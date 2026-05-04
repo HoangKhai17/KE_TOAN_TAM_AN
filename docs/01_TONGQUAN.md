@@ -104,5 +104,7 @@ Công việc kế toán có tính chất **lặp đi lặp lại theo chu kỳ**
 | Frontend | Next.js / React | SPA hiệu suất cao, dễ build dashboard |
 | Backend | Node.js (NestJS) hoặc Python (FastAPI) | Phổ biến, dễ tích hợp |
 | Database | PostgreSQL | Dữ liệu quan hệ phức tạp (task, user, company) |
-| Storage | Cloudflare R2 / S3 | Lưu trữ giấy tờ, tài liệu |
+| Storage | Microsoft OneDrive (Graph API) | KH đang dùng Microsoft 365 — không cần thuê thêm storage server |
+| File Metadata | PostgreSQL (cùng DB chính) | Lưu tên file, onedrive_item_id, web_url, category |
+| Job Scheduler | Node-cron hoặc Bull Queue | Tự động sinh task định kỳ theo lịch Customer Task Schedule |
 | Hosting | VPS hoặc cloud (Vercel + Railway) | Chi phí hợp lý cho SME |
