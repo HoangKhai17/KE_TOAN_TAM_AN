@@ -7,6 +7,7 @@
 | 01 | [01_TONGQUAN.md](./01_TONGQUAN.md) | Tổng quan dự án, bối cảnh nghiệp vụ, mục tiêu | ✅ Hoàn thành |
 | 02 | [02_CHUCNANG.md](./02_CHUCNANG.md) | Danh sách chức năng, mô tả chi tiết từng module | ✅ Hoàn thành |
 | 03 | [03_FLOW_QUYTRINH.md](./03_FLOW_QUYTRINH.md) | Luồng quy trình nghiệp vụ, sơ đồ hoạt động | ✅ Hoàn thành |
+| 04 | [04_HOSTING_VANTAI.md](./04_HOSTING_VANTAI.md) | Phương án hosting, VPS, chi phí vận hành hàng năm | ✅ Hoàn thành |
 
 ---
 
@@ -42,6 +43,7 @@ Bộ tài liệu này bao gồm:
 - Phân tích nghiệp vụ (Business Analysis)
 - Danh sách chức năng (Feature List)
 - Luồng quy trình (Process Flow)
+- Phương án hosting & chi phí vận hành
 
 **Chưa bao gồm** (sẽ bổ sung giai đoạn sau):
 - Thiết kế CSDL (Database Design)
