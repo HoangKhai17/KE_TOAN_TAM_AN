@@ -8,6 +8,7 @@ FLOW 2: Sinh công việc định kỳ tự động
 FLOW 3: Giao và thực hiện công việc
 FLOW 4: Quản lý theo dõi & xử lý vấn đề
 FLOW 5: Tổng kết & báo cáo cuối kỳ
+FLOW 6: Escalation tự động (xử lý task tồn đọng)
 ```
 
 ---
@@ -32,13 +33,16 @@ FLOW 5: Tổng kết & báo cáo cuối kỳ
   - Gán nhân viên phụ trách chính
         │
         ▼
-[Cấu hình template định kỳ cho KH này]
-  - Chọn các template công việc áp dụng cho KH
-    (ví dụ: KH có xuất nhập khẩu → thêm template khai thuế NK)
-  - Xác nhận lịch sinh việc
+[Cấu hình Customer Task Schedule cho KH này]
+  - Chọn loại công việc từ Task Type Library (Lớp 1)
+  - Thiết lập quy tắc lặp lại (hàng ngày / hàng tuần / tháng / quý / năm / tùy chỉnh)
+  - Đặt offset deadline (ví dụ: sinh ngày 1 + 20 ngày = hạn ngày 20)
+  - Ghi chú đặc thù nếu KH có nghiệp vụ riêng
+    (ví dụ: KH xuất nhập khẩu → thêm loại "Khai thuế NK" với lịch lặp riêng)
+  - Override SLA nếu cần
         │
         ▼
-[Hệ thống tự động lên lịch sinh việc tương lai]
+[Hệ thống tự động lên lịch sinh việc dựa trên Customer Task Schedule]
         │
         ▼
 [Nhân viên được thông báo có KH mới phụ trách]
@@ -54,27 +58,31 @@ FLOW 5: Tổng kết & báo cáo cuối kỳ
 > Đây là luồng tự động, không cần tác động của con người trong điều kiện bình thường.
 
 ```
-[NGÀY KÍCH HOẠT (ví dụ: ngày 1 mỗi tháng)]
+[JOB SCHEDULER chạy định kỳ (mỗi ngày lúc 00:00)]
         │
         ▼
-[Hệ thống quét toàn bộ Template Định Kỳ]
+[Quét toàn bộ Customer Task Schedule của mọi KH]
         │
-        ├── Template hàng tháng → Sinh cho tất cả KH áp dụng template này
-        ├── Template hàng quý  → Kiểm tra nếu là tháng đầu quý → Sinh
-        └── Template hàng tuần → Sinh vào ngày đầu tuần
+        ├── Quy tắc hàng ngày    → Kiểm tra khoảng ngày, sinh nếu đúng chu kỳ
+        ├── Quy tắc hàng tuần    → Kiểm tra thứ trong tuần, sinh nếu khớp
+        ├── Quy tắc hàng tháng   → Kiểm tra ngày/thứ/cuối tháng, sinh nếu khớp
+        ├── Quy tắc hàng quý     → Kiểm tra tháng + ngày trong quý
+        ├── Quy tắc hàng năm     → Kiểm tra tháng + ngày trong năm
+        └── Quy tắc danh sách ngày → Kiểm tra ngày hôm nay có trong danh sách
         │
         ▼
-[Với mỗi template + mỗi KH áp dụng:]
-  - Tạo task mới: tên = "Tên template - Tên KH - Tháng/Năm"
+[Với mỗi quy tắc khớp + mỗi KH áp dụng:]
+  - Tạo task mới: tên = "Tên loại công việc - Tên KH - Tháng/Năm"
+  - Gán checklist mặc định từ Task Type Library
   - Gán cho nhân viên phụ trách KH đó
-  - Đặt deadline = ngày template quy định
+  - Đặt deadline = ngày sinh + offset đã cấu hình
   - Trạng thái = "Chờ xử lý"
         │
         ▼
 [Gửi thông báo cho nhân viên được giao việc mới]
         │
         ▼
-[Quản lý có thể xem toàn bộ việc vừa được sinh ra]
+[Quản lý có thể xem toàn bộ việc vừa được sinh ra trên Dashboard]
 ```
 
 **Ví dụ thực tế - Ngày 01/06:**
@@ -100,31 +108,42 @@ FLOW 5: Tổng kết & báo cáo cuối kỳ
 [Nhân viên nhận thông báo]
         │
         ▼
-[Nhân viên mở task, xem mô tả, tài liệu tham chiếu]
+[Nhân viên mở task]
+  - Xem mô tả, tài liệu tham chiếu
+  - Kiểm tra task dependencies: có task nào cần làm trước không?
+  - Xem checklist bước thực hiện
         │
         ▼
-[Nhân viên cập nhật → "Đang thực hiện"]
+[Kiểm tra dependencies]
         │
-        ▼
-[Nhân viên thực hiện công việc trên phần mềm kế toán]
-   (ngoài hệ thống này)
-        │
-        ▼
-[Nhân viên đính kèm file kết quả + ghi chú]
-  Ví dụ: "Đã kê khai và nộp GTGT T6, biên lai đính kèm"
-        │
-        ▼
-[Nhân viên cập nhật → "Chờ duyệt" hoặc "Hoàn thành"]
-   (tùy cấu hình: có yêu cầu QM duyệt không)
-        │
-     [Có duyệt]           [Không cần duyệt]
+   [Chưa xong]           [Đã xong / Không có]
         │                        │
         ▼                        ▼
-[Quản lý review]          [Hoàn thành]
-[Duyệt / Trả lại]
-        │
-        ▼
-[Hoàn thành ✅]
+[Hệ thống cảnh báo,    [Nhân viên cập nhật → "Đang thực hiện"]
+ chờ task trước]
+                               │
+                               ▼
+                    [Nhân viên tick từng bước trong checklist]
+                    [Nhân viên thực hiện công việc trên phần mềm kế toán]
+                       (ngoài hệ thống này)
+                               │
+                               ▼
+                    [Nhân viên đính kèm file kết quả lên OneDrive]
+                      Ví dụ: biên lai nộp thuế, file báo cáo đã ký
+                    [Nhân viên ghi chú + ghi thời gian thực tế (time tracking)]
+                               │
+                               ▼
+                    [Nhân viên cập nhật → "Chờ duyệt" hoặc "Hoàn thành"]
+                       (tùy cấu hình: có yêu cầu Quản lý duyệt không)
+                               │
+                        [Có duyệt]           [Không cần duyệt]
+                               │                        │
+                               ▼                        ▼
+                    [Quản lý review]          [Hoàn thành ✅]
+                    [Duyệt / Trả lại]
+                               │
+                               ▼
+                    [Hoàn thành ✅]
 ```
 
 ### 3B — Công Việc Phát Sinh (Thủ Công)
@@ -202,23 +221,66 @@ FLOW 5: Tổng kết & báo cáo cuối kỳ
         ▼
 [Quản lý mở Báo Cáo Tháng/Quý]
         │
-        ├── Xem tỷ lệ hoàn thành toàn bộ đầu việc
-        ├── Xem hiệu suất từng nhân viên
-        ├── Xem danh sách công ty có việc trễ/thiếu
-        └── Xuất báo cáo Excel nếu cần
+        ├── Xem tỷ lệ hoàn thành toàn bộ đầu việc (% đúng hạn / trễ)
+        ├── Xem Báo Cáo SLA: loại công việc nào hay vượt SLA
+        ├── Xem Báo Cáo Aging: task nào đang tồn đọng lâu nhất
+        ├── Xem Báo Cáo Velocity: xu hướng hoàn thành tuần/tháng từng NV
+        ├── Xem Ma Trận Báo Cáo Chéo: NV × KH × Loại công việc
+        ├── Xem danh sách KH có việc trễ / thiếu đầu việc định kỳ
+        └── Xuất báo cáo Excel / PDF nếu cần
         │
         ▼
 [Họp nội bộ / review]
-  - Đánh giá hiệu suất nhân viên
-  - Rà soát KH cần chú ý đặc biệt
-  - Điều chỉnh phân công nếu cần
+  - Đánh giá hiệu suất nhân viên (dựa trên % đúng hạn + velocity)
+  - Rà soát KH cần chú ý đặc biệt (dựa trên aging + báo cáo KH)
+  - Điều chỉnh phân công nếu cần (dựa trên workload forecast tháng tới)
         │
         ▼
 [Chuẩn bị cho kỳ tiếp theo]
-  - Xác nhận lịch tự động sinh việc kỳ tới
-  - Thêm/bớt template cho KH nếu có thay đổi
+  - Xem Forecast: dự báo số task sẽ sinh ra kỳ tới theo Customer Task Schedule
+  - Thêm/bớt loại công việc trong Customer Task Schedule cho KH nếu có thay đổi
   - Cập nhật hồ sơ KH nếu có thay đổi
 ```
+
+---
+
+## Flow 6: Escalation Tự Động (Xử Lý Task Tồn Đọng)
+
+> Luồng tự động chạy song song mỗi ngày — không cần tác động thủ công.
+
+```
+[JOB SCHEDULER chạy hàng ngày (ví dụ: 07:00 sáng)]
+        │
+        ▼
+[Quét toàn bộ task đang mở]
+        │
+        ├── Task quá hạn N ngày mà không có cập nhật nào
+        │       │
+        │       ▼
+        │   [Tự động chuyển trạng thái → "Cần xem xét lại"]
+        │   [Gửi cảnh báo cho Quản lý: "Task X của KH Y đã quá hạn N ngày"]
+        │
+        ├── Task đang "Tạm hoãn" quá N ngày
+        │       │
+        │       ▼
+        │   [Gửi nhắc nhở cho Nhân viên + Quản lý]
+        │
+        └── Task sắp đến hạn hôm nay / ngày mai
+                │
+                ▼
+            [Gửi nhắc nhở cho Nhân viên phụ trách]
+        │
+        ▼
+[Tổng hợp gửi email sáng cho Quản lý]
+  - Danh sách task quá hạn (tên task, KH, NV, số ngày trễ)
+  - Danh sách task đến hạn hôm nay
+  - Số task cần xem xét lại
+        │
+        ▼
+[Quản lý xử lý theo Flow 4]
+```
+
+> **Cấu hình ngưỡng N ngày** theo từng loại công việc hoặc mức ưu tiên trong Module 6.2.
 
 ---
 
@@ -229,14 +291,18 @@ FLOW 5: Tổng kết & báo cáo cuối kỳ
 | Xem tất cả KH | ❌ (chỉ KH mình phụ trách) | ✅ |
 | Tạo hồ sơ KH mới | ❌ | ✅ |
 | Phân công NV cho KH | ❌ | ✅ |
-| Cấu hình template định kỳ | ❌ | ✅ |
+| Cấu hình Customer Task Schedule (2 lớp) | ❌ | ✅ |
 | Tạo task thủ công | ✅ (cho KH của mình) | ✅ |
 | Cập nhật trạng thái task | ✅ (task được giao) | ✅ |
+| Tick checklist bước thực hiện | ✅ (task được giao) | ✅ |
+| Ghi time tracking | ✅ (task được giao) | ✅ |
 | Phân công lại task | ❌ | ✅ |
-| Xem dashboard tổng quan | ❌ | ✅ |
+| Xem dashboard tổng quan (toàn bộ) | ❌ | ✅ |
 | Xem việc của mình | ✅ | ✅ |
-| Tải lên tài liệu | ✅ | ✅ |
+| Tải lên tài liệu (OneDrive) | ✅ | ✅ |
 | Xem báo cáo toàn hệ thống | ❌ | ✅ |
+| Xem báo cáo SLA / Aging / Velocity | ❌ | ✅ |
+| Cấu hình ngưỡng escalation | ❌ | ✅ |
 | Quản lý tài khoản người dùng | ❌ | ✅ |
 
 ---
