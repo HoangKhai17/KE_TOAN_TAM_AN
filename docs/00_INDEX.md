@@ -8,6 +8,7 @@
 | 02 | [02_CHUCNANG.md](./02_CHUCNANG.md) | Danh sách chức năng, mô tả chi tiết từng module | ✅ Hoàn thành |
 | 03 | [03_FLOW_QUYTRINH.md](./03_FLOW_QUYTRINH.md) | Luồng quy trình nghiệp vụ, sơ đồ hoạt động | ✅ Hoàn thành |
 | 04 | [04_HOSTING_VANTAI.md](./04_HOSTING_VANTAI.md) | Phương án hosting, VPS, chi phí vận hành hàng năm | ✅ Hoàn thành |
+| 05 | [05_DATABASE_SCHEMA.md](./05_DATABASE_SCHEMA.md) | Thiết kế CSDL — 20 bảng, ERD, indexes, triggers | ✅ Hoàn thành |
 
 ---
 
@@ -44,6 +45,7 @@ Bộ tài liệu này bao gồm:
 - Danh sách chức năng (Feature List)
 - Luồng quy trình (Process Flow)
 - Phương án hosting & chi phí vận hành
+- Thiết kế cơ sở dữ liệu (Database Design)
 
 **Chưa bao gồm** (sẽ bổ sung giai đoạn sau):
 - Thiết kế CSDL (Database Design)
