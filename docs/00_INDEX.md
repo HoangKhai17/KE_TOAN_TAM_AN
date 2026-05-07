@@ -12,6 +12,7 @@
 | 06 | [06_SECURITY.md](./06_SECURITY.md) | Thiết kế bảo mật — RBAC, AES-256, JWT, audit log | ✅ Hoàn thành |
 | 07 | [07_DEBUGGING_OBSERVABILITY.md](./07_DEBUGGING_OBSERVABILITY.md) | Logging, error tracking, metrics, testing strategy | ✅ Hoàn thành |
 | 08 | [08_COMPETITIVE_ANALYSIS.md](./08_COMPETITIVE_ANALYSIS.md) | Phân tích so sánh thị trường, điểm cải thiện, roadmap | ✅ Hoàn thành |
+| 09 | [09_BUILD_PLAN.md](./09_BUILD_PLAN.md) | Kế hoạch xây dựng chi tiết — 16 phases, acceptance criteria | ✅ Hoàn thành |
 
 ---
 
