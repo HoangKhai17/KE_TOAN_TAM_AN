@@ -6,11 +6,11 @@
 
 ## Tổng Quan Kế Hoạch
 
-| Phase | Tên | Ước tính | Phụ thuộc |
-|-------|-----|----------|-----------|
-| 0 | Environment & Project Structure | 2–3 ngày | — |
-| 1 | Database — Migrations & Seed | 2–3 ngày | Phase 0 |
-| 2 | Authentication & User Management | 3–4 ngày | Phase 1 |
+| Phase | Tên | Ước tính | Phụ thuộc | Status |
+|-------|-----|----------|-----------|--------|
+| 0 | Environment & Project Structure | 2–3 ngày | — | ✅ Hoàn thành |
+| 1 | Database — Migrations & Seed | 2–3 ngày | Phase 0 | ✅ Hoàn thành |
+| 2 | Authentication & User Management | 3–4 ngày | Phase 1 | 🔄 Tiếp theo |
 | 3 | Company & Staff Management (API + UI) | 4–5 ngày | Phase 2 |
 | 4 | Task Type Library — Lớp 1 (API + UI) | 2–3 ngày | Phase 3 |
 | 5 | Customer Task Schedules — Lớp 2 (API + UI) | 3–4 ngày | Phase 4 |
@@ -127,64 +127,64 @@ ke-toan-tam-an/
 ### 0.2 Task List
 
 **Docker & Infrastructure**
-- [ ] Tạo `docker-compose.yml` với 4 services: `nginx`, `backend`, `postgres`, `redis`
-- [ ] PostgreSQL: đặt `POSTGRES_DB=ktta_db`, `POSTGRES_USER`, `POSTGRES_PASSWORD` từ .env
-- [ ] Redis: set password, persist với `appendonly yes`
-- [ ] Health check cho postgres: `pg_isready` và redis: `redis-cli ping`
-- [ ] Volume: `postgres_data`, `redis_data`, `nginx_static` (cho React build)
-- [ ] Network: `internal` network — backend, postgres, redis trong cùng network, không expose postgres/redis ra ngoài
-- [ ] Kiểm tra `docker compose up` chạy thành công, tất cả services healthy
+- [x] Tạo `docker-compose.yml` với 4 services: `nginx`, `backend`, `postgres`, `redis`
+- [x] PostgreSQL: đặt `POSTGRES_DB=ktta_db`, `POSTGRES_USER`, `POSTGRES_PASSWORD` từ .env
+- [x] Redis: set password, persist với `appendonly yes`
+- [x] Health check cho postgres: `pg_isready` và redis: `redis-cli ping`
+- [x] Volume: `postgres_data`, `redis_data`, `nginx_static` (cho React build)
+- [x] Network: `internal` network — backend, postgres, redis trong cùng network, không expose postgres/redis ra ngoài
+- [x] Kiểm tra `docker compose up` chạy thành công, tất cả services healthy
 
 **Backend Setup**
-- [ ] `npm init` trong `/backend`, cài dependencies:
+- [x] `npm init` trong `/backend`, cài dependencies:
   ```
   express pg redis bcrypt jsonwebtoken uuid zod helmet cors
   express-rate-limit morgan winston node-cron axios dotenv
   ```
-- [ ] Dev dependencies: `nodemon jest supertest @faker-js/faker`
-- [ ] `src/config/env.js` — validate tất cả biến môi trường bắt buộc khi khởi động (throw nếu thiếu)
-- [ ] `src/config/db.js` — pg Pool, test connection khi khởi động
-- [ ] `src/config/redis.js` — ioredis client, test connection
-- [ ] `src/config/logger.js` — Winston: JSON format prod, pretty format dev
-- [ ] `src/app.js` — Express factory: helmet, cors, morgan, json parser, routes mount
-- [ ] `src/middleware/errorHandler.js` — global error handler, không lộ stack trace trong prod
-- [ ] Script `npm run dev` (nodemon), `npm start`, `npm test`
-- [ ] `.env.example` với tất cả keys (không có giá trị thật)
+- [x] Dev dependencies: `nodemon jest supertest @faker-js/faker`
+- [x] `src/config/env.js` — validate tất cả biến môi trường bắt buộc khi khởi động (throw nếu thiếu)
+- [x] `src/config/db.js` — pg Pool, test connection khi khởi động
+- [x] `src/config/redis.js` — ioredis client, test connection
+- [x] `src/config/logger.js` — Winston: JSON format prod, pretty format dev
+- [x] `src/app.js` — Express factory: helmet, cors, morgan, json parser, routes mount
+- [x] `src/middleware/errorHandler.js` — global error handler, không lộ stack trace trong prod
+- [x] Script `npm run dev` (nodemon), `npm start`, `npm test`
+- [x] `.env.example` với tất cả keys (không có giá trị thật)
 
 **Frontend Setup**
-- [ ] `npm create vite@latest frontend -- --template react` (hoặc react-ts)
-- [ ] Cài dependencies:
+- [x] `npm create vite@latest frontend -- --template react` (hoặc react-ts)
+- [x] Cài dependencies:
   ```
   axios react-router-dom zustand @tanstack/react-query
   recharts react-hook-form @hookform/resolvers
   date-fns lucide-react clsx tailwind-merge
   ```
-- [ ] Tailwind CSS + shadcn/ui setup (hoặc Ant Design nếu ưu tiên tiếng Việt UX)
-- [ ] Vite proxy: `/api` → `http://backend:3000` (dev)
-- [ ] React Router: layout routes (protected vs public)
-- [ ] Axios instance: base URL, interceptor tự động thêm Bearer token, interceptor tự động refresh khi 401
-- [ ] `src/stores/authStore.js` — Zustand: user, token, login/logout actions
-- [ ] Script `npm run dev`, `npm run build`, `npm run preview`
+- [x] Tailwind CSS setup, utility component classes (`.btn`, `.card`, `.input`)
+- [x] Vite proxy: `/api` → `http://localhost:3000` (dev)
+- [x] React Router: layout routes (protected vs public)
+- [x] Axios instance: base URL, interceptor tự động thêm Bearer token, interceptor tự động refresh khi 401
+- [x] `src/stores/authStore.js` — Zustand: user, token, login/logout actions
+- [x] Script `npm run dev`, `npm run build`, `npm run preview`
 
 **Nginx**
-- [ ] `nginx.conf`: serve React static từ `/usr/share/nginx/html`, proxy `/api/*` → `http://backend:3000`
-- [ ] Gzip compression cho static files
-- [ ] Cache-Control headers cho assets (1 năm cho hashed files)
+- [x] `nginx.conf`: serve React static từ `/usr/share/nginx/html`, proxy `/api/*` → `http://backend:3000`
+- [x] Gzip compression cho static files
+- [x] Cache-Control headers cho assets (1 năm cho hashed files)
 
 **Coding Standards**
-- [ ] `.eslintrc` (backend + frontend)
-- [ ] `.prettierrc` (printWidth: 100, singleQuote: true, semi: false)
-- [ ] `.gitignore` — node_modules, .env, dist, coverage, *.log
-- [ ] Husky + lint-staged: chạy ESLint + Prettier trước mỗi commit
-- [ ] Conventional commits: feat/fix/chore/refactor/test/docs
+- [x] `.eslintrc` (backend + frontend)
+- [x] `.prettierrc` (printWidth: 100, singleQuote: true, semi: false)
+- [x] `.gitignore` — node_modules, .env, dist, coverage, *.log
+- [x] ~~Husky + lint-staged~~ — **Đã bỏ** (quyết định 2026-05-07: dev solo, dùng `npm run lint` thủ công)
+- [x] Conventional commits: feat/fix/chore/refactor/test/docs
 
-**Acceptance Criteria Phase 0:**
+**Acceptance Criteria Phase 0:** ✅
 ```
-□ docker compose up --build chạy không lỗi
-□ curl http://localhost:3000/health → { status: "ok" }
-□ curl http://localhost:5173 (dev) → React app load
-□ postgres và redis có thể kết nối từ backend container
-□ git commit bị block nếu code không pass ESLint
+✅ docker compose up --build chạy không lỗi
+✅ GET /api/health → { status: "ok", db: "ok", redis: "ok" }
+✅ curl http://localhost:8080 → nginx serving (port 8080 thay 80 trên Windows dev)
+✅ postgres và redis healthy, kết nối được từ backend container
+⬜ git commit bị block nếu code không pass ESLint (Husky đã bỏ — dùng thủ công)
 ```
 
 ---
@@ -195,67 +195,63 @@ ke-toan-tam-an/
 
 ### 1.1 Migration Tool
 
-- [ ] Cài `node-pg-migrate` hoặc viết migration runner đơn giản bằng `fs` + `pg`
-- [ ] Convention: `migrations/YYYYMMDD_HHMMSS_<description>.sql` (up) + `_down.sql`
-- [ ] Script: `npm run migrate:up`, `npm run migrate:down`, `npm run migrate:status`
-- [ ] Migration table: `schema_migrations(filename, applied_at)` để track đã chạy migration nào
+- [x] Viết migration runner đơn giản bằng `fs` + `pg` (custom, không dùng ORM)
+- [x] Convention: `NNN_<description>.sql` (up) + `NNN_<description>.down.sql`
+- [x] Script: `npm run migrate:up`, `npm run migrate:down`, `npm run migrate:status`
+- [x] Migration table: `schema_migrations(filename, applied_at)` để track đã chạy migration nào
 
 ### 1.2 Migration Files (thứ tự quan trọng)
 
-- [ ] `001_create_enums.sql` — Tất cả 13 ENUM types (xem 05_DATABASE_SCHEMA.md)
-- [ ] `002_create_users.sql` — Table users + 3 indexes
-- [ ] `003_create_refresh_tokens.sql`
-- [ ] `004_create_companies.sql` — Table companies + FTS index
-- [ ] `005_create_staff_company_assignments.sql`
-- [ ] `006_create_task_types.sql`
-- [ ] `007_create_task_type_checklist_templates.sql`
-- [ ] `008_create_task_type_custom_field_schemas.sql`
-- [ ] `009_create_customer_task_schedules.sql`
-- [ ] `010_create_tasks.sql` — Table tasks + 9 indexes
-- [ ] `011_create_task_checklist_items.sql`
-- [ ] `012_create_task_dependencies.sql`
-- [ ] `013_create_task_comments.sql`
-- [ ] `014_create_task_activity_logs.sql`
-- [ ] `015_create_task_custom_field_values.sql`
-- [ ] `016_create_task_time_logs.sql`
-- [ ] `017_create_documents.sql`
-- [ ] `018_create_notifications.sql`
-- [ ] `019_create_report_jobs.sql`
-- [ ] `020_create_system_configs.sql`
-- [ ] `021_create_audit_logs.sql` — bao gồm `REVOKE UPDATE, DELETE ON audit_logs FROM PUBLIC`
-- [ ] `022_create_payroll_periods.sql`
-- [ ] `023_create_payroll_records.sql` — bao gồm GENERATED ALWAYS AS columns
-- [ ] `024_create_company_credentials.sql`
-- [ ] `025_create_trigger_actual_hours.sql` — trigger update tasks.actual_hours
+- [x] `001_create_enums.sql` — 13 ENUM types
+- [x] `002_create_users.sql` — Table users + 3 indexes
+- [x] `003_create_refresh_tokens.sql`
+- [x] `004_create_companies.sql` — Table companies + FTS index
+- [x] `005_create_staff_company_assignments.sql`
+- [x] `006_create_task_types.sql`
+- [x] `007_create_task_type_checklist_templates.sql`
+- [x] `008_create_task_type_custom_field_schemas.sql`
+- [x] `009_create_customer_task_schedules.sql`
+- [x] `010_create_tasks.sql` — Table tasks + 10 indexes (bao gồm FTS)
+- [x] `011_create_task_checklist_items.sql`
+- [x] `012_create_task_dependencies.sql`
+- [x] `013_create_task_comments.sql`
+- [x] `014_create_task_activity_logs.sql`
+- [x] `015_create_task_custom_field_values.sql`
+- [x] `016_create_task_time_logs.sql`
+- [x] `017_create_documents.sql`
+- [x] `018_create_notifications.sql`
+- [x] `019_create_report_jobs.sql`
+- [x] `020_create_system_configs.sql`
+- [x] `021_create_audit_logs.sql` — bao gồm `REVOKE UPDATE, DELETE ON audit_logs FROM PUBLIC`
+- [x] `022_create_payroll_periods.sql`
+- [x] `023_create_payroll_records.sql` — bao gồm GENERATED ALWAYS AS columns
+- [x] `024_create_company_credentials.sql`
+- [x] `025_create_trigger_actual_hours.sql` — trigger update tasks.actual_hours
 
 ### 1.3 Seed Data
 
-- [ ] `seeds/001_admin_user.sql` — 1 admin user (email: admin@ketoan-taman.vn, pw: phải đổi lần đầu)
-- [ ] `seeds/002_system_configs.sql` — 6 cấu hình mặc định (xem 05_DATABASE_SCHEMA.md)
-- [ ] `seeds/003_task_types.sql` — 15–20 loại công việc phổ biến:
-  - Kê khai thuế GTGT, Thuế TNCN, Thuế môn bài, Thuế nhà thầu
-  - Báo cáo tài chính quý, Quyết toán năm
-  - Lập bảng lương, Đóng BHXH/BHYT, Quyết toán TNCN cuối năm
-  - Nhập hóa đơn đầu vào, Đối soát ngân hàng, Kiểm tra công nợ
-  - Thay đổi đăng ký KD, Gia hạn giấy phép
-- [ ] `seeds/004_task_type_checklists.sql` — Checklist bước cho 5 loại công việc quan trọng nhất
-- [ ] Script: `npm run seed`
+- [x] `seeds/001_admin_user.sql` — admin@ketoan-taman.vn / Admin@2026! (must_change_pw=TRUE)
+- [x] `seeds/002_system_configs.sql` — 6 cấu hình mặc định
+- [x] `seeds/003_task_types.sql` — 17 loại công việc phổ biến (Khai thuế / BCTC / Nhân sự / Chứng từ / Hành chính)
+- [x] `seeds/004_task_type_checklists.sql` — Checklist cho 5 loại CV quan trọng nhất
+- [x] Script: `npm run seed`
 
 ### 1.4 Verify
 
-- [ ] `npm run migrate:up` chạy không lỗi, 24 migrations applied
-- [ ] Kết nối pgAdmin → kiểm tra 23 bảng tồn tại, ENUMs đúng
-- [ ] Trigger `trg_task_time_logs_after` tồn tại và hoạt động (test thủ công)
-- [ ] `SELECT * FROM schema_migrations` → 25 rows (25 migration files)
-- [ ] `SELECT * FROM task_types` → ít nhất 15 rows
-- [ ] `SELECT * FROM system_configs` → 6 rows
+- [x] `npm run migrate:up` chạy không lỗi — 25 migrations applied
+- [x] 23 bảng + `schema_migrations` = 24 tables tồn tại trong DB
+- [x] Trigger `trg_task_time_logs_after` được tạo
+- [x] `SELECT COUNT(*) FROM schema_migrations` → 25 rows
+- [x] `SELECT COUNT(*) FROM task_types` → 17 rows
+- [x] `SELECT COUNT(*) FROM system_configs` → 6 rows
 
-**Acceptance Criteria Phase 1:**
+**Acceptance Criteria Phase 1:** ✅
 ```
-□ migrate:up chạy từ empty DB thành công, không lỗi
-□ migrate:down rollback được toàn bộ (test trên DB test riêng)
-□ Seed data insert không conflict
-□ Trigger actual_hours hoạt động: insert task_time_log → tasks.actual_hours cập nhật
+✅ migrate:up chạy từ empty DB thành công, không lỗi — 25/25 migrations
+✅ Seed data insert không conflict (ON CONFLICT DO NOTHING)
+✅ 23 bảng + trigger đúng cấu trúc schema
+⬜ migrate:down rollback (có down files, chưa test toàn bộ chain)
+⬜ Trigger actual_hours: cần test thủ công sau khi có tasks API (Phase 6)
 ```
 
 ---

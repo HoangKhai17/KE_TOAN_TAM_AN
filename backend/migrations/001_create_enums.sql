@@ -1,0 +1,13 @@
+CREATE TYPE user_role AS ENUM ('admin', 'staff');
+CREATE TYPE user_status AS ENUM ('active', 'on_leave', 'resigned');
+CREATE TYPE business_type AS ENUM ('TNHH', 'CP', 'HKD', 'DN_TU_NHAN', 'KHAC');
+CREATE TYPE company_status AS ENUM ('active', 'inactive', 'terminated');
+CREATE TYPE task_status AS ENUM ('pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed');
+CREATE TYPE task_priority AS ENUM ('low', 'medium', 'high', 'urgent');
+CREATE TYPE task_source AS ENUM ('auto', 'manual');
+CREATE TYPE recurrence_type AS ENUM ('daily', 'weekly', 'monthly_by_date', 'monthly_by_weekday', 'monthly_last_day', 'quarterly', 'yearly', 'custom_dates', 'once');
+CREATE TYPE payroll_status AS ENUM ('draft', 'confirmed', 'paid');
+CREATE TYPE field_data_type AS ENUM ('text', 'number', 'date', 'boolean', 'select');
+CREATE TYPE document_category AS ENUM ('hop_dong', 'bao_cao_thue', 'so_sach', 'giay_phep', 'khac');
+CREATE TYPE notification_type AS ENUM ('task_assigned', 'task_overdue', 'deadline_reminder', 'escalation', 'morning_summary', 'task_status_changed');
+CREATE TYPE report_type_enum AS ENUM ('monthly_summary', 'staff_performance', 'customer_status', 'sla_compliance', 'aging', 'velocity', 'forecast', 'custom');

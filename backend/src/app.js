@@ -3,9 +3,11 @@ const helmet = require('helmet')
 const cors = require('cors')
 const morgan = require('morgan')
 const rateLimit = require('express-rate-limit')
+const swaggerUi = require('swagger-ui-express')
 
 const env = require('./config/env')
 const logger = require('./config/logger')
+const swaggerSpec = require('./config/swagger')
 const requestId = require('./middleware/requestId')
 const errorHandler = require('./middleware/errorHandler')
 const notFound = require('./middleware/notFound')
@@ -16,7 +18,19 @@ function createApp() {
   // Trust proxy (for correct IP behind Nginx)
   app.set('trust proxy', 1)
 
-  // Security headers
+  // Swagger UI — relaxed CSP for /api/docs only (dev tool, not production route)
+  app.use(
+    '/api/docs',
+    helmet({ contentSecurityPolicy: false }),
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      customSiteTitle: 'KTTA API Docs',
+      swaggerOptions: { persistAuthorization: true },
+    })
+  )
+  app.get('/api/docs.json', (req, res) => res.json(swaggerSpec))
+
+  // Security headers (applied to all routes except /api/docs above)
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -72,7 +86,30 @@ function createApp() {
   app.use(express.json({ limit: '10mb' }))
   app.use(express.urlencoded({ extended: true }))
 
-  // Health check (no auth required)
+  /**
+   * @openapi
+   * /health:
+   *   get:
+   *     tags: [Health]
+   *     summary: System health check
+   *     security: []
+   *     responses:
+   *       200:
+   *         description: All systems operational
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 status:  { type: string, example: ok }
+   *                 db:      { type: string, example: ok }
+   *                 redis:   { type: string, example: ok }
+   *                 uptime:  { type: integer, example: 3600 }
+   *                 version: { type: string, example: 1.0.0 }
+   *                 env:     { type: string, example: development }
+   *       503:
+   *         description: One or more services degraded
+   */
   app.get('/api/health', async (req, res) => {
     const { testConnection: testDb } = require('./config/db')
     const { testConnection: testRedis } = require('./config/redis')

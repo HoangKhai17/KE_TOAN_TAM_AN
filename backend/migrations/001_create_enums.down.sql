@@ -1,0 +1,13 @@
+DROP TYPE IF EXISTS report_type_enum;
+DROP TYPE IF EXISTS notification_type;
+DROP TYPE IF EXISTS document_category;
+DROP TYPE IF EXISTS field_data_type;
+DROP TYPE IF EXISTS payroll_status;
+DROP TYPE IF EXISTS recurrence_type;
+DROP TYPE IF EXISTS task_source;
+DROP TYPE IF EXISTS task_priority;
+DROP TYPE IF EXISTS task_status;
+DROP TYPE IF EXISTS company_status;
+DROP TYPE IF EXISTS business_type;
+DROP TYPE IF EXISTS user_status;
+DROP TYPE IF EXISTS user_role;

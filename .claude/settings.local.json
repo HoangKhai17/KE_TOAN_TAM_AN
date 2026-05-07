@@ -19,7 +19,16 @@
       "PowerShell(docker exec ke_toan_tam_an-backend-1 curl -s http://localhost:3000/api/health 2>&1)",
       "PowerShell(git -C \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\" config core.hooksPath)",
       "PowerShell(cmd /c \"dir /a /s d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\.husky\")",
-      "PowerShell(git -C \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\" config core.hooksPath .husky)"
+      "PowerShell(git -C \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\" config core.hooksPath .husky)",
+      "Bash(node -e \"const bcrypt=require\\('bcrypt'\\); bcrypt.hash\\('Admin@2026!',12\\).then\\(h=>console.log\\(h\\)\\)\")",
+      "PowerShell(docker exec ke_toan_tam_an-backend-1 npm run migrate:up 2>&1)",
+      "PowerShell(docker exec ke_toan_tam_an-backend-1 npm run seed 2>&1)",
+      "PowerShell(docker exec ke_toan_tam_an-postgres-1 psql -U ktta_user -d ktta_db -c \"SELECT email, role, must_change_pw FROM users;\" 2>&1)",
+      "PowerShell(docker exec ke_toan_tam_an-backend-1 curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/docs/ 2>&1)",
+      "PowerShell(docker exec ke_toan_tam_an-backend-1 curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/docs 2>&1)",
+      "PowerShell(docker exec ke_toan_tam_an-backend-1 curl -s http://localhost:3000/api/docs.json 2>&1)",
+      "PowerShell(head -c 200)",
+      "PowerShell(docker exec ke_toan_tam_an-backend-1 npm install swagger-jsdoc swagger-ui-express 2>&1)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

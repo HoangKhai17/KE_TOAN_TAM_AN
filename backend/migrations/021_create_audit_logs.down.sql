@@ -1,0 +1,2 @@
+GRANT UPDATE, DELETE ON audit_logs TO PUBLIC;
+DROP TABLE IF EXISTS audit_logs;
