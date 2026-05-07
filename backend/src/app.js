@@ -3,6 +3,7 @@ const helmet = require('helmet')
 const cors = require('cors')
 const morgan = require('morgan')
 const rateLimit = require('express-rate-limit')
+const cookieParser = require('cookie-parser')
 const swaggerUi = require('swagger-ui-express')
 
 const env = require('./config/env')
@@ -82,9 +83,10 @@ function createApp() {
     })
   )
 
-  // Body parsers
+  // Body parsers + cookies
   app.use(express.json({ limit: '10mb' }))
   app.use(express.urlencoded({ extended: true }))
+  app.use(cookieParser())
 
   /**
    * @openapi
@@ -140,10 +142,9 @@ function createApp() {
     })
   })
 
-  // API routes (will be populated in later phases)
-  // app.use('/api/auth', require('./modules/auth/auth.router'))
-  // app.use('/api/users', require('./modules/users/users.router'))
-  // ... etc
+  // API routes
+  app.use('/api/auth',  require('./modules/auth/auth.router'))
+  app.use('/api/users', require('./modules/users/users.router'))
 
   // 404 & error handlers
   app.use(notFound)

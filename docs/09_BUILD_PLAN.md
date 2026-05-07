@@ -10,7 +10,7 @@
 |-------|-----|----------|-----------|--------|
 | 0 | Environment & Project Structure | 2–3 ngày | — | ✅ Hoàn thành |
 | 1 | Database — Migrations & Seed | 2–3 ngày | Phase 0 | ✅ Hoàn thành |
-| 2 | Authentication & User Management | 3–4 ngày | Phase 1 | 🔄 Tiếp theo |
+| 2 | Authentication & User Management | 3–4 ngày | Phase 1 | 🔄 Backend ✅ / Frontend ⏳ |
 | 3 | Company & Staff Management (API + UI) | 4–5 ngày | Phase 2 |
 | 4 | Task Type Library — Lớp 1 (API + UI) | 2–3 ngày | Phase 3 |
 | 5 | Customer Task Schedules — Lớp 2 (API + UI) | 3–4 ngày | Phase 4 |
@@ -263,43 +263,44 @@ ke-toan-tam-an/
 ### 2.1 Backend — Auth Module
 
 **Endpoints:**
-- [ ] `POST /api/auth/login` — validate email+password, trả access_token + refresh_token (httpOnly cookie)
-- [ ] `POST /api/auth/refresh` — verify refresh token, rotation, trả access_token mới
-- [ ] `POST /api/auth/logout` — revoke refresh token hiện tại
-- [ ] `POST /api/auth/logout-all` — revoke toàn bộ refresh tokens của user (family)
-- [ ] `GET /api/auth/me` — trả thông tin user hiện tại từ token
+- [x] `POST /api/auth/login` — validate email+password, trả access_token + refresh_token (httpOnly cookie)
+- [x] `POST /api/auth/refresh` — verify refresh token, rotation, trả access_token mới
+- [x] `POST /api/auth/logout` — revoke refresh token hiện tại
+- [x] `POST /api/auth/logout-all` — revoke toàn bộ refresh tokens của user (family)
+- [x] `GET /api/auth/me` — trả thông tin user hiện tại từ token
+- [x] `POST /api/auth/change-password` — đổi mật khẩu, invalidate tất cả sessions
 
 **Logic chi tiết:**
-- [ ] `src/modules/auth/auth.service.js`:
+- [x] `src/modules/auth/auth.service.js`:
   - `login(email, password)`: tìm user, bcrypt.compare, check status, check locked_until, reset login_attempts, tạo tokens
   - `register_failure(userId)`: tăng login_attempts, nếu >= max → set locked_until
   - `refreshToken(token)`: SHA-256 hash lookup, verify family không bị revoke, rotate (revoke old, insert new)
   - `logout(tokenHash)`: set revoked_at = NOW()
   - `logoutAll(userId, familyId)`: revoke toàn bộ family
-- [ ] `src/middleware/auth.js` — verify JWT Bearer token, attach `req.user = { id, role }`
-- [ ] `src/middleware/rbac.js` — `requireRole('admin')` middleware factory
-- [ ] Refresh token lưu trong httpOnly cookie (không localStorage để chống XSS)
-- [ ] Access token 15 phút, refresh token 7 ngày
+- [x] `src/middleware/auth.js` — verify JWT Bearer token, attach `req.user = { id, role, jti, exp }`; Redis blacklist check
+- [x] `src/middleware/rbac.js` — `requireRole('admin')` middleware factory
+- [x] Refresh token lưu trong httpOnly cookie (không localStorage để chống XSS)
+- [x] Access token 15 phút, refresh token 7 ngày
 
 **Endpoints User Management:**
-- [ ] `GET /api/users` — [admin] danh sách nhân viên, pagination + filter
-- [ ] `POST /api/users` — [admin] tạo user mới (set must_change_pw = true)
-- [ ] `GET /api/users/:id` — [admin | own] xem thông tin
-- [ ] `PATCH /api/users/:id` — [admin | own] cập nhật (admin đổi role/status, own đổi name/phone)
-- [ ] `POST /api/users/:id/lock` — [admin] khóa tài khoản
-- [ ] `POST /api/users/:id/unlock` — [admin] mở khóa
-- [ ] `POST /api/users/:id/reset-password` — [admin] reset password (phát password tạm, set must_change_pw)
-- [ ] `PATCH /api/users/me/password` — [self] đổi mật khẩu (yêu cầu old_password)
+- [x] `GET /api/users` — [admin] danh sách nhân viên, pagination + filter (role/status/search)
+- [x] `POST /api/users` — [admin] tạo user mới (set must_change_pw = true)
+- [x] `GET /api/users/:id` — [admin] xem thông tin
+- [x] `PATCH /api/users/:id` — [admin] cập nhật (name, phone, jobTitle, avatarUrl, role)
+- [x] `PATCH /api/users/:id/status` — [admin] đổi status (active/inactive/suspended)
+- [x] `DELETE /api/users/:id` — [admin] xóa user (không tự xóa bản thân)
+- [ ] `POST /api/users/:id/reset-password` — [admin] reset password (phát password tạm) *(để dành sau)*
 
 ### 2.2 Backend — Validation
 
-- [ ] `src/modules/auth/auth.schema.js` — Zod schemas: loginSchema, refreshSchema, changePasswordSchema
-- [ ] `src/modules/users/users.schema.js` — createUserSchema, updateUserSchema
-- [ ] `src/middleware/validate.js` — middleware(schema) → validate req.body/params/query, trả 422 nếu sai
+- [x] `src/modules/auth/auth.schema.js` — Zod schemas: loginSchema, changePasswordSchema
+- [x] `src/modules/users/users.schema.js` — createUserSchema, updateUserSchema, updateStatusSchema
+- [x] `src/middleware/validate.js` — middleware(schema) → validate req.body/params/query, trả 422 nếu sai
 
 ### 2.3 Backend — Audit
 
-- [ ] Ghi audit_log cho: `login`, `login_failed`, `account_locked`, `logout`, `logout_all`, `user_created`, `user_role_changed`, `user_locked`, `user_unlocked`, `password_reset`, `password_changed`
+- [x] `src/lib/audit.js` — helper ghi audit_log với try/catch (không block request nếu fail)
+- [x] Ghi audit_log cho: `auth.login`, `auth.login.failed`, `auth.refresh.reuse_detected`, `auth.logout`, `auth.logout_all`, `auth.change_password`, `user.created`, `user.updated`, `user.status_changed`, `user.deleted`
 
 ### 2.4 Frontend — Auth
 
