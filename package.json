@@ -1,0 +1,15 @@
+{
+  "name": "ke-toan-tam-an",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo root — Ke Toan Tam An",
+  "scripts": {
+    "lint:backend": "cd backend && npm run lint",
+    "lint:frontend": "cd frontend && npm run lint",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "format": "prettier --write \"**/*.{js,jsx,json,md,yml}\" --ignore-path .gitignore"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.2"
+  }
+}
