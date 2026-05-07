@@ -1,5 +1,5 @@
 # 05 — Database Schema Design
-> Phiên bản: 1.0 | Ngày tạo: 2026-05-07 | Stack: PostgreSQL 16 + Docker
+> Phiên bản: 1.1 | Ngày tạo: 2026-05-07 | Cập nhật: 2026-05-07 | Stack: PostgreSQL 16 + Docker
 
 ---
 
@@ -39,6 +39,13 @@
 │notifications │  │refresh_tokens│  │ system_      │  │  audit_logs      │
 │              │  │              │  │ configs      │  │  (immutable)     │
 └──────────────┘  └──────────────┘  └──────────────┘  └──────────────────┘
+
+┌──────────────────────┐    ┌──────────────────────┐    ┌──────────────────────┐
+│   payroll_periods    │─1:N│   payroll_records     │    │  company_credentials │
+│   (Kỳ lương tháng)  │    │   (Lương/thưởng NV)  │    │  (Tài khoản hệ thống │
+└──────────────────────┘    └──────────────────────┘    │   KH — mã hóa AES)  │
+                                     │ N:1 users         └──────────────────────┘
+                                     └──────────────────────────────────────────
 ```
 
 ---
@@ -85,6 +92,13 @@ CREATE TYPE recurrence_type AS ENUM (
   'yearly',              -- Hàng năm
   'custom_dates',        -- Danh sách ngày tùy chỉnh
   'once'                 -- Một lần
+);
+
+-- Trạng thái kỳ lương
+CREATE TYPE payroll_status AS ENUM (
+  'draft',      -- Đang lập, chưa xác nhận
+  'confirmed',  -- Đã xác nhận, chưa thanh toán
+  'paid'        -- Đã thanh toán
 );
 
 -- Kiểu dữ liệu custom field
@@ -725,6 +739,169 @@ FOR EACH ROW EXECUTE FUNCTION update_task_actual_hours();
 
 ---
 
+## TABLE: payroll_periods (Kỳ Lương)
+
+```sql
+CREATE TABLE payroll_periods (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  period_year    SMALLINT NOT NULL CHECK (period_year >= 2020),
+  period_month   SMALLINT NOT NULL CHECK (period_month BETWEEN 1 AND 12),
+  start_date     DATE NOT NULL,
+  end_date       DATE NOT NULL,
+  status         payroll_status NOT NULL DEFAULT 'draft',
+  notes          TEXT,
+  created_by     UUID NOT NULL REFERENCES users(id),
+  confirmed_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+  confirmed_at   TIMESTAMP,
+  created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+
+  UNIQUE (period_year, period_month),
+  CHECK (end_date >= start_date)
+);
+
+CREATE INDEX idx_pp_year_month ON payroll_periods(period_year, period_month);
+CREATE INDEX idx_pp_status     ON payroll_periods(status);
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `period_year / period_month` | Kỳ tháng/năm — unique, ngăn tạo trùng kỳ lương |
+| `status` | `draft` → `confirmed` → `paid`; chỉ admin mới được chuyển trạng thái |
+| `confirmed_by / confirmed_at` | Ghi nhận ai đã xác nhận và thời điểm nào |
+
+---
+
+## TABLE: payroll_records (Bảng Lương & Thưởng Nhân Viên)
+
+```sql
+CREATE TABLE payroll_records (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  payroll_period_id    UUID NOT NULL REFERENCES payroll_periods(id) ON DELETE CASCADE,
+  user_id              UUID NOT NULL REFERENCES users(id),
+
+  -- Thu nhập
+  base_salary          NUMERIC(15,0) NOT NULL DEFAULT 0,   -- Lương cơ bản theo hợp đồng
+  allowances           NUMERIC(15,0) NOT NULL DEFAULT 0,   -- Phụ cấp (đi lại, ăn trưa, điện thoại...)
+  bonus                NUMERIC(15,0) NOT NULL DEFAULT 0,   -- Thưởng tháng / thưởng KPI
+  gross_income         NUMERIC(15,0) GENERATED ALWAYS AS (base_salary + allowances + bonus) STORED,
+
+  -- Bảo hiểm — phần nhân viên đóng
+  bhxh_employee        NUMERIC(15,0) NOT NULL DEFAULT 0,   -- 8% lương đóng BH
+  bhyt_employee        NUMERIC(15,0) NOT NULL DEFAULT 0,   -- 1.5%
+  bhtn_employee        NUMERIC(15,0) NOT NULL DEFAULT 0,   -- 1%
+
+  -- Bảo hiểm — phần công ty đóng (ghi nhận để đối soát chi phí)
+  bhxh_employer        NUMERIC(15,0) NOT NULL DEFAULT 0,   -- 17.5%
+  bhyt_employer        NUMERIC(15,0) NOT NULL DEFAULT 0,   -- 3%
+  bhtn_employer        NUMERIC(15,0) NOT NULL DEFAULT 0,   -- 1%
+
+  -- Khấu trừ khác
+  pit_deduction        NUMERIC(15,0) NOT NULL DEFAULT 0,   -- Thuế thu nhập cá nhân
+  other_deductions     NUMERIC(15,0) NOT NULL DEFAULT 0,   -- Tạm ứng, phạt...
+
+  -- Lương thực nhận
+  net_salary           NUMERIC(15,0) GENERATED ALWAYS AS (
+                         base_salary + allowances + bonus
+                         - bhxh_employee - bhyt_employee - bhtn_employee
+                         - pit_deduction - other_deductions
+                       ) STORED,
+
+  -- Chi tiết bổ sung
+  components           JSONB,   -- Phân rã từng khoản phụ cấp/thưởng (tùy chọn, xem mẫu dưới)
+  notes                TEXT,
+  created_by           UUID NOT NULL REFERENCES users(id),
+  created_at           TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMP NOT NULL DEFAULT NOW(),
+
+  UNIQUE (payroll_period_id, user_id)
+);
+
+CREATE INDEX idx_pr_period  ON payroll_records(payroll_period_id);
+CREATE INDEX idx_pr_user    ON payroll_records(user_id);
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `gross_income` | Cột generated: `base_salary + allowances + bonus` — PostgreSQL tự tính |
+| `net_salary` | Cột generated: thu nhập thực nhận sau khấu trừ NV phải đóng |
+| `bhxh/bhyt/bhtn_employer` | Ghi nhận để lập báo cáo chi phí nhân sự tổng thể của công ty |
+| `components` | JSONB linh hoạt để ghi chi tiết nếu cần, không bắt buộc |
+
+**Cấu trúc `components` (tùy chọn):**
+
+```json
+{
+  "allowances": [
+    { "label": "Phụ cấp xăng xe",   "amount": 500000 },
+    { "label": "Phụ cấp ăn trưa",   "amount": 730000 },
+    { "label": "Phụ cấp điện thoại","amount": 200000 }
+  ],
+  "bonuses": [
+    { "label": "Thưởng KPI tháng 5", "amount": 2000000 },
+    { "label": "Thưởng tiếp nhận KH mới", "amount": 500000 }
+  ],
+  "deductions": [
+    { "label": "Tạm ứng tháng 4 thu lại", "amount": 1000000 }
+  ]
+}
+```
+
+---
+
+## TABLE: company_credentials (Tài Khoản Hệ Thống Khách Hàng)
+
+> **Bảo mật:** Cột `encrypted_password` lưu ciphertext AES-256-GCM, base64-encoded. Khoá mã hóa (encryption key) KHÔNG lưu trong database — quản lý qua biến môi trường hoặc secrets manager. Không bao giờ log hoặc trả về raw password qua API.
+
+```sql
+CREATE TABLE company_credentials (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id        UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+
+  system_name       VARCHAR(200) NOT NULL,   -- 'Cổng thuế điện tử eTax', 'Cổng BHXH điện tử VssID', ...
+  system_url        TEXT,                    -- https://... đường link đăng nhập
+  username          VARCHAR(200) NOT NULL,   -- Tên đăng nhập (lưu plain — không nhạy cảm)
+  encrypted_password TEXT NOT NULL,          -- AES-256-GCM, base64 — KHÔNG lưu plain text
+  iv                VARCHAR(100) NOT NULL,   -- Initialization Vector (IV/nonce) cho AES-GCM, base64
+
+  notes             TEXT,                    -- Ghi chú thêm (không nhạy cảm), ví dụ: "Đổi PW hàng quý"
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by        UUID NOT NULL REFERENCES users(id),
+  updated_by        UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_cc_company    ON company_credentials(company_id);
+CREATE INDEX idx_cc_active     ON company_credentials(company_id, is_active) WHERE is_active = TRUE;
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `system_name` | Tên hệ thống bên ngoài (nhập tự do — linh hoạt cho mọi loại cổng) |
+| `system_url` | Link đăng nhập để nhân viên click trực tiếp từ trong ứng dụng |
+| `username` | Tên đăng nhập — không nhạy cảm, lưu plain text |
+| `encrypted_password` | **Mã hóa AES-256-GCM** — giải mã tại application layer, không bao giờ decrypt tại DB layer |
+| `iv` | Initialization Vector riêng cho mỗi record — đảm bảo cùng password → ciphertext khác nhau |
+| `notes` | Ghi chú vận hành, ví dụ: "Tài khoản phụ trợ", "Yêu cầu OTP SMS" |
+
+**Dữ liệu mẫu — các loại tài khoản phổ biến:**
+
+| system_name | system_url (ví dụ) |
+|-------------|-------------------|
+| Cổng thuế điện tử eTax | `https://etax.gdt.gov.vn` |
+| Cổng dịch vụ công BHXH (VssID) | `https://dichvucong.baohiemxahoi.gov.vn` |
+| Phần mềm kế toán MISA | `https://actapp.misa.vn` |
+| Ngân hàng điện tử (Internet Banking) | `https://...` |
+| Cổng thông tin Hải quan (VNACCS) | `https://www.customs.gov.vn` |
+
+> **Lưu ý triển khai:**
+> - Encryption key quản lý qua `process.env.CREDENTIAL_ENCRYPTION_KEY` (Node.js) — không hardcode, không commit vào git.
+> - Khi đọc credential để hiển thị: API trả về `{ system_name, system_url, username, password: "***" }` — chỉ decrypt khi user bấm "Hiện mật khẩu" và có ghi log vào `audit_logs`.
+> - Khi người dùng xem password: ghi `action = 'credential_viewed'` vào `audit_logs` với `target_type = 'company_credentials'`.
+
+---
+
 ## Tóm Tắt Các Bảng
 
 | # | Bảng | Mô tả | Quan hệ chính |
@@ -749,6 +926,9 @@ FOR EACH ROW EXECUTE FUNCTION update_task_actual_hours();
 | 18 | `report_jobs` | Lịch sử xuất báo cáo | N:1 users |
 | 19 | `system_configs` | Cấu hình hệ thống | — |
 | 20 | `audit_logs` | Audit trail (immutable) | N:1 users |
+| 21 | `payroll_periods` | Kỳ lương theo tháng | N:1 users (created_by, confirmed_by) |
+| 22 | `payroll_records` | Lương/thưởng từng nhân viên | N:1 payroll_periods, users |
+| 23 | `company_credentials` | Tài khoản hệ thống KH (mã hóa) | N:1 companies |
 
 ---
 
@@ -765,3 +945,5 @@ FOR EACH ROW EXECUTE FUNCTION update_task_actual_hours();
 | report_jobs (files) | 30 ngày | Tái xuất khi cần |
 | audit_logs | Vĩnh viễn | Immutable, không xóa |
 | refresh_tokens (expired) | Purge sau 7 ngày | Cleanup định kỳ |
+| payroll_records | Vĩnh viễn | Yêu cầu pháp lý kế toán lao động |
+| company_credentials | Theo vòng đời hợp đồng KH | Xóa khi `companies.status = terminated` và quá 1 năm |
