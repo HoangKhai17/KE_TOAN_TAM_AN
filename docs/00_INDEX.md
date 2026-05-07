@@ -8,7 +8,10 @@
 | 02 | [02_CHUCNANG.md](./02_CHUCNANG.md) | Danh sách chức năng, mô tả chi tiết từng module | ✅ Hoàn thành |
 | 03 | [03_FLOW_QUYTRINH.md](./03_FLOW_QUYTRINH.md) | Luồng quy trình nghiệp vụ, sơ đồ hoạt động | ✅ Hoàn thành |
 | 04 | [04_HOSTING_VANTAI.md](./04_HOSTING_VANTAI.md) | Phương án hosting, VPS, chi phí vận hành hàng năm | ✅ Hoàn thành |
-| 05 | [05_DATABASE_SCHEMA.md](./05_DATABASE_SCHEMA.md) | Thiết kế CSDL — 20 bảng, ERD, indexes, triggers | ✅ Hoàn thành |
+| 05 | [05_DATABASE_SCHEMA.md](./05_DATABASE_SCHEMA.md) | Thiết kế CSDL — 23 bảng, ERD, indexes, triggers | ✅ Hoàn thành |
+| 06 | [06_SECURITY.md](./06_SECURITY.md) | Thiết kế bảo mật — RBAC, AES-256, JWT, audit log | ✅ Hoàn thành |
+| 07 | [07_DEBUGGING_OBSERVABILITY.md](./07_DEBUGGING_OBSERVABILITY.md) | Logging, error tracking, metrics, testing strategy | ✅ Hoàn thành |
+| 08 | [08_COMPETITIVE_ANALYSIS.md](./08_COMPETITIVE_ANALYSIS.md) | Phân tích so sánh thị trường, điểm cải thiện, roadmap | ✅ Hoàn thành |
 
 ---
 
@@ -48,7 +51,5 @@ Bộ tài liệu này bao gồm:
 - Thiết kế cơ sở dữ liệu (Database Design)
 
 **Chưa bao gồm** (sẽ bổ sung giai đoạn sau):
-- Thiết kế CSDL (Database Design)
 - UI/UX Wireframe chi tiết
-- Tài liệu kỹ thuật (Technical Specification)
 - Kế hoạch triển khai (Deployment Plan)

@@ -38,6 +38,29 @@
 - Lịch sử phân công (ai phụ trách từ ngày nào đến ngày nào)
 - Cảnh báo khi doanh nghiệp chưa có nhân viên phụ trách
 
+### 1.4 Tài Khoản Hệ Thống Khách Hàng (Dynamic Credentials)
+
+> Lưu trữ an toàn các tài khoản đăng nhập hệ thống bên ngoài mà khách hàng cung cấp để nhân viên kế toán thao tác thay mặt.
+
+**Tính năng:**
+- Thêm tài khoản hệ thống cho từng khách hàng: tên hệ thống, đường link, username, mật khẩu
+- Mỗi khách hàng có số lượng tài khoản khác nhau — không giới hạn loại
+- Hiển thị mật khẩu ẩn (`***`) mặc định; nhân viên bấm "Hiện" để xem (có ghi log audit)
+- Sao chép username/password nhanh bằng nút copy trực tiếp trên giao diện
+- Bật/tắt tài khoản không còn dùng (is_active)
+
+**Các hệ thống phổ biến thường dùng:**
+
+| Hệ thống | Mục đích |
+|----------|----------|
+| Cổng thuế điện tử eTax | Kê khai, nộp thuế GTGT, TNCN, TNDN |
+| Cổng BHXH điện tử (VssID) | Khai báo lao động, đóng bảo hiểm |
+| Phần mềm kế toán MISA | Nhập liệu chứng từ, xuất báo cáo tài chính |
+| Internet Banking | Đối soát giao dịch ngân hàng |
+| Cổng Hải quan (VNACCS) | Khai báo xuất nhập khẩu (nếu có) |
+
+> **Bảo mật:** Mật khẩu được mã hóa AES-256-GCM tại application layer — không bao giờ lưu plain text. Xem chi tiết tại [06_SECURITY.md](./06_SECURITY.md).
+
 ---
 
 ## Module 2: Quản Lý Nhân Sự
@@ -59,6 +82,34 @@
 - Hiển thị tải công việc hiện tại của từng nhân viên
 - So sánh khối lượng giữa các nhân viên (dùng cho phân công cân bằng)
 - Lịch sử hoàn thành công việc theo tháng
+
+### 2.4 Quản Lý Lương & Thưởng
+
+> Lập và lưu trữ bảng lương hàng tháng cho toàn bộ nhân viên nội bộ của Tâm An.
+
+**Quy trình lập lương:**
+1. Admin tạo **kỳ lương** mới (tháng/năm) → trạng thái `Draft`
+2. Nhập dữ liệu từng nhân viên: lương cơ bản, phụ cấp, thưởng, khấu trừ
+3. Hệ thống tự tính: lương gross, BHXH/BHYT/BHTN, thuế TNCN, **lương thực nhận (net)**
+4. Admin xác nhận kỳ lương → trạng thái `Confirmed`
+5. Sau thanh toán → chuyển sang `Paid`; lưu vĩnh viễn để đối chiếu
+
+**Các thành phần trong bảng lương:**
+
+| Khoản mục | Chi tiết |
+|-----------|---------|
+| Lương cơ bản | Theo hợp đồng lao động |
+| Phụ cấp | Xăng xe, ăn trưa, điện thoại... (phân rã từng khoản) |
+| Thưởng | Thưởng KPI tháng, thưởng tiếp nhận KH mới... |
+| BHXH/BHYT/BHTN (NV đóng) | 8% + 1.5% + 1% lương đóng BH |
+| Thuế TNCN | Theo biểu thuế lũy tiến (nhập thủ công hoặc tính tự động) |
+| Khấu trừ khác | Tạm ứng thu lại, phạt... |
+| **Lương thực nhận (Net)** | **Tự động tính = Gross − các khoản khấu trừ** |
+
+**Báo cáo lương:**
+- Bảng lương tổng hợp toàn công ty theo tháng / quý
+- Chi phí nhân sự thực tế (bao gồm cả phần công ty đóng BHXH/BHYT)
+- Xuất Excel để nộp cho kế toán nội bộ hoặc đối soát ngân hàng
 
 ---
 
@@ -350,7 +401,9 @@ Mỗi loại công việc trong Task Type Library có thể cấu hình thêm tr
 | Module | Tính năng | Ưu tiên | Ghi chú |
 |--------|-----------|---------|---------|
 | M1 | Hồ sơ doanh nghiệp | 🔴 P1 | Nền tảng của toàn hệ thống |
+| M1 | Tài khoản hệ thống KH (Credentials) | 🔴 P1 | Nhu cầu hàng ngày của nhân viên kế toán |
 | M2 | Hồ sơ nhân viên + phân công | 🔴 P1 | |
+| M2 | Quản lý lương & thưởng | 🟠 P2 | Lập bảng lương hàng tháng, tính net salary |
 | M3 | Tạo & giao công việc (thủ công + template) | 🔴 P1 | |
 | M3 | Task Type Library — Lớp 1 | 🔴 P1 | Danh mục loại công việc dùng chung |
 | M3 | Customer Task Schedule + 9 chế độ lặp | 🔴 P1 | Đặc thù quan trọng nhất, xem 3.1 |

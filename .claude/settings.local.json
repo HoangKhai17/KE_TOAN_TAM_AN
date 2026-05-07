@@ -7,7 +7,8 @@
       "Bash(start \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\docs\\\\BaoGia_PhanMem_KeToanTamAn.xlsx\")",
       "Bash(taskkill /F /IM EXCEL.EXE)",
       "Bash(Start-Sleep -Seconds 1)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh api *)"
     ]
   }
 }
