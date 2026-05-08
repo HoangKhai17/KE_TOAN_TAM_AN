@@ -25,7 +25,7 @@ const updateUserSchema = z
   .refine((data) => Object.keys(data).length > 0, { message: 'No fields to update' })
 
 const updateStatusSchema = z.object({
-  status: z.enum(['active', 'inactive', 'suspended']),
+  status: z.enum(['active', 'on_leave', 'resigned']),
 })
 
 module.exports = { createUserSchema, updateUserSchema, updateStatusSchema }

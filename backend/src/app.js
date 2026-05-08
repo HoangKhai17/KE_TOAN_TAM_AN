@@ -143,8 +143,13 @@ function createApp() {
   })
 
   // API routes
-  app.use('/api/auth',  require('./modules/auth/auth.router'))
-  app.use('/api/users', require('./modules/users/users.router'))
+  app.use('/api/auth',       require('./modules/auth/auth.router'))
+  app.use('/api/users',      require('./modules/users/users.router'))
+  app.use('/api/companies',  require('./modules/companies/companies.router'))
+  app.use('/api/task-types', require('./modules/task-types/task-types.router'))
+  app.use('/api/companies/:companyId/schedules', require('./modules/schedules/company-schedules.router'))
+  app.use('/api/schedules',  require('./modules/schedules/schedules.router'))
+  app.use('/api/tasks',      require('./modules/tasks/tasks.router'))
 
   // 404 & error handlers
   app.use(notFound)

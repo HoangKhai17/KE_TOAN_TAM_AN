@@ -34,7 +34,13 @@
       "Bash(docker compose *)",
       "Bash(curl -s http://localhost:8080/api/health)",
       "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8080/api/health\" -UseBasicParsing 2>&1)",
-      "PowerShell(docker version --format \"{{.Server.Version}}\")"
+      "PowerShell(docker version --format \"{{.Server.Version}}\")",
+      "PowerShell(docker run --rm ke_toan_tam_an-backend sh -c \"cat /app/package.json\" 2>&1)",
+      "PowerShell(docker run --rm ke_toan_tam_an-backend sh -c \"ls -la /app/ && wc -c /app/package.json\" 2>&1)",
+      "PowerShell(docker compose -f \"d:/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN/docker-compose.yml\" build --no-cache backend 2>&1)",
+      "PowerShell(docker run --rm ke_toan_tam_an-backend sh -c \"wc -c /app/package.json && node -e 'require\\(`./package.json`\\); console.log\\(`OK`\\)'\" 2>&1)",
+      "PowerShell(docker compose -f \"d:/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN/docker-compose.yml\" up -d --force-recreate backend 2>&1)",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:8080/api/health\" 2>&1)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

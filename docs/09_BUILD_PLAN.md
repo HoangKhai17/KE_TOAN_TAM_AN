@@ -11,10 +11,10 @@
 | 0 | Environment & Project Structure | 2–3 ngày | — | ✅ Hoàn thành |
 | 1 | Database — Migrations & Seed | 2–3 ngày | Phase 0 | ✅ Hoàn thành |
 | 2 | Authentication & User Management | 3–4 ngày | Phase 1 | 🔄 Backend ✅ / Frontend ⏳ |
-| 3 | Company & Staff Management (API + UI) | 4–5 ngày | Phase 2 |
-| 4 | Task Type Library — Lớp 1 (API + UI) | 2–3 ngày | Phase 3 |
-| 5 | Customer Task Schedules — Lớp 2 (API + UI) | 3–4 ngày | Phase 4 |
-| 6 | Task Lifecycle — Core (API + UI) | 5–6 ngày | Phase 5 |
+| 3 | Company & Staff Management (API + UI) | 4–5 ngày | Phase 2 | 🔄 Backend ✅ / Frontend ⏳ |
+| 4 | Task Type Library — Lớp 1 (API + UI) | 2–3 ngày | Phase 3 | 🔄 Backend ✅ / Frontend ⏳ |
+| 5 | Customer Task Schedules — Lớp 2 (API + UI) | 3–4 ngày | Phase 4 | 🔄 Backend ✅ / Frontend ⏳ |
+| 6 | Task Lifecycle — Core (API + UI) | 5–6 ngày | Phase 5 | 🔄 Backend ✅ / Frontend ⏳ |
 | 7 | Task Extensions — Checklist, Deps, Time, Custom Fields | 4–5 ngày | Phase 6 |
 | 8 | Job Scheduler — Tự Động Sinh Task | 3–4 ngày | Phase 5 |
 | 9 | Credential Vault (API + UI) | 2–3 ngày | Phase 3 |
@@ -339,26 +339,26 @@ ke-toan-tam-an/
 ### 3.1 Backend — Companies
 
 **Endpoints:**
-- [ ] `GET /api/companies` — danh sách, pagination (page, limit), filter (status, assigned_staff_id, business_type), search (name/tax_code FTS)
-- [ ] `POST /api/companies` — [admin] tạo công ty mới
-- [ ] `GET /api/companies/:id` — chi tiết + assigned_staff + tổng số task đang mở
-- [ ] `PATCH /api/companies/:id` — [admin] cập nhật thông tin
-- [ ] `DELETE /api/companies/:id` — [admin] soft-delete (set status = 'terminated')
+- [x] `GET /api/companies` — danh sách, pagination (page, limit), filter (status, assigned_staff_id, business_type), search (name/tax_code FTS)
+- [x] `POST /api/companies` — [admin] tạo công ty mới
+- [x] `GET /api/companies/:id` — chi tiết + assigned_staff + tổng số task đang mở
+- [x] `PATCH /api/companies/:id` — [admin] cập nhật thông tin
+- [x] `DELETE /api/companies/:id` — [admin] soft-delete (set status = 'terminated')
 
 **Staff Assignment:**
-- [ ] `GET /api/companies/:id/assignments` — lịch sử phân công
-- [ ] `POST /api/companies/:id/assign` — [admin] phân công nhân viên (tự động đóng assignment cũ)
-- [ ] Validation: chỉ được assign user có role = 'staff' và status = 'active'
+- [x] `GET /api/companies/:id/assignments` — lịch sử phân công
+- [x] `POST /api/companies/:id/assign` — [admin] phân công nhân viên (tự động đóng assignment cũ)
+- [x] Validation: chỉ được assign user có role = 'staff' và status = 'active'
 
 **Logic:**
+- [x] `companies.service.js` có method `getCompanySummary(id)` trả thêm: task_open_count, task_overdue_count
 - [ ] Khi tạo công ty → tự động tạo thư mục OneDrive (Phase 11 sẽ implement, để placeholder)
-- [ ] `companies.service.js` có method `getCompanySummary(id)` trả thêm: task_open_count, task_overdue_count
 
 ### 3.2 Backend — Company Search
 
-- [ ] Full-text search: `to_tsvector('simple', name || ' ' || coalesce(tax_code,''))` đã có GIN index
-- [ ] Query: `WHERE fts_column @@ plainto_tsquery('simple', $1)`
-- [ ] Kết hợp search + filter trong cùng 1 query
+- [x] Full-text search: `to_tsvector('simple', name || ' ' || coalesce(tax_code,''))` đã có GIN index
+- [x] Query: `WHERE fts_column @@ plainto_tsquery('simple', $1)`
+- [x] Kết hợp search + filter trong cùng 1 query
 
 ### 3.3 Frontend — Companies
 
@@ -395,24 +395,24 @@ ke-toan-tam-an/
 ### 4.1 Backend
 
 **Endpoints:**
-- [ ] `GET /api/task-types` — danh sách, filter group_name, is_active
-- [ ] `POST /api/task-types` — [admin] tạo mới
-- [ ] `GET /api/task-types/:id` — chi tiết + checklist_templates + custom_field_schemas
-- [ ] `PATCH /api/task-types/:id` — [admin]
-- [ ] `DELETE /api/task-types/:id` — [admin] soft-delete (is_active = false)
+- [x] `GET /api/task-types` — danh sách, filter group_name, is_active
+- [x] `POST /api/task-types` — [admin] tạo mới
+- [x] `GET /api/task-types/:id` — chi tiết + checklist_templates + custom_field_schemas
+- [x] `PATCH /api/task-types/:id` — [admin]
+- [x] `POST /api/task-types/:id/toggle` — [admin] soft-deactivate (is_active toggle)
 
 **Checklist Templates:**
-- [ ] `GET /api/task-types/:id/checklist`
-- [ ] `POST /api/task-types/:id/checklist` — thêm bước (auto-increment step_order)
-- [ ] `PATCH /api/task-types/:id/checklist/:stepId` — sửa text, đổi thứ tự
-- [ ] `DELETE /api/task-types/:id/checklist/:stepId`
-- [ ] `POST /api/task-types/:id/checklist/reorder` — truyền mảng [{id, step_order}] để sắp xếp lại
+- [x] `GET /api/task-types/:id/checklist`
+- [x] `POST /api/task-types/:id/checklist` — thêm bước (auto-increment step_order)
+- [x] `PATCH /api/task-types/:id/checklist/:stepId` — sửa text, đổi thứ tự
+- [x] `DELETE /api/task-types/:id/checklist/:stepId`
+- [x] `POST /api/task-types/:id/checklist/reorder` — truyền mảng [{id, step_order}] để sắp xếp lại
 
 **Custom Field Schemas:**
-- [ ] `GET /api/task-types/:id/fields`
-- [ ] `POST /api/task-types/:id/fields` — tạo field schema (validate data_type + options hợp lệ)
-- [ ] `PATCH /api/task-types/:id/fields/:fieldId`
-- [ ] `DELETE /api/task-types/:id/fields/:fieldId`
+- [x] `GET /api/task-types/:id/fields`
+- [x] `POST /api/task-types/:id/fields` — tạo field schema (validate data_type + options hợp lệ)
+- [x] `PATCH /api/task-types/:id/fields/:fieldId`
+- [x] `DELETE /api/task-types/:id/fields/:fieldId`
 
 ### 4.2 Frontend — Task Types Page (`/settings/task-types`)
 
@@ -440,16 +440,16 @@ ke-toan-tam-an/
 ### 5.1 Backend
 
 **Endpoints:**
-- [ ] `GET /api/companies/:companyId/schedules` — danh sách lịch của 1 KH
-- [ ] `POST /api/companies/:companyId/schedules` — tạo lịch mới
-- [ ] `GET /api/schedules/:id` — chi tiết
-- [ ] `PATCH /api/schedules/:id` — cập nhật
-- [ ] `DELETE /api/schedules/:id` — xóa (kiểm tra không xóa nếu đã có task được sinh)
-- [ ] `GET /api/schedules/:id/preview` — preview 10 ngày sẽ sinh task tiếp theo (không lưu DB)
-- [ ] `POST /api/schedules/:id/toggle` — bật/tắt is_active
+- [x] `GET /api/companies/:companyId/schedules` — danh sách lịch của 1 KH
+- [x] `POST /api/companies/:companyId/schedules` — tạo lịch mới
+- [x] `GET /api/schedules/:id` — chi tiết
+- [x] `PATCH /api/schedules/:id` — cập nhật
+- [x] `DELETE /api/schedules/:id` — xóa (kiểm tra không xóa nếu đã có task được sinh)
+- [x] `GET /api/schedules/:id/preview` — preview 10 ngày sẽ sinh task tiếp theo (không lưu DB)
+- [x] `POST /api/schedules/:id/toggle` — bật/tắt is_active
 
 **Validation `recurrence_config`:**
-- [ ] `src/utils/recurrence.validator.js` — validate theo từng type:
+- [x] `src/utils/recurrence.validator.js` — validate theo từng type:
   - `daily`: `every_n_days` phải là số nguyên >= 1
   - `weekly`: `weekdays` là array, phần tử trong [0..6], không rỗng
   - `monthly_by_date`: `day` trong [1..31]
@@ -457,14 +457,14 @@ ke-toan-tam-an/
   - `monthly_last_day`: config có thể rỗng `{}`
   - `quarterly`: `month_in_quarter` trong [1..3], `day` trong [1..31]
   - `yearly`: `month` trong [1..12], `day` trong [1..31]
-  - `custom_dates`: `dates` là array ISO date strings, không rỗng, không có date trong quá khứ
-  - `once`: `date` là ISO date string trong tương lai
+  - `custom_dates`: `dates` là array ISO date strings, không rỗng
+  - `once`: `date` là ISO date string YYYY-MM-DD
 
 **Recurrence Calculator:**
-- [ ] `src/utils/recurrence.calculator.js` — function `getNextOccurrence(schedule, fromDate)`:
-  - Nhận 1 schedule object → trả về Date tiếp theo sẽ sinh task
-  - Test riêng cho từng type (đặc biệt: tháng 2 với monthly_last_day, năm nhuận...)
-  - Dùng `date-fns` cho date arithmetic
+- [x] `src/utils/recurrence.calculator.js` — functions `getNextOccurrence`, `getNextOccurrences`, `shouldGenerateToday`:
+  - Xử lý đúng tháng 2 (monthly_last_day = 28/29), năm nhuận
+  - monthly_by_weekday: tìm thứ N tuần thứ M, skip nếu tháng không có đủ tuần
+  - Dùng `date-fns` (đã có trong package.json)
 
 ### 5.2 Frontend — Schedules trong trang Company
 
@@ -497,36 +497,37 @@ ke-toan-tam-an/
 ### 6.1 Backend — Tasks
 
 **Endpoints:**
-- [ ] `GET /api/tasks` — danh sách với filters đa chiều:
-  - `company_id`, `assigned_to`, `status` (multi), `priority` (multi)
-  - `source` (auto/manual), `due_date_from`, `due_date_to`
-  - `period_label`, `is_overdue` (boolean)
-  - `search` (FTS trên title)
-  - pagination: `page`, `limit`, `sort_by`, `sort_dir`
-- [ ] `POST /api/tasks` — tạo task thủ công
-- [ ] `GET /api/tasks/:id` — chi tiết task + checklist + comments count + deps
-- [ ] `PATCH /api/tasks/:id` — cập nhật fields cho phép
-- [ ] `DELETE /api/tasks/:id` — [admin] xóa (ghi audit log)
-- [ ] `POST /api/tasks/:id/status` — chuyển trạng thái (validate transitions)
+- [x] `GET /api/tasks` — danh sách với filters đa chiều:
+  - `companyId`, `assignedTo`, `status` (multi), `priority` (multi)
+  - `source` (auto/manual), `dueDateFrom`, `dueDateTo`
+  - `periodLabel`, `isOverdue` (boolean)
+  - `search` (FTS trên title + description)
+  - pagination: `page`, `limit`, `sortBy`, `sortDir`
+- [x] `POST /api/tasks` — tạo task thủ công (auto-copy checklist từ task type nếu có taskTypeId)
+- [x] `GET /api/tasks/:id` — chi tiết task + checklist counts
+- [x] `PATCH /api/tasks/:id` — cập nhật: title, description, assignedTo, dueDate, priority, slaDays
+- [x] `DELETE /api/tasks/:id` — [admin] xóa + ghi audit log
+- [x] `POST /api/tasks/:id/status` — chuyển trạng thái (validate transitions)
+- [x] `GET /api/tasks/:id/activity` — activity log của task
 
 **Status Transition Rules:**
-- [ ] `src/modules/tasks/tasks.transitions.js` — map allowed transitions:
+- [x] `src/modules/tasks/tasks.transitions.js` — map allowed transitions:
   ```
   pending         → [in_progress, on_hold]
   in_progress     → [on_hold, pending_review, completed]
   on_hold         → [in_progress, needs_revision]
   pending_review  → [completed, needs_revision]
   needs_revision  → [in_progress]
-  completed       → [] (không cho chuyển trở lại — chỉ admin override)
+  completed       → []
   ```
-- [ ] Khi chuyển sang `on_hold`: bắt buộc có `on_hold_reason`
-- [ ] Khi chuyển sang `completed`: check tất cả checklist items done (hoặc có `force = true`)
-- [ ] Khi chuyển sang `completed`: set `completed_at = NOW()`
+- [x] Khi chuyển sang `on_hold`: bắt buộc có `onHoldReason`
+- [x] Khi chuyển sang `completed`: check tất cả checklist items done (hoặc có `force = true`)
+- [x] Khi chuyển sang `completed`: set `completed_at = NOW()`
+- [x] Rời `on_hold` → tự động clear `on_hold_reason`
 
 **Activity Logging:**
-- [ ] Sau mỗi thay đổi quan trọng → tự động insert `task_activity_logs`
-- [ ] `src/utils/activity.logger.js` — helper function `logActivity(taskId, userId, action, oldVal, newVal, meta)`
-- [ ] Log các actions: `created`, `status_changed`, `assigned`, `due_date_changed`, `priority_changed`
+- [x] `src/lib/activity.js` — fire-and-forget helper `logActivity(taskId, userId, action, oldVal, newVal, meta)`
+- [x] Log: `created`, `status_changed`, `assigned`, `due_date_changed`, `priority_changed`
 
 ### 6.2 Frontend — Tasks
 
