@@ -343,7 +343,26 @@
   line-height: var(--lh-body);
 }
 
-/* ── Error message (added for React) ────────── */
+/* ── Field-level error text ─────────────────── */
+.fieldError {
+  margin: 5px 0 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--danger);
+  line-height: 1.4;
+}
+
+/* ── Input wrapper in error state ───────────── */
+.inputError {
+  border-color: var(--danger);
+}
+
+.inputError:focus-within {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+}
+
+/* ── Global error banner (added for React) ─── */
 .errorMsg {
   display: flex;
   align-items: flex-start;

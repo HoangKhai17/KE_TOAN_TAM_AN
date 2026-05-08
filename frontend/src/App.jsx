@@ -39,6 +39,19 @@ export default function App() {
           }
         />
 
+        {/*
+          /change-password — TODO Phase 2: implement ChangePassword page.
+          Temporarily redirect to /dashboard so mustChangePw flow doesn't hit a dead route.
+        */}
+        <Route
+          path="/change-password"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/dashboard" replace />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Catch-all */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -3,7 +3,7 @@ import { useAuthStore } from '../stores/authStore'
 
 const api = axios.create({
   baseURL: '/api',
-  withCredentials: true, // needed for httpOnly cookie (refresh token)
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -16,7 +16,7 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Response interceptor — auto-refresh on 401
+// Response interceptor — auto-refresh on 401 for protected routes only
 let isRefreshing = false
 let failedQueue = []
 
@@ -28,12 +28,22 @@ function processQueue(error, token = null) {
   failedQueue = []
 }
 
+// Auth endpoints must NOT trigger auto-refresh — let their 401 propagate as-is
+const SKIP_REFRESH_URLS = ['/auth/login', '/auth/refresh']
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+    const requestUrl = originalRequest?.url ?? ''
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const shouldSkipRefresh = SKIP_REFRESH_URLS.some((path) => requestUrl.includes(path))
+
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !shouldSkipRefresh
+    ) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
@@ -58,7 +68,10 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null)
         useAuthStore.getState().logout()
-        window.location.href = '/login'
+        // Only redirect when not already on the login page
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
