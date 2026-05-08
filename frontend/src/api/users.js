@@ -28,3 +28,8 @@ export async function updateUserStatus(id, status) {
 export async function deleteUser(id) {
   await api.delete(`/users/${id}`)
 }
+
+export async function resetUserPassword(id, newPassword) {
+  const { data } = await api.patch(`/users/${id}/reset-password`, { newPassword })
+  return data.data.user
+}

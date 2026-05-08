@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import {
   Clock, Users, ListTodo, Building2, Bell, CalendarDays, ShieldAlert,
-  Settings as SettingsIcon, Plus, Pencil, Save, ArrowRight,
+  Settings as SettingsIcon, Plus, Pencil, Save, KeyRound,
   ChevronDown, ChevronRight, Loader2, CheckCircle2, AlertCircle,
+  Search, Eye, EyeOff, UserX, UserCheck,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listTaskTypes, createTaskType, updateTaskType, toggleTaskType } from '../../api/taskTypes'
+import { listUsers, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
 import { BUSINESS_TYPE_LABELS } from '../Companies/Companies'
 import s from './settings.module.css'
+
+function getInitials(name) {
+  if (!name) return '?'
+  return name.split(' ').slice(-2).map((w) => w[0]).join('').toUpperCase()
+}
 
 // ── Section list ──────────────────────────────────────────────────────────────
 
@@ -190,33 +196,302 @@ function TimezoneSection() {
 // ── Section: Users ────────────────────────────────────────────────────────────
 
 function UsersSection() {
+  const currentUser = useAuthStore((st) => st.user)
+  const [users, setUsers]           = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [search, setSearch]         = useState('')
+  const [editTarget, setEditTarget] = useState(null)
+  const [resetTarget, setResetTarget] = useState(null)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const result = await listUsers({ limit: 100 })
+      setUsers(result.users)
+    } catch { /* ignore */ }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function handleStatusToggle(u) {
+    const newStatus = u.status === 'active' ? 'on_leave' : 'active'
+    try { await updateUserStatus(u.id, newStatus); load() } catch { /* ignore */ }
+  }
+
+  const filtered = !search.trim()
+    ? users
+    : users.filter((u) =>
+        u.name.toLowerCase().includes(search.toLowerCase()) ||
+        u.email.toLowerCase().includes(search.toLowerCase())
+      )
+
   return (
     <div>
-      <p className={s.sectionText}>
-        Tạo, chỉnh sửa, phân quyền và quản lý trạng thái nhân viên tại trang quản lý riêng.
-      </p>
-      <Link to="/staff" className={s.linkReset}>
-        <button className={s.btnSave}>
-          Đi đến trang Nhân viên
-          <ArrowRight size={14} />
-        </button>
-      </Link>
-
-      <div className={s.roleGrid}>
-        {[
-          { role: 'admin',   color: '#7c3aed', bg: '#f5f3ff', desc: 'Toàn quyền hệ thống, quản lý cấu hình và nhân viên' },
-          { role: 'manager', color: '#2563eb', bg: '#eff6ff', desc: 'Xem báo cáo, phân công và theo dõi công việc' },
-          { role: 'staff',   color: '#059669', bg: '#f0fdf4', desc: 'Thực hiện và cập nhật trạng thái công việc được giao' },
-        ].map(({ role, color, bg, desc }) => (
-          <div key={role} className={s.roleCard}>
-            <span className={s.roleBadge} style={{ background: bg, color }}>
-              {role}
-            </span>
-            <p className={s.roleDesc}>{desc}</p>
-          </div>
-        ))}
+      <div className={s.usersToolbar}>
+        <div className={s.userSearchWrap}>
+          <span className={s.userSearchIcon}><Search size={13} /></span>
+          <input
+            type="text"
+            placeholder="Tìm theo tên, email…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={s.userSearchInput}
+          />
+        </div>
       </div>
+
+      <div className={s.userTableWrap}>
+        {loading ? (
+          <div className={s.skeletonStack} style={{ padding: 16 }}>
+            {[1, 2, 3].map((i) => <div key={i} className={s.skeletonLine} />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <p className={s.emptyState}>Không tìm thấy người dùng.</p>
+        ) : (
+          <table className={s.settingsTable}>
+            <thead>
+              <tr>
+                <th>Người dùng</th>
+                <th>Chức vụ</th>
+                <th>Vai trò</th>
+                <th>Trạng thái</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    <div className={s.userNameCell}>
+                      <div className={`${s.userInitials} ${u.role === 'admin' ? s.userInitialsGold : ''}`}>
+                        {getInitials(u.name)}
+                      </div>
+                      <div>
+                        <div className={s.userNameText}>{u.name}</div>
+                        <div className={s.userEmailText}>{u.email}</div>
+                        {u.mustChangePw && (
+                          <span className={s.pillWarn}>Chưa đổi MK</span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className={s.muted}>{u.jobTitle || '—'}</td>
+                  <td>
+                    <span className={u.role === 'admin' ? s.roleAdmin : s.roleStaff}>
+                      {u.role}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={
+                      u.status === 'active'   ? s.statusActive
+                      : u.status === 'on_leave' ? s.statusOnLeave
+                      : s.statusResigned
+                    }>
+                      {u.status === 'active' ? 'Hoạt động' : u.status === 'on_leave' ? 'Tạm dừng' : 'Đã nghỉ'}
+                    </span>
+                  </td>
+                  <td>
+                    <div className={s.userActionsCell}>
+                      <button
+                        className={s.iconBtn}
+                        title="Chỉnh sửa thông tin"
+                        onClick={() => setEditTarget(u)}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        className={s.iconBtn}
+                        title="Đặt lại mật khẩu"
+                        onClick={() => setResetTarget(u)}
+                      >
+                        <KeyRound size={13} />
+                      </button>
+                      {u.id !== currentUser?.id && (
+                        <button
+                          className={`${s.iconBtn} ${u.status === 'active' ? s.iconBtnWarn : s.iconBtnSuccess}`}
+                          title={u.status === 'active' ? 'Tạm dừng tài khoản' : 'Kích hoạt tài khoản'}
+                          onClick={() => handleStatusToggle(u)}
+                        >
+                          {u.status === 'active' ? <UserX size={13} /> : <UserCheck size={13} />}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {editTarget && (
+        <EditUserModal
+          user={editTarget}
+          currentUserId={currentUser?.id}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); load() }}
+        />
+      )}
+      {resetTarget && (
+        <ResetPasswordModal
+          user={resetTarget}
+          onClose={() => setResetTarget(null)}
+          onSaved={() => { setResetTarget(null); load() }}
+        />
+      )}
     </div>
+  )
+}
+
+function EditUserModal({ user, currentUserId, onClose, onSaved }) {
+  const isCurrentUser = user.id === currentUserId
+  const [form, setForm]   = useState({
+    name:     user.name,
+    phone:    user.phone    || '',
+    jobTitle: user.jobTitle || '',
+    role:     user.role,
+    status:   user.status,
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState(null)
+
+  const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }))
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!form.name.trim()) { setError('Tên không được để trống'); return }
+    setSaving(true); setError(null)
+    try {
+      await updateUser(user.id, {
+        name:     form.name.trim(),
+        phone:    form.phone.trim()    || null,
+        jobTitle: form.jobTitle.trim() || null,
+        role:     form.role,
+      })
+      if (!isCurrentUser && form.status !== user.status) {
+        await updateUserStatus(user.id, form.status)
+      }
+      onSaved()
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Đã xảy ra lỗi')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title="Chỉnh sửa người dùng" onClose={onClose}>
+      <form onSubmit={handleSubmit} className={s.modalForm}>
+        {error && <div className={s.errorBox}>{error}</div>}
+
+        <div>
+          <label className={s.settingsLabel}>Họ và tên *</label>
+          <input type="text" value={form.name} onChange={set('name')} className={s.settingsInput} />
+        </div>
+        <div>
+          <label className={s.settingsLabel}>Số điện thoại</label>
+          <input type="text" value={form.phone} onChange={set('phone')} className={s.settingsInput} />
+        </div>
+        <div>
+          <label className={s.settingsLabel}>Chức vụ</label>
+          <input type="text" value={form.jobTitle} onChange={set('jobTitle')} className={s.settingsInput} />
+        </div>
+
+        {!isCurrentUser && (
+          <>
+            <div>
+              <label className={s.settingsLabel}>Vai trò</label>
+              <select value={form.role} onChange={set('role')} className={`${s.settingsInput} ${s.settingsSelect}`}>
+                <option value="staff">Staff — Nhân viên</option>
+                <option value="admin">Admin — Quản trị viên</option>
+              </select>
+            </div>
+            <div>
+              <label className={s.settingsLabel}>Trạng thái tài khoản</label>
+              <select value={form.status} onChange={set('status')} className={`${s.settingsInput} ${s.settingsSelect}`}>
+                <option value="active">Hoạt động</option>
+                <option value="on_leave">Tạm dừng</option>
+                <option value="resigned">Đã nghỉ việc</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        <div className={s.modalActions}>
+          <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
+          <button type="submit" disabled={saving} className={s.btnSave}>
+            {saving && <Loader2 size={13} />}
+            Lưu thay đổi
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function ResetPasswordModal({ user, onClose, onSaved }) {
+  const [form, setForm]     = useState({ newPassword: '', confirm: '' })
+  const [showPw, setShowPw] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!form.newPassword) { setError('Vui lòng nhập mật khẩu mới'); return }
+    if (form.newPassword !== form.confirm) { setError('Mật khẩu xác nhận không khớp'); return }
+    setSaving(true); setError(null)
+    try {
+      await resetUserPassword(user.id, form.newPassword)
+      onSaved()
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Đã xảy ra lỗi')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title={`Đặt lại mật khẩu — ${user.name}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className={s.modalForm}>
+        <div className={s.confirmWarn}>
+          Người dùng sẽ được yêu cầu đổi mật khẩu ở lần đăng nhập tiếp theo.
+        </div>
+
+        {error && <div className={s.errorBox}>{error}</div>}
+
+        <div>
+          <label className={s.settingsLabel}>Mật khẩu mới</label>
+          <div className={s.pwInputWrap}>
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={form.newPassword}
+              onChange={(e) => setForm((p) => ({ ...p, newPassword: e.target.value }))}
+              placeholder="≥ 8 ký tự, 1 hoa, 1 số, 1 ký tự đặc biệt"
+              className={`${s.settingsInput} ${s.pwInputField}`}
+            />
+            <button type="button" className={s.pwToggleBtn} onClick={() => setShowPw((v) => !v)}>
+              {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className={s.settingsLabel}>Xác nhận mật khẩu</label>
+          <input
+            type={showPw ? 'text' : 'password'}
+            value={form.confirm}
+            onChange={(e) => setForm((p) => ({ ...p, confirm: e.target.value }))}
+            className={s.settingsInput}
+          />
+        </div>
+
+        <div className={s.modalActions}>
+          <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
+          <button type="submit" disabled={saving} className={s.btnSave}>
+            {saving && <Loader2 size={13} />}
+            Đặt lại mật khẩu
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 

@@ -2,7 +2,7 @@ const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
 const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
-const { createUserSchema, updateUserSchema, updateStatusSchema } = require('./users.schema')
+const { createUserSchema, updateUserSchema, updateStatusSchema, resetPasswordSchema } = require('./users.schema')
 const ctrl = require('./users.controller')
 
 const router = Router()
@@ -182,6 +182,7 @@ router.patch('/:id', ...adminOnly, validate(updateUserSchema), ctrl.updateUser)
  *       404: { description: User not found }
  */
 router.patch('/:id/status', ...adminOnly, validate(updateStatusSchema), ctrl.updateStatus)
+router.patch('/:id/reset-password', ...adminOnly, validate(resetPasswordSchema), ctrl.resetPassword)
 
 /**
  * @openapi

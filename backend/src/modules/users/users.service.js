@@ -177,4 +177,27 @@ async function deleteUser(id, actorId, ipAddress, userAgent) {
   })
 }
 
-module.exports = { listUsers, getUserById, createUser, updateUser, updateStatus, deleteUser }
+async function resetUserPassword(id, newPassword, actorId, ipAddress, userAgent) {
+  const passwordHash = await bcrypt.hash(newPassword, 12)
+  const { rows } = await query(
+    `UPDATE users SET password_hash = $1, must_change_pw = TRUE, updated_at = NOW()
+     WHERE id = $2
+     RETURNING id, name, email, role, status, phone, job_title, avatar_url, must_change_pw, updated_at`,
+    [passwordHash, id]
+  )
+  if (!rows[0]) throw Object.assign(new Error('User not found'), { status: 404 })
+
+  await audit.log({
+    userId: actorId,
+    action: 'user.password_reset',
+    targetType: 'user',
+    targetId: id,
+    meta: { resetBy: actorId },
+    ipAddress,
+    userAgent,
+  })
+
+  return toDto(rows[0])
+}
+
+module.exports = { listUsers, getUserById, createUser, updateUser, updateStatus, deleteUser, resetUserPassword }

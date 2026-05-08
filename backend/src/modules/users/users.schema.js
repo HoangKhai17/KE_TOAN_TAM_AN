@@ -28,4 +28,13 @@ const updateStatusSchema = z.object({
   status: z.enum(['active', 'on_leave', 'resigned']),
 })
 
-module.exports = { createUserSchema, updateUserSchema, updateStatusSchema }
+const resetPasswordSchema = z.object({
+  newPassword: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
+    .regex(/[0-9]/, 'Must contain at least one number')
+    .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character'),
+})
+
+module.exports = { createUserSchema, updateUserSchema, updateStatusSchema, resetPasswordSchema }

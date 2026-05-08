@@ -69,4 +69,15 @@ async function deleteUser(req, res, next) {
   }
 }
 
-module.exports = { listUsers, getUser, createUser, updateUser, updateStatus, deleteUser }
+async function resetPassword(req, res, next) {
+  try {
+    const user = await usersService.resetUserPassword(
+      req.params.id, req.body.newPassword, req.user.id, req.ip, req.headers['user-agent']
+    )
+    res.json({ success: true, data: { user } })
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { listUsers, getUser, createUser, updateUser, updateStatus, deleteUser, resetPassword }
