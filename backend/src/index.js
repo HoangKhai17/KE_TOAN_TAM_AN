@@ -1,15 +1,33 @@
 require('./config/env') // validate env vars first — throws if missing
 const createApp = require('./app')
-const { testConnection: testDb } = require('./config/db')
+const { pool, testConnection: testDb } = require('./config/db')
 const { redis, testConnection: testRedis } = require('./config/redis')
 const logger = require('./config/logger')
 const env = require('./config/env')
+const { applyTimezone } = require('./config/appSettings')
+
+async function loadTimezone() {
+  try {
+    const { rows } = await pool.query(
+      "SELECT value FROM system_configs WHERE key = 'system_timezone'"
+    )
+    if (rows.length) {
+      applyTimezone(rows[0].value)
+      logger.info(`System timezone set to: ${rows[0].value}`)
+    }
+  } catch (err) {
+    logger.warn('Could not load system_timezone from DB, using default Asia/Ho_Chi_Minh', { error: err.message })
+  }
+}
 
 async function start() {
   try {
     await testDb()
     await redis.connect()
     await testRedis()
+
+    // Load runtime settings before app handles any requests
+    await loadTimezone()
 
     const app = createApp()
     const server = app.listen(env.PORT, () => {

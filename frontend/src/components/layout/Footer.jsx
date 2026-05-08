@@ -1,11 +1,21 @@
+import s from './layout.module.css'
+
 export default function Footer() {
   return (
-    <footer className="flex items-center justify-between px-5 h-9 border-t border-gray-200 bg-white flex-shrink-0">
-      <span className="text-[11px] text-gray-400">
-        © 2026 Kế Toán Tâm An · v1.0.0 · Nội bộ
+    <footer className={s.footer}>
+      <span className={s.footerText}>
+        © 2026 <span className={s.footerAccent}>Kế Toán Tâm An</span> · v1.0.0
       </span>
-      <span className="text-[11px] text-gray-400 hidden sm:block">
-        Không phân phối
+      <span className={s.footerText}>
+        Developed by{' '}
+        <a
+          href="https://bbotech.vn"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={s.footerLink}
+        >
+          bbotech.vn
+        </a>
       </span>
     </footer>
   )

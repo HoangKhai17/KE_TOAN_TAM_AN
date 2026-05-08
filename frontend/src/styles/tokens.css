@@ -1,0 +1,50 @@
+:root {
+  --color-primary: #0f345e;
+  --color-primary-dark: #092744;
+  --color-primary-soft: #2c557f;
+  --color-accent: #d4a440;
+  --color-accent-light: #eac05c;
+  --color-accent-dark: #a46b1e;
+  --color-success: #059669;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-border-soft: #f3f4f6;
+  --color-text: #1f2937;
+  --color-text-strong: #111827;
+  --color-muted: #6b7280;
+  --color-muted-soft: #9ca3af;
+
+  --gradient-primary: linear-gradient(135deg, #004990 0%, #00152d 100%);
+  --gradient-accent: linear-gradient(135deg, #d4a440 0%, #eac05c 100%);
+  --shadow-sm: 0 1px 3px rgba(15, 52, 94, 0.08);
+  --shadow-md: 0 4px 20px -4px rgba(15, 52, 94, 0.14);
+  --shadow-lg: 0 20px 60px -20px rgba(9, 39, 68, 0.22);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --font-sans: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes app-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}

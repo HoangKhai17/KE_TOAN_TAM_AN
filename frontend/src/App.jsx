@@ -8,6 +8,8 @@ import Dashboard from './pages/Dashboard/Dashboard'
 import Staff from './pages/Staff/Staff'
 import Companies from './pages/Companies/Companies'
 import CompanyDetail from './pages/Companies/CompanyDetail'
+import Settings from './pages/Settings/Settings'
+import s from './App.module.css'
 
 // ── Route guards ──────────────────────────────────────────────────────
 // isAuthReady is always true by the time these render (AppRoutes handles
@@ -33,26 +35,8 @@ function GuestRoute({ children }) {
 
 function BootstrapScreen() {
   return (
-    <div
-      style={{
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        height:         '100vh',
-        background:     '#f7f8fa',
-      }}
-    >
-      <div
-        style={{
-          width:           36,
-          height:          36,
-          border:          '3px solid #e5e7eb',
-          borderTopColor:  '#0f345e',
-          borderRadius:    '50%',
-          animation:       'bs-spin 0.75s linear infinite',
-        }}
-      />
-      <style>{`@keyframes bs-spin { to { transform: rotate(360deg); } }`}</style>
+    <div className={s.bootstrap}>
+      <div className={s.bootstrapSpinner} />
     </div>
   )
 }
@@ -117,6 +101,11 @@ function AppRoutes() {
       <Route
         path="/companies/:id"
         element={<ProtectedRoute><CompanyDetail /></ProtectedRoute>}
+      />
+
+      <Route
+        path="/settings"
+        element={<ProtectedRoute><Settings /></ProtectedRoute>}
       />
 
       {/* TODO Phase 2: implement ChangePassword page.

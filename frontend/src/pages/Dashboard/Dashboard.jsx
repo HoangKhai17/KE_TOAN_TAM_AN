@@ -1,5 +1,6 @@
 import { useAuthStore } from '../../stores/authStore'
 import AppLayout from '../../components/layout/AppLayout'
+import s from './Dashboard.module.css'
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user)
@@ -7,24 +8,24 @@ export default function Dashboard() {
   return (
     <AppLayout title="Dashboard">
       {/* Greeting */}
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-gray-800">
+      <div className={s.greeting}>
+        <h2 className={s.greetingTitle}>
           Xin chào, {user?.name?.split(' ').pop() ?? 'bạn'} 👋
         </h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className={s.greetingDate}>
           Hôm nay {new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+      <div className={s.statsGrid}>
         {STAT_CARDS.map((card) => (
           <StatCard key={card.label} {...card} />
         ))}
       </div>
 
       {/* Placeholder content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className={s.contentGrid}>
         <PlaceholderPanel title="Công việc gần đây" rows={5} />
         <PlaceholderPanel title="Sắp đến hạn" rows={4} />
       </div>
@@ -44,30 +45,30 @@ const STAT_CARDS = [
 function StatCard({ label, value, sub, color, bg }) {
   return (
     <div
-      className="rounded-xl p-5 border"
+      className={s.statCard}
       style={{ background: bg, borderColor: `${color}22` }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color }}>
+      <p className={s.statLabel} style={{ color }}>
         {label}
       </p>
-      <p className="text-3xl font-bold mb-1" style={{ color }}>
+      <p className={s.statValue} style={{ color }}>
         {value}
       </p>
-      <p className="text-xs text-gray-500">{sub}</p>
+      <p className={s.statSub}>{sub}</p>
     </div>
   )
 }
 
 function PlaceholderPanel({ title, rows }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">{title}</h3>
-      <div className="space-y-2.5">
+    <div className={s.panel}>
+      <h3 className={s.panelTitle}>{title}</h3>
+      <div className={s.skeletonList}>
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="h-10 bg-gray-100 rounded-lg animate-pulse" />
+          <div key={i} className={s.skeletonRow} />
         ))}
       </div>
-      <p className="text-xs text-gray-400 text-center mt-4">
+      <p className={s.panelNote}>
         Sẽ hiển thị dữ liệu sau khi tích hợp API
       </p>
     </div>

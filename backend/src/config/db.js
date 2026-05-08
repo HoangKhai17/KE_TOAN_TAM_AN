@@ -1,6 +1,7 @@
 const { Pool } = require('pg')
 const env = require('./env')
 const logger = require('./logger')
+const { getTimezone } = require('./appSettings')
 
 const pool = new Pool({
   connectionString: env.db.url,
@@ -11,6 +12,14 @@ const pool = new Pool({
 
 pool.on('error', (err) => {
   logger.error('Unexpected PostgreSQL client error', { error: err.message })
+})
+
+// Apply system timezone on every new connection so NOW() and timezone-aware
+// operations use the configured timezone instead of PostgreSQL's default (UTC).
+pool.on('connect', (client) => {
+  client.query(`SET TIME ZONE '${getTimezone()}'`).catch((err) => {
+    logger.warn('Failed to set session timezone', { error: err.message })
+  })
 })
 
 async function testConnection() {

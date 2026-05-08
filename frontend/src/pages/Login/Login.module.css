@@ -580,6 +580,11 @@
   transform: translateX(2px);
 }
 
+.spinner {
+  flex-shrink: 0;
+  animation: app-spin 0.75s linear infinite;
+}
+
 /* ── Divider ────────────────────────────────── */
 .divider {
   display: flex;

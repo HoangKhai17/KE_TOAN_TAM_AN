@@ -10,9 +10,9 @@
 |-------|-----|----------|-----------|--------|
 | 0 | Environment & Project Structure | 2–3 ngày | — | ✅ Hoàn thành |
 | 1 | Database — Migrations & Seed | 2–3 ngày | Phase 0 | ✅ Hoàn thành |
-| 2 | Authentication & User Management | 3–4 ngày | Phase 1 | 🔄 Backend ✅ / Frontend ⏳ |
-| 3 | Company & Staff Management (API + UI) | 4–5 ngày | Phase 2 | 🔄 Backend ✅ / Frontend ⏳ |
-| 4 | Task Type Library — Lớp 1 (API + UI) | 2–3 ngày | Phase 3 | 🔄 Backend ✅ / Frontend ⏳ |
+| 2 | Authentication & User Management | 3–4 ngày | Phase 1 | 🔄 Backend ✅ / Frontend 🔄 |
+| 3 | Company & Staff Management (API + UI) | 4–5 ngày | Phase 2 | 🔄 Backend ✅ / Frontend 🔄 |
+| 4 | Task Type Library — Lớp 1 (API + UI) | 2–3 ngày | Phase 3 | 🔄 Backend ✅ / Frontend 🔄 |
 | 5 | Customer Task Schedules — Lớp 2 (API + UI) | 3–4 ngày | Phase 4 | 🔄 Backend ✅ / Frontend ⏳ |
 | 6 | Task Lifecycle — Core (API + UI) | 5–6 ngày | Phase 5 | 🔄 Backend ✅ / Frontend ⏳ |
 | 7 | Task Extensions — Checklist, Deps, Time, Custom Fields | 4–5 ngày | Phase 6 |
@@ -304,29 +304,32 @@ ke-toan-tam-an/
 
 ### 2.4 Frontend — Auth
 
-- [ ] `pages/Login/` — form email + password, show/hide password, loading state, error message
-- [ ] Axios interceptor: đính kèm Authorization header từ `authStore`
-- [ ] Axios interceptor: khi nhận 401 → tự động call `/api/auth/refresh` → retry original request → nếu refresh fail → redirect login
-- [ ] Protected route component: kiểm tra authStore, redirect `/login` nếu chưa đăng nhập
+- [x] `pages/Login/` — form email + password, show/hide password, loading state, error message
+- [x] Axios interceptor: đính kèm Authorization header từ `authStore`
+- [x] Axios interceptor: khi nhận 401 → tự động call `/api/auth/refresh` → retry original request → nếu refresh fail → redirect login
+- [x] Protected route component: kiểm tra authStore, redirect `/login` nếu chưa đăng nhập
+- [x] Bootstrap session: gọi `/auth/refresh` khi app mount, spinner khi chưa ready, proactive timer refresh 60s trước expiry
 - [ ] `must_change_pw === true` → redirect `/change-password` bắt buộc đổi mật khẩu trước khi dùng app
 
 ### 2.5 Frontend — User Management Page
 
-- [ ] `pages/Staff/` — danh sách nhân viên dạng bảng: avatar, tên, email, chức danh, role, status
-- [ ] Filter: role (admin/staff), status (active/on_leave/resigned)
-- [ ] Modal tạo nhân viên mới (admin only)
+- [x] `pages/Staff/` — danh sách nhân viên dạng bảng: avatar, tên, email, chức danh, role, status
+- [x] Filter: role (admin/staff), status (active/on_leave/resigned)
+- [x] Modal tạo nhân viên mới (admin only)
+- [x] Modal chỉnh sửa nhân viên (admin only)
+- [x] Action: đổi trạng thái (active/on_leave/resigned), xóa nhân viên
 - [ ] Xem profile nhân viên: thông tin cơ bản + danh sách KH đang phụ trách + overview task
-- [ ] Action: lock/unlock, reset password (admin only)
+- [ ] Action: reset password (admin only)
 
 **Acceptance Criteria Phase 2:**
 ```
-□ POST /api/auth/login với đúng credentials → 200 + tokens
-□ POST /api/auth/login với sai password 5 lần → tài khoản bị lock
-□ GET /api/auth/me với expired access token → 401
-□ POST /api/auth/refresh với valid refresh token → 200 + new tokens + old token revoked
-□ Dùng lại old refresh token sau khi rotate → 401 + toàn bộ family bị revoke
-□ Màn hình login hoạt động, redirect về dashboard sau login
-□ F5 trang bất kỳ → vẫn còn đăng nhập (token persist trong memory/sessionStorage)
+✅ POST /api/auth/login với đúng credentials → 200 + tokens
+✅ POST /api/auth/login với sai password 5 lần → tài khoản bị lock
+✅ GET /api/auth/me với expired access token → 401
+✅ POST /api/auth/refresh với valid refresh token → 200 + new tokens + old token revoked
+✅ Dùng lại old refresh token sau khi rotate → 401 + toàn bộ family bị revoke
+✅ Màn hình login hoạt động, redirect về dashboard sau login
+✅ F5 trang bất kỳ → vẫn còn đăng nhập (token persist qua HttpOnly refresh cookie)
 □ must_change_pw = true → không vào được app ngoài trang đổi mật khẩu
 ```
 
@@ -363,27 +366,28 @@ ke-toan-tam-an/
 ### 3.3 Frontend — Companies
 
 **Trang danh sách (`/companies`):**
-- [ ] Bảng: tên công ty, MST, loại hình, nhân viên phụ trách, trạng thái, số task mở/trễ
-- [ ] Search bar (debounce 300ms)
-- [ ] Filter dropdown: loại hình, trạng thái, nhân viên phụ trách
-- [ ] Nút "Thêm khách hàng" (admin only)
-- [ ] Click row → mở trang chi tiết
+- [x] Bảng: tên công ty, MST, loại hình, nhân viên phụ trách, trạng thái, số task mở/trễ
+- [x] Search bar (debounce 300ms)
+- [x] Filter dropdown: loại hình, trạng thái
+- [x] Nút "Thêm khách hàng" (admin only)
+- [x] Click row → mở trang chi tiết
 
 **Trang chi tiết (`/companies/:id`):**
-- [ ] Tab 1: Thông tin hồ sơ (xem/chỉnh sửa inline)
-- [ ] Tab 2: Danh sách công việc (link sang `/tasks?company_id=...`)
-- [ ] Tab 3: Tài liệu (placeholder — Phase 11)
-- [ ] Tab 4: Tài khoản hệ thống (placeholder — Phase 9)
-- [ ] Tab 5: Lịch sử phân công
-- [ ] Sidebar badge: số task đang mở, số task quá hạn
+- [x] Tab 1: Thông tin hồ sơ (xem/chỉnh sửa qua modal Edit)
+- [ ] Tab 2: Danh sách công việc (link sang `/tasks?company_id=...`) — placeholder
+- [x] Tab 3: Tài liệu (placeholder — Phase 11)
+- [x] Tab 4: Tài khoản hệ thống (placeholder — Phase 9)
+- [x] Tab 5: Lịch sử phân công + modal phân công nhân viên mới
+- [x] Header badge: số task đang mở, số task quá hạn
+- [x] Nút "Kết thúc hợp đồng" (admin only — soft delete)
 
 **Acceptance Criteria Phase 3:**
 ```
-□ Tạo công ty mới → xuất hiện trong danh sách
-□ Search "ABC" → chỉ hiển thị công ty có "ABC" trong tên hoặc MST
-□ Phân công nhân viên → assignment cũ tự động đóng (end_date set)
-□ Xóa công ty → status = 'terminated', không xóa khỏi DB
-□ staff chỉ thấy được danh sách tất cả công ty (xem nhưng không edit nếu không phụ trách)
+✅ Tạo công ty mới → xuất hiện trong danh sách
+✅ Search "ABC" → chỉ hiển thị công ty có "ABC" trong tên hoặc MST
+✅ Phân công nhân viên → assignment cũ tự động đóng (end_date set)
+✅ Xóa công ty → status = 'terminated', không xóa khỏi DB
+✅ staff chỉ thấy được danh sách tất cả công ty (xem nhưng không edit nếu không phụ trách)
 ```
 
 ---

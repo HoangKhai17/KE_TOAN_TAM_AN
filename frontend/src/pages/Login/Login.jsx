@@ -354,10 +354,9 @@ function SpinnerIcon() {
     <svg
       width="16" height="16" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-      style={{ animation: 'login-spin 0.75s linear infinite', flexShrink: 0 }}
+      className={s.spinner}
       aria-hidden="true"
     >
-      <style>{`@keyframes login-spin { to { transform: rotate(360deg); } }`}</style>
       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
     </svg>
   )

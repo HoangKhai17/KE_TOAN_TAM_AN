@@ -2,7 +2,7 @@ const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
 const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
-const { createScheduleSchema, updateScheduleSchema } = require('./schedules.schema')
+const { updateScheduleSchema } = require('./schedules.schema')
 const ctrl = require('./schedules.controller')
 
 const router = Router()

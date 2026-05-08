@@ -10,8 +10,8 @@ async function logActivity(taskId, userId, action, oldValue, newValue, meta) {
         taskId,
         userId ?? null,
         action,
-        oldValue != null ? String(oldValue) : null,
-        newValue != null ? String(newValue) : null,
+        oldValue !== null && oldValue !== undefined ? String(oldValue) : null,
+        newValue !== null && newValue !== undefined ? String(newValue) : null,
         meta ? JSON.stringify(meta) : null,
       ]
     )

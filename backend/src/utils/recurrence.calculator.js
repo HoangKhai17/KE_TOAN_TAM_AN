@@ -6,6 +6,19 @@ function toMidnight(d) {
   return result
 }
 
+function getNthWeekdayOfMonth(year, month, wd, n) {
+  let count = 0
+  const d = new Date(year, month, 1)
+  while (d.getMonth() === month) {
+    if (getDay(d) === wd) {
+      count++
+      if (count === n) return new Date(d)
+    }
+    d.setDate(d.getDate() + 1)
+  }
+  return null
+}
+
 // Returns next occurrence strictly AFTER afterDate, or null if no more occurrences
 function getNextOccurrence(type, config, afterDate) {
   const after = toMidnight(afterDate)
@@ -37,19 +50,6 @@ function getNextOccurrence(type, config, afterDate) {
 
     case 'monthly_by_weekday': {
       const { weekday, week } = config
-
-      function getNthWeekdayOfMonth(year, month, wd, n) {
-        let count = 0
-        const d = new Date(year, month, 1)
-        while (d.getMonth() === month) {
-          if (getDay(d) === wd) {
-            count++
-            if (count === n) return new Date(d)
-          }
-          d.setDate(d.getDate() + 1)
-        }
-        return null
-      }
 
       // Try current month
       const candidate = getNthWeekdayOfMonth(after.getFullYear(), after.getMonth(), weekday, week)

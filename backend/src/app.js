@@ -149,7 +149,8 @@ function createApp() {
   app.use('/api/task-types', require('./modules/task-types/task-types.router'))
   app.use('/api/companies/:companyId/schedules', require('./modules/schedules/company-schedules.router'))
   app.use('/api/schedules',  require('./modules/schedules/schedules.router'))
-  app.use('/api/tasks',      require('./modules/tasks/tasks.router'))
+  app.use('/api/tasks',          require('./modules/tasks/tasks.router'))
+  app.use('/api/system-configs', require('./modules/system-configs/system-configs.router'))
 
   // 404 & error handlers
   app.use(notFound)
