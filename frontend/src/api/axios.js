@@ -50,7 +50,7 @@ api.interceptors.response.use(
 
       try {
         const { data } = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
-        const newToken = data.data.access_token
+        const newToken = data.data.accessToken
         useAuthStore.getState().setAccessToken(newToken)
         processQueue(null, newToken)
         originalRequest.headers.Authorization = `Bearer ${newToken}`
