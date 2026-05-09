@@ -3,31 +3,31 @@
    ═══════════════════════════════════════════════ */
 
 .page {
-  --primary:       #0f345e;
-  --primary-dark:  #092744;
-  --primary-soft:  #2c557f;
-  --accent:        #d4a440;
-  --accent-light:  #eac05c;
-  --accent-dark:   #a46b1e;
-  --background:    #f7f8fa;
-  --surface:       #ffffff;
-  --border:        #e5e7eb;
-  --text-main:     #1f2937;
-  --text-muted:    #6b7280;
+  --primary:       var(--color-primary);
+  --primary-dark:  var(--color-primary-dark);
+  --primary-soft:  var(--color-primary-soft);
+  --accent:        var(--color-accent);
+  --accent-light:  var(--color-accent-light);
+  --accent-dark:   var(--color-accent-dark);
+  --background:    var(--color-bg);
+  --surface:       var(--color-surface);
+  --border:        var(--color-border-muted);
+  --text-main:     var(--color-text);
+  --text-muted:    var(--color-muted);
   --gradient-primary: linear-gradient(135deg, #004797 0%, #2c557fd8 100%);
-  --gradient-accent:  linear-gradient(135deg, #d4a440 0%, #eac05c 100%);
+  --gradient-accent:  var(--gradient-accent);
   --shadow: 0 28px 80px -34px rgba(9, 39, 68, 0.34);
-  --fs-xs:      10px;
-  --fs-micro:   11px;
-  --fs-caption: 12px;
-  --fs-small:   13px;
-  --fs-body:    14px;
-  --fs-body-lg: 15px;
+  --fs-xs:      var(--fs-2xs);
+  --fs-micro:   var(--fs-xs);
+  --fs-caption: var(--fs-sm);
+  --fs-small:   var(--fs-md);
+  --fs-body:    var(--fs-base);
+  --fs-body-lg: var(--fs-lg);
   --fs-h2:      23px;
   --fs-hero:    clamp(34px, 3.3vw, 42px);
   --lh-tight:   1.18;
-  --lh-heading: 1.25;
-  --lh-body:    1.6;
+  --lh-heading: var(--lh-tight);
+  --lh-body:    var(--lh-relaxed);
 
   position: relative;
   min-height: 100vh;
@@ -37,7 +37,7 @@
   padding: 72px 24px;
   overflow-x: hidden;
   overflow-y: auto;
-  font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   color: var(--text-main);
@@ -51,8 +51,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 780px 520px at 14% 10%, rgba(44, 85, 127, 0.12), transparent 66%),
-    radial-gradient(ellipse 680px 500px at 88% 92%, rgba(212, 164, 64, 0.14), transparent 62%),
+    radial-gradient(ellipse 780px 520px at 14% 10%, rgba(26, 82, 150, 0.12), transparent 66%),
+    radial-gradient(ellipse 680px 500px at 88% 92%, rgba(232, 168, 32, 0.14), transparent 62%),
     linear-gradient(135deg, rgba(15, 52, 94, 0.05), rgba(255, 255, 255, 0));
 }
 
@@ -101,7 +101,7 @@
   right: 13%;
   width: 88px;
   height: 88px;
-  border: 2px solid rgba(212, 164, 64, 0.55);
+  border: 2px solid rgba(232, 168, 32, 0.55);
   transform: rotate(24deg);
   opacity: 0.55;
 }
@@ -131,9 +131,9 @@
 .env {
   font-family: "JetBrains Mono", monospace;
   padding: 5px 10px;
-  border: 1px solid rgba(212, 164, 64, 0.5);
+  border: 1px solid rgba(232, 168, 32, 0.5);
   border-radius: 999px;
-  background: rgba(234, 192, 92, 0.16);
+  background: rgba(245, 200, 64, 0.16);
   color: var(--accent-dark);
   font-size: var(--fs-xs);
   font-weight: 800;
@@ -181,7 +181,7 @@
   width: 270px;
   height: 270px;
   border-radius: 50%;
-  background: rgba(212, 164, 64, 0.24);
+  background: rgba(232, 168, 32, 0.24);
 }
 
 .brandMark {
@@ -359,7 +359,7 @@
 
 .inputError:focus-within {
   border-color: var(--danger);
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
 }
 
 /* ── Global error banner (added for React) ─── */
@@ -368,10 +368,10 @@
   align-items: flex-start;
   gap: 8px;
   padding: 10px 13px;
-  border: 1px solid rgba(220, 38, 38, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
   background: rgba(254, 242, 242, 0.9);
-  color: #dc2626;
+  color: #ef4444;
   font-size: var(--fs-caption);
   font-weight: 600;
   line-height: 1.5;
@@ -415,7 +415,7 @@
 
 .input:focus-within {
   border-color: var(--primary-soft);
-  box-shadow: 0 0 0 4px rgba(44, 85, 127, 0.12);
+  box-shadow: 0 0 0 4px rgba(26, 82, 150, 0.12);
 }
 
 .prefix {
@@ -612,9 +612,9 @@
   align-items: flex-start;
   gap: 10px;
   padding: 11px 13px;
-  border: 1px solid rgba(212, 164, 64, 0.34);
+  border: 1px solid rgba(232, 168, 32, 0.34);
   border-radius: 9px;
-  background: rgba(234, 192, 92, 0.12);
+  background: rgba(245, 200, 64, 0.12);
 }
 
 .lock {
@@ -714,8 +714,8 @@
 
 @media (max-width: 540px) {
   .page {
-    --fs-body: 13px;
-    --fs-body-lg: 14px;
+    --fs-body: 13.5px;
+    --fs-body-lg: 14.5px;
     --fs-h2: 21px;
     --fs-hero: 24px;
     display: flex;

@@ -6,17 +6,17 @@
 /* ── Shell ────────────────────────────────────────── */
 
 .settingsShell {
-  --settings-navy: #0f345e;
-  --settings-navy-deep: #00182f;
+  --settings-navy: var(--color-primary);
+  --settings-navy-deep: var(--color-primary-deep);
   --settings-blue: #004696;
-  --settings-gold: #d4a440;
-  --settings-bg: #f4f7fb;
-  --settings-surface: #ffffff;
-  --settings-surface-soft: #f8fafc;
-  --settings-border: rgba(15, 52, 94, 0.12);
-  --settings-border-soft: rgba(15, 52, 94, 0.08);
-  --settings-text: #172033;
-  --settings-muted: #64748b;
+  --settings-gold: var(--color-accent);
+  --settings-bg: var(--color-bg);
+  --settings-surface: var(--color-surface);
+  --settings-surface-soft: var(--color-bg-soft);
+  --settings-border: var(--color-primary-ink);
+  --settings-border-soft: var(--color-primary-ink-soft);
+  --settings-text: var(--color-text);
+  --settings-muted: var(--color-muted);
 
   display: flex;
   height: 100%;
@@ -24,7 +24,7 @@
   padding: 1px;
   box-sizing: border-box;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background:
     linear-gradient(135deg, rgba(0, 70, 150, 0.18) 0%, rgba(212, 164, 64, 0.16) 100%),
     var(--settings-border);
@@ -51,14 +51,14 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 18px 16px 15px;
+  padding: var(--space-8) var(--space-7) var(--space-7);
   border-bottom: 1px solid rgba(15, 52, 94, 0.08);
   background: rgba(255, 255, 255, 0.58);
 }
 
 .settingsNavTitle {
-  font-size: 13px;
-  font-weight: 800;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-extrabold);
   color: var(--settings-navy);
   letter-spacing: 0;
 }
@@ -69,27 +69,27 @@
 }
 
 .settingsNavList {
-  padding: 10px 0;
+  padding: var(--space-4) 0;
 }
 
 .settingsNavItem {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-4);
   width: calc(100% - 16px);
   min-height: 38px;
   margin: 2px 8px;
-  padding: 9px 12px;
+  padding: 9px var(--space-5);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
   color: #475569;
   cursor: pointer;
   text-align: left;
-  transition: background 0.16s, color 0.16s, box-shadow 0.16s, transform 0.12s;
+  transition: background var(--duration-base), color var(--duration-base), box-shadow var(--duration-base), transform var(--duration-fast);
   position: relative;
 }
 
@@ -156,7 +156,7 @@
 }
 
 .settingsContentInner {
-  padding: 30px 34px;
+  padding: var(--space-12) var(--space-13);
 }
 
 /* ── Section header inside content ───────────────── */
@@ -164,16 +164,16 @@
 .sectionHead {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 0 20px;
-  margin-bottom: 24px;
+  gap: var(--space-5);
+  padding: 0 0 var(--space-9);
+  margin-bottom: var(--space-10);
   border-bottom: 1px solid rgba(15, 52, 94, 0.08);
 }
 
 .sectionIconWrap {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -185,39 +185,39 @@
 }
 
 .sectionTitle {
-  font-size: 18px;
-  font-weight: 800;
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-extrabold);
   color: var(--settings-text);
   margin: 0;
   letter-spacing: 0;
-  line-height: 1.25;
+  line-height: var(--lh-tight);
 }
 
 /* ── Form inputs inside settings ─────────────────── */
 
 .settingsInput {
   width: 100%;
-  height: 40px;
-  padding: 0 12px;
+  height: var(--control-h-lg);
+  padding: 0 var(--control-px-md);
   border: 1px solid rgba(15, 52, 94, 0.14);
-  border-radius: 8px;
-  background: #ffffff;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
   color: var(--settings-text);
-  line-height: 1.45;
+  line-height: var(--lh-normal);
   outline: none;
-  box-shadow: 0 1px 2px rgba(15, 52, 94, 0.03);
-  transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--duration-base), box-shadow var(--duration-base), background var(--duration-base);
 }
 
 .settingsInput:focus {
   border-color: rgba(0, 70, 150, 0.62);
   box-shadow:
-    0 0 0 3px rgba(0, 70, 150, 0.1),
+    var(--shadow-focus-blue),
     0 6px 18px -16px rgba(0, 24, 47, 0.35);
-  background: #ffffff;
+  background: var(--color-surface);
 }
 
 .settingsSelect {
@@ -230,8 +230,8 @@
 
 .settingsLabel {
   display: block;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
   color: #334155;
   margin-bottom: 6px;
   letter-spacing: 0;
@@ -239,8 +239,8 @@
 }
 
 .settingsHint {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
   color: #8290a3;
   margin-top: 4px;
   line-height: 1.5;
@@ -253,14 +253,14 @@
   align-items: center;
   gap: 7px;
   height: 38px;
-  padding: 0 18px;
+  padding: 0 var(--control-px-lg);
   border: none;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #004696 0%, #0f345e 100%);
-  color: #ffffff;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #004696 0%, var(--color-primary) 100%);
+  color: var(--color-white);
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
   cursor: pointer;
   transition: filter 0.16s, transform 0.08s, box-shadow 0.16s;
   box-shadow:
@@ -284,12 +284,12 @@
   height: 38px;
   padding: 0 16px;
   border: 1px solid rgba(15, 52, 94, 0.14);
-  border-radius: 8px;
-  background: #ffffff;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   color: #334155;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
   cursor: pointer;
   transition: background 0.14s, border-color 0.14s, box-shadow 0.14s;
   box-shadow: 0 1px 2px rgba(15, 52, 94, 0.03);
@@ -308,12 +308,12 @@
   height: 34px;
   padding: 0 14px;
   border: none;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #004696 0%, #0f345e 100%);
-  color: #ffffff;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 12px;
-  font-weight: 700;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #004696 0%, var(--color-primary) 100%);
+  color: var(--color-white);
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
   cursor: pointer;
   transition: filter 0.16s, box-shadow 0.16s;
   box-shadow: 0 8px 16px -13px rgba(0, 70, 150, 0.75);
@@ -323,9 +323,9 @@
 
 /* ── Save feedback ────────────────────────────────── */
 
-.feedbackSaving { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #2563eb; }
-.feedbackOk     { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #059669; }
-.feedbackErr    { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #dc2626; }
+.feedbackSaving { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--color-info); }
+.feedbackOk     { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--color-success); }
+.feedbackErr    { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--color-danger); }
 .spin           { animation: app-spin 1s linear infinite; }
 
 /* ── Reusable section layouts ─────────────────────── */
@@ -342,7 +342,7 @@
 .sectionText {
   margin: 0 0 24px;
   color: var(--settings-muted);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   line-height: 1.65;
 }
@@ -384,7 +384,7 @@
   margin-bottom: 8px;
   padding: 2px 10px;
   border-radius: 99px;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   text-transform: capitalize;
 }
@@ -392,7 +392,7 @@
 .roleDesc {
   margin: 0;
   color: var(--settings-muted);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 500;
   line-height: 1.55;
 }
@@ -408,7 +408,7 @@
 .taskTypeDescription {
   margin: 0;
   color: var(--settings-muted);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   line-height: 1.55;
 }
@@ -437,7 +437,7 @@
 .emptyState {
   padding: 32px 0;
   color: #9ca3af;
-  font-size: 13px;
+  font-size: 13.5px;
   text-align: center;
 }
 
@@ -460,7 +460,7 @@
   color: #334155;
   cursor: pointer;
   font-family: "Montserrat", sans-serif;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -473,7 +473,7 @@
 
 .taskGroupCount {
   color: #8290a3;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 500;
 }
 
@@ -522,8 +522,8 @@
   border: 1px solid #fca5a5;
   border-radius: 8px;
   background: #fef2f2;
-  color: #dc2626;
-  font-size: 13px;
+  color: #ef4444;
+  font-size: 13.5px;
   font-weight: 600;
   line-height: 1.5;
 }
@@ -555,7 +555,7 @@
   background: #eef4fb;
   color: var(--settings-navy);
   font-family: "JetBrains Mono", monospace;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -587,7 +587,7 @@
 .comingSoonText {
   margin: 6px 0 0;
   color: #8290a3;
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.55;
 }
 
@@ -618,7 +618,7 @@
 
 .suffix {
   color: #8290a3;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -629,14 +629,14 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.45;
 }
 
 .settingsTable th {
   padding: 10px 14px;
   text-align: left;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
@@ -658,8 +658,8 @@
 
 /* ── Badge / pill ─────────────────────────────────── */
 
-.badgeActive   { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 99px; background: #f0fdf4; color: #065f46; font-size: 12px; font-weight: 600; cursor: pointer; border: none; font-family: 'Montserrat', sans-serif; }
-.badgeInactive { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 99px; background: #f3f4f6; color: #6b7280; font-size: 12px; font-weight: 600; cursor: pointer; border: none; font-family: 'Montserrat', sans-serif; }
+.badgeActive   { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 99px; background: #f0fdf4; color: #065f46; font-size: 12.5px; font-weight: 600; cursor: pointer; border: none; font-family: 'Montserrat', sans-serif; }
+.badgeInactive { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 99px; background: #f3f4f6; color: #6b7280; font-size: 12.5px; font-weight: 600; cursor: pointer; border: none; font-family: 'Montserrat', sans-serif; }
 .badgeDot      { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
 /* ── User Management ──────────────────────────────── */
@@ -696,7 +696,7 @@
   border-radius: 8px;
   background: #ffffff;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--settings-text);
   outline: none;
@@ -731,30 +731,30 @@
   height: 34px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, #004990 0%, #00152d 100%);
+  background: linear-gradient(135deg, #0a5ead 0%, #001f50 100%);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 800;
   letter-spacing: 0.5px;
   box-shadow: 0 6px 14px -10px rgba(0, 24, 47, 0.7);
 }
 
 .userInitialsGold {
-  background: linear-gradient(135deg, #d4a440 0%, #a46b1e 100%);
+  background: linear-gradient(135deg, #e8a820 0%, #a46b1e 100%);
 }
 
 .userNameText {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--settings-text);
   line-height: 1.3;
 }
 
 .userEmailText {
-  font-size: 11px;
+  font-size: 11.5px;
   color: #8290a3;
   font-weight: 500;
   margin-top: 1px;
@@ -763,15 +763,15 @@
 
 .muted {
   color: #8290a3;
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
-.roleAdmin { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 99px; font-size: 10px; font-weight: 700; background: #f5f3ff; color: #6d28d9; text-transform: uppercase; letter-spacing: 0.3px; }
-.roleStaff { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 99px; font-size: 10px; font-weight: 700; background: #eff6ff; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.3px; }
+.roleAdmin { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; background: #f5f3ff; color: #6d28d9; text-transform: uppercase; letter-spacing: 0.3px; }
+.roleStaff { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 99px; font-size: 10.5px; font-weight: 700; background: #eff6ff; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.3px; }
 
-.statusActive   { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; background: #f0fdf4; color: #065f46; }
-.statusOnLeave  { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; background: #fffbeb; color: #92400e; }
-.statusResigned { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; background: #f3f4f6; color: #4b5563; }
+.statusActive   { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 700; background: #f0fdf4; color: #065f46; }
+.statusOnLeave  { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 700; background: #fffbeb; color: #92400e; }
+.statusResigned { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 700; background: #f3f4f6; color: #4b5563; }
 
 .userActionsCell {
   display: flex;
@@ -794,14 +794,14 @@
 }
 
 .iconBtn:hover            { background: #eef4fb; color: var(--settings-navy); }
-.iconBtnWarn:hover        { background: #fffbeb; color: #d97706; }
-.iconBtnSuccess:hover     { background: #f0fdf4; color: #059669; }
+.iconBtnWarn:hover        { background: #fffbeb; color: #f59e0b; }
+.iconBtnSuccess:hover     { background: #f0fdf4; color: #10b981; }
 
 /* Persistent status colors (không cần hover mới thấy) */
-.iconBtnSuspend           { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.iconBtnSuspend           { background: #fffbeb; color: #f59e0b; border: 1px solid #fde68a; }
 .iconBtnSuspend:hover     { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
 
-.iconBtnActivate          { background: #f0fdf4; color: #059669; border: 1px solid #a7f3d0; }
+.iconBtnActivate          { background: #f0fdf4; color: #10b981; border: 1px solid #a7f3d0; }
 .iconBtnActivate:hover    { background: #dcfce7; color: #047857; border-color: #6ee7b7; }
 
 .pillWarn {
@@ -810,10 +810,10 @@
   gap: 3px;
   padding: 1px 7px;
   border-radius: 99px;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
   background: #fffbeb;
-  color: #d97706;
+  color: #f59e0b;
   margin-top: 2px;
 }
 
@@ -822,7 +822,7 @@
   background: #fffbeb;
   border: 1px solid #fde68a;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 500;
   color: #92400e;
   line-height: 1.55;
@@ -856,14 +856,14 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
+  font-size: 12.5px;
   color: #334155;
   font-weight: 500;
 }
 
 .userSubCell span:last-child {
   color: #8290a3;
-  font-size: 11px;
+  font-size: 11.5px;
 }
 
 .pillLock {
@@ -872,15 +872,15 @@
   gap: 3px;
   padding: 1px 7px;
   border-radius: 99px;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
   background: #fef2f2;
-  color: #dc2626;
+  color: #ef4444;
   margin-top: 3px;
 }
 
-.statusDotActive   { width: 6px; height: 6px; border-radius: 50%; background: #059669; display: inline-block; margin-right: 5px; }
-.statusDotOnLeave  { width: 6px; height: 6px; border-radius: 50%; background: #d97706; display: inline-block; margin-right: 5px; }
+.statusDotActive   { width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block; margin-right: 5px; }
+.statusDotOnLeave  { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; display: inline-block; margin-right: 5px; }
 .statusDotResigned { width: 6px; height: 6px; border-radius: 50%; background: #9ca3af; display: inline-block; margin-right: 5px; }
 
 .modalUserBanner {
@@ -907,7 +907,7 @@
 }
 
 .modalUserBannerEmail {
-  font-size: 12px;
+  font-size: 12.5px;
   color: #8290a3;
   font-weight: 500;
   margin-top: 1px;
@@ -995,7 +995,7 @@
   background: #ffffff;
   color: #334155;
   font-family: 'Montserrat', sans-serif;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.14s, border-color 0.14s, color 0.14s;
@@ -1014,9 +1014,9 @@
   border: 1px solid #fca5a5;
   border-radius: 6px;
   background: #ffffff;
-  color: #dc2626;
+  color: #ef4444;
   font-family: 'Montserrat', sans-serif;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.12s;

@@ -19,6 +19,7 @@ function toDto(row) {
     serviceStartDate: row.service_start_date ?? null,
     status:           row.status,
     notes:            row.notes ?? null,
+    avatarUrl:        row.avatar_url ?? null,
     assignedStaffId:  row.assigned_staff_id ?? null,
     assignedStaff:    row.staff_name
       ? { id: row.assigned_staff_id, name: row.staff_name, email: row.staff_email, jobTitle: row.staff_job_title }
@@ -146,7 +147,7 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent) {
     industry: 'industry', legalRepName: 'legal_rep_name', legalRepPhone: 'legal_rep_phone',
     contactName: 'contact_name', contactPhone: 'contact_phone', contactEmail: 'contact_email',
     bankAccount: 'bank_account', bankName: 'bank_name', serviceStartDate: 'service_start_date',
-    notes: 'notes', assignedStaffId: 'assigned_staff_id',
+    notes: 'notes', assignedStaffId: 'assigned_staff_id', avatarUrl: 'avatar_url',
   }
 
   const updates = []
@@ -219,6 +220,45 @@ async function getAssignments(companyId) {
   }))
 }
 
+async function deleteCompany(id, actorId, ipAddress, userAgent) {
+  // Check for any tasks linked to this company
+  const { rows: tasks } = await query(
+    'SELECT id FROM tasks WHERE company_id = $1 LIMIT 1',
+    [id]
+  )
+  if (tasks.length > 0) {
+    throw Object.assign(
+      new Error('Không thể xoá công ty đã có dữ liệu công việc. Hãy chuyển trạng thái sang "Đã kết thúc" thay thế.'),
+      { status: 409 }
+    )
+  }
+
+  // Check for any assignment history
+  const { rows: assignments } = await query(
+    'SELECT id FROM staff_company_assignments WHERE company_id = $1 LIMIT 1',
+    [id]
+  )
+  if (assignments.length > 0) {
+    throw Object.assign(
+      new Error('Không thể xoá công ty đã có lịch sử phân công nhân sự. Hãy chuyển trạng thái sang "Đã kết thúc" thay thế.'),
+      { status: 409 }
+    )
+  }
+
+  const { rows } = await query(
+    'DELETE FROM companies WHERE id = $1 RETURNING id, name',
+    [id]
+  )
+  if (!rows[0]) throw Object.assign(new Error('Company not found'), { status: 404 })
+
+  await audit.log({
+    userId: actorId, action: 'company.deleted',
+    targetType: 'company', targetId: id,
+    meta: { name: rows[0].name },
+    ipAddress, userAgent,
+  })
+}
+
 async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddress, userAgent) {
   // Validate company exists
   const { rows: [company] } = await query('SELECT id, name FROM companies WHERE id = $1', [companyId])
@@ -284,6 +324,7 @@ module.exports = {
   createCompany,
   updateCompany,
   terminateCompany,
+  deleteCompany,
   getAssignments,
   assignStaff,
 }

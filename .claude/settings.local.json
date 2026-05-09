@@ -47,7 +47,10 @@
       "PowerShell(ls -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\" -Depth 0 | Where-Object { $_.PSIsContainer })",
       "Bash(npm run *)",
       "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\" -Recurse -Directory)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(npm.cmd run *)",
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

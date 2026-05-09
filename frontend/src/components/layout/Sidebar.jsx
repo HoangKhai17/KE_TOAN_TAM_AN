@@ -8,16 +8,26 @@ import { useAuthStore } from '../../stores/authStore'
 import { logout } from '../../api/auth'
 import s from './layout.module.css'
 
-const NAV_ITEMS = [
-  { to: '/dashboard',   label: 'Dashboard',              icon: LayoutDashboard },
-  { to: '/companies',   label: 'Công ty',                icon: Building2 },
-  { to: '/tasks',       label: 'Công việc',              icon: CheckSquare },
-  { to: '/task-types',  label: 'Loại công việc',         icon: ListTodo },
-  { to: '/schedules',   label: 'Lịch định kỳ',           icon: CalendarDays },
-  { to: '/staff',       label: 'Nhân viên',              icon: Users,     adminOnly: true },
-  { to: '/reports',     label: 'Báo cáo',                icon: BarChart3 },
-  { to: '/credentials', label: 'Thông tin đăng nhập',   icon: KeyRound },
-  { to: '/settings',    label: 'Cài đặt',                icon: Settings,  adminOnly: true },
+const NAV_GROUPS = [
+  {
+    label: 'ĐIỀU HƯỚNG',
+    items: [
+      { to: '/dashboard',  label: 'Dashboard',      icon: LayoutDashboard },
+      { to: '/companies',  label: 'Công ty',        icon: Building2 },
+      { to: '/tasks',      label: 'Công việc',      icon: CheckSquare },
+      { to: '/task-types', label: 'Loại công việc', icon: ListTodo },
+      { to: '/schedules',  label: 'Lịch định kỳ',   icon: CalendarDays },
+      { to: '/reports',    label: 'Báo cáo',        icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'QUẢN TRỊ HỆ THỐNG',
+    items: [
+      { to: '/staff',       label: 'Nhân viên',           icon: Users,    adminOnly: true },
+      { to: '/credentials', label: 'Thông tin đăng nhập', icon: KeyRound },
+      { to: '/settings',    label: 'Cài đặt',             icon: Settings, adminOnly: true },
+    ],
+  },
 ]
 
 function getInitials(name) {
@@ -36,7 +46,12 @@ export default function Sidebar({ open, onToggle }) {
     navigate('/login', { replace: true })
   }
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
+  const visibleGroups = NAV_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.adminOnly || isAdmin),
+    }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <aside className={`${s.sidebar} ${open ? s.sidebarExpanded : s.sidebarCollapsed}`}>
@@ -65,27 +80,27 @@ export default function Sidebar({ open, onToggle }) {
 
       {/* ── Navigation ── */}
       <nav className={s.sidebarNav}>
-        {visibleItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            title={!open ? label : undefined}
-            className={({ isActive }) =>
-              `${s.navItem} ${isActive ? s.navItemActive : ''}`
-            }
-          >
-            {({ isActive }) => (
-              <>
+        {visibleGroups.map((group) => (
+          <div key={group.label} className={s.sidebarSection}>
+            {open && <div className={s.sidebarSectionLabel}>{group.label}</div>}
+            {group.items.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                title={!open ? label : undefined}
+                className={({ isActive }) =>
+                  `${s.navItem} ${isActive ? s.navItemActive : ''}`
+                }
+              >
                 <span className={s.navIcon}>
                   <Icon size={17} />
                 </span>
                 <span className={`${s.navLabel} ${!open ? s.navLabelHidden : ''}`}>
                   {label}
                 </span>
-                {open && isActive && <span className={s.navDot} />}
-              </>
-            )}
-          </NavLink>
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
 

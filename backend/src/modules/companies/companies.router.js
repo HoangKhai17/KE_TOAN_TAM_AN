@@ -153,20 +153,38 @@ router.patch('/:id', ...admin, validate(updateCompanySchema), ctrl.updateCompany
 
 /**
  * @openapi
- * /companies/{id}:
- *   delete:
+ * /companies/{id}/terminate:
+ *   post:
  *     tags: [Companies]
- *     summary: Terminate company — soft delete (admin only)
+ *     summary: Terminate company — set status to terminated (admin only)
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema: { type: string, format: uuid }
  *     responses:
- *       200: { description: Company terminated (status set to terminated) }
+ *       200: { description: Company terminated }
  *       404: { description: Not found }
  */
-router.delete('/:id', ...admin, ctrl.terminateCompany)
+router.post('/:id/terminate', ...admin, ctrl.terminateCompany)
+
+/**
+ * @openapi
+ * /companies/{id}:
+ *   delete:
+ *     tags: [Companies]
+ *     summary: Hard-delete company (admin only). Blocked if company has tasks or assignment history.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: Company deleted }
+ *       404: { description: Not found }
+ *       409: { description: Company has activities — use terminate instead }
+ */
+router.delete('/:id', ...admin, ctrl.deleteCompany)
 
 /**
  * @openapi

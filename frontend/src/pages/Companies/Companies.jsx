@@ -1,45 +1,110 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Building2, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Plus, Search, Building2, ChevronRight, ChevronLeft,
+  Loader2, RotateCcw, Trash2, AlertTriangle, Eye,
+} from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
+import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
+import { listUsers } from '../../api/users'
+import s from './companies.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 export const BUSINESS_TYPE_LABELS = {
-  TNHH:       'Công ty TNHH',
-  CP:          'Công ty Cổ phần',
-  HKD:         'Hộ kinh doanh',
-  DN_TU_NHAN:  'Doanh nghiệp tư nhân',
-  KHAC:        'Khác',
+  TNHH:      'Công ty TNHH',
+  CP:         'Công ty Cổ phần',
+  HKD:        'Hộ kinh doanh',
+  DN_TU_NHAN:'Doanh nghiệp tư nhân',
+  KHAC:       'Khác',
 }
 
-export const COMPANY_STATUS_MAP = {
-  active:     { label: 'Đang hoạt động', cls: 'bg-green-100 text-green-700' },
-  inactive:   { label: 'Tạm dừng',       cls: 'bg-yellow-100 text-yellow-700' },
-  terminated: { label: 'Đã kết thúc',    cls: 'bg-gray-100 text-gray-500' },
+const STATUS_LABELS = {
+  active:     'Hoạt động',
+  inactive:   'Tạm dừng',
+  terminated: 'Đã kết thúc',
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
+const COMPANY_STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))
+const BUSINESS_TYPE_OPTIONS = Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => ({ value, label }))
+
+const PAGE_SIZE_OPTIONS = [20, 50, 100]
+
+// ── Small helpers ──────────────────────────────────────────────────────────────
+
+export function getInitials(name) {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function staffAvatarSrc(staff) {
+  if (staff?.avatarUrl) return staff.avatarUrl
+  const encoded = encodeURIComponent(staff?.name || '?')
+  return `https://ui-avatars.com/api/?name=${encoded}&size=56&background=e2e8f0&color=64748b&bold=true&font-size=0.4`
+}
+
+const FALLBACK_AVATAR = `https://ui-avatars.com/api/?name=&size=56&background=e2e8f0&color=94a3b8`
+
+function fmtDate(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+export function StatusPill({ status }) {
+  if (status === 'active')
+    return (
+      <span className={`${s.statusPill} ${s.statusActive}`}>
+        <span className={s.statusDot} /> Hoạt động
+      </span>
+    )
+  if (status === 'inactive')
+    return (
+      <span className={`${s.statusPill} ${s.statusInactive}`}>
+        <span className={s.statusDot} /> Tạm dừng
+      </span>
+    )
+  return (
+    <span className={`${s.statusPill} ${s.statusTerminated}`}>
+      <span className={s.statusDot} /> Đã kết thúc
+    </span>
+  )
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function Companies() {
-  const navigate = useNavigate()
-  const isAdmin  = useAuthStore((s) => s.user?.role === 'admin')
+  const navigate  = useNavigate()
+  const isAdmin   = useAuthStore((s) => s.user?.role === 'admin')
+  const addToast  = useToastStore((st) => st.toast)
 
   const [companies, setCompanies]   = useState([])
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 })
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
+  const [staffList, setStaffList]   = useState([])
 
-  const [searchInput, setSearchInput]               = useState('')
-  const [search, setSearch]                         = useState('')
-  const [statusFilter, setStatusFilter]             = useState('')
-  const [businessTypeFilter, setBusinessTypeFilter] = useState('')
-  const [page, setPage]                             = useState(1)
+  const [searchInput, setSearchInput]   = useState('')
+  const [search, setSearch]             = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [btFilter, setBtFilter]         = useState('')
+  const [staffFilter, setStaffFilter]   = useState('')
+  const [page, setPage]                 = useState(1)
+  const [limit, setLimit]               = useState(20)
 
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCreate, setShowCreate]   = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)  // company to delete
+  const [deleting, setDeleting]       = useState(false)
+
+  const hasActiveFilters = search || statusFilter || btFilter || staffFilter
+  const activeFilterCount = [search, statusFilter, btFilter, staffFilter].filter(Boolean).length
+  const pageOpenTotal = companies.reduce((sum, c) => sum + (Number(c.taskOpenCount) || 0), 0)
+  const pageOverdueTotal = companies.reduce((sum, c) => sum + (Number(c.taskOverdueCount) || 0), 0)
+  const pageActiveTotal = companies.filter((c) => c.status === 'active').length
 
   // Debounce search
   useEffect(() => {
@@ -47,8 +112,15 @@ export default function Companies() {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // Reset page on filter change
-  useEffect(() => { setPage(1) }, [statusFilter, businessTypeFilter])
+  // Reset page on filter/limit change
+  useEffect(() => { setPage(1) }, [statusFilter, btFilter, staffFilter, limit])
+
+  // Load staff for filter
+  useEffect(() => {
+    listUsers({ role: 'staff', status: 'active', limit: 100 })
+      .then(({ users }) => setStaffList(users))
+      .catch(() => {})
+  }, [])
 
   // Fetch companies
   useEffect(() => {
@@ -58,149 +130,353 @@ export default function Companies() {
     companiesApi
       .listCompanies({
         page,
-        limit:        20,
-        status:       statusFilter       || undefined,
-        businessType: businessTypeFilter || undefined,
-        search:       search             || undefined,
+        limit,
+        status:          statusFilter || undefined,
+        businessType:    btFilter     || undefined,
+        search:          search       || undefined,
+        assignedStaffId: staffFilter  || undefined,
       })
       .then(({ companies: c, pagination: p }) => {
         if (!cancelled) { setCompanies(c); setPagination(p) }
       })
-      .catch(() => { if (!cancelled) setError('Không thể tải danh sách công ty') })
+      .catch(() => { if (!cancelled) setError('Không thể tải danh sách khách hàng') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, statusFilter, businessTypeFilter, search])
+  }, [page, limit, statusFilter, btFilter, staffFilter, search])
+
+  function resetFilters() {
+    setSearchInput('')
+    setSearch('')
+    setStatusFilter('')
+    setBtFilter('')
+    setStaffFilter('')
+    setPage(1)
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await companiesApi.deleteCompany(deleteTarget.id)
+      setCompanies((prev) => prev.filter((c) => c.id !== deleteTarget.id))
+      setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }))
+      addToast(`Đã xoá "${deleteTarget.name}"`, 'success')
+      setDeleteTarget(null)
+    } catch (err) {
+      const msg = err.response?.data?.error?.message ?? 'Không thể xoá công ty'
+      addToast(msg, 'error')
+      // If has-activities error, close dialog so user can use terminate instead
+      if (err.response?.status === 409) setDeleteTarget(null)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // Pagination window
+  const totalPages = pagination.totalPages
+  function pageWindow() {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    if (page <= 4) return [1, 2, 3, 4, 5, '…', totalPages]
+    if (page >= totalPages - 3) return [1, '…', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+    return [1, '…', page - 1, page, page + 1, '…', totalPages]
+  }
 
   return (
-    <AppLayout title="Khách hàng">
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        <div>
-          <h2 className="text-lg font-bold text-gray-800">Danh sách khách hàng</h2>
-          <p className="text-sm text-gray-500">
-            {loading ? '...' : `${pagination.total} công ty`}
-          </p>
+    <AppLayout>
+      <div className={s.page}>
+
+        {/* Header */}
+        <div className={s.pageHeader}>
+          <div className={s.pageTitleGroup}>
+            <h1 className={s.pageTitle}>Khách hàng</h1>
+            <p className={s.pageSubtitle}>
+              {loading ? '...' : `${pagination.total} doanh nghiệp đang quản lý`}
+            </p>
+          </div>
+          {isAdmin && (
+            <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
+              <Plus size={14} /> Thêm khách hàng
+            </button>
+          )}
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0f345e] text-white rounded-lg text-sm font-medium hover:bg-[#0a2544] transition-colors"
-          >
-            <Plus size={16} />
-            Thêm khách hàng
-          </button>
+
+        {!loading && (
+          <div className={s.resultSummaryBar}>
+            <div className={s.resultSummaryItem}>
+              <span className={s.resultSummaryValue}>{pagination.total}</span>
+              <span className={s.resultSummaryLabel}>Kết quả</span>
+            </div>
+            <div className={s.resultSummaryItem}>
+              <span className={s.resultSummaryValue}>{pageOpenTotal}</span>
+              <span className={s.resultSummaryLabel}>Việc mở</span>
+            </div>
+            <div className={s.resultSummaryItem}>
+              <span className={`${s.resultSummaryValue} ${pageOverdueTotal > 0 ? s.resultSummaryDanger : ''}`}>
+                {pageOverdueTotal}
+              </span>
+              <span className={s.resultSummaryLabel}>Quá hạn</span>
+            </div>
+            <div className={s.resultSummaryItem}>
+              <span className={`${s.resultSummaryValue} ${s.resultSummarySuccess}`}>{pageActiveTotal}</span>
+              <span className={s.resultSummaryLabel}>Hoạt động</span>
+            </div>
+          </div>
         )}
-      </div>
 
-      {/* Filter bar */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Tên công ty, mã số thuế..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f345e]/20 focus:border-[#0f345e] bg-white"
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0f345e]/20 focus:border-[#0f345e]"
-        >
-          <option value="">Tất cả trạng thái</option>
-          <option value="active">Đang hoạt động</option>
-          <option value="inactive">Tạm dừng</option>
-          <option value="terminated">Đã kết thúc</option>
-        </select>
-        <select
-          value={businessTypeFilter}
-          onChange={(e) => setBusinessTypeFilter(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#0f345e]/20 focus:border-[#0f345e]"
-        >
-          <option value="">Tất cả loại hình</option>
-          {Object.entries(BUSINESS_TYPE_LABELS).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </select>
-      </div>
+        {/* Filter panel */}
+        <div className={s.filterPanel}>
+          {/* Header */}
+          <div className={s.filterPanelHeader}>
+            <div className={s.filterPanelTitle}>
+              <span className={s.filterPanelLabel}>Bộ lọc</span>
+              {activeFilterCount > 0 && (
+                <span className={s.filterPanelBadge}>{activeFilterCount} đang bật</span>
+              )}
+            </div>
+          </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
-        {error ? (
-          <p className="p-8 text-center text-sm text-red-500">{error}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Công ty</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">MST</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Loại hình</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">NV phụ trách</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Trạng thái</th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Công việc</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
-                ) : companies.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-400">
-                      Không tìm thấy công ty nào
-                    </td>
-                  </tr>
-                ) : (
-                  companies.map((c) => (
-                    <CompanyRow
-                      key={c.id}
-                      company={c}
-                      onClick={() => navigate(`/companies/${c.id}`)}
-                    />
-                  ))
+          {/* Controls row */}
+          <div className={s.filterGrid}>
+            {staffList.length > 0 && (
+              <div className={s.filterField}>
+                <label className={s.filterFieldLabel}>Phụ trách</label>
+                <select value={staffFilter} onChange={(e) => setStaffFilter(e.target.value)} className={s.filterSelect}>
+                  <option value="">Tất cả</option>
+                  {staffList.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className={s.filterField}>
+              <label className={s.filterFieldLabel}>Trạng thái HĐ</label>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={s.filterSelect}>
+                <option value="">Tất cả</option>
+                {COMPANY_STATUS_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className={s.filterField}>
+              <label className={s.filterFieldLabel}>Loại hình</label>
+              <select value={btFilter} onChange={(e) => setBtFilter(e.target.value)} className={s.filterSelect}>
+                <option value="">Tất cả</option>
+                {BUSINESS_TYPE_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className={`${s.filterField} ${s.filterFieldSearch}`}>
+              <label className={s.filterFieldLabel}>Từ khoá</label>
+              <div className={s.searchWrap}>
+                <span className={s.searchIcon}><Search size={13} /></span>
+                <input
+                  type="text"
+                  placeholder="Tên công ty, MST..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className={s.searchInput}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Footer: active chips + result summary */}
+          <div className={s.filterFooter}>
+            <div className={s.filterFooterLeft}>
+              <div className={s.filterActionBtns}>
+                <button
+                  className={`${s.btnFilterReset} ${hasActiveFilters ? s.btnFilterResetActive : ''}`}
+                  onClick={resetFilters}
+                >
+                  <RotateCcw size={13} /> Đặt lại
+                </button>
+                <button
+                  className={s.btnFilterApply}
+                  onClick={() => { setSearch(searchInput); setPage(1) }}
+                >
+                  <Search size={13} /> Tìm kiếm
+                </button>
+              </div>
+              <div className={s.filterChips}>
+                {statusFilter && (
+                  <span className={s.filterChip}>
+                    Trạng thái: {STATUS_LABELS[statusFilter]}
+                    <button className={s.filterChipRemove} onClick={() => setStatusFilter('')}>×</button>
+                  </span>
                 )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-500">
-            Trang {pagination.page}/{pagination.totalPages} — {pagination.total} công ty
-          </span>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-              disabled={page === pagination.totalPages}
-              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ChevronRight size={16} />
-            </button>
+                {btFilter && (
+                  <span className={s.filterChip}>
+                    Loại hình: {BUSINESS_TYPE_LABELS[btFilter]}
+                    <button className={s.filterChipRemove} onClick={() => setBtFilter('')}>×</button>
+                  </span>
+                )}
+                {staffFilter && (
+                  <span className={s.filterChip}>
+                    Phụ trách: {staffList.find((u) => u.id === staffFilter)?.name ?? '?'}
+                    <button className={s.filterChipRemove} onClick={() => setStaffFilter('')}>×</button>
+                  </span>
+                )}
+                {search && (
+                  <span className={s.filterChip}>
+                    &ldquo;{search}&rdquo;
+                    <button className={s.filterChipRemove} onClick={() => { setSearchInput(''); setSearch('') }}>×</button>
+                  </span>
+                )}
+              </div>
+            </div>
+            {!loading && (
+              <div className={s.filterSummary}>
+                <span className={s.filterSummaryItem}>
+                  <span className={s.filterSummaryValue}>{pagination.total}</span>
+                  <span className={s.filterSummaryLabel}>Kết quả</span>
+                </span>
+              </div>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Table */}
+        <div className={s.tableSectionHead}>
+          <div>
+            <h2 className={s.tableSectionTitle}>Danh sách công ty</h2>
+            <p className={s.tableSectionMeta}>
+              {loading ? 'Đang tải dữ liệu...' : `${companies.length} dòng trên trang này`}
+            </p>
+          </div>
+        </div>
+        <div className={s.tableWrap}>
+          {error ? (
+            <div className={s.errorState}>
+              <Building2 size={28} />
+              <span>{error}</span>
+            </div>
+          ) : (
+            <div className={s.tableScroll}>
+              <table className={s.table}>
+                <thead>
+                  <tr>
+                    <th>Tên công ty</th>
+                    <th style={{ display: 'table-cell' }}>MST</th>
+                    <th style={{ display: 'table-cell', minWidth: 140 }}>Người liên hệ</th>
+                    <th style={{ display: 'table-cell' }}>Phụ trách</th>
+                    <th style={{ textAlign: 'center', minWidth: 64 }}>Việc mở</th>
+                    <th style={{ textAlign: 'center', minWidth: 72 }}>Quá hạn</th>
+                    <th>Hợp đồng</th>
+                    <th className={s.actionsHead}>Hành động</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} isAdmin={isAdmin} />)
+                  ) : companies.length === 0 ? (
+                    <tr>
+                      <td colSpan={8}>
+                        <div className={s.emptyState}>
+                          <div className={s.emptyIcon}><Building2 size={26} /></div>
+                          <p className={s.emptyTitle}>Không tìm thấy doanh nghiệp</p>
+                          <p className={s.emptyDesc}>
+                            {hasActiveFilters
+                              ? 'Thử thay đổi bộ lọc hoặc từ khoá tìm kiếm.'
+                              : 'Chưa có khách hàng nào. Nhấn "+ Thêm khách hàng" để bắt đầu.'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    companies.map((c) => (
+                      <CompanyRow
+                        key={c.id}
+                        company={c}
+                        isAdmin={isAdmin}
+                        onClick={() => navigate(`/companies/${c.id}`)}
+                        onDelete={(e) => { e.stopPropagation(); setDeleteTarget(c) }}
+                      />
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Pagination */}
+        <div className={s.paginationBar}>
+          <div className={s.paginationLeft}>
+            <span className={s.paginationInfo}>
+              {loading ? '...' : `${pagination.total} công ty`}
+            </span>
+            <div className={s.pageSizeWrap}>
+              <span className={s.pageSizeLabel}>Hiển thị:</span>
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  className={`${s.pageSizeBtn} ${limit === n ? s.pageSizeBtnActive : ''}`}
+                  onClick={() => setLimit(n)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {totalPages > 1 && (
+            <div className={s.paginationBtns}>
+              <button
+                className={s.paginationBtn}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              {pageWindow().map((n, i) =>
+                n === '…' ? (
+                  <span key={`sep-${i}`} className={s.paginationEllipsis}>…</span>
+                ) : (
+                  <button
+                    key={n}
+                    className={`${s.paginationBtn} ${page === n ? s.paginationBtnActive : ''}`}
+                    onClick={() => setPage(n)}
+                  >
+                    {n}
+                  </button>
+                )
+              )}
+              <button
+                className={s.paginationBtn}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Create modal */}
-      {showCreateModal && (
+      {showCreate && (
         <CompanyFormModal
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => setShowCreate(false)}
           onSaved={(c) => {
-            setShowCreateModal(false)
+            setShowCreate(false)
             setCompanies((prev) => [c, ...prev])
             setPagination((p) => ({ ...p, total: p.total + 1 }))
+            addToast(`Đã thêm khách hàng "${c.name}"`, 'success')
           }}
+        />
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteTarget && (
+        <DeleteCompanyModal
+          company={deleteTarget}
+          deleting={deleting}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
         />
       )}
     </AppLayout>
@@ -209,48 +485,96 @@ export default function Companies() {
 
 // ── CompanyRow ─────────────────────────────────────────────────────────────────
 
-function CompanyRow({ company, onClick }) {
-  const statusInfo = COMPANY_STATUS_MAP[company.status] ?? { label: company.status, cls: 'bg-gray-100 text-gray-500' }
+function CompanyRow({ company, isAdmin, onClick, onDelete }) {
+  const staff = company.assignedStaff
 
   return (
-    <tr onClick={onClick} className="hover:bg-gray-50/70 transition-colors cursor-pointer">
-      <td className="px-5 py-3.5">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#0f345e]/10 flex items-center justify-center flex-shrink-0">
-            <Building2 size={15} className="text-[#0f345e]" />
+    <tr onClick={onClick}>
+      <td>
+        <div className={s.companyCell}>
+          {company.avatarUrl ? (
+            <img
+              src={company.avatarUrl}
+              alt=""
+              className={s.companyAvatar}
+              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }}
+            />
+          ) : null}
+          <div className={s.companyInitials} style={company.avatarUrl ? { display: 'none' } : {}}>
+            {getInitials(company.name)}
           </div>
-          <span className="font-medium text-gray-800 truncate max-w-[200px]">{company.name}</span>
+          <div>
+            <div className={s.companyName}>{company.name}</div>
+            {(company.industry || company.businessType) && (
+              <div className={s.companyMeta}>
+                {company.industry || BUSINESS_TYPE_LABELS[company.businessType]}
+              </div>
+            )}
+          </div>
         </div>
       </td>
-      <td className="px-5 py-3.5 text-gray-500 text-xs hidden sm:table-cell">
-        {company.taxCode ?? <span className="text-gray-300">—</span>}
+      <td style={{ display: 'table-cell' }}>
+        <span className={s.muted}>{company.taxCode || '—'}</span>
       </td>
-      <td className="px-5 py-3.5 text-gray-500 text-xs hidden md:table-cell">
-        {BUSINESS_TYPE_LABELS[company.businessType] ?? company.businessType}
+      <td style={{ display: 'table-cell' }}>
+        {company.contactName ? (
+          <div>
+            <div className={s.contactName}>{company.contactName}</div>
+            {company.contactPhone && <div className={s.contactPhone}>{company.contactPhone}</div>}
+          </div>
+        ) : (
+          <span className={s.muted}>—</span>
+        )}
       </td>
-      <td className="px-5 py-3.5 text-gray-600 text-xs hidden lg:table-cell">
-        {company.assignedStaff?.name ?? <span className="text-gray-300">Chưa phân công</span>}
+      <td>
+        {staff ? (
+          <div className={s.staffCell}>
+            <img
+              src={staffAvatarSrc(staff)}
+              alt={staff.name}
+              className={s.staffAvatar}
+              onError={(e) => { e.target.src = FALLBACK_AVATAR }}
+            />
+            <span className={s.staffName}>{staff.name}</span>
+          </div>
+        ) : (
+          <span className={s.unassigned}>Chưa phân công</span>
+        )}
       </td>
-      <td className="px-5 py-3.5">
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.cls}`}>
-          {statusInfo.label}
-        </span>
+      <td style={{ textAlign: 'center' }}>
+        {company.taskOpenCount > 0 ? (
+          <span className={s.metricOpen}>{company.taskOpenCount}</span>
+        ) : (
+          <span className={s.metricZero}>0</span>
+        )}
       </td>
-      <td className="px-5 py-3.5 text-right hidden sm:table-cell">
-        <div className="flex items-center justify-end gap-2">
-          {company.taskOpenCount > 0 && (
-            <span className="text-xs text-blue-600 font-medium">
-              {company.taskOpenCount} mở
-            </span>
+      <td style={{ textAlign: 'center' }}>
+        {company.taskOverdueCount > 0 ? (
+          <span className={s.pillOverdue}>{company.taskOverdueCount}</span>
+        ) : (
+          <span className={s.metricZero}>0</span>
+        )}
+      </td>
+      <td><StatusPill status={company.status} /></td>
+      <td>
+        <div className={s.rowActions}>
+          {isAdmin && (
+            <button
+              className={`${s.rowActionBtn} ${s.rowActionDanger}`}
+              onClick={onDelete}
+              title="Xoá công ty"
+            >
+              <Trash2 size={14} />
+            </button>
           )}
-          {company.taskOverdueCount > 0 && (
-            <span className="inline-flex items-center text-xs font-medium bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
-              {company.taskOverdueCount} trễ
-            </span>
-          )}
-          {company.taskOpenCount === 0 && company.taskOverdueCount === 0 && (
-            <span className="text-xs text-gray-300">—</span>
-          )}
+          <button
+            className={`${s.rowActionBtn} ${s.rowActionView}`}
+            onClick={(e) => { e.stopPropagation(); onClick() }}
+            title="Xem chi tiết"
+          >
+            <Eye size={14} />
+          </button>
+          <ChevronRight size={14} className={s.rowChevronIcon} />
         </div>
       </td>
     </tr>
@@ -259,21 +583,72 @@ function CompanyRow({ company, onClick }) {
 
 // ── SkeletonRow ────────────────────────────────────────────────────────────────
 
-function SkeletonRow() {
+function SkeletonRow({ isAdmin }) {
   return (
-    <tr className="animate-pulse">
-      <td className="px-5 py-3.5">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gray-200 flex-shrink-0" />
-          <div className="h-3 w-40 bg-gray-200 rounded" />
+    <tr className={`${s.skeletonRow} ${s.skeletonPulse}`}>
+      <td>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+          <div className={s.skeletonSquare} style={{ width: 36, height: 36, flexShrink: 0 }} />
+          <div>
+            <div className={s.skeletonBlock} style={{ width: 160, height: 12, marginBottom: 5 }} />
+            <div className={s.skeletonBlock} style={{ width: 100, height: 10 }} />
+          </div>
         </div>
       </td>
-      <td className="px-5 py-3.5 hidden sm:table-cell"><div className="h-3 w-24 bg-gray-100 rounded" /></td>
-      <td className="px-5 py-3.5 hidden md:table-cell"><div className="h-3 w-28 bg-gray-100 rounded" /></td>
-      <td className="px-5 py-3.5 hidden lg:table-cell"><div className="h-3 w-24 bg-gray-100 rounded" /></td>
-      <td className="px-5 py-3.5"><div className="h-5 w-24 bg-gray-200 rounded-full" /></td>
-      <td className="px-5 py-3.5 hidden sm:table-cell"><div className="h-3 w-16 bg-gray-100 rounded ml-auto" /></td>
+      <td><div className={s.skeletonBlock} style={{ width: 80, height: 11 }} /></td>
+      <td><div className={s.skeletonBlock} style={{ width: 100, height: 11 }} /></td>
+      <td>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className={s.skeletonCircle} style={{ width: 28, height: 28, flexShrink: 0 }} />
+          <div className={s.skeletonBlock} style={{ width: 90, height: 11 }} />
+        </div>
+      </td>
+      <td style={{ textAlign: 'center' }}><div className={s.skeletonBlock} style={{ width: 24, height: 14, margin: '0 auto' }} /></td>
+      <td style={{ textAlign: 'center' }}><div className={s.skeletonBlock} style={{ width: 24, height: 14, margin: '0 auto' }} /></td>
+      <td><div className={s.skeletonBlock} style={{ width: 80, height: 20, borderRadius: 999 }} /></td>
+      <td />
     </tr>
+  )
+}
+
+// ── DeleteCompanyModal ─────────────────────────────────────────────────────────
+
+function DeleteCompanyModal({ company, deleting, onClose, onConfirm }) {
+  const hasActivities = company.taskOpenCount > 0 || company.taskOverdueCount > 0
+
+  return (
+    <Modal title="Xoá công ty" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {hasActivities ? (
+          <div className={s.terminateWarn}>
+            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>
+              <strong>{company.name}</strong> đang có <strong>{company.taskOpenCount + company.taskOverdueCount} công việc</strong> chưa hoàn thành.
+              Không thể xoá công ty đã có hoạt động — hãy dùng chức năng <strong>"Kết thúc HĐ"</strong> trên trang chi tiết để lưu giữ dữ liệu.
+            </span>
+          </div>
+        ) : (
+          <div className={s.terminateWarn} style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
+            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
+            <span>
+              Bạn sắp <strong>xoá vĩnh viễn</strong> công ty <strong>"{company.name}"</strong>.
+              Hành động này không thể hoàn tác. Chỉ xoá được nếu công ty chưa có công việc hoặc lịch sử phân công.
+            </span>
+          </div>
+        )}
+        <div className={s.modalActions}>
+          <button onClick={onClose} className={s.btnOutline}>
+            {hasActivities ? 'Đóng' : 'Huỷ bỏ'}
+          </button>
+          {!hasActivities && (
+            <button onClick={onConfirm} disabled={deleting} className={s.btnDanger}>
+              {deleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
+              {deleting ? 'Đang xoá...' : 'Xoá vĩnh viễn'}
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -296,36 +671,40 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     bankName:         company?.bankName         ?? '',
     serviceStartDate: company?.serviceStartDate ? company.serviceStartDate.slice(0, 10) : '',
     notes:            company?.notes            ?? '',
+    avatarUrl:        company?.avatarUrl        ?? '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
-  const [fieldErrors, setFE]  = useState({})
+  const [fe, setFE]           = useState({})
 
-  function set(field) {
-    return (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
+  const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }))
+
+  function inputCls(field) {
+    return fe[field] ? `${s.formInput} ${s.formInputError}` : s.formInput
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setError(null)
-    setFE({})
+    if (!form.name.trim()) { setFE({ name: 'Tên công ty không được để trống' }); return }
+    setError(null); setFE({})
     setLoading(true)
     try {
       const body = {
-        name:             form.name,
-        taxCode:          form.taxCode          || null,
+        name:             form.name.trim(),
+        taxCode:          form.taxCode.trim()          || null,
         businessType:     form.businessType,
-        address:          form.address          || null,
-        industry:         form.industry         || null,
-        legalRepName:     form.legalRepName     || null,
-        legalRepPhone:    form.legalRepPhone    || null,
-        contactName:      form.contactName      || null,
-        contactPhone:     form.contactPhone     || null,
-        contactEmail:     form.contactEmail     || null,
-        bankAccount:      form.bankAccount      || null,
-        bankName:         form.bankName         || null,
-        serviceStartDate: form.serviceStartDate || null,
-        notes:            form.notes            || null,
+        address:          form.address.trim()          || null,
+        industry:         form.industry.trim()         || null,
+        legalRepName:     form.legalRepName.trim()     || null,
+        legalRepPhone:    form.legalRepPhone.trim()    || null,
+        contactName:      form.contactName.trim()      || null,
+        contactPhone:     form.contactPhone.trim()     || null,
+        contactEmail:     form.contactEmail.trim()     || null,
+        bankAccount:      form.bankAccount.trim()      || null,
+        bankName:         form.bankName.trim()         || null,
+        serviceStartDate: form.serviceStartDate        || null,
+        notes:            form.notes.trim()            || null,
+        avatarUrl:        form.avatarUrl.trim()        || null,
       }
       const saved = isEdit
         ? await companiesApi.updateCompany(company.id, body)
@@ -334,9 +713,9 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     } catch (err) {
       const errData = err.response?.data?.error
       if (err.response?.status === 422 && errData?.details) {
-        const fe = {}
-        for (const d of errData.details) fe[d.field] = d.message
-        setFE(fe)
+        const errs = {}
+        for (const d of errData.details) errs[d.field] = d.message
+        setFE(errs)
       } else {
         setError(errData?.message ?? 'Đã xảy ra lỗi, vui lòng thử lại')
       }
@@ -345,116 +724,134 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     }
   }
 
-  const inputCls = (field) =>
-    `w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f345e]/20 focus:border-[#0f345e] ${fieldErrors[field] ? 'border-red-400' : 'border-gray-200'}`
-
   return (
     <Modal
       title={isEdit ? 'Chỉnh sửa thông tin công ty' : 'Thêm khách hàng mới'}
       onClose={onClose}
       wide
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <div className="px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
-        )}
+      <form onSubmit={handleSubmit} className={s.modalForm}>
+        {error && <div className={s.errorBox}>{error}</div>}
 
-        {/* Name + Business type */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Tên công ty <span className="text-red-500">*</span>
-            </label>
-            <input type="text" value={form.name} onChange={set('name')} required className={inputCls('name')} placeholder="Công ty TNHH ABC" />
-            {fieldErrors.name && <p className="mt-1 text-xs text-red-500">{fieldErrors.name}</p>}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Loại hình</label>
-            <select
-              value={form.businessType}
-              onChange={set('businessType')}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f345e]/20 focus:border-[#0f345e] bg-white"
-            >
-              {Object.entries(BUSINESS_TYPE_LABELS).map(([v, l]) => (
-                <option key={v} value={v}>{l}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Tax code + Industry */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Mã số thuế</label>
-            <input type="text" value={form.taxCode} onChange={set('taxCode')} className={inputCls('taxCode')} placeholder="0123456789" />
-            {fieldErrors.taxCode && <p className="mt-1 text-xs text-red-500">{fieldErrors.taxCode}</p>}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Ngành nghề</label>
-            <input type="text" value={form.industry} onChange={set('industry')} className={inputCls('industry')} placeholder="Thương mại, sản xuất..." />
-          </div>
-        </div>
-
-        {/* Address */}
+        {/* Thông tin doanh nghiệp */}
         <div>
-          <label className="block text-xs font-semibold text-gray-600 mb-1.5">Địa chỉ</label>
-          <input type="text" value={form.address} onChange={set('address')} className={inputCls('address')} placeholder="123 Đường ABC, Quận XYZ, TP.HCM" />
+          <div className={s.formGroupLabel}>Thông tin doanh nghiệp</div>
+          <div className={s.formGrid2} style={{ marginBottom: 12 }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label className={`${s.formLabel} ${s.formLabelReq}`}>Tên công ty</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={set('name')}
+                className={inputCls('name')}
+                placeholder="Công ty TNHH ABC..."
+                autoFocus
+              />
+              {fe.name && <p className={s.formError}>{fe.name}</p>}
+            </div>
+          </div>
+          <div className={s.formGrid3}>
+            <div>
+              <label className={s.formLabel}>Mã số thuế</label>
+              <input type="text" value={form.taxCode} onChange={set('taxCode')} className={inputCls('taxCode')} placeholder="0123456789" />
+              {fe.taxCode && <p className={s.formError}>{fe.taxCode}</p>}
+            </div>
+            <div>
+              <label className={s.formLabel}>Loại hình</label>
+              <select value={form.businessType} onChange={set('businessType')} className={s.formSelect}>
+                {Object.entries(BUSINESS_TYPE_LABELS).map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={s.formLabel}>Ngành nghề</label>
+              <input type="text" value={form.industry} onChange={set('industry')} className={s.formInput} placeholder="Thương mại, sản xuất..." />
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label className={s.formLabel}>Địa chỉ</label>
+            <input type="text" value={form.address} onChange={set('address')} className={s.formInput} placeholder="123 Đường ABC, Quận XYZ, TP.HCM" />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label className={s.formLabel}>URL ảnh đại diện (tuỳ chọn)</label>
+            <input
+              type="url"
+              value={form.avatarUrl}
+              onChange={set('avatarUrl')}
+              className={inputCls('avatarUrl')}
+              placeholder="https://example.com/logo.png"
+            />
+            {fe.avatarUrl && <p className={s.formError}>{fe.avatarUrl}</p>}
+            <p className={s.formHint}>Nhập URL trực tiếp tới ảnh logo/đại diện của công ty</p>
+          </div>
         </div>
 
-        {/* Legal rep */}
+        {/* Đại diện pháp lý & liên hệ */}
         <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Người đại diện pháp lý</p>
-          <div className="grid grid-cols-2 gap-3">
-            <input type="text" value={form.legalRepName} onChange={set('legalRepName')} className={inputCls('legalRepName')} placeholder="Họ tên" />
-            <input type="tel" value={form.legalRepPhone} onChange={set('legalRepPhone')} className={inputCls('legalRepPhone')} placeholder="Số điện thoại" />
+          <div className={s.formGroupLabel}>Đại diện pháp lý & người liên hệ</div>
+          <div className={s.formGrid2} style={{ marginBottom: 12 }}>
+            <div>
+              <label className={s.formLabel}>Họ tên đại diện pháp lý</label>
+              <input type="text" value={form.legalRepName} onChange={set('legalRepName')} className={s.formInput} placeholder="Họ và tên" />
+            </div>
+            <div>
+              <label className={s.formLabel}>ĐT đại diện</label>
+              <input type="tel" value={form.legalRepPhone} onChange={set('legalRepPhone')} className={s.formInput} placeholder="0901 234 567" />
+            </div>
+          </div>
+          <div className={s.formGrid3}>
+            <div>
+              <label className={s.formLabel}>Họ tên liên hệ</label>
+              <input type="text" value={form.contactName} onChange={set('contactName')} className={s.formInput} placeholder="Người liên hệ" />
+            </div>
+            <div>
+              <label className={s.formLabel}>ĐT liên hệ</label>
+              <input type="tel" value={form.contactPhone} onChange={set('contactPhone')} className={s.formInput} placeholder="0901 234 567" />
+            </div>
+            <div>
+              <label className={s.formLabel}>Email liên hệ</label>
+              <input type="email" value={form.contactEmail} onChange={set('contactEmail')} className={inputCls('contactEmail')} placeholder="email@congty.vn" />
+              {fe.contactEmail && <p className={s.formError}>{fe.contactEmail}</p>}
+            </div>
           </div>
         </div>
 
-        {/* Contact person */}
+        {/* Hợp đồng & ngân hàng */}
         <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Người liên hệ</p>
-          <div className="grid grid-cols-2 gap-3 mb-2">
-            <input type="text" value={form.contactName} onChange={set('contactName')} className={inputCls('contactName')} placeholder="Họ tên" />
-            <input type="tel" value={form.contactPhone} onChange={set('contactPhone')} className={inputCls('contactPhone')} placeholder="Số điện thoại" />
+          <div className={s.formGroupLabel}>Hợp đồng & ngân hàng</div>
+          <div className={s.formGrid3}>
+            <div>
+              <label className={s.formLabel}>Ngày bắt đầu dịch vụ</label>
+              <input type="date" value={form.serviceStartDate} onChange={set('serviceStartDate')} className={s.formInput} />
+            </div>
+            <div>
+              <label className={s.formLabel}>Số tài khoản NH</label>
+              <input type="text" value={form.bankAccount} onChange={set('bankAccount')} className={s.formInput} placeholder="1234 5678 9012" />
+            </div>
+            <div>
+              <label className={s.formLabel}>Tên ngân hàng</label>
+              <input type="text" value={form.bankName} onChange={set('bankName')} className={s.formInput} placeholder="Vietcombank, ACB..." />
+            </div>
           </div>
-          <input type="email" value={form.contactEmail} onChange={set('contactEmail')} className={inputCls('contactEmail')} placeholder="Email liên hệ" />
-          {fieldErrors.contactEmail && <p className="mt-1 text-xs text-red-500">{fieldErrors.contactEmail}</p>}
         </div>
 
-        {/* Bank */}
+        {/* Ghi chú */}
         <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Tài khoản ngân hàng</p>
-          <div className="grid grid-cols-2 gap-3">
-            <input type="text" value={form.bankAccount} onChange={set('bankAccount')} className={inputCls('bankAccount')} placeholder="Số tài khoản" />
-            <input type="text" value={form.bankName} onChange={set('bankName')} className={inputCls('bankName')} placeholder="Tên ngân hàng" />
-          </div>
+          <div className={s.formGroupLabel}>Ghi chú</div>
+          <textarea
+            value={form.notes}
+            onChange={set('notes')}
+            className={s.formTextarea}
+            placeholder="Ghi chú đặc thù nghiệp vụ, yêu cầu đặc biệt..."
+            rows={3}
+          />
         </div>
 
-        {/* Service start date + Notes */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Ngày bắt đầu dịch vụ</label>
-            <input type="date" value={form.serviceStartDate} onChange={set('serviceStartDate')} className={inputCls('serviceStartDate')} />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Ghi chú</label>
-            <input type="text" value={form.notes} onChange={set('notes')} className={inputCls('notes')} placeholder="Ghi chú thêm..." />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            Hủy
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-5 py-2 text-sm font-semibold bg-[#0f345e] text-white rounded-lg hover:bg-[#0a2544] disabled:opacity-60 transition-colors"
-          >
+        <div className={s.modalActions}>
+          <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
+          <button type="submit" disabled={loading} className={s.btnPrimary}>
+            {loading ? <Loader2 size={13} className={s.spin} /> : null}
             {loading ? 'Đang lưu...' : isEdit ? 'Lưu thay đổi' : 'Thêm khách hàng'}
           </button>
         </div>

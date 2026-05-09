@@ -40,6 +40,13 @@ async function terminateCompany(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function deleteCompany(req, res, next) {
+  try {
+    await svc.deleteCompany(req.params.id, req.user.id, req.ip, req.headers['user-agent'])
+    res.json({ success: true, message: 'Company deleted' })
+  } catch (err) { next(err) }
+}
+
 async function getAssignments(req, res, next) {
   try {
     const assignments = await svc.getAssignments(req.params.id)
@@ -57,4 +64,4 @@ async function assignStaff(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, getAssignments, assignStaff }
+module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff }

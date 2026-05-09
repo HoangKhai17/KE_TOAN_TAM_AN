@@ -21,6 +21,10 @@ export async function updateCompany(id, body) {
 }
 
 export async function terminateCompany(id) {
+  await api.post(`/companies/${id}/terminate`)
+}
+
+export async function deleteCompany(id) {
   await api.delete(`/companies/${id}`)
 }
 
