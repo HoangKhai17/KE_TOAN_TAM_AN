@@ -8,6 +8,7 @@ import {
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
+import { useToastStore } from '../../stores/toastStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listTaskTypes, createTaskType, updateTaskType, toggleTaskType } from '../../api/taskTypes'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
@@ -191,6 +192,7 @@ export default function Settings() {
 // ── Section: Timezone ─────────────────────────────────────────────────────────
 
 function TimezoneSection() {
+  const addToast            = useToastStore((st) => st.toast)
   const [value, setValue]   = useState(DEFAULT_TIMEZONE)
   const [loaded, setLoaded] = useState(false)
   const [status, setStatus] = useState(null)
@@ -212,8 +214,10 @@ function TimezoneSection() {
       await updateConfig('system_timezone', value)
       setStatus('ok')
       setTimeout(() => setStatus(null), 2500)
+      addToast('Đã lưu múi giờ hệ thống', 'success')
     } catch {
       setStatus('err')
+      addToast('Không thể lưu múi giờ', 'error')
     }
   }
 
@@ -256,6 +260,7 @@ function TimezoneSection() {
 
 function UsersSection() {
   const currentUser = useAuthStore((st) => st.user)
+  const addToast    = useToastStore((st) => st.toast)
   const [users, setUsers]             = useState([])
   const [loading, setLoading]         = useState(true)
   const [search, setSearch]           = useState('')
@@ -276,7 +281,14 @@ function UsersSection() {
 
   async function handleStatusToggle(u) {
     const newStatus = u.status === 'active' ? 'on_leave' : 'active'
-    try { await updateUserStatus(u.id, newStatus); load() } catch { /* ignore */ }
+    try {
+      await updateUserStatus(u.id, newStatus)
+      load()
+      const label = newStatus === 'on_leave' ? 'Tạm dừng' : 'Kích hoạt'
+      addToast(`${label} tài khoản "${u.name}" thành công`, newStatus === 'active' ? 'success' : 'warning')
+    } catch {
+      addToast('Không thể cập nhật trạng thái tài khoản', 'error')
+    }
   }
 
   const filtered = !search.trim()
@@ -384,7 +396,7 @@ function UsersSection() {
                         </button>
                         {u.id !== currentUser?.id && (
                           <button
-                            className={`${s.iconBtn} ${u.status === 'active' ? s.iconBtnWarn : s.iconBtnSuccess}`}
+                            className={`${s.iconBtn} ${u.status === 'active' ? s.iconBtnSuspend : s.iconBtnActivate}`}
                             title={u.status === 'active' ? 'Tạm dừng tài khoản' : 'Kích hoạt tài khoản'}
                             onClick={() => handleStatusToggle(u)}
                           >
@@ -427,6 +439,7 @@ function UsersSection() {
 }
 
 function CreateUserModal({ onClose, onSaved }) {
+  const addToast = useToastStore((st) => st.toast)
   const [form, setForm] = useState({
     name:     '',
     email:    '',
@@ -443,9 +456,9 @@ function CreateUserModal({ onClose, onSaved }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.name.trim())  { setError('Vui lòng nhập họ tên');       return }
-    if (!form.email.trim()) { setError('Vui lòng nhập email');         return }
-    if (!form.password)     { setError('Vui lòng nhập mật khẩu');     return }
+    if (!form.name.trim())  { setError('Vui lòng nhập họ tên');   return }
+    if (!form.email.trim()) { setError('Vui lòng nhập email');     return }
+    if (!form.password)     { setError('Vui lòng nhập mật khẩu'); return }
     setSaving(true); setError(null)
     try {
       await createUser({
@@ -456,6 +469,7 @@ function CreateUserModal({ onClose, onSaved }) {
         jobTitle: form.jobTitle.trim() || null,
         role:     form.role,
       })
+      addToast(`Tạo tài khoản "${form.name.trim()}" thành công`, 'success')
       onSaved()
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Đã xảy ra lỗi')
@@ -533,6 +547,7 @@ function CreateUserModal({ onClose, onSaved }) {
 function EditUserModal({ user, currentUserId, onClose, onSaved }) {
   const isCurrentUser = user.id === currentUserId
   const patchAuthUser = useAuthStore((st) => st.patchUser)
+  const addToast      = useToastStore((st) => st.toast)
   const [form, setForm]   = useState({
     name:      user.name,
     phone:     user.phone    || '',
@@ -564,6 +579,7 @@ function EditUserModal({ user, currentUserId, onClose, onSaved }) {
       if (isCurrentUser) {
         patchAuthUser({ name: updated.name, avatarUrl: updated.avatarUrl, role: updated.role })
       }
+      addToast(`Cập nhật thông tin "${user.name}" thành công`, 'success')
       onSaved()
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Đã xảy ra lỗi')
@@ -648,7 +664,8 @@ function EditUserModal({ user, currentUserId, onClose, onSaved }) {
 }
 
 function ResetPasswordModal({ user, onClose, onSaved }) {
-  const [form, setForm]     = useState({ newPassword: '', confirm: '' })
+  const addToast        = useToastStore((st) => st.toast)
+  const [form, setForm] = useState({ newPassword: '', confirm: '' })
   const [showPw, setShowPw] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
@@ -660,6 +677,7 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
     setSaving(true); setError(null)
     try {
       await resetUserPassword(user.id, form.newPassword)
+      addToast(`Đặt lại mật khẩu cho "${user.name}" thành công`, 'success')
       onSaved()
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Đã xảy ra lỗi')
@@ -716,8 +734,9 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
 // ── Section: Task Types ───────────────────────────────────────────────────────
 
 function TaskTypesSection() {
-  const [grouped, setGrouped]     = useState({})
-  const [loading, setLoading]     = useState(true)
+  const addToast              = useToastStore((st) => st.toast)
+  const [grouped, setGrouped] = useState({})
+  const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing]     = useState(null)
   const [expanded, setExpanded]   = useState({})
@@ -733,8 +752,15 @@ function TaskTypesSection() {
 
   useEffect(() => { load() }, [])
 
-  async function handleToggle(id) {
-    try { await toggleTaskType(id); load() } catch { /* ignore */ }
+  async function handleToggle(tt) {
+    try {
+      await toggleTaskType(tt.id)
+      load()
+      const nextActive = !tt.isActive
+      addToast(`${nextActive ? 'Kích hoạt' : 'Tắt'} loại công việc "${tt.name}"`, nextActive ? 'success' : 'warning')
+    } catch {
+      addToast('Không thể cập nhật trạng thái loại công việc', 'error')
+    }
   }
 
   function toggleGroup(group) {
@@ -790,7 +816,7 @@ function TaskTypesSection() {
                         <td className={s.centerCell}>{tt.defaultSlaDays}d</td>
                         <td className={s.centerCell}>
                           <button
-                            onClick={() => handleToggle(tt.id)}
+                            onClick={() => handleToggle(tt)}
                             className={tt.isActive ? s.badgeActive : s.badgeInactive}
                           >
                             <span className={s.badgeDot} />
@@ -828,7 +854,8 @@ function TaskTypesSection() {
 }
 
 function TaskTypeModal({ taskType, onClose, onSaved }) {
-  const isEdit = !!taskType
+  const isEdit   = !!taskType
+  const addToast = useToastStore((st) => st.toast)
   const [form, setForm] = useState({
     name:           taskType?.name           ?? '',
     groupName:      taskType?.groupName      ?? '',
@@ -851,6 +878,7 @@ function TaskTypeModal({ taskType, onClose, onSaved }) {
       }
       if (isEdit) await updateTaskType(taskType.id, body)
       else        await createTaskType(body)
+      addToast(isEdit ? `Đã cập nhật "${body.name}"` : `Đã tạo loại công việc "${body.name}"`, 'success')
       onSaved()
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Đã xảy ra lỗi')
@@ -987,6 +1015,7 @@ function EscalationSection() {
 // ── Shared: config form ───────────────────────────────────────────────────────
 
 function ConfigFormSection({ description, fields }) {
+  const addToast  = useToastStore((st) => st.toast)
   const [values, setValues] = useState({})
   const [loaded, setLoaded] = useState(false)
   const [status, setStatus] = useState(null)
@@ -1012,8 +1041,10 @@ function ConfigFormSection({ description, fields }) {
       await Promise.all(fields.map((f) => updateConfig(f.key, values[f.key])))
       setStatus('ok')
       setTimeout(() => setStatus(null), 2500)
+      addToast('Đã lưu cấu hình thành công', 'success')
     } catch {
       setStatus('err')
+      addToast('Không thể lưu cấu hình', 'error')
     }
   }
 

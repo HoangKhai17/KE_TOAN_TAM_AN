@@ -797,6 +797,13 @@
 .iconBtnWarn:hover        { background: #fffbeb; color: #d97706; }
 .iconBtnSuccess:hover     { background: #f0fdf4; color: #059669; }
 
+/* Persistent status colors (không cần hover mới thấy) */
+.iconBtnSuspend           { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.iconBtnSuspend:hover     { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+
+.iconBtnActivate          { background: #f0fdf4; color: #059669; border: 1px solid #a7f3d0; }
+.iconBtnActivate:hover    { background: #dcfce7; color: #047857; border-color: #6ee7b7; }
+
 .pillWarn {
   display: inline-flex;
   align-items: center;
