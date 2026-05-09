@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus, Search, Building2, ChevronRight, ChevronLeft,
+  Plus, Search, Building2, ChevronRight,
   Loader2, RotateCcw, Trash2, AlertTriangle, Eye,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
@@ -105,6 +105,8 @@ export default function Companies() {
   const pageOpenTotal = companies.reduce((sum, c) => sum + (Number(c.taskOpenCount) || 0), 0)
   const pageOverdueTotal = companies.reduce((sum, c) => sum + (Number(c.taskOverdueCount) || 0), 0)
   const pageActiveTotal = companies.filter((c) => c.status === 'active').length
+  const paginationFrom = pagination.total === 0 ? 0 : (page - 1) * limit + 1
+  const paginationTo = Math.min(page * limit, pagination.total)
 
   // Debounce search
   useEffect(() => {
@@ -200,29 +202,6 @@ export default function Companies() {
           )}
         </div>
 
-        {!loading && (
-          <div className={s.resultSummaryBar}>
-            <div className={s.resultSummaryItem}>
-              <span className={s.resultSummaryValue}>{pagination.total}</span>
-              <span className={s.resultSummaryLabel}>Kết quả</span>
-            </div>
-            <div className={s.resultSummaryItem}>
-              <span className={s.resultSummaryValue}>{pageOpenTotal}</span>
-              <span className={s.resultSummaryLabel}>Việc mở</span>
-            </div>
-            <div className={s.resultSummaryItem}>
-              <span className={`${s.resultSummaryValue} ${pageOverdueTotal > 0 ? s.resultSummaryDanger : ''}`}>
-                {pageOverdueTotal}
-              </span>
-              <span className={s.resultSummaryLabel}>Quá hạn</span>
-            </div>
-            <div className={s.resultSummaryItem}>
-              <span className={`${s.resultSummaryValue} ${s.resultSummarySuccess}`}>{pageActiveTotal}</span>
-              <span className={s.resultSummaryLabel}>Hoạt động</span>
-            </div>
-          </div>
-        )}
-
         {/* Filter panel */}
         <div className={s.filterPanel}>
           {/* Header */}
@@ -287,20 +266,12 @@ export default function Companies() {
           {/* Footer: active chips + result summary */}
           <div className={s.filterFooter}>
             <div className={s.filterFooterLeft}>
-              <div className={s.filterActionBtns}>
-                <button
-                  className={`${s.btnFilterReset} ${hasActiveFilters ? s.btnFilterResetActive : ''}`}
-                  onClick={resetFilters}
-                >
-                  <RotateCcw size={13} /> Đặt lại
-                </button>
-                <button
-                  className={s.btnFilterApply}
-                  onClick={() => { setSearch(searchInput); setPage(1) }}
-                >
-                  <Search size={13} /> Tìm kiếm
-                </button>
-              </div>
+              <button
+                className={`${s.btnFilterReset} ${hasActiveFilters ? s.btnFilterResetActive : ''}`}
+                onClick={resetFilters}
+              >
+                <RotateCcw size={13} /> Đặt lại
+              </button>
               <div className={s.filterChips}>
                 {statusFilter && (
                   <span className={s.filterChip}>
@@ -334,20 +305,24 @@ export default function Companies() {
                   <span className={s.filterSummaryValue}>{pagination.total}</span>
                   <span className={s.filterSummaryLabel}>Kết quả</span>
                 </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={s.filterSummaryValue}>{pageOpenTotal}</span>
+                  <span className={s.filterSummaryLabel}>Việc mở</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={`${s.filterSummaryValue} ${pageOverdueTotal > 0 ? s.filterSummaryDanger : ''}`}>{pageOverdueTotal}</span>
+                  <span className={s.filterSummaryLabel}>Quá hạn</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={`${s.filterSummaryValue} ${s.filterSummarySuccess}`}>{pageActiveTotal}</span>
+                  <span className={s.filterSummaryLabel}>Hoạt động</span>
+                </span>
               </div>
             )}
           </div>
         </div>
 
         {/* Table */}
-        <div className={s.tableSectionHead}>
-          <div>
-            <h2 className={s.tableSectionTitle}>Danh sách công ty</h2>
-            <p className={s.tableSectionMeta}>
-              {loading ? 'Đang tải dữ liệu...' : `${companies.length} dòng trên trang này`}
-            </p>
-          </div>
-        </div>
         <div className={s.tableWrap}>
           {error ? (
             <div className={s.errorState}>
@@ -401,37 +376,16 @@ export default function Companies() {
               </table>
             </div>
           )}
-        </div>
 
-        {/* Pagination */}
-        <div className={s.paginationBar}>
-          <div className={s.paginationLeft}>
+          {/* Pagination — gộp trong table card */}
+          <div className={s.paginationBar}>
             <span className={s.paginationInfo}>
-              {loading ? '...' : `${pagination.total} công ty`}
+              {loading ? '...' : `Hiển thị ${paginationFrom}-${paginationTo} / ${pagination.total} record`}
             </span>
-            <div className={s.pageSizeWrap}>
-              <span className={s.pageSizeLabel}>Hiển thị:</span>
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  className={`${s.pageSizeBtn} ${limit === n ? s.pageSizeBtnActive : ''}`}
-                  onClick={() => setLimit(n)}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {totalPages > 1 && (
             <div className={s.paginationBtns}>
-              <button
-                className={s.paginationBtn}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                <ChevronLeft size={14} />
-              </button>
+              <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={page === 1}>«</button>
+              <button className={s.paginationBtn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>‹</button>
               {pageWindow().map((n, i) =>
                 n === '…' ? (
                   <span key={`sep-${i}`} className={s.paginationEllipsis}>…</span>
@@ -445,15 +399,24 @@ export default function Companies() {
                   </button>
                 )
               )}
-              <button
-                className={s.paginationBtn}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-              >
-                <ChevronRight size={14} />
-              </button>
+              <button className={s.paginationBtn} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>›</button>
+              <button className={s.paginationBtn} onClick={() => setPage(totalPages)} disabled={page === totalPages}>»</button>
             </div>
-          )}
+
+            <div className={s.pageSizeWrap}>
+              <span className={s.pageSizeLabel}>Hiển thị:</span>
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  className={`${s.pageSizeBtn} ${limit === n ? s.pageSizeBtnActive : ''}`}
+                  onClick={() => setLimit(n)}
+                >
+                  {n}
+                </button>
+              ))}
+              <span className={s.pageSizeLabel}>/ trang</span>
+            </div>
+          </div>
         </div>
       </div>
 

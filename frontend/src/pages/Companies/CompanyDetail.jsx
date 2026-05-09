@@ -4,7 +4,7 @@ import {
   Building2, Pencil, UserPlus, AlertTriangle, ChevronRight,
   Phone, Mail, MapPin, Hash, Calendar, Briefcase, CreditCard,
   User, ListTodo, CalendarDays, Lock, FileText, StickyNote,
-  Loader2, Shield, Users, BarChart2, Clock, Trash2,
+  Loader2, Shield, Users, BarChart2, Clock, Trash2, Camera,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -66,6 +66,7 @@ export default function CompanyDetail() {
   const [activeTab, setActiveTab] = useState('overview')
 
   const [showEdit, setShowEdit]             = useState(false)
+  const [showAvatarModal, setShowAvatarModal] = useState(false)
   const [showTerminate, setShowTerminate]   = useState(false)
   const [terminating, setTerminating]       = useState(false)
   const [showDelete, setShowDelete]         = useState(false)
@@ -163,16 +164,27 @@ export default function CompanyDetail() {
       {/* Hero card */}
       <div className={s.heroCard}>
         <div className={s.heroLeft}>
-          {company.avatarUrl ? (
-            <img
-              src={company.avatarUrl}
-              alt=""
-              className={s.heroAvatarImg}
-              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }}
-            />
-          ) : null}
-          <div className={s.heroInitials} style={company.avatarUrl ? { display: 'none' } : {}}>
-            {getInitials(company.name)}
+          <div
+            className={`${s.heroAvatarWrap}${isAdmin ? ` ${s.heroAvatarWrapAdmin}` : ''}`}
+            onClick={isAdmin ? () => setShowAvatarModal(true) : undefined}
+            title={isAdmin ? 'Nhấn để đổi ảnh đại diện' : undefined}
+          >
+            {company.avatarUrl ? (
+              <img
+                src={company.avatarUrl}
+                alt=""
+                className={s.heroAvatarImg}
+                onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }}
+              />
+            ) : null}
+            <div className={s.heroInitials} style={company.avatarUrl ? { display: 'none' } : {}}>
+              {getInitials(company.name)}
+            </div>
+            {isAdmin && (
+              <div className={s.heroAvatarOverlay}>
+                <Camera size={15} />
+              </div>
+            )}
           </div>
           <div className={s.heroInfo}>
             <h1 className={s.heroName}>{company.name}</h1>
@@ -320,6 +332,19 @@ export default function CompanyDetail() {
             setCompany((c) => ({ ...c, ...updated }))
             setShowEdit(false)
             addToast('Đã cập nhật thông tin công ty', 'success')
+          }}
+        />
+      )}
+
+      {/* Avatar update modal */}
+      {showAvatarModal && (
+        <AvatarUpdateModal
+          company={company}
+          onClose={() => setShowAvatarModal(false)}
+          onSaved={(updated) => {
+            setCompany((c) => ({ ...c, avatarUrl: updated.avatarUrl }))
+            setShowAvatarModal(false)
+            addToast('Đã cập nhật ảnh đại diện công ty', 'success')
           }}
         />
       )}
@@ -770,6 +795,105 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
           <button type="submit" disabled={loading || loadingStaff} className={s.btnPrimary}>
             {loading ? <Loader2 size={13} className={s.spin} /> : <UserPlus size={13} />}
             {loading ? 'Đang lưu...' : 'Xác nhận phân công'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// ── AvatarUpdateModal ──────────────────────────────────────────────────────────
+
+function AvatarUpdateModal({ company, onClose, onSaved }) {
+  const [file, setFile]             = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(company.avatarUrl ?? null)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState(null)
+
+  // Revoke blob URL on unmount to free memory
+  useEffect(() => {
+    return () => {
+      if (file) URL.revokeObjectURL(previewUrl)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleFileChange(e) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (f.size > 2 * 1024 * 1024) {
+      setError('Ảnh không được vượt quá 2MB')
+      return
+    }
+    setError(null)
+    if (file) URL.revokeObjectURL(previewUrl)
+    setFile(f)
+    setPreviewUrl(URL.createObjectURL(f))
+  }
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (!file) { setError('Vui lòng chọn ảnh'); return }
+    setError(null)
+    setLoading(true)
+    try {
+      const avatarUrl = await companiesApi.uploadAvatar(file)
+      const updated   = await companiesApi.updateCompany(company.id, { avatarUrl })
+      onSaved(updated)
+    } catch (err) {
+      setError(err.response?.data?.error?.message ?? 'Không thể tải ảnh lên')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal title="Cập nhật ảnh đại diện công ty" onClose={onClose}>
+      <form onSubmit={handleSave} className={s.modalForm}>
+
+        {/* Live preview */}
+        <div className={s.avatarPreviewWrap}>
+          {previewUrl ? (
+            <img
+              src={previewUrl}
+              alt=""
+              className={s.avatarPreviewImg}
+              onError={() => setPreviewUrl(null)}
+            />
+          ) : (
+            <div className={s.avatarPreviewInitials}>
+              {getInitials(company.name)}
+            </div>
+          )}
+          <div className={s.avatarPreviewLabel}>
+            {file ? file.name : 'Xem trước'}
+          </div>
+        </div>
+
+        {error && <div className={s.errorBox}>{error}</div>}
+
+        {/* File picker */}
+        <div>
+          <label className={s.formLabel}>Chọn ảnh từ máy tính</label>
+          <label className={s.fileInputLabel}>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              onChange={handleFileChange}
+              className={s.fileInputHidden}
+            />
+            <span className={s.fileInputBtn}>
+              <Camera size={13} /> {file ? 'Đổi ảnh khác' : 'Chọn ảnh'}
+            </span>
+            {file && <span className={s.fileInputName}>{file.name}</span>}
+          </label>
+          <p className={s.formHint}>JPEG, PNG, GIF, WebP — tối đa 2MB</p>
+        </div>
+
+        <div className={s.modalActions}>
+          <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
+          <button type="submit" disabled={loading || !file} className={s.btnPrimary}>
+            {loading ? <Loader2 size={13} className={s.spin} /> : <Camera size={13} />}
+            {loading ? 'Đang tải lên...' : 'Lưu ảnh đại diện'}
           </button>
         </div>
       </form>

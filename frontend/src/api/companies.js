@@ -37,3 +37,12 @@ export async function assignStaff(companyId, body) {
   const { data } = await api.post(`/companies/${companyId}/assign`, body)
   return data.data
 }
+
+export async function uploadAvatar(file) {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await api.post('/upload/avatar', form, {
+    headers: { 'Content-Type': undefined },
+  })
+  return data.url
+}

@@ -22,7 +22,7 @@ function toDto(row) {
     avatarUrl:        row.avatar_url ?? null,
     assignedStaffId:  row.assigned_staff_id ?? null,
     assignedStaff:    row.staff_name
-      ? { id: row.assigned_staff_id, name: row.staff_name, email: row.staff_email, jobTitle: row.staff_job_title }
+      ? { id: row.assigned_staff_id, name: row.staff_name, email: row.staff_email, jobTitle: row.staff_job_title, avatarUrl: row.staff_avatar_url ?? null }
       : null,
     taskOpenCount:    parseInt(row.task_open_count ?? 0, 10),
     taskOverdueCount: parseInt(row.task_overdue_count ?? 0, 10),
@@ -67,7 +67,7 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
   const dataParams = [...filterParams, limit, offset]
   const { rows } = await query(
     `SELECT c.*,
-            u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title,
+            u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
             (SELECT COUNT(*) FROM tasks t WHERE t.company_id = c.id AND t.status != 'completed') AS task_open_count,
             (SELECT COUNT(*) FROM tasks t WHERE t.company_id = c.id AND t.status != 'completed' AND t.due_date < CURRENT_DATE) AS task_overdue_count
      FROM companies c
@@ -87,7 +87,7 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
 async function getCompanyById(id) {
   const { rows } = await query(
     `SELECT c.*,
-            u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title,
+            u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
             (SELECT COUNT(*) FROM tasks t WHERE t.company_id = c.id AND t.status != 'completed') AS task_open_count,
             (SELECT COUNT(*) FROM tasks t WHERE t.company_id = c.id AND t.status != 'completed' AND t.due_date < CURRENT_DATE) AS task_overdue_count
      FROM companies c
@@ -197,7 +197,7 @@ async function getAssignments(companyId) {
 
   const { rows } = await query(
     `SELECT sca.id, sca.company_id, sca.staff_id, sca.start_date, sca.end_date, sca.notes, sca.created_at,
-            u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title,
+            u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
             ab.name AS assigned_by_name
      FROM staff_company_assignments sca
      JOIN users u  ON u.id  = sca.staff_id

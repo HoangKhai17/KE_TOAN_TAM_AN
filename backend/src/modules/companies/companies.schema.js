@@ -19,7 +19,7 @@ const companyBaseSchema = z.object({
   serviceStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD').optional().nullable(),
   notes:            z.string().optional().nullable(),
   assignedStaffId:  z.string().uuid().optional().nullable(),
-  avatarUrl:        z.string().url().optional().nullable(),
+  avatarUrl:        z.string().optional().nullable(),
 })
 
 const createCompanySchema = companyBaseSchema
