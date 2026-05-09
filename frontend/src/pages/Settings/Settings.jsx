@@ -1,22 +1,81 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Clock, Users, ListTodo, Building2, Bell, CalendarDays, ShieldAlert,
   Settings as SettingsIcon, Plus, Pencil, Save, KeyRound,
   ChevronDown, ChevronRight, Loader2, CheckCircle2, AlertCircle,
-  Search, Eye, EyeOff, UserX, UserCheck,
+  Search, Eye, EyeOff, UserX, UserCheck, Camera,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listTaskTypes, createTaskType, updateTaskType, toggleTaskType } from '../../api/taskTypes'
-import { listUsers, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
+import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
 import { BUSINESS_TYPE_LABELS } from '../Companies/Companies'
 import s from './settings.module.css'
 
 function getInitials(name) {
   if (!name) return '?'
   return name.split(' ').slice(-2).map((w) => w[0]).join('').toUpperCase()
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function AvatarUpload({ value, name, isAdmin, onChange }) {
+  const inputRef = useRef(null)
+
+  function handleFile(e) {
+    const file = e.target.files[0]
+    if (!file || !file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const img = new Image()
+      img.onload = () => {
+        const SIZE = 160
+        const canvas = document.createElement('canvas')
+        canvas.width = SIZE
+        canvas.height = SIZE
+        const ctx = canvas.getContext('2d')
+        const s = Math.min(img.width, img.height)
+        const ox = (img.width - s) / 2
+        const oy = (img.height - s) / 2
+        ctx.drawImage(img, ox, oy, s, s, 0, 0, SIZE, SIZE)
+        onChange(canvas.toDataURL('image/jpeg', 0.82))
+      }
+      img.src = ev.target.result
+    }
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <div className={s.avatarUploadWrap}>
+      <div className={s.avatarUploadCircle} onClick={() => inputRef.current?.click()} title="Nhấp để chọn ảnh">
+        {value ? (
+          <img src={value} alt={name} className={s.avatarUploadImg} />
+        ) : (
+          <div className={`${s.userInitials} ${isAdmin ? s.userInitialsGold : ''}`}
+            style={{ width: '100%', height: '100%', borderRadius: '50%', fontSize: 20, border: 'none' }}>
+            {getInitials(name)}
+          </div>
+        )}
+        <div className={s.avatarUploadOverlay}><Camera size={16} /></div>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
+      <div className={s.avatarUploadActions}>
+        <button type="button" className={s.avatarUploadBtn} onClick={() => inputRef.current?.click()}>
+          <Camera size={11} /> Chọn ảnh
+        </button>
+        {value && (
+          <button type="button" className={s.avatarRemoveBtn} onClick={() => onChange(null)}>
+            Xoá
+          </button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ── Section list ──────────────────────────────────────────────────────────────
@@ -197,10 +256,11 @@ function TimezoneSection() {
 
 function UsersSection() {
   const currentUser = useAuthStore((st) => st.user)
-  const [users, setUsers]           = useState([])
-  const [loading, setLoading]       = useState(true)
-  const [search, setSearch]         = useState('')
-  const [editTarget, setEditTarget] = useState(null)
+  const [users, setUsers]             = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [search, setSearch]           = useState('')
+  const [showCreate, setShowCreate]   = useState(false)
+  const [editTarget, setEditTarget]   = useState(null)
   const [resetTarget, setResetTarget] = useState(null)
 
   const load = async () => {
@@ -239,6 +299,9 @@ function UsersSection() {
             className={s.userSearchInput}
           />
         </div>
+        <button className={s.btnAddSmall} onClick={() => setShowCreate(true)}>
+          <Plus size={13} /> Tạo tài khoản
+        </button>
       </div>
 
       <div className={s.userTableWrap}>
@@ -253,78 +316,97 @@ function UsersSection() {
             <thead>
               <tr>
                 <th>Người dùng</th>
-                <th>Chức vụ</th>
+                <th>Điện thoại · Chức vụ</th>
                 <th>Vai trò</th>
                 <th>Trạng thái</th>
-                <th />
+                <th>Đăng nhập cuối</th>
+                <th>Tạo lúc</th>
+                <th>Hành động</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u) => (
-                <tr key={u.id}>
-                  <td>
-                    <div className={s.userNameCell}>
-                      <div className={`${s.userInitials} ${u.role === 'admin' ? s.userInitialsGold : ''}`}>
-                        {getInitials(u.name)}
+              {filtered.map((u) => {
+                const isLocked = u.lockedUntil && new Date(u.lockedUntil) > new Date()
+                const statusCls = u.status === 'active' ? s.statusActive
+                  : u.status === 'on_leave' ? s.statusOnLeave : s.statusResigned
+                const statusLabel = u.status === 'active' ? 'Hoạt động'
+                  : u.status === 'on_leave' ? 'Tạm dừng' : 'Đã nghỉ'
+                return (
+                  <tr key={u.id}>
+                    <td>
+                      <div className={s.userNameCell}>
+                        <div className={`${s.userInitials} ${u.avatarUrl ? s.userInitialsPhoto : u.role === 'admin' ? s.userInitialsGold : ''}`}>
+                          {u.avatarUrl
+                            ? <img src={u.avatarUrl} alt={u.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block' }} />
+                            : getInitials(u.name)}
+                        </div>
+                        <div>
+                          <div className={s.userNameText}>{u.name}</div>
+                          <div className={s.userEmailText}>{u.email}</div>
+                          {u.mustChangePw && <span className={s.pillWarn}>Chưa đổi MK</span>}
+                        </div>
                       </div>
+                    </td>
+                    <td>
+                      <div className={s.userSubCell}>
+                        <span>{u.phone || '—'}</span>
+                        <span>{u.jobTitle || '—'}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={u.role === 'admin' ? s.roleAdmin : s.roleStaff}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td>
                       <div>
-                        <div className={s.userNameText}>{u.name}</div>
-                        <div className={s.userEmailText}>{u.email}</div>
-                        {u.mustChangePw && (
-                          <span className={s.pillWarn}>Chưa đổi MK</span>
+                        <span className={statusCls}>{statusLabel}</span>
+                        {isLocked && <div><span className={s.pillLock}>Bị khoá</span></div>}
+                      </div>
+                    </td>
+                    <td className={s.muted} style={{ fontSize: 12 }}>{fmtDate(u.lastLoginAt)}</td>
+                    <td className={s.muted} style={{ fontSize: 12 }}>{fmtDate(u.createdAt)}</td>
+                    <td>
+                      <div className={s.userActionsCell}>
+                        <button
+                          className={s.iconBtn}
+                          title="Chỉnh sửa thông tin"
+                          onClick={() => setEditTarget(u)}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          className={s.iconBtn}
+                          title="Đặt lại mật khẩu"
+                          onClick={() => setResetTarget(u)}
+                        >
+                          <KeyRound size={13} />
+                        </button>
+                        {u.id !== currentUser?.id && (
+                          <button
+                            className={`${s.iconBtn} ${u.status === 'active' ? s.iconBtnWarn : s.iconBtnSuccess}`}
+                            title={u.status === 'active' ? 'Tạm dừng tài khoản' : 'Kích hoạt tài khoản'}
+                            onClick={() => handleStatusToggle(u)}
+                          >
+                            {u.status === 'active' ? <UserX size={13} /> : <UserCheck size={13} />}
+                          </button>
                         )}
                       </div>
-                    </div>
-                  </td>
-                  <td className={s.muted}>{u.jobTitle || '—'}</td>
-                  <td>
-                    <span className={u.role === 'admin' ? s.roleAdmin : s.roleStaff}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={
-                      u.status === 'active'   ? s.statusActive
-                      : u.status === 'on_leave' ? s.statusOnLeave
-                      : s.statusResigned
-                    }>
-                      {u.status === 'active' ? 'Hoạt động' : u.status === 'on_leave' ? 'Tạm dừng' : 'Đã nghỉ'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className={s.userActionsCell}>
-                      <button
-                        className={s.iconBtn}
-                        title="Chỉnh sửa thông tin"
-                        onClick={() => setEditTarget(u)}
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        className={s.iconBtn}
-                        title="Đặt lại mật khẩu"
-                        onClick={() => setResetTarget(u)}
-                      >
-                        <KeyRound size={13} />
-                      </button>
-                      {u.id !== currentUser?.id && (
-                        <button
-                          className={`${s.iconBtn} ${u.status === 'active' ? s.iconBtnWarn : s.iconBtnSuccess}`}
-                          title={u.status === 'active' ? 'Tạm dừng tài khoản' : 'Kích hoạt tài khoản'}
-                          onClick={() => handleStatusToggle(u)}
-                        >
-                          {u.status === 'active' ? <UserX size={13} /> : <UserCheck size={13} />}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
       </div>
 
+      {showCreate && (
+        <CreateUserModal
+          onClose={() => setShowCreate(false)}
+          onSaved={() => { setShowCreate(false); load() }}
+        />
+      )}
       {editTarget && (
         <EditUserModal
           user={editTarget}
@@ -344,14 +426,120 @@ function UsersSection() {
   )
 }
 
+function CreateUserModal({ onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name:     '',
+    email:    '',
+    password: '',
+    phone:    '',
+    jobTitle: '',
+    role:     'staff',
+  })
+  const [showPw, setShowPw] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState(null)
+
+  const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }))
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!form.name.trim())  { setError('Vui lòng nhập họ tên');       return }
+    if (!form.email.trim()) { setError('Vui lòng nhập email');         return }
+    if (!form.password)     { setError('Vui lòng nhập mật khẩu');     return }
+    setSaving(true); setError(null)
+    try {
+      await createUser({
+        name:     form.name.trim(),
+        email:    form.email.trim().toLowerCase(),
+        password: form.password,
+        phone:    form.phone.trim()    || null,
+        jobTitle: form.jobTitle.trim() || null,
+        role:     form.role,
+      })
+      onSaved()
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Đã xảy ra lỗi')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title="Tạo tài khoản nhân viên" onClose={onClose}>
+      <form onSubmit={handleSubmit} className={s.modalForm}>
+        {error && <div className={s.errorBox}>{error}</div>}
+
+        <div className={s.formGrid2}>
+          <div>
+            <label className={s.settingsLabel}>Họ và tên *</label>
+            <input type="text" value={form.name} onChange={set('name')} placeholder="Nguyễn Văn A" className={s.settingsInput} autoFocus />
+          </div>
+          <div>
+            <label className={s.settingsLabel}>Email *</label>
+            <input type="email" value={form.email} onChange={set('email')} placeholder="email@ketoan-taman.vn" className={s.settingsInput} />
+          </div>
+          <div>
+            <label className={s.settingsLabel}>Số điện thoại</label>
+            <input type="text" value={form.phone} onChange={set('phone')} placeholder="0901 234 567" className={s.settingsInput} />
+          </div>
+          <div>
+            <label className={s.settingsLabel}>Chức vụ</label>
+            <input type="text" value={form.jobTitle} onChange={set('jobTitle')} placeholder="Kế toán viên" className={s.settingsInput} />
+          </div>
+        </div>
+
+        <div className={s.formDivider} />
+
+        <div className={s.formGrid2}>
+          <div>
+            <label className={s.settingsLabel}>Mật khẩu tạm *</label>
+            <div className={s.pwInputWrap}>
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={form.password}
+                onChange={set('password')}
+                placeholder="≥ 8 ký tự, 1 hoa, 1 số, 1 ký tự đặc biệt"
+                className={`${s.settingsInput} ${s.pwInputField}`}
+              />
+              <button type="button" className={s.pwToggleBtn} onClick={() => setShowPw((v) => !v)}>
+                {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className={s.settingsLabel}>Vai trò</label>
+            <select value={form.role} onChange={set('role')} className={`${s.settingsInput} ${s.settingsSelect}`}>
+              <option value="staff">Staff — Nhân viên</option>
+              <option value="admin">Admin — Quản trị viên</option>
+            </select>
+          </div>
+        </div>
+
+        <div className={s.confirmWarn} style={{ fontSize: 11, padding: '8px 12px' }}>
+          Người dùng sẽ được yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên.
+        </div>
+
+        <div className={s.modalActions}>
+          <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
+          <button type="submit" disabled={saving} className={s.btnSave}>
+            {saving ? <Loader2 size={13} /> : <Plus size={13} />}
+            Tạo tài khoản
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 function EditUserModal({ user, currentUserId, onClose, onSaved }) {
   const isCurrentUser = user.id === currentUserId
+  const patchAuthUser = useAuthStore((st) => st.patchUser)
   const [form, setForm]   = useState({
-    name:     user.name,
-    phone:    user.phone    || '',
-    jobTitle: user.jobTitle || '',
-    role:     user.role,
-    status:   user.status,
+    name:      user.name,
+    phone:     user.phone    || '',
+    jobTitle:  user.jobTitle || '',
+    role:      user.role,
+    status:    user.status,
+    avatarUrl: user.avatarUrl || null,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
@@ -363,14 +551,18 @@ function EditUserModal({ user, currentUserId, onClose, onSaved }) {
     if (!form.name.trim()) { setError('Tên không được để trống'); return }
     setSaving(true); setError(null)
     try {
-      await updateUser(user.id, {
-        name:     form.name.trim(),
-        phone:    form.phone.trim()    || null,
-        jobTitle: form.jobTitle.trim() || null,
-        role:     form.role,
+      const updated = await updateUser(user.id, {
+        name:      form.name.trim(),
+        phone:     form.phone.trim()    || null,
+        jobTitle:  form.jobTitle.trim() || null,
+        role:      form.role,
+        avatarUrl: form.avatarUrl,
       })
       if (!isCurrentUser && form.status !== user.status) {
         await updateUserStatus(user.id, form.status)
+      }
+      if (isCurrentUser) {
+        patchAuthUser({ name: updated.name, avatarUrl: updated.avatarUrl, role: updated.role })
       }
       onSaved()
     } catch (err) {
@@ -382,37 +574,63 @@ function EditUserModal({ user, currentUserId, onClose, onSaved }) {
   return (
     <Modal title="Chỉnh sửa người dùng" onClose={onClose}>
       <form onSubmit={handleSubmit} className={s.modalForm}>
+
+        {/* Banner: avatar upload + thông tin */}
+        <div className={s.modalUserBanner}>
+          <AvatarUpload
+            value={form.avatarUrl}
+            name={form.name || user.name}
+            isAdmin={form.role === 'admin'}
+            onChange={(url) => setForm((p) => ({ ...p, avatarUrl: url }))}
+          />
+          <div className={s.modalUserBannerInfo}>
+            <div className={s.modalUserBannerName}>{form.name || user.name}</div>
+            <div className={s.modalUserBannerEmail}>{user.email}</div>
+            <div className={s.modalUserBannerEmail}>Tạo: {fmtDate(user.createdAt)} · Đăng nhập: {fmtDate(user.lastLoginAt)}</div>
+          </div>
+        </div>
+
         {error && <div className={s.errorBox}>{error}</div>}
 
-        <div>
-          <label className={s.settingsLabel}>Họ và tên *</label>
-          <input type="text" value={form.name} onChange={set('name')} className={s.settingsInput} />
-        </div>
-        <div>
-          <label className={s.settingsLabel}>Số điện thoại</label>
-          <input type="text" value={form.phone} onChange={set('phone')} className={s.settingsInput} />
-        </div>
-        <div>
-          <label className={s.settingsLabel}>Chức vụ</label>
-          <input type="text" value={form.jobTitle} onChange={set('jobTitle')} className={s.settingsInput} />
+        {/* Thông tin cơ bản — 2 cột */}
+        <div className={s.formGrid2}>
+          <div>
+            <label className={s.settingsLabel}>Họ và tên *</label>
+            <input type="text" value={form.name} onChange={set('name')} className={s.settingsInput} />
+          </div>
+          <div>
+            <label className={s.settingsLabel}>Số điện thoại</label>
+            <input type="text" value={form.phone} onChange={set('phone')} placeholder="VD: 0901 234 567" className={s.settingsInput} />
+          </div>
+          <div>
+            <label className={s.settingsLabel}>Chức vụ</label>
+            <input type="text" value={form.jobTitle} onChange={set('jobTitle')} placeholder="VD: Kế toán trưởng" className={s.settingsInput} />
+          </div>
+          <div>
+            <label className={s.settingsLabel}>Email</label>
+            <input type="text" value={user.email} disabled className={s.settingsInput} style={{ opacity: 0.5, cursor: 'not-allowed' }} />
+          </div>
         </div>
 
         {!isCurrentUser && (
           <>
-            <div>
-              <label className={s.settingsLabel}>Vai trò</label>
-              <select value={form.role} onChange={set('role')} className={`${s.settingsInput} ${s.settingsSelect}`}>
-                <option value="staff">Staff — Nhân viên</option>
-                <option value="admin">Admin — Quản trị viên</option>
-              </select>
-            </div>
-            <div>
-              <label className={s.settingsLabel}>Trạng thái tài khoản</label>
-              <select value={form.status} onChange={set('status')} className={`${s.settingsInput} ${s.settingsSelect}`}>
-                <option value="active">Hoạt động</option>
-                <option value="on_leave">Tạm dừng</option>
-                <option value="resigned">Đã nghỉ việc</option>
-              </select>
+            <div className={s.formDivider} />
+            <div className={s.formGrid2}>
+              <div>
+                <label className={s.settingsLabel}>Vai trò</label>
+                <select value={form.role} onChange={set('role')} className={`${s.settingsInput} ${s.settingsSelect}`}>
+                  <option value="staff">Staff — Nhân viên</option>
+                  <option value="admin">Admin — Quản trị viên</option>
+                </select>
+              </div>
+              <div>
+                <label className={s.settingsLabel}>Trạng thái tài khoản</label>
+                <select value={form.status} onChange={set('status')} className={`${s.settingsInput} ${s.settingsSelect}`}>
+                  <option value="active">Hoạt động</option>
+                  <option value="on_leave">Tạm dừng</option>
+                  <option value="resigned">Đã nghỉ việc</option>
+                </select>
+              </div>
             </div>
           </>
         )}

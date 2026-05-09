@@ -19,7 +19,10 @@ const updateUserSchema = z
     name: z.string().min(2).max(100).optional(),
     phone: z.string().max(20).optional().nullable(),
     jobTitle: z.string().max(100).optional().nullable(),
-    avatarUrl: z.string().url().optional().nullable(),
+    avatarUrl: z.union([
+      z.string().url(),
+      z.string().regex(/^data:image\//),
+    ]).optional().nullable(),
     role: z.enum(['admin', 'staff']).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'No fields to update' })

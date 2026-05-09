@@ -15,6 +15,9 @@ export const useAuthStore = create((set) => ({
   setAuthReady: () =>
     set({ isAuthReady: true }),
 
+  patchUser: (updates) =>
+    set((state) => ({ user: state.user ? { ...state.user, ...updates } : state.user })),
+
   logout: () =>
     set({ user: null, accessToken: null, isAuthenticated: false }),
 }))

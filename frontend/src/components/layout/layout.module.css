@@ -25,7 +25,7 @@
   --grad-primary:     linear-gradient(135deg, #004990 0%, #00152d 100%);
   --grad-accent:      linear-gradient(135deg, #d4a440 0%, #eac05c 100%);
   --grad-success:     linear-gradient(135deg, #047857 0%, #059669 100%);
-  --grad-sidebar:     linear-gradient(180deg, #004990 0%, #00152d 100%);
+  --grad-sidebar:     linear-gradient(180deg, #00182f 0%, #004696 100%);
   --shadow-sm:        0 1px 3px rgba(15, 52, 94, 0.08);
   --shadow-md:        0 4px 20px -4px rgba(15, 52, 94, 0.14);
   --shadow-lg:        0 20px 60px -20px rgba(9, 39, 68, 0.22);
@@ -385,6 +385,14 @@
   background: rgba(212, 164, 64, 0.2);
   color: var(--accent-dark);
   border: 1.5px solid rgba(212, 164, 64, 0.35);
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

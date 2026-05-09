@@ -113,8 +113,10 @@ export default function Header({ onMenuToggle }) {
             onClick={() => setDropdownOpen((v) => !v)}
             aria-label="Tài khoản"
           >
-            <div className={`${s.avatar} ${s.avatarMd} ${s.avatarNavy}`}>
-              {initials}
+            <div className={`${s.avatar} ${s.avatarMd} ${user?.avatarUrl ? '' : s.avatarNavy}`}>
+              {user?.avatarUrl
+                ? <img src={user.avatarUrl} alt={user.name} className={s.avatarImg} />
+                : initials}
             </div>
             <div className={s.headerUserInfo}>
               <span className={s.headerUserName}>{user?.name || 'Người dùng'}</span>

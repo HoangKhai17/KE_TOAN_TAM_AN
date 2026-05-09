@@ -92,8 +92,10 @@ export default function Sidebar({ open, onToggle }) {
       {/* ── User + logout ── */}
       <div className={s.sidebarFooter}>
         <div className={s.sidebarUser}>
-          <div className={`${s.avatar} ${s.avatarMd} ${s.avatarGold}`}>
-            {getInitials(user?.name)}
+          <div className={`${s.avatar} ${s.avatarMd} ${user?.avatarUrl ? '' : s.avatarGold}`}>
+            {user?.avatarUrl
+              ? <img src={user.avatarUrl} alt={user?.name} className={s.avatarImg} />
+              : getInitials(user?.name)}
           </div>
           {open && (
             <div className={s.sidebarUserInfo}>
