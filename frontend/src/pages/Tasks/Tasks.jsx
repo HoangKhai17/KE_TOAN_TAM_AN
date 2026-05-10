@@ -65,7 +65,7 @@ function OnHoldModal({ task, onConfirm, onClose }) {
   async function handleConfirm() {
     setSaving(true)
     try {
-      await onConfirm(task, 'on_hold', { reason: reason.trim() })
+      await onConfirm(task, 'on_hold', { reason: reason.trim() || null })
     } finally {
       setSaving(false)
     }
@@ -474,6 +474,7 @@ function ListView({ tasks, loading, pagination, page, onPageChange, onOpen, sele
         </table>
       </div>
 
+      {/* Pagination */}
       <div className={s.pagination}>
         <span className={s.paginationInfo}>
           {loading ? '...' : `${from}–${to} / ${pagination.total} công việc`}
@@ -513,15 +514,15 @@ export default function Tasks() {
   const [view, setView] = useState('list')
 
   // Filters
-  const [searchInput, setSearchInput]     = useState('')
-  const [search, setSearch]               = useState('')
-  const [companyFilter, setCompanyFilter] = useState('')
-  const [staffFilter, setStaffFilter]     = useState('')
-  const [statusFilter, setStatusFilter]   = useState('')
+  const [searchInput, setSearchInput]       = useState('')
+  const [search, setSearch]                 = useState('')
+  const [companyFilter, setCompanyFilter]   = useState('')
+  const [staffFilter, setStaffFilter]       = useState('')
+  const [statusFilter, setStatusFilter]     = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
-  const [sourceFilter, setSourceFilter]   = useState('')
-  const [isOverdue, setIsOverdue]         = useState(false)
-  const [showFilter, setShowFilter]       = useState(false)
+  const [sourceFilter, setSourceFilter]     = useState('')
+  const [isOverdue, setIsOverdue]           = useState(false)
+  const [showFilter, setShowFilter]         = useState(false)
 
   // Data
   const [tasks, setTasks]           = useState([])
@@ -558,17 +559,17 @@ export default function Tasks() {
     let cancelled = false
     setLoading(true)
     const params = {
-      search:       search       || undefined,
-      companyId:    companyFilter || undefined,
-      assignedToId: staffFilter  || undefined,
-      status:       statusFilter || undefined,
-      priority:     priorityFilter || undefined,
-      source:       sourceFilter || undefined,
-      isOverdue:    isOverdue    ? true : undefined,
-      limit:        view === 'list' ? 20 : 500,
-      page:         view === 'list' ? page : 1,
-      sortBy:       'createdAt',
-      sortDir:      'desc',
+      search:      search        || undefined,
+      companyId:   companyFilter || undefined,
+      assignedTo:  staffFilter   || undefined,   // ← backend dùng assignedTo
+      status:      statusFilter  || undefined,
+      priority:    priorityFilter || undefined,
+      source:      sourceFilter  || undefined,
+      isOverdue:   isOverdue     ? true : undefined,
+      limit:       view === 'list' ? 20 : 500,
+      page:        view === 'list' ? page : 1,
+      sortBy:      'createdAt',
+      sortDir:     'desc',
     }
     tasksApi.listTasks(params)
       .then(({ tasks: t, pagination: p }) => {
@@ -583,14 +584,18 @@ export default function Tasks() {
     return () => { cancelled = true }
   }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, page, view])
 
-  // Status change handler
+  // Status change handler — maps internal state keys to backend field names
   async function handleStatusChange(task, newStatus, extra = {}) {
     if (newStatus === 'on_hold' && !('reason' in extra)) {
       setOnHoldTarget({ task })
       return
     }
     try {
-      const updated = await tasksApi.changeTaskStatus(task.id, { newStatus, ...extra })
+      const body = { status: newStatus }
+      if (extra.reason !== undefined) body.onHoldReason = extra.reason || null
+      if (extra.force)                body.force        = true
+
+      const updated = await tasksApi.changeTaskStatus(task.id, body)
       setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
       addToast(`Đã chuyển sang "${STATUS_LABELS[newStatus]}"`, 'success')
       setOnHoldTarget(null)
@@ -639,7 +644,7 @@ export default function Tasks() {
       const task = tasks.find((t) => t.id === id)
       if (!task || task.status === 'completed') continue
       try {
-        await tasksApi.changeTaskStatus(id, { newStatus: 'completed', force: true })
+        await tasksApi.changeTaskStatus(id, { status: 'completed', force: true })
         done++
       } catch (_e) { /* skip individual failures */ }
     }
@@ -672,30 +677,9 @@ export default function Tasks() {
         <div className={s.toolbar}>
           <div className={s.toolbarLeft}>
             <h1 className={s.pageTitle}>Công việc</h1>
-
-            <div className={s.quickFilters}>
-              <span className={s.qLabel}>Nhanh:</span>
-              <button
-                className={`${s.qBtn} ${isOverdue ? s.qBtnActive : ''}`}
-                onClick={() => { setIsOverdue((p) => !p); setPage(1) }}
-              >
-                Quá hạn
-              </button>
-              {currentUser && (
-                <button
-                  className={`${s.qBtn} ${staffFilter === currentUser.id ? s.qBtnActive : ''}`}
-                  onClick={() => { setStaffFilter((p) => p === currentUser.id ? '' : currentUser.id); setPage(1) }}
-                >
-                  Của tôi
-                </button>
-              )}
-              <button
-                className={`${s.qBtn} ${statusFilter === 'pending' ? s.qBtnActive : ''}`}
-                onClick={() => { setStatusFilter((p) => p === 'pending' ? '' : 'pending'); setPage(1) }}
-              >
-                Chờ xử lý
-              </button>
-            </div>
+            {pagination.total > 0 && !loading && (
+              <span className={s.totalBadge}>{pagination.total}</span>
+            )}
           </div>
 
           <div className={s.toolbarRight}>
@@ -712,7 +696,7 @@ export default function Tasks() {
             </div>
 
             <button
-              className={s.btnSecondary}
+              className={`${s.btnSecondary} ${showFilter ? s.btnSecondaryActive : ''}`}
               style={{ height: 32, padding: '0 12px', fontSize: 13 }}
               onClick={() => setShowFilter((p) => !p)}
             >
@@ -729,13 +713,49 @@ export default function Tasks() {
           </div>
         </div>
 
+        {/* ── Quick filters (separate row) ── */}
+        <div className={s.quickFilters}>
+          <span className={s.qLabel}>Nhanh:</span>
+          <button
+            className={`${s.qBtn} ${isOverdue ? s.qBtnActive : ''}`}
+            onClick={() => { setIsOverdue((p) => !p); setPage(1) }}
+          >
+            Quá hạn
+          </button>
+          {currentUser && (
+            <button
+              className={`${s.qBtn} ${staffFilter === currentUser.id ? s.qBtnActive : ''}`}
+              onClick={() => { setStaffFilter((p) => p === currentUser.id ? '' : currentUser.id); setPage(1) }}
+            >
+              Của tôi
+            </button>
+          )}
+          <button
+            className={`${s.qBtn} ${statusFilter === 'pending' ? s.qBtnActive : ''}`}
+            onClick={() => { setStatusFilter((p) => p === 'pending' ? '' : 'pending'); setPage(1) }}
+          >
+            Chờ xử lý
+          </button>
+          <button
+            className={`${s.qBtn} ${statusFilter === 'in_progress' ? s.qBtnActive : ''}`}
+            onClick={() => { setStatusFilter((p) => p === 'in_progress' ? '' : 'in_progress'); setPage(1) }}
+          >
+            Đang thực hiện
+          </button>
+          {activeFilterCount > 0 && (
+            <button className={s.qResetBtn} onClick={resetFilters}>
+              <RotateCcw size={11} /> Xoá lọc ({activeFilterCount})
+            </button>
+          )}
+        </div>
+
         {/* ── Filter bar ── */}
         {showFilter && (
           <div className={s.filterBar}>
             <div className={s.filterBarHead}>
               <div className={s.filterBarTitle}>
                 <Filter size={12} />
-                Bộ lọc
+                Bộ lọc nâng cao
                 {activeFilterCount > 0 && (
                   <span className={s.filterActiveBadge}>{activeFilterCount} đang bật</span>
                 )}
@@ -802,7 +822,7 @@ export default function Tasks() {
                 </select>
               </div>
 
-              <div className={s.filterGroup} style={{ justifyContent: 'flex-end' }}>
+              <div className={s.filterGroup}>
                 <label className={s.filterLabel}>&nbsp;</label>
                 <button
                   className={`${s.filterToggle} ${isOverdue ? s.filterToggleActive : ''}`}

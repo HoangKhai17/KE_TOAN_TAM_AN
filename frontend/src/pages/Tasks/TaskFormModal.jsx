@@ -38,15 +38,14 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen }) {
     setError(null); setFE({}); setSaving(true)
     try {
       const task = await createTask({
-        title:        form.title.trim(),
-        companyId:    form.companyId,
-        taskTypeId:   form.taskTypeId   || null,
-        assignedToId: form.assignedToId || null,
-        dueDate:      form.dueDate      || null,
-        priority:     form.priority,
-        slaDays:      form.slaDays ? Number(form.slaDays) : null,
-        description:  form.description.trim() || null,
-        source:       'manual',
+        title:       form.title.trim(),
+        companyId:   form.companyId,
+        taskTypeId:  form.taskTypeId  || null,
+        assignedTo:  form.assignedToId || null,
+        dueDate:     form.dueDate     || null,
+        priority:    form.priority,
+        slaDays:     form.slaDays ? Number(form.slaDays) : null,
+        description: form.description.trim() || null,
       })
       if (openAfter) onSavedAndOpen(task)
       else           onSaved(task)

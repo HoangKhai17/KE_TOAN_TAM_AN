@@ -25,12 +25,9 @@ const updateTaskSchema = z.object({
 
 const changeStatusSchema = z.object({
   status:        z.enum(TASK_STATUSES),
-  onHoldReason:  z.string().min(1).optional().nullable(),
+  onHoldReason:  z.string().max(500).optional().nullable(),
   force:         z.boolean().default(false),
-}).refine(
-  d => d.status !== 'on_hold' || (d.onHoldReason && d.onHoldReason.length > 0),
-  { message: 'onHoldReason is required when status is on_hold', path: ['onHoldReason'] }
-)
+})
 
 // --- Checklist ---
 const addChecklistItemSchema = z.object({
