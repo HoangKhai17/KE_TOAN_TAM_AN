@@ -9,6 +9,8 @@ import Staff from './pages/Staff/Staff'
 import Companies from './pages/Companies/Companies'
 import CompanyDetail from './pages/Companies/CompanyDetail'
 import Settings from './pages/Settings/Settings'
+import Tasks from './pages/Tasks/Tasks'
+import TaskDetail from './pages/Tasks/TaskDetail'
 import s from './App.module.css'
 
 // ── Route guards ──────────────────────────────────────────────────────
@@ -106,6 +108,14 @@ function AppRoutes() {
       <Route
         path="/settings"
         element={<ProtectedRoute><Settings /></ProtectedRoute>}
+      />
+      <Route
+        path="/tasks"
+        element={<ProtectedRoute><Tasks /></ProtectedRoute>}
+      />
+      <Route
+        path="/tasks/:id"
+        element={<ProtectedRoute><TaskDetail /></ProtectedRoute>}
       />
       <Route
         path="/task-types"

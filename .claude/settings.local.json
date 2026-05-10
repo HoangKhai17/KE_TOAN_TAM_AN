@@ -75,7 +75,9 @@
       "Bash(node --check src/config/swagger.js)",
       "Bash(node --check src/modules/credentials/credentials.router.js)",
       "Bash(node --check src/modules/payroll/payroll.router.js)",
-      "Bash(node --check src/modules/documents/documents.router.js)"
+      "Bash(node --check src/modules/documents/documents.router.js)",
+      "Bash(Get-ChildItem \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Tasks\")",
+      "Bash(Select-Object Name, Length)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

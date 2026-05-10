@@ -1,0 +1,71 @@
+import { format, parseISO, isBefore, startOfDay } from 'date-fns'
+
+export const TASK_STATUSES = ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed']
+
+export const STATUS_LABELS = {
+  pending:         'Chờ xử lý',
+  in_progress:     'Đang thực hiện',
+  on_hold:         'Tạm hoãn',
+  pending_review:  'Chờ duyệt',
+  needs_revision:  'Cần xem lại',
+  completed:       'Hoàn thành',
+}
+
+export const STATUS_TRANSITIONS = {
+  pending:         ['in_progress'],
+  in_progress:     ['on_hold', 'pending_review', 'completed'],
+  on_hold:         ['in_progress', 'pending'],
+  pending_review:  ['needs_revision', 'completed'],
+  needs_revision:  ['in_progress', 'pending_review'],
+  completed:       [],
+}
+
+export const PRIORITY_LABELS = {
+  urgent: 'Khẩn cấp',
+  high:   'Cao',
+  medium: 'Trung bình',
+  low:    'Thấp',
+}
+
+export const SOURCE_LABELS = {
+  auto:   'Tự động',
+  manual: 'Thủ công',
+}
+
+export const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 }
+
+export function isTaskOverdue(task) {
+  if (!task.dueDate || task.status === 'completed') return false
+  return isBefore(parseISO(task.dueDate), startOfDay(new Date()))
+}
+
+export function fmtDate(iso) {
+  if (!iso) return '—'
+  try { return format(parseISO(iso), 'dd/MM/yyyy') } catch { return iso }
+}
+
+export function fmtDateTime(iso) {
+  if (!iso) return '—'
+  try { return format(parseISO(iso), 'HH:mm dd/MM/yyyy') } catch { return iso }
+}
+
+export function progressPct(task) {
+  if (!task.checklistTotal) return null
+  return Math.round((task.checklistDone / task.checklistTotal) * 100)
+}
+
+export const STATUS_CSS = {
+  pending:        'statusPending',
+  in_progress:    'statusInProgress',
+  on_hold:        'statusOnHold',
+  pending_review: 'statusPendingReview',
+  needs_revision: 'statusNeedsRevision',
+  completed:      'statusCompleted',
+}
+
+export const PRIORITY_CSS = {
+  urgent: 'priUrgent',
+  high:   'priHigh',
+  medium: 'priMedium',
+  low:    'priLow',
+}
