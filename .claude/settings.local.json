@@ -55,7 +55,27 @@
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.dependencies,null,2\\)\\)\")",
       "PowerShell(if \\($?\\) { \"Deleted upload.router.js\" } else { \"Failed\" })",
       "Bash(npm list *)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(Get-ChildItem -Path 'd:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\' -Recurse -Force)",
+      "Bash(ConvertTo-Json)",
+      "Bash(node --check src/index.js)",
+      "Bash(node --check src/app.js)",
+      "Bash(node --check src/modules/tasks/tasks.router.js)",
+      "Bash(node --check src/modules/tasks/tasks.controller.js)",
+      "Bash(node --check src/modules/tasks/tasks.service.js)",
+      "Bash(node --check src/modules/tasks/checklist.service.js)",
+      "Bash(node --check src/jobs/taskGenerator.job.js)",
+      "Bash(node --check src/jobs/index.js)",
+      "Bash(node --check src/modules/admin/scheduler.router.js)",
+      "Bash(node --check src/modules/admin/scheduler.controller.js)",
+      "Bash(node --check src/utils/encrypt.js)",
+      "Bash(node -e ' *)",
+      "Bash(dir /s /b *.js)",
+      "Bash(findstr /i \"checklist dependencies comments timeLogs customFields encrypt credentials payroll graph documents jobs admin\")",
+      "Bash(node --check src/config/swagger.js)",
+      "Bash(node --check src/modules/credentials/credentials.router.js)",
+      "Bash(node --check src/modules/payroll/payroll.router.js)",
+      "Bash(node --check src/modules/documents/documents.router.js)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

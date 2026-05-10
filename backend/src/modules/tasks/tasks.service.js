@@ -2,6 +2,7 @@ const { query } = require('../../config/db')
 const audit    = require('../../lib/audit')
 const activity = require('../../lib/activity')
 const { canTransition } = require('./tasks.transitions')
+const { checkBlockers } = require('./dependencies.service')
 
 function toDto(row) {
   return {
@@ -239,6 +240,17 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
       new Error(`Cannot transition from '${currentStatus}' to '${newStatus}'`),
       { status: 422 }
     )
+  }
+
+  // Block if dependency tasks are not yet completed
+  if (newStatus !== 'pending') {
+    const blockers = await checkBlockers(id)
+    if (blockers.length > 0) {
+      throw Object.assign(
+        new Error(`Task is blocked by ${blockers.length} incomplete dependency task(s): ${blockers.map(b => b.title).join(', ')}`),
+        { status: 422, blockers }
+      )
+    }
   }
 
   // Block completion if unchecked items remain (unless force)

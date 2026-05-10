@@ -1,10 +1,11 @@
 require('./config/env') // validate env vars first — throws if missing
-const createApp = require('./app')
+const createApp  = require('./app')
 const { pool, testConnection: testDb } = require('./config/db')
 const { redis, testConnection: testRedis } = require('./config/redis')
-const logger = require('./config/logger')
-const env = require('./config/env')
+const logger     = require('./config/logger')
+const env        = require('./config/env')
 const { applyTimezone } = require('./config/appSettings')
+const scheduler  = require('./jobs')
 
 async function loadTimezone() {
   try {
@@ -33,6 +34,9 @@ async function start() {
     const server = app.listen(env.PORT, () => {
       logger.info(`Server started`, { port: env.PORT, env: env.NODE_ENV })
     })
+
+    // Start background job scheduler (Phase 8)
+    scheduler.startScheduler()
 
     // Graceful shutdown
     const shutdown = async (signal) => {

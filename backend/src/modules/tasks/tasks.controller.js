@@ -1,4 +1,9 @@
-const svc = require('./tasks.service')
+const svc         = require('./tasks.service')
+const checklistSvc = require('./checklist.service')
+const depsSvc      = require('./dependencies.service')
+const commentsSvc  = require('./comments.service')
+const timeLogsSvc  = require('./timeLogs.service')
+const cfSvc        = require('./customFields.service')
 
 async function listTasks(req, res, next) {
   try {
@@ -64,4 +69,137 @@ async function getActivityLog(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listTasks, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog }
+// --- Checklist ---
+async function listChecklist(req, res, next) {
+  try {
+    const items = await checklistSvc.listChecklist(req.params.id)
+    res.json({ success: true, data: { items } })
+  } catch (err) { next(err) }
+}
+
+async function addChecklistItem(req, res, next) {
+  try {
+    const item = await checklistSvc.addItem(req.params.id, req.body, req.user.id)
+    res.status(201).json({ success: true, data: { item } })
+  } catch (err) { next(err) }
+}
+
+async function updateChecklistItem(req, res, next) {
+  try {
+    const item = await checklistSvc.updateItem(req.params.id, req.params.itemId, req.body, req.user.id)
+    res.json({ success: true, data: { item } })
+  } catch (err) { next(err) }
+}
+
+async function deleteChecklistItem(req, res, next) {
+  try {
+    await checklistSvc.deleteItem(req.params.id, req.params.itemId)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+// --- Dependencies ---
+async function listDependencies(req, res, next) {
+  try {
+    const dependencies = await depsSvc.listDependencies(req.params.id)
+    res.json({ success: true, data: { dependencies } })
+  } catch (err) { next(err) }
+}
+
+async function addDependency(req, res, next) {
+  try {
+    const dependency = await depsSvc.addDependency(req.params.id, req.body, req.user.id)
+    res.status(201).json({ success: true, data: { dependency } })
+  } catch (err) { next(err) }
+}
+
+async function removeDependency(req, res, next) {
+  try {
+    await depsSvc.removeDependency(req.params.id, req.params.depId)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+// --- Comments ---
+async function listComments(req, res, next) {
+  try {
+    const { page = '1', limit = '50' } = req.query
+    const comments = await commentsSvc.listComments(req.params.id, {
+      page:  Math.max(1, parseInt(page, 10)),
+      limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
+    })
+    res.json({ success: true, data: { comments } })
+  } catch (err) { next(err) }
+}
+
+async function addComment(req, res, next) {
+  try {
+    const comment = await commentsSvc.addComment(req.params.id, req.body, req.user.id)
+    res.status(201).json({ success: true, data: { comment } })
+  } catch (err) { next(err) }
+}
+
+async function updateComment(req, res, next) {
+  try {
+    const isAdmin = req.user.role === 'admin'
+    const comment = await commentsSvc.updateComment(
+      req.params.id, req.params.commentId, req.body, req.user.id, isAdmin
+    )
+    res.json({ success: true, data: { comment } })
+  } catch (err) { next(err) }
+}
+
+async function deleteComment(req, res, next) {
+  try {
+    const isAdmin = req.user.role === 'admin'
+    await commentsSvc.deleteComment(req.params.id, req.params.commentId, req.user.id, isAdmin)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+// --- Time Logs ---
+async function listTimeLogs(req, res, next) {
+  try {
+    const timeLogs = await timeLogsSvc.listTimeLogs(req.params.id)
+    res.json({ success: true, data: { timeLogs } })
+  } catch (err) { next(err) }
+}
+
+async function addTimeLog(req, res, next) {
+  try {
+    const timeLog = await timeLogsSvc.addTimeLog(req.params.id, req.body, req.user.id)
+    res.status(201).json({ success: true, data: { timeLog } })
+  } catch (err) { next(err) }
+}
+
+async function deleteTimeLog(req, res, next) {
+  try {
+    const isAdmin = req.user.role === 'admin'
+    await timeLogsSvc.deleteTimeLog(req.params.id, req.params.logId, req.user.id, isAdmin)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+// --- Custom Fields ---
+async function getCustomFields(req, res, next) {
+  try {
+    const fields = await cfSvc.getCustomFields(req.params.id)
+    res.json({ success: true, data: { fields } })
+  } catch (err) { next(err) }
+}
+
+async function upsertCustomFields(req, res, next) {
+  try {
+    const fields = await cfSvc.upsertCustomFields(req.params.id, req.body.fields)
+    res.json({ success: true, data: { fields } })
+  } catch (err) { next(err) }
+}
+
+module.exports = {
+  listTasks, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog,
+  listChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem,
+  listDependencies, addDependency, removeDependency,
+  listComments, addComment, updateComment, deleteComment,
+  listTimeLogs, addTimeLog, deleteTimeLog,
+  getCustomFields, upsertCustomFields,
+}

@@ -147,10 +147,22 @@ function createApp() {
   app.use('/api/users',      require('./modules/users/users.router'))
   app.use('/api/companies',  require('./modules/companies/companies.router'))
   app.use('/api/task-types', require('./modules/task-types/task-types.router'))
-  app.use('/api/companies/:companyId/schedules', require('./modules/schedules/company-schedules.router'))
+  app.use('/api/companies/:companyId/schedules',    require('./modules/schedules/company-schedules.router'))
   app.use('/api/schedules',  require('./modules/schedules/schedules.router'))
   app.use('/api/tasks',          require('./modules/tasks/tasks.router'))
   app.use('/api/system-configs', require('./modules/system-configs/system-configs.router'))
+
+  // Phase 9 — Credential Vault (nested under company)
+  app.use('/api/companies/:companyId/credentials', require('./modules/credentials/credentials.router'))
+
+  // Phase 10 — Payroll
+  app.use('/api/payroll', require('./modules/payroll/payroll.router'))
+
+  // Phase 11 — Documents / OneDrive (nested under company)
+  app.use('/api/companies/:companyId/documents', require('./modules/documents/documents.router'))
+
+  // Phase 8 — Scheduler admin endpoints
+  app.use('/api/admin/scheduler', require('./modules/admin/scheduler.router'))
 
   // 404 & error handlers
   app.use(notFound)
