@@ -1189,133 +1189,116 @@
   user-select: none;
 }
 
-/* ── Hero avatar wrapper (clickable) ─────────────────── */
+/* ── Hero avatar wrapper ─────────────────────────────── */
 
 .heroAvatarWrap {
   position: relative;
   flex-shrink: 0;
 }
 
-.heroAvatarWrapAdmin {
-  cursor: pointer;
+/* ── Avatar upload (logo công ty trong form) ─────────── */
+
+.avatarUploadWrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
-.heroAvatarOverlay {
+.avatarUploadCircle {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+  border: 2px solid var(--color-border);
+  background: var(--color-primary-ink-soft);
+}
+
+.avatarUploadImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatarUploadInitials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: var(--fw-extrabold);
+  color: var(--color-primary);
+  font-family: var(--font-sans);
+  user-select: none;
+}
+
+.avatarUploadOverlay {
   position: absolute;
   inset: 0;
-  border-radius: 13px;
-  background: rgba(10, 40, 80, 0.52);
+  background: rgba(10, 40, 80, 0.5);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   transition: opacity 0.18s ease;
-  backdrop-filter: blur(1px);
 }
 
-.heroAvatarWrapAdmin:hover .heroAvatarOverlay {
+.avatarUploadCircle:hover .avatarUploadOverlay {
   opacity: 1;
 }
 
-/* ── Avatar preview in modal ─────────────────────────── */
-
-.avatarPreviewWrap {
+.avatarUploadActions {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0 4px;
+  gap: 6px;
 }
 
-.avatarPreviewImg {
-  width: 84px;
-  height: 84px;
-  border-radius: 16px;
-  object-fit: cover;
-  border: 2px solid var(--color-border);
-  box-shadow: 0 2px 10px rgba(15, 52, 94, 0.12);
-}
-
-.avatarPreviewInitials {
-  width: 84px;
-  height: 84px;
-  border-radius: 16px;
-  background: var(--color-primary-ink-soft);
-  color: var(--color-primary);
-  font-size: 22px;
-  font-weight: var(--fw-extrabold);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  letter-spacing: 0.5px;
-  border: 2px solid var(--color-border);
-  font-family: var(--font-sans);
-  user-select: none;
-}
-
-.avatarPreviewLabel {
-  font-size: var(--fs-2xs);
-  font-weight: var(--fw-semibold);
-  color: var(--color-muted-soft);
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ── File input (styled) ─────────────────────────────── */
-
-.fileInputLabel {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  flex-wrap: wrap;
-}
-
-.fileInputHidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.fileInputBtn {
+.avatarUploadBtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
   border: 1.5px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text-soft);
   font-family: var(--font-sans);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
+  cursor: pointer;
   white-space: nowrap;
   transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
 }
 
-.fileInputLabel:hover .fileInputBtn {
+.avatarUploadBtn:hover {
   background: var(--color-surface-soft);
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
 
-.fileInputName {
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-  color: var(--color-muted);
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.avatarRemoveBtn {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-danger);
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: background var(--duration-fast);
 }
+
+.avatarRemoveBtn:hover { background: var(--color-danger-bg); }
 
 .btnDeleteIcon {
   display: inline-flex;

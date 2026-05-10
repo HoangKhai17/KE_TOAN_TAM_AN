@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2, ChevronRight,
-  Loader2, RotateCcw, Trash2, AlertTriangle, Eye,
+  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -53,6 +53,54 @@ const FALLBACK_AVATAR = `https://ui-avatars.com/api/?name=&size=56&background=e2
 function fmtDate(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function AvatarUpload({ value, name, onChange }) {
+  const inputRef = useRef(null)
+
+  function handleFile(e) {
+    const file = e.target.files[0]
+    if (!file || !file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const img = new Image()
+      img.onload = () => {
+        const SIZE = 160
+        const canvas = document.createElement('canvas')
+        canvas.width = SIZE
+        canvas.height = SIZE
+        const ctx = canvas.getContext('2d')
+        const sq = Math.min(img.width, img.height)
+        const ox = (img.width - sq) / 2
+        const oy = (img.height - sq) / 2
+        ctx.drawImage(img, ox, oy, sq, sq, 0, 0, SIZE, SIZE)
+        onChange(canvas.toDataURL('image/jpeg', 0.82))
+      }
+      img.src = ev.target.result
+    }
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <div className={s.avatarUploadWrap}>
+      <div className={s.avatarUploadCircle} onClick={() => inputRef.current?.click()} title="Nhấp để chọn logo">
+        {value
+          ? <img src={value} alt={name} className={s.avatarUploadImg} />
+          : <div className={s.avatarUploadInitials}>{getInitials(name)}</div>
+        }
+        <div className={s.avatarUploadOverlay}><Camera size={14} /></div>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
+      <div className={s.avatarUploadActions}>
+        <button type="button" className={s.avatarUploadBtn} onClick={() => inputRef.current?.click()}>
+          <Camera size={11} /> Chọn logo
+        </button>
+        {value && (
+          <button type="button" className={s.avatarRemoveBtn} onClick={() => onChange(null)}>Xoá</button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export function StatusPill({ status }) {
@@ -667,7 +715,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
         bankName:         form.bankName.trim()         || null,
         serviceStartDate: form.serviceStartDate        || null,
         notes:            form.notes.trim()            || null,
-        avatarUrl:        form.avatarUrl.trim()        || null,
+        avatarUrl:        form.avatarUrl                || null,
       }
       const saved = isEdit
         ? await companiesApi.updateCompany(company.id, body)
@@ -737,16 +785,13 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
             <input type="text" value={form.address} onChange={set('address')} className={s.formInput} placeholder="123 Đường ABC, Quận XYZ, TP.HCM" />
           </div>
           <div style={{ marginTop: 12 }}>
-            <label className={s.formLabel}>URL ảnh đại diện (tuỳ chọn)</label>
-            <input
-              type="url"
-              value={form.avatarUrl}
-              onChange={set('avatarUrl')}
-              className={inputCls('avatarUrl')}
-              placeholder="https://example.com/logo.png"
+            <label className={s.formLabel}>Logo / Ảnh đại diện</label>
+            <AvatarUpload
+              value={form.avatarUrl || null}
+              name={form.name || (company?.name ?? '')}
+              onChange={(url) => setForm((p) => ({ ...p, avatarUrl: url }))}
             />
-            {fe.avatarUrl && <p className={s.formError}>{fe.avatarUrl}</p>}
-            <p className={s.formHint}>Nhập URL trực tiếp tới ảnh logo/đại diện của công ty</p>
+            <p className={s.formHint}>Chọn file từ máy tính — JPEG, PNG, GIF, WebP (tối đa ~1MB sau nén)</p>
           </div>
         </div>
 

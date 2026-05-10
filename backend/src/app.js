@@ -1,4 +1,3 @@
-const path = require('path')
 const express = require('express')
 const helmet = require('helmet')
 const cors = require('cors')
@@ -89,9 +88,6 @@ function createApp() {
   app.use(express.urlencoded({ extended: true }))
   app.use(cookieParser())
 
-  // Serve uploaded files (avatars, etc.)
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
-
   /**
    * @openapi
    * /health:
@@ -148,7 +144,6 @@ function createApp() {
 
   // API routes
   app.use('/api/auth',       require('./modules/auth/auth.router'))
-  app.use('/api/upload',     require('./modules/upload/upload.router'))
   app.use('/api/users',      require('./modules/users/users.router'))
   app.use('/api/companies',  require('./modules/companies/companies.router'))
   app.use('/api/task-types', require('./modules/task-types/task-types.router'))
