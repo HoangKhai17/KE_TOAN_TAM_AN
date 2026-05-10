@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Clock, Users, ListTodo, Building2, Bell, CalendarDays, ShieldAlert,
   Settings as SettingsIcon, Plus, Pencil, Save, KeyRound,
-  ChevronDown, ChevronRight, Loader2, CheckCircle2, AlertCircle,
+  Loader2, CheckCircle2, AlertCircle,
   Search, Eye, EyeOff, UserX, UserCheck, Camera,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
@@ -10,9 +11,9 @@ import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
-import { listTaskTypes, createTaskType, updateTaskType, toggleTaskType } from '../../api/taskTypes'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
 import { BUSINESS_TYPE_LABELS } from '../Companies/Companies'
+import TaskTypesSection from './TaskTypesSection'
 import s from './settings.module.css'
 
 function getInitials(name) {
@@ -118,7 +119,11 @@ export default function Settings() {
   const user    = useAuthStore((st) => st.user)
   const isAdmin = user?.role === 'admin'
 
-  const [activeSection, setActiveSection] = useState('users')
+  const [searchParams] = useSearchParams()
+  const initialSection = SECTIONS.some((sec) => sec.key === searchParams.get('section'))
+    ? searchParams.get('section')
+    : 'users'
+  const [activeSection, setActiveSection] = useState(initialSection)
 
   if (!isAdmin) {
     return (
@@ -724,211 +729,6 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
           <button type="submit" disabled={saving} className={s.btnSave}>
             {saving && <Loader2 size={13} />}
             Đặt lại mật khẩu
-          </button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-// ── Section: Task Types ───────────────────────────────────────────────────────
-
-function TaskTypesSection() {
-  const addToast              = useToastStore((st) => st.toast)
-  const [grouped, setGrouped] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [editing, setEditing]     = useState(null)
-  const [expanded, setExpanded]   = useState({})
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const result = await listTaskTypes()
-      setGrouped(result.grouped || {})
-    } catch { /* ignore */ }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [])
-
-  async function handleToggle(tt) {
-    try {
-      await toggleTaskType(tt.id)
-      load()
-      const nextActive = !tt.isActive
-      addToast(`${nextActive ? 'Kích hoạt' : 'Tắt'} loại công việc "${tt.name}"`, nextActive ? 'success' : 'warning')
-    } catch {
-      addToast('Không thể cập nhật trạng thái loại công việc', 'error')
-    }
-  }
-
-  function toggleGroup(group) {
-    setExpanded((prev) => ({ ...prev, [group]: !prev[group] }))
-  }
-
-  return (
-    <div>
-      <div className={s.taskTypeHeader}>
-        <p className={s.taskTypeDescription}>
-          Định nghĩa loại công việc, nhóm, SLA mặc định.
-        </p>
-        <button className={s.btnAddSmall} onClick={() => { setEditing(null); setShowModal(true) }}>
-          <Plus size={13} /> Thêm loại
-        </button>
-      </div>
-
-      {loading ? (
-        <div className={s.skeletonStack}>
-          {[1,2,3].map((i) => <div key={i} className={s.skeletonLine} />)}
-        </div>
-      ) : Object.keys(grouped).length === 0 ? (
-        <p className={s.emptyState}>Chưa có loại công việc nào.</p>
-      ) : (
-        <div className={s.groupList}>
-          {Object.entries(grouped).map(([group, types]) => (
-            <div key={group} className={s.taskGroup}>
-              <button
-                onClick={() => toggleGroup(group)}
-                className={s.taskGroupButton}
-              >
-                <span>{group || 'Chưa phân nhóm'}</span>
-                <span className={s.taskGroupMeta}>
-                  <span className={s.taskGroupCount}>{types.length} loại</span>
-                  {(expanded[group] ?? true) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </span>
-              </button>
-              {(expanded[group] ?? true) && (
-                <table className={s.settingsTable}>
-                  <thead>
-                    <tr>
-                      <th>Tên</th>
-                      <th className={s.hiddenColumn}>Mô tả</th>
-                      <th className={s.centerCell}>SLA</th>
-                      <th className={s.centerCell}>Trạng thái</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {types.map((tt) => (
-                      <tr key={tt.id}>
-                        <td className={s.taskTypeName}>{tt.name}</td>
-                        <td className={s.centerCell}>{tt.defaultSlaDays}d</td>
-                        <td className={s.centerCell}>
-                          <button
-                            onClick={() => handleToggle(tt)}
-                            className={tt.isActive ? s.badgeActive : s.badgeInactive}
-                          >
-                            <span className={s.badgeDot} />
-                            {tt.isActive ? 'Hoạt động' : 'Tắt'}
-                          </button>
-                        </td>
-                        <td className={s.actionsCell}>
-                          <button
-                            onClick={() => { setEditing(tt); setShowModal(true) }}
-                            className={s.iconButton}
-                            title="Chỉnh sửa"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {showModal && (
-        <TaskTypeModal
-          taskType={editing}
-          onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); load() }}
-        />
-      )}
-    </div>
-  )
-}
-
-function TaskTypeModal({ taskType, onClose, onSaved }) {
-  const isEdit   = !!taskType
-  const addToast = useToastStore((st) => st.toast)
-  const [form, setForm] = useState({
-    name:           taskType?.name           ?? '',
-    groupName:      taskType?.groupName      ?? '',
-    description:    taskType?.description    ?? '',
-    defaultSlaDays: taskType?.defaultSlaDays ?? 7,
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError]   = useState(null)
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!form.name.trim()) { setError('Tên loại công việc không được để trống'); return }
-    setSaving(true); setError(null)
-    try {
-      const body = {
-        name:           form.name.trim(),
-        groupName:      form.groupName.trim() || null,
-        description:    form.description.trim() || null,
-        defaultSlaDays: Number(form.defaultSlaDays) || 7,
-      }
-      if (isEdit) await updateTaskType(taskType.id, body)
-      else        await createTaskType(body)
-      addToast(isEdit ? `Đã cập nhật "${body.name}"` : `Đã tạo loại công việc "${body.name}"`, 'success')
-      onSaved()
-    } catch (err) {
-      setError(err.response?.data?.error?.message || 'Đã xảy ra lỗi')
-      setSaving(false)
-    }
-  }
-
-  function set(field) { return (e) => setForm((p) => ({ ...p, [field]: e.target.value })) }
-
-  return (
-    <Modal
-      title={isEdit ? 'Chỉnh sửa loại công việc' : 'Thêm loại công việc'}
-      onClose={onClose}
-    >
-      <form onSubmit={handleSubmit} className={s.modalForm}>
-        {error && (
-          <div className={s.errorBox}>
-            {error}
-          </div>
-        )}
-        {[
-          { key: 'name',        label: 'Tên loại công việc *', placeholder: 'VD: Khai thuế GTGT', type: 'text' },
-          { key: 'groupName',   label: 'Nhóm',                 placeholder: 'VD: Khai thuế',       type: 'text' },
-          { key: 'description', label: 'Mô tả',                placeholder: '',                     type: 'text' },
-        ].map(({ key, label, placeholder, type }) => (
-          <div key={key}>
-            <label className={s.settingsLabel}>{label}</label>
-            <input
-              type={type}
-              value={form[key]}
-              onChange={set(key)}
-              placeholder={placeholder}
-              className={s.settingsInput}
-            />
-          </div>
-        ))}
-        <div>
-          <label className={s.settingsLabel}>SLA mặc định (ngày)</label>
-          <input
-            type="number" min={1}
-            value={form.defaultSlaDays}
-            onChange={set('defaultSlaDays')}
-            className={`${s.settingsInput} ${s.slaInput}`}
-          />
-        </div>
-        <div className={s.modalActions}>
-          <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
-          <button type="submit" disabled={saving} className={s.btnSave}>
-            {saving && <Loader2 size={13} />}
-            {isEdit ? 'Lưu thay đổi' : 'Tạo mới'}
           </button>
         </div>
       </form>

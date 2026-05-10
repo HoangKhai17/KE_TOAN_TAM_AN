@@ -1029,3 +1029,578 @@
   overflow: hidden;
   padding: 0;
 }
+
+/* ── Task Type card list ──────────────────────────────────────────────────── */
+
+.ttList {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(15, 52, 94, 0.08);
+}
+
+.ttRow {
+  border-bottom: 1px solid rgba(15, 52, 94, 0.07);
+  transition: background 0.12s;
+}
+
+.ttRow:last-child { border-bottom: none; }
+.ttRow:hover .ttRowHeader { background: #f8fbff; }
+
+.ttRowExpanded { background: #f5f8fc; }
+.ttRowExpanded .ttRowHeader { background: #edf3fa; }
+
+.ttRowHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  transition: background 0.12s;
+}
+
+.ttExpandBtn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #8290a3;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.ttExpandBtn:hover {
+  background: #e5edf6;
+  color: var(--settings-navy);
+}
+
+.ttNameGroup {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ttNameText {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--settings-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ttDescText {
+  font-size: 11.5px;
+  color: #8290a3;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ttMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ttSlaTag {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #eef4fb;
+  color: var(--settings-blue);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+}
+
+.ttActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Expanded detail panel ────────────────────────────────────────────────── */
+
+.ttDetailPanel {
+  border-top: 1px dashed rgba(15, 52, 94, 0.12);
+  padding: 14px 14px 16px 14px;
+  background: rgba(239, 246, 255, 0.35);
+}
+
+.ttDetailLoading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 4px;
+  color: #8290a3;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ttDetailSplit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .ttDetailSplit { grid-template-columns: 1fr; }
+}
+
+.ttPanelSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 52, 94, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 80px;
+}
+
+.ttPanelTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.ttPanelSaving {
+  color: #8290a3;
+  margin-left: 4px;
+}
+
+.ttPanelEmpty {
+  color: #9ca3af;
+  font-size: 12.5px;
+  padding: 6px 0;
+}
+
+/* ── Checklist items ──────────────────────────────────────────────────────── */
+
+.clItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+  border-radius: 5px;
+  min-height: 32px;
+  transition: background 0.1s;
+}
+
+.clItem:hover { background: #f1f5f9; }
+
+.clDragHandle {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: grab;
+  padding: 0;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+
+.clDragHandle:hover { color: #8290a3; background: #e5edf6; }
+.clDragHandle:active { cursor: grabbing; }
+
+.clStepOrder {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  min-width: 18px;
+}
+
+.clStepText {
+  flex: 1;
+  font-size: 13px;
+  color: #334155;
+  font-weight: 500;
+  cursor: text;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.clStepText:hover { color: var(--settings-navy); }
+
+.clStepInput {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(0, 70, 150, 0.45);
+  border-radius: 5px;
+  background: #fff;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 70, 150, 0.1);
+}
+
+.clActionBtn {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  color: #94a3b8;
+  transition: background 0.12s, color 0.12s;
+  padding: 0;
+}
+
+.clSaveBtn:hover  { background: #dcfce7; color: #15803d; }
+.clActionBtn:hover { background: #e5edf6; color: #475569; }
+.clDeleteBtn:hover { background: #fef2f2; color: #ef4444; }
+
+.clAddRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(15, 52, 94, 0.1);
+}
+
+.clAddInput {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(15, 52, 94, 0.14);
+  border-radius: 5px;
+  background: #f8fafc;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #334155;
+  outline: none;
+  transition: border-color 0.14s, background 0.14s, box-shadow 0.14s;
+}
+
+.clAddInput:focus {
+  border-color: rgba(0, 70, 150, 0.5);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(0, 70, 150, 0.08);
+}
+
+.clAddInput::placeholder { color: #b0bac7; }
+
+.clAddBtn {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 5px;
+  background: rgba(0, 70, 150, 0.1);
+  color: var(--settings-blue);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.clAddBtn:hover:not(:disabled) { background: rgba(0, 70, 150, 0.18); }
+.clAddBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Custom Field items ───────────────────────────────────────────────────── */
+
+.cfItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 2px;
+  border-radius: 5px;
+  transition: background 0.1s;
+}
+
+.cfItem:hover { background: #f1f5f9; }
+
+.cfItemMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cfLabel {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfKey {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: #8290a3;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.cfItemMeta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.cfRequired {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #dc2626;
+  background: #fef2f2;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.cfOptionsPill {
+  font-size: 10.5px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 4px;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfDeleteBtn { flex-shrink: 0; }
+.cfDeleteBtn:hover { background: #fef2f2 !important; color: #ef4444 !important; }
+
+/* Data type badges */
+.dtBadge {
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dtText    { background: #f0f9ff; color: #0369a1; }
+.dtNumber  { background: #f0fdf4; color: #15803d; }
+.dtDate    { background: #fdf4ff; color: #9333ea; }
+.dtBoolean { background: #fff7ed; color: #c2410c; }
+.dtSelect  { background: #eff6ff; color: #2563eb; }
+
+/* ── Add custom field form ────────────────────────────────────────────────── */
+
+.cfAddTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px dashed rgba(15, 52, 94, 0.2);
+  border-radius: 5px;
+  background: transparent;
+  color: #8290a3;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  margin-top: 2px;
+}
+
+.cfAddTrigger:hover {
+  border-color: var(--settings-blue);
+  color: var(--settings-blue);
+  background: #eef4fb;
+}
+
+.cfAddPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 52, 94, 0.1);
+  border-radius: 7px;
+}
+
+.cfFormGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.cfFormLabel {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.cfFormInput {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(15, 52, 94, 0.14);
+  border-radius: 5px;
+  background: #fff;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #334155;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+
+.cfFormInput:focus {
+  border-color: rgba(0, 70, 150, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 70, 150, 0.08);
+}
+
+.cfRequiredWrap {
+  display: flex;
+  align-items: center;
+}
+
+.cfCheckLabel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cfOptionsTextarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid rgba(15, 52, 94, 0.14);
+  border-radius: 5px;
+  background: #fff;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #334155;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+
+.cfOptionsTextarea:focus {
+  border-color: rgba(0, 70, 150, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 70, 150, 0.08);
+}
+
+.cfFormError {
+  padding: 7px 10px;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cfFormActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── TaskType Modal — checklist steps ─────────────────────────────────────── */
+
+.ttModalStepsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ttModalAddStepBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(15, 52, 94, 0.14);
+  border-radius: 5px;
+  background: #fff;
+  color: #475569;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.ttModalAddStepBtn:hover { background: #f1f5f9; border-color: rgba(15, 52, 94, 0.22); }
+
+.ttModalStepList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ttModalStepRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ttModalStepNum {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  min-width: 18px;
+  flex-shrink: 0;
+}
+
+.ttModalRemoveStepBtn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  padding: 0;
+}
+
+.ttModalRemoveStepBtn:hover { background: #fef2f2; color: #ef4444; }

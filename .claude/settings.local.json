@@ -54,7 +54,8 @@
       "Bash(findstr /i \"multer sharp jimp formidable busboy\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.dependencies,null,2\\)\\)\")",
       "PowerShell(if \\($?\\) { \"Deleted upload.router.js\" } else { \"Failed\" })",
-      "Bash(rg \"avatar_url|avatarUrl\" backend/src frontend/src --type-add \"js:*.{js,jsx}\" -t js)"
+      "Bash(npm list *)",
+      "Bash(npx eslint *)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

@@ -107,6 +107,10 @@ function AppRoutes() {
         path="/settings"
         element={<ProtectedRoute><Settings /></ProtectedRoute>}
       />
+      <Route
+        path="/task-types"
+        element={<Navigate to="/settings?section=task-types" replace />}
+      />
 
       {/* TODO Phase 2: implement ChangePassword page.
           Redirects to dashboard until the page exists. */}

@@ -15,7 +15,7 @@ const NAV_GROUPS = [
       { to: '/dashboard',  label: 'Dashboard',      icon: LayoutDashboard },
       { to: '/companies',  label: 'Công ty',        icon: Building2 },
       { to: '/tasks',      label: 'Công việc',      icon: CheckSquare },
-      { to: '/task-types', label: 'Loại công việc', icon: ListTodo },
+      { to: '/settings?section=task-types', label: 'Loại công việc', icon: ListTodo },
       { to: '/schedules',  label: 'Lịch định kỳ',   icon: CalendarDays },
       { to: '/reports',    label: 'Báo cáo',        icon: BarChart3 },
     ],
