@@ -12,8 +12,8 @@
 | 1 | Database — Migrations & Seed | 2–3 ngày | Phase 0 | ✅ Hoàn thành |
 | 2 | Authentication & User Management | 3–4 ngày | Phase 1 | 🔄 Backend ✅ / Frontend 🔄 |
 | 3 | Company & Staff Management (API + UI) | 4–5 ngày | Phase 2 | 🔄 Backend ✅ / Frontend 🔄 |
-| 4 | Task Type Library — Lớp 1 (API + UI) | 2–3 ngày | Phase 3 | 🔄 Backend ✅ / Frontend 🔄 |
-| 5 | Customer Task Schedules — Lớp 2 (API + UI) | 3–4 ngày | Phase 4 | 🔄 Backend ✅ / Frontend ⏳ |
+| 4 | Task Type Library — Lớp 1 (API + UI) | 2–3 ngày | Phase 3 | ✅ Hoàn thành |
+| 5 | Customer Task Schedules — Lớp 2 (API + UI) | 3–4 ngày | Phase 4 | 🔄 Backend ✅ / Frontend ✅ |
 | 6 | Task Lifecycle — Core (API + UI) | 5–6 ngày | Phase 5 | 🔄 Backend ✅ / Frontend ⏳ |
 | 7 | Task Extensions — Checklist, Deps, Time, Custom Fields | 4–5 ngày | Phase 6 |
 | 8 | Job Scheduler — Tự Động Sinh Task | 3–4 ngày | Phase 5 |
@@ -309,7 +309,7 @@ ke-toan-tam-an/
 - [x] Axios interceptor: khi nhận 401 → tự động call `/api/auth/refresh` → retry original request → nếu refresh fail → redirect login
 - [x] Protected route component: kiểm tra authStore, redirect `/login` nếu chưa đăng nhập
 - [x] Bootstrap session: gọi `/auth/refresh` khi app mount, spinner khi chưa ready, proactive timer refresh 60s trước expiry
-- [ ] `must_change_pw === true` → redirect `/change-password` bắt buộc đổi mật khẩu trước khi dùng app
+- [-] `must_change_pw === true` → redirect `/change-password` bắt buộc đổi mật khẩu trước khi dùng app *(App.jsx redirect về /dashboard tạm thời — Phase 2 TODO)*
 
 ### 2.5 Frontend — User Management Page
 
@@ -318,8 +318,8 @@ ke-toan-tam-an/
 - [x] Modal tạo nhân viên mới (admin only)
 - [x] Modal chỉnh sửa nhân viên (admin only)
 - [x] Action: đổi trạng thái (active/on_leave/resigned), xóa nhân viên
-- [ ] Xem profile nhân viên: thông tin cơ bản + danh sách KH đang phụ trách + overview task
-- [ ] Action: reset password (admin only)
+- [-] Xem profile nhân viên: thông tin cơ bản + danh sách KH đang phụ trách + overview task *(chưa triển khai)*
+- [-] Action: reset password (admin only) *(API resetUserPassword có sẵn, chưa có UI)*
 
 **Acceptance Criteria Phase 2:**
 ```
@@ -330,7 +330,7 @@ ke-toan-tam-an/
 ✅ Dùng lại old refresh token sau khi rotate → 401 + toàn bộ family bị revoke
 ✅ Màn hình login hoạt động, redirect về dashboard sau login
 ✅ F5 trang bất kỳ → vẫn còn đăng nhập (token persist qua HttpOnly refresh cookie)
-□ must_change_pw = true → không vào được app ngoài trang đổi mật khẩu
+⏳ must_change_pw = true → không vào được app ngoài trang đổi mật khẩu (chưa làm — trang /change-password chưa tồn tại)
 ```
 
 ---
@@ -374,10 +374,11 @@ ke-toan-tam-an/
 
 **Trang chi tiết (`/companies/:id`):**
 - [x] Tab 1: Thông tin hồ sơ (xem/chỉnh sửa qua modal Edit)
-- [ ] Tab 2: Danh sách công việc (link sang `/tasks?company_id=...`) — placeholder
+- [-] Tab 2: Danh sách công việc (link sang `/tasks?company_id=...`) — placeholder *(Phase 6)*
 - [x] Tab 3: Tài liệu (placeholder — Phase 11)
 - [x] Tab 4: Tài khoản hệ thống (placeholder — Phase 9)
 - [x] Tab 5: Lịch sử phân công + modal phân công nhân viên mới
+- [x] Tab 6: Lịch định kỳ — SchedulesTab đầy đủ *(Phase 5 — hoàn thành)*
 - [x] Header badge: số task đang mở, số task quá hạn
 - [x] Nút "Kết thúc hợp đồng" (admin only — soft delete)
 
@@ -420,19 +421,21 @@ ke-toan-tam-an/
 
 ### 4.2 Frontend — Task Types Page (`/settings/task-types`)
 
-- [ ] Danh sách card theo nhóm (Khai thuế / Báo cáo tài chính / Nhân sự...)
-- [ ] Expand card → xem checklist + custom fields
-- [ ] Modal tạo/sửa loại công việc
-- [ ] Drag-and-drop reorder checklist steps (dùng `@dnd-kit/core`)
-- [ ] Form thêm custom field: label, key (auto snake_case), data_type, required, options (nếu select)
-- [ ] Toggle is_active trực tiếp trên card
+- [x] Danh sách card theo nhóm (Khai thuế / Báo cáo tài chính / Nhân sự...) — grouped + collapsible header
+- [x] Expand card → xem checklist + custom fields (detail cache, lazy load)
+- [x] Modal tạo/sửa loại công việc (tạo gồm initial checklist steps, sửa chỉ metadata)
+- [x] Drag-and-drop reorder checklist steps (dùng `@dnd-kit/core` + `@dnd-kit/sortable`, optimistic UI)
+- [x] Form thêm custom field: label, key (auto snake_case từ Vietnamese), data_type, required, options (nếu select)
+- [x] Toggle is_active trực tiếp trên card
+- [x] Sidebar link `/settings?section=task-types` + URL param `?section=` để active đúng tab
+- [x] Redirect `/task-types` → `/settings?section=task-types` (App.jsx)
 
 **Acceptance Criteria Phase 4:**
 ```
-□ Tạo task type với checklist 5 bước → bước hiển thị đúng thứ tự
-□ Reorder checklist → lưu thứ tự mới
-□ Tạo custom field type 'select' với options → options lưu đúng JSON
-□ Deactivate task type → không xuất hiện trong danh sách khi tạo schedule
+✅ Tạo task type với checklist 5 bước → bước hiển thị đúng thứ tự
+✅ Reorder checklist → lưu thứ tự mới (DnD + reorderChecklist API)
+✅ Tạo custom field type 'select' với options → options lưu đúng JSON
+✅ Deactivate task type → không xuất hiện trong danh sách khi tạo schedule (filter isActive trong SchedulesTab)
 ```
 
 ---
@@ -472,24 +475,35 @@ ke-toan-tam-an/
 
 ### 5.2 Frontend — Schedules trong trang Company
 
-- [ ] Tab "Lịch công việc" trong trang chi tiết KH
-- [ ] Bảng: loại CV, chế độ lặp (mô tả ngắn), deadline offset, NV thực hiện, trạng thái, ngày chạy kế tiếp
-- [ ] Modal thêm lịch: chọn task type → chọn recurrence type → form động theo type → preview ngày kế tiếp
-- [ ] Form động: mỗi recurrence type hiển thị UI input khác nhau
+- [x] Tab "Lịch định kỳ" trong trang chi tiết KH (`SchedulesTab.jsx`)
+- [x] Bảng: loại CV, chế độ lặp (label + mô tả ngắn), deadline offset, SLA override, NV thực hiện, trạng thái
+- [x] Modal tạo lịch: chọn task type → chọn recurrence type → form động theo type → preview ngày kế tiếp
+- [x] Modal chỉnh sửa lịch: readonly task type name, cập nhật tất cả trường còn lại
+- [x] Form động — đủ 9 recurrence types:
   - `daily`: number input "Mỗi N ngày"
-  - `weekly`: checkbox grid 7 ngày trong tuần
+  - `weekly`: toggle buttons 7 ngày trong tuần (multi-select)
   - `monthly_by_date`: number picker 1–31
-  - `monthly_by_weekday`: select "Thứ" + select "Tuần thứ"
-  - `custom_dates`: date picker multi-select
-- [ ] Preview: sau khi cấu hình → show "10 lần chạy tiếp theo" realtime
+  - `monthly_by_weekday`: select "Thứ" + select "Tuần thứ N"
+  - `monthly_last_day`: info text (không cần config)
+  - `quarterly`: select tháng trong quý + number picker ngày
+  - `yearly`: select tháng + number picker ngày
+  - `custom_dates`: date input + add/remove list
+  - `once`: date picker, min = today
+- [x] Preview realtime: `utils/recurrencePreview.js` mirrors backend calculator (date-fns), hiển thị "10 lần kích hoạt tới" trong modal
+- [x] Server preview modal: gọi `GET /schedules/:id/preview` cho lịch đã tồn tại
+- [x] Toggle is_active (admin): bật/tắt với loading indicator
+- [x] Xóa lịch (admin): confirm dialog + guard 409 "đã sinh task"
+- [x] Validation: taskTypeId required, config per type, once/custom_dates không trong quá khứ
+- [x] `src/api/schedules.js` — 7 hàm API client đầy đủ
+- [x] `src/utils/recurrencePreview.js` — local calculator mirror backend
 
 **Acceptance Criteria Phase 5:**
 ```
-□ Tạo schedule monthly_last_day → preview tháng 2 = ngày 28 (hoặc 29 nếu năm nhuận)
-□ Tạo schedule quarterly month_in_quarter=1 day=5 → preview đúng 5 tháng đầu quý
-□ Tạo schedule once date trong quá khứ → validation error
-□ Tạo schedule custom_dates với list dates → preview đúng thứ tự ngày
-□ Toggle is_active = false → scheduler sẽ bỏ qua (Phase 8)
+✅ Tạo schedule monthly_last_day → preview tháng 2 = ngày 28 (hoặc 29 nếu năm nhuận) — recurrencePreview.js dùng lastDayOfMonth từ date-fns
+✅ Tạo schedule quarterly month_in_quarter=1 day=5 → preview đúng 5 tháng đầu quý
+✅ Tạo schedule once date trong quá khứ → validation error (validateForm kiểm tra date <= today)
+✅ Tạo schedule custom_dates với list dates → preview đúng thứ tự ngày (sort + filter future)
+⏳ Toggle is_active = false → scheduler sẽ bỏ qua (Phase 8 — job chưa implement)
 ```
 
 ---

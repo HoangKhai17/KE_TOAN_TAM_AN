@@ -13,6 +13,7 @@ import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import * as usersApi from '../../api/users'
 import { BUSINESS_TYPE_LABELS, CompanyFormModal, getInitials, StatusPill } from './Companies'
+import SchedulesTab from './SchedulesTab'
 import s from './companies.module.css'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -281,13 +282,7 @@ export default function CompanyDetail() {
         />
       )}
       {activeTab === 'schedules' && (
-        <PlaceholderTab
-          icon={<CalendarDays size={24} color="#0891b2" />}
-          iconBg="#ecfeff"
-          title="Lịch công việc định kỳ"
-          desc="Cấu hình lịch lặp tự động sinh task theo định kỳ. Tính năng thuộc Phase 5."
-          phase="Phase 5"
-        />
+        <SchedulesTab company={company} isAdmin={isAdmin} />
       )}
       {activeTab === 'credentials' && (
         <CredentialsTab />
