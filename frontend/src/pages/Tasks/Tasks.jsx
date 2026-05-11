@@ -798,6 +798,16 @@ const CUR_YEAR  = String(new Date().getFullYear())
 const CUR_MONTH = String(new Date().getMonth() + 1)
 const INIT_DATES = yearMonthToDates(CUR_YEAR, CUR_MONTH)
 
+const FILTER_KEY = 'tasks_filter_v1'
+
+function loadSavedFilters() {
+  try { return JSON.parse(sessionStorage.getItem(FILTER_KEY)) ?? {} }
+  catch { return {} }
+}
+function saveFilters(obj) {
+  try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(obj)) } catch (_) {}
+}
+
 export default function Tasks() {
   const navigate    = useNavigate()
   const currentUser = useAuthStore((state) => state.user)
@@ -807,36 +817,43 @@ export default function Tasks() {
   const loadEnums   = useEnumsStore((st) => st.load)
   const isAdmin     = currentUser?.role === 'admin'
 
+  // Restore saved filters from sessionStorage (once on mount)
+  const [initF] = useState(() => loadSavedFilters())
+
   // View
-  const [view, setView] = useState('list')
+  const [view, setView] = useState(initF.view ?? 'list')
 
   // Date filters — default: current month
-  const [yearFilter,  setYearFilter]  = useState(CUR_YEAR)
-  const [monthFilter, setMonthFilter] = useState(CUR_MONTH)
-  const [dueDateFrom, setDueDateFrom] = useState(INIT_DATES.from)
-  const [dueDateTo,   setDueDateTo]   = useState(INIT_DATES.to)
+  const [yearFilter,  setYearFilter]  = useState(initF.yearFilter  ?? CUR_YEAR)
+  const [monthFilter, setMonthFilter] = useState(initF.monthFilter ?? CUR_MONTH)
+  const [dueDateFrom, setDueDateFrom] = useState(initF.dueDateFrom ?? INIT_DATES.from)
+  const [dueDateTo,   setDueDateTo]   = useState(initF.dueDateTo   ?? INIT_DATES.to)
 
   // Sort — default: newest first
-  const [sortValue, setSortValue] = useState('created_at:desc')
+  const [sortValue, setSortValue] = useState(initF.sortValue ?? 'created_at:desc')
 
   // Other filters (status/priority/source are multi-select arrays)
-  const [searchInput, setSearchInput]       = useState('')
-  const [search, setSearch]                 = useState('')
-  const [companyFilter, setCompanyFilter]   = useState('')
-  const [staffFilter, setStaffFilter]       = useState('')
-  const [statusFilter, setStatusFilter]     = useState([])
-  const [priorityFilter, setPriorityFilter] = useState([])
-  const [sourceFilter, setSourceFilter]     = useState([])
-  const [isOverdue, setIsOverdue]           = useState(false)
+  const [searchInput, setSearchInput]       = useState(initF.searchInput    ?? '')
+  const [search, setSearch]                 = useState(initF.searchInput    ?? '')
+  const [companyFilter, setCompanyFilter]   = useState(initF.companyFilter  ?? '')
+  const [staffFilter, setStaffFilter]       = useState(initF.staffFilter    ?? '')
+  const [statusFilter, setStatusFilter]     = useState(initF.statusFilter   ?? [])
+  const [priorityFilter, setPriorityFilter] = useState(initF.priorityFilter ?? [])
+  const [sourceFilter, setSourceFilter]     = useState(initF.sourceFilter   ?? [])
+  const [isOverdue, setIsOverdue]           = useState(initF.isOverdue      ?? false)
 
   // Stats (counts across base filters, ignoring status/priority/isOverdue)
   const [stats, setStats] = useState({
     total: 0, pending: 0, in_progress: 0, on_hold: 0,
     pending_review: 0, needs_revision: 0, completed: 0,
   })
+  const [statsKey, setStatsKey] = useState(0)  // increment to force stats refresh
+
+  // Refresh trigger (e.g. on tab-focus)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   // Pagination
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(initF.pageSize ?? 20)
   const [page, setPage]         = useState(1)
 
   // Data
@@ -896,6 +913,27 @@ export default function Tasks() {
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Refresh data when tab regains focus (catches changes made in other tabs / TaskDetail)
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') {
+        setRefreshKey((k) => k + 1)
+        setStatsKey((k) => k + 1)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
+  // Persist filters to sessionStorage whenever they change
+  useEffect(() => {
+    saveFilters({
+      view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
+      sortValue, searchInput, companyFilter, staffFilter,
+      statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize,
+    })
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize])
+
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
     let cancelled = false
@@ -919,7 +957,7 @@ export default function Tasks() {
       }
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, dueDateFrom, dueDateTo]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, companyFilter, staffFilter, dueDateFrom, dueDateTo, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load tasks
   useEffect(() => {
@@ -952,7 +990,7 @@ export default function Tasks() {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view, sortValue])
+  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view, sortValue, refreshKey])
 
   // ── Date filter handlers ──────────────────────────────────────────────────────
 
@@ -985,6 +1023,7 @@ export default function Tasks() {
 
       const updated = await tasksApi.changeTaskStatus(task.id, body)
       setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
+      setStatsKey((k) => k + 1)
       addToast(`Đã chuyển sang "${getLabel('task_status', newStatus, STATUS_LABELS[newStatus])}"`, 'success')
       setOnHoldTarget(null)
       setForceTarget(null)
@@ -1007,6 +1046,7 @@ export default function Tasks() {
     try {
       const updated = await tasksApi.updateTask(task.id, { priority })
       setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
+      addToast(`Đã đổi ưu tiên → "${getLabel('task_priority', priority, PRIORITY_LABELS[priority])}"`, 'success')
     } catch {
       addToast('Không thể cập nhật ưu tiên', 'error')
     }
@@ -1016,6 +1056,7 @@ export default function Tasks() {
     try {
       const updated = await tasksApi.updateTask(task.id, { dueDate: dueDate || null })
       setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
+      addToast(dueDate ? 'Đã cập nhật ngày hết hạn' : 'Đã xóa ngày hết hạn', 'success')
     } catch {
       addToast('Không thể cập nhật ngày hết hạn', 'error')
     }
@@ -1049,7 +1090,9 @@ export default function Tasks() {
     setDueDateFrom(INIT_DATES.from)
     setDueDateTo(INIT_DATES.to)
     setSortValue('created_at:desc')
+    setView('list'); setPageSize(20)
     setPage(1)
+    try { sessionStorage.removeItem(FILTER_KEY) } catch (_) {}
   }
 
   const activeFilterCount = [search, companyFilter, staffFilter].filter(Boolean).length
