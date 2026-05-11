@@ -4,7 +4,7 @@ import {
   Building2, Pencil, AlertTriangle, ChevronRight,
   Hash, Calendar, Briefcase,
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
-  Loader2, Shield, Users, BarChart2, Clock, Trash2,
+  Loader2, Users, BarChart2, Clock, Trash2,
   Plus, Search, RotateCcw,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
@@ -16,6 +16,7 @@ import * as usersApi from '../../api/users'
 import * as tasksApi from '../../api/tasks'
 import { BUSINESS_TYPE_LABELS, CompanyFormModal, getInitials, StatusPill } from './Companies'
 import SchedulesTab from './SchedulesTab'
+import CredentialsTab from './CredentialsTab'
 import TaskFormModal from '../Tasks/TaskFormModal'
 import {
   STATUS_LABELS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS,
@@ -293,7 +294,7 @@ export default function CompanyDetail() {
         <SchedulesTab company={company} isAdmin={isAdmin} />
       )}
       {activeTab === 'credentials' && (
-        <CredentialsTab />
+        <CredentialsTab company={company} />
       )}
       {activeTab === 'documents' && (
         <PlaceholderTab
@@ -783,28 +784,6 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
   )
 }
 
-// ── CredentialsTab ─────────────────────────────────────────────────────────────
-
-function CredentialsTab() {
-  return (
-    <div>
-      <div className={s.securityBanner}>
-        <Shield size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>
-          <strong>Khu vực bảo mật.</strong> Tài khoản hệ thống được mã hoá AES-256-GCM.
-          Mật khẩu chỉ hiển thị khi có xác nhận và được ghi vào audit log.
-        </span>
-      </div>
-      <PlaceholderTab
-        icon={<Lock size={24} color="#4f46e5" />}
-        iconBg="#eef2ff"
-        title="Tài khoản hệ thống khách hàng"
-        desc="Lưu trữ an toàn tài khoản cổng thuế, BHXH, phần mềm kế toán... với mã hoá AES-256. Tính năng thuộc Phase 9."
-        phase="Phase 9"
-      />
-    </div>
-  )
-}
 
 // ── PlaceholderTab ─────────────────────────────────────────────────────────────
 

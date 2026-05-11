@@ -1,8 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Building2, CheckSquare, ListTodo,
-  CalendarDays, Users, BarChart3, KeyRound, Settings,
-  ChevronLeft, ChevronRight, LogOut,
+  LayoutDashboard, Building2, CheckSquare,
+  Users, BarChart3, Settings,
+  ChevronLeft, ChevronRight, LogOut, Wallet,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { logout } from '../../api/auth'
@@ -12,20 +12,18 @@ const NAV_GROUPS = [
   {
     label: 'ĐIỀU HƯỚNG',
     items: [
-      { to: '/dashboard',  label: 'Dashboard',      icon: LayoutDashboard },
-      { to: '/companies',  label: 'Công ty',        icon: Building2 },
-      { to: '/tasks',      label: 'Công việc',      icon: CheckSquare },
-      { to: '/settings?section=task-types', label: 'Loại công việc', icon: ListTodo },
-      { to: '/schedules',  label: 'Lịch định kỳ',   icon: CalendarDays },
-      { to: '/reports',    label: 'Báo cáo',        icon: BarChart3 },
+      { to: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
+      { to: '/companies',  label: 'Công ty',    icon: Building2 },
+      { to: '/tasks',      label: 'Công việc',  icon: CheckSquare },
+      { to: '/reports',    label: 'Báo cáo',    icon: BarChart3 },
     ],
   },
   {
     label: 'QUẢN TRỊ HỆ THỐNG',
     items: [
-      { to: '/staff',       label: 'Nhân viên',           icon: Users,    adminOnly: true },
-      { to: '/credentials', label: 'Thông tin đăng nhập', icon: KeyRound },
-      { to: '/settings',    label: 'Cài đặt',             icon: Settings, adminOnly: true },
+      { to: '/staff',    label: 'Nhân viên', icon: Users,    adminOnly: true },
+      { to: '/payroll',  label: 'Bảng lương', icon: Wallet,  adminOnly: true },
+      { to: '/settings', label: 'Cài đặt',   icon: Settings, adminOnly: true },
     ],
   },
 ]

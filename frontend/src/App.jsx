@@ -11,6 +11,8 @@ import CompanyDetail from './pages/Companies/CompanyDetail'
 import Settings from './pages/Settings/Settings'
 import Tasks from './pages/Tasks/Tasks'
 import TaskDetail from './pages/Tasks/TaskDetail'
+import Payroll from './pages/Payroll/Payroll'
+import PayrollDetail from './pages/Payroll/PayrollDetail'
 import s from './App.module.css'
 
 // ── Route guards ──────────────────────────────────────────────────────
@@ -120,6 +122,22 @@ function AppRoutes() {
       <Route
         path="/task-types"
         element={<Navigate to="/settings?section=task-types" replace />}
+      />
+      <Route
+        path="/schedules"
+        element={<Navigate to="/companies" replace />}
+      />
+      <Route
+        path="/credentials"
+        element={<Navigate to="/companies" replace />}
+      />
+      <Route
+        path="/payroll"
+        element={<ProtectedRoute><Payroll /></ProtectedRoute>}
+      />
+      <Route
+        path="/payroll/:id"
+        element={<ProtectedRoute><PayrollDetail /></ProtectedRoute>}
       />
 
       {/* TODO Phase 2: implement ChangePassword page.

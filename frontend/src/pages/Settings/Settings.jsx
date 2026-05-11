@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Clock, Users, ListTodo, Building2, Bell, CalendarDays, ShieldAlert,
+  Clock, Users, ListTodo, Bell, CalendarDays, ShieldAlert,
   Settings as SettingsIcon, Plus, Pencil, Save, KeyRound,
   Loader2, CheckCircle2, AlertCircle,
   Search, Eye, EyeOff, UserX, UserCheck, Camera, Tag,
+  Play, RotateCcw, CheckCircle, XCircle,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -12,7 +13,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
-import { BUSINESS_TYPE_LABELS } from '../Companies/Companies'
+import { getSchedulerStatus, runSchedulerNow } from '../../api/scheduler'
 import TaskTypesSection from './TaskTypesSection'
 import EnumManagementSection from './EnumManagementSection'
 import s from './settings.module.css'
@@ -88,9 +89,8 @@ const SECTIONS = [
   { key: 'users',           label: 'Quản lý người dùng',     icon: Users,       dot: '#059669', bg: '#f0fdf4', iconColor: '#059669' },
   { key: 'task-types',      label: 'Loại công việc',         icon: ListTodo,    dot: '#7c3aed', bg: '#f5f3ff', iconColor: '#7c3aed' },
   { key: 'enum-management', label: 'Danh mục hệ thống',      icon: Tag,         dot: '#0f766e', bg: '#f0fdfa', iconColor: '#0f766e' },
-  { key: 'business-types',  label: 'Loại hình doanh nghiệp', icon: Building2,   dot: '#d97706', bg: '#fffbeb', iconColor: '#d97706' },
   { key: 'deadline',        label: 'Cảnh báo deadline',      icon: Bell,        dot: '#dc2626', bg: '#fef2f2', iconColor: '#dc2626' },
-  { key: 'templates',       label: 'Template định kỳ',       icon: CalendarDays,dot: '#0891b2', bg: '#ecfeff', iconColor: '#0891b2' },
+  { key: 'templates',       label: 'Bộ lập lịch tự động',   icon: CalendarDays,dot: '#0891b2', bg: '#ecfeff', iconColor: '#0891b2' },
   { key: 'escalation',      label: 'Quy tắc Escalation',     icon: ShieldAlert, dot: '#4f46e5', bg: '#eef2ff', iconColor: '#4f46e5' },
 ]
 
@@ -185,7 +185,6 @@ export default function Settings() {
             {activeSection === 'users'           && <UsersSection />}
             {activeSection === 'task-types'      && <TaskTypesSection />}
             {activeSection === 'enum-management' && <EnumManagementSection />}
-            {activeSection === 'business-types'  && <BusinessTypesSection />}
             {activeSection === 'deadline'        && <DeadlineSection />}
             {activeSection === 'templates'       && <TemplatesSection />}
             {activeSection === 'escalation'      && <EscalationSection />}
@@ -739,39 +738,6 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
   )
 }
 
-// ── Section: Business Types ───────────────────────────────────────────────────
-
-function BusinessTypesSection() {
-  return (
-    <div>
-      <p className={s.sectionText}>
-        Danh sách loại hình doanh nghiệp được cố định ở cấp cơ sở dữ liệu và không thể thay đổi qua giao diện.
-      </p>
-      <div className={s.businessTableWrap}>
-        <table className={s.settingsTable}>
-          <thead>
-            <tr>
-              <th>Mã</th>
-              <th>Tên hiển thị</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(BUSINESS_TYPE_LABELS).map(([code, label]) => (
-              <tr key={code}>
-                <td>
-                  <code className={s.codePill}>
-                    {code}
-                  </code>
-                </td>
-                <td className={s.semiBold}>{label}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
 
 // ── Section: Deadline warnings ────────────────────────────────────────────────
 
@@ -787,14 +753,145 @@ function DeadlineSection() {
   )
 }
 
-// ── Section: Templates ────────────────────────────────────────────────────────
+// ── Section: Scheduler ────────────────────────────────────────────────────────
 
 function TemplatesSection() {
+  const addToast = useToastStore((st) => st.toast)
+  const [status, setStatus]   = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [lastResult, setLastResult] = useState(null)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const s = await getSchedulerStatus()
+      setStatus(s)
+      if (s.lastRunResult) setLastResult(s.lastRunResult)
+    } catch {
+      addToast('Không thể tải trạng thái bộ lập lịch', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleRunNow() {
+    setRunning(true)
+    try {
+      const result = await runSchedulerNow()
+      setLastResult(result)
+      addToast(`Đã chạy: tạo ${result.generated} task, bỏ qua ${result.skipped}`, 'success')
+      load()
+    } catch (err) {
+      const httpStatus = err.response?.status
+      if (httpStatus === 409) {
+        addToast('Bộ lập lịch đang chạy, vui lòng thử lại sau', 'warning')
+      } else {
+        addToast(err.response?.data?.error?.message ?? 'Không thể chạy bộ lập lịch', 'error')
+      }
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  function fmtDt(iso) {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleString('vi-VN', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    })
+  }
+
   return (
-    <div className={s.comingSoon}>
-      <CalendarDays size={44} className={s.comingSoonIcon} />
-      <p className={s.comingSoonTitle}>Tính năng đang phát triển</p>
-      <p className={s.comingSoonText}>Template công việc định kỳ sẽ có ở Phase 8.</p>
+    <div>
+      <p className={s.sectionText}>
+        Bộ lập lịch tự động tạo công việc từ các lịch định kỳ mỗi ngày lúc 05:00 (giờ Việt Nam).
+        Bạn có thể kích hoạt thủ công bên dưới.
+      </p>
+
+      {loading ? (
+        <div className={s.skeletonStack} style={{ padding: '0 0 16px' }}>
+          {[1, 2, 3].map((i) => <div key={i} className={s.skeletonLine} />)}
+        </div>
+      ) : status && (
+        <>
+          <div className={s.schedulerStatusGrid}>
+            <div className={s.schedulerStatusCard}>
+              <div className={s.schedulerStatusLabel}>Trạng thái cron</div>
+              <div className={s.schedulerStatusVal}>
+                {status.active
+                  ? <><CheckCircle size={14} style={{ color: '#22c55e' }} /> Đang hoạt động</>
+                  : <><XCircle size={14} style={{ color: '#ef4444' }} /> Chưa khởi động</>
+                }
+              </div>
+            </div>
+
+            <div className={s.schedulerStatusCard}>
+              <div className={s.schedulerStatusLabel}>Lần chạy cuối</div>
+              <div className={s.schedulerStatusVal}>{fmtDt(status.lastRunAt)}</div>
+            </div>
+
+            <div className={s.schedulerStatusCard}>
+              <div className={s.schedulerStatusLabel}>Trạng thái hiện tại</div>
+              <div className={s.schedulerStatusVal}>
+                {status.isRunning
+                  ? <><Loader2 size={13} className={s.spin} style={{ color: '#0891b2' }} /> Đang chạy...</>
+                  : 'Rảnh'
+                }
+              </div>
+            </div>
+          </div>
+
+          {lastResult && !lastResult.error && (
+            <div className={s.schedulerResult}>
+              <div className={s.schedulerResultTitle}>Kết quả lần chạy cuối</div>
+              <div className={s.schedulerResultGrid}>
+                <div className={s.schedulerResultItem}>
+                  <span className={s.schedulerResultNum} style={{ color: '#22c55e' }}>{lastResult.generated ?? 0}</span>
+                  <span className={s.schedulerResultLbl}>Task tạo mới</span>
+                </div>
+                <div className={s.schedulerResultItem}>
+                  <span className={s.schedulerResultNum} style={{ color: '#94a3b8' }}>{lastResult.skipped ?? 0}</span>
+                  <span className={s.schedulerResultLbl}>Bỏ qua</span>
+                </div>
+                <div className={s.schedulerResultItem}>
+                  <span className={s.schedulerResultNum} style={{ color: lastResult.errors > 0 ? '#ef4444' : '#94a3b8' }}>{lastResult.errors ?? 0}</span>
+                  <span className={s.schedulerResultLbl}>Lỗi</span>
+                </div>
+                <div className={s.schedulerResultItem}>
+                  <span className={s.schedulerResultNum} style={{ color: '#64748b' }}>{lastResult.durationMs ?? 0}ms</span>
+                  <span className={s.schedulerResultLbl}>Thời gian</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {lastResult?.error && (
+            <div className={s.schedulerError}>
+              <XCircle size={14} style={{ color: '#ef4444', flexShrink: 0 }} />
+              <span>Lỗi lần chạy cuối: {lastResult.error}</span>
+            </div>
+          )}
+
+          <div className={s.formActions} style={{ marginTop: 20 }}>
+            <button
+              className={s.btnSave}
+              onClick={handleRunNow}
+              disabled={running || status.isRunning}
+            >
+              {running || status.isRunning
+                ? <><Loader2 size={13} className={s.spin} /> Đang chạy...</>
+                : <><Play size={13} /> Chạy ngay</>
+              }
+            </button>
+            <button className={s.btnOutline} onClick={load} disabled={loading} style={{ height: 36 }}>
+              <RotateCcw size={13} /> Làm mới
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -2409,3 +2409,175 @@
   font-weight: 500;
   padding: 8px 0;
 }
+
+/* ── Credentials Tab ─────────────────────────────────────── */
+
+.credList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.credCard {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: box-shadow 0.15s, opacity 0.2s;
+}
+
+.credCard:hover {
+  box-shadow: 0 4px 12px -4px rgba(15, 52, 94, 0.12);
+}
+
+.credCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.credCardTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.credBadgeOff {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+.credCardActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.iconBtnSm {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  color: #6b7280;
+  transition: background 0.14s, color 0.14s;
+  text-decoration: none;
+}
+
+.iconBtnSm:hover {
+  background: #f1f5f9;
+  color: #0f345e;
+}
+
+.iconBtnDanger:hover {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.credCardMeta {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.credCardUsername, .credCardPw {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.credCardNotes {
+  font-size: 12.5px;
+  color: #6b7280;
+  margin: 4px 0 6px;
+  line-height: 1.5;
+}
+
+.credCardFooter {
+  font-size: 11.5px;
+  color: #9ca3af;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.formLabelHint {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.pwToggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  display: flex;
+  padding: 4px;
+  transition: color 0.12s;
+}
+
+.pwToggle:hover { color: #0f345e; }
+
+.credRevealSkeleton {
+  height: 44px;
+  background: linear-gradient(90deg, #f0f2f5 25%, #e2e8f0 50%, #f0f2f5 75%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: skeleton-fade 1.4s ease-in-out infinite;
+}
+
+.credRevealBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.credRevealPw {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  word-break: break-all;
+  user-select: all;
+}
+
+.credRevealCopy {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  color: #6b7280;
+  transition: background 0.12s, color 0.12s;
+}
+
+.credRevealCopy:hover { background: #f1f5f9; color: #0f345e; }
