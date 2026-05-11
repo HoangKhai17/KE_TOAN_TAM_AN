@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { login } from '../../api/auth'
-import s from './Login.module.css'
+import s from './login.module.css'
 
 // ── Validation ──────────────────────────────────────────────────────
 
