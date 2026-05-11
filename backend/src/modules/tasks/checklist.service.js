@@ -48,7 +48,7 @@ async function updateItem(taskId, itemId, { stepText, isCompleted }, actorId) {
   )
   if (!item) throw Object.assign(new Error('Checklist item not found'), { status: 404 })
 
-  const updates = ['updated_at = NOW()']
+  const updates = []
   const params = []
 
   if (stepText !== undefined) {
@@ -69,6 +69,8 @@ async function updateItem(taskId, itemId, { stepText, isCompleted }, actorId) {
       updates.push('completed_at = NULL')
     }
   }
+
+  if (updates.length === 0) return toDto(item)
 
   params.push(itemId)
   const { rows: [updated] } = await query(

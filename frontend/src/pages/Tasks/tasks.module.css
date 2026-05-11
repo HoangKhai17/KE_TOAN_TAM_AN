@@ -165,7 +165,6 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   margin-bottom: 12px;
-  overflow: hidden;
 }
 
 .filterBarHead {
@@ -550,7 +549,6 @@
 .taskTitle {
   font-weight: var(--fw-semibold);
   color: var(--color-text-strong);
-  max-width: 280px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2370,3 +2368,4 @@
 .statOrange { color: #c2410c; }
 .statGreen  { color: #15803d; }
 .statRed    { color: var(--color-danger); }
+.statPurple { color: #7e22ce; }

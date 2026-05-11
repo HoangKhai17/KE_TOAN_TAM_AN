@@ -830,7 +830,10 @@ export default function Tasks() {
   const [isOverdue, setIsOverdue]           = useState(false)
 
   // Stats (counts across base filters, ignoring status/priority/isOverdue)
-  const [stats, setStats] = useState({ total: 0, completed: 0, overdue: 0 })
+  const [stats, setStats] = useState({
+    total: 0, pending: 0, in_progress: 0, on_hold: 0,
+    pending_review: 0, needs_revision: 0, completed: 0,
+  })
 
   // Pagination
   const [pageSize, setPageSize] = useState(20)
@@ -847,11 +850,13 @@ export default function Tasks() {
   const [availableYears, setAvailableYears] = useState([])
 
   // Modals
-  const [showCreate, setShowCreate]     = useState(false)
-  const [onHoldTarget, setOnHoldTarget] = useState(null)
-  const [forceTarget, setForceTarget]   = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
-  const [deleting, setDeleting]         = useState(false)
+  const [showCreate, setShowCreate]         = useState(false)
+  const [onHoldTarget, setOnHoldTarget]     = useState(null)
+  const [forceTarget, setForceTarget]       = useState(null)
+  const [deleteTarget, setDeleteTarget]     = useState(null)
+  const [deleting, setDeleting]             = useState(false)
+  const [showBulkDelete, setShowBulkDelete] = useState(false)
+  const [bulkDeleting, setBulkDeleting]     = useState(false)
 
   // Bulk
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -902,16 +907,16 @@ export default function Tasks() {
       dueDateTo:   dueDateTo     || undefined,
       limit: 1, page: 1,
     }
+    const statusKeys = ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed']
     Promise.all([
       tasksApi.listTasks(base),
-      tasksApi.listTasks({ ...base, status: 'completed' }),
-      tasksApi.listTasks({ ...base, isOverdue: true }),
-    ]).then(([all, done, over]) => {
-      if (!cancelled) setStats({
-        total:     all.pagination.total,
-        completed: done.pagination.total,
-        overdue:   over.pagination.total,
-      })
+      ...statusKeys.map((st) => tasksApi.listTasks({ ...base, status: st })),
+    ]).then(([all, ...bySt]) => {
+      if (!cancelled) {
+        const counts = { total: all.pagination.total }
+        statusKeys.forEach((st, i) => { counts[st] = bySt[i].pagination.total })
+        setStats(counts)
+      }
     }).catch(() => {})
     return () => { cancelled = true }
   }, [search, companyFilter, staffFilter, dueDateFrom, dueDateTo]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1076,6 +1081,23 @@ export default function Tasks() {
     }
     if (done > 0) addToast(`Đã hoàn thành ${done} công việc`, 'success')
     setSelectedIds(new Set())
+    if (done > 0) setPage(1)
+  }
+
+  async function bulkDelete() {
+    setBulkDeleting(true)
+    let done = 0
+    const ids = [...selectedIds]
+    for (const id of ids) {
+      try {
+        await tasksApi.deleteTask(id)
+        done++
+      } catch (_e) { /* skip individual failures */ }
+    }
+    addToast(`Đã xoá ${done} công việc`, done > 0 ? 'success' : 'error')
+    setSelectedIds(new Set())
+    setShowBulkDelete(false)
+    setBulkDeleting(false)
     if (done > 0) setPage(1)
   }
 
@@ -1284,24 +1306,39 @@ export default function Tasks() {
           <div className={s.statsRow}>
             <div className={s.statItem}>
               <span className={s.statValue}>{stats.total}</span>
-              <span className={s.statLabel}>Tổng kết quả</span>
+              <span className={s.statLabel}>Tổng</span>
             </div>
             <span className={s.statDivider} />
             <div className={s.statItem}>
-              <span className={`${s.statValue} ${s.statOrange}`}>{Math.max(0, stats.total - stats.completed)}</span>
-              <span className={s.statLabel}>Cần xử lý</span>
+              <span className={s.statValue}>{stats.pending ?? 0}</span>
+              <span className={s.statLabel}>Chờ xử lý</span>
             </div>
             <span className={s.statDivider} />
             <div className={s.statItem}>
-              <span className={`${s.statValue} ${s.statGreen}`}>{stats.completed}</span>
+              <span className={`${s.statValue} ${s.statOrange}`}>{stats.in_progress ?? 0}</span>
+              <span className={s.statLabel}>Đang thực hiện</span>
+            </div>
+            <span className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={s.statValue}>{stats.on_hold ?? 0}</span>
+              <span className={s.statLabel}>Tạm hoãn</span>
+            </div>
+            <span className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={`${s.statValue} ${s.statPurple}`}>{stats.pending_review ?? 0}</span>
+              <span className={s.statLabel}>Chờ duyệt</span>
+            </div>
+            <span className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={`${s.statValue} ${s.statRed}`}>{stats.needs_revision ?? 0}</span>
+              <span className={s.statLabel}>Xem lại</span>
+            </div>
+            <span className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={`${s.statValue} ${s.statGreen}`}>{stats.completed ?? 0}</span>
               <span className={s.statLabel}>
-                Đã duyệt{stats.total > 0 ? ` · ${Math.round(stats.completed / stats.total * 100)}%` : ''}
+                Hoàn thành{stats.total > 0 ? ` · ${Math.round((stats.completed ?? 0) / stats.total * 100)}%` : ''}
               </span>
-            </div>
-            <span className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={`${s.statValue} ${stats.overdue > 0 ? s.statRed : ''}`}>{stats.overdue}</span>
-              <span className={s.statLabel}>Bị flag</span>
             </div>
           </div>
         </div>
@@ -1314,6 +1351,15 @@ export default function Tasks() {
             <button className={s.btnGhost} onClick={bulkComplete}>
               <Check size={13} /> Hoàn thành tất cả
             </button>
+            {isAdmin && (
+              <button
+                className={s.btnGhost}
+                style={{ color: 'var(--color-danger)' }}
+                onClick={() => setShowBulkDelete(true)}
+              >
+                <Trash2 size={13} /> Xóa đã chọn
+              </button>
+            )}
             <button className={s.btnGhost} onClick={() => setSelectedIds(new Set())}>
               Bỏ chọn
             </button>
@@ -1398,6 +1444,37 @@ export default function Tasks() {
           onClose={() => !deleting && setDeleteTarget(null)}
           onConfirm={handleDeleteConfirm}
         />
+      )}
+
+      {showBulkDelete && (
+        <div className={s.miniOverlay}>
+          <div className={s.miniDialog}>
+            <h4 className={s.miniTitle}>Xóa {selectedIds.size} công việc</h4>
+            <p className={s.miniBody}>
+              Bạn có chắc chắn muốn xóa <strong>{selectedIds.size}</strong> công việc đã chọn?{' '}
+              Hành động này không thể hoàn tác.
+            </p>
+            <div className={s.miniActions}>
+              <button
+                onClick={() => setShowBulkDelete(false)}
+                className={s.btnSecondary}
+                disabled={bulkDeleting}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={bulkDelete}
+                disabled={bulkDeleting}
+                className={s.btnDangerSolid}
+              >
+                {bulkDeleting
+                  ? <><Loader2 size={13} className={s.spinIcon} /> Đang xóa...</>
+                  : <><Trash2 size={13} /> Xóa {selectedIds.size} mục</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </AppLayout>
   )
