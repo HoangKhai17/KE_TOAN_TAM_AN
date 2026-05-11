@@ -79,7 +79,10 @@
       "Bash(Get-ChildItem \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Tasks\")",
       "Bash(Select-Object Name, Length)",
       "Bash(dir /s /b \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\*.js\")",
-      "Bash(findstr /i task)"
+      "Bash(findstr /i task)",
+      "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\migrations\")",
+      "Bash(Select-Object Name)",
+      "Bash(grep -v \"^$\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

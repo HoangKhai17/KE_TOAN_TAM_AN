@@ -1604,3 +1604,86 @@
 }
 
 .ttModalRemoveStepBtn:hover { background: #fef2f2; color: #ef4444; }
+
+/* ── Enum management section ─────────────────────────── */
+
+.enumShell {
+  display: flex;
+  gap: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 400px;
+}
+
+.enumSidebar {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 6px 0;
+  overflow-y: auto;
+}
+
+.enumTypeBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  color: #475569;
+  transition: background 0.12s, color 0.12s;
+}
+
+.enumTypeBtn:hover { background: #e2e8f0; }
+
+.enumTypeBtnActive {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 600;
+}
+
+.enumTypeName { flex: 1; }
+
+.enumTypeCount {
+  font-size: 11px;
+  background: #e2e8f0;
+  color: #64748b;
+  padding: 1px 6px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.enumTypeBtnActive .enumTypeCount { background: #bae6fd; color: #0369a1; }
+
+.enumTypeChevron { color: #94a3b8; flex-shrink: 0; }
+
+.enumContent {
+  flex: 1;
+  overflow: hidden;
+  padding: 16px 20px;
+}
+
+.enumContentHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.enumContentTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--settings-text);
+}
+
+.enumEditRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

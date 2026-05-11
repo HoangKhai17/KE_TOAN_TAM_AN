@@ -5,6 +5,8 @@ import { createTask } from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
 import { listUsers } from '../../api/users'
 import { listTaskTypes } from '../../api/taskTypes'
+import { useEnumsStore } from '../../hooks/useEnums'
+import { PRIORITY_LABELS } from './taskUtils'
 import s from './tasks.module.css'
 
 export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initialCompanyId, lockCompany }) {
@@ -19,6 +21,9 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   const [fe, setFE]                 = useState({})
   const [error, setError]           = useState(null)
 
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const loadEnums  = useEnumsStore((st) => st.load)
+
   useEffect(() => {
     listCompanies({ limit: 200, status: 'active' })
       .then(({ companies: c }) => setCompanies(c)).catch(() => {})
@@ -26,7 +31,8 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       .then(({ users: u }) => setUsers(u)).catch(() => {})
     listTaskTypes({ isActive: true, limit: 200 })
       .then(({ taskTypes: t }) => setTaskTypes(t)).catch(() => {})
-  }, [])
+    loadEnums()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }))
 
@@ -131,10 +137,10 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         <div className={s.formGroup}>
           <label className={s.formLabel}>Ưu tiên</label>
           <select value={form.priority} onChange={set('priority')} className={s.formSelect}>
-            <option value="urgent">Khẩn cấp</option>
-            <option value="high">Cao</option>
-            <option value="medium">Trung bình</option>
-            <option value="low">Thấp</option>
+            {(getOptions('task_priority').length > 0
+              ? getOptions('task_priority')
+              : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
+            ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
           </select>
         </div>
 

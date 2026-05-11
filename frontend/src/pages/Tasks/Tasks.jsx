@@ -25,6 +25,7 @@ import {
   TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS,
   isTaskOverdue, fmtDate, progressPct,
 } from './taskUtils'
+import { useEnumsStore } from '../../hooks/useEnums'
 import s from './tasks.module.css'
 
 // ── Column dot class map ───────────────────────────────────────────────────────
@@ -41,17 +42,19 @@ const COL_DOT = {
 // ── Small shared components ───────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
+  const getLabel = useEnumsStore((st) => st.getLabel)
   return (
     <span className={`${s.statusBadge} ${s[STATUS_CSS[status]]}`}>
-      {STATUS_LABELS[status] ?? status}
+      {getLabel('task_status', status, STATUS_LABELS[status])}
     </span>
   )
 }
 
 function PriorityBadge({ priority }) {
+  const getLabel = useEnumsStore((st) => st.getLabel)
   return (
     <span className={`${s.priorityBadge} ${s[PRIORITY_CSS[priority]]}`}>
-      {PRIORITY_LABELS[priority] ?? priority}
+      {getLabel('task_priority', priority, PRIORITY_LABELS[priority])}
     </span>
   )
 }
@@ -187,12 +190,13 @@ function DraggableCard({ task, onOpen }) {
 
 function DroppableColumn({ status, tasks, onOpen }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
+  const getLabel = useEnumsStore((st) => st.getLabel)
 
   return (
     <div className={s.boardCol}>
       <div className={s.boardColHead}>
         <span className={`${s.boardColDot} ${COL_DOT[status]}`} />
-        <span className={s.boardColTitle}>{STATUS_LABELS[status]}</span>
+        <span className={s.boardColTitle}>{getLabel('task_status', status, STATUS_LABELS[status])}</span>
         <span className={s.boardColCount}>{tasks.length}</span>
       </div>
       <div
@@ -217,6 +221,7 @@ function DroppableColumn({ status, tasks, onOpen }) {
 function BoardView({ tasks, onStatusChange, onOpen }) {
   const [activeTask, setActiveTask] = useState(null)
   const addToast = useToastStore((state) => state.toast)
+  const getLabel = useEnumsStore((st) => st.getLabel)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -243,7 +248,7 @@ function BoardView({ tasks, onStatusChange, onOpen }) {
     if (src === dst) return
     const validTargets = STATUS_TRANSITIONS[src] ?? []
     if (!validTargets.includes(dst)) {
-      addToast(`Không thể chuyển từ "${STATUS_LABELS[src]}" sang "${STATUS_LABELS[dst]}"`, 'error')
+      addToast(`Không thể chuyển từ "${getLabel('task_status', src, STATUS_LABELS[src])}" sang "${getLabel('task_status', dst, STATUS_LABELS[dst])}"`, 'error')
       return
     }
     const task = tasks.find((t) => t.id === active.id)
@@ -515,6 +520,9 @@ export default function Tasks() {
   const navigate    = useNavigate()
   const currentUser = useAuthStore((state) => state.user)
   const addToast    = useToastStore((state) => state.toast)
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const getLabel   = useEnumsStore((st) => st.getLabel)
+  const loadEnums  = useEnumsStore((st) => st.load)
 
   // View
   const [view, setView] = useState('list')
@@ -554,11 +562,12 @@ export default function Tasks() {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // Load reference data
+  // Load reference data + enums
   useEffect(() => {
     listCompanies({ limit: 300, status: 'active' }).then(({ companies: c }) => setCompanies(c)).catch(() => {})
     listUsers({ role: 'staff', status: 'active', limit: 100 }).then(({ users: u }) => setStaffList(u)).catch(() => {})
-  }, [])
+    loadEnums()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load tasks
   useEffect(() => {
@@ -603,7 +612,7 @@ export default function Tasks() {
 
       const updated = await tasksApi.changeTaskStatus(task.id, body)
       setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
-      addToast(`Đã chuyển sang "${STATUS_LABELS[newStatus]}"`, 'success')
+      addToast(`Đã chuyển sang "${getLabel('task_status', newStatus, STATUS_LABELS[newStatus])}"`, 'success')
       setOnHoldTarget(null)
       setForceTarget(null)
     } catch (err) {
@@ -807,7 +816,10 @@ export default function Tasks() {
                 <label className={s.filterLabel}>Trạng thái</label>
                 <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
                   <option value="">Tất cả</option>
-                  {TASK_STATUSES.map((st) => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
+                  {(getOptions('task_status').length > 0
+                    ? getOptions('task_status')
+                    : TASK_STATUSES.map((k) => ({ key: k, label: STATUS_LABELS[k] }))
+                  ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                 </select>
               </div>
 
@@ -815,7 +827,10 @@ export default function Tasks() {
                 <label className={s.filterLabel}>Ưu tiên</label>
                 <select value={priorityFilter} onChange={(e) => { setPriorityFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
                   <option value="">Tất cả</option>
-                  {['urgent', 'high', 'medium', 'low'].map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+                  {(getOptions('task_priority').length > 0
+                    ? getOptions('task_priority')
+                    : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
+                  ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                 </select>
               </div>
 
@@ -823,8 +838,10 @@ export default function Tasks() {
                 <label className={s.filterLabel}>Nguồn</label>
                 <select value={sourceFilter} onChange={(e) => { setSourceFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
                   <option value="">Tất cả</option>
-                  <option value="auto">Tự động</option>
-                  <option value="manual">Thủ công</option>
+                  {(getOptions('task_source').length > 0
+                    ? getOptions('task_source')
+                    : [{ key: 'auto', label: 'Tự động' }, { key: 'manual', label: 'Thủ công' }]
+                  ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                 </select>
               </div>
 

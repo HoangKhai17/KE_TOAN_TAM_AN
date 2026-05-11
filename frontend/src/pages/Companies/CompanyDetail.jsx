@@ -21,6 +21,7 @@ import {
   STATUS_LABELS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS,
   isTaskOverdue, fmtDate as fmtTaskDate, progressPct,
 } from '../Tasks/taskUtils'
+import { useEnumsStore } from '../../hooks/useEnums'
 import ts from '../Tasks/tasks.module.css'
 import s from './companies.module.css'
 
@@ -68,6 +69,8 @@ export default function CompanyDetail() {
   const { id }    = useParams()
   const isAdmin   = useAuthStore((st) => st.user?.role === 'admin')
   const addToast  = useToastStore((st) => st.toast)
+  const getLabel  = useEnumsStore((st) => st.getLabel)
+  const loadEnums = useEnumsStore((st) => st.load)
 
   const [company, setCompany]   = useState(null)
   const [loading, setLoading]   = useState(true)
@@ -79,6 +82,8 @@ export default function CompanyDetail() {
   const [terminating, setTerminating]       = useState(false)
   const [showDelete, setShowDelete]         = useState(false)
   const [deleting, setDeleting]             = useState(false)
+
+  useEffect(() => { loadEnums() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false
@@ -189,7 +194,7 @@ export default function CompanyDetail() {
               <StatusPill status={company.status} />
               {company.businessType && (
                 <span className={`${s.heroBadge} ${s.heroBadgeType}`}>
-                  {BUSINESS_TYPE_LABELS[company.businessType] ?? company.businessType}
+                  {getLabel('business_type', company.businessType, BUSINESS_TYPE_LABELS[company.businessType] ?? company.businessType)}
                 </span>
               )}
             </div>
@@ -397,6 +402,7 @@ function OverviewTab({ company, isAdmin, onAssigned }) {
 // ── BusinessInfoCard ───────────────────────────────────────────────────────────
 
 function BusinessInfoCard({ company }) {
+  const getLabel = useEnumsStore((st) => st.getLabel)
   return (
     <div className={s.infoCard}>
       <div className={s.infoCardHeader}>
@@ -411,7 +417,7 @@ function BusinessInfoCard({ company }) {
         <div className={s.infoGrid}>
           <InfoField label="Tên công ty"        value={company.name} />
           <InfoField label="Mã số thuế"         value={company.taxCode} />
-          <InfoField label="Loại hình"          value={BUSINESS_TYPE_LABELS[company.businessType] ?? company.businessType} />
+          <InfoField label="Loại hình"          value={getLabel('business_type', company.businessType, BUSINESS_TYPE_LABELS[company.businessType] ?? company.businessType)} />
           <InfoField label="Ngành nghề"         value={company.industry} />
           <InfoField label="Địa chỉ"            value={company.address} fullWidth />
           <InfoField label="Ngày bắt đầu HĐ"   value={fmtDate(company.serviceStartDate)} />
@@ -825,6 +831,9 @@ function PlaceholderTab({ icon, iconBg, title, desc, phase, btnLabel, btnDisable
 function CompanyTasksTab({ company, onTaskCountChange }) {
   const navigate   = useNavigate()
   const addToast   = useToastStore((st) => st.toast)
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const getLabel   = useEnumsStore((st) => st.getLabel)
+  const loadEnums  = useEnumsStore((st) => st.load)
 
   const [tasks, setTasks]           = useState([])
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
@@ -844,6 +853,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 350)
     return () => clearTimeout(t)
   }, [searchInput])
+
+  useEffect(() => { loadEnums() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(() => {
     let cancelled = false
@@ -953,7 +964,10 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           style={{ height: 32, minWidth: 130 }}
         >
           <option value="">Tất cả trạng thái</option>
-          {STATUSES.map((st) => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
+          {(getOptions('task_status').length > 0
+            ? getOptions('task_status')
+            : STATUSES.map((k) => ({ key: k, label: STATUS_LABELS[k] }))
+          ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
         <select
           value={priorityFilter}
@@ -962,7 +976,10 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           style={{ height: 32, minWidth: 120 }}
         >
           <option value="">Tất cả ưu tiên</option>
-          {['urgent', 'high', 'medium', 'low'].map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+          {(getOptions('task_priority').length > 0
+            ? getOptions('task_priority')
+            : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
+          ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
         <button
           className={ts.qBtn}
@@ -1028,12 +1045,12 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                     </td>
                     <td>
                       <span className={`${ts.statusBadge} ${ts[STATUS_CSS[task.status]]}`}>
-                        {STATUS_LABELS[task.status]}
+                        {getLabel('task_status', task.status, STATUS_LABELS[task.status])}
                       </span>
                     </td>
                     <td>
                       <span className={`${ts.priorityBadge} ${ts[PRIORITY_CSS[task.priority]]}`}>
-                        {PRIORITY_LABELS[task.priority]}
+                        {getLabel('task_priority', task.priority, PRIORITY_LABELS[task.priority])}
                       </span>
                     </td>
                     <td style={{ fontSize: 12, color: overdue ? '#dc2626' : 'var(--color-text-soft)', fontWeight: overdue ? 700 : 400 }}>

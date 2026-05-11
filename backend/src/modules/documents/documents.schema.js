@@ -1,6 +1,7 @@
 const { z } = require('zod')
 
-const ALLOWED_CATEGORIES = ['ho_so', 'bao_cao', 'hop_dong', 'chung_tu', 'thue', 'bao_hiem', 'khac']
+// Values must match the document_category PostgreSQL enum in 001_create_enums.sql
+const ALLOWED_CATEGORIES = ['hop_dong', 'bao_cao_thue', 'so_sach', 'giay_phep', 'khac']
 
 const ALLOWED_MIME_TYPES = [
   'application/pdf',

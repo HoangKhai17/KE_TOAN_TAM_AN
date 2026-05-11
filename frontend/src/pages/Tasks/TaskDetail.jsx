@@ -14,6 +14,7 @@ import {
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
   fmtDate, fmtDateTime, isTaskOverdue,
 } from './taskUtils'
+import { useEnumsStore } from '../../hooks/useEnums'
 import s from './tasks.module.css'
 
 // ── Status action CSS map ─────────────────────────────────────────────────────
@@ -30,17 +31,19 @@ const SA_CLASS = {
 // ── Shared badges ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
+  const getLabel = useEnumsStore((st) => st.getLabel)
   return (
     <span className={`${s.statusBadge} ${s[STATUS_CSS[status]]}`}>
-      {STATUS_LABELS[status] ?? status}
+      {getLabel('task_status', status, STATUS_LABELS[status])}
     </span>
   )
 }
 
 function PriorityBadge({ priority }) {
+  const getLabel = useEnumsStore((st) => st.getLabel)
   return (
     <span className={`${s.priorityBadge} ${s[PRIORITY_CSS[priority]]}`}>
-      {PRIORITY_LABELS[priority] ?? priority}
+      {getLabel('task_priority', priority, PRIORITY_LABELS[priority])}
     </span>
   )
 }
@@ -83,6 +86,7 @@ function OnHoldModal({ onConfirm, onClose }) {
 
 function ForceModal({ newStatus, onConfirm, onClose }) {
   const [saving, setSaving] = useState(false)
+  const getLabel = useEnumsStore((st) => st.getLabel)
 
   async function go() {
     setSaving(true)
@@ -94,7 +98,7 @@ function ForceModal({ newStatus, onConfirm, onClose }) {
       <div className={s.miniDialog}>
         <h4 className={s.miniTitle}>Checklist chưa xong</h4>
         <p className={s.miniBody}>
-          Còn các bước chưa hoàn thành. Vẫn chuyển sang <strong>&ldquo;{STATUS_LABELS[newStatus]}&rdquo;</strong>?
+          Còn các bước chưa hoàn thành. Vẫn chuyển sang <strong>&ldquo;{getLabel('task_status', newStatus, STATUS_LABELS[newStatus])}&rdquo;</strong>?
         </p>
         <div className={s.miniActions}>
           <button onClick={onClose} className={s.btnSecondary} disabled={saving}>Huỷ</button>
@@ -511,6 +515,7 @@ function CommentsTab({ taskId }) {
 function ActivityTab({ taskId }) {
   const [logs, setLogs]     = useState([])
   const [loading, setLoading] = useState(true)
+  const getLabel = useEnumsStore((st) => st.getLabel)
 
   useEffect(() => {
     tasksApi.getTaskActivity(taskId).then(setLogs).catch(() => {}).finally(() => setLoading(false))
@@ -530,7 +535,7 @@ function ActivityTab({ taskId }) {
           <div className={s.activityContent}>
             <p className={s.activityText}>
               <strong>{log.actorName ?? 'Hệ thống'}</strong>{' '}
-              {log.action === 'status_changed' && `đổi trạng thái → ${STATUS_LABELS[log.newValue] ?? log.newValue}`}
+              {log.action === 'status_changed' && `đổi trạng thái → ${getLabel('task_status', log.newValue, STATUS_LABELS[log.newValue] ?? log.newValue)}`}
               {log.action === 'comment_added' && 'thêm bình luận'}
               {log.action === 'checklist_checked' && `đánh dấu hoàn thành bước "${log.meta?.stepText ?? ''}"`}
               {log.action === 'checklist_unchecked' && `bỏ hoàn thành bước "${log.meta?.stepText ?? ''}"`}
@@ -774,9 +779,12 @@ const TABS = [
 ]
 
 export default function TaskDetail() {
-  const { id }   = useParams()
-  const navigate = useNavigate()
-  const addToast = useToastStore((s) => s.toast)
+  const { id }    = useParams()
+  const navigate  = useNavigate()
+  const addToast  = useToastStore((s) => s.toast)
+  const getLabel  = useEnumsStore((st) => st.getLabel)
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const loadEnums  = useEnumsStore((st) => st.load)
 
   const [task, setTask]       = useState(null)
   const [loading, setLoading] = useState(true)
@@ -799,6 +807,8 @@ export default function TaskDetail() {
   // Checklist counts for tab badge
   const [clTotal, setClTotal] = useState(0)
   const [clDone, setClDone]   = useState(0)
+
+  useEffect(() => { loadEnums() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setLoading(true)
@@ -824,7 +834,7 @@ export default function TaskDetail() {
 
       const updated = await tasksApi.changeTaskStatus(id, body)
       setTask(updated)
-      addToast(`Đã chuyển sang "${STATUS_LABELS[newStatus]}"`, 'success')
+      addToast(`Đã chuyển sang "${getLabel('task_status', newStatus, STATUS_LABELS[newStatus])}"`, 'success')
       setOnHoldVisible(false)
       setForceVisible(false)
       setPendingStatus(null)
@@ -926,7 +936,7 @@ export default function TaskDetail() {
                 )}
                 {task.source && (
                   <span className={`${s.sourceBadge} ${task.source === 'auto' ? s.sourceAuto : s.sourceManual}`}>
-                    {SOURCE_LABELS[task.source] ?? task.source}
+                    {getLabel('task_source', task.source, SOURCE_LABELS[task.source] ?? task.source)}
                   </span>
                 )}
               </div>
@@ -974,13 +984,16 @@ export default function TaskDetail() {
           {transitions.length > 0 && (
             <div className={s.statusActions}>
               <span className={s.statusActionLabel}>Chuyển sang:</span>
-              {transitions.map((st) => (
+              {(getOptions('task_status').length > 0
+                ? getOptions('task_status').filter((o) => transitions.includes(o.key))
+                : transitions.map((k) => ({ key: k, label: STATUS_LABELS[k] }))
+              ).map((opt) => (
                 <button
-                  key={st}
-                  className={`${s.statusActionBtn} ${SA_CLASS[st] ?? ''}`}
-                  onClick={() => changeStatus(st)}
+                  key={opt.key}
+                  className={`${s.statusActionBtn} ${SA_CLASS[opt.key] ?? ''}`}
+                  onClick={() => changeStatus(opt.key)}
                 >
-                  {STATUS_LABELS[st]}
+                  {opt.label}
                 </button>
               ))}
             </div>
@@ -1111,7 +1124,7 @@ export default function TaskDetail() {
 
               <div className={s.infoRow}>
                 <span className={s.infoRowLabel}>Nguồn</span>
-                <span className={s.infoRowValue}>{SOURCE_LABELS[task.source] ?? task.source}</span>
+                <span className={s.infoRowValue}>{getLabel('task_source', task.source, SOURCE_LABELS[task.source] ?? task.source)}</span>
               </div>
 
               {task.periodLabel && (

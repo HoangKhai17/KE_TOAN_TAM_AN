@@ -4,7 +4,7 @@ import {
   Clock, Users, ListTodo, Building2, Bell, CalendarDays, ShieldAlert,
   Settings as SettingsIcon, Plus, Pencil, Save, KeyRound,
   Loader2, CheckCircle2, AlertCircle,
-  Search, Eye, EyeOff, UserX, UserCheck, Camera,
+  Search, Eye, EyeOff, UserX, UserCheck, Camera, Tag,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -14,6 +14,7 @@ import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
 import { BUSINESS_TYPE_LABELS } from '../Companies/Companies'
 import TaskTypesSection from './TaskTypesSection'
+import EnumManagementSection from './EnumManagementSection'
 import s from './settings.module.css'
 
 function getInitials(name) {
@@ -83,13 +84,14 @@ function AvatarUpload({ value, name, isAdmin, onChange }) {
 // ── Section list ──────────────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { key: 'timezone',       label: 'Múi giờ hệ thống',      icon: Clock,       dot: '#3b82f6', bg: '#eff6ff', iconColor: '#2563eb' },
-  { key: 'users',          label: 'Quản lý người dùng',     icon: Users,       dot: '#059669', bg: '#f0fdf4', iconColor: '#059669' },
-  { key: 'task-types',     label: 'Loại công việc',         icon: ListTodo,    dot: '#7c3aed', bg: '#f5f3ff', iconColor: '#7c3aed' },
-  { key: 'business-types', label: 'Loại hình doanh nghiệp', icon: Building2,   dot: '#d97706', bg: '#fffbeb', iconColor: '#d97706' },
-  { key: 'deadline',       label: 'Cảnh báo deadline',      icon: Bell,        dot: '#dc2626', bg: '#fef2f2', iconColor: '#dc2626' },
-  { key: 'templates',      label: 'Template định kỳ',       icon: CalendarDays,dot: '#0891b2', bg: '#ecfeff', iconColor: '#0891b2' },
-  { key: 'escalation',     label: 'Quy tắc Escalation',     icon: ShieldAlert, dot: '#4f46e5', bg: '#eef2ff', iconColor: '#4f46e5' },
+  { key: 'timezone',        label: 'Múi giờ hệ thống',      icon: Clock,       dot: '#3b82f6', bg: '#eff6ff', iconColor: '#2563eb' },
+  { key: 'users',           label: 'Quản lý người dùng',     icon: Users,       dot: '#059669', bg: '#f0fdf4', iconColor: '#059669' },
+  { key: 'task-types',      label: 'Loại công việc',         icon: ListTodo,    dot: '#7c3aed', bg: '#f5f3ff', iconColor: '#7c3aed' },
+  { key: 'enum-management', label: 'Danh mục hệ thống',      icon: Tag,         dot: '#0f766e', bg: '#f0fdfa', iconColor: '#0f766e' },
+  { key: 'business-types',  label: 'Loại hình doanh nghiệp', icon: Building2,   dot: '#d97706', bg: '#fffbeb', iconColor: '#d97706' },
+  { key: 'deadline',        label: 'Cảnh báo deadline',      icon: Bell,        dot: '#dc2626', bg: '#fef2f2', iconColor: '#dc2626' },
+  { key: 'templates',       label: 'Template định kỳ',       icon: CalendarDays,dot: '#0891b2', bg: '#ecfeff', iconColor: '#0891b2' },
+  { key: 'escalation',      label: 'Quy tắc Escalation',     icon: ShieldAlert, dot: '#4f46e5', bg: '#eef2ff', iconColor: '#4f46e5' },
 ]
 
 const TIMEZONES = [
@@ -179,13 +181,14 @@ export default function Settings() {
               </div>
             )}
 
-            {activeSection === 'timezone'       && <TimezoneSection />}
-            {activeSection === 'users'          && <UsersSection />}
-            {activeSection === 'task-types'     && <TaskTypesSection />}
-            {activeSection === 'business-types' && <BusinessTypesSection />}
-            {activeSection === 'deadline'       && <DeadlineSection />}
-            {activeSection === 'templates'      && <TemplatesSection />}
-            {activeSection === 'escalation'     && <EscalationSection />}
+            {activeSection === 'timezone'        && <TimezoneSection />}
+            {activeSection === 'users'           && <UsersSection />}
+            {activeSection === 'task-types'      && <TaskTypesSection />}
+            {activeSection === 'enum-management' && <EnumManagementSection />}
+            {activeSection === 'business-types'  && <BusinessTypesSection />}
+            {activeSection === 'deadline'        && <DeadlineSection />}
+            {activeSection === 'templates'       && <TemplatesSection />}
+            {activeSection === 'escalation'      && <EscalationSection />}
           </div>
         </div>
 

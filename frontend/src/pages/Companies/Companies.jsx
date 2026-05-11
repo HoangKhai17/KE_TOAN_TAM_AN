@@ -10,16 +10,17 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import { listUsers } from '../../api/users'
+import { useEnumsStore } from '../../hooks/useEnums'
 import s from './companies.module.css'
 
-// ── Constants ──────────────────────────────────────────────────────────────────
+// ── Constants (fallbacks while enum API loads) ─────────────────────────────────
 
 export const BUSINESS_TYPE_LABELS = {
-  TNHH:      'Công ty TNHH',
-  CP:         'Công ty Cổ phần',
-  HKD:        'Hộ kinh doanh',
-  DN_TU_NHAN:'Doanh nghiệp tư nhân',
-  KHAC:       'Khác',
+  TNHH:       'Công ty TNHH',
+  CP:          'Công ty Cổ phần',
+  HKD:         'Hộ kinh doanh',
+  DN_TU_NHAN: 'Doanh nghiệp tư nhân',
+  KHAC:        'Khác',
 }
 
 const STATUS_LABELS = {
@@ -129,6 +130,9 @@ export default function Companies() {
   const navigate  = useNavigate()
   const isAdmin   = useAuthStore((s) => s.user?.role === 'admin')
   const addToast  = useToastStore((st) => st.toast)
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const getLabel   = useEnumsStore((st) => st.getLabel)
+  const loadEnums  = useEnumsStore((st) => st.load)
 
   const [companies, setCompanies]   = useState([])
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 })
@@ -165,12 +169,13 @@ export default function Companies() {
   // Reset page on filter/limit change
   useEffect(() => { setPage(1) }, [statusFilter, btFilter, staffFilter, limit])
 
-  // Load staff for filter
+  // Load staff for filter + enums
   useEffect(() => {
     listUsers({ role: 'staff', status: 'active', limit: 100 })
       .then(({ users }) => setStaffList(users))
       .catch(() => {})
-  }, [])
+    loadEnums()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch companies
   useEffect(() => {
@@ -280,7 +285,10 @@ export default function Companies() {
               <label className={s.filterFieldLabel}>Trạng thái HĐ</label>
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={s.filterSelect}>
                 <option value="">Tất cả</option>
-                {COMPANY_STATUS_OPTIONS.map(({ value, label }) => (
+                {(getOptions('company_status').length > 0
+                  ? getOptions('company_status').map((o) => ({ value: o.key, label: o.label }))
+                  : COMPANY_STATUS_OPTIONS
+                ).map(({ value, label }) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
@@ -290,7 +298,10 @@ export default function Companies() {
               <label className={s.filterFieldLabel}>Loại hình</label>
               <select value={btFilter} onChange={(e) => setBtFilter(e.target.value)} className={s.filterSelect}>
                 <option value="">Tất cả</option>
-                {BUSINESS_TYPE_OPTIONS.map(({ value, label }) => (
+                {(getOptions('business_type').length > 0
+                  ? getOptions('business_type').map((o) => ({ value: o.key, label: o.label }))
+                  : BUSINESS_TYPE_OPTIONS
+                ).map(({ value, label }) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
@@ -323,13 +334,13 @@ export default function Companies() {
               <div className={s.filterChips}>
                 {statusFilter && (
                   <span className={s.filterChip}>
-                    Trạng thái: {STATUS_LABELS[statusFilter]}
+                    Trạng thái: {getLabel('company_status', statusFilter, STATUS_LABELS[statusFilter])}
                     <button className={s.filterChipRemove} onClick={() => setStatusFilter('')}>×</button>
                   </span>
                 )}
                 {btFilter && (
                   <span className={s.filterChip}>
-                    Loại hình: {BUSINESS_TYPE_LABELS[btFilter]}
+                    Loại hình: {getLabel('business_type', btFilter, BUSINESS_TYPE_LABELS[btFilter])}
                     <button className={s.filterChipRemove} onClick={() => setBtFilter('')}>×</button>
                   </span>
                 )}
@@ -497,7 +508,8 @@ export default function Companies() {
 // ── CompanyRow ─────────────────────────────────────────────────────────────────
 
 function CompanyRow({ company, isAdmin, onClick, onDelete }) {
-  const staff = company.assignedStaff
+  const staff    = company.assignedStaff
+  const getLabel = useEnumsStore((st) => st.getLabel)
 
   return (
     <tr onClick={onClick}>
@@ -518,7 +530,7 @@ function CompanyRow({ company, isAdmin, onClick, onDelete }) {
             <div className={s.companyName}>{company.name}</div>
             {(company.industry || company.businessType) && (
               <div className={s.companyMeta}>
-                {company.industry || BUSINESS_TYPE_LABELS[company.businessType]}
+                {company.industry || getLabel('business_type', company.businessType, BUSINESS_TYPE_LABELS[company.businessType])}
               </div>
             )}
           </div>
@@ -635,14 +647,14 @@ function DeleteCompanyModal({ company, deleting, onClose, onConfirm }) {
             <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
             <span>
               <strong>{company.name}</strong> đang có <strong>{company.taskOpenCount + company.taskOverdueCount} công việc</strong> chưa hoàn thành.
-              Không thể xoá công ty đã có hoạt động — hãy dùng chức năng <strong>"Kết thúc HĐ"</strong> trên trang chi tiết để lưu giữ dữ liệu.
+              Không thể xoá công ty đã có hoạt động — hãy dùng chức năng <strong>&ldquo;Kết thúc HĐ&rdquo;</strong> trên trang chi tiết để lưu giữ dữ liệu.
             </span>
           </div>
         ) : (
           <div className={s.terminateWarn} style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
             <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
             <span>
-              Bạn sắp <strong>xoá vĩnh viễn</strong> công ty <strong>"{company.name}"</strong>.
+              Bạn sắp <strong>xoá vĩnh viễn</strong> công ty <strong>&ldquo;{company.name}&rdquo;</strong>.
               Hành động này không thể hoàn tác. Chỉ xoá được nếu công ty chưa có công việc hoặc lịch sử phân công.
             </span>
           </div>

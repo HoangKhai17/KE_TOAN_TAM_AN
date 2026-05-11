@@ -161,6 +161,9 @@ function createApp() {
   // Phase 11 — Documents / OneDrive (nested under company)
   app.use('/api/companies/:companyId/documents', require('./modules/documents/documents.router'))
 
+  // Enum metadata
+  app.use('/api/enums', require('./modules/enums/enums.router'))
+
   // Phase 8 — Scheduler admin endpoints
   app.use('/api/admin/scheduler', require('./modules/admin/scheduler.router'))
 
