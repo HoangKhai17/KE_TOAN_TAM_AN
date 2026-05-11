@@ -150,14 +150,17 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         </div>
 
         <div className={s.formGroup}>
-          <label className={s.formLabel}>SLA (số ngày)</label>
+          <label className={s.formLabel}>SLA chuẩn (ngày)</label>
           <input
             type="number" min="1" max="365"
             value={form.slaDays}
             onChange={set('slaDays')}
             className={s.formInput}
-            placeholder="Số ngày SLA..."
+            placeholder="Ví dụ: 7"
           />
+          <p style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 3 }}>
+            Số ngày tối đa để hoàn thành theo chuẩn dịch vụ
+          </p>
         </div>
 
         <div className={`${s.formGroup} ${s.span2}`}>

@@ -8,10 +8,12 @@ import {
 import {
   Plus, Search, RotateCcw, List, Columns, Calendar,
   ChevronLeft, ChevronRight, Filter, ClipboardList, Check,
+  Trash2, Loader2, X,
 } from 'lucide-react'
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
   isSameMonth, format, addMonths, subMonths, isToday,
+  startOfYear, endOfYear, startOfQuarter, endOfQuarter,
 } from 'date-fns'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
@@ -22,13 +24,61 @@ import { listCompanies } from '../../api/companies'
 import { listUsers } from '../../api/users'
 import TaskFormModal from './TaskFormModal'
 import {
-  TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS,
+  TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
+  PRIORITY_LABELS, PRIORITY_CSS,
   isTaskOverdue, fmtDate, progressPct,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import s from './tasks.module.css'
 
-// ── Column dot class map ───────────────────────────────────────────────────────
+// ── Date preset helpers ───────────────────────────────────────────────────────
+
+const DATE_PRESETS = [
+  { key: 'today',        label: 'Hôm nay' },
+  { key: 'this_week',    label: 'Tuần này' },
+  { key: 'this_month',   label: 'Tháng này' },
+  { key: 'this_quarter', label: 'Quý này' },
+  { key: 'this_year',    label: 'Năm nay' },
+  { key: 'custom',       label: 'Tùy chỉnh' },
+]
+
+function getPresetRange(preset) {
+  const today = new Date()
+  const fmt   = (d) => format(d, 'yyyy-MM-dd')
+  switch (preset) {
+    case 'today':
+      return { from: fmt(today), to: fmt(today) }
+    case 'this_week':
+      return {
+        from: fmt(startOfWeek(today, { weekStartsOn: 1 })),
+        to:   fmt(endOfWeek(today,   { weekStartsOn: 1 })),
+      }
+    case 'this_month':
+      return { from: fmt(startOfMonth(today)), to: fmt(endOfMonth(today)) }
+    case 'this_quarter':
+      return { from: fmt(startOfQuarter(today)), to: fmt(endOfQuarter(today)) }
+    case 'this_year':
+      return { from: fmt(startOfYear(today)), to: fmt(endOfYear(today)) }
+    default:
+      return { from: '', to: '' }
+  }
+}
+
+function presetChipLabel(preset, from, to) {
+  const today = new Date()
+  if (preset === 'today')        return 'Hôm nay'
+  if (preset === 'this_week')    return 'Tuần này'
+  if (preset === 'this_month')   return `Tháng ${format(today, 'MM/yyyy')}`
+  if (preset === 'this_quarter') return 'Quý này'
+  if (preset === 'this_year')    return `Năm ${format(today, 'yyyy')}`
+  if (from && to) {
+    const fmtD = (s) => s.split('-').reverse().join('/')
+    return `${fmtD(from)} – ${fmtD(to)}`
+  }
+  return 'Tùy chỉnh'
+}
+
+// ── Column dot class map ──────────────────────────────────────────────────────
 
 const COL_DOT = {
   pending:        s.dotPending,
@@ -39,7 +89,7 @@ const COL_DOT = {
   completed:      s.dotCompleted,
 }
 
-// ── Small shared components ───────────────────────────────────────────────────
+// ── Shared badges ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
   const getLabel = useEnumsStore((st) => st.getLabel)
@@ -59,6 +109,34 @@ function PriorityBadge({ priority }) {
   )
 }
 
+// ── DeleteTaskModal ───────────────────────────────────────────────────────────
+
+function DeleteTaskModal({ task, deleting, onClose, onConfirm }) {
+  return (
+    <div className={s.miniOverlay}>
+      <div className={s.miniDialog}>
+        <h4 className={s.miniTitle}>Xóa công việc</h4>
+        <p className={s.miniBody}>
+          Bạn có chắc chắn muốn xóa công việc{' '}
+          <strong>&ldquo;{task.title}&rdquo;</strong>?{' '}
+          Hành động này không thể hoàn tác.
+        </p>
+        <div className={s.miniActions}>
+          <button onClick={onClose} className={s.btnSecondary} disabled={deleting}>
+            Hủy bỏ
+          </button>
+          <button onClick={onConfirm} disabled={deleting} className={s.btnDangerSolid}>
+            {deleting
+              ? <><Loader2 size={13} className={s.spinIcon} /> Đang xóa...</>
+              : <><Trash2 size={13} /> Xóa</>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── OnHoldModal ───────────────────────────────────────────────────────────────
 
 function OnHoldModal({ task, onConfirm, onClose }) {
@@ -69,9 +147,7 @@ function OnHoldModal({ task, onConfirm, onClose }) {
     setSaving(true)
     try {
       await onConfirm(task, 'on_hold', { reason: reason.trim() || null })
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   return (
@@ -106,11 +182,7 @@ function ForceConfirmModal({ task, newStatus, onConfirm, onClose }) {
 
   async function handleConfirm() {
     setSaving(true)
-    try {
-      await onConfirm()
-    } finally {
-      setSaving(false)
-    }
+    try { await onConfirm() } finally { setSaving(false) }
   }
 
   return (
@@ -132,9 +204,9 @@ function ForceConfirmModal({ task, newStatus, onConfirm, onClose }) {
   )
 }
 
-// ── Board card content (shared between draggable + overlay) ───────────────────
+// ── Board card inner ──────────────────────────────────────────────────────────
 
-function BoardCardInner({ task }) {
+function BoardCardInner({ task, isAdmin, onDelete }) {
   const pct     = progressPct(task)
   const overdue = isTaskOverdue(task)
   return (
@@ -160,13 +232,24 @@ function BoardCardInner({ task }) {
           <span className={s.boardCardProgressText}>{pct}%</span>
         </div>
       )}
+      {isAdmin && onDelete && (
+        <div className={s.boardCardActions}>
+          <button
+            className={s.boardCardDeleteBtn}
+            onClick={(e) => { e.stopPropagation(); onDelete(task) }}
+            title="Xóa công việc"
+          >
+            <Trash2 size={11} />
+          </button>
+        </div>
+      )}
     </>
   )
 }
 
 // ── DraggableCard ─────────────────────────────────────────────────────────────
 
-function DraggableCard({ task, onOpen }) {
+function DraggableCard({ task, onOpen, isAdmin, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { status: task.status },
@@ -181,14 +264,14 @@ function DraggableCard({ task, onOpen }) {
       style={transform ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` } : undefined}
       onClick={() => !isDragging && onOpen(task.id)}
     >
-      <BoardCardInner task={task} />
+      <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} />
     </div>
   )
 }
 
 // ── DroppableColumn ───────────────────────────────────────────────────────────
 
-function DroppableColumn({ status, tasks, onOpen }) {
+function DroppableColumn({ status, tasks, onOpen, isAdmin, onDelete }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
   const getLabel = useEnumsStore((st) => st.getLabel)
 
@@ -199,12 +282,9 @@ function DroppableColumn({ status, tasks, onOpen }) {
         <span className={s.boardColTitle}>{getLabel('task_status', status, STATUS_LABELS[status])}</span>
         <span className={s.boardColCount}>{tasks.length}</span>
       </div>
-      <div
-        ref={setNodeRef}
-        className={`${s.boardCards} ${isOver ? s.boardCardsOver : ''}`}
-      >
+      <div ref={setNodeRef} className={`${s.boardCards} ${isOver ? s.boardCardsOver : ''}`}>
         {tasks.map((t) => (
-          <DraggableCard key={t.id} task={t} onOpen={onOpen} />
+          <DraggableCard key={t.id} task={t} onOpen={onOpen} isAdmin={isAdmin} onDelete={onDelete} />
         ))}
         {tasks.length === 0 && (
           <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 11, padding: '16px 0' }}>
@@ -218,7 +298,7 @@ function DroppableColumn({ status, tasks, onOpen }) {
 
 // ── BoardView ─────────────────────────────────────────────────────────────────
 
-function BoardView({ tasks, onStatusChange, onOpen }) {
+function BoardView({ tasks, onStatusChange, onOpen, isAdmin, onDelete }) {
   const [activeTask, setActiveTask] = useState(null)
   const addToast = useToastStore((state) => state.toast)
   const getLabel = useEnumsStore((st) => st.getLabel)
@@ -230,9 +310,7 @@ function BoardView({ tasks, onStatusChange, onOpen }) {
   const byStatus = useMemo(() => {
     const map = {}
     for (const st of TASK_STATUSES) map[st] = []
-    for (const t of tasks) {
-      if (map[t.status]) map[t.status].push(t)
-    }
+    for (const t of tasks) { if (map[t.status]) map[t.status].push(t) }
     return map
   }, [tasks])
 
@@ -248,7 +326,10 @@ function BoardView({ tasks, onStatusChange, onOpen }) {
     if (src === dst) return
     const validTargets = STATUS_TRANSITIONS[src] ?? []
     if (!validTargets.includes(dst)) {
-      addToast(`Không thể chuyển từ "${getLabel('task_status', src, STATUS_LABELS[src])}" sang "${getLabel('task_status', dst, STATUS_LABELS[dst])}"`, 'error')
+      addToast(
+        `Không thể chuyển từ "${getLabel('task_status', src, STATUS_LABELS[src])}" sang "${getLabel('task_status', dst, STATUS_LABELS[dst])}"`,
+        'error'
+      )
       return
     }
     const task = tasks.find((t) => t.id === active.id)
@@ -269,13 +350,15 @@ function BoardView({ tasks, onStatusChange, onOpen }) {
             status={status}
             tasks={byStatus[status] ?? []}
             onOpen={onOpen}
+            isAdmin={isAdmin}
+            onDelete={onDelete}
           />
         ))}
       </div>
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
           <div className={`${s.boardCard} ${s.boardCardOverlay}`}>
-            <BoardCardInner task={activeTask} />
+            <BoardCardInner task={activeTask} isAdmin={false} onDelete={null} />
           </div>
         ) : null}
       </DragOverlay>
@@ -295,11 +378,12 @@ const CAL_PRIORITY_CLASS = {
 }
 
 function CalendarView({ tasks, onOpen }) {
-  const [calMonth, setCalMonth] = useState(new Date())
+  const [calMonth, setCalMonth]   = useState(new Date())
+  const [dayPopover, setDayPopover] = useState(null) // { date, tasks }
 
   const days = useMemo(() => {
     const start = startOfWeek(startOfMonth(calMonth), { weekStartsOn: 1 })
-    const end   = endOfWeek(endOfMonth(calMonth),   { weekStartsOn: 1 })
+    const end   = endOfWeek(endOfMonth(calMonth),     { weekStartsOn: 1 })
     return eachDayOfInterval({ start, end })
   }, [calMonth])
 
@@ -360,22 +444,75 @@ function CalendarView({ tasks, onOpen }) {
                 </span>
               ))}
               {dayTasks.length > 3 && (
-                <span className={s.calMore}>+{dayTasks.length - 3} thêm</span>
+                <button
+                  className={s.calMoreBtn}
+                  onClick={(e) => { e.stopPropagation(); setDayPopover({ date: key, tasks: dayTasks }) }}
+                >
+                  +{dayTasks.length - 3} thêm
+                </button>
               )}
             </div>
           )
         })}
       </div>
+
+      {/* Day popover */}
+      {dayPopover && (
+        <div className={s.miniOverlay} onClick={() => setDayPopover(null)}>
+          <div className={s.calDayPopover} onClick={(e) => e.stopPropagation()}>
+            <div className={s.calDayPopoverHead}>
+              <span style={{ fontWeight: 700, color: 'var(--color-text)' }}>
+                {dayPopover.date.split('-').reverse().join('/')}
+              </span>
+              <span style={{ color: 'var(--color-muted)', fontSize: 12, marginLeft: 6 }}>
+                ({dayPopover.tasks.length} công việc)
+              </span>
+              <button
+                className={s.btnIcon}
+                style={{ marginLeft: 'auto' }}
+                onClick={() => setDayPopover(null)}
+              >
+                <X size={13} />
+              </button>
+            </div>
+            <div className={s.calDayPopoverList}>
+              {dayPopover.tasks.map((t) => (
+                <div
+                  key={t.id}
+                  className={s.calDayPopoverItem}
+                  onClick={() => { onOpen(t.id); setDayPopover(null) }}
+                >
+                  <span className={`${s.calTask} ${calClass(t)}`} style={{ flexShrink: 0 }}>
+                    {STATUS_LABELS[t.status]}
+                  </span>
+                  <span className={s.calDayPopoverTitle}>{t.title}</span>
+                  {t.companyName && (
+                    <span className={s.calDayPopoverCompany}>{t.companyName}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ── ListView ──────────────────────────────────────────────────────────────────
 
-function ListView({ tasks, loading, pagination, page, onPageChange, onOpen, selectedIds, onToggleSelect, onSelectAll }) {
+function ListView({
+  tasks, loading, pagination, page, pageSize,
+  onPageChange, onPageSizeChange, onOpen,
+  selectedIds, onToggleSelect, onSelectAll,
+  onStatusChange, onPriorityChange, onDueDateChange, onDelete,
+  isAdmin,
+}) {
+  const getLabel    = useEnumsStore((st) => st.getLabel)
   const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.has(t.id))
-  const from = pagination.total === 0 ? 0 : (page - 1) * 20 + 1
-  const to   = Math.min(page * 20, pagination.total)
+  const from = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
+  const to   = Math.min(page * pageSize, pagination.total)
+  const colSpan = isAdmin ? 8 : 7
 
   function pageWindow() {
     const total = pagination.totalPages ?? 1
@@ -404,6 +541,7 @@ function ListView({ tasks, loading, pagination, page, onPageChange, onOpen, sele
               <th className={s.th}>Hết hạn</th>
               <th className={s.th}>Tiến độ</th>
               <th className={s.th}>Giao cho</th>
+              {isAdmin && <th className={s.th} style={{ width: 44 }} />}
             </tr>
           </thead>
           <tbody>
@@ -416,11 +554,12 @@ function ListView({ tasks, loading, pagination, page, onPageChange, onOpen, sele
                       <div style={{ width: w, height: 11, background: '#f1f5f9', borderRadius: 4, animation: 'app-pulse 1.5s ease-in-out infinite' }} />
                     </td>
                   ))}
+                  {isAdmin && <td className={s.td} />}
                 </tr>
               ))
             ) : tasks.length === 0 ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={colSpan}>
                   <div className={s.emptyBox}>
                     <div className={s.emptyIcon}><ClipboardList size={32} /></div>
                     <p className={s.emptyTitle}>Không có công việc</p>
@@ -448,13 +587,53 @@ function ListView({ tasks, loading, pagination, page, onPageChange, onOpen, sele
                     <div className={`${s.taskTitle} ${overdue ? s.taskTitleOverdue : ''}`}>{t.title}</div>
                     {t.companyName && <div className={s.taskMeta}>{t.companyName}</div>}
                   </td>
-                  <td className={s.td}><StatusBadge status={t.status} /></td>
-                  <td className={s.td}><PriorityBadge priority={t.priority} /></td>
-                  <td className={s.td}>
-                    <span className={overdue ? s.dueDateOverdue : s.dueDateNormal}>
-                      {fmtDate(t.dueDate)}
-                    </span>
+
+                  {/* Quick edit: status */}
+                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                    <select
+                      value={t.status}
+                      onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
+                      className={s.qeSelect}
+                      title="Đổi trạng thái"
+                    >
+                      <option value={t.status}>
+                        {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
+                      </option>
+                      {(STATUS_TRANSITIONS[t.status] ?? []).map((st) => (
+                        <option key={st} value={st}>
+                          {getLabel('task_status', st, STATUS_LABELS[st])}
+                        </option>
+                      ))}
+                    </select>
                   </td>
+
+                  {/* Quick edit: priority */}
+                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                    <select
+                      value={t.priority}
+                      onChange={(e) => onPriorityChange(t, e.target.value)}
+                      className={s.qeSelect}
+                      title="Đổi ưu tiên"
+                    >
+                      {['urgent', 'high', 'medium', 'low'].map((p) => (
+                        <option key={p} value={p}>
+                          {getLabel('task_priority', p, PRIORITY_LABELS[p])}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+
+                  {/* Quick edit: due date */}
+                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="date"
+                      value={t.dueDate?.slice(0, 10) ?? ''}
+                      onChange={(e) => onDueDateChange(t, e.target.value)}
+                      className={`${s.qeDate} ${overdue ? s.qeDateOverdue : ''}`}
+                      title="Đổi ngày hết hạn"
+                    />
+                  </td>
+
                   <td className={s.td}>
                     {pct !== null ? (
                       <div className={s.progressWrap}>
@@ -468,6 +647,7 @@ function ListView({ tasks, loading, pagination, page, onPageChange, onOpen, sele
                       </div>
                     ) : <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>—</span>}
                   </td>
+
                   <td className={s.td}>
                     {t.assignedToName ? (
                       <div className={s.assignedCell}>
@@ -478,6 +658,18 @@ function ListView({ tasks, loading, pagination, page, onPageChange, onOpen, sele
                       <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>—</span>
                     )}
                   </td>
+
+                  {isAdmin && (
+                    <td className={s.tdAction} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className={s.btnDeleteRow}
+                        onClick={() => onDelete(t)}
+                        title="Xóa công việc"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               )
             })}
@@ -487,9 +679,22 @@ function ListView({ tasks, loading, pagination, page, onPageChange, onOpen, sele
 
       {/* Pagination */}
       <div className={s.pagination}>
-        <span className={s.paginationInfo}>
-          {loading ? '...' : `${from}–${to} / ${pagination.total} công việc`}
-        </span>
+        <div className={s.paginationLeft}>
+          <span className={s.paginationInfo}>
+            {loading ? '...' : `${from}–${to} / ${pagination.total} công việc`}
+          </span>
+          <div className={s.pageSizeBtns}>
+            {[20, 50, 100].map((n) => (
+              <button
+                key={n}
+                className={`${s.pageSizeBtn} ${pageSize === n ? s.pageSizeBtnActive : ''}`}
+                onClick={() => onPageSizeChange(n)}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className={s.paginationBtns}>
           <button className={s.pageBtn} onClick={() => onPageChange(1)} disabled={page === 1}>«</button>
           <button className={s.pageBtn} onClick={() => onPageChange(page - 1)} disabled={page === 1}>‹</button>
@@ -520,14 +725,21 @@ export default function Tasks() {
   const navigate    = useNavigate()
   const currentUser = useAuthStore((state) => state.user)
   const addToast    = useToastStore((state) => state.toast)
-  const getOptions = useEnumsStore((st) => st.getOptions)
-  const getLabel   = useEnumsStore((st) => st.getLabel)
-  const loadEnums  = useEnumsStore((st) => st.load)
+  const getOptions  = useEnumsStore((st) => st.getOptions)
+  const getLabel    = useEnumsStore((st) => st.getLabel)
+  const loadEnums   = useEnumsStore((st) => st.load)
+  const isAdmin     = currentUser?.role === 'admin'
 
   // View
   const [view, setView] = useState('list')
 
-  // Filters
+  // Date preset
+  const [datePreset, setDatePreset] = useState('this_month')
+  const initRange = useMemo(() => getPresetRange('this_month'), [])
+  const [dueDateFrom, setDueDateFrom] = useState(initRange.from)
+  const [dueDateTo,   setDueDateTo]   = useState(initRange.to)
+
+  // Other filters
   const [searchInput, setSearchInput]       = useState('')
   const [search, setSearch]                 = useState('')
   const [companyFilter, setCompanyFilter]   = useState('')
@@ -538,13 +750,16 @@ export default function Tasks() {
   const [isOverdue, setIsOverdue]           = useState(false)
   const [showFilter, setShowFilter]         = useState(false)
 
+  // Pagination
+  const [pageSize, setPageSize] = useState(20)
+  const [page, setPage]         = useState(1)
+
   // Data
   const [tasks, setTasks]           = useState([])
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 })
-  const [page, setPage]             = useState(1)
   const [loading, setLoading]       = useState(true)
 
-  // Reference data for filters
+  // Reference data
   const [companies, setCompanies] = useState([])
   const [staffList, setStaffList] = useState([])
 
@@ -552,6 +767,8 @@ export default function Tasks() {
   const [showCreate, setShowCreate]     = useState(false)
   const [onHoldTarget, setOnHoldTarget] = useState(null)
   const [forceTarget, setForceTarget]   = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting]         = useState(false)
 
   // Bulk
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -561,6 +778,11 @@ export default function Tasks() {
     const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 350)
     return () => clearTimeout(t)
   }, [searchInput])
+
+  // Reset page on filter changes
+  useEffect(() => {
+    setPage(1)
+  }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter])
 
   // Load reference data + enums
   useEffect(() => {
@@ -574,17 +796,19 @@ export default function Tasks() {
     let cancelled = false
     setLoading(true)
     const params = {
-      search:      search        || undefined,
-      companyId:   companyFilter || undefined,
-      assignedTo:  staffFilter   || undefined,   // ← backend dùng assignedTo
-      status:      statusFilter  || undefined,
+      search:      search         || undefined,
+      companyId:   companyFilter  || undefined,
+      assignedTo:  staffFilter    || undefined,
+      status:      statusFilter   || undefined,
       priority:    priorityFilter || undefined,
-      source:      sourceFilter  || undefined,
-      isOverdue:   isOverdue     ? true : undefined,
-      limit:       view === 'list' ? 20 : 500,
+      source:      sourceFilter   || undefined,
+      isOverdue:   isOverdue      ? true : undefined,
+      dueDateFrom: dueDateFrom    || undefined,
+      dueDateTo:   dueDateTo      || undefined,
+      limit:       view === 'list' ? pageSize : 500,
       page:        view === 'list' ? page : 1,
-      sortBy:      'createdAt',
-      sortDir:     'desc',
+      sortBy:      'due_date',
+      sortDir:     'asc',
     }
     tasksApi.listTasks(params)
       .then(({ tasks: t, pagination: p }) => {
@@ -597,9 +821,10 @@ export default function Tasks() {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, page, view])
+  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view])
 
-  // Status change handler — maps internal state keys to backend field names
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+
   async function handleStatusChange(task, newStatus, extra = {}) {
     if (newStatus === 'on_hold' && !('reason' in extra)) {
       setOnHoldTarget({ task })
@@ -630,15 +855,68 @@ export default function Tasks() {
     }
   }
 
+  async function handlePriorityChange(task, priority) {
+    try {
+      const updated = await tasksApi.updateTask(task.id, { priority })
+      setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
+    } catch {
+      addToast('Không thể cập nhật ưu tiên', 'error')
+    }
+  }
+
+  async function handleDueDateChange(task, dueDate) {
+    try {
+      const updated = await tasksApi.updateTask(task.id, { dueDate: dueDate || null })
+      setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
+    } catch {
+      addToast('Không thể cập nhật ngày hết hạn', 'error')
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await tasksApi.deleteTask(deleteTarget.id)
+      addToast(`Đã xoá "${deleteTarget.title}"`, 'success')
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(deleteTarget.id); return n })
+      const remaining = tasks.filter((t) => t.id !== deleteTarget.id)
+      setTasks(remaining)
+      setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }))
+      if (remaining.length === 0 && page > 1) setPage((p) => p - 1)
+      setDeleteTarget(null)
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể xoá công việc', 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  function applyPreset(preset) {
+    setDatePreset(preset)
+    if (preset !== 'custom') {
+      const { from, to } = getPresetRange(preset)
+      setDueDateFrom(from)
+      setDueDateTo(to)
+    }
+    setPage(1)
+  }
+
   function resetFilters() {
     setSearchInput(''); setSearch('')
     setCompanyFilter(''); setStaffFilter('')
     setStatusFilter(''); setPriorityFilter('')
     setSourceFilter(''); setIsOverdue(false)
+    const range = getPresetRange('this_month')
+    setDatePreset('this_month')
+    setDueDateFrom(range.from)
+    setDueDateTo(range.to)
     setPage(1)
   }
 
-  const activeFilterCount = [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter].filter(Boolean).length + (isOverdue ? 1 : 0)
+  const activeFilterCount = [
+    search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter,
+  ].filter(Boolean).length + (isOverdue ? 1 : 0)
 
   function toggleSelect(id) {
     setSelectedIds((prev) => {
@@ -684,6 +962,8 @@ export default function Tasks() {
     navigate(`/tasks/${task.id}`)
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────────
+
   return (
     <AppLayout>
       <div className={s.page}>
@@ -699,10 +979,10 @@ export default function Tasks() {
 
           <div className={s.toolbarRight}>
             <div className={s.viewSwitch}>
-              <button className={`${s.viewBtn} ${view === 'list' ? s.viewBtnActive : ''}`} onClick={() => setView('list')}>
+              <button className={`${s.viewBtn} ${view === 'list'     ? s.viewBtnActive : ''}`} onClick={() => setView('list')}>
                 <List size={13} /> Danh sách
               </button>
-              <button className={`${s.viewBtn} ${view === 'board' ? s.viewBtnActive : ''}`} onClick={() => setView('board')}>
+              <button className={`${s.viewBtn} ${view === 'board'    ? s.viewBtnActive : ''}`} onClick={() => setView('board')}>
                 <Columns size={13} /> Board
               </button>
               <button className={`${s.viewBtn} ${view === 'calendar' ? s.viewBtnActive : ''}`} onClick={() => setView('calendar')}>
@@ -728,8 +1008,28 @@ export default function Tasks() {
           </div>
         </div>
 
-        {/* ── Quick filters (separate row) ── */}
+        {/* ── Quick filters ── */}
         <div className={s.quickFilters}>
+          {/* Date presets */}
+          <span className={s.qLabel}>Thời gian:</span>
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p.key}
+              className={`${s.qBtn} ${datePreset === p.key ? s.qBtnActive : ''}`}
+              onClick={() => applyPreset(p.key)}
+            >
+              {p.label}
+            </button>
+          ))}
+
+          {/* Active date chip */}
+          <span className={s.dateChip}>
+            {presetChipLabel(datePreset, dueDateFrom, dueDateTo)}
+          </span>
+
+          <span className={s.qDivider} />
+
+          {/* Status & role quick filters */}
           <span className={s.qLabel}>Nhanh:</span>
           <button
             className={`${s.qBtn} ${isOverdue ? s.qBtnActive : ''}`}
@@ -757,14 +1057,37 @@ export default function Tasks() {
           >
             Đang thực hiện
           </button>
+
           {activeFilterCount > 0 && (
             <button className={s.qResetBtn} onClick={resetFilters}>
-              <RotateCcw size={11} /> Xoá lọc ({activeFilterCount})
+              <RotateCcw size={11} /> Đặt lại ({activeFilterCount})
             </button>
           )}
         </div>
 
-        {/* ── Filter bar ── */}
+        {/* ── Custom date range ── */}
+        {datePreset === 'custom' && (
+          <div className={s.customDateRow}>
+            <label className={s.filterLabel}>Từ ngày</label>
+            <input
+              type="date"
+              value={dueDateFrom}
+              onChange={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
+              className={s.filterInput}
+              style={{ width: 150 }}
+            />
+            <label className={s.filterLabel}>Đến ngày</label>
+            <input
+              type="date"
+              value={dueDateTo}
+              onChange={(e) => { setDueDateTo(e.target.value); setPage(1) }}
+              className={s.filterInput}
+              style={{ width: 150 }}
+            />
+          </div>
+        )}
+
+        {/* ── Advanced filter bar ── */}
         {showFilter && (
           <div className={s.filterBar}>
             <div className={s.filterBarHead}>
@@ -886,11 +1209,18 @@ export default function Tasks() {
             loading={loading}
             pagination={pagination}
             page={page}
+            pageSize={pageSize}
             onPageChange={(p) => { setPage(p); setSelectedIds(new Set()) }}
+            onPageSizeChange={(n) => { setPageSize(n); setPage(1) }}
             onOpen={openTask}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
             onSelectAll={selectAll}
+            onStatusChange={handleStatusChange}
+            onPriorityChange={handlePriorityChange}
+            onDueDateChange={handleDueDateChange}
+            onDelete={setDeleteTarget}
+            isAdmin={isAdmin}
           />
         )}
 
@@ -899,6 +1229,8 @@ export default function Tasks() {
             tasks={tasks}
             onStatusChange={handleStatusChange}
             onOpen={openTask}
+            isAdmin={isAdmin}
+            onDelete={setDeleteTarget}
           />
         )}
 
@@ -931,6 +1263,15 @@ export default function Tasks() {
           newStatus={forceTarget.newStatus}
           onConfirm={() => handleStatusChange(forceTarget.task, forceTarget.newStatus, { ...forceTarget.prevExtra, force: true })}
           onClose={() => setForceTarget(null)}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteTaskModal
+          task={deleteTarget}
+          deleting={deleting}
+          onClose={() => !deleting && setDeleteTarget(null)}
+          onConfirm={handleDeleteConfirm}
         />
       )}
     </AppLayout>

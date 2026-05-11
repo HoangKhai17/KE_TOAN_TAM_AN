@@ -171,12 +171,13 @@ function DescriptionTab({ taskId, initialDesc, onSaved }) {
 
 function ChecklistTab({ taskId, onCountChange }) {
   const addToast = useToastStore((s) => s.toast)
-  const [items, setItems]     = useState([])
-  const [loading, setLoading] = useState(true)
-  const [addText, setAddText] = useState('')
-  const [adding, setAdding]   = useState(false)
-  const [editId, setEditId]   = useState(null)
-  const [editText, setEditText] = useState('')
+  const [items, setItems]         = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [togglingIds, setTogglingIds] = useState(new Set())
+  const [addText, setAddText]     = useState('')
+  const [adding, setAdding]       = useState(false)
+  const [editId, setEditId]       = useState(null)
+  const [editText, setEditText]   = useState('')
 
   useEffect(() => {
     tasksApi.getTaskChecklist(taskId)
@@ -192,10 +193,16 @@ function ChecklistTab({ taskId, onCountChange }) {
   useEffect(() => { onCountChange(total, done) }, [total, done, onCountChange]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function toggle(item) {
+    if (togglingIds.has(item.id)) return
+    setTogglingIds((prev) => new Set([...prev, item.id]))
     try {
       const updated = await tasksApi.updateTaskChecklistItem(taskId, item.id, { isCompleted: !item.isCompleted })
       setItems((prev) => prev.map((i) => i.id === updated.id ? updated : i))
-    } catch { addToast('Không thể cập nhật', 'error') }
+    } catch {
+      addToast('Không thể cập nhật bước checklist', 'error')
+    } finally {
+      setTogglingIds((prev) => { const n = new Set(prev); n.delete(item.id); return n })
+    }
   }
 
   async function addItem() {
@@ -237,11 +244,14 @@ function ChecklistTab({ taskId, onCountChange }) {
         </div>
       )}
 
-      {items.map((item) => (
+      {items.map((item) => {
+        const isToggling = togglingIds.has(item.id)
+        return (
         <div key={item.id} className={s.checklistItem}>
           <div
             className={`${s.checklistCheck} ${item.isCompleted ? s.checklistCheckDone : ''}`}
             onClick={() => toggle(item)}
+            style={isToggling ? { opacity: 0.5, pointerEvents: 'none' } : undefined}
           >
             {item.isCompleted && <Check size={10} color="#fff" />}
           </div>
@@ -269,7 +279,8 @@ function ChecklistTab({ taskId, onCountChange }) {
             </>
           )}
         </div>
-      ))}
+        )
+      })}
 
       <div className={s.checklistAddRow}>
         <input
@@ -1072,7 +1083,7 @@ export default function TaskDetail() {
 
               {task.slaDays && (
                 <div className={s.infoRow}>
-                  <span className={s.infoRowLabel}>SLA</span>
+                  <span className={s.infoRowLabel}>SLA chuẩn</span>
                   <span className={s.infoRowValue}>{task.slaDays} ngày</span>
                 </div>
               )}
