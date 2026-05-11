@@ -868,10 +868,37 @@ function PlaceholderTab({ icon, iconBg, title, desc, phase, btnLabel, btnDisable
   )
 }
 
+// ── DeleteTaskModal ────────────────────────────────────────────────────────────
+
+function DeleteTaskModal({ task, deleting, onClose, onConfirm }) {
+  return (
+    <Modal title="Xoá công việc" onClose={onClose}>
+      <div className={s.modalForm}>
+        <div className={s.terminateWarn} style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
+          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
+          <span style={{ fontSize: 13 }}>
+            Bạn có chắc chắn muốn xoá công việc{' '}
+            <strong>&ldquo;{task.title}&rdquo;</strong>?
+            Hành động này không thể hoàn tác.
+          </span>
+        </div>
+        <div className={s.modalActions} style={{ marginTop: 16 }}>
+          <button onClick={onClose} className={s.btnOutline} disabled={deleting}>Huỷ bỏ</button>
+          <button onClick={onConfirm} disabled={deleting} className={s.btnDanger}>
+            {deleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
+            {deleting ? 'Đang xoá...' : 'Xoá công việc'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ── CompanyTasksTab ────────────────────────────────────────────────────────────
 
 function CompanyTasksTab({ company, onTaskCountChange }) {
   const navigate   = useNavigate()
+  const isAdmin    = useAuthStore((st) => st.user?.role === 'admin')
   const addToast   = useToastStore((st) => st.toast)
   const getOptions = useEnumsStore((st) => st.getOptions)
   const getLabel   = useEnumsStore((st) => st.getLabel)
@@ -880,23 +907,29 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const [tasks, setTasks]           = useState([])
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
   const [page, setPage]             = useState(1)
+  const [limit, setLimit]           = useState(20)
   const [loading, setLoading]       = useState(true)
 
-  const [searchInput, setSearchInput]     = useState('')
-  const [search, setSearch]               = useState('')
-  const [statusFilter, setStatusFilter]   = useState('')
+  const [searchInput, setSearchInput]       = useState('')
+  const [search, setSearch]                 = useState('')
+  const [statusFilter, setStatusFilter]     = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
-  const [isOverdue, setIsOverdue]         = useState(false)
-  const [monthFilter, setMonthFilter]     = useState('')
-  const [yearFilter, setYearFilter]       = useState('')
+  const [isOverdue, setIsOverdue]           = useState(false)
+  const [monthFilter, setMonthFilter]       = useState('')
+  const [yearFilter, setYearFilter]         = useState('')
 
-  const [showCreate, setShowCreate] = useState(false)
+  const [showCreate, setShowCreate]   = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting]       = useState(false)
 
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 350)
     return () => clearTimeout(t)
   }, [searchInput])
+
+  // Reset to page 1 when filters or limit change
+  useEffect(() => { setPage(1) }, [statusFilter, priorityFilter, isOverdue, monthFilter, yearFilter, limit])
 
   useEffect(() => { loadEnums() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -910,9 +943,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         dueDateTo:   `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
       }
     }
-    if (y) {
-      return { dueDateFrom: `${y}-01-01`, dueDateTo: `${y}-12-31` }
-    }
+    if (y) return { dueDateFrom: `${y}-01-01`, dueDateTo: `${y}-12-31` }
     return {}
   }
 
@@ -921,15 +952,15 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     setLoading(true)
     tasksApi.listTasks({
       companyId:  company.id,
-      search:     search     || undefined,
+      search:     search        || undefined,
       status:     statusFilter  || undefined,
       priority:   priorityFilter || undefined,
-      isOverdue:  isOverdue  ? true : undefined,
+      isOverdue:  isOverdue     ? true : undefined,
       ...getDateRange(),
       page,
-      limit:      20,
-      sortBy:     'due_date',
-      sortDir:    'asc',
+      limit,
+      sortBy:  'due_date',
+      sortDir: 'asc',
     })
       .then(({ tasks: t, pagination: p }) => {
         if (!cancelled) {
@@ -940,12 +971,32 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [company.id, search, statusFilter, priorityFilter, isOverdue, monthFilter, yearFilter, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [company.id, search, statusFilter, priorityFilter, isOverdue, monthFilter, yearFilter, page, limit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const cancel = load()
     return cancel
   }, [load])
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await tasksApi.deleteTask(deleteTarget.id)
+      addToast(`Đã xoá "${deleteTarget.title}"`, 'success')
+      setDeleteTarget(null)
+      onTaskCountChange(Math.max(0, (company.taskOpenCount ?? 0) - 1))
+      if (tasks.length === 1 && page > 1) {
+        setPage((p) => p - 1)
+      } else {
+        load()
+      }
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể xoá công việc', 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   function resetFilters() {
     setSearchInput(''); setSearch('')
@@ -954,12 +1005,13 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     setPage(1)
   }
 
-  const activeFilters = [search, statusFilter, priorityFilter, monthFilter, yearFilter].filter(Boolean).length + (isOverdue ? 1 : 0)
-
-  // KPI derived from current page (not perfect but good enough without extra API)
-  const openCount     = tasks.filter((t) => t.status !== 'completed').length
-  const overdueCount  = tasks.filter((t) => isTaskOverdue(t)).length
+  const activeFilters  = [search, statusFilter, priorityFilter, monthFilter, yearFilter].filter(Boolean).length + (isOverdue ? 1 : 0)
+  const openCount      = tasks.filter((t) => t.status !== 'completed').length
+  const overdueCount   = tasks.filter((t) => isTaskOverdue(t)).length
   const completedCount = tasks.filter((t) => t.status === 'completed').length
+  const colSpan        = isAdmin ? 8 : 7
+  const from = pagination.total === 0 ? 0 : (page - 1) * limit + 1
+  const to   = Math.min(page * limit, pagination.total)
 
   function pageWindow() {
     const total = pagination.totalPages ?? 1
@@ -994,8 +1046,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       {!loading && tasks.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           {[
-            { label: 'Đang mở',   value: openCount,      color: '#1d4ed8', bg: '#eff6ff', border: '#93c5fd' },
-            { label: 'Quá hạn',   value: overdueCount,   color: '#dc2626', bg: '#fef2f2', border: '#fca5a5', hide: overdueCount === 0 },
+            { label: 'Đang mở',    value: openCount,      color: '#1d4ed8', bg: '#eff6ff', border: '#93c5fd' },
+            { label: 'Quá hạn',    value: overdueCount,   color: '#dc2626', bg: '#fef2f2', border: '#fca5a5', hide: overdueCount === 0 },
             { label: 'Hoàn thành', value: completedCount, color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
           ].filter((k) => !k.hide).map((k) => (
             <div key={k.label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 8, background: k.bg, border: `1px solid ${k.border}` }}>
@@ -1006,7 +1058,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         </div>
       )}
 
-      {/* Filter row */}
+      {/* Filter bar */}
       <div className={s.taskFilterBar}>
         <div className={s.taskFilterSearch}>
           <Search size={12} className={s.taskFilterSearchIcon} />
@@ -1020,7 +1072,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+          onChange={(e) => setStatusFilter(e.target.value)}
           className={s.taskFilterSelect}
         >
           <option value="">Tất cả trạng thái</option>
@@ -1031,7 +1083,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         </select>
         <select
           value={priorityFilter}
-          onChange={(e) => { setPriorityFilter(e.target.value); setPage(1) }}
+          onChange={(e) => setPriorityFilter(e.target.value)}
           className={s.taskFilterSelect}
         >
           <option value="">Tất cả ưu tiên</option>
@@ -1042,7 +1094,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         </select>
         <select
           value={monthFilter}
-          onChange={(e) => { setMonthFilter(e.target.value); setPage(1) }}
+          onChange={(e) => setMonthFilter(e.target.value)}
           className={`${s.taskFilterSelect} ${s.taskFilterSelectSm}`}
         >
           <option value="">Tháng</option>
@@ -1052,7 +1104,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         </select>
         <select
           value={yearFilter}
-          onChange={(e) => { setYearFilter(e.target.value); setPage(1) }}
+          onChange={(e) => setYearFilter(e.target.value)}
           className={`${s.taskFilterSelect} ${s.taskFilterSelectSm}`}
         >
           <option value="">Năm</option>
@@ -1063,7 +1115,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         <button
           className={ts.qBtn}
           style={isOverdue ? { background: '#dc2626', borderColor: '#dc2626', color: '#fff' } : {}}
-          onClick={() => { setIsOverdue((v) => !v); setPage(1) }}
+          onClick={() => setIsOverdue((v) => !v)}
         >
           Quá hạn
         </button>
@@ -1083,27 +1135,30 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                 <th>Tiêu đề</th>
                 <th>Trạng thái</th>
                 <th>Ưu tiên</th>
+                <th>Ngày tạo</th>
                 <th>Hết hạn</th>
                 <th>Phụ trách</th>
                 <th>Tiến độ</th>
+                {isAdmin && <th style={{ width: 44 }} />}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    {[220, 100, 80, 80, 100, 80].map((w, j) => (
+                    {[220, 100, 80, 80, 80, 100, 80].map((w, j) => (
                       <td key={j} style={{ padding: '10px 16px' }}>
                         <div style={{ width: w, height: 10, background: '#f1f5f9', borderRadius: 4, animation: 'app-pulse 1.5s ease-in-out infinite' }} />
                       </td>
                     ))}
+                    {isAdmin && <td />}
                   </tr>
                 ))
               ) : tasks.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={colSpan}>
                     <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--color-muted)', fontSize: 13 }}>
-                      <ListTodo size={28} style={{ opacity: 0.3, marginBottom: 8, display: 'block', margin: '0 auto 8px' }} />
+                      <ListTodo size={28} style={{ opacity: 0.3, display: 'block', margin: '0 auto 8px' }} />
                       {activeFilters > 0 ? 'Không tìm thấy công việc phù hợp' : 'Chưa có công việc nào'}
                     </div>
                   </td>
@@ -1118,7 +1173,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                     onClick={() => navigate(`/tasks/${task.id}`)}
                   >
                     <td>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: overdue ? '#dc2626' : 'var(--color-text)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: overdue ? '#dc2626' : 'var(--color-text)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                         {task.title}
                       </div>
                     </td>
@@ -1132,7 +1187,10 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                         {getLabel('task_priority', task.priority, PRIORITY_LABELS[task.priority])}
                       </span>
                     </td>
-                    <td style={{ fontSize: 12, color: overdue ? '#dc2626' : 'var(--color-text-soft)', fontWeight: overdue ? 700 : 400 }}>
+                    <td style={{ fontSize: 12, color: 'var(--color-text-soft)', whiteSpace: 'nowrap' }}>
+                      {fmtTaskDate(task.createdAt)}
+                    </td>
+                    <td style={{ fontSize: 12, color: overdue ? '#dc2626' : 'var(--color-text-soft)', fontWeight: overdue ? 700 : 400, whiteSpace: 'nowrap' }}>
                       {fmtTaskDate(task.dueDate)}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--color-text-soft)' }}>
@@ -1148,6 +1206,17 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                         </div>
                       ) : <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>—</span>}
                     </td>
+                    {isAdmin && (
+                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className={`${s.rowActionBtn} ${s.rowActionDanger}`}
+                          title="Xoá công việc"
+                          onClick={() => setDeleteTarget(task)}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -1155,33 +1224,44 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           </table>
         </div>
 
-        {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className={s.paginationBar}>
-            <span className={s.paginationInfo}>
-              {loading ? '...' : `${(page - 1) * 20 + 1}–${Math.min(page * 20, pagination.total)} / ${pagination.total}`}
-            </span>
-            <div className={s.paginationBtns}>
-              <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={page === 1}>«</button>
-              <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
-              {pageWindow().map((n, i) =>
-                n === '…' ? (
-                  <span key={`e${i}`} style={{ padding: '0 4px', fontSize: 12, color: 'var(--color-muted)' }}>…</span>
-                ) : (
-                  <button
-                    key={n}
-                    className={`${s.paginationBtn} ${page === n ? s.paginationBtnActive : ''}`}
-                    onClick={() => setPage(n)}
-                  >
-                    {n}
-                  </button>
-                )
-              )}
-              <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
-              <button className={s.paginationBtn} onClick={() => setPage(pagination.totalPages)} disabled={page === pagination.totalPages}>»</button>
-            </div>
+        {/* Pagination — always visible when data exists */}
+        <div className={s.paginationBar}>
+          <span className={s.paginationInfo}>
+            {loading ? '...' : pagination.total === 0 ? '0 công việc' : `${from}–${to} / ${pagination.total}`}
+          </span>
+          <div className={s.paginationBtns}>
+            <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={page === 1 || loading}>«</button>
+            <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1 || loading}>‹</button>
+            {pageWindow().map((n, i) =>
+              n === '…' ? (
+                <span key={`e${i}`} style={{ padding: '0 4px', fontSize: 12, color: 'var(--color-muted)' }}>…</span>
+              ) : (
+                <button
+                  key={n}
+                  className={`${s.paginationBtn} ${page === n ? s.paginationBtnActive : ''}`}
+                  onClick={() => setPage(n)}
+                >
+                  {n}
+                </button>
+              )
+            )}
+            <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === (pagination.totalPages ?? 1) || loading}>›</button>
+            <button className={s.paginationBtn} onClick={() => setPage(pagination.totalPages ?? 1)} disabled={page === (pagination.totalPages ?? 1) || loading}>»</button>
           </div>
-        )}
+          <div className={s.pageSizeWrap}>
+            <span className={s.pageSizeLabel}>Hiển thị:</span>
+            {[10, 20, 50].map((n) => (
+              <button
+                key={n}
+                className={`${s.pageSizeBtn} ${limit === n ? s.pageSizeBtnActive : ''}`}
+                onClick={() => setLimit(n)}
+              >
+                {n}
+              </button>
+            ))}
+            <span className={s.pageSizeLabel}>/ trang</span>
+          </div>
+        </div>
       </div>
 
       {/* Create task modal */}
@@ -1201,6 +1281,16 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             setShowCreate(false)
             navigate(`/tasks/${task.id}`)
           }}
+        />
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteTarget && (
+        <DeleteTaskModal
+          task={deleteTarget}
+          deleting={deleting}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
         />
       )}
     </div>

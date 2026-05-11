@@ -83,7 +83,10 @@
       "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\migrations\")",
       "Bash(Select-Object Name)",
       "Bash(grep -v \"^$\")",
-      "PowerShell(New-Item -ItemType Directory -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Payroll\" -Force)"
+      "PowerShell(New-Item -ItemType Directory -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Payroll\" -Force)",
+      "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\" -Filter \"*.sql\" -Recurse)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\seeds\" -Filter \"*.sql\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"
