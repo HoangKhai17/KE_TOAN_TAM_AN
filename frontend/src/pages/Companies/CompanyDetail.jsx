@@ -387,7 +387,7 @@ function OverviewTab({ company, isAdmin, onAssigned }) {
       <div className={s.overviewLeft}>
         <BusinessInfoCard company={company} />
         <ContactCard company={company} />
-        <ActivityCard />
+        <ActivityCard companyId={company.id} />
       </div>
 
       {/* Right column */}
@@ -481,7 +481,44 @@ function ContactCard({ company }) {
 
 // ── ActivityCard ───────────────────────────────────────────────────────────────
 
-function ActivityCard() {
+const ACTION_LABELS = {
+  'status_changed':    'Đổi trạng thái',
+  'created':           'Tạo công việc',
+  'assigned':          'Phân công',
+  'due_date_changed':  'Đổi hạn',
+  'priority_changed':  'Đổi ưu tiên',
+  'title_changed':     'Đổi tiêu đề',
+  'comment_added':     'Thêm bình luận',
+  'checklist_added':   'Thêm checklist',
+  'checklist_checked': 'Hoàn thành checklist',
+  'time_logged':       'Ghi giờ làm',
+  'completed':         'Hoàn thành',
+}
+
+function fmtRelative(iso) {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1)  return 'Vừa xong'
+  if (m < 60) return `${m} phút trước`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h} giờ trước`
+  const d = Math.floor(h / 24)
+  if (d < 30) return `${d} ngày trước`
+  return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function ActivityCard({ companyId }) {
+  const [activities, setActivities] = useState([])
+  const [loading, setLoading]       = useState(true)
+
+  useEffect(() => {
+    companiesApi.getActivityLog(companyId, 15)
+      .then(setActivities)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className={s.infoCard}>
       <div className={s.infoCardHeader}>
@@ -492,15 +529,41 @@ function ActivityCard() {
           Hoạt động gần đây
         </div>
       </div>
-      <div className={s.infoCardBody}>
-        <div className={s.placeholderTab} style={{ padding: '24px 0', boxShadow: 'none', border: 'none', background: 'transparent' }}>
-          <div className={s.placeholderIcon} style={{ background: '#f5f3ff', width: 40, height: 40, borderRadius: 10 }}>
-            <Clock size={18} color="#7c3aed" />
+      <div className={s.infoCardBody} style={{ padding: 0 }}>
+        {loading ? (
+          <div className={s.loadingCenter} style={{ height: 80 }}>
+            <Loader2 size={15} className={s.spin} />
           </div>
-          <p className={s.placeholderDesc} style={{ fontSize: 12 }}>
-            Activity log sẽ hiển thị ở đây sau khi Phase 6 hoàn thiện.
-          </p>
-        </div>
+        ) : activities.length === 0 ? (
+          <div style={{ padding: '20px 16px', textAlign: 'center', fontSize: 12, color: 'var(--color-muted)' }}>
+            Chưa có hoạt động nào.
+          </div>
+        ) : (
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+            {activities.map((a, i) => (
+              <li key={a.id} style={{
+                display: 'flex', gap: 10, padding: '10px 16px',
+                borderBottom: i < activities.length - 1 ? '1px solid #f3f4f6' : 'none',
+              }}>
+                <div style={{
+                  width: 7, height: 7, borderRadius: '50%', background: '#7c3aed',
+                  flexShrink: 0, marginTop: 5,
+                }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ACTION_LABELS[a.action] ?? a.action}
+                    {a.taskTitle && (
+                      <span style={{ fontWeight: 400, color: '#6b7280' }}> · {a.taskTitle}</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
+                    {a.actorName} · {fmtRelative(a.createdAt)}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   )
@@ -824,6 +887,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const [statusFilter, setStatusFilter]   = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
   const [isOverdue, setIsOverdue]         = useState(false)
+  const [monthFilter, setMonthFilter]     = useState('')
+  const [yearFilter, setYearFilter]       = useState('')
 
   const [showCreate, setShowCreate] = useState(false)
 
@@ -835,6 +900,22 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
 
   useEffect(() => { loadEnums() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  function getDateRange() {
+    const y = yearFilter  ? parseInt(yearFilter, 10)  : null
+    const m = monthFilter ? parseInt(monthFilter, 10) : null
+    if (y && m) {
+      const lastDay = new Date(y, m, 0).getDate()
+      return {
+        dueDateFrom: `${y}-${String(m).padStart(2, '0')}-01`,
+        dueDateTo:   `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
+      }
+    }
+    if (y) {
+      return { dueDateFrom: `${y}-01-01`, dueDateTo: `${y}-12-31` }
+    }
+    return {}
+  }
+
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
@@ -844,6 +925,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       status:     statusFilter  || undefined,
       priority:   priorityFilter || undefined,
       isOverdue:  isOverdue  ? true : undefined,
+      ...getDateRange(),
       page,
       limit:      20,
       sortBy:     'due_date',
@@ -858,7 +940,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [company.id, search, statusFilter, priorityFilter, isOverdue, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [company.id, search, statusFilter, priorityFilter, isOverdue, monthFilter, yearFilter, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const cancel = load()
@@ -868,10 +950,11 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   function resetFilters() {
     setSearchInput(''); setSearch('')
     setStatusFilter(''); setPriorityFilter(''); setIsOverdue(false)
+    setMonthFilter(''); setYearFilter('')
     setPage(1)
   }
 
-  const activeFilters = [search, statusFilter, priorityFilter].filter(Boolean).length + (isOverdue ? 1 : 0)
+  const activeFilters = [search, statusFilter, priorityFilter, monthFilter, yearFilter].filter(Boolean).length + (isOverdue ? 1 : 0)
 
   // KPI derived from current page (not perfect but good enough without extra API)
   const openCount     = tasks.filter((t) => t.status !== 'completed').length
@@ -924,23 +1007,21 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       )}
 
       {/* Filter row */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: '1', minWidth: 160 }}>
-          <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)', pointerEvents: 'none' }} />
+      <div className={s.taskFilterBar}>
+        <div className={s.taskFilterSearch}>
+          <Search size={12} className={s.taskFilterSearchIcon} />
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Tìm công việc..."
-            className={s.searchInput}
-            style={{ paddingLeft: 28, height: 32 }}
+            className={s.taskFilterInput}
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-          className={s.filterSelect}
-          style={{ height: 32, minWidth: 130 }}
+          className={s.taskFilterSelect}
         >
           <option value="">Tất cả trạng thái</option>
           {(getOptions('task_status').length > 0
@@ -951,14 +1032,33 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         <select
           value={priorityFilter}
           onChange={(e) => { setPriorityFilter(e.target.value); setPage(1) }}
-          className={s.filterSelect}
-          style={{ height: 32, minWidth: 120 }}
+          className={s.taskFilterSelect}
         >
           <option value="">Tất cả ưu tiên</option>
           {(getOptions('task_priority').length > 0
             ? getOptions('task_priority')
             : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
           ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+        </select>
+        <select
+          value={monthFilter}
+          onChange={(e) => { setMonthFilter(e.target.value); setPage(1) }}
+          className={`${s.taskFilterSelect} ${s.taskFilterSelectSm}`}
+        >
+          <option value="">Tháng</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={m}>T{m}</option>
+          ))}
+        </select>
+        <select
+          value={yearFilter}
+          onChange={(e) => { setYearFilter(e.target.value); setPage(1) }}
+          className={`${s.taskFilterSelect} ${s.taskFilterSelectSm}`}
+        >
+          <option value="">Năm</option>
+          {[2024, 2025, 2026, 2027].map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
         </select>
         <button
           className={ts.qBtn}

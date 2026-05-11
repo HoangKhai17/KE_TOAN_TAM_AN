@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus, Search, Building2, ChevronRight,
+  Plus, Search, Building2,
   Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
@@ -597,7 +597,6 @@ function CompanyRow({ company, isAdmin, onClick, onDelete }) {
           >
             <Eye size={14} />
           </button>
-          <ChevronRight size={14} className={s.rowChevronIcon} />
         </div>
       </td>
     </tr>
@@ -708,7 +707,20 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.name.trim()) { setFE({ name: 'Tên công ty không được để trống' }); return }
+    const phoneRe = /^0\d{9}$/
+    const errs = {}
+    if (!form.name.trim()) errs.name = 'Tên công ty không được để trống'
+    if (form.taxCode.trim() && !/^\d{10}(-\d{3})?$/.test(form.taxCode.trim()))
+      errs.taxCode = 'Mã số thuế phải gồm 10 chữ số (VD: 0123456789)'
+    const rawLP = form.legalRepPhone.replace(/[\s\-\.]/g, '')
+    if (rawLP && !phoneRe.test(rawLP))
+      errs.legalRepPhone = 'Số điện thoại không đúng định dạng (VD: 0901 234 567)'
+    const rawCP = form.contactPhone.replace(/[\s\-\.]/g, '')
+    if (rawCP && !phoneRe.test(rawCP))
+      errs.contactPhone = 'Số điện thoại không đúng định dạng (VD: 0901 234 567)'
+    if (form.contactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail.trim()))
+      errs.contactEmail = 'Email không đúng định dạng'
+    if (Object.keys(errs).length > 0) { setFE(errs); return }
     setError(null); setFE({})
     setLoading(true)
     try {
@@ -817,7 +829,8 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
             </div>
             <div>
               <label className={s.formLabel}>ĐT đại diện</label>
-              <input type="tel" value={form.legalRepPhone} onChange={set('legalRepPhone')} className={s.formInput} placeholder="0901 234 567" />
+              <input type="tel" value={form.legalRepPhone} onChange={set('legalRepPhone')} className={inputCls('legalRepPhone')} placeholder="0901 234 567" />
+              {fe.legalRepPhone && <p className={s.formError}>{fe.legalRepPhone}</p>}
             </div>
           </div>
           <div className={s.formGrid3}>
@@ -827,7 +840,8 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
             </div>
             <div>
               <label className={s.formLabel}>ĐT liên hệ</label>
-              <input type="tel" value={form.contactPhone} onChange={set('contactPhone')} className={s.formInput} placeholder="0901 234 567" />
+              <input type="tel" value={form.contactPhone} onChange={set('contactPhone')} className={inputCls('contactPhone')} placeholder="0901 234 567" />
+              {fe.contactPhone && <p className={s.formError}>{fe.contactPhone}</p>}
             </div>
             <div>
               <label className={s.formLabel}>Email liên hệ</label>

@@ -243,4 +243,24 @@ router.get('/:id/assignments', ...auth, ctrl.getAssignments)
  */
 router.post('/:id/assign', ...admin, validate(assignStaffSchema), ctrl.assignStaff)
 
+/**
+ * @openapi
+ * /companies/{id}/activity:
+ *   get:
+ *     tags: [Companies]
+ *     summary: Get recent task activity log for a company
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 50 }
+ *     responses:
+ *       200:
+ *         description: Activity log entries
+ */
+router.get('/:id/activity', ...auth, ctrl.getActivityLog)
+
 module.exports = router

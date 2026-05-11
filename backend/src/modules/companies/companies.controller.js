@@ -64,4 +64,12 @@ async function assignStaff(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff }
+async function getActivityLog(req, res, next) {
+  try {
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit ?? '20', 10)))
+    const activities = await svc.getActivityLog(req.params.id, limit)
+    res.json({ success: true, data: { activities } })
+  } catch (err) { next(err) }
+}
+
+module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog }

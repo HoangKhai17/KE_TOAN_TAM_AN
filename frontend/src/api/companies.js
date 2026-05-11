@@ -37,3 +37,8 @@ export async function assignStaff(companyId, body) {
   const { data } = await api.post(`/companies/${companyId}/assign`, body)
   return data.data
 }
+
+export async function getActivityLog(companyId, limit = 20) {
+  const { data } = await api.get(`/companies/${companyId}/activity`, { params: { limit } })
+  return data.data.activities
+}

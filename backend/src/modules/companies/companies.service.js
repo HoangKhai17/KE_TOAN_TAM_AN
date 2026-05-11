@@ -318,6 +318,32 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
   }
 }
 
+async function getActivityLog(companyId, limit = 20) {
+  const { rows } = await query(
+    `SELECT tal.id, tal.action, tal.old_value, tal.new_value, tal.meta, tal.created_at,
+            u.name AS actor_name,
+            t.id   AS task_id, t.title AS task_title
+     FROM task_activity_logs tal
+     JOIN tasks t ON t.id = tal.task_id
+     LEFT JOIN users u ON u.id = tal.user_id
+     WHERE t.company_id = $1
+     ORDER BY tal.created_at DESC
+     LIMIT $2`,
+    [companyId, limit]
+  )
+  return rows.map((r) => ({
+    id:         r.id,
+    action:     r.action,
+    oldValue:   r.old_value ?? null,
+    newValue:   r.new_value ?? null,
+    meta:       r.meta ? (typeof r.meta === 'string' ? JSON.parse(r.meta) : r.meta) : null,
+    actorName:  r.actor_name ?? 'Hệ thống',
+    taskId:     r.task_id,
+    taskTitle:  r.task_title,
+    createdAt:  r.created_at,
+  }))
+}
+
 module.exports = {
   listCompanies,
   getCompanyById,
@@ -327,4 +353,5 @@ module.exports = {
   deleteCompany,
   getAssignments,
   assignStaff,
+  getActivityLog,
 }

@@ -15,7 +15,6 @@
   --text-main:     var(--color-text);
   --text-muted:    var(--color-muted);
   --gradient-primary: linear-gradient(135deg, #004797 0%, #2c557fd8 100%);
-  --gradient-accent:  var(--gradient-accent);
   --shadow: 0 28px 80px -34px rgba(9, 39, 68, 0.34);
   --fs-xs:      var(--fs-2xs);
   --fs-micro:   var(--fs-xs);
