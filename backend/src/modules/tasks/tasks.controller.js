@@ -195,8 +195,16 @@ async function upsertCustomFields(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function getAvailableYears(req, res, next) {
+  try {
+    const years = await svc.getAvailableYears()
+    res.json({ success: true, data: { years } })
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listTasks, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog,
+  getAvailableYears,
   listChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem,
   listDependencies, addDependency, removeDependency,
   listComments, addComment, updateComment, deleteComment,

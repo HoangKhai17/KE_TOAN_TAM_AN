@@ -91,6 +91,9 @@ const admin = [authenticate, requireRole('admin')]
  */
 router.get('/', ...auth, ctrl.listTasks)
 
+// IMPORTANT: must be before /:id to prevent 'meta' being matched as an ID
+router.get('/meta/years', ...auth, ctrl.getAvailableYears)
+
 /**
  * @openapi
  * /tasks:

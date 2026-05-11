@@ -7,6 +7,11 @@ export async function listTasks(params = {}) {
   return data.data  // { tasks, pagination }
 }
 
+export async function getTaskYears() {
+  const { data } = await api.get('/tasks/meta/years')
+  return data.data.years  // number[]
+}
+
 export async function getTask(id) {
   const { data } = await api.get(`/tasks/${id}`)
   return data.data.task

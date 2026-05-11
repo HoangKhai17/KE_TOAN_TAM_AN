@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   DndContext, DragOverlay,
@@ -7,13 +7,12 @@ import {
 } from '@dnd-kit/core'
 import {
   Plus, Search, RotateCcw, List, Columns, Calendar,
-  ChevronLeft, ChevronRight, Filter, ClipboardList, Check,
-  Trash2, Loader2, X,
+  ChevronLeft, ChevronRight, ChevronDown, Filter, ClipboardList, Check,
+  Trash2, Loader2, X, Eye,
 } from 'lucide-react'
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
-  isSameMonth, format, addMonths, subMonths, isToday,
-  startOfYear, endOfYear, startOfQuarter, endOfQuarter,
+  isSameMonth, format, addMonths, subMonths, isToday, differenceInDays, parseISO,
 } from 'date-fns'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
@@ -31,51 +30,33 @@ import {
 import { useEnumsStore } from '../../hooks/useEnums'
 import s from './tasks.module.css'
 
-// ── Date preset helpers ───────────────────────────────────────────────────────
+// ── Sort options ──────────────────────────────────────────────────────────────
 
-const DATE_PRESETS = [
-  { key: 'today',        label: 'Hôm nay' },
-  { key: 'this_week',    label: 'Tuần này' },
-  { key: 'this_month',   label: 'Tháng này' },
-  { key: 'this_quarter', label: 'Quý này' },
-  { key: 'this_year',    label: 'Năm nay' },
-  { key: 'custom',       label: 'Tùy chỉnh' },
+const SORT_OPTIONS = [
+  { value: 'due_date:asc',    label: 'Hết hạn sớm nhất' },
+  { value: 'due_date:desc',   label: 'Hết hạn muộn nhất' },
+  { value: 'created_at:desc', label: 'Mới nhất' },
+  { value: 'created_at:asc',  label: 'Cũ nhất' },
+  { value: 'priority:desc',   label: 'Ưu tiên cao nhất' },
+  { value: 'updated_at:desc', label: 'Cập nhật gần nhất' },
 ]
 
-function getPresetRange(preset) {
-  const today = new Date()
-  const fmt   = (d) => format(d, 'yyyy-MM-dd')
-  switch (preset) {
-    case 'today':
-      return { from: fmt(today), to: fmt(today) }
-    case 'this_week':
-      return {
-        from: fmt(startOfWeek(today, { weekStartsOn: 1 })),
-        to:   fmt(endOfWeek(today,   { weekStartsOn: 1 })),
-      }
-    case 'this_month':
-      return { from: fmt(startOfMonth(today)), to: fmt(endOfMonth(today)) }
-    case 'this_quarter':
-      return { from: fmt(startOfQuarter(today)), to: fmt(endOfQuarter(today)) }
-    case 'this_year':
-      return { from: fmt(startOfYear(today)), to: fmt(endOfYear(today)) }
-    default:
-      return { from: '', to: '' }
-  }
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+function yearMonthToDates(year, month) {
+  if (!year) return { from: '', to: '' }
+  if (!month) return { from: `${year}-01-01`, to: `${year}-12-31` }
+  const m = parseInt(month, 10)
+  const lastDay = new Date(parseInt(year, 10), m, 0).getDate()
+  const mm = String(m).padStart(2, '0')
+  return { from: `${year}-${mm}-01`, to: `${year}-${mm}-${String(lastDay).padStart(2, '0')}` }
 }
 
-function presetChipLabel(preset, from, to) {
-  const today = new Date()
-  if (preset === 'today')        return 'Hôm nay'
-  if (preset === 'this_week')    return 'Tuần này'
-  if (preset === 'this_month')   return `Tháng ${format(today, 'MM/yyyy')}`
-  if (preset === 'this_quarter') return 'Quý này'
-  if (preset === 'this_year')    return `Năm ${format(today, 'yyyy')}`
-  if (from && to) {
-    const fmtD = (s) => s.split('-').reverse().join('/')
-    return `${fmtD(from)} – ${fmtD(to)}`
-  }
-  return 'Tùy chỉnh'
+function calcDays(task) {
+  if (!task.createdAt) return null
+  const start = parseISO(task.createdAt)
+  const end   = task.completedAt ? parseISO(task.completedAt) : new Date()
+  return Math.max(0, differenceInDays(end, start))
 }
 
 // ── Column dot class map ──────────────────────────────────────────────────────
@@ -378,8 +359,8 @@ const CAL_PRIORITY_CLASS = {
 }
 
 function CalendarView({ tasks, onOpen }) {
-  const [calMonth, setCalMonth]   = useState(new Date())
-  const [dayPopover, setDayPopover] = useState(null) // { date, tasks }
+  const [calMonth, setCalMonth]     = useState(new Date())
+  const [dayPopover, setDayPopover] = useState(null)
 
   const days = useMemo(() => {
     const start = startOfWeek(startOfMonth(calMonth), { weekStartsOn: 1 })
@@ -456,7 +437,6 @@ function CalendarView({ tasks, onOpen }) {
         })}
       </div>
 
-      {/* Day popover */}
       {dayPopover && (
         <div className={s.miniOverlay} onClick={() => setDayPopover(null)}>
           <div className={s.calDayPopover} onClick={(e) => e.stopPropagation()}>
@@ -499,6 +479,74 @@ function CalendarView({ tasks, onOpen }) {
   )
 }
 
+// ── MultiSelect ───────────────────────────────────────────────────────────────
+
+function MultiSelect({ placeholder, options, selected, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onOut(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onOut)
+    return () => document.removeEventListener('mousedown', onOut)
+  }, [open])
+
+  function toggle(key) {
+    onChange(selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key])
+  }
+
+  const count = selected.length
+  const allChecked = options.length > 0 && count === options.length
+
+  return (
+    <div className={s.multiSelect} ref={ref}>
+      <button
+        type="button"
+        className={`${s.multiSelectTrigger} ${count > 0 ? s.multiSelectActive : ''}`}
+        onClick={() => setOpen((p) => !p)}
+      >
+        <span className={s.multiSelectLabel}>
+          {count === 0 ? placeholder : `${count} đã chọn`}
+        </span>
+        {count > 0 && <span className={s.multiSelectBadge}>{count}</span>}
+        <ChevronDown
+          size={11}
+          style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.13s' }}
+        />
+      </button>
+      {open && (
+        <div className={s.multiSelectDropdown}>
+          <label className={s.multiSelectItem}>
+            <input
+              type="checkbox"
+              checked={allChecked}
+              onChange={() => onChange(allChecked ? [] : options.map((o) => o.key))}
+            />
+            <span>Tất cả</span>
+          </label>
+          <div className={s.multiSelectDivider} />
+          {options.map((o) => (
+            <label
+              key={o.key}
+              className={`${s.multiSelectItem} ${selected.includes(o.key) ? s.multiSelectItemChecked : ''}`}
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(o.key)}
+                onChange={() => toggle(o.key)}
+              />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── ListView ──────────────────────────────────────────────────────────────────
 
 function ListView({
@@ -512,7 +560,6 @@ function ListView({
   const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.has(t.id))
   const from = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
   const to   = Math.min(page * pageSize, pagination.total)
-  const colSpan = isAdmin ? 8 : 7
 
   function pageWindow() {
     const total = pagination.totalPages ?? 1
@@ -536,12 +583,14 @@ function ListView({
                 />
               </th>
               <th className={s.th}>Tiêu đề / Khách hàng</th>
+              <th className={s.th}>Ngày bắt đầu</th>
+              <th className={s.th}>Số ngày</th>
               <th className={s.th}>Trạng thái</th>
               <th className={s.th}>Ưu tiên</th>
               <th className={s.th}>Hết hạn</th>
               <th className={s.th}>Tiến độ</th>
               <th className={s.th}>Giao cho</th>
-              {isAdmin && <th className={s.th} style={{ width: 44 }} />}
+              <th className={s.th} style={{ width: 90 }}>Hành động</th>
             </tr>
           </thead>
           <tbody>
@@ -549,17 +598,16 @@ function ListView({
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className={s.tr}>
                   <td className={s.tdCheck} />
-                  {[260, 110, 80, 80, 90, 110].map((w, j) => (
+                  {[240, 80, 55, 110, 80, 80, 90, 110, 70].map((w, j) => (
                     <td key={j} className={s.td}>
                       <div style={{ width: w, height: 11, background: '#f1f5f9', borderRadius: 4, animation: 'app-pulse 1.5s ease-in-out infinite' }} />
                     </td>
                   ))}
-                  {isAdmin && <td className={s.td} />}
                 </tr>
               ))
             ) : tasks.length === 0 ? (
               <tr>
-                <td colSpan={colSpan}>
+                <td colSpan={10}>
                   <div className={s.emptyBox}>
                     <div className={s.emptyIcon}><ClipboardList size={32} /></div>
                     <p className={s.emptyTitle}>Không có công việc</p>
@@ -570,6 +618,7 @@ function ListView({
             ) : tasks.map((t) => {
               const overdue = isTaskOverdue(t)
               const pct     = progressPct(t)
+              const days    = calcDays(t)
               return (
                 <tr
                   key={t.id}
@@ -586,6 +635,20 @@ function ListView({
                   <td className={s.td}>
                     <div className={`${s.taskTitle} ${overdue ? s.taskTitleOverdue : ''}`}>{t.title}</div>
                     {t.companyName && <div className={s.taskMeta}>{t.companyName}</div>}
+                  </td>
+
+                  {/* Ngày bắt đầu */}
+                  <td className={s.td}>
+                    <span className={s.dueDateNormal}>{fmtDate(t.createdAt)}</span>
+                  </td>
+
+                  {/* Số ngày thực hiện */}
+                  <td className={s.td}>
+                    {days !== null ? (
+                      <span className={`${s.daysBadge} ${t.status === 'completed' ? s.daysBadgeDone : ''}`}>
+                        {days}d
+                      </span>
+                    ) : <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>—</span>}
                   </td>
 
                   {/* Quick edit: status */}
@@ -659,17 +722,27 @@ function ListView({
                     )}
                   </td>
 
-                  {isAdmin && (
-                    <td className={s.tdAction} onClick={(e) => e.stopPropagation()}>
+                  {/* Action column — always visible */}
+                  <td className={s.tdAction} onClick={(e) => e.stopPropagation()}>
+                    <div className={s.actionBtns}>
                       <button
-                        className={s.btnDeleteRow}
-                        onClick={() => onDelete(t)}
-                        title="Xóa công việc"
+                        className={s.btnActionView}
+                        onClick={() => onOpen(t.id)}
+                        title="Xem chi tiết"
                       >
-                        <Trash2 size={13} />
+                        <Eye size={13} />
                       </button>
-                    </td>
-                  )}
+                      {isAdmin && (
+                        <button
+                          className={s.btnActionDelete}
+                          onClick={() => onDelete(t)}
+                          title="Xóa công việc"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               )
             })}
@@ -721,6 +794,10 @@ function ListView({
 
 // ── Main Tasks page ───────────────────────────────────────────────────────────
 
+const CUR_YEAR  = String(new Date().getFullYear())
+const CUR_MONTH = String(new Date().getMonth() + 1)
+const INIT_DATES = yearMonthToDates(CUR_YEAR, CUR_MONTH)
+
 export default function Tasks() {
   const navigate    = useNavigate()
   const currentUser = useAuthStore((state) => state.user)
@@ -733,22 +810,27 @@ export default function Tasks() {
   // View
   const [view, setView] = useState('list')
 
-  // Date preset
-  const [datePreset, setDatePreset] = useState('this_month')
-  const initRange = useMemo(() => getPresetRange('this_month'), [])
-  const [dueDateFrom, setDueDateFrom] = useState(initRange.from)
-  const [dueDateTo,   setDueDateTo]   = useState(initRange.to)
+  // Date filters — default: current month
+  const [yearFilter,  setYearFilter]  = useState(CUR_YEAR)
+  const [monthFilter, setMonthFilter] = useState(CUR_MONTH)
+  const [dueDateFrom, setDueDateFrom] = useState(INIT_DATES.from)
+  const [dueDateTo,   setDueDateTo]   = useState(INIT_DATES.to)
 
-  // Other filters
+  // Sort — default: newest first
+  const [sortValue, setSortValue] = useState('created_at:desc')
+
+  // Other filters (status/priority/source are multi-select arrays)
   const [searchInput, setSearchInput]       = useState('')
   const [search, setSearch]                 = useState('')
   const [companyFilter, setCompanyFilter]   = useState('')
   const [staffFilter, setStaffFilter]       = useState('')
-  const [statusFilter, setStatusFilter]     = useState('')
-  const [priorityFilter, setPriorityFilter] = useState('')
-  const [sourceFilter, setSourceFilter]     = useState('')
+  const [statusFilter, setStatusFilter]     = useState([])
+  const [priorityFilter, setPriorityFilter] = useState([])
+  const [sourceFilter, setSourceFilter]     = useState([])
   const [isOverdue, setIsOverdue]           = useState(false)
-  const [showFilter, setShowFilter]         = useState(false)
+
+  // Stats (counts across base filters, ignoring status/priority/isOverdue)
+  const [stats, setStats] = useState({ total: 0, completed: 0, overdue: 0 })
 
   // Pagination
   const [pageSize, setPageSize] = useState(20)
@@ -760,8 +842,9 @@ export default function Tasks() {
   const [loading, setLoading]       = useState(true)
 
   // Reference data
-  const [companies, setCompanies] = useState([])
-  const [staffList, setStaffList] = useState([])
+  const [companies, setCompanies]       = useState([])
+  const [staffList, setStaffList]       = useState([])
+  const [availableYears, setAvailableYears] = useState([])
 
   // Modals
   const [showCreate, setShowCreate]     = useState(false)
@@ -782,33 +865,76 @@ export default function Tasks() {
   // Reset page on filter changes
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter])
+  }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter, sortValue])
 
-  // Load reference data + enums
+  // Load reference data + enums + years
   useEffect(() => {
     listCompanies({ limit: 300, status: 'active' }).then(({ companies: c }) => setCompanies(c)).catch(() => {})
     listUsers({ role: 'staff', status: 'active', limit: 100 }).then(({ users: u }) => setStaffList(u)).catch(() => {})
     loadEnums()
+    tasksApi.getTaskYears()
+      .then((years) => {
+        setAvailableYears(years)
+        // If current year not in list, fall back to first available year
+        if (years.length > 0 && !years.includes(parseInt(CUR_YEAR, 10))) {
+          const firstYear = String(years[0])
+          setYearFilter(firstYear)
+          const { from, to } = yearMonthToDates(firstYear, '')
+          setDueDateFrom(from)
+          setDueDateTo(to)
+        }
+      })
+      .catch(() => {
+        // Graceful fallback: generate last 3 years
+        const y = parseInt(CUR_YEAR, 10)
+        setAvailableYears([y, y - 1, y - 2])
+      })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load stats (always uses base date/company/staff filters, no status filter)
+  useEffect(() => {
+    let cancelled = false
+    const base = {
+      search:      search        || undefined,
+      companyId:   companyFilter || undefined,
+      assignedTo:  staffFilter   || undefined,
+      dueDateFrom: dueDateFrom   || undefined,
+      dueDateTo:   dueDateTo     || undefined,
+      limit: 1, page: 1,
+    }
+    Promise.all([
+      tasksApi.listTasks(base),
+      tasksApi.listTasks({ ...base, status: 'completed' }),
+      tasksApi.listTasks({ ...base, isOverdue: true }),
+    ]).then(([all, done, over]) => {
+      if (!cancelled) setStats({
+        total:     all.pagination.total,
+        completed: done.pagination.total,
+        overdue:   over.pagination.total,
+      })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [search, companyFilter, staffFilter, dueDateFrom, dueDateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load tasks
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    const [sortBy, sortDir] = sortValue.split(':')
     const params = {
       search:      search         || undefined,
       companyId:   companyFilter  || undefined,
       assignedTo:  staffFilter    || undefined,
-      status:      statusFilter   || undefined,
-      priority:    priorityFilter || undefined,
-      source:      sourceFilter   || undefined,
+      status:      statusFilter.length   > 0 ? statusFilter   : undefined,
+      priority:    priorityFilter.length > 0 ? priorityFilter : undefined,
+      source:      sourceFilter.length   > 0 ? sourceFilter[0] : undefined,
       isOverdue:   isOverdue      ? true : undefined,
       dueDateFrom: dueDateFrom    || undefined,
       dueDateTo:   dueDateTo      || undefined,
       limit:       view === 'list' ? pageSize : 500,
       page:        view === 'list' ? page : 1,
-      sortBy:      'due_date',
-      sortDir:     'asc',
+      sortBy,
+      sortDir,
     }
     tasksApi.listTasks(params)
       .then(({ tasks: t, pagination: p }) => {
@@ -821,9 +947,26 @@ export default function Tasks() {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view])
+  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view, sortValue])
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
+  // ── Date filter handlers ──────────────────────────────────────────────────────
+
+  function handleYearChange(year) {
+    setYearFilter(year)
+    const { from, to } = yearMonthToDates(year, year ? monthFilter : '')
+    setDueDateFrom(from)
+    setDueDateTo(to)
+  }
+
+  function handleMonthChange(month) {
+    setMonthFilter(month)
+    if (!yearFilter) return
+    const { from, to } = yearMonthToDates(yearFilter, month)
+    setDueDateFrom(from)
+    setDueDateTo(to)
+  }
+
+  // ── Other handlers ────────────────────────────────────────────────────────────
 
   async function handleStatusChange(task, newStatus, extra = {}) {
     if (newStatus === 'on_hold' && !('reason' in extra)) {
@@ -892,31 +1035,21 @@ export default function Tasks() {
     }
   }
 
-  function applyPreset(preset) {
-    setDatePreset(preset)
-    if (preset !== 'custom') {
-      const { from, to } = getPresetRange(preset)
-      setDueDateFrom(from)
-      setDueDateTo(to)
-    }
-    setPage(1)
-  }
-
   function resetFilters() {
     setSearchInput(''); setSearch('')
     setCompanyFilter(''); setStaffFilter('')
-    setStatusFilter(''); setPriorityFilter('')
-    setSourceFilter(''); setIsOverdue(false)
-    const range = getPresetRange('this_month')
-    setDatePreset('this_month')
-    setDueDateFrom(range.from)
-    setDueDateTo(range.to)
+    setStatusFilter([]); setPriorityFilter([])
+    setSourceFilter([]); setIsOverdue(false)
+    setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
+    setDueDateFrom(INIT_DATES.from)
+    setDueDateTo(INIT_DATES.to)
+    setSortValue('created_at:desc')
     setPage(1)
   }
 
-  const activeFilterCount = [
-    search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter,
-  ].filter(Boolean).length + (isOverdue ? 1 : 0)
+  const activeFilterCount = [search, companyFilter, staffFilter].filter(Boolean).length
+    + statusFilter.length + priorityFilter.length + sourceFilter.length
+    + (isOverdue ? 1 : 0)
 
   function toggleSelect(id) {
     setSelectedIds((prev) => {
@@ -990,196 +1123,188 @@ export default function Tasks() {
               </button>
             </div>
 
-            <button
-              className={`${s.btnSecondary} ${showFilter ? s.btnSecondaryActive : ''}`}
-              style={{ height: 32, padding: '0 12px', fontSize: 13 }}
-              onClick={() => setShowFilter((p) => !p)}
-            >
-              <Filter size={13} />
-              Bộ lọc
-              {activeFilterCount > 0 && (
-                <span className={s.filterActiveBadge}>{activeFilterCount}</span>
-              )}
-            </button>
-
             <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
               <Plus size={14} /> Tạo công việc
             </button>
           </div>
         </div>
 
-        {/* ── Quick filters ── */}
-        <div className={s.quickFilters}>
-          {/* Date presets */}
-          <span className={s.qLabel}>Thời gian:</span>
-          {DATE_PRESETS.map((p) => (
-            <button
-              key={p.key}
-              className={`${s.qBtn} ${datePreset === p.key ? s.qBtnActive : ''}`}
-              onClick={() => applyPreset(p.key)}
-            >
-              {p.label}
+        {/* ── Unified filter panel (always visible) ── */}
+        <div className={s.filterBar}>
+          <div className={s.filterBarHead}>
+            <div className={s.filterBarTitle}>
+              <Filter size={12} />
+              Bộ lọc
+              {activeFilterCount > 0 && (
+                <span className={s.filterActiveBadge}>{activeFilterCount} đang bật</span>
+              )}
+            </div>
+            <button className={s.filterReset} onClick={resetFilters}>
+              <RotateCcw size={11} /> Đặt lại
             </button>
-          ))}
-
-          {/* Active date chip */}
-          <span className={s.dateChip}>
-            {presetChipLabel(datePreset, dueDateFrom, dueDateTo)}
-          </span>
-
-          <span className={s.qDivider} />
-
-          {/* Status & role quick filters */}
-          <span className={s.qLabel}>Nhanh:</span>
-          <button
-            className={`${s.qBtn} ${isOverdue ? s.qBtnActive : ''}`}
-            onClick={() => { setIsOverdue((p) => !p); setPage(1) }}
-          >
-            Quá hạn
-          </button>
-          {currentUser && (
-            <button
-              className={`${s.qBtn} ${staffFilter === currentUser.id ? s.qBtnActive : ''}`}
-              onClick={() => { setStaffFilter((p) => p === currentUser.id ? '' : currentUser.id); setPage(1) }}
-            >
-              Của tôi
-            </button>
-          )}
-          <button
-            className={`${s.qBtn} ${statusFilter === 'pending' ? s.qBtnActive : ''}`}
-            onClick={() => { setStatusFilter((p) => p === 'pending' ? '' : 'pending'); setPage(1) }}
-          >
-            Chờ xử lý
-          </button>
-          <button
-            className={`${s.qBtn} ${statusFilter === 'in_progress' ? s.qBtnActive : ''}`}
-            onClick={() => { setStatusFilter((p) => p === 'in_progress' ? '' : 'in_progress'); setPage(1) }}
-          >
-            Đang thực hiện
-          </button>
-
-          {activeFilterCount > 0 && (
-            <button className={s.qResetBtn} onClick={resetFilters}>
-              <RotateCcw size={11} /> Đặt lại ({activeFilterCount})
-            </button>
-          )}
-        </div>
-
-        {/* ── Custom date range ── */}
-        {datePreset === 'custom' && (
-          <div className={s.customDateRow}>
-            <label className={s.filterLabel}>Từ ngày</label>
-            <input
-              type="date"
-              value={dueDateFrom}
-              onChange={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
-              className={s.filterInput}
-              style={{ width: 150 }}
-            />
-            <label className={s.filterLabel}>Đến ngày</label>
-            <input
-              type="date"
-              value={dueDateTo}
-              onChange={(e) => { setDueDateTo(e.target.value); setPage(1) }}
-              className={s.filterInput}
-              style={{ width: 150 }}
-            />
           </div>
-        )}
 
-        {/* ── Advanced filter bar ── */}
-        {showFilter && (
-          <div className={s.filterBar}>
-            <div className={s.filterBarHead}>
-              <div className={s.filterBarTitle}>
-                <Filter size={12} />
-                Bộ lọc nâng cao
-                {activeFilterCount > 0 && (
-                  <span className={s.filterActiveBadge}>{activeFilterCount} đang bật</span>
-                )}
+          <div className={s.filterGrid}>
+
+            {/* NĂM */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Năm</label>
+              <select value={yearFilter} onChange={(e) => handleYearChange(e.target.value)} className={s.filterSelect}>
+                <option value="">Tất cả năm</option>
+                {availableYears.map((y) => (
+                  <option key={y} value={String(y)}>Năm {y}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* THÁNG */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Tháng</label>
+              <select value={monthFilter} onChange={(e) => handleMonthChange(e.target.value)} className={s.filterSelect} disabled={!yearFilter}>
+                <option value="">Cả năm</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                  <option key={m} value={String(m)}>Tháng {m}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* TỪ NGÀY */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Từ ngày</label>
+              <input type="date" value={dueDateFrom} onChange={(e) => { setDueDateFrom(e.target.value); setPage(1) }} className={s.filterInput} />
+            </div>
+
+            {/* ĐẾN NGÀY */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Đến ngày</label>
+              <input type="date" value={dueDateTo} onChange={(e) => { setDueDateTo(e.target.value); setPage(1) }} className={s.filterInput} />
+            </div>
+
+            {/* SẮP XẾP */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Sắp xếp</label>
+              <select value={sortValue} onChange={(e) => setSortValue(e.target.value)} className={s.filterSelect}>
+                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {/* TỪ KHOÁ */}
+            <div className={`${s.filterGroup} ${s.grow}`}>
+              <label className={s.filterLabel}>Từ khoá</label>
+              <div style={{ position: 'relative' }}>
+                <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)', pointerEvents: 'none' }} />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className={s.filterInput}
+                  style={{ paddingLeft: 28 }}
+                  placeholder="Tiêu đề công việc..."
+                />
               </div>
-              <button className={s.filterReset} onClick={resetFilters}>
-                <RotateCcw size={11} /> Đặt lại
+            </div>
+
+            {/* KHÁCH HÀNG */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Khách hàng</label>
+              <select value={companyFilter} onChange={(e) => { setCompanyFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
+                <option value="">Tất cả</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+
+            {/* NHÂN VIÊN */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Nhân viên</label>
+              <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
+                <option value="">Tất cả</option>
+                {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+
+            {/* TRẠNG THÁI — multi-select */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Trạng thái</label>
+              <MultiSelect
+                placeholder="Tất cả trạng thái"
+                options={
+                  getOptions('task_status').length > 0
+                    ? getOptions('task_status')
+                    : TASK_STATUSES.map((k) => ({ key: k, label: STATUS_LABELS[k] }))
+                }
+                selected={statusFilter}
+                onChange={(v) => { setStatusFilter(v); setPage(1) }}
+              />
+            </div>
+
+            {/* ƯU TIÊN — multi-select */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Ưu tiên</label>
+              <MultiSelect
+                placeholder="Tất cả ưu tiên"
+                options={
+                  getOptions('task_priority').length > 0
+                    ? getOptions('task_priority')
+                    : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
+                }
+                selected={priorityFilter}
+                onChange={(v) => { setPriorityFilter(v); setPage(1) }}
+              />
+            </div>
+
+            {/* NGUỒN — multi-select */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Nguồn</label>
+              <MultiSelect
+                placeholder="Tất cả nguồn"
+                options={
+                  getOptions('task_source').length > 0
+                    ? getOptions('task_source')
+                    : [{ key: 'auto', label: 'Tự động' }, { key: 'manual', label: 'Thủ công' }]
+                }
+                selected={sourceFilter}
+                onChange={(v) => { setSourceFilter(v); setPage(1) }}
+              />
+            </div>
+
+            {/* QUÁ HẠN */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>&nbsp;</label>
+              <button
+                className={`${s.filterToggle} ${isOverdue ? s.filterToggleActive : ''}`}
+                onClick={() => { setIsOverdue((p) => !p); setPage(1) }}
+              >
+                {isOverdue ? '✓ ' : ''}Quá hạn
               </button>
             </div>
 
-            <div className={s.filterGrid}>
-              <div className={`${s.filterGroup} ${s.grow}`}>
-                <label className={s.filterLabel}>Từ khoá</label>
-                <div style={{ position: 'relative' }}>
-                  <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)', pointerEvents: 'none' }} />
-                  <input
-                    type="text"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    className={s.filterInput}
-                    style={{ paddingLeft: 28 }}
-                    placeholder="Tiêu đề công việc..."
-                  />
-                </div>
-              </div>
+          </div>
 
-              <div className={s.filterGroup}>
-                <label className={s.filterLabel}>Khách hàng</label>
-                <select value={companyFilter} onChange={(e) => { setCompanyFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
-                  <option value="">Tất cả</option>
-                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <label className={s.filterLabel}>Nhân viên</label>
-                <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
-                  <option value="">Tất cả</option>
-                  {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <label className={s.filterLabel}>Trạng thái</label>
-                <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
-                  <option value="">Tất cả</option>
-                  {(getOptions('task_status').length > 0
-                    ? getOptions('task_status')
-                    : TASK_STATUSES.map((k) => ({ key: k, label: STATUS_LABELS[k] }))
-                  ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <label className={s.filterLabel}>Ưu tiên</label>
-                <select value={priorityFilter} onChange={(e) => { setPriorityFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
-                  <option value="">Tất cả</option>
-                  {(getOptions('task_priority').length > 0
-                    ? getOptions('task_priority')
-                    : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
-                  ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <label className={s.filterLabel}>Nguồn</label>
-                <select value={sourceFilter} onChange={(e) => { setSourceFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
-                  <option value="">Tất cả</option>
-                  {(getOptions('task_source').length > 0
-                    ? getOptions('task_source')
-                    : [{ key: 'auto', label: 'Tự động' }, { key: 'manual', label: 'Thủ công' }]
-                  ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <label className={s.filterLabel}>&nbsp;</label>
-                <button
-                  className={`${s.filterToggle} ${isOverdue ? s.filterToggleActive : ''}`}
-                  onClick={() => { setIsOverdue((p) => !p); setPage(1) }}
-                >
-                  Quá hạn
-                </button>
-              </div>
+          {/* ── Stats row ── */}
+          <div className={s.statsRow}>
+            <div className={s.statItem}>
+              <span className={s.statValue}>{stats.total}</span>
+              <span className={s.statLabel}>Tổng kết quả</span>
+            </div>
+            <span className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={`${s.statValue} ${s.statOrange}`}>{Math.max(0, stats.total - stats.completed)}</span>
+              <span className={s.statLabel}>Cần xử lý</span>
+            </div>
+            <span className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={`${s.statValue} ${s.statGreen}`}>{stats.completed}</span>
+              <span className={s.statLabel}>
+                Đã duyệt{stats.total > 0 ? ` · ${Math.round(stats.completed / stats.total * 100)}%` : ''}
+              </span>
+            </div>
+            <span className={s.statDivider} />
+            <div className={s.statItem}>
+              <span className={`${s.statValue} ${stats.overdue > 0 ? s.statRed : ''}`}>{stats.overdue}</span>
+              <span className={s.statLabel}>Bị flag</span>
             </div>
           </div>
-        )}
+        </div>
 
         {/* ── Bulk action bar ── */}
         {selectedIds.size > 0 && (

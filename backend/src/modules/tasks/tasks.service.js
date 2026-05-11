@@ -320,7 +320,17 @@ async function getActivityLog(taskId, { page = 1, limit = 50 } = {}) {
   }))
 }
 
+async function getAvailableYears() {
+  const { rows } = await query(
+    `SELECT DISTINCT EXTRACT(YEAR FROM due_date)::int AS year
+     FROM tasks
+     WHERE due_date IS NOT NULL
+     ORDER BY year DESC`
+  )
+  return rows.map((r) => r.year)
+}
+
 module.exports = {
   listTasks, getTaskById, createTask, updateTask, deleteTask,
-  changeTaskStatus, getActivityLog,
+  changeTaskStatus, getActivityLog, getAvailableYears,
 }
