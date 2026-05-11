@@ -12,11 +12,11 @@ export const STATUS_LABELS = {
 }
 
 export const STATUS_TRANSITIONS = {
-  pending:         ['in_progress'],
+  pending:         ['in_progress', 'on_hold'],
   in_progress:     ['on_hold', 'pending_review', 'completed'],
-  on_hold:         ['in_progress', 'pending'],
-  pending_review:  ['needs_revision', 'completed'],
-  needs_revision:  ['in_progress', 'pending_review'],
+  on_hold:         ['in_progress', 'needs_revision'],
+  pending_review:  ['completed', 'needs_revision'],
+  needs_revision:  ['in_progress'],
   completed:       [],
 }
 

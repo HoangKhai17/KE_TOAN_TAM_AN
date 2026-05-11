@@ -304,15 +304,15 @@ function DependenciesTab({ taskId, currentTaskId }) {
       setSearching(true)
       try {
         const { tasks } = await tasksApi.listTasks({ search: search.trim(), limit: 10 })
-        setResults(tasks.filter((t) => t.id !== currentTaskId && !deps.find((d) => d.blockedById === t.id)))
+        setResults(tasks.filter((t) => t.id !== currentTaskId && !deps.find((d) => d.dependsOnTaskId === t.id)))
       } catch (_e) { /* ignore */ } finally { setSearching(false) }
     }, 300)
     return () => clearTimeout(t)
   }, [search, deps, currentTaskId])
 
-  async function addDep(blockedById) {
+  async function addDep(dependsOnTaskId) {
     try {
-      const dep = await tasksApi.addTaskDependency(taskId, { blockedById })
+      const dep = await tasksApi.addTaskDependency(taskId, { dependsOnTaskId })
       setDeps((prev) => [...prev, dep])
       setSearch(''); setResults([])
       addToast('Đã thêm phụ thuộc', 'success')
@@ -336,12 +336,11 @@ function DependenciesTab({ taskId, currentTaskId }) {
       {deps.length > 0 && (
         <div className={s.depList}>
           {deps.map((dep) => {
-            const blocked = dep.blockedByStatus !== 'completed'
+            const blocked = dep.dependsOnStatus !== 'completed'
             return (
               <div key={dep.id} className={`${s.depItem} ${blocked ? s.depBlocked : s.depDone}`}>
-                <StatusBadge status={dep.blockedByStatus} />
-                <span className={s.depTitle} title={dep.blockedByTitle}>{dep.blockedByTitle}</span>
-                <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>{dep.blockedByCompanyName}</span>
+                <StatusBadge status={dep.dependsOnStatus} />
+                <span className={s.depTitle} title={dep.dependsOnTitle}>{dep.dependsOnTitle}</span>
                 {blocked && <span className={s.depWarning}><AlertTriangle size={10} /> Chưa xong</span>}
                 <button className={s.btnIcon} onClick={() => removeDep(dep.id)} title="Xoá" style={{ color: 'var(--color-danger)', width: 24, height: 24 }}>
                   <Trash2 size={11} />
@@ -373,7 +372,7 @@ function DependenciesTab({ taskId, currentTaskId }) {
         {results.length > 0 && (
           <div className={s.depSearchResults}>
             {results.map((t) => (
-              <div key={t.id} className={s.depSearchItem} onClick={() => addDep(t.id)}>
+              <div key={t.id} className={s.depSearchItem} onClick={() => addDep(t.id)} role="button" tabIndex={0}>
                 <span className={s.depSearchTitle}>{t.title}</span>
                 <span className={s.depSearchCompany}>{t.companyName}</span>
                 <StatusBadge status={t.status} />
@@ -448,12 +447,12 @@ function CommentsTab({ taskId }) {
           const canEdit = c.userId === currentUser?.id || isAdmin
           return (
             <div key={c.id} className={s.commentItem}>
-              <div className={s.commentAvatar}>{initials(c.authorName)}</div>
+              <div className={s.commentAvatar}>{initials(c.userName)}</div>
               <div className={s.commentBody}>
                 <div className={s.commentMeta}>
-                  <span className={s.commentAuthor}>{c.authorName}</span>
+                  <span className={s.commentAuthor}>{c.userName}</span>
                   <span className={s.commentTime}>{fmtDateTime(c.createdAt)}</span>
-                  {c.updatedAt !== c.createdAt && <span className={s.commentEdited}>(đã sửa)</span>}
+                  {c.isEdited && <span className={s.commentEdited}>(đã sửa)</span>}
                 </div>
                 {editId === c.id ? (
                   <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
@@ -628,12 +627,12 @@ function TimeLogsTab({ taskId }) {
       <div className={s.timeLogList}>
         {logs.length === 0 && <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>Chưa có nhật ký thời gian.</p>}
         {logs.map((log) => {
-          const canDel = log.loggedById === currentUser?.id || isAdmin
+          const canDel = log.userId === currentUser?.id || isAdmin
           return (
             <div key={log.id} className={s.timeLogItem}>
               <span className={s.timeLogHours}>{Number(log.hours).toFixed(1)}h</span>
               <span className={s.timeLogNote}>{log.note || '—'}</span>
-              <span className={s.timeLogMeta}>{log.loggedByName} · {fmtDate(log.loggedAt)}</span>
+              <span className={s.timeLogMeta}>{log.userName} · {fmtDate(log.loggedDate)}</span>
               {canDel && (
                 <button className={s.btnIcon} onClick={() => deleteLog(log.id)} title="Xoá" style={{ width: 24, height: 24, color: 'var(--color-danger)' }}>
                   <Trash2 size={11} />
@@ -656,30 +655,49 @@ function CustomFieldsTab({ taskId }) {
   const [values, setValues]   = useState({})
   const [saving, setSaving]   = useState(false)
 
+  function initValues(data) {
+    const init = {}
+    for (const f of data) {
+      if (f.dataType === 'boolean') init[f.fieldKey] = f.value ?? false
+      else if (f.dataType === 'number') init[f.fieldKey] = f.value ?? ''
+      else if (f.dataType === 'date') init[f.fieldKey] = f.value ? String(f.value).slice(0, 10) : ''
+      else init[f.fieldKey] = f.value ?? ''
+    }
+    return init
+  }
+
   useEffect(() => {
     tasksApi.getTaskCustomFields(taskId)
       .then((data) => {
         setFields(data)
-        const init = {}
-        for (const f of data) {
-          if (f.dataType === 'boolean') init[f.fieldKey] = f.valueBoolean ?? false
-          else if (f.dataType === 'number') init[f.fieldKey] = f.valueNumber ?? ''
-          else if (f.dataType === 'date') init[f.fieldKey] = f.valueDate?.slice(0, 10) ?? ''
-          else if (f.dataType === 'select') init[f.fieldKey] = f.selectValue ?? ''
-          else init[f.fieldKey] = f.valueText ?? ''
-        }
-        setValues(init)
+        setValues(initValues(data))
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [taskId])
+  }, [taskId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save() {
+    // Client-side required check
+    for (const f of fields) {
+      const v = values[f.fieldKey]
+      if (f.isRequired && (v === '' || v === null || v === undefined)) {
+        addToast(`Trường "${f.label}" là bắt buộc`, 'error')
+        return
+      }
+    }
     setSaving(true)
     try {
-      await tasksApi.upsertTaskCustomFields(taskId, {
-        fields: fields.map((f) => ({ fieldKey: f.fieldKey, value: values[f.fieldKey] ?? null }))
+      const payload = fields.map((f) => {
+        let value = values[f.fieldKey] ?? null
+        if (f.dataType === 'number') value = value !== '' && value !== null ? Number(value) : null
+        if (f.dataType === 'date' || f.dataType === 'text' || f.dataType === 'select') {
+          value = value === '' ? null : value
+        }
+        return { fieldKey: f.fieldKey, value }
       })
+      const updated = await tasksApi.upsertTaskCustomFields(taskId, { fields: payload })
+      setFields(updated)
+      setValues(initValues(updated))
       addToast('Đã lưu trường tuỳ chỉnh', 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể lưu', 'error')
@@ -721,7 +739,7 @@ function CustomFieldsTab({ taskId }) {
     if (f.dataType === 'number') {
       return <input type="number" value={val} onChange={(e) => set(e.target.value)} className={s.cfInput} />
     }
-    return <input type="text" value={val} onChange={(e) => set(e.target.value)} className={s.cfInput} placeholder={f.fieldLabel} />
+    return <input type="text" value={val} onChange={(e) => set(e.target.value)} className={s.cfInput} placeholder={f.label} />
   }
 
   return (
@@ -729,7 +747,7 @@ function CustomFieldsTab({ taskId }) {
       <div className={s.cfGrid}>
         {fields.map((f) => (
           <div key={f.fieldKey} className={s.cfGroup}>
-            <label className={`${s.cfLabel} ${f.isRequired ? s.cfRequired : ''}`}>{f.fieldLabel}</label>
+            <label className={`${s.cfLabel} ${f.isRequired ? s.cfRequired : ''}`}>{f.label}</label>
             {renderInput(f)}
           </div>
         ))}
@@ -797,25 +815,32 @@ export default function TaskDetail() {
       setOnHoldVisible(true)
       return
     }
+    // Always track the target status so ForceModal knows what to retry
+    setPendingStatus(newStatus)
     try {
-      const updated = await tasksApi.changeTaskStatus(id, { newStatus, ...extra })
+      const body = { status: newStatus }
+      if (extra.reason !== undefined) body.onHoldReason = extra.reason || null
+      if (extra.force)                body.force        = true
+
+      const updated = await tasksApi.changeTaskStatus(id, body)
       setTask(updated)
       addToast(`Đã chuyển sang "${STATUS_LABELS[newStatus]}"`, 'success')
       setOnHoldVisible(false)
       setForceVisible(false)
       setPendingStatus(null)
     } catch (err) {
-      const status = err.response?.status
-      const msg    = err.response?.data?.error?.message
-      if (status === 409) {
+      const httpStatus = err.response?.status
+      const msg        = err.response?.data?.error?.message
+      if (httpStatus === 409) {
         setOnHoldVisible(false)
         setForceVisible(true)
-      } else if (status === 422) {
+      } else if (httpStatus === 422) {
         setOnHoldVisible(false)
-        addToast(msg ?? 'Task bị chặn bởi dependency', 'error')
+        addToast(msg ?? 'Task bị chặn bởi dependency chưa hoàn thành', 'error')
         setPendingStatus(null)
       } else {
         addToast(msg ?? 'Không thể cập nhật trạng thái', 'error')
+        setPendingStatus(null)
       }
     }
   }

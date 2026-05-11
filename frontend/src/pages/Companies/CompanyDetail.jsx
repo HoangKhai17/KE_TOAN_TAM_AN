@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
-  Building2, Pencil, UserPlus, AlertTriangle, ChevronRight,
-  Phone, Mail, MapPin, Hash, Calendar, Briefcase, CreditCard,
-  User, ListTodo, CalendarDays, Lock, FileText, StickyNote,
+  Building2, Pencil, AlertTriangle, ChevronRight,
+  Hash, Calendar, Briefcase,
+  User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Shield, Users, BarChart2, Clock, Trash2,
+  Plus, Search, RotateCcw,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -12,8 +13,15 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import * as usersApi from '../../api/users'
+import * as tasksApi from '../../api/tasks'
 import { BUSINESS_TYPE_LABELS, CompanyFormModal, getInitials, StatusPill } from './Companies'
 import SchedulesTab from './SchedulesTab'
+import TaskFormModal from '../Tasks/TaskFormModal'
+import {
+  STATUS_LABELS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS,
+  isTaskOverdue, fmtDate as fmtTaskDate, progressPct,
+} from '../Tasks/taskUtils'
+import ts from '../Tasks/tasks.module.css'
 import s from './companies.module.css'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -86,8 +94,6 @@ export default function CompanyDetail() {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [id])
-
-  const navigate = () => window.history.back()
 
   async function handleDelete() {
     setDeleting(true)
@@ -273,12 +279,9 @@ export default function CompanyDetail() {
         />
       )}
       {activeTab === 'tasks' && (
-        <PlaceholderTab
-          icon={<ListTodo size={24} color="#7c3aed" />}
-          iconBg="#f5f3ff"
-          title="Danh sách công việc"
-          desc="Module quản lý công việc sẽ hoàn thiện trong Phase 6. Số việc đang mở hiển thị trên đầu trang."
-          phase="Phase 6"
+        <CompanyTasksTab
+          company={company}
+          onTaskCountChange={(openCount) => setCompany((c) => ({ ...c, taskOpenCount: openCount }))}
         />
       )}
       {activeTab === 'schedules' && (
@@ -329,7 +332,7 @@ export default function CompanyDetail() {
               <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
               <span>
                 Bạn sắp kết thúc hợp đồng với <strong>{company.name}</strong>.
-                Công ty sẽ chuyển sang trạng thái <strong>"Đã kết thúc"</strong> và không thể tạo thêm công việc mới.
+                Công ty sẽ chuyển sang trạng thái <strong>&ldquo;Đã kết thúc&rdquo;</strong> và không thể tạo thêm công việc mới.
                 Dữ liệu hiện có vẫn được giữ nguyên.
               </span>
             </div>
@@ -351,8 +354,8 @@ export default function CompanyDetail() {
             <div className={s.terminateWarn} style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
               <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
               <span>
-                Bạn sắp <strong>xoá vĩnh viễn</strong> công ty <strong>"{company.name}"</strong>.
-                Hành động này không thể hoàn tác. Nếu công ty đã có công việc hoặc lịch sử phân công, hãy dùng <strong>"Kết thúc HĐ"</strong> thay thế.
+                Bạn sắp <strong>xoá vĩnh viễn</strong> công ty <strong>&ldquo;{company.name}&rdquo;</strong>.
+                Hành động này không thể hoàn tác. Nếu công ty đã có công việc hoặc lịch sử phân công, hãy dùng <strong>&ldquo;Kết thúc HĐ&rdquo;</strong> thay thế.
               </span>
             </div>
             <div className={s.modalActions}>
@@ -812,6 +815,297 @@ function PlaceholderTab({ icon, iconBg, title, desc, phase, btnLabel, btnDisable
         <button className={s.btnOutline} disabled={btnDisabled} style={{ marginTop: 4 }}>
           {btnLabel}
         </button>
+      )}
+    </div>
+  )
+}
+
+// ── CompanyTasksTab ────────────────────────────────────────────────────────────
+
+function CompanyTasksTab({ company, onTaskCountChange }) {
+  const navigate   = useNavigate()
+  const addToast   = useToastStore((st) => st.toast)
+
+  const [tasks, setTasks]           = useState([])
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
+  const [page, setPage]             = useState(1)
+  const [loading, setLoading]       = useState(true)
+
+  const [searchInput, setSearchInput]     = useState('')
+  const [search, setSearch]               = useState('')
+  const [statusFilter, setStatusFilter]   = useState('')
+  const [priorityFilter, setPriorityFilter] = useState('')
+  const [isOverdue, setIsOverdue]         = useState(false)
+
+  const [showCreate, setShowCreate] = useState(false)
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 350)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  const load = useCallback(() => {
+    let cancelled = false
+    setLoading(true)
+    tasksApi.listTasks({
+      companyId:  company.id,
+      search:     search     || undefined,
+      status:     statusFilter  || undefined,
+      priority:   priorityFilter || undefined,
+      isOverdue:  isOverdue  ? true : undefined,
+      page,
+      limit:      20,
+      sortBy:     'due_date',
+      sortDir:    'asc',
+    })
+      .then(({ tasks: t, pagination: p }) => {
+        if (!cancelled) {
+          setTasks(t)
+          setPagination(p ?? { total: t.length, totalPages: 1 })
+        }
+      })
+      .catch(() => { if (!cancelled) setTasks([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [company.id, search, statusFilter, priorityFilter, isOverdue, page]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const cancel = load()
+    return cancel
+  }, [load])
+
+  function resetFilters() {
+    setSearchInput(''); setSearch('')
+    setStatusFilter(''); setPriorityFilter(''); setIsOverdue(false)
+    setPage(1)
+  }
+
+  const activeFilters = [search, statusFilter, priorityFilter].filter(Boolean).length + (isOverdue ? 1 : 0)
+
+  // KPI derived from current page (not perfect but good enough without extra API)
+  const openCount     = tasks.filter((t) => t.status !== 'completed').length
+  const overdueCount  = tasks.filter((t) => isTaskOverdue(t)).length
+  const completedCount = tasks.filter((t) => t.status === 'completed').length
+
+  function pageWindow() {
+    const total = pagination.totalPages ?? 1
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+    if (page <= 4) return [1, 2, 3, 4, 5, '…', total]
+    if (page >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
+    return [1, '…', page - 1, page, page + 1, '…', total]
+  }
+
+  const STATUSES = ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed']
+
+  return (
+    <div>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--color-text)' }}>
+            Công việc của khách hàng
+          </h3>
+          {!loading && (
+            <span style={{ fontSize: 11, fontWeight: 700, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: 99, padding: '1px 8px' }}>
+              {pagination.total}
+            </span>
+          )}
+        </div>
+        <button className={ts.btnPrimary} style={{ height: 32, fontSize: 13 }} onClick={() => setShowCreate(true)}>
+          <Plus size={13} /> Tạo công việc
+        </button>
+      </div>
+
+      {/* KPI strip */}
+      {!loading && tasks.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          {[
+            { label: 'Đang mở',   value: openCount,      color: '#1d4ed8', bg: '#eff6ff', border: '#93c5fd' },
+            { label: 'Quá hạn',   value: overdueCount,   color: '#dc2626', bg: '#fef2f2', border: '#fca5a5', hide: overdueCount === 0 },
+            { label: 'Hoàn thành', value: completedCount, color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
+          ].filter((k) => !k.hide).map((k) => (
+            <div key={k.label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 8, background: k.bg, border: `1px solid ${k.border}` }}>
+              <span style={{ fontSize: 16, fontWeight: 800, color: k.color }}>{k.value}</span>
+              <span style={{ fontSize: 11, color: k.color, fontWeight: 600 }}>{k.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Filter row */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: '1', minWidth: 160 }}>
+          <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)', pointerEvents: 'none' }} />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Tìm công việc..."
+            className={s.searchInput}
+            style={{ paddingLeft: 28, height: 32 }}
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+          className={s.filterSelect}
+          style={{ height: 32, minWidth: 130 }}
+        >
+          <option value="">Tất cả trạng thái</option>
+          {STATUSES.map((st) => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
+        </select>
+        <select
+          value={priorityFilter}
+          onChange={(e) => { setPriorityFilter(e.target.value); setPage(1) }}
+          className={s.filterSelect}
+          style={{ height: 32, minWidth: 120 }}
+        >
+          <option value="">Tất cả ưu tiên</option>
+          {['urgent', 'high', 'medium', 'low'].map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+        </select>
+        <button
+          className={ts.qBtn}
+          style={isOverdue ? { background: '#dc2626', borderColor: '#dc2626', color: '#fff' } : {}}
+          onClick={() => { setIsOverdue((v) => !v); setPage(1) }}
+        >
+          Quá hạn
+        </button>
+        {activeFilters > 0 && (
+          <button className={ts.qResetBtn} onClick={resetFilters}>
+            <RotateCcw size={11} /> Xoá lọc ({activeFilters})
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className={s.tableWrap}>
+        <div className={s.tableScroll}>
+          <table className={s.table}>
+            <thead>
+              <tr>
+                <th>Tiêu đề</th>
+                <th>Trạng thái</th>
+                <th>Ưu tiên</th>
+                <th>Hết hạn</th>
+                <th>Phụ trách</th>
+                <th>Tiến độ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    {[220, 100, 80, 80, 100, 80].map((w, j) => (
+                      <td key={j} style={{ padding: '10px 16px' }}>
+                        <div style={{ width: w, height: 10, background: '#f1f5f9', borderRadius: 4, animation: 'app-pulse 1.5s ease-in-out infinite' }} />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : tasks.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--color-muted)', fontSize: 13 }}>
+                      <ListTodo size={28} style={{ opacity: 0.3, marginBottom: 8, display: 'block', margin: '0 auto 8px' }} />
+                      {activeFilters > 0 ? 'Không tìm thấy công việc phù hợp' : 'Chưa có công việc nào'}
+                    </div>
+                  </td>
+                </tr>
+              ) : tasks.map((task) => {
+                const overdue = isTaskOverdue(task)
+                const pct     = progressPct(task)
+                return (
+                  <tr
+                    key={task.id}
+                    style={{ cursor: 'pointer', borderLeft: overdue ? '3px solid #ef4444' : undefined }}
+                    onClick={() => navigate(`/tasks/${task.id}`)}
+                  >
+                    <td>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: overdue ? '#dc2626' : 'var(--color-text)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {task.title}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`${ts.statusBadge} ${ts[STATUS_CSS[task.status]]}`}>
+                        {STATUS_LABELS[task.status]}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`${ts.priorityBadge} ${ts[PRIORITY_CSS[task.priority]]}`}>
+                        {PRIORITY_LABELS[task.priority]}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 12, color: overdue ? '#dc2626' : 'var(--color-text-soft)', fontWeight: overdue ? 700 : 400 }}>
+                      {fmtTaskDate(task.dueDate)}
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--color-text-soft)' }}>
+                      {task.assignedToName ?? '—'}
+                    </td>
+                    <td>
+                      {pct !== null ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <div style={{ flex: 1, height: 5, minWidth: 40, background: '#e2e8f0', borderRadius: 99, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#22c55e' : '#3b82f6', borderRadius: 99, transition: 'width 0.3s' }} />
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{pct}%</span>
+                        </div>
+                      ) : <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>—</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {pagination.totalPages > 1 && (
+          <div className={s.paginationBar}>
+            <span className={s.paginationInfo}>
+              {loading ? '...' : `${(page - 1) * 20 + 1}–${Math.min(page * 20, pagination.total)} / ${pagination.total}`}
+            </span>
+            <div className={s.paginationBtns}>
+              <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={page === 1}>«</button>
+              <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
+              {pageWindow().map((n, i) =>
+                n === '…' ? (
+                  <span key={`e${i}`} style={{ padding: '0 4px', fontSize: 12, color: 'var(--color-muted)' }}>…</span>
+                ) : (
+                  <button
+                    key={n}
+                    className={`${s.paginationBtn} ${page === n ? s.paginationBtnActive : ''}`}
+                    onClick={() => setPage(n)}
+                  >
+                    {n}
+                  </button>
+                )
+              )}
+              <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
+              <button className={s.paginationBtn} onClick={() => setPage(pagination.totalPages)} disabled={page === pagination.totalPages}>»</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Create task modal */}
+      {showCreate && (
+        <TaskFormModal
+          initialCompanyId={company.id}
+          lockCompany
+          onClose={() => setShowCreate(false)}
+          onSaved={(task) => {
+            setShowCreate(false)
+            addToast(`Đã tạo "${task.title}"`, 'success')
+            setPage(1)
+            load()
+            onTaskCountChange((company.taskOpenCount ?? 0) + 1)
+          }}
+          onSavedAndOpen={(task) => {
+            setShowCreate(false)
+            navigate(`/tasks/${task.id}`)
+          }}
+        />
       )}
     </div>
   )

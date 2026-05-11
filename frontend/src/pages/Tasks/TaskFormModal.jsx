@@ -7,9 +7,9 @@ import { listUsers } from '../../api/users'
 import { listTaskTypes } from '../../api/taskTypes'
 import s from './tasks.module.css'
 
-export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen }) {
+export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initialCompanyId, lockCompany }) {
   const [form, setForm] = useState({
-    title: '', companyId: '', taskTypeId: '', assignedToId: '',
+    title: '', companyId: initialCompanyId || '', taskTypeId: '', assignedToId: '',
     dueDate: '', priority: 'medium', slaDays: '', description: '',
   })
   const [companies, setCompanies]   = useState([])
@@ -94,7 +94,11 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen }) {
             value={form.companyId}
             onChange={set('companyId')}
             className={s.formSelect}
-            style={fe.companyId ? { borderColor: '#ef4444' } : {}}
+            disabled={lockCompany}
+            style={{
+              ...(fe.companyId ? { borderColor: '#ef4444' } : {}),
+              ...(lockCompany ? { background: '#f8fafc', cursor: 'not-allowed' } : {}),
+            }}
           >
             <option value="">-- Chọn khách hàng --</option>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

@@ -22,7 +22,7 @@ import { listCompanies } from '../../api/companies'
 import { listUsers } from '../../api/users'
 import TaskFormModal from './TaskFormModal'
 import {
-  TASK_STATUSES, STATUS_LABELS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS,
+  TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS,
   isTaskOverdue, fmtDate, progressPct,
 } from './taskUtils'
 import s from './tasks.module.css'
@@ -216,6 +216,7 @@ function DroppableColumn({ status, tasks, onOpen }) {
 
 function BoardView({ tasks, onStatusChange, onOpen }) {
   const [activeTask, setActiveTask] = useState(null)
+  const addToast = useToastStore((state) => state.toast)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -240,6 +241,11 @@ function BoardView({ tasks, onStatusChange, onOpen }) {
     const src = active.data.current?.status
     const dst = over.id
     if (src === dst) return
+    const validTargets = STATUS_TRANSITIONS[src] ?? []
+    if (!validTargets.includes(dst)) {
+      addToast(`Không thể chuyển từ "${STATUS_LABELS[src]}" sang "${STATUS_LABELS[dst]}"`, 'error')
+      return
+    }
     const task = tasks.find((t) => t.id === active.id)
     if (task) onStatusChange(task, dst)
   }
