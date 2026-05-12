@@ -73,4 +73,34 @@ async function getActivityLog(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog }
+async function listNotes(req, res, next) {
+  try {
+    const notes = await svc.listNotes(req.params.id)
+    res.json({ success: true, data: { notes } })
+  } catch (err) { next(err) }
+}
+
+async function createNote(req, res, next) {
+  try {
+    const { content, isPinned } = req.body
+    if (!content?.trim()) return res.status(400).json({ success: false, error: { message: 'Nội dung không được trống' } })
+    const note = await svc.createNote(req.params.id, { content, isPinned }, req.user.id)
+    res.status(201).json({ success: true, data: { note } })
+  } catch (err) { next(err) }
+}
+
+async function updateNote(req, res, next) {
+  try {
+    const note = await svc.updateNote(req.params.id, req.params.noteId, req.body)
+    res.json({ success: true, data: { note } })
+  } catch (err) { next(err) }
+}
+
+async function deleteNote(req, res, next) {
+  try {
+    await svc.deleteNote(req.params.id, req.params.noteId)
+    res.json({ success: true })
+  } catch (err) { next(err) }
+}
+
+module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote }

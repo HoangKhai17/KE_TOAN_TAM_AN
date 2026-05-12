@@ -353,6 +353,81 @@ async function getActivityLog(companyId, { page = 1, limit = 10 } = {}) {
   return { activities, total }
 }
 
+// ── Company Notes ──────────────────────────────────────────────────────────────
+
+async function listNotes(companyId) {
+  const { rows } = await query(
+    `SELECT cn.id, cn.content, cn.is_pinned, cn.created_at, cn.updated_at,
+            u.name AS author_name, cn.created_by
+     FROM company_notes cn
+     LEFT JOIN users u ON u.id = cn.created_by
+     WHERE cn.company_id = $1
+     ORDER BY cn.is_pinned DESC, cn.created_at DESC`,
+    [companyId]
+  )
+  return rows.map(r => ({
+    id:         r.id,
+    content:    r.content,
+    isPinned:   r.is_pinned,
+    authorName: r.author_name ?? 'Hệ thống',
+    createdBy:  r.created_by,
+    createdAt:  r.created_at,
+    updatedAt:  r.updated_at,
+  }))
+}
+
+async function createNote(companyId, { content, isPinned = false }, userId) {
+  const { rows: [row] } = await query(
+    `INSERT INTO company_notes (company_id, content, is_pinned, created_by)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, content, is_pinned, created_at, updated_at, created_by`,
+    [companyId, content.trim(), isPinned, userId]
+  )
+  const { rows: [user] } = await query('SELECT name FROM users WHERE id = $1', [userId])
+  return {
+    id:         row.id,
+    content:    row.content,
+    isPinned:   row.is_pinned,
+    authorName: user?.name ?? 'Hệ thống',
+    createdBy:  row.created_by,
+    createdAt:  row.created_at,
+    updatedAt:  row.updated_at,
+  }
+}
+
+async function updateNote(companyId, noteId, { content, isPinned }) {
+  const sets = []
+  const vals = []
+  if (content  !== undefined) { sets.push(`content = $${sets.length + 1}`);   vals.push(content.trim()) }
+  if (isPinned !== undefined) { sets.push(`is_pinned = $${sets.length + 1}`); vals.push(isPinned) }
+  if (!sets.length) throw new Error('Nothing to update')
+  sets.push('updated_at = NOW()')
+  vals.push(companyId, noteId)
+
+  const { rows: [row] } = await query(
+    `UPDATE company_notes SET ${sets.join(', ')}
+     WHERE company_id = $${vals.length - 1} AND id = $${vals.length}
+     RETURNING id, content, is_pinned, created_at, updated_at, created_by`,
+    vals
+  )
+  if (!row) throw Object.assign(new Error('Note not found'), { status: 404 })
+  return {
+    id:         row.id,
+    content:    row.content,
+    isPinned:   row.is_pinned,
+    createdAt:  row.created_at,
+    updatedAt:  row.updated_at,
+  }
+}
+
+async function deleteNote(companyId, noteId) {
+  const { rowCount } = await query(
+    'DELETE FROM company_notes WHERE company_id = $1 AND id = $2',
+    [companyId, noteId]
+  )
+  if (!rowCount) throw Object.assign(new Error('Note not found'), { status: 404 })
+}
+
 module.exports = {
   listCompanies,
   getCompanyById,
@@ -363,4 +438,8 @@ module.exports = {
   getAssignments,
   assignStaff,
   getActivityLog,
+  listNotes,
+  createNote,
+  updateNote,
+  deleteNote,
 }

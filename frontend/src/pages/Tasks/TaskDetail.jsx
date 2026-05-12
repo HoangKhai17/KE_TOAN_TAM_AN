@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  ArrowLeft, Check, X, Plus, Trash2, Send, Edit2,
+  ArrowLeft, Check, X, Plus, Trash2, Send, Edit2, Loader2,
   Building2, User, Tag, Clock, Calendar, AlertTriangle,
   ClipboardList, MessageSquare, History, Timer, Sliders,
 } from 'lucide-react'
@@ -504,17 +504,26 @@ function CommentsTab({ taskId }) {
 
       <div className={s.commentAddRow}>
         <div className={s.commentAvatar}>{initials(currentUser?.name)}</div>
-        <div style={{ flex: 1, display: 'flex', gap: 6 }}>
+        <div className={s.commentInputWrap}>
           <textarea
             value={newText}
             onChange={(e) => setNewText(e.target.value)}
-            placeholder="Viết bình luận..."
+            placeholder="Viết bình luận... (Ctrl+Enter để gửi)"
             className={s.commentInput}
             onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) submit() }}
           />
-          <button className={s.btnPrimary} onClick={submit} disabled={sending || !newText.trim()} style={{ height: 72, padding: '0 14px', alignSelf: 'stretch', flexShrink: 0 }}>
-            <Send size={14} />
-          </button>
+          <div className={s.commentSendRow}>
+            <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>Ctrl + Enter để gửi</span>
+            <button
+              className={s.btnPrimary}
+              onClick={submit}
+              disabled={sending || !newText.trim()}
+              style={{ height: 32, padding: '0 16px', fontSize: 13 }}
+            >
+              {sending ? <Loader2 size={13} className={s.spin} /> : <Send size={13} />}
+              Gửi
+            </button>
+          </div>
         </div>
       </div>
     </div>

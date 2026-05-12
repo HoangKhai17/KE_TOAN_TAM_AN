@@ -143,4 +143,12 @@ async function getLogs(limit = 20) {
   return rows
 }
 
-module.exports = { startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs }
+async function deleteLog(id) {
+  await query('DELETE FROM scheduler_run_logs WHERE id = $1', [id])
+}
+
+async function clearLogs() {
+  await query('TRUNCATE TABLE scheduler_run_logs')
+}
+
+module.exports = { startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs, deleteLog, clearLogs }

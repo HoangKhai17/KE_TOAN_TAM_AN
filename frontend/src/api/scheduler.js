@@ -19,3 +19,11 @@ export async function updateSchedulerConfig(config) {
   const { data } = await api.patch('/admin/scheduler/config', config)
   return data.data
 }
+
+export async function deleteSchedulerLog(id) {
+  await api.delete(`/admin/scheduler/logs/${id}`)
+}
+
+export async function clearSchedulerLogs() {
+  await api.delete('/admin/scheduler/logs')
+}

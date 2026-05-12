@@ -7,6 +7,7 @@ import {
   Search, Eye, EyeOff, UserX, UserCheck, Camera, Tag,
   Play, RotateCcw, CheckCircle, XCircle,
   ChevronDown, ChevronUp, ListChecks, History,
+  Trash2, Check, X,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -14,7 +15,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
-import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerConfig } from '../../api/scheduler'
+import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerConfig, deleteSchedulerLog, clearSchedulerLogs } from '../../api/scheduler'
 import TaskTypesSection from './TaskTypesSection'
 import EnumManagementSection from './EnumManagementSection'
 import s from './settings.module.css'
@@ -769,9 +770,15 @@ function TemplatesSection() {
   const [runHour,     setRunHour]     = useState(5)
   const [hourSaving,  setHourSaving]  = useState(false)
 
-  const [logs,        setLogs]        = useState([])
-  const [logsLoading, setLogsLoading] = useState(false)
-  const [expandedIds, setExpandedIds] = useState(new Set())
+  const [logs,            setLogs]            = useState([])
+  const [logsLoading,     setLogsLoading]     = useState(false)
+  const [expandedIds,     setExpandedIds]     = useState(new Set())
+  const [logsPage,        setLogsPage]        = useState(1)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [deletingId,      setDeletingId]      = useState(null)
+  const [confirmClearAll, setConfirmClearAll] = useState(false)
+  const [clearingAll,     setClearingAll]     = useState(false)
+  const LOGS_PER_PAGE = 10
 
   function fmtDt(iso) {
     if (!iso) return '—'
@@ -846,6 +853,37 @@ function TemplatesSection() {
       addToast('Không thể cập nhật giờ chạy', 'error')
     } finally {
       setHourSaving(false)
+    }
+  }
+
+  async function handleDeleteLog(id) {
+    setDeletingId(id)
+    try {
+      await deleteSchedulerLog(id)
+      setLogs((prev) => prev.filter((l) => l.id !== id))
+      setConfirmDeleteId(null)
+      setLogsPage(1)
+      addToast('Đã xoá lịch sử chạy', 'success')
+    } catch {
+      addToast('Không thể xoá lịch sử', 'error')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  async function handleClearLogs() {
+    setClearingAll(true)
+    try {
+      await clearSchedulerLogs()
+      setLogs([])
+      setConfirmClearAll(false)
+      setLogsPage(1)
+      setExpandedIds(new Set())
+      addToast('Đã xoá toàn bộ lịch sử chạy', 'success')
+    } catch {
+      addToast('Không thể xoá lịch sử', 'error')
+    } finally {
+      setClearingAll(false)
     }
   }
 
@@ -979,84 +1017,177 @@ function TemplatesSection() {
             Lịch sử chạy
             {logs.length > 0 && <span className={s.schedulerLogsBadge}>{logs.length}</span>}
           </div>
-          <button
-            className={s.schedulerLogsRefresh}
-            onClick={loadLogs}
-            disabled={logsLoading}
-            title="Làm mới lịch sử"
-          >
-            <RotateCcw size={12} className={logsLoading ? s.spin : ''} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {logs.length > 0 && (
+              confirmClearAll ? (
+                <div className={s.schedulerLogsClearConfirm}>
+                  <span>Xoá tất cả?</span>
+                  <button
+                    className={`${s.schedulerLogConfirmBtn} ${s.schedulerLogConfirmBtnOk}`}
+                    onClick={handleClearLogs}
+                    disabled={clearingAll}
+                    title="Xác nhận xoá tất cả"
+                  >
+                    {clearingAll ? <Loader2 size={11} className={s.spin} /> : <Check size={11} />}
+                  </button>
+                  <button
+                    className={`${s.schedulerLogConfirmBtn} ${s.schedulerLogConfirmBtnCancel}`}
+                    onClick={() => setConfirmClearAll(false)}
+                    title="Huỷ"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className={s.schedulerLogsClearBtn}
+                  onClick={() => setConfirmClearAll(true)}
+                  title="Xoá toàn bộ lịch sử"
+                >
+                  <Trash2 size={12} /> Xoá tất cả
+                </button>
+              )
+            )}
+            <button
+              className={s.schedulerLogsRefresh}
+              onClick={loadLogs}
+              disabled={logsLoading}
+              title="Làm mới lịch sử"
+            >
+              <RotateCcw size={12} className={logsLoading ? s.spin : ''} />
+            </button>
+          </div>
         </div>
 
         {logsLoading && logs.length === 0 ? (
           <div className={s.schedulerLogsEmpty}>Đang tải...</div>
         ) : logs.length === 0 ? (
           <div className={s.schedulerLogsEmpty}>Chưa có lịch sử chạy nào.</div>
-        ) : (
-          <div className={s.schedulerLogsList}>
-            {logs.map(log => {
-              const expanded = expandedIds.has(log.id)
-              const tasks    = Array.isArray(log.tasks_created) ? log.tasks_created : []
-              const isManual = log.triggered_by === 'manual'
-              const hasErr   = !!log.error_message
+        ) : (() => {
+          const totalPages = Math.ceil(logs.length / LOGS_PER_PAGE)
+          const pagedLogs  = logs.slice((logsPage - 1) * LOGS_PER_PAGE, logsPage * LOGS_PER_PAGE)
+          return (
+            <>
+              <div className={s.schedulerLogsList}>
+                {pagedLogs.map(log => {
+                  const expanded = expandedIds.has(log.id)
+                  const tasks    = Array.isArray(log.tasks_created) ? log.tasks_created : []
+                  const isManual = log.triggered_by === 'manual'
+                  const hasErr   = !!log.error_message
 
-              return (
-                <div key={log.id} className={`${s.schedulerLogRow} ${hasErr ? s.schedulerLogRowErr : ''}`}>
-                  <div className={s.schedulerLogMeta}>
-                    <span className={`${s.schedulerLogBadge} ${isManual ? s.schedulerLogBadgeManual : s.schedulerLogBadgeAuto}`}>
-                      {isManual ? `Thủ công${log.triggered_by_name ? ` · ${log.triggered_by_name}` : ''}` : 'Tự động'}
-                    </span>
-                    <span className={s.schedulerLogTime}>{fmtDt(log.started_at)}</span>
-                    <span className={s.schedulerLogDur}>{fmtDur(log.duration_ms)}</span>
-                  </div>
-
-                  {hasErr ? (
-                    <div className={s.schedulerLogErrMsg}>
-                      <XCircle size={12} /> {log.error_message}
-                    </div>
-                  ) : (
-                    <div className={s.schedulerLogStats}>
-                      <span className={s.schedulerLogStat} style={{ color: '#16a34a' }}>
-                        +{log.generated} task
-                      </span>
-                      <span className={s.schedulerLogStat} style={{ color: '#94a3b8' }}>
-                        {log.skipped} bỏ qua
-                      </span>
-                      {log.errors > 0 && (
-                        <span className={s.schedulerLogStat} style={{ color: '#ef4444' }}>
-                          {log.errors} lỗi
+                  return (
+                    <div key={log.id} className={`${s.schedulerLogRow} ${hasErr ? s.schedulerLogRowErr : ''}`}>
+                      <div className={s.schedulerLogMeta}>
+                        <span className={`${s.schedulerLogBadge} ${isManual ? s.schedulerLogBadgeManual : s.schedulerLogBadgeAuto}`}>
+                          {isManual ? `Thủ công${log.triggered_by_name ? ` · ${log.triggered_by_name}` : ''}` : 'Tự động'}
                         </span>
+                        <span className={s.schedulerLogTime}>{fmtDt(log.started_at)}</span>
+                        <span className={s.schedulerLogDur}>{fmtDur(log.duration_ms)}</span>
+
+                        {confirmDeleteId === log.id ? (
+                          <div className={s.schedulerLogConfirm}>
+                            <span className={s.schedulerLogConfirmText}>Xoá?</span>
+                            <button
+                              className={`${s.schedulerLogConfirmBtn} ${s.schedulerLogConfirmBtnOk}`}
+                              onClick={() => handleDeleteLog(log.id)}
+                              disabled={deletingId === log.id}
+                              title="Xác nhận xoá"
+                            >
+                              {deletingId === log.id ? <Loader2 size={10} className={s.spin} /> : <Check size={11} />}
+                            </button>
+                            <button
+                              className={`${s.schedulerLogConfirmBtn} ${s.schedulerLogConfirmBtnCancel}`}
+                              onClick={() => setConfirmDeleteId(null)}
+                              title="Huỷ"
+                            >
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className={s.schedulerLogDeleteBtn}
+                            onClick={() => setConfirmDeleteId(log.id)}
+                            title="Xoá lịch sử này"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      {hasErr ? (
+                        <div className={s.schedulerLogErrMsg}>
+                          <XCircle size={12} /> {log.error_message}
+                        </div>
+                      ) : (
+                        <div className={s.schedulerLogStats}>
+                          <span className={s.schedulerLogStat} style={{ color: '#16a34a' }}>
+                            +{log.generated} task
+                          </span>
+                          <span className={s.schedulerLogStat} style={{ color: '#94a3b8' }}>
+                            {log.skipped} bỏ qua
+                          </span>
+                          {log.errors > 0 && (
+                            <span className={s.schedulerLogStat} style={{ color: '#ef4444' }}>
+                              {log.errors} lỗi
+                            </span>
+                          )}
+                          {tasks.length > 0 && (
+                            <button
+                              className={s.schedulerLogExpandBtn}
+                              onClick={() => toggleExpand(log.id)}
+                            >
+                              <ListChecks size={11} />
+                              {expanded ? 'Ẩn' : `Xem ${tasks.length} task`}
+                              {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                            </button>
+                          )}
+                        </div>
                       )}
-                      {tasks.length > 0 && (
-                        <button
-                          className={s.schedulerLogExpandBtn}
-                          onClick={() => toggleExpand(log.id)}
-                        >
-                          <ListChecks size={11} />
-                          {expanded ? 'Ẩn' : `Xem ${tasks.length} task`}
-                          {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                        </button>
+
+                      {expanded && tasks.length > 0 && (
+                        <ul className={s.schedulerLogTaskList}>
+                          {tasks.map((t, i) => (
+                            <li key={t.id ?? i} className={s.schedulerLogTaskItem}>
+                              <span className={s.schedulerLogTaskPeriod}>{t.periodLabel}</span>
+                              <span className={s.schedulerLogTaskTitle}>{t.title}</span>
+                              <span className={s.schedulerLogTaskDue}>hạn {t.dueDate}</span>
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </div>
-                  )}
+                  )
+                })}
+              </div>
 
-                  {expanded && tasks.length > 0 && (
-                    <ul className={s.schedulerLogTaskList}>
-                      {tasks.map((t, i) => (
-                        <li key={t.id ?? i} className={s.schedulerLogTaskItem}>
-                          <span className={s.schedulerLogTaskPeriod}>{t.periodLabel}</span>
-                          <span className={s.schedulerLogTaskTitle}>{t.title}</span>
-                          <span className={s.schedulerLogTaskDue}>hạn {t.dueDate}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className={s.schedulerLogsPagination}>
+                  <button
+                    className={s.schedulerLogsPagBtn}
+                    onClick={() => setLogsPage(p => Math.max(1, p - 1))}
+                    disabled={logsPage === 1}
+                  >‹</button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+                    <button
+                      key={n}
+                      className={`${s.schedulerLogsPagBtn} ${logsPage === n ? s.schedulerLogsPagBtnActive : ''}`}
+                      onClick={() => setLogsPage(n)}
+                    >{n}</button>
+                  ))}
+                  <button
+                    className={s.schedulerLogsPagBtn}
+                    onClick={() => setLogsPage(p => Math.min(totalPages, p + 1))}
+                    disabled={logsPage === totalPages}
+                  >›</button>
+                  <span className={s.schedulerLogsPagInfo}>
+                    {(logsPage - 1) * LOGS_PER_PAGE + 1}–{Math.min(logsPage * LOGS_PER_PAGE, logs.length)} / {logs.length}
+                  </span>
                 </div>
-              )
-            })}
-          </div>
-        )}
+              )}
+            </>
+          )
+        })()}
       </div>
     </div>
   )

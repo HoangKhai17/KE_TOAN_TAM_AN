@@ -263,4 +263,10 @@ router.post('/:id/assign', ...admin, validate(assignStaffSchema), ctrl.assignSta
  */
 router.get('/:id/activity', ...auth, ctrl.getActivityLog)
 
+// Notes
+router.get   ('/:id/notes',          ...auth,  ctrl.listNotes)
+router.post  ('/:id/notes',          ...auth,  ctrl.createNote)
+router.patch ('/:id/notes/:noteId',  ...auth,  ctrl.updateNote)
+router.delete('/:id/notes/:noteId',  ...auth,  ctrl.deleteNote)
+
 module.exports = router

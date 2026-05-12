@@ -42,3 +42,24 @@ export async function getActivityLog(companyId, { page = 1, limit = 10 } = {}) {
   const { data } = await api.get(`/companies/${companyId}/activity`, { params: { page, limit } })
   return { activities: data.data.activities, total: data.data.total }
 }
+
+// ── Notes ─────────────────────────────────────────────────────────────────────
+
+export async function getNotes(companyId) {
+  const { data } = await api.get(`/companies/${companyId}/notes`)
+  return data.data.notes
+}
+
+export async function createNote(companyId, body) {
+  const { data } = await api.post(`/companies/${companyId}/notes`, body)
+  return data.data.note
+}
+
+export async function updateNote(companyId, noteId, body) {
+  const { data } = await api.patch(`/companies/${companyId}/notes/${noteId}`, body)
+  return data.data.note
+}
+
+export async function deleteNote(companyId, noteId) {
+  await api.delete(`/companies/${companyId}/notes/${noteId}`)
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   DndContext, DragOverlay,
   PointerSensor, useSensor, useSensors,
@@ -1196,7 +1196,8 @@ function saveFilters(obj) {
 }
 
 export default function Tasks() {
-  const navigate    = useNavigate()
+  const navigate      = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const currentUser = useAuthStore((state) => state.user)
   const addToast    = useToastStore((state) => state.toast)
   const getOptions  = useEnumsStore((st) => st.getOptions)
@@ -1204,8 +1205,16 @@ export default function Tasks() {
   const loadEnums   = useEnumsStore((st) => st.load)
   const isAdmin     = currentUser?.role === 'admin'
 
+  // Handle URL params from header shortcuts (?new=1, ?search=...)
+  const _urlNew    = searchParams.get('new')
+  const _urlSearch = searchParams.get('search')
+
   // Restore saved filters from sessionStorage (once on mount)
-  const [initF] = useState(() => loadSavedFilters())
+  const [initF] = useState(() => {
+    const saved = loadSavedFilters()
+    if (_urlSearch) saved.searchInput = _urlSearch
+    return saved
+  })
 
   // View
   const [view, setView] = useState(initF.view ?? 'list')
@@ -1277,6 +1286,18 @@ export default function Tasks() {
 
   // Bulk
   const [selectedIds, setSelectedIds] = useState(new Set())
+
+  // On first mount: handle URL params from header shortcuts
+  useEffect(() => {
+    if (_urlNew === '1') setShowCreate(true)
+    if (_urlNew || _urlSearch) {
+      setSearchParams((prev) => {
+        prev.delete('new')
+        prev.delete('search')
+        return prev
+      }, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounce search
   useEffect(() => {

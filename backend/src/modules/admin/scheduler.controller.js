@@ -51,4 +51,19 @@ async function updateConfig(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { getStatus, runNow, getLogs, updateConfig }
+async function deleteLog(req, res, next) {
+  try {
+    const { id } = req.params
+    await scheduler.deleteLog(id)
+    res.json({ success: true })
+  } catch (err) { next(err) }
+}
+
+async function clearLogs(req, res, next) {
+  try {
+    await scheduler.clearLogs()
+    res.json({ success: true })
+  } catch (err) { next(err) }
+}
+
+module.exports = { getStatus, runNow, getLogs, updateConfig, deleteLog, clearLogs }

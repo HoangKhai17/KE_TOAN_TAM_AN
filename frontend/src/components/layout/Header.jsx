@@ -39,7 +39,15 @@ export default function Header({ onMenuToggle }) {
   const navigate   = useNavigate()
   const { user, logout: clearAuth } = useAuthStore()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [searchQuery, setSearchQuery]   = useState('')
   const crumbs = useBreadcrumb()
+
+  function handleSearchKeyDown(e) {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      navigate(`/tasks?search=${encodeURIComponent(searchQuery.trim())}`)
+      setSearchQuery('')
+    }
+  }
 
   async function handleLogout() {
     setDropdownOpen(false)
@@ -85,15 +93,16 @@ export default function Header({ onMenuToggle }) {
           <input
             className={s.headerSearchInput}
             type="text"
-            placeholder="Tìm khách hàng, mã số thuế…"
-            readOnly
-            onFocus={(e) => e.target.blur()}
+            placeholder="Tìm theo tên, tiêu đề… (Enter)"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
           />
           <span className={s.headerSearchKbd}>⌘K</span>
         </div>
 
         {/* Create task button */}
-        <button className={s.btnSuccess}>
+        <button className={s.btnPrimary} onClick={() => navigate('/tasks?new=1')}>
           <Plus size={14} />
           Tạo công việc
         </button>

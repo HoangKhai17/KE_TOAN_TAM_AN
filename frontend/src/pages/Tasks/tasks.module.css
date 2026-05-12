@@ -1779,12 +1779,26 @@
 
 .commentAddRow {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   margin-top: 8px;
 }
 
-.commentInput {
+.commentAddRow .commentAvatar {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.commentInputWrap {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.commentInput {
+  width: 100%;
   min-height: 72px;
   padding: 8px 10px;
   border: 1px solid var(--color-border);
@@ -1792,11 +1806,19 @@
   font-family: inherit;
   font-size: var(--fs-sm);
   color: var(--color-text);
-  resize: none;
+  resize: vertical;
   transition: border-color 0.13s;
+  box-sizing: border-box;
 }
 
 .commentInput:focus { outline: none; border-color: var(--color-primary-soft); }
+
+.commentSendRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
 
 /* ── Time log tab ────────────────────────────────────────────── */
 

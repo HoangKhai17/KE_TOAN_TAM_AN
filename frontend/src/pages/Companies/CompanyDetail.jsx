@@ -5,7 +5,7 @@ import {
   Hash, Calendar, Briefcase,
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
-  Plus, Search, RotateCcw, Filter,
+  Plus, Search, RotateCcw, Filter, Eye,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -17,7 +17,9 @@ import * as tasksApi from '../../api/tasks'
 import { BUSINESS_TYPE_LABELS, CompanyFormModal, getInitials, StatusPill } from './Companies'
 import SchedulesTab from './SchedulesTab'
 import CredentialsTab from './CredentialsTab'
+import NotesTab from './NotesTab'
 import TaskFormModal from '../Tasks/TaskFormModal'
+import TaskQuickView from '../Tasks/TaskQuickView'
 import {
   STATUS_LABELS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS,
   isTaskOverdue, fmtDate as fmtTaskDate, progressPct,
@@ -306,15 +308,7 @@ export default function CompanyDetail() {
         />
       )}
       {activeTab === 'notes' && (
-        <PlaceholderTab
-          icon={<StickyNote size={24} color="#d97706" />}
-          iconBg="#fffbeb"
-          title="Ghi chú nội bộ"
-          desc="Lưu ghi chú, trao đổi nội bộ về khách hàng. Sẽ triển khai trong Phase sau."
-          phase="Sắp có"
-          btnLabel="+ Thêm ghi chú"
-          btnDisabled
-        />
+        <NotesTab company={company} />
       )}
 
       {/* Edit modal */}
@@ -951,9 +945,10 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const [monthFilter, setMonthFilter]       = useState(CUR_MONTH)
   const [yearFilter, setYearFilter]         = useState(CUR_YEAR)
 
-  const [showCreate, setShowCreate]   = useState(false)
+  const [showCreate, setShowCreate]     = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const [deleting, setDeleting]       = useState(false)
+  const [deleting, setDeleting]         = useState(false)
+  const [quickViewId, setQuickViewId]   = useState(null)
 
   // Debounce search
   useEffect(() => {
@@ -1043,7 +1038,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     + (isOverdue ? 1 : 0)
     + (monthFilter !== CUR_MONTH ? 1 : 0)
     + (yearFilter  !== CUR_YEAR  ? 1 : 0)
-  const colSpan = isAdmin ? 8 : 7
+  const colSpan = 8  // always 8: title + status + priority + createdAt + dueDate + assigned + progress + actions
   const from = pagination.total === 0 ? 0 : (page - 1) * limit + 1
   const to   = Math.min(page * limit, pagination.total)
 
@@ -1195,7 +1190,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                 <th>Hết hạn</th>
                 <th>Phụ trách</th>
                 <th>Tiến độ</th>
-                {isAdmin && <th style={{ width: 44 }} />}
+                <th style={{ width: isAdmin ? 72 : 44 }} />
               </tr>
             </thead>
             <tbody>
@@ -1226,7 +1221,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                   <tr
                     key={task.id}
                     style={{ cursor: 'pointer', borderLeft: overdue ? '3px solid #ef4444' : undefined }}
-                    onClick={() => navigate(`/tasks/${task.id}`)}
+                    onClick={() => setQuickViewId(task.id)}
                   >
                     <td>
                       <div style={{ fontWeight: 600, fontSize: 13, color: overdue ? '#dc2626' : 'var(--color-text)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
@@ -1262,17 +1257,26 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                         </div>
                       ) : <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>—</span>}
                     </td>
-                    {isAdmin && (
-                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                         <button
-                          className={`${s.rowActionBtn} ${s.rowActionDanger}`}
-                          title="Xoá công việc"
-                          onClick={() => setDeleteTarget(task)}
+                          className={s.rowActionBtn}
+                          title="Xem chi tiết"
+                          onClick={() => navigate(`/tasks/${task.id}`)}
                         >
-                          <Trash2 size={13} />
+                          <Eye size={13} />
                         </button>
-                      </td>
-                    )}
+                        {isAdmin && (
+                          <button
+                            className={`${s.rowActionBtn} ${s.rowActionDanger}`}
+                            title="Xoá công việc"
+                            onClick={() => setDeleteTarget(task)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 )
               })}
@@ -1347,6 +1351,15 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           deleting={deleting}
           onClose={() => setDeleteTarget(null)}
           onConfirm={handleDelete}
+        />
+      )}
+
+      {/* Quick view sidebar */}
+      {quickViewId && (
+        <TaskQuickView
+          taskId={quickViewId}
+          onClose={() => setQuickViewId(null)}
+          onUpdated={() => load()}
         />
       )}
     </div>

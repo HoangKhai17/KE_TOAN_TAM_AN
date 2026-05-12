@@ -26,7 +26,8 @@ function emptyForm() {
 // ── CredentialForm (shared by create/edit modals) ─────────────────────────────
 
 function CredentialForm({ initial, onSubmit, onClose, title }) {
-  const [form, setForm] = useState(initial ?? emptyForm())
+  // Always start password as empty in edit mode — user must type a new one to change it
+  const [form, setForm] = useState(initial ? { ...initial, password: '' } : emptyForm())
   const [showPw, setShowPw] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -405,6 +406,20 @@ export default function CredentialsTab({ company }) {
                   )}
                 </div>
               </div>
+
+              {cred.systemUrl && (
+                <div className={s.credCardUrl}>
+                  <ExternalLink size={11} />
+                  <a
+                    href={cred.systemUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {cred.systemUrl}
+                  </a>
+                </div>
+              )}
 
               <div className={s.credCardMeta}>
                 <span className={s.credCardUsername}>
