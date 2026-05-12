@@ -100,7 +100,13 @@
       "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue)",
       "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue | ForEach-Object { $p = $_; try { $wmi = Get-WmiObject Win32_Process -Filter \"ProcessId=$\\($p.Id\\)\"; Write-Host \"PID: $\\($p.Id\\) | CMD: $\\($wmi.CommandLine\\)\" } catch { Write-Host \"PID: $\\($p.Id\\) | \\(no cmd\\)\" } })",
       "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue | ForEach-Object { $p = $_; $wmi = Get-WmiObject Win32_Process -Filter \"ProcessId=$\\($p.Id\\)\" 2>$null; $parent = Get-WmiObject Win32_Process -Filter \"ProcessId=$\\($wmi.ParentProcessId\\)\" 2>$null; Write-Host \"PID: $\\($p.Id\\) | Parent: $\\($wmi.ParentProcessId\\) \\($\\($parent.Name\\)\\) | CMD: $\\($wmi.CommandLine.Substring\\(0, [Math]::Min\\(120, $wmi.CommandLine.Length\\)\\)\\)\" })",
-      "PowerShell($wmi = Get-WmiObject Win32_Process -Filter \"ProcessId=16652\"; Write-Host \"Working dir is not directly available, but checking child processes...\"; Get-WmiObject Win32_Process | Where-Object { $_.ParentProcessId -eq 16652 } | ForEach-Object { Write-Host \"Child PID: $\\($_.ProcessId\\) | CMD: $\\($_.CommandLine.Substring\\(0, [Math]::Min\\(150, $_.CommandLine.Length\\)\\)\\)\" })"
+      "PowerShell($wmi = Get-WmiObject Win32_Process -Filter \"ProcessId=16652\"; Write-Host \"Working dir is not directly available, but checking child processes...\"; Get-WmiObject Win32_Process | Where-Object { $_.ParentProcessId -eq 16652 } | ForEach-Object { Write-Host \"Child PID: $\\($_.ProcessId\\) | CMD: $\\($_.CommandLine.Substring\\(0, [Math]::Min\\(150, $_.CommandLine.Length\\)\\)\\)\" })",
+      "Bash(node -e \"const d = new Date\\('2026-05-12'\\); console.log\\('Day of week \\(0=Sun\\):', d.getDay\\(\\)\\); console.log\\('Date:', d.getDate\\(\\)\\); console.log\\('Month:', d.getMonth\\(\\)+1\\)\")",
+      "Bash(node scripts/test-recurrence.js)",
+      "Bash(node scripts/test-scheduler-integration.js)",
+      "Bash(node -e \"require\\('dotenv'\\).config\\(\\); console.log\\('DB URL prefix:', process.env.DATABASE_URL?.slice\\(0,30\\) || 'NOT SET'\\)\")",
+      "Bash(node -e \"require\\('dotenv'\\).config\\(\\); const url = new URL\\(process.env.DATABASE_URL\\); console.log\\('host:', url.hostname, 'port:', url.port, 'db:', url.pathname\\)\")",
+      "Bash(copy \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\scripts\\\\test-scheduler-integration.js\" \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\scripts\\\\test-scheduler-integration.js\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"
