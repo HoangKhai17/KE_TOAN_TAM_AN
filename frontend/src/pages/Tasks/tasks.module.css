@@ -797,6 +797,28 @@
 .boardCardDate { font-size: var(--fs-2xs); color: var(--color-muted); }
 .boardCardDateOver { font-size: var(--fs-2xs); color: var(--color-danger); font-weight: var(--fw-bold); }
 
+.boardCardDates {
+  font-size: var(--fs-2xs);
+  color: var(--color-muted);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.boardCardOnHold {
+  font-size: var(--fs-2xs);
+  color: #c2410c;
+  background: #fff7ed;
+  border-left: 2px solid #fb923c;
+  border-radius: 0 3px 3px 0;
+  padding: 3px 7px;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .boardCardCompany {
   font-size: var(--fs-2xs);
   color: var(--color-muted);
@@ -1827,6 +1849,186 @@
   border-top: 1px solid var(--color-border-soft);
 }
 
+/* ── Searchable company picker ───────────────────────────────── */
+
+.cpTrigger {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-size: var(--fs-sm);
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.13s, box-shadow 0.13s;
+}
+.cpTrigger:hover { border-color: var(--color-primary-soft); }
+
+.cpTriggerText {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cpDropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 3px);
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  z-index: 300;
+  overflow: hidden;
+}
+
+.cpSearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.cpSearchInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  background: transparent;
+}
+.cpSearchInput::placeholder { color: var(--color-muted); }
+
+.cpSearchClear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  color: var(--color-muted);
+  border-radius: 3px;
+}
+.cpSearchClear:hover { color: var(--color-text); }
+
+.cpList {
+  max-height: 210px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.cpItem {
+  padding: 7px 12px;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.cpItem:hover { background: var(--color-bg-hover, #f8fafc); }
+
+.cpItemActive {
+  background: #eff6ff;
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+}
+
+.cpEmpty {
+  padding: 12px;
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  text-align: center;
+}
+
+/* ── Checklist in create-task form ───────────────────────────── */
+
+.fmClList {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.fmClItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border-soft);
+  font-size: var(--fs-sm);
+}
+.fmClItem:last-child { border-bottom: none; }
+
+.fmClIdx {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  font-weight: var(--fw-semibold);
+  min-width: 18px;
+}
+
+.fmClText {
+  flex: 1;
+  color: var(--color-text);
+}
+
+.fmClDel {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  color: var(--color-muted);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.fmClItem:hover .fmClDel { opacity: 1; }
+.fmClDel:hover { color: var(--color-danger); background: #fff1f2; }
+
+.fmClAdd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 2px;
+}
+
+.fmClInput {
+  flex: 1;
+  border: none;
+  border-bottom: 1px dashed var(--color-border);
+  outline: none;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  padding: 4px 0;
+  background: transparent;
+}
+.fmClInput:focus { border-bottom-color: var(--color-primary-soft); }
+.fmClInput::placeholder { color: var(--color-muted); }
+
+.fmClAddBtn {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  background: none;
+  border: 1px solid var(--color-primary-soft);
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+.fmClAddBtn:hover { background: #eff6ff; }
+
 /* ── Dep search ──────────────────────────────────────────────── */
 
 .depSearchWrap {
@@ -2404,11 +2606,11 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 420px;
-  max-width: 95vw;
+  width: 820px;
+  max-width: 96vw;
   background: #fff;
   border-left: 1px solid var(--color-border);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  box-shadow: -6px 0 32px rgba(0, 0, 0, 0.13);
   z-index: 501;
   display: flex;
   flex-direction: column;
@@ -2472,12 +2674,26 @@
 .qvBody {
   flex: 1;
   overflow-y: auto;
-  padding: 14px 16px;
+  padding: 18px 20px;
 }
 
+.qvGrid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.qvLeft {
+  border-right: 1px solid var(--color-border-soft);
+  padding-right: 20px;
+}
+
+.qvRight { min-width: 0; }
+
 .qvSection {
-  margin-bottom: 16px;
-  padding-bottom: 14px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--color-border-soft);
 }
 
@@ -2489,15 +2705,15 @@
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .qvRow {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 7px;
-  min-height: 28px;
+  margin-bottom: 9px;
+  min-height: 30px;
 }
 
 .qvRow:last-child { margin-bottom: 0; }
@@ -2509,7 +2725,7 @@
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
   color: var(--color-muted);
-  width: 96px;
+  width: 100px;
   flex-shrink: 0;
 }
 
@@ -2519,16 +2735,18 @@
   flex: 1;
 }
 
+.qvFieldSelect { flex: 1; min-width: 0; }
+
 .qvStatusActions {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  padding: 10px 12px;
+  padding: 10px 14px;
   background: var(--color-surface-muted);
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border-soft);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .qvTransitionLabel {
@@ -2538,25 +2756,132 @@
   white-space: nowrap;
 }
 
+.qvChecklistList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
 .qvChecklistItem {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin-bottom: 6px;
+  padding: 3px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.1s;
 }
+
+.qvChecklistItem:hover { background: var(--color-surface-muted); }
+
+.qvChecklistItem:hover .qvChecklistDel { opacity: 1; }
 
 .qvChecklistText {
   font-size: var(--fs-xs);
   color: var(--color-text);
-  line-height: 1.5;
+  line-height: 1.55;
   flex: 1;
-  padding-top: 1px;
+  padding-top: 2px;
 }
 
 .qvChecklistTextDone {
   color: var(--color-muted);
   text-decoration: line-through;
 }
+
+.qvChecklistDel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+  flex-shrink: 0;
+  padding: 0;
+  margin-top: 1px;
+}
+
+.qvChecklistDel:hover { background: var(--color-danger-bg); color: var(--color-danger); }
+
+.qvAddItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+  transition: border-color 0.13s;
+}
+
+.qvAddItem:focus-within {
+  border-color: var(--color-primary-soft);
+  border-style: solid;
+  background: var(--color-info-bg);
+}
+
+.qvAddItemInput {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--color-text);
+  outline: none;
+  padding: 0;
+}
+
+.qvAddItemInput::placeholder { color: var(--color-muted); }
+.qvAddItemInput:disabled { opacity: 0.5; }
+
+.qvDescTextarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color 0.13s, box-shadow 0.13s;
+  box-sizing: border-box;
+}
+
+.qvDescTextarea:focus {
+  outline: none;
+  border-color: var(--color-primary-soft);
+  box-shadow: 0 0 0 2px rgba(11, 79, 138, 0.08);
+}
+
+.qvDescTextarea::placeholder { color: var(--color-muted); }
+
+.btnQvSave {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-sm);
+  background: #f0fdf4;
+  color: #15803d;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: all 0.13s;
+}
+
+.btnQvSave:hover:not(:disabled) { background: #15803d; color: #fff; }
+.btnQvSave:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .qvDesc {
   font-size: var(--fs-sm);
@@ -2578,6 +2903,49 @@
   font-size: var(--fs-2xs);
   font-weight: var(--fw-bold);
   border: 1px solid #fca5a5;
+}
+
+/* ── QvDateField — formatted date display with hidden native picker ── */
+
+.qvDateField {
+  position: relative;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.13s;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.qvDateField:hover { border-color: var(--color-primary-soft); }
+
+.qvDateFieldError { border-color: var(--color-danger); }
+
+.qvDateValue {
+  font-size: var(--fs-xs);
+  color: var(--color-text);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.qvDateFieldError .qvDateValue { color: var(--color-danger); font-weight: var(--fw-semibold); }
+
+.qvDateHidden {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
 /* ── Board card quickview button ─────────────────────────────── */

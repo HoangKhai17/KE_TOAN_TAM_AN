@@ -91,6 +91,32 @@ const COL_DOT = {
   completed:      s.dotCompleted,
 }
 
+// ── List due-date field: shows dd/MM/yyyy text, hidden native picker on click ──
+
+function ListDateField({ value, onChange, isOverdue }) {
+  const ref = useRef(null)
+  const dateStr = value ? value.slice(0, 10) : ''
+  return (
+    <div
+      className={`${s.qeDate} ${isOverdue ? s.qeDateOverdue : ''}`}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
+      onClick={() => ref.current?.showPicker?.()}
+    >
+      <span style={{ pointerEvents: 'none', userSelect: 'none' }}>
+        {dateStr ? fmtDate(dateStr) : '—'}
+      </span>
+      <input
+        ref={ref}
+        type="date"
+        value={dateStr}
+        onChange={onChange}
+        style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 1 }}
+        tabIndex={-1}
+      />
+    </div>
+  )
+}
+
 // ── Shared badges ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
@@ -211,18 +237,23 @@ function ForceConfirmModal({ task, newStatus, onConfirm, onClose }) {
 function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
   const pct     = progressPct(task)
   const overdue = isTaskOverdue(task)
+  const startShort = task.startDate ? fmtDate(task.startDate).slice(0, 5) : null
+  const endShort   = task.dueDate   ? fmtDate(task.dueDate).slice(0, 5)   : null
   return (
     <>
       <div className={s.boardCardTitle}>{task.title}</div>
       {task.companyName && <div className={s.boardCardCompany}>{task.companyName}</div>}
       <div className={s.boardCardMeta}>
         <PriorityBadge priority={task.priority} />
-        {task.dueDate && (
-          <span className={overdue ? s.boardCardDateOver : s.boardCardDate}>
-            {fmtDate(task.dueDate)}
+        {(startShort || endShort) && (
+          <span className={`${s.boardCardDates} ${overdue ? s.boardCardDateOver : ''}`}>
+            {startShort ?? '—'} → {endShort ?? '—'}
           </span>
         )}
       </div>
+      {task.status === 'on_hold' && task.onHoldReason && (
+        <div className={s.boardCardOnHold}>{task.onHoldReason}</div>
+      )}
       {pct !== null && (
         <div className={s.boardCardProgress}>
           <div className={s.progressBar}>
@@ -709,7 +740,7 @@ function ListView({
 
                   {/* Ngày bắt đầu */}
                   <td className={s.td}>
-                    <span className={s.dueDateNormal}>{fmtDate(t.createdAt)}</span>
+                    <span className={s.dueDateNormal}>{fmtDate(t.startDate || t.createdAt)}</span>
                   </td>
 
                   {/* Số ngày thực hiện */}
@@ -760,12 +791,10 @@ function ListView({
 
                   {/* Quick edit: due date */}
                   <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="date"
-                      value={t.dueDate?.slice(0, 10) ?? ''}
+                    <ListDateField
+                      value={t.dueDate ?? ''}
                       onChange={(e) => onDueDateChange(t, e.target.value)}
-                      className={`${s.qeDate} ${overdue ? s.qeDateOverdue : ''}`}
-                      title="Đổi ngày hết hạn"
+                      isOverdue={overdue}
                     />
                   </td>
 

@@ -1,7 +1,11 @@
-const { Pool } = require('pg')
+const { Pool, types } = require('pg')
 const env = require('./env')
 const logger = require('./logger')
 const { getTimezone } = require('./appSettings')
+
+// Return DATE columns as plain YYYY-MM-DD strings to avoid pg's local-midnight
+// Date object conversion which shifts the date when serialised to ISO UTC.
+types.setTypeParser(1082, (val) => val)
 
 const pool = new Pool({
   connectionString: env.db.url,

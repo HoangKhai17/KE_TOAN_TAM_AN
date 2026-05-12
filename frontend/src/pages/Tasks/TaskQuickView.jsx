@@ -1,20 +1,56 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  X, ArrowUpRight, Check, Loader2,
+  X, ArrowUpRight, Check, Loader2, Plus,
   Building2, User, Calendar, Clock, AlertTriangle, Flag, FileText,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
+import { listUsers } from '../../api/users'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS,
-  fmtDate, isTaskOverdue, progressPct,
+  fmtDate, isTaskOverdue,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
 import s from './tasks.module.css'
 
-// ── Local constants (mirrors Tasks.jsx) ───────────────────────────────────────
+// Convert any ISO string to local yyyy-MM-dd.
+// DATE columns now return plain "YYYY-MM-DD" strings from the backend; full
+// ISO timestamps (e.g. createdAt) are converted using local time components.
+function toDateValue(isoStr) {
+  if (!isoStr) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoStr)) return isoStr   // already a plain date
+  const d = new Date(isoStr)
+  if (isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// Date field: shows dd/MM/yyyy text, hidden native picker on click
+function QvDateField({ value, onChange, isError }) {
+  const ref = useRef(null)
+  return (
+    <div
+      className={`${s.qvDateField} ${isError ? s.qvDateFieldError : ''}`}
+      onClick={() => ref.current?.showPicker?.()}
+    >
+      <span className={s.qvDateValue}>{value ? fmtDate(value) : '—'}</span>
+      <input
+        ref={ref}
+        type="date"
+        value={value}
+        onChange={onChange}
+        className={s.qvDateHidden}
+        tabIndex={-1}
+      />
+    </div>
+  )
+}
+
+// ── Local constants ───────────────────────────────────────────────────────────
 
 const SA_CLASS = {
   in_progress:    s.saInProgress,
@@ -64,15 +100,26 @@ function PriorityBadge({ priority }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function TaskQuickView({ taskId, onClose, onUpdated }) {
-  const navigate   = useNavigate()
-  const addToast   = useToastStore((st) => st.toast)
-  const getLabel   = useEnumsStore((st) => st.getLabel)
+  const navigate  = useNavigate()
+  const addToast  = useToastStore((st) => st.toast)
+  const getLabel  = useEnumsStore((st) => st.getLabel)
 
   const [task,        setTask]        = useState(null)
   const [loading,     setLoading]     = useState(true)
   const [checklist,   setChecklist]   = useState([])
   const [togglingIds, setTogglingIds] = useState(new Set())
   const [saving,      setSaving]      = useState(false)
+  const [staffList,   setStaffList]   = useState([])
+
+  // Checklist add
+  const [newItemText, setNewItemText] = useState('')
+  const [addingItem,  setAddingItem]  = useState(false)
+  const newItemRef = useRef(null)
+
+  // Description inline edit
+  const [descDraft,  setDescDraft]  = useState('')
+  const [descDirty,  setDescDirty]  = useState(false)
+  const [savingDesc, setSavingDesc] = useState(false)
 
   // Close on Escape
   useEffect(() => {
@@ -81,28 +128,39 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Fetch task + checklist in parallel
+  // Fetch task + checklist + staff in parallel
   useEffect(() => {
     if (!taskId) return
     setLoading(true)
     setTask(null)
     setChecklist([])
+    setDescDirty(false)
     Promise.all([
       tasksApi.getTask(taskId),
       tasksApi.getTaskChecklist(taskId),
+      listUsers({ role: 'staff', status: 'active', limit: 100 }),
     ])
-      .then(([t, items]) => { setTask(t); setChecklist(items) })
+      .then(([t, items, { users }]) => {
+        setTask(t)
+        setChecklist(items)
+        setDescDraft(t.description ?? '')
+        setStaffList(users)
+      })
       .catch(() => { addToast('Không thể tải công việc', 'error'); onClose() })
       .finally(() => setLoading(false))
   }, [taskId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function applyUpdate(updated) {
+    setTask(updated)
+    onUpdated?.(updated)
+  }
 
   async function changeStatus(newStatus) {
     setSaving(true)
     try {
       const updated = await tasksApi.changeTaskStatus(taskId, { status: newStatus })
-      setTask(updated)
+      applyUpdate(updated)
       addToast(`Đã chuyển sang "${getLabel('task_status', newStatus, STATUS_LABELS[newStatus])}"`, 'success')
-      onUpdated?.(updated)
     } catch (err) {
       const status = err.response?.status
       const msg    = err.response?.data?.error?.message
@@ -119,19 +177,53 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   async function changePriority(priority) {
     try {
       const updated = await tasksApi.updateTask(taskId, { priority })
-      setTask(updated)
-      addToast(`Đã đổi ưu tiên → "${getLabel('task_priority', priority, PRIORITY_LABELS[priority])}"`, 'success')
-      onUpdated?.(updated)
+      applyUpdate(updated)
+      addToast(`Ưu tiên → "${getLabel('task_priority', priority, PRIORITY_LABELS[priority])}"`, 'success')
     } catch { addToast('Không thể đổi ưu tiên', 'error') }
+  }
+
+  async function changeStartDate(startDate) {
+    try {
+      const updated = await tasksApi.updateTask(taskId, { startDate: startDate || null })
+      applyUpdate(updated)
+      addToast(startDate ? 'Đã cập nhật ngày bắt đầu' : 'Đã xóa ngày bắt đầu', 'success')
+    } catch { addToast('Không thể đổi ngày bắt đầu', 'error') }
   }
 
   async function changeDueDate(dueDate) {
     try {
       const updated = await tasksApi.updateTask(taskId, { dueDate: dueDate || null })
-      setTask(updated)
+      applyUpdate(updated)
       addToast(dueDate ? 'Đã cập nhật ngày hết hạn' : 'Đã xóa ngày hết hạn', 'success')
-      onUpdated?.(updated)
     } catch { addToast('Không thể đổi ngày hết hạn', 'error') }
+  }
+
+  async function changeAssigned(assignedTo) {
+    try {
+      const updated = await tasksApi.updateTask(taskId, { assignedTo: assignedTo || null })
+      applyUpdate(updated)
+      const name = staffList.find((u) => u.id === assignedTo)?.name
+      addToast(name ? `Đã giao cho ${name}` : 'Đã bỏ phân công', 'success')
+    } catch { addToast('Không thể đổi người phụ trách', 'error') }
+  }
+
+  async function saveDescription() {
+    if (!descDirty) return
+    setSavingDesc(true)
+    try {
+      const updated = await tasksApi.updateTask(taskId, { description: descDraft.trim() || null })
+      applyUpdate(updated)
+      setDescDraft(updated.description ?? '')
+      setDescDirty(false)
+      addToast('Đã lưu mô tả', 'success')
+    } catch { addToast('Không thể lưu mô tả', 'error') }
+    finally { setSavingDesc(false) }
+  }
+
+  function syncChecklistCounts(newCl) {
+    if (!task) return
+    const done = newCl.filter((i) => i.isCompleted).length
+    applyUpdate({ ...task, checklistTotal: newCl.length, checklistDone: done })
   }
 
   async function toggleChecklist(item) {
@@ -139,11 +231,37 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
     setTogglingIds((p) => new Set([...p, item.id]))
     try {
       const updated = await tasksApi.updateTaskChecklistItem(taskId, item.id, { isCompleted: !item.isCompleted })
-      setChecklist((p) => p.map((i) => i.id === updated.id ? updated : i))
+      const newCl = checklist.map((i) => i.id === updated.id ? updated : i)
+      setChecklist(newCl)
+      syncChecklistCounts(newCl)
     } catch { addToast('Không thể cập nhật checklist', 'error') }
     finally {
       setTogglingIds((p) => { const n = new Set(p); n.delete(item.id); return n })
     }
+  }
+
+  async function addChecklistItem() {
+    const text = newItemText.trim()
+    if (!text) return
+    setAddingItem(true)
+    try {
+      const item = await tasksApi.addTaskChecklistItem(taskId, { stepText: text })
+      const newCl = [...checklist, item]
+      setChecklist(newCl)
+      setNewItemText('')
+      newItemRef.current?.focus()
+      syncChecklistCounts(newCl)
+    } catch { addToast('Không thể thêm việc cần làm', 'error') }
+    finally { setAddingItem(false) }
+  }
+
+  async function removeChecklistItem(itemId) {
+    try {
+      await tasksApi.deleteTaskChecklistItem(taskId, itemId)
+      const newCl = checklist.filter((i) => i.id !== itemId)
+      setChecklist(newCl)
+      syncChecklistCounts(newCl)
+    } catch { addToast('Không thể xóa mục checklist', 'error') }
   }
 
   const overdue     = task ? isTaskOverdue(task) : false
@@ -164,7 +282,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
         <div className={s.qvHeader}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {loading
-              ? <div style={{ height: 18, width: '60%', background: '#f1f5f9', borderRadius: 4 }} />
+              ? <div style={{ height: 20, width: '55%', background: '#f1f5f9', borderRadius: 4 }} />
               : <h2 className={s.qvTitle}>{task?.title}</h2>
             }
             {task && (
@@ -216,102 +334,176 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
               </div>
             )}
 
-            {/* ── Info section ── */}
-            <div className={s.qvSection}>
-              <div className={s.qvSectionTitle}>Thông tin</div>
+            {/* ── 2-column body ── */}
+            <div className={s.qvGrid}>
 
-              <div className={s.qvRow}>
-                <span className={s.qvLabel}><Building2 size={11} /> Khách hàng</span>
-                <span className={s.qvValue}>{task.companyName || '—'}</span>
-              </div>
+              {/* ── LEFT: meta info ── */}
+              <div className={s.qvLeft}>
+                <div className={s.qvSectionTitle}>Thông tin</div>
 
-              <div className={s.qvRow}>
-                <span className={s.qvLabel}><User size={11} /> Giao cho</span>
-                <span className={s.qvValue}>{task.assignedToName || '—'}</span>
-              </div>
-
-              <div className={s.qvRow}>
-                <span className={s.qvLabel}><Flag size={11} /> Ưu tiên</span>
-                <select
-                  value={task.priority}
-                  onChange={(e) => changePriority(e.target.value)}
-                  className={s.qeSelect}
-                  style={{ ...(PRIORITY_SELECT_STYLE[task.priority] ?? {}), fontWeight: 600 }}
-                >
-                  {['urgent', 'high', 'medium', 'low'].map((p) => (
-                    <option key={p} value={p}>
-                      {getLabel('task_priority', p, PRIORITY_LABELS[p])}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className={s.qvRow}>
-                <span className={s.qvLabel}><Calendar size={11} /> Bắt đầu</span>
-                <span className={s.qvValue}>{fmtDate(task.startDate || task.createdAt)}</span>
-              </div>
-
-              <div className={s.qvRow}>
-                <span className={s.qvLabel}><Clock size={11} /> Hết hạn</span>
-                <input
-                  type="date"
-                  value={task.dueDate?.slice(0, 10) ?? ''}
-                  onChange={(e) => changeDueDate(e.target.value)}
-                  className={s.qeDate}
-                  style={overdue ? { borderColor: 'var(--color-danger)', color: 'var(--color-danger)' } : {}}
-                />
-              </div>
-
-              {task.slaDays && (
                 <div className={s.qvRow}>
-                  <span className={s.qvLabel}>SLA chuẩn</span>
-                  <span className={s.qvValue}>{task.slaDays} ngày</span>
-                </div>
-              )}
-            </div>
-
-            {/* ── Checklist ── */}
-            {clTotal > 0 && (
-              <div className={s.qvSection}>
-                <div className={s.qvSectionTitle}>
-                  Checklist — {clDone}/{clTotal}
-                  {pct !== null && ` (${pct}%)`}
+                  <span className={s.qvLabel}><Building2 size={11} /> Khách hàng</span>
+                  <span className={s.qvValue}>{task.companyName || '—'}</span>
                 </div>
 
-                <div className={s.progressBar} style={{ marginBottom: 10 }}>
-                  <div
-                    className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`}
-                    style={{ width: `${pct}%` }}
+                {task.taskTypeName && (
+                  <div className={s.qvRow}>
+                    <span className={s.qvLabel}>Loại công việc</span>
+                    <span className={s.qvValue}>{task.taskTypeName}</span>
+                  </div>
+                )}
+
+                <div className={s.qvRow}>
+                  <span className={s.qvLabel}><User size={11} /> Giao cho</span>
+                  <select
+                    value={task.assignedTo ?? ''}
+                    onChange={(e) => changeAssigned(e.target.value || null)}
+                    className={`${s.qeSelect} ${s.qvFieldSelect}`}
+                  >
+                    <option value="">— Chưa phân công —</option>
+                    {staffList.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className={s.qvRow}>
+                  <span className={s.qvLabel}><Flag size={11} /> Ưu tiên</span>
+                  <select
+                    value={task.priority}
+                    onChange={(e) => changePriority(e.target.value)}
+                    className={`${s.qeSelect} ${s.qvFieldSelect}`}
+                    style={{ ...(PRIORITY_SELECT_STYLE[task.priority] ?? {}), fontWeight: 600 }}
+                  >
+                    {['urgent', 'high', 'medium', 'low'].map((p) => (
+                      <option key={p} value={p}>
+                        {getLabel('task_priority', p, PRIORITY_LABELS[p])}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className={s.qvRow}>
+                  <span className={s.qvLabel}><Calendar size={11} /> Bắt đầu</span>
+                  <QvDateField
+                    value={toDateValue(task.startDate || task.createdAt)}
+                    onChange={(e) => changeStartDate(e.target.value)}
                   />
                 </div>
 
-                {checklist.map((item) => {
-                  const isToggling = togglingIds.has(item.id)
-                  return (
-                    <div key={item.id} className={s.qvChecklistItem}>
-                      <div
-                        className={`${s.checklistCheck} ${item.isCompleted ? s.checklistCheckDone : ''}`}
-                        onClick={() => toggleChecklist(item)}
-                        style={isToggling ? { opacity: 0.5, pointerEvents: 'none' } : { cursor: 'pointer' }}
-                      >
-                        {item.isCompleted && <Check size={10} color="#fff" />}
-                      </div>
-                      <span className={`${s.qvChecklistText} ${item.isCompleted ? s.qvChecklistTextDone : ''}`}>
-                        {item.stepText}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+                <div className={s.qvRow}>
+                  <span className={s.qvLabel}><Clock size={11} /> Hết hạn</span>
+                  <QvDateField
+                    value={toDateValue(task.dueDate)}
+                    onChange={(e) => changeDueDate(e.target.value)}
+                    isError={overdue}
+                  />
+                </div>
 
-            {/* ── Description ── */}
-            {task.description && (
-              <div className={s.qvSection}>
-                <div className={s.qvSectionTitle}><FileText size={11} style={{ display: 'inline', marginRight: 4 }} />Mô tả</div>
-                <p className={s.qvDesc}>{task.description}</p>
+                {task.slaDays && (
+                  <div className={s.qvRow}>
+                    <span className={s.qvLabel}>SLA chuẩn</span>
+                    <span className={s.qvValue}>{task.slaDays} ngày</span>
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* ── RIGHT: checklist + description ── */}
+              <div className={s.qvRight}>
+
+                {/* Checklist */}
+                <div className={s.qvSection}>
+                  <div className={s.qvSectionTitle}>
+                    Checklist
+                    {clTotal > 0 && (
+                      <span style={{ fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>
+                        {clDone}/{clTotal}{pct !== null ? ` · ${pct}%` : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  {clTotal > 0 && (
+                    <div className={s.progressBar} style={{ marginBottom: 12 }}>
+                      <div
+                        className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  )}
+
+                  <div className={s.qvChecklistList}>
+                    {checklist.map((item) => {
+                      const isToggling = togglingIds.has(item.id)
+                      return (
+                        <div key={item.id} className={s.qvChecklistItem}>
+                          <div
+                            className={`${s.checklistCheck} ${item.isCompleted ? s.checklistCheckDone : ''}`}
+                            onClick={() => toggleChecklist(item)}
+                            style={isToggling ? { opacity: 0.5, pointerEvents: 'none' } : { cursor: 'pointer' }}
+                          >
+                            {item.isCompleted && <Check size={10} color="#fff" />}
+                          </div>
+                          <span className={`${s.qvChecklistText} ${item.isCompleted ? s.qvChecklistTextDone : ''}`}>
+                            {item.stepText}
+                          </span>
+                          <button
+                            className={s.qvChecklistDel}
+                            onClick={() => removeChecklistItem(item.id)}
+                            title="Xóa"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Add checklist item */}
+                  <div className={s.qvAddItem}>
+                    <Plus size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+                    <input
+                      ref={newItemRef}
+                      type="text"
+                      value={newItemText}
+                      onChange={(e) => setNewItemText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChecklistItem() } }}
+                      className={s.qvAddItemInput}
+                      placeholder="Thêm việc cần làm... (Enter để thêm)"
+                      disabled={addingItem}
+                    />
+                    {addingItem && <Loader2 size={13} className={s.spinIcon} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />}
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className={s.qvSection} style={{ borderBottom: 'none', marginBottom: 0 }}>
+                  <div className={s.qvSectionTitle} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span><FileText size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />Mô tả</span>
+                    {descDirty && (
+                      <button
+                        className={s.btnQvSave}
+                        onClick={saveDescription}
+                        disabled={savingDesc}
+                      >
+                        {savingDesc ? <Loader2 size={11} className={s.spinIcon} /> : <Check size={11} />}
+                        Lưu
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={descDraft}
+                    onChange={(e) => {
+                      setDescDraft(e.target.value)
+                      setDescDirty(e.target.value !== (task.description ?? ''))
+                    }}
+                    onBlur={saveDescription}
+                    className={s.qvDescTextarea}
+                    placeholder="Nhập mô tả công việc..."
+                  />
+                </div>
+
+              </div>
+            </div>
 
           </div>
         ) : null}

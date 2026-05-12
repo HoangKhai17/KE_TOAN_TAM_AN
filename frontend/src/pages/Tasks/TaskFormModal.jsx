@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Info } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Info, Search, ChevronDown, X, Plus } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
-import { createTask } from '../../api/tasks'
+import { createTask, addTaskChecklistItem } from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
 import { listUsers } from '../../api/users'
 import { listTaskTypes } from '../../api/taskTypes'
@@ -9,24 +9,129 @@ import { useEnumsStore } from '../../hooks/useEnums'
 import { PRIORITY_LABELS } from './taskUtils'
 import s from './tasks.module.css'
 
+// ── Searchable company picker ─────────────────────────────────────────────────
+
+function CompanyPicker({ companies, value, onChange, disabled, hasError }) {
+  const [search, setSearch] = useState('')
+  const [open,   setOpen]   = useState(false)
+  const wrapRef   = useRef(null)
+  const searchRef = useRef(null)
+
+  const selected = companies.find((c) => c.id === value)
+  const filtered = search.trim()
+    ? companies.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
+    : companies
+
+  useEffect(() => {
+    if (!open) return
+    searchRef.current?.focus()
+    function onOutside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onOutside)
+    return () => document.removeEventListener('mousedown', onOutside)
+  }, [open])
+
+  function select(id) {
+    onChange(id)
+    setOpen(false)
+    setSearch('')
+  }
+
+  if (disabled) {
+    return (
+      <div className={s.cpTrigger} style={{ background: '#f8fafc', cursor: 'not-allowed', borderColor: hasError ? '#ef4444' : undefined }}>
+        <span className={s.cpTriggerText} style={{ color: 'var(--color-muted)' }}>
+          {selected?.name ?? '-- Chọn khách hàng --'}
+        </span>
+        <ChevronDown size={12} style={{ flexShrink: 0, color: 'var(--color-muted)' }} />
+      </div>
+    )
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div
+        className={s.cpTrigger}
+        style={{ borderColor: hasError ? '#ef4444' : undefined }}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className={s.cpTriggerText} style={{ color: selected ? 'var(--color-text)' : 'var(--color-muted)' }}>
+          {selected?.name ?? '-- Chọn khách hàng --'}
+        </span>
+        <ChevronDown size={12} style={{ flexShrink: 0, color: 'var(--color-muted)', transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 0.15s' }} />
+      </div>
+
+      {open && (
+        <div className={s.cpDropdown}>
+          <div className={s.cpSearch}>
+            <Search size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+              placeholder="Tìm kiếm khách hàng..."
+              className={s.cpSearchInput}
+            />
+            {search && (
+              <button type="button" className={s.cpSearchClear} onClick={() => setSearch('')}>
+                <X size={10} />
+              </button>
+            )}
+          </div>
+          <div className={s.cpList}>
+            <div
+              className={`${s.cpItem} ${!value ? s.cpItemActive : ''}`}
+              onClick={() => select('')}
+            >
+              — Chọn khách hàng —
+            </div>
+            {filtered.map((c) => (
+              <div
+                key={c.id}
+                className={`${s.cpItem} ${value === c.id ? s.cpItemActive : ''}`}
+                onClick={() => select(c.id)}
+              >
+                {c.name}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className={s.cpEmpty}>Không tìm thấy "{search}"</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main modal ────────────────────────────────────────────────────────────────
+
 export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initialCompanyId, lockCompany }) {
   const todayISO = new Date().toISOString().slice(0, 10)
   const [form, setForm] = useState({
     title: '', companyId: initialCompanyId || '', taskTypeId: '', assignedToId: '',
     startDate: todayISO, dueDate: '', priority: 'medium', slaDays: '', description: '',
   })
-  const [companies, setCompanies]   = useState([])
-  const [users, setUsers]           = useState([])
-  const [taskTypes, setTaskTypes]   = useState([])
-  const [saving, setSaving]         = useState(false)
-  const [fe, setFE]                 = useState({})
-  const [error, setError]           = useState(null)
+  const [companies, setCompanies] = useState([])
+  const [users,     setUsers]     = useState([])
+  const [taskTypes, setTaskTypes] = useState([])
+  const [saving,    setSaving]    = useState(false)
+  const [fe,        setFE]        = useState({})
+  const [error,     setError]     = useState(null)
+
+  // Checklist
+  const [checklistItems, setChecklistItems] = useState([])
+  const [newItemText,    setNewItemText]    = useState('')
+  const newItemRef = useRef(null)
 
   const getOptions = useEnumsStore((st) => st.getOptions)
   const loadEnums  = useEnumsStore((st) => st.load)
 
   useEffect(() => {
-    listCompanies({ limit: 200, status: 'active' })
+    listCompanies({ limit: 500, status: 'active' })
       .then(({ companies: c }) => setCompanies(c)).catch(() => {})
     listUsers({ role: 'staff', status: 'active', limit: 100 })
       .then(({ users: u }) => setUsers(u)).catch(() => {})
@@ -36,6 +141,18 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }))
+
+  function addToChecklist() {
+    const text = newItemText.trim()
+    if (!text) return
+    setChecklistItems((prev) => [...prev, { id: Date.now(), text }])
+    setNewItemText('')
+    newItemRef.current?.focus()
+  }
+
+  function removeFromChecklist(id) {
+    setChecklistItems((prev) => prev.filter((item) => item.id !== id))
+  }
 
   async function submit(openAfter) {
     const errs = {}
@@ -55,6 +172,9 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         slaDays:     form.slaDays ? Number(form.slaDays) : null,
         description: form.description.trim() || null,
       })
+      for (const item of checklistItems) {
+        await addTaskChecklistItem(task.id, { stepText: item.text })
+      }
       if (openAfter) onSavedAndOpen(task)
       else           onSaved(task)
     } catch (err) {
@@ -82,6 +202,8 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       )}
 
       <div className={s.formGrid} style={{ gap: 14 }}>
+
+        {/* Title */}
         <div className={`${s.formGroup} ${s.span2}`}>
           <label className={`${s.formLabel} ${s.required}`}>Tiêu đề</label>
           <input
@@ -96,24 +218,20 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           {fe.title && <p className={s.formError}>{fe.title}</p>}
         </div>
 
+        {/* Company — searchable picker */}
         <div className={s.formGroup}>
           <label className={`${s.formLabel} ${s.required}`}>Khách hàng</label>
-          <select
+          <CompanyPicker
+            companies={companies}
             value={form.companyId}
-            onChange={set('companyId')}
-            className={s.formSelect}
+            onChange={(id) => setForm((p) => ({ ...p, companyId: id }))}
             disabled={lockCompany}
-            style={{
-              ...(fe.companyId ? { borderColor: '#ef4444' } : {}),
-              ...(lockCompany ? { background: '#f8fafc', cursor: 'not-allowed' } : {}),
-            }}
-          >
-            <option value="">-- Chọn khách hàng --</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+            hasError={!!fe.companyId}
+          />
           {fe.companyId && <p className={s.formError}>{fe.companyId}</p>}
         </div>
 
+        {/* Task type */}
         <div className={s.formGroup}>
           <label className={s.formLabel}>Loại công việc</label>
           <select value={form.taskTypeId} onChange={set('taskTypeId')} className={s.formSelect}>
@@ -128,6 +246,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           )}
         </div>
 
+        {/* Assigned to */}
         <div className={s.formGroup}>
           <label className={s.formLabel}>Giao cho</label>
           <select value={form.assignedToId} onChange={set('assignedToId')} className={s.formSelect}>
@@ -136,6 +255,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           </select>
         </div>
 
+        {/* Priority */}
         <div className={s.formGroup}>
           <label className={s.formLabel}>Ưu tiên</label>
           <select value={form.priority} onChange={set('priority')} className={s.formSelect}>
@@ -146,11 +266,13 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           </select>
         </div>
 
+        {/* Start date */}
         <div className={s.formGroup}>
           <label className={s.formLabel}>Ngày bắt đầu</label>
           <input type="date" value={form.startDate} onChange={set('startDate')} className={s.formInput} />
         </div>
 
+        {/* Due date */}
         <div className={s.formGroup}>
           <label className={s.formLabel}>Ngày hết hạn</label>
           <input
@@ -162,6 +284,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           />
         </div>
 
+        {/* SLA */}
         <div className={s.formGroup}>
           <label className={s.formLabel}>SLA chuẩn (ngày)</label>
           <input
@@ -176,6 +299,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           </p>
         </div>
 
+        {/* Description */}
         <div className={`${s.formGroup} ${s.span2}`}>
           <label className={s.formLabel}>Mô tả</label>
           <textarea
@@ -186,6 +310,56 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
             placeholder="Mô tả chi tiết công việc..."
           />
         </div>
+
+        {/* Checklist */}
+        <div className={`${s.formGroup} ${s.span2}`}>
+          <label className={s.formLabel}>
+            Checklist công việc
+            {checklistItems.length > 0 && (
+              <span style={{ fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>
+                ({checklistItems.length} bước)
+              </span>
+            )}
+          </label>
+
+          {checklistItems.length > 0 && (
+            <div className={s.fmClList}>
+              {checklistItems.map((item, idx) => (
+                <div key={item.id} className={s.fmClItem}>
+                  <span className={s.fmClIdx}>{idx + 1}.</span>
+                  <span className={s.fmClText}>{item.text}</span>
+                  <button
+                    type="button"
+                    className={s.fmClDel}
+                    onClick={() => removeFromChecklist(item.id)}
+                    title="Xóa bước này"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className={s.fmClAdd}>
+            <Plus size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+            <input
+              ref={newItemRef}
+              type="text"
+              value={newItemText}
+              onChange={(e) => setNewItemText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addToChecklist() } }}
+              className={s.fmClInput}
+              placeholder="Thêm bước công việc... (Enter để thêm)"
+            />
+            {newItemText.trim() && (
+              <button type="button" className={s.fmClAddBtn} onClick={addToChecklist}>
+                Thêm
+              </button>
+            )}
+          </div>
+        </div>
+
       </div>
 
       <div className={s.formFooter}>

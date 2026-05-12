@@ -89,7 +89,18 @@
       "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\seeds\" -Filter \"*.sql\")",
       "Bash(Remove-Item \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\db\\\\migrations\\\\028_add_task_type_name_unique.sql\" -Force)",
       "Bash(Remove-Item \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\db\\\\migrations\\\\028_add_task_type_name_unique.down.sql\" -Force)",
-      "Bash(Write-Host \"Cleaned up misplaced files\")"
+      "Bash(Write-Host \"Cleaned up misplaced files\")",
+      "Bash(node -e \"const { query } = require\\('./src/config/db'\\); query\\('SELECT id, title, start_date, due_date FROM tasks LIMIT 3'\\).then\\(r => { r.rows.forEach\\(row => { console.log\\(row.title, '| start_date:', row.start_date, typeof row.start_date, '| due_date:', row.due_date, typeof row.due_date\\) }\\); process.exit\\(0\\) }\\).catch\\(e => { console.error\\(e.message\\); process.exit\\(1\\) }\\)\")",
+      "Bash(node -e \"const pg = require\\('pg'\\); console.log\\('pg version:', require\\('./node_modules/pg/package.json'\\).version\\); const types = pg.types; console.log\\('DATE parser OID 1082:', types.getTypeParser\\(1082\\).toString\\(\\).slice\\(0, 200\\)\\)\")",
+      "Bash(node -e \"const pg = require\\('pg'\\); const types = pg.types; const fn = types.getTypeParser\\(1082\\); console.log\\('Full DATE parser:', fn.toString\\(\\)\\)\")",
+      "Bash(npx pm2 *)",
+      "Bash(Get-Process -Name \"node\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Id, ProcessName, CommandLine)",
+      "Bash(Format-List)",
+      "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue | ForEach-Object { $p = $_; try { $wmi = Get-WmiObject Win32_Process -Filter \"ProcessId=$\\($p.Id\\)\"; Write-Host \"PID: $\\($p.Id\\) | CMD: $\\($wmi.CommandLine\\)\" } catch { Write-Host \"PID: $\\($p.Id\\) | \\(no cmd\\)\" } })",
+      "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue | ForEach-Object { $p = $_; $wmi = Get-WmiObject Win32_Process -Filter \"ProcessId=$\\($p.Id\\)\" 2>$null; $parent = Get-WmiObject Win32_Process -Filter \"ProcessId=$\\($wmi.ParentProcessId\\)\" 2>$null; Write-Host \"PID: $\\($p.Id\\) | Parent: $\\($wmi.ParentProcessId\\) \\($\\($parent.Name\\)\\) | CMD: $\\($wmi.CommandLine.Substring\\(0, [Math]::Min\\(120, $wmi.CommandLine.Length\\)\\)\\)\" })",
+      "PowerShell($wmi = Get-WmiObject Win32_Process -Filter \"ProcessId=16652\"; Write-Host \"Working dir is not directly available, but checking child processes...\"; Get-WmiObject Win32_Process | Where-Object { $_.ParentProcessId -eq 16652 } | ForEach-Object { Write-Host \"Child PID: $\\($_.ProcessId\\) | CMD: $\\($_.CommandLine.Substring\\(0, [Math]::Min\\(150, $_.CommandLine.Length\\)\\)\\)\" })"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"
