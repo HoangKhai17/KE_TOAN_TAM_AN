@@ -153,6 +153,20 @@
   font-size: 13px;
 }
 
+.rangeBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 11px;
+  border: 1.5px solid #dbeafe;
+  border-radius: 7px;
+  background: #f8fbff;
+  color: #1e3a8a;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* Forecast filters */
 .forecastFilters {
   display: flex;
@@ -331,12 +345,12 @@
 /* ── Stat cards ───────────────────────────────────────────────────────────── */
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
 }
 
 @media (max-width: 900px) {
-  .statsGrid { grid-template-columns: repeat(2, 1fr); }
+  .statsGrid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 }
 @media (max-width: 540px) {
   .statsGrid { grid-template-columns: 1fr; }

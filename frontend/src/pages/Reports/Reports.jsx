@@ -51,40 +51,61 @@ const STATUS_CSS = {
   completed:      { background: '#ecfdf5', color: '#059669' },
 }
 const STATUS_LABEL = {
-  pending: 'Chờ xử lý', in_progress: 'Đang làm', on_hold: 'Tạm dừng',
-  pending_review: 'Chờ duyệt', needs_revision: 'Cần sửa', completed: 'Hoàn thành',
+  pending: 'Chờ xử lý', in_progress: 'Đang thực hiện', on_hold: 'Tạm hoãn',
+  pending_review: 'Chờ duyệt', needs_revision: 'Xem lại', completed: 'Đã hoàn thành',
 }
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
+function formatDateValue(date) {
+  return format(date, 'yyyy-MM-dd')
+}
+
+function parseDateValue(value) {
+  if (!value) return null
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
 function computeRange(preset, customFrom, customTo) {
   const today = new Date()
-  const fmt = (d) => d.toISOString().slice(0, 10)
   if (preset === '7d') {
     const f = new Date(today); f.setDate(f.getDate() - 6)
-    return { from: fmt(f), to: fmt(today) }
+    return { from: formatDateValue(f), to: formatDateValue(today) }
   }
   if (preset === 'month') {
-    return { from: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), to: fmt(today) }
+    return { from: formatDateValue(new Date(today.getFullYear(), today.getMonth(), 1)), to: formatDateValue(today) }
   }
   if (preset === 'quarter') {
     const qStart = Math.floor(today.getMonth() / 3) * 3
-    return { from: fmt(new Date(today.getFullYear(), qStart, 1)), to: fmt(today) }
+    return { from: formatDateValue(new Date(today.getFullYear(), qStart, 1)), to: formatDateValue(today) }
   }
   return { from: customFrom, to: customTo }
 }
 
 function computePrevRange(from, to) {
-  const start = new Date(from), end = new Date(to)
+  const start = parseDateValue(from), end = parseDateValue(to)
   const days  = Math.round((end - start) / 86400000)
   const pe    = new Date(start); pe.setDate(pe.getDate() - 1)
   const ps    = new Date(pe);    ps.setDate(ps.getDate() - days)
-  const fmt   = (d) => d.toISOString().slice(0, 10)
-  return { from: fmt(ps), to: fmt(pe) }
+  return { from: formatDateValue(ps), to: formatDateValue(pe) }
+}
+
+function formatRangeLabel(from, to) {
+  const start = parseDateValue(from)
+  const end = parseDateValue(to)
+  if (!start || !end) return ''
+  return `${format(start, 'dd/MM/yyyy')} - ${format(end, 'dd/MM/yyyy')}`
 }
 
 function defaultCustomFrom() {
   const d = new Date(); d.setMonth(d.getMonth() - 1)
-  return d.toISOString().slice(0, 10)
+  return formatDateValue(d)
+}
+
+function defaultForecastPeriod() {
+  const d = new Date()
+  d.setMonth(d.getMonth() + 1)
+  return { month: d.getMonth() + 1, year: d.getFullYear() }
 }
 
 // ── Custom chart tooltip ──────────────────────────────────────────────────────
@@ -111,12 +132,12 @@ export default function Reports() {
   const [activeTab,     setActiveTab]     = useState('overview')
   const [preset,        setPreset]        = useState('month')
   const [customFrom,    setCustomFrom]    = useState(defaultCustomFrom)
-  const [customTo,      setCustomTo]      = useState(() => new Date().toISOString().slice(0, 10))
+  const [customTo,      setCustomTo]      = useState(() => formatDateValue(new Date()))
   const [compare,       setCompare]       = useState(false)
   const [groupBy,       setGroupBy]       = useState('staff')
   const [periodUnit,    setPeriodUnit]    = useState('week')
-  const [forecastMonth, setForecastMonth] = useState(() => new Date().getMonth() + 1)
-  const [forecastYear,  setForecastYear]  = useState(() => new Date().getFullYear())
+  const [forecastMonth, setForecastMonth] = useState(() => defaultForecastPeriod().month)
+  const [forecastYear,  setForecastYear]  = useState(() => defaultForecastPeriod().year)
   const [loading,       setLoading]       = useState(false)
   const [exporting,     setExporting]     = useState(false)
   const [error,         setError]         = useState(null)
@@ -169,7 +190,7 @@ export default function Reports() {
     setData(null)
     fetch()
     return () => { cancelled = true }
-  }, [activeTab, preset, customFrom, customTo, compare, groupBy, periodUnit, forecastMonth, forecastYear, refreshKey])
+  }, [activeTab, preset, customFrom, customTo, compare, groupBy, periodUnit, forecastMonth, forecastYear, refreshKey, toast])
 
   async function handleExport() {
     const { from, to } = computeRange(preset, customFrom, customTo)
@@ -204,6 +225,7 @@ export default function Reports() {
   }
 
   const currentYear = new Date().getFullYear()
+  const currentRange = computeRange(preset, customFrom, customTo)
 
   return (
     <AppLayout title="Báo cáo">
@@ -255,6 +277,12 @@ export default function Reports() {
                   value={customTo} onChange={(e) => setCustomTo(e.target.value)}
                 />
               </div>
+            )}
+
+            {!isForecast && (
+              <span className={s.rangeBadge}>
+                {formatRangeLabel(currentRange.from, currentRange.to)}
+              </span>
             )}
 
             {/* Forecast month / year */}
@@ -362,6 +390,8 @@ function TabContent({ tab, data, compare }) {
 // ── OverviewTab ───────────────────────────────────────────────────────────────
 function OverviewTab({ data, compare }) {
   const { stats, trend, prevTrend, byTaskType, byStatus, byAssignee } = data
+  const statValue = (key) => stats?.[key]?.value ?? 0
+  const statChange = (key) => stats?.[key]?.change ?? null
 
   const trendChart = trend.map((d, i) => ({
     date: (() => { try { return format(new Date(d.date), 'dd/MM') } catch { return String(d.date).slice(5) } })(),
@@ -372,10 +402,13 @@ function OverviewTab({ data, compare }) {
   return (
     <div className={s.tabContent}>
       <div className={s.statsGrid}>
-        <StatCard icon={FileText}     label="Tổng Records"     value={stats.total.value}     change={stats.total.change}     color="blue"  />
-        <StatCard icon={CheckCircle2} label="Đã duyệt"          value={stats.completed.value} change={stats.completed.change} color="green" />
-        <StatCard icon={Timer}        label="Chờ xử lý"          value={stats.pending.value}   change={stats.pending.change}   color="amber" />
-        <StatCard icon={AlertCircle}  label="Flagged / Quá hạn"  value={stats.overdue.value}   change={stats.overdue.change}   color="red"   />
+        <StatCard icon={FileText}     label="Tổng tasks"      value={statValue('total')}          change={statChange('total')}          color="blue"   />
+        <StatCard icon={CheckCircle2} label="Đã hoàn thành"   value={statValue('completed')}      change={statChange('completed')}      color="green"  />
+        <StatCard icon={Timer}        label="Chờ xử lý"       value={statValue('pending')}        change={statChange('pending')}        color="slate"  />
+        <StatCard icon={Clock3}       label="Đang thực hiện"  value={statValue('inProgress')}     change={statChange('inProgress')}     color="blue"   />
+        <StatCard icon={AlertTriangle} label="Tạm hoãn"       value={statValue('onHold')}         change={statChange('onHold')}         color="amber"  />
+        <StatCard icon={ShieldCheck}  label="Chờ duyệt"       value={statValue('pendingReview')}  change={statChange('pendingReview')}  color="purple" />
+        <StatCard icon={AlertCircle}  label="Xem lại"         value={statValue('needsRevision')}  change={statChange('needsRevision')}  color="red"    />
       </div>
 
       <div className={s.section}>
@@ -884,6 +917,8 @@ function StatCard({ icon: Icon, label, value, change, color = 'blue' }) {
     green: { bg: '#ecfdf5', text: '#065f46', accent: '#059669', border: '#a7f3d0' },
     amber: { bg: '#fffbeb', text: '#78350f', accent: '#d97706', border: '#fde68a' },
     red:   { bg: '#fef2f2', text: '#7f1d1d', accent: '#dc2626', border: '#fecaca' },
+    purple:{ bg: '#faf5ff', text: '#581c87', accent: '#7e22ce', border: '#d8b4fe' },
+    slate: { bg: '#f8fafc', text: '#334155', accent: '#64748b', border: '#cbd5e1' },
   }
   const c = colorMap[color] || colorMap.blue
   const up   = change > 0

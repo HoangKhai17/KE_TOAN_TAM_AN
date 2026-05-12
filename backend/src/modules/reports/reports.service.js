@@ -1,6 +1,6 @@
 const { query } = require('../../config/db')
 const ExcelJS = require('exceljs')
-const { shouldGenerateToday } = require('../../utils/recurrence.calculator')
+const { getNextOccurrence } = require('../../utils/recurrence.calculator')
 
 // ── 0. Overview ───────────────────────────────────────────────────────────────
 
@@ -12,9 +12,13 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
       SELECT
         COUNT(*)                                                                    AS total,
         COUNT(*) FILTER (WHERE status = 'completed')                               AS completed,
-        COUNT(*) FILTER (WHERE status != 'completed')                              AS pending,
+        COUNT(*) FILTER (WHERE status = 'pending')                                 AS pending,
+        COUNT(*) FILTER (WHERE status = 'in_progress')                             AS in_progress,
+        COUNT(*) FILTER (WHERE status = 'on_hold')                                 AS on_hold,
+        COUNT(*) FILTER (WHERE status = 'pending_review')                          AS pending_review,
+        COUNT(*) FILTER (WHERE status = 'needs_revision')                          AS needs_revision,
         COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed')  AS overdue
-      FROM tasks WHERE created_at BETWEEN $1 AND $2
+      FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     `, [from, to]),
 
     hasPrev
@@ -22,9 +26,13 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
           SELECT
             COUNT(*)                                                                    AS total,
             COUNT(*) FILTER (WHERE status = 'completed')                               AS completed,
-            COUNT(*) FILTER (WHERE status != 'completed')                              AS pending,
+            COUNT(*) FILTER (WHERE status = 'pending')                                 AS pending,
+            COUNT(*) FILTER (WHERE status = 'in_progress')                             AS in_progress,
+            COUNT(*) FILTER (WHERE status = 'on_hold')                                 AS on_hold,
+            COUNT(*) FILTER (WHERE status = 'pending_review')                          AS pending_review,
+            COUNT(*) FILTER (WHERE status = 'needs_revision')                          AS needs_revision,
             COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed')  AS overdue
-          FROM tasks WHERE created_at BETWEEN $1 AND $2
+          FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
         `, [prevFrom, prevTo])
       : Promise.resolve({ rows: [{}] }),
 
@@ -32,7 +40,7 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
       SELECT created_at::date AS date,
         COUNT(*) AS total,
         COUNT(*) FILTER (WHERE status = 'completed') AS completed
-      FROM tasks WHERE created_at BETWEEN $1 AND $2
+      FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
       GROUP BY created_at::date ORDER BY date
     `, [from, to]),
 
@@ -41,7 +49,7 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
           SELECT created_at::date AS date,
             COUNT(*) AS total,
             COUNT(*) FILTER (WHERE status = 'completed') AS completed
-          FROM tasks WHERE created_at BETWEEN $1 AND $2
+          FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
           GROUP BY created_at::date ORDER BY date
         `, [prevFrom, prevTo])
       : Promise.resolve({ rows: [] }),
@@ -52,13 +60,13 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
         COUNT(*) FILTER (WHERE t.status = 'completed') AS completed
       FROM tasks t
       LEFT JOIN task_types tt ON tt.id = t.task_type_id
-      WHERE t.created_at BETWEEN $1 AND $2
+      WHERE t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
       GROUP BY tt.name ORDER BY total DESC LIMIT 10
     `, [from, to]),
 
     query(`
       SELECT status AS label, COUNT(*) AS total
-      FROM tasks WHERE created_at BETWEEN $1 AND $2
+      FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
       GROUP BY status ORDER BY total DESC
     `, [from, to]),
 
@@ -69,7 +77,7 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
         ROUND(COUNT(*) FILTER (WHERE t.status = 'completed') * 100.0 / NULLIF(COUNT(*), 0), 1) AS rate
       FROM tasks t
       LEFT JOIN users u ON u.id = t.assigned_to
-      WHERE t.created_at BETWEEN $1 AND $2
+      WHERE t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
       GROUP BY u.name ORDER BY total DESC LIMIT 10
     `, [from, to]),
   ])
@@ -89,6 +97,10 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
       total:     { value: parseInt(c.total, 10) || 0,     change: hasPrev ? pctChange(c.total, p.total) : null },
       completed: { value: parseInt(c.completed, 10) || 0, change: hasPrev ? pctChange(c.completed, p.completed) : null },
       pending:   { value: parseInt(c.pending, 10) || 0,   change: hasPrev ? pctChange(c.pending, p.pending) : null },
+      inProgress:    { value: parseInt(c.in_progress, 10) || 0,    change: hasPrev ? pctChange(c.in_progress, p.in_progress) : null },
+      onHold:        { value: parseInt(c.on_hold, 10) || 0,        change: hasPrev ? pctChange(c.on_hold, p.on_hold) : null },
+      pendingReview: { value: parseInt(c.pending_review, 10) || 0, change: hasPrev ? pctChange(c.pending_review, p.pending_review) : null },
+      needsRevision: { value: parseInt(c.needs_revision, 10) || 0, change: hasPrev ? pctChange(c.needs_revision, p.needs_revision) : null },
       overdue:   { value: parseInt(c.overdue, 10) || 0,   change: hasPrev ? pctChange(c.overdue, p.overdue) : null },
     },
     trend:      trend.rows.map((r) => ({ date: r.date, total: parseInt(r.total, 10), completed: parseInt(r.completed, 10) })),
@@ -120,7 +132,7 @@ async function staffPerformance({ from, to, staffIds }) {
       ROUND(COUNT(t.id) FILTER (WHERE t.status = 'completed') * 100.0 / NULLIF(COUNT(t.id), 0), 1) AS completion_rate
     FROM users u
     LEFT JOIN tasks t ON t.assigned_to = u.id
-      AND t.created_at BETWEEN $1 AND $2
+      AND t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
     WHERE u.role = 'staff' ${staffFilter}
     GROUP BY u.id, u.name, u.job_title
     ORDER BY total DESC
@@ -159,7 +171,7 @@ async function companyStatus({ from, to, companyIds }) {
       ROUND(COUNT(t.id) FILTER (WHERE t.status = 'completed') * 100.0 / NULLIF(COUNT(t.id), 0), 1) AS completion_rate
     FROM companies c
     LEFT JOIN tasks t ON t.company_id = c.id
-      AND t.created_at BETWEEN $1 AND $2
+      AND t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
     WHERE c.status != 'terminated' ${companyFilter}
     GROUP BY c.id, c.name, c.tax_code
     ORDER BY total DESC
@@ -196,7 +208,7 @@ async function slaCompliance({ from, to, groupBy = 'staff' }) {
     LEFT JOIN companies  c  ON c.id  = t.company_id
     LEFT JOIN task_types tt ON tt.id = t.task_type_id
     WHERE t.status = 'completed'
-      AND t.completed_at BETWEEN $1 AND $2
+      AND t.completed_at >= $1::date AND t.completed_at < ($2::date + INTERVAL '1 day')
       AND t.due_date IS NOT NULL
     GROUP BY ${labelExpr}
     ORDER BY total DESC
@@ -273,7 +285,7 @@ async function velocity({ from, to, period = 'week' }) {
       ), 1) AS avg_days_to_complete
     FROM tasks
     WHERE status = 'completed'
-      AND completed_at BETWEEN $2 AND $3
+      AND completed_at >= $2::date AND completed_at < ($3::date + INTERVAL '1 day')
     GROUP BY period
     ORDER BY period
   `, [pg_period, from, to])
@@ -307,22 +319,37 @@ async function forecast({ month, year }) {
     ORDER BY c.name, tt.name
   `)
 
-  // Calculate occurrences in the target month using recurrence calculator
   const result = []
-  const daysInMonth = new Date(targetYear, targetMonth, 0).getDate()
+  const monthStart = new Date(targetYear, targetMonth - 1, 1)
+  const monthEnd = new Date(targetYear, targetMonth, 0)
+  monthStart.setHours(0, 0, 0, 0)
+  monthEnd.setHours(23, 59, 59, 999)
+
+  function toDateString(date) {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
 
   for (const s of schedules) {
-    for (let day = 1; day <= daysInMonth; day++) {
-      const checkDate = new Date(targetYear, targetMonth - 1, day)
+    const lastGenerated = s.last_generated_at ? new Date(s.last_generated_at) : null
+    const cursorStart = lastGenerated && lastGenerated > monthStart ? lastGenerated : new Date(monthStart)
+    cursorStart.setDate(cursorStart.getDate() - 1)
+
+    let cursor = cursorStart
+    let safety = 370
+    while (safety-- > 0) {
       try {
-        const { shouldGenerate, forDate } = shouldGenerateToday(
+        const triggerDate = getNextOccurrence(
           s.recurrence_type,
           s.recurrence_config,
-          s.last_generated_at,
-          checkDate
+          cursor
         )
-        if (shouldGenerate && forDate) {
-          const dueDate = new Date(forDate)
+        if (!triggerDate || triggerDate > monthEnd) break
+
+        if (triggerDate >= monthStart) {
+          const dueDate = new Date(triggerDate)
           dueDate.setDate(dueDate.getDate() + (s.deadline_offset_days || 0))
           result.push({
             scheduleId:       s.id,
@@ -330,17 +357,18 @@ async function forecast({ month, year }) {
             groupName:        s.group_name,
             companyName:      s.company_name,
             assignedToName:   s.assigned_to_name,
-            triggerDate:      forDate,
-            dueDate:          dueDate.toISOString().slice(0, 10),
+            triggerDate:      toDateString(triggerDate),
+            dueDate:          toDateString(dueDate),
             deadlineOffset:   s.deadline_offset_days || 0,
           })
-          break // only first occurrence per schedule per month
         }
-      } catch { /* skip invalid schedule */ }
+
+        cursor = triggerDate
+      } catch { break /* skip invalid schedule */ }
     }
   }
 
-  return result.sort((a, b) => a.triggerDate - b.triggerDate)
+  return result.sort((a, b) => a.triggerDate.localeCompare(b.triggerDate))
 }
 
 // ── Export helpers ────────────────────────────────────────────────────────────
