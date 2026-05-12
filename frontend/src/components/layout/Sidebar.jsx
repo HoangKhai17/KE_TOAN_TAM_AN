@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, CheckSquare,
   Users, BarChart3, Settings,
-  ChevronLeft, ChevronRight, LogOut, Wallet,
+  ChevronLeft, ChevronRight, LogOut, Wallet, CalendarCheck,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { logout } from '../../api/auth'
@@ -21,9 +21,10 @@ const NAV_GROUPS = [
   {
     label: 'QUẢN TRỊ HỆ THỐNG',
     items: [
-      { to: '/staff',    label: 'Nhân viên', icon: Users,    adminOnly: true },
-      { to: '/payroll',  label: 'Bảng lương', icon: Wallet,  adminOnly: true },
-      { to: '/settings', label: 'Cài đặt',   icon: Settings, adminOnly: true },
+      { to: '/staff',      label: 'Nhân viên',   icon: Users,          adminOnly: true },
+      { to: '/attendance', label: 'Chấm công',   icon: CalendarCheck },
+      { to: '/payroll',    label: 'Bảng lương',  icon: Wallet,          adminOnly: true },
+      { to: '/settings',   label: 'Cài đặt',     icon: Settings,        adminOnly: true },
     ],
   },
 ]

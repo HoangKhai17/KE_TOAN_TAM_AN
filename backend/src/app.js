@@ -171,6 +171,9 @@ function createApp() {
   app.use('/api/dashboard', require('./modules/dashboard/dashboard.router'))
   app.use('/api/reports',   require('./modules/reports/reports.router'))
 
+  // Phase 14 — Attendance & Leave
+  app.use('/api/attendance', require('./modules/attendance/attendance.router'))
+
   // 404 & error handlers
   app.use(notFound)
   app.use(errorHandler)

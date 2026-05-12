@@ -115,6 +115,7 @@ function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) 
     <Modal
       title={existing ? `Sửa lương: ${existing.userName ?? ''}` : 'Thêm bảng lương nhân viên'}
       onClose={onClose}
+      wide
     >
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}

@@ -6,6 +6,8 @@ import { useTokenRefresh } from './hooks/useTokenRefresh'
 import Login from './pages/Login/Login'
 import Dashboard from './pages/Dashboard/Dashboard'
 import Staff from './pages/Staff/Staff'
+import StaffDetail from './pages/Staff/StaffDetail'
+import Attendance from './pages/Attendance/Attendance'
 import Companies from './pages/Companies/Companies'
 import CompanyDetail from './pages/Companies/CompanyDetail'
 import Settings from './pages/Settings/Settings'
@@ -98,6 +100,14 @@ function AppRoutes() {
       <Route
         path="/staff"
         element={<ProtectedRoute><Staff /></ProtectedRoute>}
+      />
+      <Route
+        path="/staff/:id"
+        element={<ProtectedRoute><StaffDetail /></ProtectedRoute>}
+      />
+      <Route
+        path="/attendance"
+        element={<ProtectedRoute><Attendance /></ProtectedRoute>}
       />
       <Route
         path="/companies"

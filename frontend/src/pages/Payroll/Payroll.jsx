@@ -214,7 +214,7 @@ export default function Payroll() {
                       style={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/payroll/${period.id}`)}
                     >
-                      <td style={{ fontWeight: 700, color: '#0f345e' }}>
+                      <td style={{ fontWeight: 700, color: '#1e3a8a' }}>
                         Tháng {period.periodMonth}/{period.periodYear}
                       </td>
                       <td>

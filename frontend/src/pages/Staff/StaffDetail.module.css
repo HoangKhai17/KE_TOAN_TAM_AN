@@ -1,0 +1,283 @@
+/* ── Page shell ──────────────────────────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  padding: var(--space-8);
+}
+
+/* ── Back nav ────────────────────────────────────────────────────────────── */
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1.5px solid #dbeafe;
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: #2563eb;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  align-self: flex-start;
+}
+
+.backBtn:hover { background: #eff6ff; border-color: #93c5fd; }
+
+/* ── Profile card ────────────────────────────────────────────────────────── */
+
+.profileCard {
+  background: var(--color-surface);
+  border: 1.5px solid #dbeafe;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.05);
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  flex-shrink: 0;
+  border: 2px solid #dbeafe;
+}
+
+.profileInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.profileName {
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  color: var(--color-text);
+  margin: 0 0 4px;
+  letter-spacing: -0.3px;
+}
+
+.profileEmail {
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+  margin: 0 0 10px;
+}
+
+.profileBadges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badgeAdmin    { background: #eff6ff; color: #2563eb; }
+.badgeStaff    { background: #f5f3ff; color: #6d28d9; }
+.badgeActive   { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.badgeOnLeave  { background: #fefce8; color: #a16207; border: 1px solid #fde68a; }
+.badgeResigned { background: #f1f5f9; color: #64748b; }
+
+.profileMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}
+
+.profileMetaItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.profileActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  margin-left: auto;
+}
+
+/* ── Stats row ───────────────────────────────────────────────────────────── */
+
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.statCard {
+  background: var(--color-surface);
+  border: 1.5px solid #dbeafe;
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.05);
+}
+
+.statLabel {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+}
+
+.statValue {
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+
+.statValueDanger { color: #dc2626; }
+.statValueSuccess { color: #15803d; }
+
+/* ── Section ─────────────────────────────────────────────────────────────── */
+
+.section {
+  background: var(--color-surface);
+  border: 1.5px solid #dbeafe;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.04);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #f1f5f9;
+  background: linear-gradient(180deg, #f8fbff 0%, #edf4fb 100%);
+}
+
+.sectionTitle {
+  font-size: var(--fs-base);
+  font-weight: 800;
+  color: #1e3a8a;
+  margin: 0;
+}
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: #1e3a8a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #f8fbff 0%, #edf4fb 100%);
+  border-bottom: 1.5px solid #dbeafe;
+}
+
+.table td {
+  padding: 11px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--color-text-soft);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td { border-bottom: none; }
+.table tbody tr:hover td { background: #f8fbff; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+.btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+  transition: opacity 0.14s;
+}
+
+.btnPrimary:hover { opacity: 0.9; }
+.btnPrimary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1.5px solid #dbeafe;
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: #2563eb;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.btnSecondary:hover { background: #eff6ff; }
+
+/* ── Loading / empty ─────────────────────────────────────────────────────── */
+
+.centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 24px;
+  color: var(--color-muted);
+  font-size: var(--fs-sm);
+}
+
+.skeleton {
+  animation: pulse 1.4s ease-in-out infinite;
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.spin { animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
