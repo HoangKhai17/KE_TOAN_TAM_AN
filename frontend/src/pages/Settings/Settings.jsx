@@ -6,6 +6,7 @@ import {
   Loader2, CheckCircle2, AlertCircle,
   Search, Eye, EyeOff, UserX, UserCheck, Camera, Tag,
   Play, RotateCcw, CheckCircle, XCircle,
+  ChevronDown, ChevronUp, ListChecks, History,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -13,7 +14,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
-import { getSchedulerStatus, runSchedulerNow } from '../../api/scheduler'
+import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerConfig } from '../../api/scheduler'
 import TaskTypesSection from './TaskTypesSection'
 import EnumManagementSection from './EnumManagementSection'
 import s from './settings.module.css'
@@ -755,19 +756,43 @@ function DeadlineSection() {
 
 // ── Section: Scheduler ────────────────────────────────────────────────────────
 
+const HOURS_VN = Array.from({ length: 24 }, (_, i) => i)
+
 function TemplatesSection() {
   const addToast = useToastStore((st) => st.toast)
-  const [status, setStatus]   = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [running, setRunning] = useState(false)
-  const [lastResult, setLastResult] = useState(null)
 
-  async function load() {
+  const [status,      setStatus]      = useState(null)
+  const [loading,     setLoading]     = useState(true)
+  const [running,     setRunning]     = useState(false)
+  const [lastResult,  setLastResult]  = useState(null)
+
+  const [runHour,     setRunHour]     = useState(5)
+  const [hourSaving,  setHourSaving]  = useState(false)
+
+  const [logs,        setLogs]        = useState([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [expandedIds, setExpandedIds] = useState(new Set())
+
+  function fmtDt(iso) {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleString('vi-VN', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    })
+  }
+
+  function fmtDur(ms) {
+    if (!ms) return '—'
+    return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
+  }
+
+  async function loadStatus() {
     setLoading(true)
     try {
       const s = await getSchedulerStatus()
       setStatus(s)
       if (s.lastRunResult) setLastResult(s.lastRunResult)
+      if (s.runHour !== undefined) setRunHour(s.runHour)
     } catch {
       addToast('Không thể tải trạng thái bộ lập lịch', 'error')
     } finally {
@@ -775,7 +800,22 @@ function TemplatesSection() {
     }
   }
 
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  async function loadLogs() {
+    setLogsLoading(true)
+    try {
+      const data = await getSchedulerLogs(30)
+      setLogs(data)
+    } catch {
+      addToast('Không thể tải lịch sử chạy', 'error')
+    } finally {
+      setLogsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadStatus()
+    loadLogs()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleRunNow() {
     setRunning(true)
@@ -783,7 +823,8 @@ function TemplatesSection() {
       const result = await runSchedulerNow()
       setLastResult(result)
       addToast(`Đã chạy: tạo ${result.generated} task, bỏ qua ${result.skipped}`, 'success')
-      load()
+      loadStatus()
+      loadLogs()
     } catch (err) {
       const httpStatus = err.response?.status
       if (httpStatus === 409) {
@@ -796,20 +837,56 @@ function TemplatesSection() {
     }
   }
 
-  function fmtDt(iso) {
-    if (!iso) return '—'
-    return new Date(iso).toLocaleString('vi-VN', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
+  async function handleSaveHour() {
+    setHourSaving(true)
+    try {
+      await updateSchedulerConfig({ runHour })
+      addToast(`Đã cập nhật: bộ lập lịch sẽ chạy lúc ${String(runHour).padStart(2, '0')}:00 (giờ Việt Nam)`, 'success')
+    } catch {
+      addToast('Không thể cập nhật giờ chạy', 'error')
+    } finally {
+      setHourSaving(false)
+    }
+  }
+
+  function toggleExpand(id) {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
     })
   }
 
   return (
     <div>
       <p className={s.sectionText}>
-        Bộ lập lịch tự động tạo công việc từ các lịch định kỳ mỗi ngày lúc 05:00 (giờ Việt Nam).
-        Bạn có thể kích hoạt thủ công bên dưới.
+        Bộ lập lịch tự động tạo công việc từ các lịch định kỳ. Bạn có thể chọn giờ chạy
+        và theo dõi lịch sử bên dưới.
       </p>
+
+      {/* ── Cấu hình giờ chạy ─────────────────────────────────────────── */}
+      <div className={s.schedulerHourRow}>
+        <Clock size={14} className={s.schedulerHourIcon} />
+        <span className={s.schedulerHourLabel}>Giờ chạy tự động (giờ Việt Nam)</span>
+        <select
+          className={s.schedulerHourSelect}
+          value={runHour}
+          onChange={e => setRunHour(Number(e.target.value))}
+          disabled={hourSaving}
+        >
+          {HOURS_VN.map(h => (
+            <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+          ))}
+        </select>
+        <button
+          className={s.btnSave}
+          style={{ height: 32, padding: '0 14px', fontSize: 12 }}
+          onClick={handleSaveHour}
+          disabled={hourSaving}
+        >
+          {hourSaving ? <><Loader2 size={12} className={s.spin} /> Đang lưu</> : 'Lưu'}
+        </button>
+      </div>
 
       {loading ? (
         <div className={s.skeletonStack} style={{ padding: '0 0 16px' }}>
@@ -817,6 +894,7 @@ function TemplatesSection() {
         </div>
       ) : status && (
         <>
+          {/* ── Status cards ─────────────────────────────────────────────── */}
           <div className={s.schedulerStatusGrid}>
             <div className={s.schedulerStatusCard}>
               <div className={s.schedulerStatusLabel}>Trạng thái cron</div>
@@ -827,12 +905,10 @@ function TemplatesSection() {
                 }
               </div>
             </div>
-
             <div className={s.schedulerStatusCard}>
               <div className={s.schedulerStatusLabel}>Lần chạy cuối</div>
               <div className={s.schedulerStatusVal}>{fmtDt(status.lastRunAt)}</div>
             </div>
-
             <div className={s.schedulerStatusCard}>
               <div className={s.schedulerStatusLabel}>Trạng thái hiện tại</div>
               <div className={s.schedulerStatusVal}>
@@ -844,6 +920,7 @@ function TemplatesSection() {
             </div>
           </div>
 
+          {/* ── Kết quả lần chạy cuối ────────────────────────────────────── */}
           {lastResult && !lastResult.error && (
             <div className={s.schedulerResult}>
               <div className={s.schedulerResultTitle}>Kết quả lần chạy cuối</div>
@@ -875,6 +952,7 @@ function TemplatesSection() {
             </div>
           )}
 
+          {/* ── Nút Chạy ngay + Làm mới ─────────────────────────────────── */}
           <div className={s.formActions} style={{ marginTop: 20 }}>
             <button
               className={s.btnSave}
@@ -886,12 +964,100 @@ function TemplatesSection() {
                 : <><Play size={13} /> Chạy ngay</>
               }
             </button>
-            <button className={s.btnOutline} onClick={load} disabled={loading} style={{ height: 36 }}>
+            <button className={s.btnOutline} onClick={() => { loadStatus(); loadLogs() }} disabled={loading} style={{ height: 36 }}>
               <RotateCcw size={13} /> Làm mới
             </button>
           </div>
         </>
       )}
+
+      {/* ── Lịch sử chạy ─────────────────────────────────────────────────── */}
+      <div className={s.schedulerLogsPanel}>
+        <div className={s.schedulerLogsHeader}>
+          <div className={s.schedulerLogsTitle}>
+            <History size={14} />
+            Lịch sử chạy
+            {logs.length > 0 && <span className={s.schedulerLogsBadge}>{logs.length}</span>}
+          </div>
+          <button
+            className={s.schedulerLogsRefresh}
+            onClick={loadLogs}
+            disabled={logsLoading}
+            title="Làm mới lịch sử"
+          >
+            <RotateCcw size={12} className={logsLoading ? s.spin : ''} />
+          </button>
+        </div>
+
+        {logsLoading && logs.length === 0 ? (
+          <div className={s.schedulerLogsEmpty}>Đang tải...</div>
+        ) : logs.length === 0 ? (
+          <div className={s.schedulerLogsEmpty}>Chưa có lịch sử chạy nào.</div>
+        ) : (
+          <div className={s.schedulerLogsList}>
+            {logs.map(log => {
+              const expanded = expandedIds.has(log.id)
+              const tasks    = Array.isArray(log.tasks_created) ? log.tasks_created : []
+              const isManual = log.triggered_by === 'manual'
+              const hasErr   = !!log.error_message
+
+              return (
+                <div key={log.id} className={`${s.schedulerLogRow} ${hasErr ? s.schedulerLogRowErr : ''}`}>
+                  <div className={s.schedulerLogMeta}>
+                    <span className={`${s.schedulerLogBadge} ${isManual ? s.schedulerLogBadgeManual : s.schedulerLogBadgeAuto}`}>
+                      {isManual ? `Thủ công${log.triggered_by_name ? ` · ${log.triggered_by_name}` : ''}` : 'Tự động'}
+                    </span>
+                    <span className={s.schedulerLogTime}>{fmtDt(log.started_at)}</span>
+                    <span className={s.schedulerLogDur}>{fmtDur(log.duration_ms)}</span>
+                  </div>
+
+                  {hasErr ? (
+                    <div className={s.schedulerLogErrMsg}>
+                      <XCircle size={12} /> {log.error_message}
+                    </div>
+                  ) : (
+                    <div className={s.schedulerLogStats}>
+                      <span className={s.schedulerLogStat} style={{ color: '#16a34a' }}>
+                        +{log.generated} task
+                      </span>
+                      <span className={s.schedulerLogStat} style={{ color: '#94a3b8' }}>
+                        {log.skipped} bỏ qua
+                      </span>
+                      {log.errors > 0 && (
+                        <span className={s.schedulerLogStat} style={{ color: '#ef4444' }}>
+                          {log.errors} lỗi
+                        </span>
+                      )}
+                      {tasks.length > 0 && (
+                        <button
+                          className={s.schedulerLogExpandBtn}
+                          onClick={() => toggleExpand(log.id)}
+                        >
+                          <ListChecks size={11} />
+                          {expanded ? 'Ẩn' : `Xem ${tasks.length} task`}
+                          {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {expanded && tasks.length > 0 && (
+                    <ul className={s.schedulerLogTaskList}>
+                      {tasks.map((t, i) => (
+                        <li key={t.id ?? i} className={s.schedulerLogTaskItem}>
+                          <span className={s.schedulerLogTaskPeriod}>{t.periodLabel}</span>
+                          <span className={s.schedulerLogTaskTitle}>{t.title}</span>
+                          <span className={s.schedulerLogTaskDue}>hạn {t.dueDate}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

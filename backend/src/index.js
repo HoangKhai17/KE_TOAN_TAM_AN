@@ -21,6 +21,18 @@ async function loadTimezone() {
   }
 }
 
+async function loadSchedulerHour() {
+  try {
+    const { rows } = await pool.query(
+      "SELECT value FROM system_configs WHERE key = 'scheduler_run_hour'"
+    )
+    if (rows.length) return parseInt(rows[0].value, 10)
+  } catch (err) {
+    logger.warn('Could not load scheduler_run_hour from DB, using default 5', { error: err.message })
+  }
+  return 5  // default: 05:00 VN
+}
+
 async function start() {
   try {
     await testDb()
@@ -36,7 +48,8 @@ async function start() {
     })
 
     // Start background job scheduler (Phase 8)
-    scheduler.startScheduler()
+    const schedulerHour = await loadSchedulerHour()
+    scheduler.startScheduler(schedulerHour)
 
     // Graceful shutdown
     const shutdown = async (signal) => {

@@ -1,17 +1,77 @@
+'use strict'
+
 const cron   = require('node-cron')
 const logger = require('../config/logger')
+const { query } = require('../config/db')
 const { runTaskGenerator } = require('./taskGenerator.job')
 
 let schedulerTask = null
 let lastRunAt     = null
 let lastRunResult = null
 let isRunning     = false
+let currentVnHour = 5  // default: 05:00 Vietnam time
 
-function startScheduler() {
-  // Run every day at 05:00 Vietnam time (UTC+7 = 22:00 UTC previous day)
-  // Cron expression: "0 22 * * *" (UTC) — or use TZ option with node-cron
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function vnToUtcHour(vnHour) {
+  return (vnHour - 7 + 24) % 24
+}
+
+function buildCronExpr(vnHour) {
+  return `0 ${vnToUtcHour(vnHour)} * * *`
+}
+
+async function saveLog({ triggeredBy, triggeredByUserId, startedAt, finishedAt,
+  generated = 0, skipped = 0, errors = 0, durationMs = 0,
+  tasksCreated = [], errorMessage = null }) {
+  try {
+    await query(
+      `INSERT INTO scheduler_run_logs
+         (triggered_by, triggered_by_user_id, started_at, finished_at,
+          generated, skipped, errors, duration_ms, tasks_created, error_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`,
+      [
+        triggeredBy, triggeredByUserId ?? null,
+        startedAt, finishedAt,
+        generated, skipped, errors, durationMs,
+        JSON.stringify(tasksCreated),
+        errorMessage,
+      ]
+    )
+  } catch (err) {
+    logger.error('[Scheduler] Failed to save run log', { error: err.message })
+  }
+}
+
+async function runAndLog(triggeredBy, triggeredByUserId = null) {
+  const startedAt = new Date()
+  try {
+    const result = await runTaskGenerator()
+    await saveLog({ ...result, triggeredBy, triggeredByUserId, startedAt, finishedAt: new Date() })
+    lastRunResult = result
+    return result
+  } catch (err) {
+    const errResult = {
+      generated: 0, skipped: 0, errors: 1,
+      durationMs: Date.now() - startedAt.getTime(),
+      tasksCreated: [],
+      errorMessage: err.message,
+    }
+    await saveLog({ ...errResult, triggeredBy, triggeredByUserId, startedAt, finishedAt: new Date() })
+    lastRunResult = { error: err.message }
+    throw err
+  }
+}
+
+// ── Scheduler lifecycle ────────────────────────────────────────────────────────
+
+function startScheduler(vnHour = 5) {
+  currentVnHour = vnHour
+  const expr    = buildCronExpr(vnHour)
+  const utcH    = vnToUtcHour(vnHour)
+
   schedulerTask = cron.schedule(
-    '0 22 * * *',
+    expr,
     async () => {
       if (isRunning) {
         logger.warn('[Scheduler] Skipping run — previous run still in progress')
@@ -20,9 +80,9 @@ function startScheduler() {
       isRunning = true
       lastRunAt = new Date()
       try {
-        lastRunResult = await runTaskGenerator()
+        await runAndLog('auto')
       } catch (err) {
-        lastRunResult = { error: err.message }
+        logger.error('[Scheduler] Fatal error in cron run', { error: err.message })
       } finally {
         isRunning = false
       }
@@ -30,8 +90,19 @@ function startScheduler() {
     { timezone: 'UTC' }
   )
 
-  logger.info('[Scheduler] Task generator cron started (05:00 VN time daily)')
+  logger.info(`[Scheduler] Task generator cron started (${vnHour}:00 VN = ${utcH}:00 UTC daily)`)
 }
+
+function restartWithNewHour(vnHour) {
+  if (schedulerTask) {
+    schedulerTask.stop()
+    schedulerTask = null
+    logger.info('[Scheduler] Stopped old cron job')
+  }
+  startScheduler(vnHour)
+}
+
+// ── Public API ─────────────────────────────────────────────────────────────────
 
 function getStatus() {
   return {
@@ -39,24 +110,37 @@ function getStatus() {
     isRunning,
     lastRunAt,
     lastRunResult,
+    runHour:       currentVnHour,
   }
 }
 
-async function triggerNow() {
+async function triggerNow(triggeredByUserId = null) {
   if (isRunning) {
     throw Object.assign(new Error('Scheduler is already running'), { status: 409 })
   }
   isRunning = true
   lastRunAt = new Date()
   try {
-    lastRunResult = await runTaskGenerator()
-    return lastRunResult
-  } catch (err) {
-    lastRunResult = { error: err.message }
-    throw err
+    return await runAndLog('manual', triggeredByUserId)
   } finally {
     isRunning = false
   }
 }
 
-module.exports = { startScheduler, getStatus, triggerNow }
+async function getLogs(limit = 20) {
+  const { rows } = await query(
+    `SELECT srl.id, srl.triggered_by, srl.triggered_by_user_id,
+            u.name AS triggered_by_name,
+            srl.started_at, srl.finished_at,
+            srl.generated, srl.skipped, srl.errors,
+            srl.duration_ms, srl.tasks_created, srl.error_message
+     FROM scheduler_run_logs srl
+     LEFT JOIN users u ON u.id = srl.triggered_by_user_id
+     ORDER BY srl.started_at DESC
+     LIMIT $1`,
+    [limit]
+  )
+  return rows
+}
+
+module.exports = { startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs }

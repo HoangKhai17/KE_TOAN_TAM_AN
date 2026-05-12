@@ -32,9 +32,10 @@ async function runTaskGenerator() {
   const startedAt = new Date()
   logger.info('[Scheduler] Task generator started')
 
-  let generated = 0
-  let skipped   = 0
-  let errors    = 0
+  let generated    = 0
+  let skipped      = 0
+  let errors       = 0
+  const tasksCreated = []
 
   try {
     const { rows: schedules } = await query(
@@ -88,11 +89,12 @@ async function runTaskGenerator() {
         const sla = schedule.override_sla_days ?? schedule.default_sla_days
         const title = `[${periodLabel}] ${schedule.task_type_name} — ${schedule.company_name}`
 
-        await query(
+        const { rows: [newTask] } = await query(
           `INSERT INTO tasks
              (title, company_id, task_type_id, customer_task_schedule_id,
               assigned_to, due_date, period_label, source, sla_days, priority, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,'auto',$8,'medium',$9)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'auto',$8,'medium',$9)
+           RETURNING id`,
           [
             title,
             schedule.company_id,
@@ -111,20 +113,23 @@ async function runTaskGenerator() {
           'SELECT step_order, step_text FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order',
           [schedule.task_type_id]
         )
-        if (steps.length) {
-          const { rows: [newTask] } = await query(
-            'SELECT id FROM tasks WHERE customer_task_schedule_id = $1 AND period_label = $2',
-            [schedule.id, periodLabel]
-          )
-          if (newTask) {
-            for (const step of steps) {
-              await query(
-                'INSERT INTO task_checklist_items (task_id, step_order, step_text) VALUES ($1,$2,$3)',
-                [newTask.id, step.step_order, step.step_text]
-              )
-            }
+        if (steps.length && newTask) {
+          for (const step of steps) {
+            await query(
+              'INSERT INTO task_checklist_items (task_id, step_order, step_text) VALUES ($1,$2,$3)',
+              [newTask.id, step.step_order, step.step_text]
+            )
           }
         }
+
+        tasksCreated.push({
+          id:           newTask?.id,
+          title,
+          companyName:  schedule.company_name,
+          taskTypeName: schedule.task_type_name,
+          periodLabel,
+          dueDate:      dueDateStr,
+        })
 
         // Mark schedule as generated
         await query(
@@ -147,8 +152,8 @@ async function runTaskGenerator() {
   }
 
   const durationMs = Date.now() - startedAt.getTime()
-  const summary = { generated, skipped, errors, durationMs }
-  logger.info('[Scheduler] Task generator finished', summary)
+  const summary = { generated, skipped, errors, durationMs, tasksCreated }
+  logger.info('[Scheduler] Task generator finished', { generated, skipped, errors, durationMs })
   return summary
 }
 
