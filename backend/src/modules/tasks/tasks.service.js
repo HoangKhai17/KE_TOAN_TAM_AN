@@ -56,12 +56,30 @@ async function listTasks(filters = {}) {
   } = filters
 
   const offset = (page - 1) * limit
-  const conditions = ['1=1']
-  const params = []
 
-  if (companyId)  { params.push(companyId);  conditions.push(`t.company_id = $${params.length}`) }
-  if (assignedTo) { params.push(assignedTo); conditions.push(`t.assigned_to = $${params.length}`) }
+  // Base conditions: all filters EXCEPT status (used for statusCounts)
+  const baseConditions = ['1=1']
+  const baseParams = []
 
+  if (companyId)  { baseParams.push(companyId);  baseConditions.push(`t.company_id = $${baseParams.length}`) }
+  if (assignedTo) { baseParams.push(assignedTo); baseConditions.push(`t.assigned_to = $${baseParams.length}`) }
+  if (source)      { baseParams.push(source);      baseConditions.push(`t.source = $${baseParams.length}::task_source`) }
+  if (dueDateFrom) { baseParams.push(dueDateFrom); baseConditions.push(`t.due_date >= $${baseParams.length}`) }
+  if (dueDateTo)   { baseParams.push(dueDateTo);   baseConditions.push(`t.due_date <= $${baseParams.length}`) }
+  if (periodLabel) { baseParams.push(periodLabel); baseConditions.push(`t.period_label = $${baseParams.length}`) }
+  if (isOverdue === 'true' || isOverdue === true) {
+    baseConditions.push(`t.due_date < CURRENT_DATE AND t.status != 'completed'`)
+  }
+  if (search && search.trim()) {
+    baseParams.push(search.trim())
+    baseConditions.push(
+      `to_tsvector('simple', t.title || ' ' || coalesce(t.description, '')) @@ plainto_tsquery('simple', $${baseParams.length})`
+    )
+  }
+
+  // Full conditions: base + status + priority (used for main list/count)
+  const conditions = [...baseConditions]
+  const params = [...baseParams]
   if (status) {
     const arr = Array.isArray(status) ? status : [status]
     params.push(arr)
@@ -72,22 +90,10 @@ async function listTasks(filters = {}) {
     params.push(arr)
     conditions.push(`t.priority = ANY($${params.length}::task_priority[])`)
   }
-  if (source)      { params.push(source);      conditions.push(`t.source = $${params.length}::task_source`) }
-  if (dueDateFrom) { params.push(dueDateFrom); conditions.push(`t.due_date >= $${params.length}`) }
-  if (dueDateTo)   { params.push(dueDateTo);   conditions.push(`t.due_date <= $${params.length}`) }
-  if (periodLabel) { params.push(periodLabel); conditions.push(`t.period_label = $${params.length}`) }
 
-  if (isOverdue === 'true' || isOverdue === true) {
-    conditions.push(`t.due_date < CURRENT_DATE AND t.status != 'completed'`)
-  }
-  if (search && search.trim()) {
-    params.push(search.trim())
-    conditions.push(
-      `to_tsvector('simple', t.title || ' ' || coalesce(t.description, '')) @@ plainto_tsquery('simple', $${params.length})`
-    )
-  }
+  const baseWhere = baseConditions.join(' AND ')
+  const where     = conditions.join(' AND ')
 
-  const where = conditions.join(' AND ')
   const SORT_COLS = {
     created_at: 't.created_at',
     due_date:   't.due_date',
@@ -97,18 +103,24 @@ async function listTasks(filters = {}) {
   }
   const orderBy = `${SORT_COLS[sortBy] || 't.created_at'} ${sortDir === 'asc' ? 'ASC' : 'DESC'}`
 
-  const countRes = await query(`SELECT COUNT(*) FROM tasks t WHERE ${where}`, params)
-  const total = parseInt(countRes.rows[0].count, 10)
+  const [countRes, statusCountsRes, { rows }] = await Promise.all([
+    query(`SELECT COUNT(*) FROM tasks t WHERE ${where}`, params),
+    query(`SELECT t.status, COUNT(*) AS cnt FROM tasks t WHERE ${baseWhere} GROUP BY t.status`, baseParams),
+    query(
+      `${TASK_SELECT} WHERE ${where} ORDER BY ${orderBy}
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
+    ),
+  ])
 
-  const { rows } = await query(
-    `${TASK_SELECT} WHERE ${where} ORDER BY ${orderBy}
-     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, limit, offset]
-  )
+  const total = parseInt(countRes.rows[0].count, 10)
+  const statusCounts = {}
+  for (const r of statusCountsRes.rows) statusCounts[r.status] = parseInt(r.cnt, 10)
 
   return {
     tasks: rows.map(toDto),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    statusCounts,
   }
 }
 

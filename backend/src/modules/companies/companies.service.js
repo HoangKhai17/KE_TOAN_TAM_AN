@@ -318,7 +318,15 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
   }
 }
 
-async function getActivityLog(companyId, limit = 20) {
+async function getActivityLog(companyId, { page = 1, limit = 10 } = {}) {
+  const offset = (page - 1) * limit
+  const countRes = await query(
+    `SELECT COUNT(*) FROM task_activity_logs tal
+     JOIN tasks t ON t.id = tal.task_id
+     WHERE t.company_id = $1`,
+    [companyId]
+  )
+  const total = parseInt(countRes.rows[0].count, 10)
   const { rows } = await query(
     `SELECT tal.id, tal.action, tal.old_value, tal.new_value, tal.meta, tal.created_at,
             u.name AS actor_name,
@@ -328,10 +336,10 @@ async function getActivityLog(companyId, limit = 20) {
      LEFT JOIN users u ON u.id = tal.user_id
      WHERE t.company_id = $1
      ORDER BY tal.created_at DESC
-     LIMIT $2`,
-    [companyId, limit]
+     LIMIT $2 OFFSET $3`,
+    [companyId, limit, offset]
   )
-  return rows.map((r) => ({
+  const activities = rows.map((r) => ({
     id:         r.id,
     action:     r.action,
     oldValue:   r.old_value ?? null,
@@ -342,6 +350,7 @@ async function getActivityLog(companyId, limit = 20) {
     taskTitle:  r.task_title,
     createdAt:  r.created_at,
   }))
+  return { activities, total }
 }
 
 module.exports = {

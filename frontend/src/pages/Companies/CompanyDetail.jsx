@@ -5,7 +5,7 @@ import {
   Hash, Calendar, Briefcase,
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
-  Plus, Search, RotateCcw,
+  Plus, Search, RotateCcw, Filter,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -508,16 +508,27 @@ function fmtRelative(iso) {
   return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+const ACT_PER_PAGE = 10
+
 function ActivityCard({ companyId }) {
   const [activities, setActivities] = useState([])
-  const [loading, setLoading]       = useState(true)
+  const [total,      setTotal]      = useState(0)
+  const [page,       setPage]       = useState(1)
+  const [loading,    setLoading]    = useState(true)
 
   useEffect(() => {
-    companiesApi.getActivityLog(companyId, 15)
-      .then(setActivities)
+    let cancelled = false
+    setLoading(true)
+    companiesApi.getActivityLog(companyId, { page, limit: ACT_PER_PAGE })
+      .then(({ activities: a, total: t }) => {
+        if (!cancelled) { setActivities(a); setTotal(t) }
+      })
       .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [companyId, page]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalPages = Math.max(1, Math.ceil(total / ACT_PER_PAGE))
 
   return (
     <div className={s.infoCard}>
@@ -527,6 +538,7 @@ function ActivityCard({ companyId }) {
             <Clock size={14} color="#7c3aed" />
           </div>
           Hoạt động gần đây
+          {total > 0 && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>{total} mục</span>}
         </div>
       </div>
       <div className={s.infoCardBody} style={{ padding: 0 }}>
@@ -539,30 +551,47 @@ function ActivityCard({ companyId }) {
             Chưa có hoạt động nào.
           </div>
         ) : (
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-            {activities.map((a, i) => (
-              <li key={a.id} style={{
-                display: 'flex', gap: 10, padding: '10px 16px',
-                borderBottom: i < activities.length - 1 ? '1px solid #f3f4f6' : 'none',
-              }}>
-                <div style={{
-                  width: 7, height: 7, borderRadius: '50%', background: '#7c3aed',
-                  flexShrink: 0, marginTop: 5,
-                }} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {ACTION_LABELS[a.action] ?? a.action}
-                    {a.taskTitle && (
-                      <span style={{ fontWeight: 400, color: '#6b7280' }}> · {a.taskTitle}</span>
-                    )}
+          <>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {activities.map((a, i) => (
+                <li key={a.id} style={{
+                  display: 'flex', gap: 10, padding: '10px 16px',
+                  borderBottom: i < activities.length - 1 ? '1px solid #f3f4f6' : 'none',
+                }}>
+                  <div style={{
+                    width: 7, height: 7, borderRadius: '50%', background: '#7c3aed',
+                    flexShrink: 0, marginTop: 5,
+                  }} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {ACTION_LABELS[a.action] ?? a.action}
+                      {a.taskTitle && (
+                        <span style={{ fontWeight: 400, color: '#6b7280' }}> · {a.taskTitle}</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
+                      {a.actorName} · {fmtRelative(a.createdAt)}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
-                    {a.actorName} · {fmtRelative(a.createdAt)}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+            {totalPages > 1 && (
+              <div className={s.actPagination}>
+                <button
+                  className={s.actPageBtn}
+                  onClick={() => setPage((p) => p - 1)}
+                  disabled={page === 1}
+                >‹</button>
+                <span className={s.actPageInfo}>Trang {page} / {totalPages}</span>
+                <button
+                  className={s.actPageBtn}
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={page === totalPages}
+                >›</button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -904,8 +933,12 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const getLabel   = useEnumsStore((st) => st.getLabel)
   const loadEnums  = useEnumsStore((st) => st.load)
 
+  const CUR_MONTH = String(new Date().getMonth() + 1)
+  const CUR_YEAR  = String(new Date().getFullYear())
+
   const [tasks, setTasks]           = useState([])
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
+  const [statusCounts, setStatusCounts] = useState({})
   const [page, setPage]             = useState(1)
   const [limit, setLimit]           = useState(20)
   const [loading, setLoading]       = useState(true)
@@ -915,8 +948,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const [statusFilter, setStatusFilter]     = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
   const [isOverdue, setIsOverdue]           = useState(false)
-  const [monthFilter, setMonthFilter]       = useState('')
-  const [yearFilter, setYearFilter]         = useState('')
+  const [monthFilter, setMonthFilter]       = useState(CUR_MONTH)
+  const [yearFilter, setYearFilter]         = useState(CUR_YEAR)
 
   const [showCreate, setShowCreate]   = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -962,10 +995,11 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       sortBy:  'due_date',
       sortDir: 'asc',
     })
-      .then(({ tasks: t, pagination: p }) => {
+      .then(({ tasks: t, pagination: p, statusCounts: sc }) => {
         if (!cancelled) {
           setTasks(t)
           setPagination(p ?? { total: t.length, totalPages: 1 })
+          if (sc) setStatusCounts(sc)
         }
       })
       .catch(() => { if (!cancelled) setTasks([]) })
@@ -1001,15 +1035,15 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   function resetFilters() {
     setSearchInput(''); setSearch('')
     setStatusFilter(''); setPriorityFilter(''); setIsOverdue(false)
-    setMonthFilter(''); setYearFilter('')
+    setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR)
     setPage(1)
   }
 
-  const activeFilters  = [search, statusFilter, priorityFilter, monthFilter, yearFilter].filter(Boolean).length + (isOverdue ? 1 : 0)
-  const openCount      = tasks.filter((t) => t.status !== 'completed').length
-  const overdueCount   = tasks.filter((t) => isTaskOverdue(t)).length
-  const completedCount = tasks.filter((t) => t.status === 'completed').length
-  const colSpan        = isAdmin ? 8 : 7
+  const activeFilters = [search, statusFilter, priorityFilter].filter(Boolean).length
+    + (isOverdue ? 1 : 0)
+    + (monthFilter !== CUR_MONTH ? 1 : 0)
+    + (yearFilter  !== CUR_YEAR  ? 1 : 0)
+  const colSpan = isAdmin ? 8 : 7
   const from = pagination.total === 0 ? 0 : (page - 1) * limit + 1
   const to   = Math.min(page * limit, pagination.total)
 
@@ -1042,88 +1076,110 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         </button>
       </div>
 
-      {/* KPI strip */}
-      {!loading && tasks.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          {[
-            { label: 'Đang mở',    value: openCount,      color: '#1d4ed8', bg: '#eff6ff', border: '#93c5fd' },
-            { label: 'Quá hạn',    value: overdueCount,   color: '#dc2626', bg: '#fef2f2', border: '#fca5a5', hide: overdueCount === 0 },
-            { label: 'Hoàn thành', value: completedCount, color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
-          ].filter((k) => !k.hide).map((k) => (
-            <div key={k.label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 8, background: k.bg, border: `1px solid ${k.border}` }}>
-              <span style={{ fontSize: 16, fontWeight: 800, color: k.color }}>{k.value}</span>
-              <span style={{ fontSize: 11, color: k.color, fontWeight: 600 }}>{k.label}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Filter bar */}
-      <div className={s.taskFilterBar}>
-        <div className={s.taskFilterSearch}>
-          <Search size={12} className={s.taskFilterSearchIcon} />
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Tìm công việc..."
-            className={s.taskFilterInput}
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className={s.taskFilterSelect}
-        >
-          <option value="">Tất cả trạng thái</option>
-          {(getOptions('task_status').length > 0
-            ? getOptions('task_status')
-            : STATUSES.map((k) => ({ key: k, label: STATUS_LABELS[k] }))
-          ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-        </select>
-        <select
-          value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value)}
-          className={s.taskFilterSelect}
-        >
-          <option value="">Tất cả ưu tiên</option>
-          {(getOptions('task_priority').length > 0
-            ? getOptions('task_priority')
-            : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
-          ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-        </select>
-        <select
-          value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
-          className={`${s.taskFilterSelect} ${s.taskFilterSelectSm}`}
-        >
-          <option value="">Tháng</option>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-            <option key={m} value={m}>T{m}</option>
-          ))}
-        </select>
-        <select
-          value={yearFilter}
-          onChange={(e) => setYearFilter(e.target.value)}
-          className={`${s.taskFilterSelect} ${s.taskFilterSelectSm}`}
-        >
-          <option value="">Năm</option>
-          {[2024, 2025, 2026, 2027].map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
-        <button
-          className={ts.qBtn}
-          style={isOverdue ? { background: '#dc2626', borderColor: '#dc2626', color: '#fff' } : {}}
-          onClick={() => setIsOverdue((v) => !v)}
-        >
-          Quá hạn
-        </button>
-        {activeFilters > 0 && (
-          <button className={ts.qResetBtn} onClick={resetFilters}>
-            <RotateCcw size={11} /> Xoá lọc ({activeFilters})
+      {/* Filter panel */}
+      <div className={s.cTaskFilterPanel}>
+        <div className={s.cTaskFilterHead}>
+          <div className={s.cTaskFilterTitle}>
+            <Filter size={12} />
+            Bộ lọc
+            {activeFilters > 0 && (
+              <span className={s.cTaskFilterBadge}>{activeFilters} đang bật</span>
+            )}
+          </div>
+          <button className={s.cTaskFilterReset} onClick={resetFilters}>
+            <RotateCcw size={11} /> Đặt lại
           </button>
-        )}
+        </div>
+
+        <div className={s.cTaskFilterGrid}>
+          {/* Tìm kiếm */}
+          <div className={`${s.cTaskFilterGroup} ${s.cTaskFilterGroupGrow}`}>
+            <label className={s.cTaskFilterLabel}>Từ khoá</label>
+            <div style={{ position: 'relative' }}>
+              <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)', pointerEvents: 'none' }} />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Tìm công việc..."
+                className={s.cTaskFilterInput}
+                style={{ paddingLeft: 26 }}
+              />
+            </div>
+          </div>
+
+          {/* Tháng */}
+          <div className={s.cTaskFilterGroup}>
+            <label className={s.cTaskFilterLabel}>Tháng</label>
+            <select value={monthFilter} onChange={(e) => { setMonthFilter(e.target.value); setPage(1) }} className={s.cTaskFilterSelect}>
+              <option value="">Tất cả</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>Tháng {m}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Năm */}
+          <div className={s.cTaskFilterGroup}>
+            <label className={s.cTaskFilterLabel}>Năm</label>
+            <select value={yearFilter} onChange={(e) => { setYearFilter(e.target.value); setPage(1) }} className={s.cTaskFilterSelect}>
+              <option value="">Tất cả</option>
+              {[2024, 2025, 2026, 2027].map((y) => (
+                <option key={y} value={y}>Năm {y}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Ưu tiên */}
+          <div className={s.cTaskFilterGroup}>
+            <label className={s.cTaskFilterLabel}>Ưu tiên</label>
+            <select value={priorityFilter} onChange={(e) => { setPriorityFilter(e.target.value); setPage(1) }} className={s.cTaskFilterSelect}>
+              <option value="">Tất cả</option>
+              {(getOptions('task_priority').length > 0
+                ? getOptions('task_priority')
+                : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
+              ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+          </div>
+
+          {/* Quá hạn */}
+          <div className={s.cTaskFilterGroup} style={{ justifyContent: 'flex-end' }}>
+            <label className={s.cTaskFilterLabel}>&nbsp;</label>
+            <button
+              className={`${s.cTaskOverdueBtn} ${isOverdue ? s.cTaskOverdueBtnActive : ''}`}
+              onClick={() => { setIsOverdue((v) => !v); setPage(1) }}
+            >
+              Quá hạn
+            </button>
+          </div>
+        </div>
+
+        {/* Status count chips */}
+        <div className={s.cTaskStatusRow}>
+          {[
+            { key: '',              label: 'Tất cả',       color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
+            { key: 'pending',       label: STATUS_LABELS.pending,         color: '#92400e', bg: '#fffbeb', border: '#fcd34d' },
+            { key: 'in_progress',   label: STATUS_LABELS.in_progress,     color: '#1e40af', bg: '#eff6ff', border: '#93c5fd' },
+            { key: 'on_hold',       label: STATUS_LABELS.on_hold,         color: '#6b7280', bg: '#f9fafb', border: '#d1d5db' },
+            { key: 'pending_review',label: STATUS_LABELS.pending_review,  color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
+            { key: 'needs_revision',label: STATUS_LABELS.needs_revision,  color: '#b45309', bg: '#fff7ed', border: '#fed7aa' },
+            { key: 'completed',     label: STATUS_LABELS.completed,       color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
+          ].map(({ key, label, color, bg, border }) => {
+            const count = key === '' ? pagination.total : (statusCounts[key] ?? 0)
+            const isActive = statusFilter === key
+            return (
+              <button
+                key={key}
+                className={`${s.cTaskStatusChip} ${isActive ? s.cTaskStatusChipActive : ''}`}
+                style={isActive ? { background: bg, borderColor: border, color } : {}}
+                onClick={() => { setStatusFilter(key); setPage(1) }}
+              >
+                <span>{label}</span>
+                <span className={s.cTaskStatusChipCount} style={isActive ? { background: border, color } : {}}>{count}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Table */}

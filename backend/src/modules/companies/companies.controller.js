@@ -66,9 +66,10 @@ async function assignStaff(req, res, next) {
 
 async function getActivityLog(req, res, next) {
   try {
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit ?? '20', 10)))
-    const activities = await svc.getActivityLog(req.params.id, limit)
-    res.json({ success: true, data: { activities } })
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit ?? '10', 10)))
+    const page  = Math.max(1, parseInt(req.query.page  ?? '1',  10))
+    const { activities, total } = await svc.getActivityLog(req.params.id, { page, limit })
+    res.json({ success: true, data: { activities, total } })
   } catch (err) { next(err) }
 }
 
