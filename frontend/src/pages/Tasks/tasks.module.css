@@ -910,13 +910,14 @@
 }
 
 .calCell {
-  min-height: 90px;
+  min-height: 80px;
   padding: 5px;
   border-right: 1px solid var(--color-border-soft);
   border-bottom: 1px solid var(--color-border-soft);
   vertical-align: top;
   background: #fff;
   transition: background 0.1s;
+  overflow: hidden;
 }
 
 .calCell:nth-child(7n) { border-right: none; }
@@ -971,6 +972,25 @@
 .calTaskLow     { background: #f1f5f9; color: #475569; }
 .calTaskDone    { background: #dcfce7; color: #166534; }
 .calTaskOverdue { background: #ffe4e6; color: #9f1239; text-decoration: line-through; }
+
+/* Multi-day span position variants */
+.calTaskSpanStart {
+  border-radius: 3px 0 0 3px;
+  margin-right: -5px;
+  padding-right: 2px;
+}
+.calTaskSpanMid {
+  border-radius: 0;
+  margin-left: -5px;
+  margin-right: -5px;
+  padding-left: 4px;
+  opacity: 0.85;
+}
+.calTaskSpanEnd {
+  border-radius: 0 3px 3px 0;
+  margin-left: -5px;
+  padding-left: 4px;
+}
 
 .calMore {
   font-size: 10px;
@@ -1892,7 +1912,7 @@
 /* ── Table action column / delete row button ─────────────────── */
 
 .tdAction {
-  width: 72px;
+  width: 100px;
   padding: 10px 8px;
   vertical-align: middle;
   white-space: nowrap;
@@ -2369,3 +2389,215 @@
 .statGreen  { color: #15803d; }
 .statRed    { color: var(--color-danger); }
 .statPurple { color: #7e22ce; }
+
+/* ── Quick View panel (slide-in right) ──────────────────────── */
+
+.qvOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 500;
+}
+
+.qvPanel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 95vw;
+  background: #fff;
+  border-left: 1px solid var(--color-border);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  z-index: 501;
+  display: flex;
+  flex-direction: column;
+  animation: qvSlideIn 0.22s ease;
+}
+
+@keyframes qvSlideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.qvHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-muted);
+  flex-shrink: 0;
+}
+
+.qvTitle {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
+  color: var(--color-text-strong);
+  margin: 0;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.qvHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.btnQvDetail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--color-primary-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-info-bg);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.13s;
+}
+
+.btnQvDetail:hover { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+
+.qvBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.qvSection {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.qvSection:last-child { border-bottom: none; margin-bottom: 0; }
+
+.qvSectionTitle {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.qvRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  min-height: 28px;
+}
+
+.qvRow:last-child { margin-bottom: 0; }
+
+.qvLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  width: 96px;
+  flex-shrink: 0;
+}
+
+.qvValue {
+  font-size: var(--fs-xs);
+  color: var(--color-text);
+  flex: 1;
+}
+
+.qvStatusActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-soft);
+  margin-bottom: 14px;
+}
+
+.qvTransitionLabel {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.qvChecklistItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.qvChecklistText {
+  font-size: var(--fs-xs);
+  color: var(--color-text);
+  line-height: 1.5;
+  flex: 1;
+  padding-top: 1px;
+}
+
+.qvChecklistTextDone {
+  color: var(--color-muted);
+  text-decoration: line-through;
+}
+
+.qvDesc {
+  font-size: var(--fs-sm);
+  color: var(--color-text-soft);
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.overdueTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: #fef2f2;
+  color: var(--color-danger);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  border: 1px solid #fca5a5;
+}
+
+/* ── Board card quickview button ─────────────────────────────── */
+
+.boardCardViewBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs, 3px);
+  background: #fff;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.boardCardViewBtn:hover {
+  background: var(--color-info-bg);
+  color: var(--color-primary);
+  border-color: var(--color-primary-soft);
+}

@@ -20,6 +20,7 @@ function toDto(row) {
     status:                 row.status,
     priority:               row.priority,
     source:                 row.source,
+    startDate:              row.start_date ?? null,
     dueDate:                row.due_date ?? null,
     periodLabel:            row.period_label ?? null,
     completedAt:            row.completed_at ?? null,
@@ -115,7 +116,7 @@ async function getTaskById(id) {
 }
 
 async function createTask(data, actorId, ipAddress, userAgent) {
-  const { title, description, companyId, taskTypeId, assignedTo, dueDate, priority = 'medium', slaDays } = data
+  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays } = data
 
   const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
@@ -130,13 +131,13 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   const { rows: [task] } = await query(
     `INSERT INTO tasks
        (title, description, company_id, task_type_id, assigned_to, assigned_by,
-        due_date, priority, source, sla_days, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',$9,$10)
+        start_date, due_date, priority, source, sla_days, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'manual',$10,$11)
      RETURNING *`,
     [
       title, description ?? null, companyId, taskTypeId ?? null,
-      assignedTo ?? null, actorId, dueDate ?? null, priority,
-      effectiveSlaDays, actorId,
+      assignedTo ?? null, actorId, startDate ?? null, dueDate ?? null,
+      priority, effectiveSlaDays, actorId,
     ]
   )
 
@@ -169,6 +170,7 @@ async function updateTask(id, data, actorId, ipAddress, userAgent) {
     title:       'title',
     description: 'description',
     assignedTo:  'assigned_to',
+    startDate:   'start_date',
     dueDate:     'due_date',
     priority:    'priority',
     slaDays:     'sla_days',

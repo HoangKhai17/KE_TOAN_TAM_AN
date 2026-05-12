@@ -10,9 +10,10 @@ import { PRIORITY_LABELS } from './taskUtils'
 import s from './tasks.module.css'
 
 export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initialCompanyId, lockCompany }) {
+  const todayISO = new Date().toISOString().slice(0, 10)
   const [form, setForm] = useState({
     title: '', companyId: initialCompanyId || '', taskTypeId: '', assignedToId: '',
-    dueDate: '', priority: 'medium', slaDays: '', description: '',
+    startDate: todayISO, dueDate: '', priority: 'medium', slaDays: '', description: '',
   })
   const [companies, setCompanies]   = useState([])
   const [users, setUsers]           = useState([])
@@ -46,9 +47,10 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       const task = await createTask({
         title:       form.title.trim(),
         companyId:   form.companyId,
-        taskTypeId:  form.taskTypeId  || null,
+        taskTypeId:  form.taskTypeId   || null,
         assignedTo:  form.assignedToId || null,
-        dueDate:     form.dueDate     || null,
+        startDate:   form.startDate    || null,
+        dueDate:     form.dueDate      || null,
         priority:    form.priority,
         slaDays:     form.slaDays ? Number(form.slaDays) : null,
         description: form.description.trim() || null,
@@ -145,8 +147,19 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         </div>
 
         <div className={s.formGroup}>
+          <label className={s.formLabel}>Ngày bắt đầu</label>
+          <input type="date" value={form.startDate} onChange={set('startDate')} className={s.formInput} />
+        </div>
+
+        <div className={s.formGroup}>
           <label className={s.formLabel}>Ngày hết hạn</label>
-          <input type="date" value={form.dueDate} onChange={set('dueDate')} className={s.formInput} />
+          <input
+            type="date"
+            value={form.dueDate}
+            onChange={set('dueDate')}
+            className={s.formInput}
+            min={form.startDate || undefined}
+          />
         </div>
 
         <div className={s.formGroup}>

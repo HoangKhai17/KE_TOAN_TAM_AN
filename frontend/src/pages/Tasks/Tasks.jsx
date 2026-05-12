@@ -8,11 +8,12 @@ import {
 import {
   Plus, Search, RotateCcw, List, Columns, Calendar,
   ChevronLeft, ChevronRight, ChevronDown, Filter, ClipboardList, Check,
-  Trash2, Loader2, X, Eye,
+  Trash2, Loader2, X, Eye, ArrowUpRight,
 } from 'lucide-react'
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
   isSameMonth, format, addMonths, subMonths, isToday, differenceInDays, parseISO,
+  addDays, isAfter,
 } from 'date-fns'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
@@ -22,6 +23,7 @@ import * as tasksApi from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
 import { listUsers } from '../../api/users'
 import TaskFormModal from './TaskFormModal'
+import TaskQuickView from './TaskQuickView'
 import {
   TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS,
@@ -53,10 +55,29 @@ function yearMonthToDates(year, month) {
 }
 
 function calcDays(task) {
-  if (!task.createdAt) return null
-  const start = parseISO(task.createdAt)
+  const base = task.startDate || task.createdAt
+  if (!base) return null
+  const start = parseISO(base)
   const end   = task.completedAt ? parseISO(task.completedAt) : new Date()
   return Math.max(0, differenceInDays(end, start))
+}
+
+// Status color map for quick-edit select in list view
+const STATUS_SELECT_STYLE = {
+  pending:        { background: '#f1f5f9', color: '#475569', borderColor: '#cbd5e1' },
+  in_progress:    { background: '#eff6ff', color: '#1d4ed8', borderColor: '#93c5fd' },
+  on_hold:        { background: '#fff7ed', color: '#c2410c', borderColor: '#fed7aa' },
+  pending_review: { background: '#faf5ff', color: '#7e22ce', borderColor: '#d8b4fe' },
+  needs_revision: { background: '#fff1f2', color: '#be123c', borderColor: '#fda4af' },
+  completed:      { background: '#f0fdf4', color: '#15803d', borderColor: '#86efac' },
+}
+
+// Priority color map for quick-edit select in list view
+const PRIORITY_SELECT_STYLE = {
+  urgent: { background: '#fef2f2', color: '#b91c1c', borderColor: '#fca5a5' },
+  high:   { background: '#fff7ed', color: '#c2410c', borderColor: '#fdba74' },
+  medium: { background: '#eff6ff', color: '#1d4ed8', borderColor: '#93c5fd' },
+  low:    { background: '#f8fafc', color: '#64748b', borderColor: '#cbd5e1' },
 }
 
 // ── Column dot class map ──────────────────────────────────────────────────────
@@ -187,7 +208,7 @@ function ForceConfirmModal({ task, newStatus, onConfirm, onClose }) {
 
 // ── Board card inner ──────────────────────────────────────────────────────────
 
-function BoardCardInner({ task, isAdmin, onDelete }) {
+function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
   const pct     = progressPct(task)
   const overdue = isTaskOverdue(task)
   return (
@@ -213,15 +234,26 @@ function BoardCardInner({ task, isAdmin, onDelete }) {
           <span className={s.boardCardProgressText}>{pct}%</span>
         </div>
       )}
-      {isAdmin && onDelete && (
+      {(onQuickView || (isAdmin && onDelete)) && (
         <div className={s.boardCardActions}>
-          <button
-            className={s.boardCardDeleteBtn}
-            onClick={(e) => { e.stopPropagation(); onDelete(task) }}
-            title="Xóa công việc"
-          >
-            <Trash2 size={11} />
-          </button>
+          {onQuickView && (
+            <button
+              className={s.boardCardViewBtn}
+              onClick={(e) => { e.stopPropagation(); onQuickView(task.id) }}
+              title="Xem nhanh"
+            >
+              <Eye size={11} />
+            </button>
+          )}
+          {isAdmin && onDelete && (
+            <button
+              className={s.boardCardDeleteBtn}
+              onClick={(e) => { e.stopPropagation(); onDelete(task) }}
+              title="Xóa công việc"
+            >
+              <Trash2 size={11} />
+            </button>
+          )}
         </div>
       )}
     </>
@@ -230,7 +262,7 @@ function BoardCardInner({ task, isAdmin, onDelete }) {
 
 // ── DraggableCard ─────────────────────────────────────────────────────────────
 
-function DraggableCard({ task, onOpen, isAdmin, onDelete }) {
+function DraggableCard({ task, onOpen, isAdmin, onDelete, onQuickView }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { status: task.status },
@@ -245,14 +277,14 @@ function DraggableCard({ task, onOpen, isAdmin, onDelete }) {
       style={transform ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` } : undefined}
       onClick={() => !isDragging && onOpen(task.id)}
     >
-      <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} />
+      <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
     </div>
   )
 }
 
 // ── DroppableColumn ───────────────────────────────────────────────────────────
 
-function DroppableColumn({ status, tasks, onOpen, isAdmin, onDelete }) {
+function DroppableColumn({ status, tasks, onOpen, isAdmin, onDelete, onQuickView }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
   const getLabel = useEnumsStore((st) => st.getLabel)
 
@@ -265,7 +297,7 @@ function DroppableColumn({ status, tasks, onOpen, isAdmin, onDelete }) {
       </div>
       <div ref={setNodeRef} className={`${s.boardCards} ${isOver ? s.boardCardsOver : ''}`}>
         {tasks.map((t) => (
-          <DraggableCard key={t.id} task={t} onOpen={onOpen} isAdmin={isAdmin} onDelete={onDelete} />
+          <DraggableCard key={t.id} task={t} onOpen={onOpen} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
         ))}
         {tasks.length === 0 && (
           <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 11, padding: '16px 0' }}>
@@ -279,7 +311,7 @@ function DroppableColumn({ status, tasks, onOpen, isAdmin, onDelete }) {
 
 // ── BoardView ─────────────────────────────────────────────────────────────────
 
-function BoardView({ tasks, onStatusChange, onOpen, isAdmin, onDelete }) {
+function BoardView({ tasks, onStatusChange, onOpen, isAdmin, onDelete, onQuickView }) {
   const [activeTask, setActiveTask] = useState(null)
   const addToast = useToastStore((state) => state.toast)
   const getLabel = useEnumsStore((st) => st.getLabel)
@@ -333,6 +365,7 @@ function BoardView({ tasks, onStatusChange, onOpen, isAdmin, onDelete }) {
             onOpen={onOpen}
             isAdmin={isAdmin}
             onDelete={onDelete}
+            onQuickView={onQuickView}
           />
         ))}
       </div>
@@ -368,25 +401,62 @@ function CalendarView({ tasks, onOpen }) {
     return eachDayOfInterval({ start, end })
   }, [calMonth])
 
+  // Build tasksByDay — tasks spanning multiple days appear on every day in range
   const tasksByDay = useMemo(() => {
     const map = {}
+    const calStart = days[0]
+    const calEnd   = days[days.length - 1]
+
     for (const t of tasks) {
-      if (!t.dueDate) continue
-      const key = t.dueDate.slice(0, 10)
-      if (!map[key]) map[key] = []
-      map[key].push(t)
+      const startStr = t.startDate?.slice(0, 10) || t.dueDate?.slice(0, 10)
+      const endStr   = t.dueDate?.slice(0, 10)
+      if (!startStr && !endStr) continue
+
+      const effectiveStart = parseISO(startStr || endStr)
+      const effectiveEnd   = parseISO(endStr   || startStr)
+      const isMulti        = startStr && endStr && startStr !== endStr
+
+      // Clamp to visible calendar range to avoid huge iteration
+      let cur = isAfter(effectiveStart, calStart) ? effectiveStart : calStart
+      const stopAt = isAfter(effectiveEnd, calEnd) ? calEnd : effectiveEnd
+
+      while (!isAfter(cur, stopAt)) {
+        const key = format(cur, 'yyyy-MM-dd')
+        if (!map[key]) map[key] = []
+        const dayStr = format(cur, 'yyyy-MM-dd')
+        const spanPos = !isMulti ? 'single'
+          : dayStr === startStr ? 'start'
+          : dayStr === endStr   ? 'end'
+          : 'mid'
+        map[key].push({ ...t, _spanPos: spanPos })
+        cur = addDays(cur, 1)
+      }
     }
     return map
-  }, [tasks])
+  }, [tasks, days])
 
   function calClass(t) {
-    if (t.status === 'completed') return s.calTaskDone
-    if (isTaskOverdue(t))        return s.calTaskOverdue
-    return CAL_PRIORITY_CLASS[t.priority] ?? s.calTaskLow
+    const pos = t._spanPos ?? 'single'
+    const base = t.status === 'completed' ? s.calTaskDone
+      : isTaskOverdue(t) ? s.calTaskOverdue
+      : CAL_PRIORITY_CLASS[t.priority] ?? s.calTaskLow
+    if (pos === 'start') return `${base} ${s.calTaskSpanStart}`
+    if (pos === 'mid')   return `${base} ${s.calTaskSpanMid}`
+    if (pos === 'end')   return `${base} ${s.calTaskSpanEnd}`
+    return base
   }
 
+  function spanLabel(t) {
+    if (t._spanPos === 'start') return `▶ ${t.title}`
+    if (t._spanPos === 'end')   return `◀ ${t.title}`
+    if (t._spanPos === 'mid')   return `— ${t.title}`
+    return t.title
+  }
+
+  const numRows = days.length / 7
+
   return (
-    <div className={s.calWrap}>
+    <div className={s.calWrap} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div className={s.calNav}>
         <button className={s.calNavBtn} onClick={() => setCalMonth((m) => subMonths(m, 1))}>
           <ChevronLeft size={16} />
@@ -398,7 +468,7 @@ function CalendarView({ tasks, onOpen }) {
         </button>
       </div>
 
-      <div className={s.calGrid}>
+      <div className={s.calGrid} style={{ flex: 1, gridTemplateRows: `auto repeat(${numRows}, 1fr)` }}>
         {WEEK_DAYS.map((d) => (
           <div key={d} className={s.calDayHead}>{d}</div>
         ))}
@@ -416,12 +486,12 @@ function CalendarView({ tasks, onOpen }) {
               <div className={s.calDayNum}>{format(day, 'd')}</div>
               {dayTasks.slice(0, 3).map((t) => (
                 <span
-                  key={t.id}
+                  key={`${t.id}-${t._spanPos}`}
                   className={`${s.calTask} ${calClass(t)}`}
                   onClick={() => onOpen(t.id)}
-                  title={t.title}
+                  title={`${t.title}${t.startDate ? ` (${t.startDate.slice(0,10)} → ${t.dueDate?.slice(0,10)})` : ''}`}
                 >
-                  {t.title}
+                  {spanLabel(t)}
                 </span>
               ))}
               {dayTasks.length > 3 && (
@@ -458,7 +528,7 @@ function CalendarView({ tasks, onOpen }) {
             <div className={s.calDayPopoverList}>
               {dayPopover.tasks.map((t) => (
                 <div
-                  key={t.id}
+                  key={`${t.id}-${t._spanPos}`}
                   className={s.calDayPopoverItem}
                   onClick={() => { onOpen(t.id); setDayPopover(null) }}
                 >
@@ -551,7 +621,7 @@ function MultiSelect({ placeholder, options, selected, onChange }) {
 
 function ListView({
   tasks, loading, pagination, page, pageSize,
-  onPageChange, onPageSizeChange, onOpen,
+  onPageChange, onPageSizeChange, onOpen, onQuickView,
   selectedIds, onToggleSelect, onSelectAll,
   onStatusChange, onPriorityChange, onDueDateChange, onDelete,
   isAdmin,
@@ -590,7 +660,7 @@ function ListView({
               <th className={s.th}>Hết hạn</th>
               <th className={s.th}>Tiến độ</th>
               <th className={s.th}>Giao cho</th>
-              <th className={s.th} style={{ width: 90 }}>Hành động</th>
+              <th className={s.th} style={{ width: 100 }}>Hành động</th>
             </tr>
           </thead>
           <tbody>
@@ -658,6 +728,7 @@ function ListView({
                       onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
                       className={s.qeSelect}
                       title="Đổi trạng thái"
+                      style={{ ...(STATUS_SELECT_STYLE[t.status] ?? {}), fontWeight: 600 }}
                     >
                       <option value={t.status}>
                         {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
@@ -677,6 +748,7 @@ function ListView({
                       onChange={(e) => onPriorityChange(t, e.target.value)}
                       className={s.qeSelect}
                       title="Đổi ưu tiên"
+                      style={{ ...(PRIORITY_SELECT_STYLE[t.priority] ?? {}), fontWeight: 600 }}
                     >
                       {['urgent', 'high', 'medium', 'low'].map((p) => (
                         <option key={p} value={p}>
@@ -727,10 +799,17 @@ function ListView({
                     <div className={s.actionBtns}>
                       <button
                         className={s.btnActionView}
-                        onClick={() => onOpen(t.id)}
-                        title="Xem chi tiết"
+                        onClick={() => onQuickView(t.id)}
+                        title="Xem nhanh"
                       >
                         <Eye size={13} />
+                      </button>
+                      <button
+                        className={s.btnActionView}
+                        onClick={() => onOpen(t.id)}
+                        title="Mở chi tiết"
+                      >
+                        <ArrowUpRight size={13} />
                       </button>
                       {isAdmin && (
                         <button
@@ -874,6 +953,7 @@ export default function Tasks() {
   const [deleting, setDeleting]             = useState(false)
   const [showBulkDelete, setShowBulkDelete] = useState(false)
   const [bulkDeleting, setBulkDeleting]     = useState(false)
+  const [quickViewId, setQuickViewId]       = useState(null)
 
   // Bulk
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -1427,6 +1507,7 @@ export default function Tasks() {
             onPageChange={(p) => { setPage(p); setSelectedIds(new Set()) }}
             onPageSizeChange={(n) => { setPageSize(n); setPage(1) }}
             onOpen={openTask}
+            onQuickView={setQuickViewId}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
             onSelectAll={selectAll}
@@ -1443,13 +1524,16 @@ export default function Tasks() {
             tasks={tasks}
             onStatusChange={handleStatusChange}
             onOpen={openTask}
+            onQuickView={setQuickViewId}
             isAdmin={isAdmin}
             onDelete={setDeleteTarget}
           />
         )}
 
         {view === 'calendar' && !loading && (
-          <CalendarView tasks={tasks} onOpen={openTask} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <CalendarView tasks={tasks} onOpen={openTask} />
+          </div>
         )}
 
       </div>
@@ -1486,6 +1570,14 @@ export default function Tasks() {
           deleting={deleting}
           onClose={() => !deleting && setDeleteTarget(null)}
           onConfirm={handleDeleteConfirm}
+        />
+      )}
+
+      {quickViewId && (
+        <TaskQuickView
+          taskId={quickViewId}
+          onClose={() => setQuickViewId(null)}
+          onUpdated={(updated) => setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))}
         />
       )}
 
