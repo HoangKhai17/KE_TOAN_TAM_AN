@@ -1,5 +1,16 @@
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+.topBar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
 .greeting {
-  margin-bottom: var(--space-10);
+  flex: 1;
+  min-width: 0;
 }
 
 .greetingTitle {
@@ -11,99 +22,516 @@
 }
 
 .greetingDate {
-  margin: var(--space-1) 0 0;
+  margin: 4px 0 0;
   color: var(--color-muted);
   font-size: var(--fs-md);
 }
 
-.statsGrid {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: var(--space-7);
-  margin-bottom: var(--space-12);
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding-top: 4px;
 }
 
-.contentGrid {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: var(--space-7);
+/* ── Range buttons ───────────────────────────────────────────────────────── */
+.rangeBtns {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.statCard {
-  padding: var(--space-9);
+.rangeBtn {
+  padding: 6px 14px;
+  background: var(--color-surface);
+  border: none;
+  border-right: 1px solid var(--color-border);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-muted);
+  transition: background 0.13s, color 0.13s;
+  white-space: nowrap;
+}
+
+.rangeBtn:last-child { border-right: none; }
+.rangeBtn:hover { background: var(--color-bg); color: var(--color-text); }
+
+.rangeBtnActive {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+/* ── Fullscreen button ───────────────────────────────────────────────────── */
+.fullscreenBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background 0.13s, color 0.13s, border-color 0.13s;
+  flex-shrink: 0;
+}
+
+.fullscreenBtn:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-color: var(--color-primary-soft);
+}
+
+.fullscreenActive {
+  background: #eff6ff !important;
+  color: var(--color-primary) !important;
+  border-color: var(--color-primary-soft) !important;
+}
+
+/* ── Error banner ────────────────────────────────────────────────────────── */
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ── KPI Grid ────────────────────────────────────────────────────────────── */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.kpiCard {
+  padding: 14px 16px;
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
+  transition: box-shadow 0.15s;
 }
 
-.statLabel {
-  margin: 0 0 var(--space-5);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-bold);
-  letter-spacing: 0.04em;
+.kpiCard:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+}
+
+.kpiCardUrgent {
+  animation: kpi-pulse 2s ease-in-out infinite;
+}
+
+@keyframes kpi-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0.2); }
+  50%       { box-shadow: 0 0 0 6px rgba(185, 28, 28, 0); }
+}
+
+.kpiCardInner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.kpiIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.kpiText { flex: 1; min-width: 0; }
+
+.kpiLabel {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
+  opacity: 0.85;
 }
 
-.statValue {
-  margin: 0 0 4px;
-  font-size: var(--fs-3xl);
-  font-weight: var(--fw-extrabold);
+.kpiValue {
+  margin: 0 0 2px;
+  font-size: 26px;
+  font-weight: 800;
   line-height: 1.1;
 }
 
-.statSub {
+.kpiSub {
   margin: 0;
   color: var(--color-muted);
-  font-size: var(--fs-sm);
+  font-size: 11px;
 }
 
-.panel {
-  padding: var(--space-9);
+.kpiSkeleton {
+  height: 28px;
+  width: 60px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 2px 0;
+  animation: app-pulse 1.4s ease-in-out infinite;
+}
+
+/* ── Charts layout ───────────────────────────────────────────────────────── */
+.chartsRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.chartPanel {
+  padding: 16px 18px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   background: var(--color-surface);
+  min-height: 120px;
 }
 
-.panelTitle {
-  margin: 0 0 16px;
-  color: #374151;
-  font-size: var(--fs-md);
-  font-weight: var(--fw-bold);
+.chartHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
 }
 
-.skeletonList {
+.chartTitle {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+
+.chartSub {
+  display: block;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.chartHeaderLink {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.chartHeaderLink:hover { text-decoration: underline; }
+
+.chartLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 280px;
+  color: var(--color-muted);
+}
+
+.chartEmpty {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-}
-
-.skeletonRow {
-  height: 40px;
-  border-radius: var(--radius-md);
-  background: var(--color-border-soft);
-  animation: app-pulse 1.5s ease-in-out infinite;
-}
-
-.panelNote {
-  margin: 16px 0 0;
-  color: var(--color-muted-soft);
+  align-items: center;
+  justify-content: center;
+  height: 280px;
+  color: var(--color-muted);
   font-size: var(--fs-sm);
   text-align: center;
+  gap: 4px;
 }
 
+/* ── Pie chart layout ────────────────────────────────────────────────────── */
+.pieRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 280px;
+}
+
+.pieLeft {
+  flex-shrink: 0;
+}
+
+.pieLegend {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.pieLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: background 0.12s;
+  cursor: default;
+}
+
+.pieLegendItem:hover { background: #f8fafc; }
+
+.pieLegendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pieLegendName {
+  flex: 1;
+  font-size: 12px;
+  color: var(--color-text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pieLegendCount {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+  min-width: 28px;
+  text-align: right;
+}
+
+.pieLegendPct {
+  font-size: 11px;
+  color: var(--color-muted);
+  min-width: 32px;
+  text-align: right;
+}
+
+.pieLegendTotal {
+  margin-top: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--color-muted);
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── Custom tooltip ──────────────────────────────────────────────────────── */
+.tooltip {
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  font-size: 12px;
+}
+
+.tooltipLabel {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* ── Overdue list ────────────────────────────────────────────────────────── */
+.overdueList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 330px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.overdueList::-webkit-scrollbar { width: 4px; }
+.overdueList::-webkit-scrollbar-track { background: transparent; }
+.overdueList::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+
+/* ── Task cards (shared by overdue + due today) ──────────────────────────── */
+.overdueCard,
+.dueTodayCard {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #fee2e2;
+  background: #fffafa;
+  cursor: pointer;
+  transition: box-shadow 0.14s, transform 0.1s;
+}
+
+.overdueCard:hover,
+.dueTodayCard:hover {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.dueTodayCard {
+  border-color: #dbeafe;
+  background: #f0f9ff;
+}
+
+.taskCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.taskCardBadges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.priorityBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.overdueDaysBadge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b91c1c;
+  background: #fee2e2;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dueTodayBadge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.taskCardTitle {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.taskCardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.taskCardMetaItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.taskCardMetaItem span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Due Today panel ─────────────────────────────────────────────────────── */
+.dueTodayPanel {
+  padding: 16px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  margin-bottom: 8px;
+}
+
+.dueTodayGrid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* ── Spin animation ──────────────────────────────────────────────────────── */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (min-width: 640px) {
-  .statsGrid {
+  .kpiGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dueTodayGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
-  .contentGrid {
+  .kpiGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .chartsRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dueTodayGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1280px) {
-  .statsGrid {
+  .dueTodayGrid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

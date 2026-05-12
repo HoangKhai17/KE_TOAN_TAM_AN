@@ -167,6 +167,10 @@ function createApp() {
   // Phase 8 — Scheduler admin endpoints
   app.use('/api/admin/scheduler', require('./modules/admin/scheduler.router'))
 
+  // Phase 13 — Dashboard & Reports
+  app.use('/api/dashboard', require('./modules/dashboard/dashboard.router'))
+  app.use('/api/reports',   require('./modules/reports/reports.router'))
+
   // 404 & error handlers
   app.use(notFound)
   app.use(errorHandler)

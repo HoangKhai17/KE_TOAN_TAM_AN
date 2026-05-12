@@ -13,6 +13,7 @@ import Tasks from './pages/Tasks/Tasks'
 import TaskDetail from './pages/Tasks/TaskDetail'
 import Payroll from './pages/Payroll/Payroll'
 import PayrollDetail from './pages/Payroll/PayrollDetail'
+import Reports from './pages/Reports/Reports'
 import s from './App.module.css'
 
 // ── Route guards ──────────────────────────────────────────────────────
@@ -138,6 +139,10 @@ function AppRoutes() {
       <Route
         path="/payroll/:id"
         element={<ProtectedRoute><PayrollDetail /></ProtectedRoute>}
+      />
+      <Route
+        path="/reports"
+        element={<ProtectedRoute><Reports /></ProtectedRoute>}
       />
 
       {/* TODO Phase 2: implement ChangePassword page.
