@@ -56,8 +56,8 @@
 .viewSwitch {
   display: flex;
   align-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: #f8fbff;
+  border: 1.5px solid #dbeafe;
   border-radius: var(--radius-md);
   padding: 3px;
   gap: 2px;
@@ -69,25 +69,26 @@
   justify-content: center;
   gap: 5px;
   height: 28px;
-  padding: 0 10px;
+  padding: 0 12px;
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--color-muted);
+  color: #64748b;
   font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
+  font-weight: 700;
   cursor: pointer;
   transition: background 0.13s, color 0.13s;
   white-space: nowrap;
 }
 
-.viewBtn:hover { background: var(--color-surface-muted); color: var(--color-text); }
+.viewBtn:hover { background: #eff6ff; color: #2563eb; }
 
 .viewBtnActive {
-  background: var(--color-primary);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
+  box-shadow: 0 2px 8px -2px rgba(37, 99, 235, 0.45);
 }
-.viewBtnActive:hover { background: var(--color-primary-dark); color: #fff; }
+.viewBtnActive:hover { filter: brightness(1.06); color: #fff; }
 
 .fullscreenBtn {
   display: flex;
@@ -1546,8 +1547,8 @@
 
 .tabNav {
   display: flex;
-  border-bottom: 1px solid var(--color-border-soft);
-  background: var(--color-surface-muted);
+  border-bottom: 1.5px solid #dbeafe;
+  background: #f0f6ff;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1558,26 +1559,27 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 10px 14px;
+  padding: 10px 16px;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 2.5px solid transparent;
   background: transparent;
-  color: var(--color-muted);
+  color: #64748b;
   font-family: inherit;
   font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.13s, border-color 0.13s;
-  margin-bottom: -1px;
+  transition: color 0.13s, border-color 0.13s, background 0.13s;
+  margin-bottom: -1.5px;
 }
 
-.tabBtn:hover { color: var(--color-text); }
+.tabBtn:hover { color: #1e3a8a; background: rgba(255,255,255,0.6); }
 
 .tabBtnActive {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-  background: var(--color-surface);
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  background: #fff;
+  font-weight: 800;
 }
 
 .tabCount {
@@ -1588,10 +1590,15 @@
   height: 16px;
   padding: 0 4px;
   border-radius: var(--radius-pill);
-  background: var(--color-border-muted);
-  color: var(--color-muted);
+  background: #e2e8f0;
+  color: #64748b;
   font-size: 10px;
-  font-weight: var(--fw-bold);
+  font-weight: 700;
+}
+
+.tabBtnActive .tabCount {
+  background: #dbeafe;
+  color: #2563eb;
 }
 
 .tabContent {

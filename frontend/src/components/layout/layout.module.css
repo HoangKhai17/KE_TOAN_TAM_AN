@@ -57,7 +57,7 @@
 .sidebarExpanded  { width: var(--sidebar-w); }
 .sidebarCollapsed { width: var(--sidebar-col); }
 
-/* Vivid blue accent line on right edge */
+/* White accent line on right edge */
 .sidebar::after {
   content: '';
   position: absolute;
@@ -68,8 +68,8 @@
   background: linear-gradient(
     180deg,
     transparent 0%,
-    rgba(96, 165, 250, 0.55) 30%,
-    rgba(96, 165, 250, 0.55) 70%,
+    rgba(255, 255, 255, 0.28) 25%,
+    rgba(255, 255, 255, 0.28) 75%,
     transparent 100%
   );
   pointer-events: none;
@@ -84,7 +84,7 @@
   gap: 12px;
   min-height: 82px;
   padding: var(--space-6) var(--space-7) var(--space-6) var(--space-8);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   flex-shrink: 0;
 }
 
@@ -134,7 +134,7 @@
 .sidebarSubtitle {
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.78);
   letter-spacing: 0.5px;
   text-transform: uppercase;
   margin-top: 2px;
@@ -162,15 +162,15 @@
   justify-content: center;
   border: none;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.75);
   cursor: pointer;
   transition: background var(--duration-base), color var(--duration-base);
 }
 
 .sidebarToggle:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
 }
 
 /* ── Navigation ───────────────────────────────────── */
@@ -191,14 +191,14 @@
 
 .sidebarSection:not(:last-child) {
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .sidebarSectionLabel {
   padding: var(--space-4) var(--space-4) 9px;
   font-size: var(--fs-xs);
   font-weight: var(--fw-extrabold);
-  color: rgba(255, 255, 255, 0.38);
+  color: rgba(255, 255, 255, 0.55);
   letter-spacing: 1.1px;
   text-transform: uppercase;
   white-space: nowrap;
@@ -213,7 +213,7 @@
   margin-bottom: var(--space-1);
   border-radius: var(--radius-md);
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(255, 255, 255, 0.84);
   font-size: var(--fs-md);
   font-weight: var(--fw-bold);
   transition: background var(--duration-base), color var(--duration-base), box-shadow var(--duration-base), transform var(--duration-fast);
@@ -224,8 +224,8 @@
 }
 
 .navItem:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .navItemActive {
@@ -255,7 +255,7 @@
 
 .navIcon {
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(255, 255, 255, 0.75);
   transition: color 0.13s;
   display: flex;
   align-items: center;
@@ -265,7 +265,7 @@
 }
 
 .navItem:hover .navIcon {
-  color: rgba(255, 255, 255, 0.88);
+  color: #fff;
 }
 
 .navLabel {
@@ -286,7 +286,7 @@
 
 .sidebarFooter {
   flex-shrink: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
   padding: 12px 10px;
 }
 
@@ -316,8 +316,8 @@
 
 .sidebarUserRole {
   font-size: 11.5px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.58);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
   text-transform: capitalize;
   white-space: nowrap;
 }
@@ -332,10 +332,10 @@
   border: none;
   border-radius: var(--radius);
   background: transparent;
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(255, 255, 255, 0.75);
   font-family: inherit;
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: background 0.13s, color 0.13s;
   white-space: nowrap;
