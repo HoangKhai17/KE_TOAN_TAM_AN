@@ -8,7 +8,7 @@ import {
 import {
   Plus, Search, RotateCcw, List, Columns, Calendar,
   ChevronLeft, ChevronRight, ChevronDown, Filter, ClipboardList, Check,
-  Trash2, Loader2, X, Eye, ArrowUpRight,
+  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2,
 } from 'lucide-react'
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
@@ -39,7 +39,10 @@ const SORT_OPTIONS = [
   { value: 'due_date:desc',   label: 'Hết hạn muộn nhất' },
   { value: 'created_at:desc', label: 'Mới nhất' },
   { value: 'created_at:asc',  label: 'Cũ nhất' },
-  { value: 'priority:desc',   label: 'Ưu tiên cao nhất' },
+  { value: 'priority:asc',    label: 'Ưu tiên: Cao → Thấp' },
+  { value: 'priority:desc',   label: 'Ưu tiên: Thấp → Cao' },
+  { value: 'status:asc',      label: 'Trạng thái: Chờ → Hoàn thành' },
+  { value: 'status:desc',     label: 'Trạng thái: Hoàn thành → Chờ' },
   { value: 'updated_at:desc', label: 'Cập nhật gần nhất' },
 ]
 
@@ -837,6 +840,93 @@ function FilterDateField({ value, onChange }) {
   )
 }
 
+// ── FilterCompanyPicker: searchable company dropdown for filter bar ───────────
+
+function FilterCompanyPicker({ companies, value, onChange }) {
+  const [search,   setSearch]   = useState('')
+  const [open,     setOpen]     = useState(false)
+  const wrapRef   = useRef(null)
+  const searchRef = useRef(null)
+
+  const selected = companies.find((c) => c.id === value)
+  const filtered = search.trim()
+    ? companies.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
+    : companies
+
+  useEffect(() => {
+    if (!open) return
+    searchRef.current?.focus()
+    function onOutside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onOutside)
+    return () => document.removeEventListener('mousedown', onOutside)
+  }, [open])
+
+  function select(id) {
+    onChange(id)
+    setOpen(false)
+    setSearch('')
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div
+        className={s.cpTrigger}
+        style={{ height: 32, fontSize: 'var(--fs-xs)' }}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className={s.cpTriggerText} style={{ color: selected ? 'var(--color-text)' : 'var(--color-muted)' }}>
+          {selected?.name ?? 'Tất cả'}
+        </span>
+        <ChevronDown size={11} style={{ flexShrink: 0, color: 'var(--color-muted)', transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 0.15s' }} />
+      </div>
+
+      {open && (
+        <div className={s.cpDropdown}>
+          <div className={s.cpSearch}>
+            <Search size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+              placeholder="Tìm khách hàng..."
+              className={s.cpSearchInput}
+            />
+            {search && (
+              <button type="button" className={s.cpSearchClear} onClick={() => setSearch('')}>
+                <X size={10} />
+              </button>
+            )}
+          </div>
+          <div className={s.cpList}>
+            <div
+              className={`${s.cpItem} ${!value ? s.cpItemActive : ''}`}
+              onClick={() => select('')}
+            >
+              Tất cả khách hàng
+            </div>
+            {filtered.map((c) => (
+              <div
+                key={c.id}
+                className={`${s.cpItem} ${value === c.id ? s.cpItemActive : ''}`}
+                onClick={() => select(c.id)}
+              >
+                {c.name}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className={s.cpEmpty}>Không tìm thấy "{search}"</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── ListView ──────────────────────────────────────────────────────────────────
 
 function ListView({
@@ -1119,6 +1209,18 @@ export default function Tasks() {
 
   // View
   const [view, setView] = useState(initF.view ?? 'list')
+
+  // Fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  useEffect(() => {
+    function onFsChange() { setIsFullscreen(!!document.fullscreenElement) }
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {})
+    else document.exitFullscreen().catch(() => {})
+  }
 
   // Date filters — default: current month
   const [yearFilter,  setYearFilter]  = useState(initF.yearFilter  ?? CUR_YEAR)
@@ -1486,6 +1588,14 @@ export default function Tasks() {
               </button>
             </div>
 
+            <button
+              className={`${s.fullscreenBtn} ${isFullscreen ? s.fullscreenActive : ''}`}
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+            >
+              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+
             <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
               <Plus size={14} /> Tạo công việc
             </button>
@@ -1576,10 +1686,11 @@ export default function Tasks() {
             {/* KHÁCH HÀNG */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Khách hàng</label>
-              <select value={companyFilter} onChange={(e) => { setCompanyFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
-                <option value="">Tất cả</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <FilterCompanyPicker
+                companies={companies}
+                value={companyFilter}
+                onChange={(id) => { setCompanyFilter(id); setPage(1) }}
+              />
             </div>
 
             {/* NHÂN VIÊN */}

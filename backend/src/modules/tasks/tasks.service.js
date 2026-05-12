@@ -89,8 +89,11 @@ async function listTasks(filters = {}) {
 
   const where = conditions.join(' AND ')
   const SORT_COLS = {
-    created_at: 't.created_at', due_date: 't.due_date',
-    priority: 't.priority',     updated_at: 't.updated_at',
+    created_at: 't.created_at',
+    due_date:   't.due_date',
+    updated_at: 't.updated_at',
+    priority: `CASE t.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END`,
+    status:   `CASE t.status WHEN 'pending' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'on_hold' THEN 3 WHEN 'pending_review' THEN 4 WHEN 'needs_revision' THEN 5 WHEN 'completed' THEN 6 ELSE 7 END`,
   }
   const orderBy = `${SORT_COLS[sortBy] || 't.created_at'} ${sortDir === 'asc' ? 'ASC' : 'DESC'}`
 
