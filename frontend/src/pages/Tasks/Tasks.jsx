@@ -422,93 +422,123 @@ const CAL_PRIORITY_CLASS = {
   low:    s.calTaskLow,
 }
 
-// Pixels: day-number area at top of each week row
-const CAL_DAY_H   = 36
-// Pixels: height per task bar slot
-const CAL_SLOT_H  = 26
-// Maximum visible task bar rows before showing "+N more"
-const CAL_MAX_SL  = 3
+// Month view constants
+const CAL_DAY_H  = 36   // px: day-number header height inside each week row
+const CAL_SLOT_H = 26   // px: task bar slot height in month view
+const CAL_MAX_SL = 5    // max visible task bars before "+N more"
+
+// Week view constants
+const WEEK_TOP_H  = 10  // px: top offset for bars in week view row
+const WEEK_SLOT_H = 32  // px: task bar slot height in week view
+
+// Greedy slot-assignment for one week row
+function computeBarLayout(week, allTasks, maxSlots) {
+  const wStart = format(week[0], 'yyyy-MM-dd')
+  const wEnd   = format(week[6], 'yyyy-MM-dd')
+
+  const wTasks = allTasks.filter((t) => {
+    const ts = t.startDate || t.dueDate
+    const te = t.dueDate   || t.startDate
+    if (!ts && !te) return false
+    return te >= wStart && ts <= wEnd
+  })
+
+  wTasks.sort((a, b) => {
+    const as = a.startDate || a.dueDate || ''
+    const bs = b.startDate || b.dueDate || ''
+    if (as !== bs) return as.localeCompare(bs)
+    const ad = a.dueDate && a.startDate ? new Date(a.dueDate) - new Date(a.startDate) : 0
+    const bd = b.dueDate && b.startDate ? new Date(b.dueDate) - new Date(b.startDate) : 0
+    return bd - ad
+  })
+
+  const dayIdxMap = {}
+  week.forEach((d, i) => { dayIdxMap[format(d, 'yyyy-MM-dd')] = i })
+
+  const slots         = []
+  const bars          = []
+  const overflowByDay = Array(7).fill(0)
+
+  for (const t of wTasks) {
+    const ts = t.startDate || t.dueDate
+    const te = t.dueDate   || t.startDate
+    const cs = ts < wStart ? wStart : ts
+    const ce = te > wEnd   ? wEnd   : te
+    const si = dayIdxMap[cs] ?? 0
+    const ei = dayIdxMap[ce] ?? 6
+
+    let slot = slots.findIndex((end) => end < si)
+    if (slot === -1) slot = slots.length
+
+    if (slot < maxSlots) {
+      slots[slot] = ei
+      bars.push({
+        task: t, si, ei, slot,
+        continuesLeft:  !!t.startDate && t.startDate < wStart,
+        continuesRight: !!t.dueDate   && t.dueDate   > wEnd,
+      })
+    } else {
+      for (let d = si; d <= ei; d++) overflowByDay[d]++
+    }
+  }
+
+  return { bars, overflowByDay, slotCount: slots.length }
+}
 
 function CalendarView({ tasks, onOpen }) {
-  const [calMonth, setCalMonth]     = useState(new Date())
+  const [calMode, setCalMode]       = useState('month')  // 'month' | 'week'
+  const [calDate, setCalDate]       = useState(new Date())
   const [dayPopover, setDayPopover] = useState(null)
 
-  const days = useMemo(() => {
-    const start = startOfWeek(startOfMonth(calMonth), { weekStartsOn: 1 })
-    const end   = endOfWeek(endOfMonth(calMonth),     { weekStartsOn: 1 })
+  function goPrev()  { setCalDate((d) => calMode === 'month' ? subMonths(d, 1) : addDays(d, -7)) }
+  function goNext()  { setCalDate((d) => calMode === 'month' ? addMonths(d, 1) : addDays(d,  7)) }
+  function goToday() { setCalDate(new Date()) }
+
+  const navTitle = useMemo(() => {
+    if (calMode === 'month') return format(calDate, 'MMMM yyyy', { locale: vi })
+    const ws = startOfWeek(calDate, { weekStartsOn: 1 })
+    const we = endOfWeek(calDate,   { weekStartsOn: 1 })
+    return `${format(ws, 'dd/MM')} – ${format(we, 'dd/MM/yyyy')}`
+  }, [calMode, calDate])
+
+  // ── Month view ─────────────────────────────────────────────
+  const monthDays = useMemo(() => {
+    if (calMode !== 'month') return []
+    const start = startOfWeek(startOfMonth(calDate), { weekStartsOn: 1 })
+    const end   = endOfWeek(endOfMonth(calDate),     { weekStartsOn: 1 })
     return eachDayOfInterval({ start, end })
-  }, [calMonth])
+  }, [calMode, calDate])
 
-  const weeks = useMemo(() => {
+  const monthWeeks = useMemo(() => {
     const result = []
-    for (let i = 0; i < days.length; i += 7) result.push(days.slice(i, i + 7))
+    for (let i = 0; i < monthDays.length; i += 7) result.push(monthDays.slice(i, i + 7))
     return result
-  }, [days])
+  }, [monthDays])
 
-  // For each week compute continuous bar positions + overflow counts
-  const weekBars = useMemo(() => {
-    return weeks.map((week) => {
-      const wStart = format(week[0], 'yyyy-MM-dd')
-      const wEnd   = format(week[6], 'yyyy-MM-dd')
+  const monthWeekBars = useMemo(() => {
+    return monthWeeks.map((week) => ({ week, ...computeBarLayout(week, tasks, CAL_MAX_SL) }))
+  }, [tasks, monthWeeks])
 
-      // Tasks that overlap this week
-      const wTasks = tasks.filter((t) => {
-        const ts = t.startDate || t.dueDate
-        const te = t.dueDate   || t.startDate
-        if (!ts && !te) return false
-        return te >= wStart && ts <= wEnd
-      })
+  // ── Week view ──────────────────────────────────────────────
+  const weekDays = useMemo(() => {
+    if (calMode !== 'week') return []
+    const start = startOfWeek(calDate, { weekStartsOn: 1 })
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i))
+  }, [calMode, calDate])
 
-      // Sort: earlier start first; longer span first on tie
-      wTasks.sort((a, b) => {
-        const as = a.startDate || a.dueDate || ''
-        const bs = b.startDate || b.dueDate || ''
-        if (as !== bs) return as.localeCompare(bs)
-        const ad = a.dueDate && a.startDate ? new Date(a.dueDate) - new Date(a.startDate) : 0
-        const bd = b.dueDate && b.startDate ? new Date(b.dueDate) - new Date(b.startDate) : 0
-        return bd - ad
-      })
+  const weekLayout = useMemo(() => {
+    if (calMode !== 'week' || weekDays.length === 0)
+      return { bars: [], overflowByDay: Array(7).fill(0), slotCount: 0 }
+    return computeBarLayout(weekDays, tasks, Infinity)
+  }, [tasks, weekDays, calMode])
 
-      const dayIdxMap = {}
-      week.forEach((d, i) => { dayIdxMap[format(d, 'yyyy-MM-dd')] = i })
-
-      // slots[i] = last endIdx used in slot i (for greedy slot assignment)
-      const slots         = []
-      const bars          = []
-      const overflowByDay = Array(7).fill(0)
-
-      for (const t of wTasks) {
-        const ts = t.startDate || t.dueDate
-        const te = t.dueDate   || t.startDate
-        const cs = ts < wStart ? wStart : ts          // clamped start
-        const ce = te > wEnd   ? wEnd   : te          // clamped end
-        const si = dayIdxMap[cs] ?? 0
-        const ei = dayIdxMap[ce] ?? 6
-
-        let slot = slots.findIndex((end) => end < si)
-        if (slot === -1) slot = slots.length
-
-        if (slot < CAL_MAX_SL) {
-          slots[slot] = ei
-          bars.push({
-            task: t, si, ei, slot,
-            continuesLeft:  !!t.startDate && t.startDate < wStart,
-            continuesRight: !!t.dueDate   && t.dueDate   > wEnd,
-          })
-        } else {
-          for (let d = si; d <= ei; d++) overflowByDay[d]++
-        }
-      }
-
-      return { week, bars, overflowByDay }
-    })
-  }, [tasks, weeks])
-
-  // All tasks per calendar day (for the popover — shows everything)
+  // ── Tasks by day (for "+N more" popover) ──────────────────
   const tasksByDay = useMemo(() => {
+    const allDays = calMode === 'month' ? monthDays : weekDays
+    if (allDays.length === 0) return {}
     const map      = {}
-    const calStart = days[0]
-    const calEnd   = days[days.length - 1]
+    const calStart = allDays[0]
+    const calEnd   = allDays[allDays.length - 1]
     for (const t of tasks) {
       const ts = t.startDate || t.dueDate
       const te = t.dueDate   || t.startDate
@@ -523,7 +553,7 @@ function CalendarView({ tasks, onOpen }) {
       }
     }
     return map
-  }, [tasks, days])
+  }, [tasks, monthDays, weekDays, calMode])
 
   function taskBarClass(t) {
     if (t.status === 'completed') return s.calTaskDone
@@ -531,95 +561,138 @@ function CalendarView({ tasks, onOpen }) {
     return CAL_PRIORITY_CLASS[t.priority] ?? s.calTaskLow
   }
 
+  function renderBar({ task, si, ei, slot, continuesLeft, continuesRight }, topH, slotH) {
+    const lm = continuesLeft  ? 0 : 3
+    const rm = continuesRight ? 0 : 3
+    return (
+      <div
+        key={task.id}
+        className={`${s.calTaskBar} ${taskBarClass(task)} ${continuesLeft ? s.calBarLeft : ''} ${continuesRight ? s.calBarRight : ''}`}
+        style={{
+          left:   `calc(${(si / 7) * 100}% + ${lm}px)`,
+          width:  `calc(${((ei - si + 1) / 7) * 100}% - ${lm + rm}px)`,
+          top:    `${topH + slot * slotH + 3}px`,
+          height: `${slotH - 5}px`,
+        }}
+        onClick={() => onOpen(task.id)}
+        title={task.title}
+      >
+        {!continuesLeft  && <span className={s.calBarStartMark}>▶</span>}
+        <span className={s.calBarTitle}>{task.title}</span>
+        {!continuesRight && <span className={s.calBarEndMark}>→</span>}
+      </div>
+    )
+  }
+
   return (
-    <div className={s.calWrap} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+    <div className={s.calWrap}>
 
-      {/* Month navigation */}
+      {/* Navigation: [←][→] [Title] [Hôm nay|Tháng|Tuần] */}
       <div className={s.calNav}>
-        <button className={s.calNavBtn} onClick={() => setCalMonth((m) => subMonths(m, 1))}>
-          <ChevronLeft size={16} />
-        </button>
-        <button className={s.calTodayBtn} onClick={() => setCalMonth(new Date())}>Hôm nay</button>
-        <span className={s.calNavTitle}>{format(calMonth, 'MMMM yyyy', { locale: vi })}</span>
-        <button className={s.calNavBtn} onClick={() => setCalMonth((m) => addMonths(m, 1))}>
-          <ChevronRight size={16} />
-        </button>
+        <button className={s.calNavBtn} onClick={goPrev}><ChevronLeft size={16} /></button>
+        <button className={s.calNavBtn} onClick={goNext}><ChevronRight size={16} /></button>
+        <span className={s.calNavTitle}>{navTitle}</span>
+        <div className={s.calModeSwitch}>
+          <button
+            className={`${s.calModeBtn} ${calMode === 'month' ? s.calModeBtnActive : ''}`}
+            onClick={() => setCalMode('month')}
+          >Tháng</button>
+          <button
+            className={`${s.calModeBtn} ${calMode === 'week' ? s.calModeBtnActive : ''}`}
+            onClick={() => setCalMode('week')}
+          >Tuần</button>
+        </div>
       </div>
 
-      {/* Weekday header row */}
-      <div className={s.calDayHeaders}>
-        {WEEK_DAYS.map((d) => <div key={d} className={s.calDayHead}>{d}</div>)}
-      </div>
-
-      {/* Week rows — each row flex-fills the container height equally */}
-      <div className={s.calWeeksContainer}>
-        {weekBars.map(({ week, bars, overflowByDay }, wIdx) => {
-          const isLast = wIdx === weekBars.length - 1
-          return (
-            <div
-              key={format(week[0], 'yyyy-MM-dd')}
-              className={`${s.calWeekRow} ${isLast ? s.calWeekRowLast : ''}`}
-            >
-              {/* Absolutely-positioned day column backgrounds */}
-              {week.map((day, dIdx) => {
-                const key      = format(day, 'yyyy-MM-dd')
-                const isOther  = !isSameMonth(day, calMonth)
-                const isTod    = isToday(day)
-                const overflow = overflowByDay[dIdx]
-                const dayTasks = tasksByDay[key] ?? []
-                return (
-                  <div
-                    key={key}
-                    className={`${s.calDayCol}
-                      ${isOther  ? s.calColOther  : ''}
-                      ${isTod    ? s.calColToday  : ''}
-                      ${dIdx === 6 ? s.calColLast : ''}`}
-                    style={{ left: `${(dIdx / 7) * 100}%`, width: `${100 / 7}%` }}
-                  >
-                    <div className={s.calDayNum}>
-                      <span className={isTod ? s.calDayNumToday : ''}>{format(day, 'd')}</span>
-                    </div>
-                    {overflow > 0 && (
-                      <button
-                        className={s.calMoreBtn}
-                        onClick={(e) => { e.stopPropagation(); setDayPopover({ date: key, tasks: dayTasks }) }}
+      {/* ── MONTH VIEW ── */}
+      {calMode === 'month' && (
+        <>
+          <div className={s.calDayHeaders}>
+            {WEEK_DAYS.map((d) => <div key={d} className={s.calDayHead}>{d}</div>)}
+          </div>
+          <div className={s.calWeeksContainer}>
+            {monthWeekBars.map(({ week, bars, overflowByDay }, wIdx) => {
+              const isLast = wIdx === monthWeekBars.length - 1
+              return (
+                <div
+                  key={format(week[0], 'yyyy-MM-dd')}
+                  className={`${s.calWeekRow} ${isLast ? s.calWeekRowLast : ''}`}
+                >
+                  {week.map((day, dIdx) => {
+                    const key      = format(day, 'yyyy-MM-dd')
+                    const isOther  = !isSameMonth(day, calDate)
+                    const isTod    = isToday(day)
+                    const overflow = overflowByDay[dIdx]
+                    const dayTasks = tasksByDay[key] ?? []
+                    return (
+                      <div
+                        key={key}
+                        className={`${s.calDayCol} ${isOther ? s.calColOther : ''} ${isTod ? s.calColToday : ''} ${dIdx === 6 ? s.calColLast : ''}`}
+                        style={{ left: `${(dIdx / 7) * 100}%`, width: `${100 / 7}%` }}
                       >
-                        +{overflow} thêm
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
+                        <div className={s.calDayNum}>
+                          <span className={isTod ? s.calDayNumToday : ''}>{format(day, 'd')}</span>
+                        </div>
+                        {overflow > 0 && (
+                          <button
+                            className={s.calMoreBtn}
+                            onClick={(e) => { e.stopPropagation(); setDayPopover({ date: key, tasks: dayTasks }) }}
+                          >+{overflow} thêm</button>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {bars.map((b) => renderBar(b, CAL_DAY_H, CAL_SLOT_H))}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
 
-              {/* Continuous task bars */}
-              {bars.map(({ task, si, ei, slot, continuesLeft, continuesRight }) => {
-                const lm = continuesLeft  ? 0 : 3
-                const rm = continuesRight ? 0 : 3
+      {/* ── WEEK VIEW ── */}
+      {calMode === 'week' && (
+        <>
+          {/* Day headers: show weekday name + full date */}
+          <div className={s.calDayHeaders}>
+            {weekDays.map((day, dIdx) => {
+              const isTod = isToday(day)
+              return (
+                <div key={dIdx} className={`${s.calDayHead} ${s.calDayHeadWide} ${isTod ? s.calDayHeadToday : ''}`}>
+                  <span className={s.calWeekDayName}>{WEEK_DAYS[dIdx]}</span>
+                  <span className={`${s.calWeekDayDate} ${isTod ? s.calWeekDayDateToday : ''}`}>
+                    {format(day, 'd/M')}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          {/* Single week row — all tasks visible, grows to fit */}
+          <div className={s.calWeeksContainer}>
+            <div
+              className={`${s.calWeekRow} ${s.calWeekRowLast}`}
+              style={{ minHeight: Math.max(160, WEEK_TOP_H + weekLayout.slotCount * WEEK_SLOT_H + 32) }}
+            >
+              {weekDays.map((day, dIdx) => {
+                const isTod = isToday(day)
                 return (
                   <div
-                    key={task.id}
-                    className={`${s.calTaskBar} ${taskBarClass(task)}
-                      ${continuesLeft  ? s.calBarLeft  : ''}
-                      ${continuesRight ? s.calBarRight : ''}`}
-                    style={{
-                      left:   `calc(${(si / 7) * 100}% + ${lm}px)`,
-                      width:  `calc(${((ei - si + 1) / 7) * 100}% - ${lm + rm}px)`,
-                      top:    `${CAL_DAY_H + slot * CAL_SLOT_H + 3}px`,
-                      height: `${CAL_SLOT_H - 5}px`,
-                    }}
-                    onClick={() => onOpen(task.id)}
-                    title={task.title}
-                  >
-                    {task.title}
-                  </div>
+                    key={format(day, 'yyyy-MM-dd')}
+                    className={`${s.calDayCol} ${isTod ? s.calColToday : ''} ${dIdx === 6 ? s.calColLast : ''}`}
+                    style={{ left: `${(dIdx / 7) * 100}%`, width: `${100 / 7}%` }}
+                  />
                 )
               })}
+              {weekLayout.bars.map((b) => renderBar(b, WEEK_TOP_H, WEEK_SLOT_H))}
+              {weekLayout.bars.length === 0 && (
+                <div className={s.calNoTasks}>Không có công việc trong tuần này</div>
+              )}
             </div>
-          )
-        })}
-      </div>
+          </div>
+        </>
+      )}
 
-      {/* Day detail popover */}
+      {/* Day detail popover (month view "+N more") */}
       {dayPopover && (
         <div className={s.miniOverlay} onClick={() => setDayPopover(null)}>
           <div className={s.calDayPopover} onClick={(e) => e.stopPropagation()}>
@@ -630,7 +703,7 @@ function CalendarView({ tasks, onOpen }) {
               <span className={s.calPopoverCount}>
                 {dayPopover.tasks.length} công việc
               </span>
-              <button className={s.btnIcon} style={{ marginLeft: 'auto' }} onClick={() => setDayPopover(null)}>
+              <button className={`${s.btnIcon} ${s.calPopoverCloseBtn}`} onClick={() => setDayPopover(null)}>
                 <X size={14} />
               </button>
             </div>
@@ -643,7 +716,7 @@ function CalendarView({ tasks, onOpen }) {
                     className={s.calDayPopoverItem}
                     onClick={() => { onOpen(t.id); setDayPopover(null) }}
                   >
-                    <span className={`${s.statusBadge} ${s[STATUS_CSS[t.status]]}`} style={{ flexShrink: 0, minWidth: 100 }}>
+                    <span className={`${s.statusBadge} ${s[STATUS_CSS[t.status]]} ${s.calPopoverStatusBadge}`}>
                       {STATUS_LABELS[t.status]}
                     </span>
                     <div className={s.calPopoverMain}>
@@ -739,6 +812,27 @@ function MultiSelect({ placeholder, options, selected, onChange }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── FilterDateField: shows dd/MM/yyyy text, hidden native picker ──────────────
+
+function FilterDateField({ value, onChange }) {
+  const ref = useRef(null)
+  return (
+    <div className={s.filterDateField} onClick={() => ref.current?.showPicker?.()}>
+      <span className={value ? s.filterDateFieldText : `${s.filterDateFieldText} ${s.filterDateFieldPlaceholder}`}>
+        {value ? fmtDate(value) : 'dd/mm/yyyy'}
+      </span>
+      <input
+        ref={ref}
+        type="date"
+        value={value}
+        onChange={onChange}
+        tabIndex={-1}
+        className={s.filterDateFieldInput}
+      />
     </div>
   )
 }
@@ -1440,13 +1534,19 @@ export default function Tasks() {
             {/* TỪ NGÀY */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Từ ngày</label>
-              <input type="date" value={dueDateFrom} onChange={(e) => { setDueDateFrom(e.target.value); setPage(1) }} className={s.filterInput} />
+              <FilterDateField
+                value={dueDateFrom}
+                onChange={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
+              />
             </div>
 
             {/* ĐẾN NGÀY */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Đến ngày</label>
-              <input type="date" value={dueDateTo} onChange={(e) => { setDueDateTo(e.target.value); setPage(1) }} className={s.filterInput} />
+              <FilterDateField
+                value={dueDateTo}
+                onChange={(e) => { setDueDateTo(e.target.value); setPage(1) }}
+              />
             </div>
 
             {/* SẮP XẾP */}

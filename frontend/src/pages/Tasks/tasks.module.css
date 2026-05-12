@@ -245,6 +245,53 @@
   box-shadow: 0 0 0 2px rgba(11, 79, 138, 0.09);
 }
 
+/* ── Filter date field: shows dd/MM/yyyy over hidden native picker ── */
+
+.filterDateField {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-size: var(--fs-xs);
+  font-family: inherit;
+  color: var(--color-text);
+  transition: border-color 0.13s, box-shadow 0.13s;
+  width: 100%;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.filterDateField:focus-within {
+  border-color: var(--color-primary-soft);
+  box-shadow: 0 0 0 2px rgba(11, 79, 138, 0.09);
+}
+
+.filterDateFieldText {
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.filterDateFieldPlaceholder {
+  color: var(--color-muted);
+}
+
+.filterDateFieldInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  z-index: 1;
+  border: none;
+  background: transparent;
+}
+
 .filterReset {
   display: inline-flex;
   align-items: center;
@@ -859,28 +906,36 @@
 /* ── Calendar ────────────────────────────────────────────────── */
 
 .calWrap {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: #fff;
+  border: 1.5px solid #d1d5db;
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 14px rgba(0,0,0,.05);
   overflow: hidden;
 }
+
+/* ── Navigation bar ──────────────────────────────────────────── */
 
 .calNav {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border-soft);
+  background: #fff;
+  border-bottom: 1.5px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
 .calNavTitle {
   flex: 1;
   text-align: center;
   font-size: var(--fs-base);
-  font-weight: var(--fw-bold);
-  color: var(--color-text);
+  font-weight: 800;
+  color: #111827;
   text-transform: capitalize;
+  letter-spacing: -0.2px;
 }
 
 .calNavBtn {
@@ -889,50 +944,88 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--color-border);
+  border: 1.5px solid #d1d5db;
   border-radius: var(--radius-sm);
   background: #fff;
-  color: var(--color-muted);
+  color: #6b7280;
   cursor: pointer;
   transition: all 0.13s;
+  flex-shrink: 0;
 }
 
-.calNavBtn:hover { border-color: var(--color-primary-soft); color: var(--color-primary); background: var(--color-info-bg); }
+.calNavBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: #eff6ff;
+}
 
-.calTodayBtn {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--color-border);
+/* ── Mode + today switcher ───────────────────────────────────── */
+
+.calModeSwitch {
+  display: flex;
+  border: 1.5px solid #d1d5db;
   border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.calModeBtn {
+  height: 30px;
+  padding: 0 13px;
+  border: none;
   background: #fff;
-  color: var(--color-text-soft);
+  font-family: inherit;
   font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
+  font-weight: 600;
+  color: #374151;
   cursor: pointer;
-  transition: all 0.13s;
+  transition: background 0.13s, color 0.13s;
+  white-space: nowrap;
 }
 
-.calTodayBtn:hover { border-color: var(--color-primary-soft); color: var(--color-primary); background: var(--color-info-bg); }
+.calModeBtn + .calModeBtn { border-left: 1.5px solid #d1d5db; }
 
-/* ── New calendar layout: flex rows fill available height ─────── */
+.calModeBtn:hover:not(.calModeBtnActive):not(.calModeBtnToday) {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.calModeBtnActive {
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.calModeBtnToday {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.calModeBtnToday:hover {
+  background: #eff6ff;
+}
+
+/* ── Weekday header row ──────────────────────────────────────── */
 
 .calDayHeaders {
   display: flex;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--color-border-soft);
-  background: var(--color-surface-muted);
+  background: #f3f4f6;
+  border-bottom: 1.5px solid #d1d5db;
 }
 
 .calDayHead {
   flex: 1;
   padding: 10px 4px;
   text-align: center;
-  font-size: var(--fs-2xs);
-  font-weight: var(--fw-bold);
-  color: var(--color-muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #6b7280;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.7px;
 }
+
+/* ── Week rows ───────────────────────────────────────────────── */
 
 .calWeeksContainer {
   flex: 1;
@@ -945,34 +1038,45 @@
 .calWeekRow {
   flex: 1;
   position: relative;
-  min-height: 140px;
-  border-bottom: 1px solid var(--color-border-soft);
+  min-height: 196px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .calWeekRowLast { border-bottom: none; }
+
+/* ── Day columns ─────────────────────────────────────────────── */
 
 .calDayCol {
   position: absolute;
   top: 0;
   bottom: 0;
-  border-right: 1px solid var(--color-border-soft);
+  border-right: 1px solid #e9eaec;
   background: #fff;
   transition: background 0.1s;
 }
 
-.calColOther { background: var(--color-surface-muted); }
-.calColOther .calDayNum { opacity: 0.4; }
-.calColToday { background: var(--color-info-bg); }
-.calColLast  { border-right: none; }
+.calColOther {
+  background: #f9fafb;
+}
+
+.calColOther .calDayNum {
+  opacity: 0.45;
+}
+
+.calColToday {
+  background: #eff6ff;
+}
+
+.calColLast { border-right: none; }
 
 .calDayNum {
   height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-bold);
-  color: var(--color-text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
 }
 
 .calDayNumToday {
@@ -981,43 +1085,162 @@
   border-radius: 50%;
   width: 26px;
   height: 26px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--fs-xs);
+  font-size: 12px;
+  font-weight: 800;
 }
 
-/* Continuous task bar — absolutely positioned within week row */
+/* ── Task bars ───────────────────────────────────────────────── */
+
 .calTaskBar {
   position: absolute;
   border-radius: 4px;
   padding: 0 7px;
   font-size: 11px;
-  font-weight: var(--fw-semibold);
-  white-space: nowrap;
+  font-weight: 600;
   overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
   display: flex;
   align-items: center;
+  gap: 3px;
   z-index: 1;
-  transition: opacity 0.12s;
+  box-shadow: 0 1px 2px rgba(0,0,0,.10);
+  transition: filter 0.12s, transform 0.1s;
 }
 
-.calTaskBar:hover { opacity: 0.8; }
+.calTaskBar:hover {
+  filter: brightness(0.96);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,.14);
+  z-index: 2;
+}
 
-/* Priority / status colour variants (shared with old .calTask*) */
-.calTaskUrgent  { background: #fee2e2; color: #991b1b; }
-.calTaskHigh    { background: #ffedd5; color: #9a3412; }
-.calTaskMedium  { background: #dbeafe; color: #1e40af; }
-.calTaskLow     { background: #f1f5f9; color: #475569; }
-.calTaskDone    { background: #dcfce7; color: #166534; }
-.calTaskOverdue { background: #ffe4e6; color: #9f1239; text-decoration: line-through; }
+/* Softer pastel palette — easy on the eyes, clearly distinguishable */
+.calTaskUrgent  { background: #fca5a5; color: #7f1d1d; }
+.calTaskHigh    { background: #fdba74; color: #7c2d12; }
+.calTaskMedium  { background: #93c5fd; color: #1e3a8a; }
+.calTaskLow     { background: #cbd5e1; color: #334155; }
+.calTaskDone    { background: #86efac; color: #14532d; }
+.calTaskOverdue { background: #fda4af; color: #881337; text-decoration: line-through; text-decoration-color: rgba(136,19,55,.45); }
 
-/* Bar continues from previous week — remove left radius */
-.calBarLeft  { border-top-left-radius: 0; border-bottom-left-radius: 0; }
-/* Bar continues into next week — remove right radius */
+.calBarLeft  { border-top-left-radius: 0; border-bottom-left-radius: 0; box-shadow: none; }
 .calBarRight { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+
+/* Bar inner layout */
+.calBarTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calBarStartMark {
+  flex-shrink: 0;
+  font-size: 7px;
+  opacity: 0.7;
+  line-height: 1;
+}
+
+.calBarEndMark {
+  flex-shrink: 0;
+  font-size: 10px;
+  opacity: 0.8;
+  margin-left: auto;
+  line-height: 1;
+}
+
+/* ── +N more button ──────────────────────────────────────────── */
+
+.calMoreBtn {
+  position: absolute;
+  bottom: 5px;
+  left: 0;
+  right: 0;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: color 0.12s;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+
+.calMoreBtn:hover { color: var(--color-primary); text-decoration: underline; }
+
+/* ── Week view: wide day header cells ────────────────────────── */
+
+.calDayHeadWide {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 4px;
+  height: 64px;
+  justify-content: center;
+  align-items: center;
+}
+
+.calDayHeadToday {
+  background: #eff6ff;
+  border-bottom: 2.5px solid var(--color-primary);
+}
+
+.calWeekDayName {
+  font-size: 10px;
+  font-weight: 800;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.calWeekDayDate {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1;
+}
+
+.calWeekDayDateToday {
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* ── Week view: empty state ──────────────────────────────────── */
+
+.calNoTasks {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+/* ── Popover helpers ─────────────────────────────────────────── */
+
+.calPopoverStatusBadge {
+  flex-shrink: 0;
+  min-width: 100px;
+}
+
+.calPopoverCloseBtn {
+  margin-left: auto;
+}
 
 /* ── Confirm / mini modal overlay ────────────────────────────── */
 
@@ -2323,33 +2546,13 @@
   border-color: var(--color-primary-dark);
 }
 
-/* ── Calendar +N more button (absolute, bottom of day col) ──── */
-
-.calMoreBtn {
-  position: absolute;
-  bottom: 5px;
-  left: 0;
-  right: 0;
-  border: none;
-  background: transparent;
-  text-align: center;
-  font-family: inherit;
-  font-size: 10px;
-  color: var(--color-muted);
-  cursor: pointer;
-  transition: color 0.12s;
-  padding: 0 4px;
-  line-height: 1.4;
-}
-
-.calMoreBtn:hover { color: var(--color-primary); text-decoration: underline; }
-
 /* ── Calendar day popover (wide, 1000px) ─────────────────────── */
 
 .calDayPopover {
   background: #fff;
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-floating);
+  box-shadow: 0 8px 32px rgba(0,0,0,.14), 0 2px 8px rgba(0,0,0,.08);
+  border: 1.5px solid #e5e7eb;
   width: min(1000px, 92vw);
   max-height: 80vh;
   display: flex;
@@ -2362,22 +2565,24 @@
   align-items: center;
   gap: 8px;
   padding: 14px 18px;
-  border-bottom: 1px solid var(--color-border-soft);
+  border-bottom: 1.5px solid #e5e7eb;
+  background: #f9fafb;
   flex-shrink: 0;
 }
 
 .calPopoverDate {
   font-size: var(--fs-sm);
-  font-weight: var(--fw-bold);
-  color: var(--color-text-strong);
+  font-weight: 800;
+  color: #111827;
 }
 
 .calPopoverCount {
   font-size: var(--fs-xs);
-  color: var(--color-muted);
-  background: var(--color-surface-muted);
+  color: #6b7280;
+  background: #e5e7eb;
   border-radius: 10px;
   padding: 2px 9px;
+  font-weight: 600;
 }
 
 .calDayPopoverList {
@@ -2392,13 +2597,17 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.1s, border-color 0.1s;
 }
 
-.calDayPopoverItem:hover { background: var(--color-info-bg); }
+.calDayPopoverItem:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
 
 /* Main text block inside popover item */
 .calPopoverMain {
