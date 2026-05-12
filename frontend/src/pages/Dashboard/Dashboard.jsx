@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import {
@@ -18,30 +18,30 @@ import s from './Dashboard.module.css'
 
 // ── Gradient palette for PieChart ─────────────────────────────────────────────
 const PIE_GRADIENTS = [
-  ['#6366f1', '#a5b4fc'],
-  ['#10b981', '#6ee7b7'],
-  ['#f59e0b', '#fcd34d'],
-  ['#ef4444', '#fca5a5'],
-  ['#8b5cf6', '#c4b5fd'],
-  ['#06b6d4', '#67e8f9'],
-  ['#f97316', '#fdba74'],
-  ['#84cc16', '#bef264'],
+  ['#4f46e5', '#818cf8'],  // indigo vivid
+  ['#059669', '#34d399'],  // emerald vivid
+  ['#d97706', '#fbbf24'],  // amber vivid
+  ['#dc2626', '#f87171'],  // red vivid
+  ['#7c3aed', '#a78bfa'],  // violet vivid
+  ['#0891b2', '#22d3ee'],  // cyan vivid
+  ['#ea580c', '#fb923c'],  // orange vivid
+  ['#65a30d', '#a3e635'],  // lime vivid
 ]
 
 const PRIORITY_CSS = {
-  urgent: { background: '#fef2f2', color: '#b91c1c', borderColor: '#fca5a5' },
-  high:   { background: '#fff7ed', color: '#c2410c', borderColor: '#fdba74' },
-  medium: { background: '#eff6ff', color: '#1d4ed8', borderColor: '#93c5fd' },
-  low:    { background: '#f8fafc', color: '#64748b', borderColor: '#cbd5e1' },
+  urgent: { background: '#dc2626', color: '#fff' },
+  high:   { background: '#ea580c', color: '#fff' },
+  medium: { background: '#2563eb', color: '#fff' },
+  low:    { background: '#64748b', color: '#fff' },
 }
 const PRIORITY_LABEL = { urgent: 'Khẩn', high: 'Cao', medium: 'TB', low: 'Thấp' }
 
 const STATUS_CSS = {
-  pending:        { background: '#f1f5f9', color: '#475569' },
-  in_progress:    { background: '#eff6ff', color: '#1d4ed8' },
-  on_hold:        { background: '#fff7ed', color: '#c2410c' },
-  pending_review: { background: '#faf5ff', color: '#7e22ce' },
-  needs_revision: { background: '#fff1f2', color: '#be123c' },
+  pending:        { background: '#e2e8f0', color: '#334155' },
+  in_progress:    { background: '#bfdbfe', color: '#1d4ed8' },
+  on_hold:        { background: '#fed7aa', color: '#c2410c' },
+  pending_review: { background: '#e9d5ff', color: '#6d28d9' },
+  needs_revision: { background: '#fecdd3', color: '#be123c' },
 }
 const STATUS_LABEL = {
   pending: 'Chờ xử lý', in_progress: 'Đang làm', on_hold: 'Tạm dừng',
@@ -97,8 +97,8 @@ function CustomTooltip({ active, payload, label }) {
     <div className={s.tooltip}>
       <p className={s.tooltipLabel}>{label}</p>
       {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color, margin: '2px 0', fontSize: 12 }}>
-          {p.name}: <strong>{p.value}</strong>
+        <p key={p.name} style={{ color: p.color === '#2563eb' ? '#93c5fd' : p.color, margin: '3px 0', fontSize: 12.5 }}>
+          {p.name}: <strong style={{ color: '#f8fafc' }}>{p.value}</strong>
         </p>
       ))}
     </div>
@@ -161,24 +161,27 @@ export default function Dashboard() {
       value: loading ? null : (summary?.activeCompanies ?? '—'),
       sub:   'công ty đang hợp tác',
       icon:  Building2,
-      color: '#1d4ed8',
-      bg:    '#eff6ff',
+      color: '#2563eb',
+      bg:    'linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%)',
+      accent: '#2563eb',
     },
     {
       label: 'Công việc đang mở',
       value: loading ? null : (summary?.openTasks ?? '—'),
       sub:   'cần xử lý',
       icon:  ClipboardList,
-      color: '#0f9960',
-      bg:    '#ecfdf5',
+      color: '#059669',
+      bg:    'linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%)',
+      accent: '#059669',
     },
     {
       label: 'Quá hạn',
       value: loading ? null : (summary?.overdueTasks ?? '—'),
       sub:   'cần ưu tiên xử lý ngay',
       icon:  AlertTriangle,
-      color: '#b91c1c',
-      bg:    '#fef2f2',
+      color: '#dc2626',
+      bg:    'linear-gradient(135deg, #fee2e2 0%, #fff5f5 100%)',
+      accent: '#dc2626',
       urgent: (summary?.overdueTasks ?? 0) > 0,
     },
     {
@@ -186,16 +189,18 @@ export default function Dashboard() {
       value: loading ? null : (summary?.completedThisMonth ?? '—'),
       sub:   RANGE_SUB[range],
       icon:  CheckCircle2,
-      color: '#d97706',
-      bg:    '#fffbeb',
+      color: '#b45309',
+      bg:    'linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%)',
+      accent: '#d97706',
     },
     {
       label: 'Tuân thủ SLA',
       value: loading ? null : (summary ? `${summary.slaComplianceRate}%` : '—'),
       sub:   'hoàn thành đúng / trước hạn',
       icon:  TrendingUp,
-      color: '#7c3aed',
-      bg:    '#f5f3ff',
+      color: '#6d28d9',
+      bg:    'linear-gradient(135deg, #ede9fe 0%, #f5f3ff 100%)',
+      accent: '#7c3aed',
     },
   ]
 
@@ -206,7 +211,8 @@ export default function Dashboard() {
       sub:   'việc cần hoàn thành hôm nay',
       icon:  Clock,
       color: '#0369a1',
-      bg:    '#f0f9ff',
+      bg:    'linear-gradient(135deg, #bae6fd 0%, #e0f2fe 100%)',
+      accent: '#0284c7',
     })
   }
 
@@ -272,18 +278,27 @@ export default function Dashboard() {
             <div className={s.chartLoading}><Loader2 size={20} className={s.spin} /></div>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={charts?.weeklyTrend ?? []} margin={{ top: 12, right: 16, left: -10, bottom: 0 }}>
+              <AreaChart data={charts?.weeklyTrend ?? []} margin={{ top: 12, right: 16, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="areaGradBlue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"  stopColor="#2563eb" stopOpacity={0.55} />
+                    <stop offset="90%" stopColor="#2563eb" stopOpacity={0.03} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="week" tickFormatter={fmtWeek} tick={{ fontSize: 11, fill: '#94a3b8' }} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Line
+                <Area
                   type="monotone" dataKey="completed" name="Đã hoàn thành"
-                  stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 5, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }}
+                  stroke="#3b82f6" strokeWidth={2.5}
+                  fill="url(#areaGradBlue)"
+                  stroke="#2563eb"
+                  dot={{ r: 5, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
                   activeDot={{ r: 7 }}
                 />
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
           )}
         </div>
@@ -312,8 +327,8 @@ export default function Dashboard() {
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />
-                <Bar dataKey="open"      name="Cần thực hiện" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="completed" name="Đã hoàn thành"  fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="open"      name="Cần thực hiện" fill="#f97316" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="completed" name="Đã hoàn thành"  fill="#059669" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -338,7 +353,7 @@ export default function Dashboard() {
           ) : (
             <div className={s.pieRow}>
               <div className={s.pieLeft}>
-                <PieChart width={200} height={280}>
+                <PieChart width={260} height={300}>
                   <defs>
                     {PIE_GRADIENTS.map(([c1, c2], i) => (
                       <linearGradient key={i} id={`dashPieGrad${i}`} x1="0" y1="0" x2="1" y2="1">
@@ -352,8 +367,8 @@ export default function Dashboard() {
                     dataKey="value"
                     nameKey="name"
                     cx="50%" cy="50%"
-                    outerRadius={90}
-                    innerRadius={48}
+                    outerRadius={118}
+                    innerRadius={62}
                     paddingAngle={3}
                     labelLine={false}
                   >
@@ -443,18 +458,18 @@ export default function Dashboard() {
 }
 
 // ── KpiCard ───────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, icon: Icon, color, bg, urgent, loading }) {
+function KpiCard({ label, value, sub, icon: Icon, color, bg, accent, urgent, loading }) {
   return (
     <div
       className={`${s.kpiCard} ${urgent ? s.kpiCardUrgent : ''}`}
-      style={{ background: bg, borderColor: `${color}33` }}
+      style={{ background: bg, borderColor: `${accent ?? color}30`, borderLeftColor: accent ?? color }}
     >
       <div className={s.kpiCardInner}>
-        <div className={s.kpiIcon} style={{ background: `${color}18` }}>
-          <Icon size={18} style={{ color }} />
+        <div className={s.kpiIcon} style={{ background: `${accent ?? color}22` }}>
+          <Icon size={20} style={{ color: accent ?? color }} />
         </div>
         <div className={s.kpiText}>
-          <p className={s.kpiLabel} style={{ color }}>{label}</p>
+          <p className={s.kpiLabel} style={{ color: accent ?? color }}>{label}</p>
           {loading ? (
             <div className={s.kpiSkeleton} />
           ) : (
