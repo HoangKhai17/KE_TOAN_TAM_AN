@@ -14,17 +14,17 @@
 | 3 | Company & Staff Management (API + UI) | 4–5 ngày | Phase 2 | 🔄 Backend ✅ / Frontend 🔄 |
 | 4 | Task Type Library — Lớp 1 (API + UI) | 2–3 ngày | Phase 3 | ✅ Hoàn thành |
 | 5 | Customer Task Schedules — Lớp 2 (API + UI) | 3–4 ngày | Phase 4 | 🔄 Backend ✅ / Frontend ✅ |
-| 6 | Task Lifecycle — Core (API + UI) | 5–6 ngày | Phase 5 | 🔄 Backend ✅ / Frontend ⏳ |
-| 7 | Task Extensions — Checklist, Deps, Time, Custom Fields | 4–5 ngày | Phase 6 |
-| 8 | Job Scheduler — Tự Động Sinh Task | 3–4 ngày | Phase 5 |
-| 9 | Credential Vault (API + UI) | 2–3 ngày | Phase 3 |
-| 10 | Payroll Management (API + UI) | 3–4 ngày | Phase 2 |
-| 11 | Document Management — OneDrive | 3–4 ngày | Phase 6 |
-| 12 | Notifications & Escalation | 3–4 ngày | Phase 6, 8 |
-| 13 | Dashboard & Reports | 5–7 ngày | Phase 6, 7 |
-| 14 | Security Hardening | 2–3 ngày | Phase 13 |
-| 15 | Observability — Logging, Sentry, Metrics | 2–3 ngày | Phase 14 |
-| 16 | Production Deployment | 2–3 ngày | Phase 15 |
+| 6 | Task Lifecycle — Core (API + UI) | 5–6 ngày | Phase 5 | ✅ Hoàn thành |
+| 7 | Task Extensions — Checklist, Deps, Time, Custom Fields | 4–5 ngày | Phase 6 | ✅ Hoàn thành |
+| 8 | Job Scheduler — Tự Động Sinh Task | 3–4 ngày | Phase 5 | 🔄 Backend ✅ / Frontend ✅ |
+| 9 | Credential Vault (API + UI) | 2–3 ngày | Phase 3 | ✅ Hoàn thành |
+| 10 | Payroll Management (API + UI) | 3–4 ngày | Phase 2 | ✅ Hoàn thành |
+| 11 | Document Management — OneDrive | 3–4 ngày | Phase 6 | 🔄 Backend ✅ / Frontend ⏳ |
+| 12 | Notifications & Escalation | 3–4 ngày | Phase 6, 8 | ⏳ Chưa bắt đầu |
+| 13 | Dashboard & Reports | 5–7 ngày | Phase 6, 7 | ⏳ Placeholder UI |
+| 14 | Security Hardening | 2–3 ngày | Phase 13 | ⏳ Chưa bắt đầu |
+| 15 | Observability — Logging, Sentry, Metrics | 2–3 ngày | Phase 14 | ⏳ Chưa bắt đầu |
+| 16 | Production Deployment | 2–3 ngày | Phase 15 | ⏳ Chưa bắt đầu |
 
 **Tổng ước tính:** 50–65 ngày làm việc (solo developer)
 
@@ -227,6 +227,7 @@ ke-toan-tam-an/
 - [x] `023_create_payroll_records.sql` — bao gồm GENERATED ALWAYS AS columns
 - [x] `024_create_company_credentials.sql`
 - [x] `025_create_trigger_actual_hours.sql` — trigger update tasks.actual_hours
+- [x] `032_add_performance_indexes.sql` — GIN FTS, composite, partial indexes (tối ưu query)
 
 ### 1.3 Seed Data
 
@@ -550,33 +551,35 @@ ke-toan-tam-an/
 ### 6.2 Frontend — Tasks
 
 **Trang danh sách Tasks (`/tasks`):**
-- [ ] **3 view modes**: List (bảng) / Board (Kanban) / Calendar — toggle bằng icon
-- [ ] **List view**: sort, multi-column filter, bulk actions (assign, change priority)
-- [ ] **Board view**: 6 cột (pending / in_progress / on_hold / pending_review / needs_revision / completed), drag card để đổi status, hiển thị tối đa 10 cards/cột + "Xem thêm"
-- [ ] **Calendar view**: task deadline trên calendar tháng, click ngày → popover danh sách task ngày đó
-- [ ] Filter bar: KH, nhân viên, trạng thái, ưu tiên, kỳ (period_label), trễ hạn, nguồn (auto/manual)
-- [ ] Badge màu theo priority: urgent=đỏ đậm, high=cam, medium=vàng, low=xám
-- [ ] Badge màu theo status với icon
-- [ ] Indicator quá hạn: đỏ khi due_date < today + status != completed
+- [x] **3 view modes**: List (bảng) / Board (Kanban) / Calendar — toggle bằng icon
+- [x] **List view**: sort, multi-column filter, bulk actions (complete, delete), quick-edit status/priority/due_date inline
+- [x] **Board view**: 6 cột (pending / in_progress / on_hold / pending_review / needs_revision / completed), drag card để đổi status
+- [x] **Calendar view**: task deadline trên calendar tháng, click ngày → popover danh sách task ngày đó
+- [x] Filter bar: KH, nhân viên, trạng thái, ưu tiên, kỳ (period_label), trễ hạn, nguồn (auto/manual), search FTS
+- [x] Badge màu theo priority: urgent=đỏ đậm, high=cam, medium=xanh, low=xám
+- [x] Badge màu theo status với màu sắc phân biệt
+- [x] Indicator quá hạn: đỏ khi due_date < today + status != completed
+- [x] Quick view sidebar: click task → panel bên phải hiển thị nhanh chi tiết
+- [x] URL params: `?search=` và `?new=1` từ Header điều hướng tới đây
 
 **Trang chi tiết Task (`/tasks/:id`):**
-- [ ] Header: title (inline edit), status badge, priority badge, KH, assigned to
-- [ ] Action buttons: chuyển status, phân công lại, xóa (admin)
-- [ ] Sidebar: due_date picker, SLA progress bar, actual_hours
-- [ ] Tab: Mô tả | Checklist | Phụ thuộc | Comments | Activity Log | Time Log | Custom Fields
+- [x] Header: title (inline edit), status badge, priority badge, KH, assigned to
+- [x] Action buttons: chuyển status (với modal on_hold reason / force complete confirm), phân công lại, xóa (admin)
+- [x] Sidebar: due_date picker (inline click), SLA progress, actual_hours
+- [x] Tab: Mô tả | Checklist | Phụ thuộc | Comments | Activity Log | Time Log | Custom Fields
 
 **Modal tạo task thủ công:**
-- [ ] Fields: title, company, task_type (optional), assigned_to, due_date, priority, description
-- [ ] Nếu chọn task_type → tự động copy checklist + custom fields
+- [x] Fields: title, company, task_type (optional), assigned_to, due_date, priority, description
+- [x] Nếu chọn task_type → tự động copy checklist + custom fields
 
 **Acceptance Criteria Phase 6:**
 ```
-□ Tạo task → xuất hiện trong list, board, calendar
-□ Kéo task trên Kanban từ pending → in_progress → DB cập nhật, activity log ghi
-□ Chuyển sang on_hold không có reason → 422 error
-□ Chuyển sang completed với checklist chưa xong → warning + confirm
-□ completed_at được set khi và chỉ khi status = completed
-□ GET /api/tasks?is_overdue=true → chỉ trả task quá hạn chưa hoàn thành
+✅ Tạo task → xuất hiện trong list, board, calendar
+✅ Kéo task trên Kanban từ pending → in_progress → DB cập nhật, activity log ghi
+✅ Chuyển sang on_hold không có reason → modal yêu cầu nhập reason
+✅ Chuyển sang completed với checklist chưa xong → warning + confirm force
+✅ completed_at được set khi và chỉ khi status = completed
+✅ GET /api/tasks?is_overdue=true → chỉ trả task quá hạn chưa hoàn thành
 ```
 
 ---
@@ -587,52 +590,52 @@ ke-toan-tam-an/
 
 ### 7.1 Checklist Items
 
-- [ ] `GET /api/tasks/:id/checklist`
-- [ ] `POST /api/tasks/:id/checklist` — thêm bước mới
-- [ ] `PATCH /api/tasks/:id/checklist/:itemId` — sửa text, đổi thứ tự
-- [ ] `POST /api/tasks/:id/checklist/:itemId/toggle` — tick/untick (ghi activity log)
-- [ ] `DELETE /api/tasks/:id/checklist/:itemId`
-- [ ] UI: checkbox list, progress bar "3/5 bước hoàn thành", inline add new step
+- [x] `GET /api/tasks/:id/checklist`
+- [x] `POST /api/tasks/:id/checklist` — thêm bước mới
+- [x] `PATCH /api/tasks/:id/checklist/:itemId` — sửa text, toggle is_completed
+- [x] `POST /api/tasks/:id/checklist/:itemId/toggle` — tick/untick (ghi activity log)
+- [x] `DELETE /api/tasks/:id/checklist/:itemId`
+- [x] UI: checkbox list, progress bar "X/Y bước hoàn thành", inline add new step, inline edit, delete
 
 ### 7.2 Task Dependencies
 
-- [ ] `GET /api/tasks/:id/dependencies` — trả cả blockers (tasks phải xong trước) + blocked_by (tasks đang bị block)
-- [ ] `POST /api/tasks/:id/dependencies` — thêm phụ thuộc
-- [ ] `DELETE /api/tasks/:id/dependencies/:depId`
-- [ ] Validation: check cycle detection (A→B→C→A là invalid) — dùng DFS
-- [ ] Backend check: khi update status → nếu task này có blocker chưa completed → 422
-- [ ] UI: section "Phụ thuộc vào" (danh sách task blockers + status badge), section "Được chờ bởi"
+- [x] `GET /api/tasks/:id/dependencies` — danh sách blockers + status
+- [x] `POST /api/tasks/:id/dependencies` — thêm phụ thuộc
+- [x] `DELETE /api/tasks/:id/dependencies/:depId`
+- [x] Validation: cycle detection bằng recursive CTE — single DB round-trip
+- [x] Backend check: khi update status → nếu task này có blocker chưa completed → 422
+- [x] UI: search task để thêm dependency, danh sách blockers với status badge, remove button
 
 ### 7.3 Task Comments
 
-- [ ] `GET /api/tasks/:id/comments` — pagination, sort by created_at DESC
-- [ ] `POST /api/tasks/:id/comments` — tạo comment
-- [ ] `PATCH /api/tasks/:id/comments/:commentId` — [owner] sửa (set is_edited = true)
-- [ ] `DELETE /api/tasks/:id/comments/:commentId` — [owner | admin]
-- [ ] UI: comment box dưới cùng, danh sách comment với avatar, timestamp, "(đã chỉnh sửa)"
+- [x] `GET /api/tasks/:id/comments` — pagination, sort by created_at DESC
+- [x] `POST /api/tasks/:id/comments` — tạo comment
+- [x] `PATCH /api/tasks/:id/comments/:commentId` — [owner] sửa (set is_edited = true)
+- [x] `DELETE /api/tasks/:id/comments/:commentId` — [owner | admin]
+- [x] UI: comment box, danh sách comment với avatar, timestamp, "(đã chỉnh sửa)", edit/delete
 
 ### 7.4 Time Tracking
 
-- [ ] `GET /api/tasks/:id/time-logs`
-- [ ] `POST /api/tasks/:id/time-logs` — ghi thời gian (hours, note, logged_date)
-- [ ] `DELETE /api/tasks/:id/time-logs/:logId` — [owner | admin]
-- [ ] Trigger PostgreSQL tự động cập nhật `tasks.actual_hours` (đã có từ Phase 1)
-- [ ] UI: form nhỏ "Ghi thêm thời gian: [input hours] [input note]", bảng lịch sử time logs, tổng actual_hours vs SLA_days
+- [x] `GET /api/tasks/:id/time-logs`
+- [x] `POST /api/tasks/:id/time-logs` — ghi thời gian (hours, note, logged_date)
+- [x] `DELETE /api/tasks/:id/time-logs/:logId` — [owner | admin]
+- [x] Trigger PostgreSQL tự động cập nhật `tasks.actual_hours` (đã có từ Phase 1)
+- [x] UI: form "Ghi thêm thời gian: [hours] [note]", bảng lịch sử time logs
 
 ### 7.5 Custom Field Values
 
-- [ ] `GET /api/tasks/:id/custom-fields` — trả schema + giá trị hiện tại
-- [ ] `PUT /api/tasks/:id/custom-fields` — upsert toàn bộ values (không patch từng field)
-- [ ] Validation: kiểm tra field_schema thuộc đúng task_type của task
-- [ ] UI: form động generated từ field schemas, render đúng input theo data_type
+- [x] `GET /api/tasks/:id/custom-fields` — trả schema + giá trị hiện tại
+- [x] `PUT /api/tasks/:id/custom-fields` — upsert toàn bộ values
+- [x] Validation: kiểm tra field_schema thuộc đúng task_type của task
+- [x] UI: form động generated từ field schemas, render đúng input theo data_type
 
 **Acceptance Criteria Phase 7:**
 ```
-□ Tick checklist item → activity log ghi "checklist_checked"
-□ Thêm dependency A → B → B → A → 422 cycle detection error
-□ Khi task A chưa completed → update task B status → 422 blocked
-□ Insert time_log 2h → tasks.actual_hours tăng 2h (trigger hoạt động)
-□ Custom field type 'select' → chỉ cho phép giá trị trong options list
+✅ Tick checklist item → progress bar cập nhật realtime
+✅ Thêm dependency A → B → B → A → 422 cycle detection error (recursive CTE)
+✅ Khi task A chưa completed → update task B status → 422 blocked
+✅ Insert time_log 2h → tasks.actual_hours tăng 2h (trigger hoạt động)
+✅ Custom field type 'select' → form render dropdown đúng options
 ```
 
 ---
@@ -661,39 +664,35 @@ src/jobs/taskGenerator.job.js
 
 ### 8.2 Implementation
 
-- [ ] `src/jobs/taskGenerator.job.js` — main job function
-- [ ] `src/utils/recurrence.calculator.js` — hàm `shouldGenerateToday(schedule, today)`:
-  - Tính next occurrence dựa vào recurrence_type + recurrence_config + last_generated_at
-  - Trả về `{ shouldGenerate: boolean, forDate: Date }`
-  - Unit test đầy đủ cho 9 loại (đây là logic phức tạp nhất)
-- [ ] Khi sinh task: copy từ schedule:
-  - `title` = `[task_type.name] — [period_label]` (ví dụ: "Kê khai GTGT — T05/2026")
-  - `company_id`, `task_type_id`, `customer_task_schedule_id`
-  - `assigned_to` = schedule.assigned_staff_id ?? company.assigned_staff_id
-  - `due_date` = forDate + deadline_offset_days
-  - `sla_days` = schedule.override_sla_days ?? task_type.default_sla_days
-  - `source` = 'auto'
-  - `period_label` = format(forDate, "'T'MM/yyyy") hoặc "'Q'Q/yyyy"
-- [ ] Copy checklist items từ `task_type_checklist_templates`
-- [ ] Idempotent check: query `tasks` xem đã có task cùng `customer_task_schedule_id + period_label` chưa → không sinh trùng
-- [ ] Xử lý lỗi từng schedule độc lập: 1 schedule lỗi không crash toàn bộ job
-- [ ] Ghi log đầy đủ: `scheduler.generated`, `scheduler.skipped`, `scheduler.error`
+- [x] `src/jobs/taskGenerator.job.js` — main job function
+- [x] `src/utils/recurrence.calculator.js` — hàm `shouldGenerateToday(schedule, today)` với unit test coverage
+- [x] Khi sinh task: copy từ schedule (title, company_id, task_type_id, assigned_to, due_date + offset, sla_days, source = 'auto', period_label)
+- [x] Copy checklist items từ `task_type_checklist_templates` bằng bulk INSERT…SELECT
+- [x] Idempotent check: kiểm tra đã có task cùng `customer_task_schedule_id + period_label` chưa
+- [x] Xử lý lỗi từng schedule độc lập: 1 schedule lỗi không crash toàn bộ job
+- [x] Ghi log: `scheduler.generated`, `scheduler.skipped`, `scheduler.error` vào `scheduler_run_logs`
 
-### 8.3 Cron Setup
+### 8.3 Cron Setup & Admin UI
 
-- [ ] `src/jobs/index.js` — khởi động tất cả cron jobs khi app start
-- [ ] Job chạy lúc `05:00` hàng ngày (VN timezone UTC+7: `0 22 * * *` UTC)
-- [ ] Endpoint `GET /api/admin/scheduler/status` — [admin] xem jobs đang chạy + last run time
-- [ ] Endpoint `POST /api/admin/scheduler/run-now` — [admin] trigger manual run (dev/debug)
+- [x] `src/jobs/index.js` — khởi động scheduler, expose `startScheduler`, `restartWithNewHour`, `getStatus`, `triggerNow`, `getLogs`, `deleteLog`, `clearLogs`
+- [x] Giờ chạy cấu hình được qua Settings UI (VN timezone UTC+7)
+- [x] `GET /api/admin/scheduler/status` — [admin] trạng thái + last run result
+- [x] `POST /api/admin/scheduler/run-now` — [admin] trigger thủ công
+- [x] `GET /api/admin/scheduler/logs` — [admin] lịch sử chạy với pagination
+- [x] `DELETE /api/admin/scheduler/logs/:id` — [admin] xóa 1 log entry
+- [x] `DELETE /api/admin/scheduler/logs` — [admin] xóa toàn bộ logs (TRUNCATE)
+- [x] `PATCH /api/admin/scheduler/config` — [admin] cập nhật giờ chạy
+- [x] Frontend: Settings → Cấu hình hệ thống → Bộ lập lịch tự động:
+  - Chọn giờ chạy (VN), nút "Chạy ngay", status card, bảng lịch sử (10/trang, xóa từng row, xóa tất cả)
 
 **Acceptance Criteria Phase 8:**
 ```
-□ Schedule monthly_by_date day=20 → task được sinh đúng ngày 20 tháng đó
-□ Chạy 2 lần trong ngày → chỉ sinh 1 task (idempotent)
-□ Schedule is_active = false → không sinh task
-□ Schedule lỗi recurrence_config → log error, không crash job
-□ Task sinh ra có đúng title format, due_date = forDate + offset, source = 'auto'
-□ Checklist items được copy từ task_type template
+✅ Schedule monthly_by_date day=20 → task được sinh đúng ngày 20 tháng đó
+✅ Chạy 2 lần trong ngày → chỉ sinh 1 task (idempotent check period_label)
+✅ Schedule is_active = false → không sinh task
+✅ Schedule lỗi → log error, không crash job, schedules khác vẫn chạy
+✅ Task sinh ra có đúng title format, due_date = forDate + offset, source = 'auto'
+✅ Checklist items được copy từ task_type template (bulk INSERT…SELECT)
 ```
 
 ---
@@ -704,38 +703,38 @@ src/jobs/taskGenerator.job.js
 
 ### 9.1 Backend
 
-- [ ] `src/utils/encrypt.js` — hàm `encrypt(plaintext)` và `decrypt(ciphertext, iv)` dùng AES-256-GCM (xem 06_SECURITY.md)
-- [ ] Validate `CREDENTIAL_ENCRYPTION_KEY` = 64 hex chars khi startup
-- [ ] Test encrypt/decrypt round-trip trong unit test
+- [x] `src/utils/encrypt.js` — hàm `encrypt(plaintext)` và `decrypt(ciphertext, iv)` dùng AES-256-GCM
+- [x] Validate `CREDENTIAL_ENCRYPTION_KEY` khi startup
+- [ ] Test encrypt/decrypt round-trip trong unit test *(chưa viết unit test)*
 
 **Endpoints:**
-- [ ] `GET /api/companies/:companyId/credentials` — danh sách (KHÔNG trả password, trả `"***"`)
-- [ ] `POST /api/companies/:companyId/credentials` — tạo mới (encrypt password trước khi lưu)
-- [ ] `PATCH /api/credentials/:id` — cập nhật (nếu có password mới → encrypt lại, tạo IV mới)
-- [ ] `DELETE /api/credentials/:id` — xóa
-- [ ] `GET /api/credentials/:id/reveal` — [auth + phân quyền] decrypt + trả password thật + ghi audit_log
-- [ ] `POST /api/credentials/:id/toggle` — bật/tắt is_active
+- [x] `GET /api/companies/:companyId/credentials` — danh sách (password trả `"***"`)
+- [x] `POST /api/companies/:companyId/credentials` — tạo mới (encrypt password)
+- [x] `PATCH /api/credentials/:id` — cập nhật (encrypt lại nếu có password mới)
+- [x] `DELETE /api/credentials/:id` — xóa
+- [x] `GET /api/credentials/:id/reveal` — decrypt + trả password + ghi audit_log
+- [x] `POST /api/credentials/:id/toggle` — bật/tắt is_active
 
 **Phân quyền `/reveal`:**
-- [ ] Admin: xem mọi credential
-- [ ] Staff: chỉ xem credential của công ty mình đang phụ trách (check qua assignments)
+- [x] Admin: xem mọi credential
+- [x] Staff: chỉ xem credential của công ty mình đang phụ trách
 
 ### 9.2 Frontend — Tab Credentials trong Company Detail
 
-- [ ] Danh sách credentials: system_name, link (clickable), username, password (hiển thị `***`)
-- [ ] Nút "Hiện" → gọi API `/reveal`, hiện password 30 giây rồi tự ẩn lại (countdown timer)
-- [ ] Nút copy username / copy password (call `/reveal` rồi copy vào clipboard)
-- [ ] Modal thêm/sửa: system_name, system_url, username, password (type=password), notes
-- [ ] Toggle is_active
-- [ ] Xác nhận khi xóa credential
+- [x] Danh sách credentials: system_name, link (clickable URL), username, password (`***`)
+- [x] Nút "Hiện" → gọi API `/reveal`, hiện password rồi tự ẩn sau timeout
+- [x] Nút copy username / copy password
+- [x] Modal thêm/sửa: system_name, system_url, username, password, notes
+- [x] Toggle is_active
+- [x] Xác nhận khi xóa credential
 
 **Acceptance Criteria Phase 9:**
 ```
-□ Tạo credential với password "abc123" → DB lưu ciphertext (không phải "abc123")
-□ GET /api/companies/:id/credentials → password trả về là "***"
-□ GET /api/credentials/:id/reveal → trả password đúng "abc123" + audit_log ghi credential_viewed
-□ Staff không phụ trách công ty → 403 khi gọi /reveal
-□ Encrypt 2 lần cùng password → 2 ciphertext khác nhau (do IV random)
+✅ Tạo credential với password "abc123" → DB lưu ciphertext (không phải "abc123")
+✅ GET /api/companies/:id/credentials → password trả về là "***"
+✅ GET /api/credentials/:id/reveal → trả password đúng + audit_log ghi credential_viewed
+✅ Staff không phụ trách công ty → 403 khi gọi /reveal
+✅ Encrypt 2 lần cùng password → 2 ciphertext khác nhau (do IV random)
 ```
 
 ---
@@ -747,49 +746,40 @@ src/jobs/taskGenerator.job.js
 ### 10.1 Backend
 
 **Endpoints:**
-- [ ] `GET /api/payroll` — [admin] danh sách kỳ lương, pagination, filter year/status
-- [ ] `POST /api/payroll` — [admin] tạo kỳ lương mới (validate unique year+month)
-- [ ] `GET /api/payroll/:periodId` — chi tiết kỳ + records
-- [ ] `PATCH /api/payroll/:periodId` — [admin] cập nhật notes (chỉ khi status = draft)
-- [ ] `POST /api/payroll/:periodId/confirm` — [admin] chuyển draft → confirmed (validate có đủ records cho active staff)
-- [ ] `POST /api/payroll/:periodId/mark-paid` — [admin] confirmed → paid
-- [ ] `GET /api/payroll/:periodId/records` — danh sách records của kỳ
-- [ ] `POST /api/payroll/:periodId/records` — [admin] thêm/cập nhật record cho 1 nhân viên
-- [ ] `PATCH /api/payroll/records/:recordId` — [admin] cập nhật (chỉ khi period.status = draft)
-- [ ] `DELETE /api/payroll/records/:recordId` — [admin] xóa (chỉ khi draft)
-- [ ] `GET /api/payroll/:periodId/export` — [admin] export Excel bảng lương kỳ đó
+- [x] `GET /api/payroll` — [admin] danh sách kỳ lương, pagination, filter year/status
+- [x] `POST /api/payroll` — [admin] tạo kỳ lương mới (validate unique year+month)
+- [x] `GET /api/payroll/:periodId` — chi tiết kỳ + records
+- [x] `PATCH /api/payroll/:periodId` — [admin] cập nhật notes (chỉ khi status = draft)
+- [x] `POST /api/payroll/:periodId/confirm` — [admin] draft → confirmed
+- [x] `POST /api/payroll/:periodId/mark-paid` — [admin] confirmed → paid
+- [x] `GET /api/payroll/:periodId/records` — danh sách records của kỳ
+- [x] `PUT /api/payroll/:periodId/records` — [admin] upsert record cho nhân viên
+- [x] `DELETE /api/payroll/records/:recordId` — [admin] xóa (chỉ khi draft)
+- [x] `GET /api/payroll/:periodId/export` — [admin] export Excel bảng lương
 
 **Logic:**
-- [ ] `gross_income` và `net_salary` là GENERATED columns — không cần tính ở app layer
-- [ ] Khi confirm: warn nếu có active staff không có record trong kỳ này
-- [ ] Khi status = confirmed hoặc paid: chặn sửa records (trả 409)
+- [x] `gross_income` và `net_salary` là GENERATED columns — không cần tính ở app layer
+- [x] Khi status = confirmed hoặc paid: chặn sửa records (409)
 
 **Export Excel:**
-- [ ] Dùng `exceljs` để tạo file bảng lương:
-  - Header: Bảng lương tháng MM/YYYY — Công ty Kế Toán Tâm An
-  - Columns: STT, Họ tên, Lương CB, Phụ cấp, Thưởng, Gross, BHXH, BHYT, BHTN, Thuế TNCN, Khấu trừ khác, Net
-  - Footer: Tổng cộng
-  - Format số: VND (có dấu chấm phân cách ngàn)
+- [x] Dùng `exceljs` — header, columns lương đầy đủ, footer tổng cộng, format VND
 
 ### 10.2 Frontend (`/payroll`)
 
-- [ ] Danh sách kỳ lương: năm/tháng, status badge, tổng net salary, số nhân viên
-- [ ] Tạo kỳ lương mới (chọn tháng/năm)
-- [ ] Màn hình chi tiết kỳ lương:
-  - Header: thông tin kỳ, status, actions (confirm/mark-paid/export Excel)
-  - Bảng: từng nhân viên với tất cả columns lương
-  - Inline edit khi status = draft
-  - Summary row tổng cuối
-- [ ] Modal thêm nhân viên vào kỳ lương (dropdown user + form nhập số liệu)
-- [ ] Button export Excel
+- [x] Danh sách kỳ lương: năm/tháng, status badge, tổng net salary, số nhân viên
+- [x] Tạo kỳ lương mới (chọn tháng/năm)
+- [x] Màn hình chi tiết kỳ lương: header info, bảng nhân viên, actions (confirm/mark-paid/export)
+- [x] Inline edit khi status = draft
+- [x] Summary row tổng cuối
+- [x] Button export Excel → download file
 
 **Acceptance Criteria Phase 10:**
 ```
-□ Tạo kỳ 05/2026, thêm record cho 3 NV → DB lưu đúng, gross_income và net_salary tự tính
-□ Sửa base_salary → gross_income và net_salary cập nhật tự động (GENERATED)
-□ Confirm kỳ → không thể sửa records nữa
-□ Export Excel → file download được, số liệu đúng, format VND
-□ Tạo trùng kỳ tháng/năm → 409 conflict
+✅ Tạo kỳ 05/2026, thêm record cho 3 NV → DB lưu đúng, gross_income và net_salary tự tính
+✅ Sửa base_salary → gross_income và net_salary cập nhật (GENERATED columns)
+✅ Confirm kỳ → không thể sửa records nữa
+✅ Export Excel → file download được, số liệu đúng, format VND
+✅ Tạo trùng kỳ tháng/năm → 409 conflict
 ```
 
 ---
@@ -808,24 +798,19 @@ src/jobs/taskGenerator.job.js
 - [ ] Test: `GET /v1.0/me/drive` → kết nối thành công
 - [ ] Cấu hình thư mục gốc: `/TamAn_Documents/` trong OneDrive của service account
 
-### 11.2 Backend
+### 11.2 Backend ✅
 
 **Upload Flow:**
-- [ ] `POST /api/companies/:companyId/documents/upload` — nhận file (multipart/form-data), category
-  1. Validate file type (PDF, XLSX, DOC, DOCX, PNG, JPG, JPEG) + size (<= 50MB)
-  2. Xác định OneDrive path: `/TamAn_Documents/KH_{companyName}/{year}/{category}/`
-  3. Upload lên OneDrive: `PUT /v1.0/drives/{driveId}/root:/{path}/{filename}:/content`
-  4. Lấy `id` và `webUrl` từ response
-  5. Insert vào `documents` table
-  6. Return metadata
+- [x] `POST /api/companies/:companyId/documents/upload` — validate file type + size, upload OneDrive, insert DB
+- [x] Validate file type (PDF, XLSX, DOC, DOCX, PNG, JPG, JPEG) + size (<= 50MB)
 
 **Other Endpoints:**
-- [ ] `GET /api/companies/:companyId/documents` — danh sách, filter category, task_id, search tên file
-- [ ] `GET /api/documents/:id/link` — generate download link (Graph API create share link hoặc trả webUrl)
-- [ ] `DELETE /api/documents/:id` — xóa file trên OneDrive + xóa record DB (soft delete)
-- [ ] `PATCH /api/tasks/:taskId/documents/:docId/attach` — gắn document vào task (set task_id)
+- [x] `GET /api/companies/:companyId/documents` — danh sách, filter category, task_id, search tên file
+- [x] `GET /api/documents/:id/link` — generate download link / webUrl
+- [x] `DELETE /api/documents/:id` — xóa file + record DB
+- [x] `POST /api/tasks/:taskId/documents/:docId/attach` — gắn document vào task
 
-### 11.3 Frontend
+### 11.3 Frontend ⏳
 
 **Tab Tài Liệu trong Company Detail:**
 - [ ] Upload zone: drag-and-drop hoặc click-to-browse
@@ -883,16 +868,15 @@ src/jobs/taskGenerator.job.js
   - Query tasks: `due_date = today + N ngày` (N = system_config `deadline_warning_days`)
   - Gửi in-app notification + email cho assigned_to
 - [ ] **Overdue Escalation Job** — chạy mỗi ngày lúc 08:00:
-  - Query tasks: `due_date < today - N ngày` (N = `escalation_overdue_days`), status != completed
+  - Query tasks: `due_date < today - N ngày`, status != completed
   - Chuyển status → needs_revision nếu còn trong in_progress
   - Ghi activity_log action = 'escalated'
   - Gửi notification type = 'escalation' cho assigned_to + admin
 - [ ] **On-Hold Reminder Job** — chạy mỗi ngày lúc 08:00:
-  - Query tasks: status = 'on_hold' và updated_at < today - N ngày (N = `escalation_on_hold_days`)
+  - Query tasks: status = 'on_hold' và updated_at < today - N ngày
   - Gửi reminder notification cho assigned_to + admin
-- [ ] **Morning Summary Job** — chạy mỗi ngày lúc 07:00 (cấu hình qua system_config `morning_email_time`):
-  - Gửi email cho admin: danh sách task quá hạn, task đến hạn hôm nay, task on_hold quá lâu
-  - Format: HTML table gọn, có link trực tiếp vào từng task
+- [ ] **Morning Summary Job** — chạy mỗi ngày lúc 07:00:
+  - Gửi email cho admin: task quá hạn, task đến hạn hôm nay, task on_hold quá lâu
 
 **Acceptance Criteria Phase 12:**
 ```
@@ -923,29 +907,22 @@ src/jobs/taskGenerator.job.js
 ### 13.2 Reports API
 
 - [ ] `GET /api/reports/staff-performance` — params: `staff_id[]`, `from`, `to`
-  - Mỗi staff: tasks hoàn thành, % đúng hạn, avg_actual_hours, top 5 task types
 - [ ] `GET /api/reports/company-status` — params: `company_id[]`, `from`, `to`
-  - Mỗi KH: tasks open/completed/overdue, tổng thời gian, % hoàn thành đầu việc định kỳ
-- [ ] `GET /api/reports/sla-compliance` — params: `from`, `to`, `group_by` (staff|company|task_type)
-  - % tasks hoàn thành trước hạn / đúng hạn / trễ 1-3 ngày / trễ >3 ngày
+- [ ] `GET /api/reports/sla-compliance` — params: `from`, `to`, `group_by`
 - [ ] `GET /api/reports/aging` — tasks đang mở, sắp xếp theo số ngày đã mở
-- [ ] `GET /api/reports/velocity` — tasks hoàn thành mỗi tuần/tháng, so sánh kỳ trước
-- [ ] `GET /api/reports/forecast` — dựa trên schedules is_active → dự báo tasks tháng tới theo staff
+- [ ] `GET /api/reports/velocity` — tasks hoàn thành mỗi tuần/tháng
+- [ ] `GET /api/reports/forecast` — dự báo tasks tháng tới theo staff
 
 ### 13.3 Export
 
 - [ ] `POST /api/reports/export` — body: `{report_type, params, format: 'excel'|'pdf'}`
-  1. Insert `report_jobs` record (status = processing)
-  2. Generate file async (`exceljs` cho Excel, `puppeteer` hoặc `jspdf` cho PDF)
-  3. Lưu file tạm vào `/tmp/reports/` (30 ngày rồi tự xóa)
-  4. Update `report_jobs.status = done`, `file_url`
 - [ ] `GET /api/reports/jobs` — danh sách lịch sử export
 - [ ] `GET /api/reports/download/:jobId` — download file
 
-### 13.4 Frontend — Dashboard (`/dashboard`)
+### 13.4 Frontend — Dashboard (`/dashboard`) ⏳ Placeholder
 
-- [ ] **KPI Row**: 5 cards số liệu với màu sắc trực quan (Recharts hoặc tự custom)
-- [ ] **Biểu đồ hàng 1**: Line chart xu hướng hoàn thành (4 tuần), Bar chart tải công việc theo nhân viên
+- [ ] **KPI Row**: 5 cards số liệu với màu sắc trực quan *(StatCard UI có sẵn, cần wire API)*
+- [ ] **Biểu đồ hàng 1**: Line chart xu hướng hoàn thành, Bar chart tải công việc theo nhân viên
 - [ ] **Biểu đồ hàng 2**: Pie chart phân loại task type, Heat map deadline trong tháng
 - [ ] **Quick List**: 5 task quá hạn gần nhất + link "Xem thêm"
 
@@ -988,7 +965,6 @@ src/jobs/taskGenerator.job.js
 
 - [ ] Kiểm tra toàn bộ endpoints có Zod schema validation
 - [ ] Kiểm tra không có raw string interpolation trong SQL queries
-- [ ] `express-mongo-sanitize` hoặc tương tự để clean NoSQL injection (nếu có JSONB input từ user)
 - [ ] File upload validation: MIME type check + file extension check + max size
 - [ ] Sanitize HTML trong comment content (dùng `DOMPurify` phía frontend, backend strip tags)
 
