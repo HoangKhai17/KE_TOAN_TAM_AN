@@ -2,6 +2,103 @@ const { query } = require('../../config/db')
 const ExcelJS = require('exceljs')
 const { shouldGenerateToday } = require('../../utils/recurrence.calculator')
 
+// ── 0. Overview ───────────────────────────────────────────────────────────────
+
+async function overviewReport({ from, to, prevFrom, prevTo }) {
+  const hasPrev = Boolean(prevFrom && prevTo)
+
+  const [curStats, prevStats, trend, prevTrend, byTaskType, byStatus, byAssignee] = await Promise.all([
+    query(`
+      SELECT
+        COUNT(*)                                                                    AS total,
+        COUNT(*) FILTER (WHERE status = 'completed')                               AS completed,
+        COUNT(*) FILTER (WHERE status != 'completed')                              AS pending,
+        COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed')  AS overdue
+      FROM tasks WHERE created_at BETWEEN $1 AND $2
+    `, [from, to]),
+
+    hasPrev
+      ? query(`
+          SELECT
+            COUNT(*)                                                                    AS total,
+            COUNT(*) FILTER (WHERE status = 'completed')                               AS completed,
+            COUNT(*) FILTER (WHERE status != 'completed')                              AS pending,
+            COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed')  AS overdue
+          FROM tasks WHERE created_at BETWEEN $1 AND $2
+        `, [prevFrom, prevTo])
+      : Promise.resolve({ rows: [{}] }),
+
+    query(`
+      SELECT created_at::date AS date,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed
+      FROM tasks WHERE created_at BETWEEN $1 AND $2
+      GROUP BY created_at::date ORDER BY date
+    `, [from, to]),
+
+    hasPrev
+      ? query(`
+          SELECT created_at::date AS date,
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE status = 'completed') AS completed
+          FROM tasks WHERE created_at BETWEEN $1 AND $2
+          GROUP BY created_at::date ORDER BY date
+        `, [prevFrom, prevTo])
+      : Promise.resolve({ rows: [] }),
+
+    query(`
+      SELECT tt.name AS label,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE t.status = 'completed') AS completed
+      FROM tasks t
+      LEFT JOIN task_types tt ON tt.id = t.task_type_id
+      WHERE t.created_at BETWEEN $1 AND $2
+      GROUP BY tt.name ORDER BY total DESC LIMIT 10
+    `, [from, to]),
+
+    query(`
+      SELECT status AS label, COUNT(*) AS total
+      FROM tasks WHERE created_at BETWEEN $1 AND $2
+      GROUP BY status ORDER BY total DESC
+    `, [from, to]),
+
+    query(`
+      SELECT u.name AS label,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE t.status = 'completed') AS completed,
+        ROUND(COUNT(*) FILTER (WHERE t.status = 'completed') * 100.0 / NULLIF(COUNT(*), 0), 1) AS rate
+      FROM tasks t
+      LEFT JOIN users u ON u.id = t.assigned_to
+      WHERE t.created_at BETWEEN $1 AND $2
+      GROUP BY u.name ORDER BY total DESC LIMIT 10
+    `, [from, to]),
+  ])
+
+  const c = curStats.rows[0] || {}
+  const p = prevStats.rows[0] || {}
+
+  function pctChange(cur, prev) {
+    const cv = parseInt(cur, 10) || 0
+    const pv = parseInt(prev, 10) || 0
+    if (pv === 0) return cv > 0 ? 100 : 0
+    return Math.round((cv - pv) * 100 / pv)
+  }
+
+  return {
+    stats: {
+      total:     { value: parseInt(c.total, 10) || 0,     change: hasPrev ? pctChange(c.total, p.total) : null },
+      completed: { value: parseInt(c.completed, 10) || 0, change: hasPrev ? pctChange(c.completed, p.completed) : null },
+      pending:   { value: parseInt(c.pending, 10) || 0,   change: hasPrev ? pctChange(c.pending, p.pending) : null },
+      overdue:   { value: parseInt(c.overdue, 10) || 0,   change: hasPrev ? pctChange(c.overdue, p.overdue) : null },
+    },
+    trend:      trend.rows.map((r) => ({ date: r.date, total: parseInt(r.total, 10), completed: parseInt(r.completed, 10) })),
+    prevTrend:  prevTrend.rows.map((r) => ({ date: r.date, total: parseInt(r.total, 10), completed: parseInt(r.completed, 10) })),
+    byTaskType: byTaskType.rows.map((r) => ({ label: r.label || '(Không có)', total: parseInt(r.total, 10), completed: parseInt(r.completed, 10) })),
+    byStatus:   byStatus.rows.map((r) => ({ label: r.label, total: parseInt(r.total, 10) })),
+    byAssignee: byAssignee.rows.map((r) => ({ label: r.label || '(Không có)', total: parseInt(r.total, 10), completed: parseInt(r.completed, 10), rate: parseFloat(r.rate) || 0 })),
+  }
+}
+
 // ── 1. Staff Performance ──────────────────────────────────────────────────────
 
 async function staffPerformance({ from, to, staffIds }) {
@@ -346,6 +443,7 @@ async function exportToExcel(type, data) {
 }
 
 module.exports = {
+  overviewReport,
   staffPerformance,
   companyStatus,
   slaCompliance,

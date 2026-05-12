@@ -7,6 +7,7 @@ const router = Router()
 const auth  = [authenticate]
 const admin = [authenticate, requireRole('admin')]
 
+router.get('/overview', ...auth,  ctrl.getOverview)
 router.get('/staff',    ...auth,  ctrl.getStaffPerformance)
 router.get('/company',  ...auth,  ctrl.getCompanyStatus)
 router.get('/sla',      ...auth,  ctrl.getSlaCompliance)

@@ -1,5 +1,6 @@
 import api from './axios'
 
+export const getOverviewReport = (params) => api.get('/reports/overview', { params }).then((r) => r.data)
 export const getStaffReport    = (params) => api.get('/reports/staff',    { params }).then((r) => r.data)
 export const getCompanyReport  = (params) => api.get('/reports/company',  { params }).then((r) => r.data)
 export const getSlaReport      = (params) => api.get('/reports/sla',      { params }).then((r) => r.data)

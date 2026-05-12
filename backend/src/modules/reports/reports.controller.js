@@ -63,6 +63,15 @@ async function getForecast(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function getOverview(req, res, next) {
+  try {
+    const { from, to, prevFrom, prevTo } = req.query
+    const range = from && to ? { from, to } : defaultDateRange()
+    const data = await svc.overviewReport({ ...range, prevFrom, prevTo })
+    res.json(data)
+  } catch (err) { next(err) }
+}
+
 async function exportReport(req, res, next) {
   try {
     const { type } = req.params
@@ -94,4 +103,4 @@ async function exportReport(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { getStaffPerformance, getCompanyStatus, getSlaCompliance, getAging, getVelocity, getForecast, exportReport }
+module.exports = { getOverview, getStaffPerformance, getCompanyStatus, getSlaCompliance, getAging, getVelocity, getForecast, exportReport }

@@ -112,7 +112,9 @@
       "Bash(node -e \"require\\('./src/modules/reports/reports.router'\\)\")",
       "Bash(node -e \"require\\('./src/app'\\)\")",
       "Bash(findstr -i \"toan\\\\|ktta\\\\|backend\")",
-      "Bash(docker cp *)"
+      "Bash(docker cp *)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/lucide-react/package.json'\\); console.log\\(pkg.version\\)\")",
+      "Bash(node -e \"const { GitCompare, Timer, Award, LayoutDashboard, Maximize2, Minimize2, TrendingDown, RefreshCw, CheckCircle2, AlertCircle, FileText } = require\\('lucide-react'\\); console.log\\('GitCompare:', !!GitCompare, 'Timer:', !!Timer, 'Award:', !!Award, 'LayoutDashboard:', !!LayoutDashboard, 'Maximize2:', !!Maximize2, 'Minimize2:', !!Minimize2, 'TrendingDown:', !!TrendingDown, 'RefreshCw:', !!RefreshCw, 'CheckCircle2:', !!CheckCircle2, 'AlertCircle:', !!AlertCircle, 'FileText:', !!FileText\\)\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"
