@@ -40,12 +40,17 @@ const TASK_SELECT = `
          c.name   AS company_name,
          tt.name  AS task_type_name,
          ua.name  AS assigned_to_name,
-         (SELECT COUNT(*) FROM task_checklist_items ci WHERE ci.task_id = t.id)                          AS checklist_total,
-         (SELECT COUNT(*) FROM task_checklist_items ci WHERE ci.task_id = t.id AND ci.is_completed = TRUE) AS checklist_done
+         cl.checklist_total,
+         cl.checklist_done
   FROM tasks t
   LEFT JOIN companies  c  ON c.id  = t.company_id
   LEFT JOIN task_types tt ON tt.id = t.task_type_id
-  LEFT JOIN users      ua ON ua.id = t.assigned_to`
+  LEFT JOIN users      ua ON ua.id = t.assigned_to
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*)                                        AS checklist_total,
+           COUNT(*) FILTER (WHERE ci.is_completed = TRUE) AS checklist_done
+    FROM task_checklist_items ci WHERE ci.task_id = t.id
+  ) cl ON TRUE`
 
 async function listTasks(filters = {}) {
   const {
@@ -156,18 +161,16 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     ]
   )
 
-  // Copy checklist template from task type
+  // Copy checklist template from task type — single INSERT … SELECT (no loop)
   if (taskTypeId) {
-    const { rows: steps } = await query(
-      'SELECT step_order, step_text FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order',
-      [taskTypeId]
+    await query(
+      `INSERT INTO task_checklist_items (task_id, step_order, step_text)
+       SELECT $1, step_order, step_text
+       FROM task_type_checklist_templates
+       WHERE task_type_id = $2
+       ORDER BY step_order`,
+      [task.id, taskTypeId]
     )
-    for (const step of steps) {
-      await query(
-        'INSERT INTO task_checklist_items (task_id, step_order, step_text) VALUES ($1,$2,$3)',
-        [task.id, step.step_order, step.step_text]
-      )
-    }
   }
 
   await activity.logActivity(task.id, actorId, 'created', null, null, { title, companyId, taskTypeId })

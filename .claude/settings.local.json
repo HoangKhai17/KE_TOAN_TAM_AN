@@ -106,7 +106,8 @@
       "Bash(node scripts/test-scheduler-integration.js)",
       "Bash(node -e \"require\\('dotenv'\\).config\\(\\); console.log\\('DB URL prefix:', process.env.DATABASE_URL?.slice\\(0,30\\) || 'NOT SET'\\)\")",
       "Bash(node -e \"require\\('dotenv'\\).config\\(\\); const url = new URL\\(process.env.DATABASE_URL\\); console.log\\('host:', url.hostname, 'port:', url.port, 'db:', url.pathname\\)\")",
-      "Bash(copy \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\scripts\\\\test-scheduler-integration.js\" \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\scripts\\\\test-scheduler-integration.js\")"
+      "Bash(copy \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\scripts\\\\test-scheduler-integration.js\" \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\scripts\\\\test-scheduler-integration.js\")",
+      "Bash(node src/db/migrate.js)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

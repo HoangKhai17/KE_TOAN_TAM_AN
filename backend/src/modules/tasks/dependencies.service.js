@@ -17,25 +17,21 @@ async function assertTask(taskId) {
   if (!rows[0]) throw Object.assign(new Error('Task not found'), { status: 404 })
 }
 
-// DFS to detect if adding (taskId -> dependsOnTaskId) creates a cycle
+// Cycle detection via recursive CTE — single DB round-trip instead of N+1 BFS
 async function hasCycle(taskId, dependsOnTaskId) {
-  // BFS/DFS: starting from dependsOnTaskId, can we reach taskId following dependencies?
-  const visited = new Set()
-  const queue = [dependsOnTaskId]
-
-  while (queue.length) {
-    const current = queue.shift()
-    if (current === taskId) return true
-    if (visited.has(current)) continue
-    visited.add(current)
-
-    const { rows } = await query(
-      'SELECT depends_on_task_id FROM task_dependencies WHERE task_id = $1',
-      [current]
-    )
-    for (const r of rows) queue.push(r.depends_on_task_id)
-  }
-  return false
+  const { rows } = await query(
+    `WITH RECURSIVE dep_chain AS (
+       SELECT depends_on_task_id AS node
+       FROM task_dependencies WHERE task_id = $1
+       UNION
+       SELECT td.depends_on_task_id
+       FROM task_dependencies td
+       JOIN dep_chain dc ON td.task_id = dc.node
+     )
+     SELECT 1 FROM dep_chain WHERE node = $2 LIMIT 1`,
+    [dependsOnTaskId, taskId]
+  )
+  return rows.length > 0
 }
 
 async function listDependencies(taskId) {

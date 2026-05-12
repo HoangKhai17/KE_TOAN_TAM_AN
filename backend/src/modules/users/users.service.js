@@ -35,8 +35,10 @@ async function listUsers({ page = 1, limit = 20, role, status, search } = {}) {
     conditions.push(`status = $${filterParams.length}`)
   }
   if (search) {
-    filterParams.push(`%${search}%`)
-    conditions.push(`(name ILIKE $${filterParams.length} OR email ILIKE $${filterParams.length})`)
+    filterParams.push(search.trim())
+    conditions.push(
+      `to_tsvector('simple', name || ' ' || email) @@ plainto_tsquery('simple', $${filterParams.length})`
+    )
   }
 
   const where = conditions.join(' AND ')
