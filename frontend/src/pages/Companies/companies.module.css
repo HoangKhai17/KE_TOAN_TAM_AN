@@ -3101,3 +3101,259 @@
   border-radius: 10px;
   padding: 14px;
 }
+
+/* ── Documents tab ───────────────────────────────────────── */
+
+.dropZone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--duration-base), background var(--duration-base);
+  background: var(--color-bg-soft);
+  margin-bottom: 10px;
+}
+
+.dropZone:hover, .dropZoneActive {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.dropZoneContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.dropZoneText {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+  margin: 0;
+}
+
+.dropZoneLink {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dropZoneHint {
+  font-size: 11.5px;
+  color: var(--color-muted-soft);
+  margin: 0;
+}
+
+.uploadMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.uploadMetaLabel {
+  font-size: 12px;
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.uploadCatSelect {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  font-size: 12.5px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.docFilterBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+}
+
+.docFilterLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.docFilterChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.docCatChip {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 12px;
+  color: var(--color-text-soft);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.docCatChip:hover { border-color: #2563eb; color: #2563eb; }
+
+.docCatChipActive {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.docFilterReset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: none;
+  font-size: 11.5px;
+  color: var(--color-muted);
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.docFilterReset:hover { background: #fef2f2; color: #ef4444; border-color: #fca5a5; }
+
+.docList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.docRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background var(--duration-fast);
+}
+
+.docRow:last-child { border-bottom: none; }
+.docRow:hover { background: #fafbfd; }
+
+.docFileIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: #f8fafc;
+  border: 1px solid var(--color-border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.docInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.docFileName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--color-muted-soft);
+  flex-wrap: wrap;
+}
+
+.docCatPill {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-pill);
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.docActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.docActionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.docActionBtn:hover { background: #eff6ff; border-color: #93c5fd; color: #2563eb; }
+.docActionBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.docActionDanger:hover { background: #fef2f2; border-color: #fca5a5; color: #dc2626; }
+
+.docEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 24px;
+  color: var(--color-muted-soft);
+  font-size: 13px;
+}
+
+.docEmpty p { margin: 0; }
+
+.docDeleteOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.docDeleteDialog {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: var(--shadow-floating);
+}

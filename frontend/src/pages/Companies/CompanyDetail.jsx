@@ -17,6 +17,7 @@ import * as tasksApi from '../../api/tasks'
 import { BUSINESS_TYPE_LABELS, CompanyFormModal, getInitials, StatusPill } from './Companies'
 import SchedulesTab from './SchedulesTab'
 import CredentialsTab from './CredentialsTab'
+import DocumentsTab from './DocumentsTab'
 import NotesTab from './NotesTab'
 import TaskFormModal from '../Tasks/TaskFormModal'
 import TaskQuickView from '../Tasks/TaskQuickView'
@@ -303,13 +304,7 @@ export default function CompanyDetail() {
         <CredentialsTab company={company} />
       )}
       {activeTab === 'documents' && (
-        <PlaceholderTab
-          icon={<FileText size={24} color="#2563eb" />}
-          iconBg="#eff6ff"
-          title="Tài liệu & hồ sơ"
-          desc="Upload, quản lý và liên kết tài liệu KH qua Microsoft OneDrive. Tính năng thuộc Phase 11."
-          phase="Phase 11"
-        />
+        <DocumentsTab company={company} />
       )}
       {activeTab === 'notes' && (
         <NotesTab company={company} onNoteCountChange={setNoteCount} />

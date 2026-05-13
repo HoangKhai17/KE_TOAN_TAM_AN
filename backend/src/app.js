@@ -158,8 +158,9 @@ function createApp() {
   // Phase 10 — Payroll
   app.use('/api/payroll', require('./modules/payroll/payroll.router'))
 
-  // Phase 11 — Documents / OneDrive (nested under company)
+  // Phase 11 — Documents / OneDrive
   app.use('/api/companies/:companyId/documents', require('./modules/documents/documents.router'))
+  app.use('/api/admin/onedrive', require('./modules/onedrive/onedrive.router'))
 
   // Enum metadata
   app.use('/api/enums', require('./modules/enums/enums.router'))

@@ -7,7 +7,7 @@ import {
   Search, Eye, EyeOff, UserX, UserCheck, Camera, Tag,
   Play, RotateCcw, CheckCircle, XCircle,
   ChevronDown, ChevronUp, ListChecks, History,
-  Trash2, Check, X, Mail, Send, Info, ExternalLink,
+  Trash2, Check, X, Mail, Send, Info, ExternalLink, Cloud,
 } from 'lucide-react'
 import { testEmail } from '../../api/notifications'
 import AppLayout from '../../components/layout/AppLayout'
@@ -20,6 +20,7 @@ import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerC
 import TaskTypesSection from './TaskTypesSection'
 import EnumManagementSection from './EnumManagementSection'
 import EmailTemplatesSection from './EmailTemplatesSection'
+import OneDriveSection from './OneDriveSection'
 import s from './settings.module.css'
 
 function getInitials(name) {
@@ -97,6 +98,7 @@ const SECTIONS = [
   { key: 'templates',       label: 'Bộ lập lịch tự động',   icon: CalendarDays,dot: '#0891b2', bg: '#ecfeff', iconColor: '#0891b2' },
   { key: 'escalation',      label: 'Quy tắc Escalation',     icon: ShieldAlert, dot: '#4f46e5', bg: '#eef2ff', iconColor: '#4f46e5' },
   { key: 'email',           label: 'Cấu hình Email (SMTP)',  icon: Mail,        dot: '#ea580c', bg: '#fff7ed', iconColor: '#ea580c' },
+  { key: 'onedrive',        label: 'Kết nối OneDrive',        icon: Cloud,       dot: '#0284c7', bg: '#f0f9ff', iconColor: '#0284c7' },
 ]
 
 const TIMEZONES = [
@@ -194,6 +196,7 @@ export default function Settings() {
             {activeSection === 'templates'       && <TemplatesSection />}
             {activeSection === 'escalation'      && <EscalationSection />}
             {activeSection === 'email'           && <><EmailSection /><EmailTemplatesSection /></>}
+            {activeSection === 'onedrive'        && <OneDriveSection />}
           </div>
         </div>
 

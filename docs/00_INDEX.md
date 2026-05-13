@@ -13,6 +13,7 @@
 | 07 | [07_DEBUGGING_OBSERVABILITY.md](./07_DEBUGGING_OBSERVABILITY.md) | Logging, error tracking, metrics, testing strategy | ✅ Hoàn thành |
 | 08 | [08_COMPETITIVE_ANALYSIS.md](./08_COMPETITIVE_ANALYSIS.md) | Phân tích so sánh thị trường, điểm cải thiện, roadmap | ✅ Hoàn thành |
 | 09 | [09_BUILD_PLAN.md](./09_BUILD_PLAN.md) | Kế hoạch xây dựng chi tiết — 16 phases, acceptance criteria | ✅ Hoàn thành |
+| 12 | [12_ONEDRIVE_SETUP.md](./12_ONEDRIVE_SETUP.md) | Hướng dẫn kết nối OneDrive Personal — Azure App, OAuth2, xử lý sự cố | ✅ Hoàn thành |
 
 ---
 
