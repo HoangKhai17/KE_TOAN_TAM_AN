@@ -1,6 +1,7 @@
 'use strict'
 const { query } = require('../config/db')
 const { sendMail } = require('../utils/mailer')
+const { getTemplate, renderTemplate } = require('../utils/emailTemplates')
 const logger = require('../config/logger')
 
 async function runMorningSummary() {
@@ -40,51 +41,33 @@ async function runMorningSummary() {
 
     const taskRows = dueTasks.map((t) =>
       `<tr>
-        <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb">${t.title}</td>
-        <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb">${t.company || '—'}</td>
-        <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb">${t.assignee || '—'}</td>
+        <td style="padding:7px 10px;border:1px solid #e2e8f0">${t.title}</td>
+        <td style="padding:7px 10px;border:1px solid #e2e8f0">${t.company || '—'}</td>
+        <td style="padding:7px 10px;border:1px solid #e2e8f0">${t.assignee || '—'}</td>
        </tr>`
     ).join('')
 
-    const html = `
-      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-        <h2 style="color:#1e3a8a;border-bottom:2px solid #dbeafe;padding-bottom:8px">
-          📋 Báo cáo sáng — ${today}
-        </h2>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
-          <tr>
-            <td style="padding:8px 12px;color:#64748b">Tổng công việc đang xử lý</td>
-            <td style="padding:8px 12px;font-weight:bold">${totalRow.count}</td>
-          </tr>
-          <tr style="background:#fef2f2">
-            <td style="padding:8px 12px;color:#dc2626">Quá hạn</td>
-            <td style="padding:8px 12px;font-weight:bold;color:#dc2626">${overdueRow.count}</td>
-          </tr>
-          <tr style="background:#fffbeb">
-            <td style="padding:8px 12px;color:#d97706">Đến hạn hôm nay</td>
-            <td style="padding:8px 12px;font-weight:bold;color:#d97706">${dueTodayRow.count}</td>
-          </tr>
-          <tr>
-            <td style="padding:8px 12px;color:#94a3b8">Tạm hoãn</td>
-            <td style="padding:8px 12px;font-weight:bold">${onHoldRow.count}</td>
-          </tr>
-        </table>
-        ${dueTasks.length > 0 ? `
-        <h3 style="color:#1e3a8a">Công việc đến hạn hôm nay</h3>
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr style="background:#eff6ff">
-              <th style="padding:6px 10px;text-align:left;border-bottom:2px solid #dbeafe">Công việc</th>
-              <th style="padding:6px 10px;text-align:left;border-bottom:2px solid #dbeafe">Công ty</th>
-              <th style="padding:6px 10px;text-align:left;border-bottom:2px solid #dbeafe">Nhân viên</th>
-            </tr>
-          </thead>
-          <tbody>${taskRows}</tbody>
-        </table>` : '<p style="color:#94a3b8">Không có công việc đến hạn hôm nay.</p>'}
-        <br>
-        <p style="color:#94a3b8;font-size:12px">— Hệ thống Kế Toán Tâm An</p>
-      </div>
-    `
+    const taskListHtml = dueTasks.length > 0
+      ? `<h3 style="color:#1e3a8a">Công việc đến hạn hôm nay</h3>
+         <table style="width:100%;border-collapse:collapse;font-size:13px">
+           <thead><tr style="background:#eff6ff">
+             <th style="padding:7px 10px;text-align:left;border:1px solid #dbeafe">Công việc</th>
+             <th style="padding:7px 10px;text-align:left;border:1px solid #dbeafe">Công ty</th>
+             <th style="padding:7px 10px;text-align:left;border:1px solid #dbeafe">Nhân viên</th>
+           </tr></thead>
+           <tbody>${taskRows}</tbody>
+         </table>`
+      : '<p style="color:#94a3b8">Không có công việc đến hạn hôm nay.</p>'
+
+    const tpl = await getTemplate('email_tpl_morning')
+    const html = renderTemplate(tpl, {
+      date: today,
+      total_tasks: totalRow.count,
+      overdue_count: overdueRow.count,
+      due_today_count: dueTodayRow.count,
+      on_hold_count: onHoldRow.count,
+      task_list_html: taskListHtml,
+    })
 
     let sent = 0
     for (const admin of admins) {

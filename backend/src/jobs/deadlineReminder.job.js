@@ -2,6 +2,7 @@
 const { query } = require('../config/db')
 const { createAndEmit } = require('../lib/notify')
 const { sendMail } = require('../utils/mailer')
+const { getTemplate, renderTemplate } = require('../utils/emailTemplates')
 const logger = require('../config/logger')
 
 async function runDeadlineReminder() {
@@ -40,13 +41,17 @@ async function runDeadlineReminder() {
       )
 
       if (task.user_email) {
+        const tpl = await getTemplate('email_tpl_reminder')
+        const html = renderTemplate(tpl, {
+          user_name: task.user_name,
+          task_title: task.title,
+          company_name: task.company_name || '—',
+          due_date: dueStr,
+        })
         await sendMail({
           to: task.user_email,
           subject: `[Nhắc nhở] Công việc sắp đến hạn: ${task.title}`,
-          html: `<p>Xin chào <strong>${task.user_name}</strong>,</p>
-                 <p>Công việc <strong>"${task.title}"</strong> (${task.company_name}) sẽ đến hạn vào ngày <strong>${dueStr}</strong>.</p>
-                 <p>Vui lòng hoàn thành đúng hạn.</p>
-                 <br><p>— Hệ thống Kế Toán Tâm An</p>`,
+          html,
           text: `Công việc "${task.title}" đến hạn ngày ${dueStr}.`,
         })
       }

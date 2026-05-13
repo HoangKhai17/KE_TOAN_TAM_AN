@@ -1,6 +1,32 @@
 const { query, getClient } = require('../../config/db')
 const audit = require('../../lib/audit')
 const { createAndEmit } = require('../../lib/notify')
+const { sendMail } = require('../../utils/mailer')
+const { getTemplate, renderTemplate } = require('../../utils/emailTemplates')
+
+async function sendCompanyAssignmentEmail({ staffId, companyName, assignerName, startDate, type = 'assigned' }) {
+  try {
+    const { rows: [staff] } = await query('SELECT name, email FROM users WHERE id = $1', [staffId])
+    if (!staff?.email) return
+    const dateStr = startDate
+      ? new Date(startDate).toLocaleDateString('vi-VN')
+      : new Date().toLocaleDateString('vi-VN')
+    const key = type === 'assigned' ? 'email_tpl_company_assignment' : 'email_tpl_company_unassignment'
+    const tpl = await getTemplate(key)
+    const html = renderTemplate(tpl, {
+      assignee_name: staff.name,
+      company_name: companyName,
+      assigner_name: assignerName || '—',
+      start_date: dateStr,
+    })
+    const subject = type === 'assigned'
+      ? `[Phân công] Bạn phụ trách khách hàng: ${companyName}`
+      : `[Thay đổi] Không còn phụ trách: ${companyName}`
+    await sendMail({ to: staff.email, subject, html, text: subject })
+  } catch {
+    // Non-blocking — email failure must not break the main flow
+  }
+}
 
 function toDto(row) {
   return {
@@ -167,6 +193,15 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
       `Công ty "${name}" vừa được giao cho bạn`,
       null,
     ).catch(() => {})
+
+    const { rows: [actor] } = await query('SELECT name FROM users WHERE id = $1', [actorId])
+    sendCompanyAssignmentEmail({
+      staffId: assignedStaffId,
+      companyName: name,
+      assignerName: actor?.name,
+      startDate: new Date(),
+      type: 'assigned',
+    })
   }
 
   return toDto({ ...rows[0], task_open_count: 0, task_overdue_count: 0 })
@@ -215,6 +250,7 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent) {
     const companyName = rows[0].name
     const newStaff    = data.assignedStaffId
     const oldStaff    = current.assigned_staff_id
+    const { rows: [actor] } = await query('SELECT name FROM users WHERE id = $1', [actorId])
 
     // Notify new assignee
     if (newStaff && newStaff !== actorId) {
@@ -224,6 +260,13 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent) {
         `Công ty "${companyName}" vừa được giao cho bạn`,
         null,
       ).catch(() => {})
+      sendCompanyAssignmentEmail({
+        staffId: newStaff,
+        companyName,
+        assignerName: actor?.name,
+        startDate: new Date(),
+        type: 'assigned',
+      })
     }
     // Notify previous assignee they are no longer responsible
     if (oldStaff && oldStaff !== actorId && oldStaff !== newStaff) {
@@ -233,6 +276,13 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent) {
         `Bạn không còn phụ trách công ty "${companyName}" nữa`,
         null,
       ).catch(() => {})
+      sendCompanyAssignmentEmail({
+        staffId: oldStaff,
+        companyName,
+        assignerName: actor?.name,
+        startDate: new Date(),
+        type: 'unassigned',
+      })
     }
   }
 
@@ -373,6 +423,8 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
       ipAddress, userAgent,
     })
 
+    const { rows: [actor] } = await query('SELECT name FROM users WHERE id = $1', [actorId])
+
     // Notify new assignee
     if (staffId !== actorId) {
       createAndEmit(
@@ -381,6 +433,13 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
         `Công ty "${company.name}" vừa được giao cho bạn`,
         null,
       ).catch(() => {})
+      sendCompanyAssignmentEmail({
+        staffId,
+        companyName: company.name,
+        assignerName: actor?.name,
+        startDate: assignDate,
+        type: 'assigned',
+      })
     }
     // Notify previous assignee they are no longer responsible
     if (previousStaffId && previousStaffId !== actorId && previousStaffId !== staffId) {
@@ -390,6 +449,13 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
         `Bạn không còn phụ trách công ty "${company.name}" nữa`,
         null,
       ).catch(() => {})
+      sendCompanyAssignmentEmail({
+        staffId: previousStaffId,
+        companyName: company.name,
+        assignerName: actor?.name,
+        startDate: assignDate,
+        type: 'unassigned',
+      })
     }
 
     return { assignmentId: newAssignment.id, staffId, startDate: assignDate }

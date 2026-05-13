@@ -19,6 +19,7 @@ import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword 
 import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerConfig, deleteSchedulerLog, clearSchedulerLogs } from '../../api/scheduler'
 import TaskTypesSection from './TaskTypesSection'
 import EnumManagementSection from './EnumManagementSection'
+import EmailTemplatesSection from './EmailTemplatesSection'
 import s from './settings.module.css'
 
 function getInitials(name) {
@@ -192,7 +193,7 @@ export default function Settings() {
             {activeSection === 'deadline'        && <DeadlineSection />}
             {activeSection === 'templates'       && <TemplatesSection />}
             {activeSection === 'escalation'      && <EscalationSection />}
-            {activeSection === 'email'           && <EmailSection />}
+            {activeSection === 'email'           && <><EmailSection /><EmailTemplatesSection /></>}
           </div>
         </div>
 

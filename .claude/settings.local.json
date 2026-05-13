@@ -119,7 +119,19 @@
       "Bash(node -e \"const { CalendarCheck } = require\\('lucide-react'\\); console.log\\(typeof CalendarCheck\\)\")",
       "Bash(node -e \"const { CalendarCheck, CalendarDays } = require\\('lucide-react'\\); console.log\\('CalendarCheck:', typeof CalendarCheck, '| CalendarDays:', typeof CalendarDays\\)\")",
       "Bash(node src/db/migrate.js up)",
-      "Bash(node -e \"import\\('socket.io-client'\\).then\\(m => console.log\\('socket.io-client version:', m.default?.version || 'OK'\\)\\)\")"
+      "Bash(node -e \"import\\('socket.io-client'\\).then\\(m => console.log\\('socket.io-client version:', m.default?.version || 'OK'\\)\\)\")",
+      "Bash(npx vite *)",
+      "Bash(node -e \"require\\('./src/utils/emailTemplates'\\)\")",
+      "Bash(node -e \"require\\('./src/jobs/deadlineReminder.job'\\)\")",
+      "Bash(node -e \"require\\('./src/jobs/morningSummary.job'\\)\")",
+      "Bash(node -e \"require\\('./src/jobs/overdueEscalation.job'\\)\")",
+      "Bash(node --check \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\utils\\\\emailTemplates.js\")",
+      "Bash(node --check \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\jobs\\\\deadlineReminder.job.js\")",
+      "Bash(node --check \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\jobs\\\\morningSummary.job.js\")",
+      "Bash(node --check \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\jobs\\\\overdueEscalation.job.js\")",
+      "Bash(node --check \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\tasks\\\\tasks.service.js\")",
+      "Bash(node --check \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\companies\\\\companies.service.js\")",
+      "Bash(docker-compose exec *)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

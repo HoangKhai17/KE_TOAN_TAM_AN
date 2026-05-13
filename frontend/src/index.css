@@ -25,3 +25,24 @@
   ::-webkit-scrollbar-thumb   { background: var(--color-border-strong); border-radius: var(--radius-pill); }
   ::-webkit-scrollbar-thumb:hover { background: var(--color-muted-soft); }
 }
+
+/* ── Quill editor in email template section ── */
+.email-tpl-quill .ql-container {
+  font-family: inherit;
+  font-size: 13px;
+  min-height: 280px;
+  border-radius: 0 0 4px 4px;
+}
+.email-tpl-quill .ql-toolbar {
+  border-radius: 4px 4px 0 0;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+.email-tpl-quill .ql-container {
+  border-color: #e2e8f0;
+}
+.email-tpl-quill .ql-editor {
+  min-height: 280px;
+  line-height: 1.6;
+}
+.email-tpl-quill .ql-editor p { margin: 4px 0; }

@@ -2,6 +2,7 @@
 const { query } = require('../config/db')
 const { createAndEmit } = require('../lib/notify')
 const { sendMail } = require('../utils/mailer')
+const { getTemplate, renderTemplate } = require('../utils/emailTemplates')
 const logger = require('../config/logger')
 
 async function runOverdueEscalation() {
@@ -58,14 +59,18 @@ async function runOverdueEscalation() {
         )
 
         if (admin.email) {
+          const tpl = await getTemplate('email_tpl_escalation')
+          const html = renderTemplate(tpl, {
+            admin_name: admin.name,
+            task_title: task.title,
+            assignee_name: task.user_name,
+            company_name: task.company_name || '—',
+            due_date: dueStr,
+          })
           await sendMail({
             to: admin.email,
             subject: `[Escalation] Công việc quá hạn: ${task.title}`,
-            html: `<p>Xin chào <strong>${admin.name}</strong>,</p>
-                   <p>Công việc <strong>"${task.title}"</strong> được giao cho <strong>${task.user_name}</strong>
-                   (${task.company_name}) đã quá hạn từ ngày <strong>${dueStr}</strong>.</p>
-                   <p>Trạng thái đã tự động chuyển sang <strong>"Cần xem lại"</strong>.</p>
-                   <br><p>— Hệ thống Kế Toán Tâm An</p>`,
+            html,
             text: `Công việc "${task.title}" của ${task.user_name} quá hạn từ ${dueStr}.`,
           })
         }

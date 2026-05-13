@@ -1,0 +1,131 @@
+'use strict'
+const { query } = require('../config/db')
+
+const WRAPPER = (body) => `
+<div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;color:#1e293b">
+  <div style="background:#1e3a8a;padding:18px 28px;border-radius:8px 8px 0 0">
+    <span style="color:#fff;font-size:16px;font-weight:bold">Kế Toán Tâm An</span>
+  </div>
+  <div style="background:#fff;padding:28px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px">
+    ${body}
+  </div>
+  <p style="text-align:center;font-size:11px;color:#94a3b8;margin-top:12px">
+    Email tự động từ hệ thống Kế Toán Tâm An — vui lòng không trả lời email này.
+  </p>
+</div>`
+
+const DEFAULTS = {
+  email_tpl_assignment: WRAPPER(`
+<h2 style="color:#1e3a8a;margin-top:0">📋 Bạn có công việc mới được giao</h2>
+<p>Xin chào <strong>{{assignee_name}}</strong>,</p>
+<p>Bạn vừa được giao một công việc mới. Chi tiết như sau:</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;width:150px;border:1px solid #e2e8f0">Tiêu đề</td><td style="padding:9px 14px;font-weight:600;border:1px solid #e2e8f0">{{task_title}}</td></tr>
+  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0">Khách hàng</td><td style="padding:9px 14px;border:1px solid #e2e8f0">{{company_name}}</td></tr>
+  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0">Ưu tiên</td><td style="padding:9px 14px;border:1px solid #e2e8f0">{{priority}}</td></tr>
+  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0">Hạn hoàn thành</td><td style="padding:9px 14px;font-weight:600;color:#dc2626;border:1px solid #e2e8f0">{{due_date}}</td></tr>
+  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0">Giao bởi</td><td style="padding:9px 14px;border:1px solid #e2e8f0">{{assigner_name}}</td></tr>
+</table>
+{{description_block}}
+<p style="color:#64748b;font-size:13px">Vui lòng đăng nhập hệ thống để xem chi tiết và cập nhật tiến độ.</p>`),
+
+  email_tpl_reminder: WRAPPER(`
+<h2 style="color:#d97706;margin-top:0">⚠️ Nhắc nhở: Công việc sắp đến hạn</h2>
+<p>Xin chào <strong>{{user_name}}</strong>,</p>
+<p>Công việc <strong style="color:#1e3a8a">"{{task_title}}"</strong> thuộc khách hàng <strong>{{company_name}}</strong> sẽ đến hạn vào ngày <strong style="color:#dc2626">{{due_date}}</strong>.</p>
+<p>Vui lòng hoàn thành đúng hạn hoặc liên hệ quản lý nếu gặp khó khăn.</p>`),
+
+  email_tpl_morning: WRAPPER(`
+<h2 style="color:#1e3a8a;margin-top:0;border-bottom:2px solid #dbeafe;padding-bottom:10px">📋 Báo cáo sáng — {{date}}</h2>
+<table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px">
+  <tr><td style="padding:9px 14px;color:#475569;border:1px solid #e2e8f0">Tổng công việc đang xử lý</td><td style="padding:9px 14px;font-weight:700;text-align:right;border:1px solid #e2e8f0">{{total_tasks}}</td></tr>
+  <tr style="background:#fef2f2"><td style="padding:9px 14px;color:#dc2626;border:1px solid #e2e8f0">🔴 Quá hạn</td><td style="padding:9px 14px;font-weight:700;color:#dc2626;text-align:right;border:1px solid #e2e8f0">{{overdue_count}}</td></tr>
+  <tr style="background:#fffbeb"><td style="padding:9px 14px;color:#d97706;border:1px solid #e2e8f0">🟡 Đến hạn hôm nay</td><td style="padding:9px 14px;font-weight:700;color:#d97706;text-align:right;border:1px solid #e2e8f0">{{due_today_count}}</td></tr>
+  <tr><td style="padding:9px 14px;color:#94a3b8;border:1px solid #e2e8f0">⏸ Tạm hoãn</td><td style="padding:9px 14px;font-weight:700;text-align:right;border:1px solid #e2e8f0">{{on_hold_count}}</td></tr>
+</table>
+{{task_list_html}}`),
+
+  email_tpl_escalation: WRAPPER(`
+<h2 style="color:#dc2626;margin-top:0">🚨 Escalation: Công việc quá hạn</h2>
+<p>Xin chào <strong>{{admin_name}}</strong>,</p>
+<p>Công việc <strong style="color:#1e3a8a">"{{task_title}}"</strong> được giao cho <strong>{{assignee_name}}</strong> ({{company_name}}) đã <strong style="color:#dc2626">quá hạn từ ngày {{due_date}}</strong>.</p>
+<p>Trạng thái đã tự động chuyển sang <strong style="background:#fef2f2;padding:2px 8px;border-radius:4px;color:#dc2626">"Cần xem lại"</strong>.</p>
+<p style="color:#64748b;font-size:13px">Vui lòng kiểm tra và xử lý kịp thời.</p>`),
+}
+
+DEFAULTS.email_tpl_company_assignment = WRAPPER(`
+<h2 style="color:#1e3a8a;margin-top:0">🏢 Phân công phụ trách khách hàng</h2>
+<p>Xin chào <strong>{{assignee_name}}</strong>,</p>
+<p>Bạn vừa được phân công phụ trách khách hàng mới. Vui lòng liên hệ và theo dõi các công việc liên quan trong hệ thống.</p>
+<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
+  <tr>
+    <td style="background:#eff6ff;border-left:4px solid #2563eb;padding:14px 18px;border-radius:0 8px 8px 0" colspan="2">
+      <div style="font-size:11px;font-weight:bold;color:#2563eb;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Khách hàng phụ trách</div>
+      <div style="font-size:17px;font-weight:bold;color:#1e3a8a">🏢 {{company_name}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;font-size:13.5px">
+  <tr>
+    <td style="width:160px;padding:9px 14px;background:#f8fafc;color:#64748b;font-weight:600;border:1px solid #e2e8f0">Nhân viên phụ trách</td>
+    <td style="padding:9px 14px;color:#1e293b;font-weight:600;border:1px solid #e2e8f0">{{assignee_name}}</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 14px;background:#f8fafc;color:#64748b;font-weight:600;border:1px solid #e2e8f0">Phân công bởi</td>
+    <td style="padding:9px 14px;color:#1e293b;border:1px solid #e2e8f0">{{assigner_name}}</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 14px;background:#f8fafc;color:#64748b;font-weight:600;border:1px solid #e2e8f0">Ngày hiệu lực</td>
+    <td style="padding:9px 14px;color:#1e293b;border:1px solid #e2e8f0">{{start_date}}</td>
+  </tr>
+</table>
+<div style="margin-top:20px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 18px">
+  <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6">
+    <strong>Lưu ý:</strong> Bạn chịu trách nhiệm theo dõi toàn bộ công việc và đảm bảo tiến độ cho khách hàng này. Vui lòng đăng nhập hệ thống để xem danh sách công việc hiện có.
+  </p>
+</div>`)
+
+DEFAULTS.email_tpl_company_unassignment = WRAPPER(`
+<h2 style="color:#64748b;margin-top:0">🔄 Thay đổi phân công phụ trách</h2>
+<p>Xin chào <strong>{{assignee_name}}</strong>,</p>
+<p>Bạn đã được ghi nhận <strong style="color:#dc2626">không còn phụ trách</strong> khách hàng dưới đây kể từ ngày <strong>{{start_date}}</strong>.</p>
+<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
+  <tr>
+    <td style="background:#fef2f2;border-left:4px solid #dc2626;padding:14px 18px;border-radius:0 8px 8px 0" colspan="2">
+      <div style="font-size:11px;font-weight:bold;color:#dc2626;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Khách hàng thôi phụ trách</div>
+      <div style="font-size:17px;font-weight:bold;color:#1e3a8a">🏢 {{company_name}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;font-size:13.5px">
+  <tr>
+    <td style="width:160px;padding:9px 14px;background:#f8fafc;color:#64748b;font-weight:600;border:1px solid #e2e8f0">Thay đổi bởi</td>
+    <td style="padding:9px 14px;color:#1e293b;border:1px solid #e2e8f0">{{assigner_name}}</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 14px;background:#f8fafc;color:#64748b;font-weight:600;border:1px solid #e2e8f0">Ngày hiệu lực</td>
+    <td style="padding:9px 14px;color:#1e293b;border:1px solid #e2e8f0">{{start_date}}</td>
+  </tr>
+</table>
+<p style="margin-top:16px;font-size:13px;color:#64748b;line-height:1.6">Nếu có thắc mắc, vui lòng liên hệ quản lý trực tiếp.</p>`)
+
+async function getTemplate(key) {
+  try {
+    const { rows: [row] } = await query(
+      'SELECT value FROM system_configs WHERE key = $1',
+      [key]
+    )
+    const val = row?.value?.trim()
+    return val || DEFAULTS[key] || ''
+  } catch {
+    return DEFAULTS[key] || ''
+  }
+}
+
+function renderTemplate(html, vars) {
+  return Object.entries(vars).reduce((acc, [k, v]) => {
+    return acc.split(`{{${k}}}`).join(v ?? '')
+  }, html)
+}
+
+module.exports = { getTemplate, renderTemplate, DEFAULTS }
