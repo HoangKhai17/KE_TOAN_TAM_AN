@@ -3,6 +3,17 @@ const audit    = require('../../lib/audit')
 const activity = require('../../lib/activity')
 const { canTransition } = require('./tasks.transitions')
 const { checkBlockers } = require('./dependencies.service')
+const { createAndEmit } = require('../../lib/notify')
+
+const STATUS_LABEL = {
+  pending:        'Chờ xử lý',
+  in_progress:    'Đang xử lý',
+  on_hold:        'Tạm hoãn',
+  pending_review: 'Chờ duyệt',
+  needs_revision: 'Cần xem lại',
+  completed:      'Hoàn thành',
+  cancelled:      'Đã huỷ',
+}
 
 function toDto(row) {
   return {
@@ -180,7 +191,19 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     meta: { title, companyId }, ipAddress, userAgent,
   })
 
-  return getTaskById(task.id)
+  const result = await getTaskById(task.id)
+
+  // Notify assignee if set and different from actor
+  if (assignedTo && assignedTo !== actorId) {
+    createAndEmit(
+      assignedTo, 'task_assigned',
+      'Bạn được giao công việc mới',
+      `"${result.title}" — ${result.companyName || ''}`,
+      task.id,
+    ).catch(() => {})
+  }
+
+  return result
 }
 
 async function updateTask(id, data, actorId, ipAddress, userAgent) {
@@ -199,12 +222,16 @@ async function updateTask(id, data, actorId, ipAddress, userAgent) {
 
   const updates = []
   const params = []
+  let newAssignee = null
+  let prevAssignee = null
 
   for (const [key, col] of Object.entries(fieldMap)) {
     if (data[key] !== undefined) {
-      // Fire specific activity events
-      if (key === 'assignedTo' && data[key] !== current.assigned_to)
+      if (key === 'assignedTo' && data[key] !== current.assigned_to) {
         await activity.logActivity(id, actorId, 'assigned', current.assigned_to, data[key], null)
+        prevAssignee = current.assigned_to
+        newAssignee  = data[key]
+      }
       if (key === 'dueDate' && data[key] !== current.due_date)
         await activity.logActivity(id, actorId, 'due_date_changed', current.due_date, data[key], null)
       if (key === 'priority' && data[key] !== current.priority)
@@ -227,7 +254,28 @@ async function updateTask(id, data, actorId, ipAddress, userAgent) {
     targetType: 'task', targetId: id, meta: data, ipAddress, userAgent,
   })
 
-  return getTaskById(id)
+  const result = await getTaskById(id)
+
+  // Notify new assignee when task is re-assigned
+  if (newAssignee && newAssignee !== actorId) {
+    createAndEmit(
+      newAssignee, 'task_assigned',
+      'Bạn được giao công việc',
+      `"${result.title}" — ${result.companyName || ''}`,
+      id,
+    ).catch(() => {})
+  }
+  // Notify previous assignee they were unassigned
+  if (prevAssignee && prevAssignee !== actorId && prevAssignee !== newAssignee) {
+    createAndEmit(
+      prevAssignee, 'task_status_changed',
+      'Công việc đã được giao cho người khác',
+      `"${result.title}" không còn được giao cho bạn nữa`,
+      id,
+    ).catch(() => {})
+  }
+
+  return result
 }
 
 async function deleteTask(id, actorId, ipAddress, userAgent) {
@@ -310,7 +358,47 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
     meta: { from: currentStatus, to: newStatus }, ipAddress, userAgent,
   })
 
-  return getTaskById(id)
+  const result = await getTaskById(id)
+  const fromLabel = STATUS_LABEL[currentStatus] || currentStatus
+  const toLabel   = STATUS_LABEL[newStatus]     || newStatus
+
+  // Notify assignee about status change (if not the one making the change)
+  if (result.assignedTo && result.assignedTo !== actorId) {
+    createAndEmit(
+      result.assignedTo, 'task_status_changed',
+      `Công việc cập nhật: ${toLabel}`,
+      `"${result.title}" chuyển từ ${fromLabel} → ${toLabel}`,
+      id,
+    ).catch(() => {})
+  }
+
+  // When completed — notify creator if different from assignee and actor
+  if (newStatus === 'completed') {
+    const notified = new Set([actorId, result.assignedTo].filter(Boolean))
+    if (result.createdBy && !notified.has(result.createdBy)) {
+      createAndEmit(
+        result.createdBy, 'task_status_changed',
+        'Công việc đã hoàn thành',
+        `"${result.title}" — ${result.companyName || ''} đã được đánh dấu hoàn thành`,
+        id,
+      ).catch(() => {})
+    }
+  }
+
+  // When needs_revision — notify assignee explicitly (escalation case)
+  if (newStatus === 'needs_revision' && result.assignedTo && result.assignedTo === actorId) {
+    // Actor is the assignee marking their own task — notify creator
+    if (result.createdBy && result.createdBy !== actorId) {
+      createAndEmit(
+        result.createdBy, 'task_status_changed',
+        `Công việc cần xem lại`,
+        `"${result.title}" đã chuyển sang "Cần xem lại"`,
+        id,
+      ).catch(() => {})
+    }
+  }
+
+  return result
 }
 
 async function getActivityLog(taskId, { page = 1, limit = 50 } = {}) {

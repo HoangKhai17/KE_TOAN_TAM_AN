@@ -3,7 +3,7 @@ import { Info, Search, ChevronDown, X, Plus } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { createTask, addTaskChecklistItem } from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
-import { listUsers } from '../../api/users'
+import { listUserOptions } from '../../api/users'
 import { listTaskTypes } from '../../api/taskTypes'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { PRIORITY_LABELS } from './taskUtils'
@@ -133,7 +133,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   useEffect(() => {
     listCompanies({ limit: 500, status: 'active' })
       .then(({ companies: c }) => setCompanies(c)).catch(() => {})
-    listUsers({ role: 'staff', status: 'active', limit: 100 })
+    listUserOptions({ status: 'active' })
       .then(({ users: u }) => setUsers(u)).catch(() => {})
     listTaskTypes({ isActive: true, limit: 200 })
       .then(({ taskTypes: t }) => setTaskTypes(t)).catch(() => {})

@@ -5,6 +5,12 @@ export async function listUsers(params = {}) {
   return data.data  // { users, pagination }
 }
 
+// Minimal user list for dropdowns — accessible to all roles (not admin-only)
+export async function listUserOptions(params = {}) {
+  const { data } = await api.get('/users/options', { params })
+  return data.data  // { users: [{ id, name, role }] }
+}
+
 export async function getUser(id) {
   const { data } = await api.get(`/users/${id}`)
   return data.data.user

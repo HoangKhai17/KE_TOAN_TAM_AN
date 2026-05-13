@@ -16,6 +16,20 @@ async function listUsers(req, res, next) {
   }
 }
 
+async function listUserOptions(req, res, next) {
+  try {
+    const { role, status = 'active', limit = '200' } = req.query
+    const result = await usersService.listUserOptions({
+      role,
+      status,
+      limit: Math.min(500, Math.max(1, parseInt(limit, 10))),
+    })
+    res.json({ success: true, data: result })
+  } catch (err) {
+    next(err)
+  }
+}
+
 async function getUser(req, res, next) {
   try {
     const user = await usersService.getUserById(req.params.id)
@@ -80,4 +94,4 @@ async function resetPassword(req, res, next) {
   }
 }
 
-module.exports = { listUsers, getUser, createUser, updateUser, updateStatus, deleteUser, resetPassword }
+module.exports = { listUsers, listUserOptions, getUser, createUser, updateUser, updateStatus, deleteUser, resetPassword }

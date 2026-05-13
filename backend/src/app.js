@@ -177,6 +177,22 @@ function createApp() {
   // Phase 12 — Notifications
   app.use('/api/notifications', require('./modules/notifications/notifications.router'))
 
+  // Dev helper: send a test notification to the calling user
+  app.post('/api/notifications/test', require('./middleware/auth').authenticate, async (req, res, next) => {
+    try {
+      const { createAndEmit } = require('./lib/notify')
+      const types = ['task_assigned', 'deadline_reminder', 'task_status_changed', 'escalation', 'morning_summary']
+      const type  = types[Math.floor(Math.random() * types.length)]
+      const notif = await createAndEmit(
+        req.user.id, type,
+        'Thông báo test từ hệ thống',
+        `Đây là notification test (${type}) — ${new Date().toLocaleTimeString('vi-VN')}`,
+        null,
+      )
+      res.json({ success: true, data: { notification: notif } })
+    } catch (err) { next(err) }
+  })
+
   // Phase 12 — Test email endpoint
   app.post('/api/system-configs/test-email', require('./middleware/auth').authenticate, require('./middleware/rbac').requireRole('admin'), async (req, res, next) => {
     try {

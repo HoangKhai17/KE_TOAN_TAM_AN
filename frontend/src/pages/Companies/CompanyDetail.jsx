@@ -785,14 +785,14 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
 
   useEffect(() => {
     usersApi
-      .listUsers({ role: 'staff', status: 'active', limit: 100 })
+      .listUserOptions({ status: 'active' })
       .then(({ users }) => setStaffList(users))
       .finally(() => setLoadingStaff(false))
   }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!staffId) { setError('Vui lòng chọn nhân viên'); return }
+    if (!staffId) { setError('Vui lòng chọn người phụ trách'); return }
     setError(null)
     setLoading(true)
     try {
@@ -802,22 +802,22 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
         notes: notes || null,
       })
       const chosen = staffList.find((u) => u.id === staffId)
-      addToast(`Đã phân công "${chosen?.name ?? 'nhân viên'}" phụ trách`, 'success')
+      addToast(`Đã phân công "${chosen?.name ?? 'nhân sự'}" phụ trách`, 'success')
       onAssigned()
     } catch (err) {
-      setError(err.response?.data?.error?.message ?? 'Không thể phân công nhân viên')
+      setError(err.response?.data?.error?.message ?? 'Không thể phân công')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Modal title="Phân công nhân viên phụ trách" onClose={onClose}>
+    <Modal title="Phân công người phụ trách" onClose={onClose}>
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}
 
         <div>
-          <label className={`${s.formLabel} ${s.formLabelReq}`}>Nhân viên phụ trách</label>
+          <label className={`${s.formLabel} ${s.formLabelReq}`}>Người phụ trách</label>
           {loadingStaff ? (
             <div style={{ height: 36, background: '#f0f2f5', borderRadius: 7, animation: 'skeleton-fade 1.4s ease-in-out infinite' }} />
           ) : (
@@ -826,10 +826,10 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
               onChange={(e) => setStaffId(e.target.value)}
               className={s.formSelect}
             >
-              <option value="">Chọn nhân viên...</option>
+              <option value="">Chọn người phụ trách...</option>
               {staffList.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.name}{u.jobTitle ? ` — ${u.jobTitle}` : ''}
+                  {u.role === 'admin' ? '[Admin] ' : ''}{u.name}{u.jobTitle ? ` — ${u.jobTitle}` : ''}
                 </option>
               ))}
             </select>

@@ -1,5 +1,6 @@
 const { query } = require('../../config/db')
 const activity = require('../../lib/activity')
+const { createAndEmit } = require('../../lib/notify')
 
 function toDto(row) {
   return {
@@ -47,6 +48,34 @@ async function addComment(taskId, { content }, actorId) {
     'SELECT c.*, u.name AS user_name FROM task_comments c JOIN users u ON u.id = c.user_id WHERE c.id = $1',
     [comment.id]
   )
+
+  // Notify task stakeholders (assignee + creator) — skip if they are the commenter
+  const { rows: [taskInfo] } = await query(
+    `SELECT t.title, t.assigned_to, t.created_by, c.name AS company_name
+     FROM tasks t LEFT JOIN companies c ON c.id = t.company_id WHERE t.id = $1`,
+    [taskId]
+  )
+  if (taskInfo) {
+    const preview = content.length > 80 ? content.slice(0, 80) + '…' : content
+    const commentBody = `${full.user_name}: "${preview}"`
+    const notified = new Set([actorId])
+
+    const notifyUser = (userId) => {
+      if (userId && !notified.has(userId)) {
+        notified.add(userId)
+        createAndEmit(
+          userId, 'task_status_changed',
+          `Bình luận mới: "${taskInfo.title}"`,
+          commentBody,
+          taskId,
+        ).catch(() => {})
+      }
+    }
+
+    notifyUser(taskInfo.assigned_to)
+    notifyUser(taskInfo.created_by)
+  }
+
   return toDto(full)
 }
 

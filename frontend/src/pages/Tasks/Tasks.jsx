@@ -21,7 +21,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as tasksApi from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
-import { listUsers } from '../../api/users'
+import { listUserOptions } from '../../api/users'
 import TaskFormModal from './TaskFormModal'
 import TaskQuickView from './TaskQuickView'
 import {
@@ -1313,7 +1313,7 @@ export default function Tasks() {
   // Load reference data + enums + years
   useEffect(() => {
     listCompanies({ limit: 300, status: 'active' }).then(({ companies: c }) => setCompanies(c)).catch(() => {})
-    listUsers({ role: 'staff', status: 'active', limit: 100 }).then(({ users: u }) => setStaffList(u)).catch(() => {})
+    listUserOptions({ status: 'active' }).then(({ users: u }) => setStaffList(u)).catch(() => {})
     loadEnums()
     tasksApi.getTaskYears()
       .then((years) => {

@@ -1,5 +1,6 @@
 const { query, getClient } = require('../../config/db')
 const audit = require('../../lib/audit')
+const { createAndEmit } = require('../../lib/notify')
 
 function toDto(row) {
   return {
@@ -148,10 +149,26 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
     userAgent,
   })
 
+  // Notify assigned staff when company is created with an assignee
+  if (assignedStaffId && assignedStaffId !== actorId) {
+    createAndEmit(
+      assignedStaffId, 'task_assigned',
+      'Bạn được phân công phụ trách công ty',
+      `Công ty "${name}" vừa được giao cho bạn`,
+      null,
+    ).catch(() => {})
+  }
+
   return toDto({ ...rows[0], task_open_count: 0, task_overdue_count: 0 })
 }
 
 async function updateCompany(id, data, actorId, ipAddress, userAgent) {
+  // Pre-fetch current state to detect assignment changes
+  const { rows: [current] } = await query(
+    'SELECT name, assigned_staff_id FROM companies WHERE id = $1', [id]
+  )
+  if (!current) throw Object.assign(new Error('Company not found'), { status: 404 })
+
   const fieldMap = {
     name: 'name', taxCode: 'tax_code', address: 'address', businessType: 'business_type',
     industry: 'industry', legalRepName: 'legal_rep_name', legalRepPhone: 'legal_rep_phone',
@@ -182,6 +199,32 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent) {
     userId: actorId, action: 'company.updated',
     targetType: 'company', targetId: id, meta: data, ipAddress, userAgent,
   })
+
+  // Notify on assigned staff change
+  if (data.assignedStaffId !== undefined && data.assignedStaffId !== current.assigned_staff_id) {
+    const companyName = rows[0].name
+    const newStaff    = data.assignedStaffId
+    const oldStaff    = current.assigned_staff_id
+
+    // Notify new assignee
+    if (newStaff && newStaff !== actorId) {
+      createAndEmit(
+        newStaff, 'task_assigned',
+        'Bạn được phân công phụ trách công ty',
+        `Công ty "${companyName}" vừa được giao cho bạn`,
+        null,
+      ).catch(() => {})
+    }
+    // Notify previous assignee they are no longer responsible
+    if (oldStaff && oldStaff !== actorId && oldStaff !== newStaff) {
+      createAndEmit(
+        oldStaff, 'task_status_changed',
+        'Thay đổi phân công công ty',
+        `Bạn không còn phụ trách công ty "${companyName}" nữa`,
+        null,
+      ).catch(() => {})
+    }
+  }
 
   return toDto({ ...rows[0], task_open_count: 0, task_overdue_count: 0 })
 }
@@ -270,18 +313,19 @@ async function deleteCompany(id, actorId, ipAddress, userAgent) {
 }
 
 async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddress, userAgent) {
-  // Validate company exists
-  const { rows: [company] } = await query('SELECT id, name FROM companies WHERE id = $1', [companyId])
+  // Validate company exists and get current assignee
+  const { rows: [company] } = await query('SELECT id, name, assigned_staff_id FROM companies WHERE id = $1', [companyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
 
-  // Validate staff exists and is eligible
+  const previousStaffId = company.assigned_staff_id
+
+  // Validate new assignee exists and is active
   const { rows: [staff] } = await query(
     `SELECT id, name, role, status FROM users WHERE id = $1`,
     [staffId]
   )
-  if (!staff) throw Object.assign(new Error('Staff not found'), { status: 404 })
-  if (staff.role !== 'staff') throw Object.assign(new Error('User must have role = staff'), { status: 422 })
-  if (staff.status !== 'active') throw Object.assign(new Error('Staff must be active'), { status: 422 })
+  if (!staff) throw Object.assign(new Error('Nhân sự không tồn tại'), { status: 404 })
+  if (staff.status !== 'active') throw Object.assign(new Error('Nhân sự phải đang hoạt động'), { status: 422 })
 
   const assignDate = startDate || new Date().toISOString().slice(0, 10)
 
@@ -318,6 +362,25 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
       meta: { staffId, staffName: staff.name, companyName: company.name },
       ipAddress, userAgent,
     })
+
+    // Notify new assignee
+    if (staffId !== actorId) {
+      createAndEmit(
+        staffId, 'task_assigned',
+        'Bạn được phân công phụ trách công ty',
+        `Công ty "${company.name}" vừa được giao cho bạn`,
+        null,
+      ).catch(() => {})
+    }
+    // Notify previous assignee they are no longer responsible
+    if (previousStaffId && previousStaffId !== actorId && previousStaffId !== staffId) {
+      createAndEmit(
+        previousStaffId, 'task_status_changed',
+        'Thay đổi phân công công ty',
+        `Bạn không còn phụ trách công ty "${company.name}" nữa`,
+        null,
+      ).catch(() => {})
+    }
 
     return { assignmentId: newAssignment.id, staffId, startDate: assignDate }
   } catch (err) {

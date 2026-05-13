@@ -66,6 +66,117 @@
   border-color: #2563eb;
 }
 
+.btnTest {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1.5px dashed #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #6b7280;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.13s;
+}
+
+.btnTest:hover:not(:disabled) {
+  border-color: #7c3aed;
+  color: #7c3aed;
+  background: #f5f3ff;
+}
+
+.btnTest:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnDelete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: 1.5px solid #fecaca;
+  border-radius: 8px;
+  background: #fff;
+  color: #dc2626;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.13s;
+}
+
+.btnDelete:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #dc2626;
+}
+
+.btnDelete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnGhost {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.13s;
+}
+
+.btnGhost:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #374151;
+}
+
+/* ── Select bar ── */
+
+.selectBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+}
+
+.selectAllBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.selectCount {
+  font-size: 12.5px;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
 /* ── Filter bar ── */
 
 .filterBar {
@@ -73,6 +184,7 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .filterIcon {
@@ -112,6 +224,14 @@
   color: #fff;
 }
 
+.filterSep {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
 /* ── List ── */
 
 .listWrap {
@@ -148,6 +268,17 @@
 .itemUnread { background: #f0f6ff; }
 .itemRead   { background: transparent; }
 .itemRead:hover { background: #f8faff; }
+.itemSelected { background: #eff6ff !important; outline: 1.5px solid #bfdbfe; outline-offset: -1px; }
+
+.itemCheckbox {
+  flex-shrink: 0;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.itemCheckboxChecked {
+  color: #2563eb;
+}
 
 .itemEmoji {
   flex-shrink: 0;
@@ -222,6 +353,7 @@
 .itemMetaSep {
   color: #cbd5e1;
 }
+
 
 .itemDot {
   flex-shrink: 0;

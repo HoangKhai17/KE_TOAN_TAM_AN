@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import * as schedulesApi from '../../api/schedules'
 import { listTaskTypes } from '../../api/taskTypes'
-import { listUsers } from '../../api/users'
+import { listUserOptions } from '../../api/users'
 import { getNextOccurrences } from '../../utils/recurrencePreview'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
@@ -431,7 +431,7 @@ export default function SchedulesTab({ company, isAdmin }) {
       const [sched, ttResult, usersResult] = await Promise.all([
         schedulesApi.listCompanySchedules(company.id),
         listTaskTypes(),
-        listUsers({ limit: 200 }),
+        listUserOptions({ status: 'active' }),
       ])
       setSchedules(sched)
       setTaskTypes((ttResult.taskTypes || []).filter(tt => tt.isActive))

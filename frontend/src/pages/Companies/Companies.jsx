@@ -9,7 +9,7 @@ import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
-import { listUsers } from '../../api/users'
+import { listUserOptions } from '../../api/users'
 import { useEnumsStore } from '../../hooks/useEnums'
 import s from './companies.module.css'
 
@@ -171,7 +171,7 @@ export default function Companies() {
 
   // Load staff for filter + enums
   useEffect(() => {
-    listUsers({ role: 'staff', status: 'active', limit: 100 })
+    listUserOptions({ status: 'active' })
       .then(({ users }) => setStaffList(users))
       .catch(() => {})
     loadEnums()

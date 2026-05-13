@@ -7,7 +7,8 @@ async function list(req, res, next) {
     const page   = Math.max(1, parseInt(req.query.page  || '1', 10))
     const limit  = Math.min(50, parseInt(req.query.limit || '20', 10))
     const isRead = req.query.is_read !== undefined ? req.query.is_read === 'true' : undefined
-    const result = await svc.listNotifications(userId, { page, limit, isRead })
+    const type   = req.query.type || undefined
+    const result = await svc.listNotifications(userId, { page, limit, isRead, type })
     res.json({ success: true, data: result })
   } catch (err) { next(err) }
 }
@@ -33,4 +34,22 @@ async function markAll(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { list, unreadCount, markOne, markAll }
+async function removeOne(req, res, next) {
+  try {
+    await svc.deleteOne(req.params.id, req.user.id)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+async function removeMany(req, res, next) {
+  try {
+    const { ids } = req.body
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(422).json({ success: false, error: { message: 'ids must be a non-empty array' } })
+    }
+    const deleted = await svc.deleteMany(ids, req.user.id)
+    res.json({ success: true, data: { deleted } })
+  } catch (err) { next(err) }
+}
+
+module.exports = { list, unreadCount, markOne, markAll, removeOne, removeMany }

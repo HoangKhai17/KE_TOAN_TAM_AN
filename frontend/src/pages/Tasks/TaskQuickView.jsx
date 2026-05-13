@@ -5,7 +5,7 @@ import {
   Building2, User, Calendar, Clock, AlertTriangle, Flag, FileText,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
-import { listUsers } from '../../api/users'
+import { listUserOptions } from '../../api/users'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS,
@@ -138,7 +138,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
     Promise.all([
       tasksApi.getTask(taskId),
       tasksApi.getTaskChecklist(taskId),
-      listUsers({ role: 'staff', status: 'active', limit: 100 }),
+      listUserOptions({ status: 'active' }),
     ])
       .then(([t, items, { users }]) => {
         setTask(t)

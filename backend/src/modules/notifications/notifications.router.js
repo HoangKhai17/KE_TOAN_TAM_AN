@@ -6,9 +6,11 @@ const ctrl = require('./notifications.controller')
 const router = Router()
 const auth = [authenticate]
 
-router.get('/',             ...auth, ctrl.list)
-router.get('/unread-count', ...auth, ctrl.unreadCount)
-router.patch('/:id/read',   ...auth, ctrl.markOne)
-router.post('/read-all',    ...auth, ctrl.markAll)
+router.get('/',              ...auth, ctrl.list)
+router.get('/unread-count',  ...auth, ctrl.unreadCount)
+router.patch('/:id/read',    ...auth, ctrl.markOne)
+router.post('/read-all',     ...auth, ctrl.markAll)
+router.post('/delete-many',  ...auth, ctrl.removeMany)
+router.delete('/:id',        ...auth, ctrl.removeOne)
 
 module.exports = router

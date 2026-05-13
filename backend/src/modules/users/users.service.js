@@ -61,6 +61,21 @@ async function listUsers({ page = 1, limit = 20, role, status, search } = {}) {
   }
 }
 
+async function listUserOptions({ role, status = 'active', limit = 200 } = {}) {
+  const conditions = ['status = $1']
+  const params = [status]
+  if (role) {
+    params.push(role)
+    conditions.push(`role = $${params.length}`)
+  }
+  params.push(limit)
+  const { rows } = await query(
+    `SELECT id, name, role FROM users WHERE ${conditions.join(' AND ')} ORDER BY name LIMIT $${params.length}`,
+    params
+  )
+  return { users: rows }
+}
+
 async function getUserById(id) {
   const { rows } = await query(
     `SELECT id, name, email, role, status, phone, job_title, avatar_url,
@@ -202,4 +217,4 @@ async function resetUserPassword(id, newPassword, actorId, ipAddress, userAgent)
   return toDto(rows[0])
 }
 
-module.exports = { listUsers, getUserById, createUser, updateUser, updateStatus, deleteUser, resetUserPassword }
+module.exports = { listUsers, listUserOptions, getUserById, createUser, updateUser, updateStatus, deleteUser, resetUserPassword }

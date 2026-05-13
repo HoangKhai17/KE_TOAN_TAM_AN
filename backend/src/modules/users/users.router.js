@@ -51,6 +51,9 @@ const adminOnly = [authenticate, requireRole('admin')]
  */
 router.get('/', ...adminOnly, ctrl.listUsers)
 
+// Lightweight options list for dropdowns — accessible to all authenticated users
+router.get('/options', authenticate, ctrl.listUserOptions)
+
 /**
  * @openapi
  * /users:
