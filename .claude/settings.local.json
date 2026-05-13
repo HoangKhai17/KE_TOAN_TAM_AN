@@ -118,7 +118,8 @@
       "Bash(node -e \"const { CalendarCheck } = require\\('./node_modules/lucide-react'\\); console.log\\(typeof CalendarCheck\\)\")",
       "Bash(node -e \"const { CalendarCheck } = require\\('lucide-react'\\); console.log\\(typeof CalendarCheck\\)\")",
       "Bash(node -e \"const { CalendarCheck, CalendarDays } = require\\('lucide-react'\\); console.log\\('CalendarCheck:', typeof CalendarCheck, '| CalendarDays:', typeof CalendarDays\\)\")",
-      "Bash(node src/db/migrate.js up)"
+      "Bash(node src/db/migrate.js up)",
+      "Bash(node -e \"import\\('socket.io-client'\\).then\\(m => console.log\\('socket.io-client version:', m.default?.version || 'OK'\\)\\)\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

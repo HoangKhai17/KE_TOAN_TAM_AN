@@ -7,8 +7,9 @@ import {
   Search, Eye, EyeOff, UserX, UserCheck, Camera, Tag,
   Play, RotateCcw, CheckCircle, XCircle,
   ChevronDown, ChevronUp, ListChecks, History,
-  Trash2, Check, X,
+  Trash2, Check, X, Mail, Send,
 } from 'lucide-react'
+import { testEmail } from '../../api/notifications'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
@@ -94,6 +95,7 @@ const SECTIONS = [
   { key: 'deadline',        label: 'Cảnh báo deadline',      icon: Bell,        dot: '#dc2626', bg: '#fef2f2', iconColor: '#dc2626' },
   { key: 'templates',       label: 'Bộ lập lịch tự động',   icon: CalendarDays,dot: '#0891b2', bg: '#ecfeff', iconColor: '#0891b2' },
   { key: 'escalation',      label: 'Quy tắc Escalation',     icon: ShieldAlert, dot: '#4f46e5', bg: '#eef2ff', iconColor: '#4f46e5' },
+  { key: 'email',           label: 'Cấu hình Email (SMTP)',  icon: Mail,        dot: '#ea580c', bg: '#fff7ed', iconColor: '#ea580c' },
 ]
 
 const TIMEZONES = [
@@ -190,6 +192,7 @@ export default function Settings() {
             {activeSection === 'deadline'        && <DeadlineSection />}
             {activeSection === 'templates'       && <TemplatesSection />}
             {activeSection === 'escalation'      && <EscalationSection />}
+            {activeSection === 'email'           && <EmailSection />}
           </div>
         </div>
 
@@ -1206,6 +1209,181 @@ function EscalationSection() {
         { key: 'lock_duration_minutes',   label: 'Thời gian khoá tài khoản',    suffix: 'phút',  type: 'number', min: 1 },
       ]}
     />
+  )
+}
+
+// ── Section: Email (SMTP) ─────────────────────────────────────────────────────
+
+function EmailSection() {
+  const addToast = useToastStore((st) => st.toast)
+  const [form, setForm] = useState({
+    smtp_host: '',
+    smtp_port: '587',
+    smtp_user: '',
+    smtp_pass: '',
+    smtp_from: '',
+  })
+  const [showPw, setShowPw]       = useState(false)
+  const [loaded, setLoaded]       = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [testing, setTesting]     = useState(false)
+  const [saveStatus, setSaveStatus] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    listConfigs().then((configs) => {
+      if (cancelled) return
+      const map = {}
+      configs.forEach((c) => { map[c.key] = c.value })
+      setForm({
+        smtp_host: map.smtp_host || '',
+        smtp_port: map.smtp_port || '587',
+        smtp_user: map.smtp_user || '',
+        smtp_pass: map.smtp_pass || '',
+        smtp_from: map.smtp_from || '',
+      })
+      setLoaded(true)
+    }).catch(() => { setLoaded(true) })
+    return () => { cancelled = true }
+  }, [])
+
+  const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }))
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true); setSaveStatus(null)
+    try {
+      await Promise.all(
+        Object.entries(form).map(([key, val]) => updateConfig(key, val))
+      )
+      setSaveStatus('ok')
+      setTimeout(() => setSaveStatus(null), 2500)
+      addToast('Đã lưu cấu hình SMTP', 'success')
+    } catch {
+      setSaveStatus('err')
+      addToast('Không thể lưu cấu hình', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleTest() {
+    if (!form.smtp_host || !form.smtp_port || !form.smtp_user || !form.smtp_pass) {
+      addToast('Vui lòng điền đầy đủ host, port, user, pass', 'warning')
+      return
+    }
+    setTesting(true)
+    try {
+      await testEmail({
+        host: form.smtp_host,
+        port: form.smtp_port,
+        user: form.smtp_user,
+        pass: form.smtp_pass,
+        from: form.smtp_from || form.smtp_user,
+      })
+      addToast('Gửi email test thành công! Kiểm tra hộp thư đến.', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message || 'Không thể kết nối SMTP', 'error')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <div>
+      <p className={s.sectionText}>
+        Cấu hình SMTP để gửi email tự động (nhắc nhở deadline, báo cáo sáng, escalation).
+        Mặc định dùng Microsoft 365 — smtp.office365.com, port 587.
+      </p>
+
+      {!loaded ? (
+        <div className={s.configSkeleton}>
+          {[1, 2, 3, 4, 5].map((i) => <div key={i} className={s.skeletonLine} />)}
+        </div>
+      ) : (
+        <form onSubmit={handleSave} className={s.configForm}>
+          <div className={s.formGrid2}>
+            <div>
+              <label className={s.settingsLabel}>SMTP Host</label>
+              <input
+                type="text"
+                value={form.smtp_host}
+                onChange={set('smtp_host')}
+                placeholder="smtp.office365.com"
+                className={s.settingsInput}
+              />
+            </div>
+            <div>
+              <label className={s.settingsLabel}>SMTP Port</label>
+              <input
+                type="number"
+                value={form.smtp_port}
+                onChange={set('smtp_port')}
+                placeholder="587"
+                className={s.settingsInput}
+                min={1}
+                max={65535}
+              />
+            </div>
+            <div>
+              <label className={s.settingsLabel}>Email (SMTP User)</label>
+              <input
+                type="email"
+                value={form.smtp_user}
+                onChange={set('smtp_user')}
+                placeholder="no-reply@ketoan-taman.vn"
+                className={s.settingsInput}
+              />
+            </div>
+            <div>
+              <label className={s.settingsLabel}>Mật khẩu SMTP</label>
+              <div className={s.pwInputWrap}>
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  value={form.smtp_pass}
+                  onChange={set('smtp_pass')}
+                  placeholder="App password hoặc mật khẩu SMTP"
+                  className={`${s.settingsInput} ${s.pwInputField}`}
+                />
+                <button type="button" className={s.pwToggleBtn} onClick={() => setShowPw((v) => !v)}>
+                  {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className={s.settingsLabel}>Địa chỉ "From" (tùy chọn)</label>
+            <input
+              type="email"
+              value={form.smtp_from}
+              onChange={set('smtp_from')}
+              placeholder="Kế Toán Tâm An <no-reply@ketoan-taman.vn>"
+              className={s.settingsInput}
+            />
+            <p className={s.settingsHint}>Để trống sẽ dùng chính SMTP user.</p>
+          </div>
+
+          <div className={s.formActions}>
+            <button type="submit" className={s.btnSave} disabled={saving}>
+              {saving ? <Loader2 size={13} className={s.spin} /> : <Save size={13} />}
+              Lưu cấu hình
+            </button>
+            <button
+              type="button"
+              className={s.btnOutline}
+              onClick={handleTest}
+              disabled={testing}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36 }}
+            >
+              {testing ? <Loader2 size={13} className={s.spin} /> : <Send size={13} />}
+              Test gửi email
+            </button>
+            <SaveFeedback status={saveStatus} />
+          </div>
+        </form>
+      )}
+    </div>
   )
 }
 

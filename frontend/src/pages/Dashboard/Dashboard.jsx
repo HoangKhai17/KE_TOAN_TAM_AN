@@ -292,9 +292,8 @@ export default function Dashboard() {
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
                 <Area
                   type="monotone" dataKey="completed" name="Đã hoàn thành"
-                  stroke="#3b82f6" strokeWidth={2.5}
+                  stroke="#2563eb" strokeWidth={2.5}
                   fill="url(#areaGradBlue)"
-                  stroke="#2563eb"
                   dot={{ r: 5, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
                   activeDot={{ r: 7 }}
                 />

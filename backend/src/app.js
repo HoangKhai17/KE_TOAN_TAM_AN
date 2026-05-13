@@ -174,6 +174,24 @@ function createApp() {
   // Phase 14 — Attendance & Leave
   app.use('/api/attendance', require('./modules/attendance/attendance.router'))
 
+  // Phase 12 — Notifications
+  app.use('/api/notifications', require('./modules/notifications/notifications.router'))
+
+  // Phase 12 — Test email endpoint
+  app.post('/api/system-configs/test-email', require('./middleware/auth').authenticate, require('./middleware/rbac').requireRole('admin'), async (req, res, next) => {
+    try {
+      const { testSmtp } = require('./utils/mailer')
+      const { host, port, user, pass, from } = req.body
+      if (!host || !port || !user || !pass) {
+        return res.status(422).json({ success: false, error: { message: 'Vui lòng nhập đầy đủ host, port, user, pass' } })
+      }
+      await testSmtp({ host, port: parseInt(port, 10), user, pass, from: from || user })
+      res.json({ success: true, data: { message: 'Gửi email test thành công!' } })
+    } catch (err) {
+      next(Object.assign(err, { status: 400 }))
+    }
+  })
+
   // 404 & error handlers
   app.use(notFound)
   app.use(errorHandler)

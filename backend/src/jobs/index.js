@@ -3,7 +3,11 @@
 const cron   = require('node-cron')
 const logger = require('../config/logger')
 const { query } = require('../config/db')
-const { runTaskGenerator } = require('./taskGenerator.job')
+const { runTaskGenerator }    = require('./taskGenerator.job')
+const { runDeadlineReminder } = require('./deadlineReminder.job')
+const { runOverdueEscalation } = require('./overdueEscalation.job')
+const { runOnHoldReminder }   = require('./onHoldReminder.job')
+const { runMorningSummary }   = require('./morningSummary.job')
 
 let schedulerTask = null
 let lastRunAt     = null
@@ -151,4 +155,40 @@ async function clearLogs() {
   await query('TRUNCATE TABLE scheduler_run_logs')
 }
 
-module.exports = { startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs, deleteLog, clearLogs }
+// ── Notification & escalation cron jobs (Vietnam timezone offsets) ─────────────
+// All times are UTC. Vietnam is UTC+7.
+// 07:00 VN = 00:00 UTC | 07:30 VN = 00:30 UTC | 08:00 VN = 01:00 UTC
+
+function startNotificationJobs() {
+  // Morning Summary — 07:00 VN
+  cron.schedule('0 0 * * *', async () => {
+    try { await runMorningSummary() } catch (err) {
+      logger.error('[Jobs] Morning summary failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  // Deadline Reminder — 07:30 VN
+  cron.schedule('30 0 * * *', async () => {
+    try { await runDeadlineReminder() } catch (err) {
+      logger.error('[Jobs] Deadline reminder failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  // Overdue Escalation — 08:00 VN
+  cron.schedule('0 1 * * *', async () => {
+    try { await runOverdueEscalation() } catch (err) {
+      logger.error('[Jobs] Overdue escalation failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  // On-Hold Reminder — 08:05 VN (after escalation)
+  cron.schedule('5 1 * * *', async () => {
+    try { await runOnHoldReminder() } catch (err) {
+      logger.error('[Jobs] On-hold reminder failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  logger.info('[Jobs] Notification cron jobs scheduled (07:00/07:30/08:00/08:05 VN daily)')
+}
+
+module.exports = { startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs, deleteLog, clearLogs, startNotificationJobs }

@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Menu, Bell, ChevronDown, User, LogOut, Search, Plus } from 'lucide-react'
+import { Menu, Bell, ChevronDown, User, LogOut, Search, Plus, CheckCheck } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
+import { useNotificationStore } from '../../stores/notificationStore'
 import { logout } from '../../api/auth'
+import { listNotifications, markOneRead, markAllRead, getUnreadCount } from '../../api/notifications'
+import { connectSocket, disconnectSocket } from '../../lib/socket'
 import s from './layout.module.css'
 
 const ROUTE_LABELS = {
@@ -16,6 +19,9 @@ const ROUTE_LABELS = {
   credentials: 'Thông tin đăng nhập',
   settings:    'Cài đặt',
   profile:     'Hồ sơ',
+  notifications: 'Thông báo',
+  attendance:  'Chấm công',
+  payroll:     'Bảng lương',
 }
 
 function useBreadcrumb() {
@@ -35,12 +41,86 @@ function getInitials(name) {
   return name.split(' ').slice(-2).map((w) => w[0]).join('').toUpperCase()
 }
 
+function fmtRelative(iso) {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1)  return 'vừa xong'
+  if (m < 60) return `${m} phút trước`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h} giờ trước`
+  return new Date(iso).toLocaleDateString('vi-VN')
+}
+
+const TYPE_ICON = {
+  task_assigned:        { emoji: '📋', color: '#2563eb' },
+  task_overdue:         { emoji: '⚠️', color: '#dc2626' },
+  deadline_reminder:    { emoji: '🔔', color: '#d97706' },
+  escalation:           { emoji: '🚨', color: '#dc2626' },
+  morning_summary:      { emoji: '☀️', color: '#059669' },
+  task_status_changed:  { emoji: '🔄', color: '#7c3aed' },
+}
+
 export default function Header({ onMenuToggle }) {
   const navigate   = useNavigate()
-  const { user, logout: clearAuth } = useAuthStore()
+  const { user, accessToken, logout: clearAuth } = useAuthStore()
+  const {
+    unreadCount, recent, hasLoaded,
+    setUnreadCount, setRecent, addNew, markOneRead: storeMarkOne, markAllRead: storeMarkAll,
+  } = useNotificationStore()
+
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [bellOpen, setBellOpen]         = useState(false)
   const [searchQuery, setSearchQuery]   = useState('')
-  const crumbs = useBreadcrumb()
+  const bellRef = useRef(null)
+  const crumbs  = useBreadcrumb()
+
+  // Bootstrap: load unread count + recent 10 notifications
+  useEffect(() => {
+    if (!accessToken) return
+    let cancelled = false
+
+    Promise.all([
+      getUnreadCount(),
+      listNotifications({ limit: 10 }),
+    ]).then(([count, result]) => {
+      if (cancelled) return
+      setUnreadCount(count)
+      setRecent(result.notifications)
+    }).catch(() => {})
+
+    return () => { cancelled = true }
+  }, [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Socket.io: connect when authenticated, disconnect on logout
+  useEffect(() => {
+    if (!accessToken) {
+      disconnectSocket()
+      return
+    }
+
+    const sock = connectSocket(accessToken)
+
+    sock.on('notification', (notif) => {
+      addNew(notif)
+    })
+
+    return () => {
+      sock.off('notification')
+    }
+  }, [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close bell dropdown on outside click
+  useEffect(() => {
+    if (!bellOpen) return
+    function handle(e) {
+      if (bellRef.current && !bellRef.current.contains(e.target)) {
+        setBellOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [bellOpen])
 
   function handleSearchKeyDown(e) {
     if (e.key === 'Enter' && searchQuery.trim()) {
@@ -53,7 +133,18 @@ export default function Header({ onMenuToggle }) {
     setDropdownOpen(false)
     try { await logout() } catch { /* ignore */ }
     clearAuth()
+    disconnectSocket()
     navigate('/login', { replace: true })
+  }
+
+  async function handleMarkOne(id) {
+    storeMarkOne(id)
+    try { await markOneRead(id) } catch { /* ignore */ }
+  }
+
+  async function handleMarkAll() {
+    storeMarkAll()
+    try { await markAllRead() } catch { /* ignore */ }
   }
 
   const initials = getInitials(user?.name)
@@ -108,10 +199,74 @@ export default function Header({ onMenuToggle }) {
         </button>
 
         {/* Notification bell */}
-        <button className={s.headerIconBtn} aria-label="Thông báo">
-          <Bell size={18} />
-          <span className={s.headerBadge} />
-        </button>
+        <div className={s.bellWrap} ref={bellRef}>
+          <button
+            className={s.headerIconBtn}
+            aria-label="Thông báo"
+            onClick={() => setBellOpen((v) => !v)}
+          >
+            <Bell size={18} />
+            {unreadCount > 0 && (
+              <span className={s.headerBadge}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {bellOpen && (
+            <div className={s.bellDropdown}>
+              <div className={s.bellDropdownHead}>
+                <span className={s.bellDropdownTitle}>Thông báo</span>
+                {unreadCount > 0 && (
+                  <button className={s.bellMarkAll} onClick={handleMarkAll} title="Đánh dấu tất cả đã đọc">
+                    <CheckCheck size={13} /> Đọc tất cả
+                  </button>
+                )}
+              </div>
+
+              <div className={s.bellList}>
+                {!hasLoaded ? (
+                  <div className={s.bellEmpty}>Đang tải…</div>
+                ) : recent.length === 0 ? (
+                  <div className={s.bellEmpty}>Không có thông báo nào.</div>
+                ) : (
+                  recent.map((n) => {
+                    const meta = TYPE_ICON[n.type] || { emoji: '🔔', color: '#64748b' }
+                    return (
+                      <button
+                        key={n.id}
+                        className={`${s.bellItem} ${n.is_read ? s.bellItemRead : s.bellItemUnread}`}
+                        onClick={() => {
+                          handleMarkOne(n.id)
+                          if (n.task_id) {
+                            setBellOpen(false)
+                            navigate(`/tasks/${n.task_id}`)
+                          }
+                        }}
+                      >
+                        <span className={s.bellItemEmoji} style={{ color: meta.color }}>{meta.emoji}</span>
+                        <div className={s.bellItemBody}>
+                          <div className={s.bellItemTitle}>{n.title}</div>
+                          <div className={s.bellItemText}>{n.body}</div>
+                          <div className={s.bellItemTime}>{fmtRelative(n.created_at)}</div>
+                        </div>
+                        {!n.is_read && <span className={s.bellItemDot} />}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+
+              <Link
+                to="/notifications"
+                className={s.bellViewAll}
+                onClick={() => setBellOpen(false)}
+              >
+                Xem tất cả thông báo →
+              </Link>
+            </div>
+          )}
+        </div>
 
         <span className={s.headerDivider} />
 

@@ -6,6 +6,7 @@ const logger     = require('./config/logger')
 const env        = require('./config/env')
 const { applyTimezone } = require('./config/appSettings')
 const scheduler  = require('./jobs')
+const { initSocket } = require('./config/socket')
 
 async function loadTimezone() {
   try {
@@ -47,9 +48,15 @@ async function start() {
       logger.info(`Server started`, { port: env.PORT, env: env.NODE_ENV })
     })
 
+    // Attach Socket.io to the HTTP server (Phase 12)
+    initSocket(server)
+
     // Start background job scheduler (Phase 8)
     const schedulerHour = await loadSchedulerHour()
     scheduler.startScheduler(schedulerHour)
+
+    // Start notification & escalation cron jobs (Phase 12)
+    scheduler.startNotificationJobs()
 
     // Graceful shutdown
     const shutdown = async (signal) => {
