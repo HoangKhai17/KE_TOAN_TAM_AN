@@ -4,8 +4,6 @@ const activity = require('../../lib/activity')
 const { canTransition } = require('./tasks.transitions')
 const { checkBlockers } = require('./dependencies.service')
 const { createAndEmit } = require('../../lib/notify')
-const { sendMail } = require('../../utils/mailer')
-const { getTemplate, renderTemplate } = require('../../utils/emailTemplates')
 
 const STATUS_LABEL = {
   pending:        'Chờ xử lý',
@@ -203,41 +201,6 @@ async function createTask(data, actorId, ipAddress, userAgent) {
       `"${result.title}" — ${result.companyName || ''}`,
       task.id,
     ).catch(() => {})
-
-    // Send assignment email
-    const { rows: [assigneeUser] } = await query(
-      'SELECT name, email FROM users WHERE id = $1',
-      [assignedTo]
-    )
-    const { rows: [actorUser] } = await query(
-      'SELECT name FROM users WHERE id = $1',
-      [actorId]
-    )
-    if (assigneeUser?.email) {
-      const dueStr = result.dueDate
-        ? new Date(result.dueDate).toLocaleDateString('vi-VN')
-        : 'Không có'
-      const priorityMap = { low: 'Thấp', medium: 'Trung bình', high: 'Cao', urgent: 'Khẩn cấp' }
-      const descBlock = result.description
-        ? `<p><strong>Mô tả:</strong> ${result.description}</p>`
-        : ''
-      const tpl = await getTemplate('email_tpl_assignment')
-      const html = renderTemplate(tpl, {
-        assignee_name: assigneeUser.name,
-        task_title: result.title,
-        company_name: result.companyName || '—',
-        priority: priorityMap[result.priority] || result.priority || '—',
-        due_date: dueStr,
-        assigner_name: actorUser?.name || '—',
-        description_block: descBlock,
-      })
-      sendMail({
-        to: assigneeUser.email,
-        subject: `[Phân công] Công việc mới: ${result.title}`,
-        html,
-        text: `Bạn được giao công việc "${result.title}" (${result.companyName}), hạn ${dueStr}.`,
-      }).catch(() => {})
-    }
   }
 
   return result
@@ -301,41 +264,6 @@ async function updateTask(id, data, actorId, ipAddress, userAgent) {
       `"${result.title}" — ${result.companyName || ''}`,
       id,
     ).catch(() => {})
-
-    // Send reassignment email
-    const { rows: [assigneeUser] } = await query(
-      'SELECT name, email FROM users WHERE id = $1',
-      [newAssignee]
-    )
-    const { rows: [actorUser] } = await query(
-      'SELECT name FROM users WHERE id = $1',
-      [actorId]
-    )
-    if (assigneeUser?.email) {
-      const dueStr = result.dueDate
-        ? new Date(result.dueDate).toLocaleDateString('vi-VN')
-        : 'Không có'
-      const priorityMap = { low: 'Thấp', medium: 'Trung bình', high: 'Cao', urgent: 'Khẩn cấp' }
-      const descBlock = result.description
-        ? `<p><strong>Mô tả:</strong> ${result.description}</p>`
-        : ''
-      const tpl = await getTemplate('email_tpl_assignment')
-      const html = renderTemplate(tpl, {
-        assignee_name: assigneeUser.name,
-        task_title: result.title,
-        company_name: result.companyName || '—',
-        priority: priorityMap[result.priority] || result.priority || '—',
-        due_date: dueStr,
-        assigner_name: actorUser?.name || '—',
-        description_block: descBlock,
-      })
-      sendMail({
-        to: assigneeUser.email,
-        subject: `[Phân công] Công việc: ${result.title}`,
-        html,
-        text: `Bạn được giao công việc "${result.title}" (${result.companyName}), hạn ${dueStr}.`,
-      }).catch(() => {})
-    }
   }
   // Notify previous assignee they were unassigned
   if (prevAssignee && prevAssignee !== actorId && prevAssignee !== newAssignee) {

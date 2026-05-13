@@ -30,21 +30,6 @@ const TEMPLATES = [
     ],
   },
   {
-    key: 'email_tpl_assignment',
-    label: 'Phân công việc',
-    icon: '📋',
-    desc: 'Gửi cho nhân viên khi được giao một công việc mới',
-    vars: [
-      { name: '{{assignee_name}}',   desc: 'Tên người được giao' },
-      { name: '{{task_title}}',      desc: 'Tiêu đề công việc' },
-      { name: '{{company_name}}',    desc: 'Tên khách hàng' },
-      { name: '{{priority}}',        desc: 'Mức độ ưu tiên' },
-      { name: '{{due_date}}',        desc: 'Ngày hết hạn' },
-      { name: '{{assigner_name}}',   desc: 'Người giao việc' },
-      { name: '{{description_block}}', desc: 'Mô tả công việc (HTML)' },
-    ],
-  },
-  {
     key: 'email_tpl_reminder',
     label: 'Nhắc nhở deadline',
     icon: '⚠️',

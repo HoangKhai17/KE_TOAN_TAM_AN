@@ -15,20 +15,6 @@ const WRAPPER = (body) => `
 </div>`
 
 const DEFAULTS = {
-  email_tpl_assignment: WRAPPER(`
-<h2 style="color:#1e3a8a;margin-top:0">📋 Bạn có công việc mới được giao</h2>
-<p>Xin chào <strong>{{assignee_name}}</strong>,</p>
-<p>Bạn vừa được giao một công việc mới. Chi tiết như sau:</p>
-<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
-  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;width:150px;border:1px solid #e2e8f0">Tiêu đề</td><td style="padding:9px 14px;font-weight:600;border:1px solid #e2e8f0">{{task_title}}</td></tr>
-  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0">Khách hàng</td><td style="padding:9px 14px;border:1px solid #e2e8f0">{{company_name}}</td></tr>
-  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0">Ưu tiên</td><td style="padding:9px 14px;border:1px solid #e2e8f0">{{priority}}</td></tr>
-  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0">Hạn hoàn thành</td><td style="padding:9px 14px;font-weight:600;color:#dc2626;border:1px solid #e2e8f0">{{due_date}}</td></tr>
-  <tr><td style="padding:9px 14px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0">Giao bởi</td><td style="padding:9px 14px;border:1px solid #e2e8f0">{{assigner_name}}</td></tr>
-</table>
-{{description_block}}
-<p style="color:#64748b;font-size:13px">Vui lòng đăng nhập hệ thống để xem chi tiết và cập nhật tiến độ.</p>`),
-
   email_tpl_reminder: WRAPPER(`
 <h2 style="color:#d97706;margin-top:0">⚠️ Nhắc nhở: Công việc sắp đến hạn</h2>
 <p>Xin chào <strong>{{user_name}}</strong>,</p>
