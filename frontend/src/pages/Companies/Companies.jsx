@@ -34,6 +34,11 @@ const BUSINESS_TYPE_OPTIONS = Object.entries(BUSINESS_TYPE_LABELS).map(([value, 
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100]
 
+const FILTER_KEY = 'companies_filters'
+function readSaved() {
+  try { return JSON.parse(sessionStorage.getItem(FILTER_KEY) || '{}') } catch { return {} }
+}
+
 // ── Small helpers ──────────────────────────────────────────────────────────────
 
 export function getInitials(name) {
@@ -140,13 +145,13 @@ export default function Companies() {
   const [error, setError]           = useState(null)
   const [staffList, setStaffList]   = useState([])
 
-  const [searchInput, setSearchInput]   = useState('')
-  const [search, setSearch]             = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [btFilter, setBtFilter]         = useState('')
-  const [staffFilter, setStaffFilter]   = useState('')
-  const [page, setPage]                 = useState(1)
-  const [limit, setLimit]               = useState(20)
+  const [searchInput, setSearchInput]   = useState(() => readSaved().search ?? '')
+  const [search, setSearch]             = useState(() => readSaved().search ?? '')
+  const [statusFilter, setStatusFilter] = useState(() => readSaved().statusFilter ?? '')
+  const [btFilter, setBtFilter]         = useState(() => readSaved().btFilter ?? '')
+  const [staffFilter, setStaffFilter]   = useState(() => readSaved().staffFilter ?? '')
+  const [page, setPage]                 = useState(() => readSaved().page ?? 1)
+  const [limit, setLimit]               = useState(() => readSaved().limit ?? 20)
 
   const [showCreate, setShowCreate]   = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)  // company to delete
@@ -161,6 +166,13 @@ export default function Companies() {
   const pageTerminatedTotal = companies.filter((c) => c.status === 'terminated').length
   const paginationFrom = pagination.total === 0 ? 0 : (page - 1) * limit + 1
   const paginationTo = Math.min(page * limit, pagination.total)
+
+  // Persist filters to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem(FILTER_KEY, JSON.stringify({
+      search, statusFilter, btFilter, staffFilter, page, limit,
+    }))
+  }, [search, statusFilter, btFilter, staffFilter, page, limit])
 
   // Debounce search
   useEffect(() => {
@@ -208,6 +220,7 @@ export default function Companies() {
     setBtFilter('')
     setStaffFilter('')
     setPage(1)
+    sessionStorage.removeItem(FILTER_KEY)
   }
 
   async function handleDelete() {

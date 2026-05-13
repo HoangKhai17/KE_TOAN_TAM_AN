@@ -82,6 +82,7 @@ export default function CompanyDetail() {
   const [activeTab, setActiveTab] = useState('overview')
 
   const [noteCount, setNoteCount]         = useState(0)
+  const [overviewTick, setOverviewTick]   = useState(0)
   const [showEdit, setShowEdit]           = useState(false)
   const [showTerminate, setShowTerminate] = useState(false)
   const [terminating, setTerminating]       = useState(false)
@@ -288,7 +289,11 @@ export default function CompanyDetail() {
         <OverviewTab
           company={company}
           isAdmin={isAdmin}
-          onAssigned={() => companiesApi.getCompany(id).then(setCompany).catch(() => {})}
+          refreshTick={overviewTick}
+          onAssigned={() => {
+            companiesApi.getCompany(id).then(setCompany).catch(() => {})
+            setOverviewTick((t) => t + 1)
+          }}
         />
       )}
       {activeTab === 'tasks' && (
@@ -317,6 +322,7 @@ export default function CompanyDetail() {
           onClose={() => setShowEdit(false)}
           onSaved={(updated) => {
             setCompany((c) => ({ ...c, ...updated }))
+            setOverviewTick((t) => t + 1)
             setShowEdit(false)
             addToast('Đã cập nhật thông tin công ty', 'success')
           }}
@@ -373,21 +379,21 @@ export default function CompanyDetail() {
 
 // ── OverviewTab ────────────────────────────────────────────────────────────────
 
-function OverviewTab({ company, isAdmin, onAssigned }) {
+function OverviewTab({ company, isAdmin, onAssigned, refreshTick }) {
   return (
     <div className={s.overviewGrid}>
       {/* Left column */}
       <div className={s.overviewLeft}>
         <BusinessInfoCard company={company} />
         <ContactCard company={company} />
-        <ActivityCard companyId={company.id} />
+        <ActivityCard companyId={company.id} refreshTick={refreshTick} />
       </div>
 
       {/* Right column */}
       <div className={s.overviewRight}>
         <StaffCard company={company} isAdmin={isAdmin} onAssigned={onAssigned} />
         <PerformanceCard company={company} />
-        <AssignmentsCard companyId={company.id} isAdmin={isAdmin} onAssigned={onAssigned} />
+        <AssignmentsCard companyId={company.id} isAdmin={isAdmin} onAssigned={onAssigned} refreshTick={refreshTick} />
       </div>
     </div>
   )
@@ -503,7 +509,7 @@ function fmtRelative(iso) {
 
 const ACT_PER_PAGE = 10
 
-function ActivityCard({ companyId }) {
+function ActivityCard({ companyId, refreshTick }) {
   const [activities, setActivities] = useState([])
   const [total,      setTotal]      = useState(0)
   const [page,       setPage]       = useState(1)
@@ -519,7 +525,7 @@ function ActivityCard({ companyId }) {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [companyId, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [companyId, page, refreshTick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalPages = Math.max(1, Math.ceil(total / ACT_PER_PAGE))
 
@@ -686,19 +692,20 @@ function PerformanceCard({ company }) {
 
 // ── AssignmentsCard ────────────────────────────────────────────────────────────
 
-function AssignmentsCard({ companyId, isAdmin, onAssigned }) {
+function AssignmentsCard({ companyId, isAdmin, onAssigned, refreshTick }) {
   const [assignments, setAssignments] = useState([])
   const [loading, setLoading]         = useState(true)
   const [showModal, setShowModal]     = useState(false)
 
   useEffect(() => {
     let cancelled = false
+    setLoading(true)
     companiesApi
       .getAssignments(companyId)
       .then((a) => { if (!cancelled) setAssignments(a) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [companyId])
+  }, [companyId, refreshTick])
 
   function handleAssigned() {
     setShowModal(false)
