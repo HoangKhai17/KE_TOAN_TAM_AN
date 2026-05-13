@@ -1781,6 +1781,60 @@ export default function Tasks() {
 
           </div>
 
+          {/* ── Active filter chips ── */}
+          {(yearFilter || monthFilter || staffFilter || companyFilter || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || search) && (
+            <div className={s.filterChipsRow}>
+              {(yearFilter || monthFilter) && (
+                <span className={s.filterChip}>
+                  {monthFilter && yearFilter ? `T${monthFilter}/${yearFilter}` : yearFilter ? `Năm ${yearFilter}` : `T${monthFilter}`}
+                  <button className={s.filterChipRemove} onClick={() => { setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH); const { from, to } = yearMonthToDates(CUR_YEAR, CUR_MONTH); setDueDateFrom(from); setDueDateTo(to); setPage(1) }}>×</button>
+                </span>
+              )}
+              {companyFilter && (
+                <span className={s.filterChip}>
+                  KH: {companies.find((c) => c.id === companyFilter)?.name ?? '?'}
+                  <button className={s.filterChipRemove} onClick={() => { setCompanyFilter(''); setPage(1) }}>×</button>
+                </span>
+              )}
+              {staffFilter && (
+                <span className={s.filterChip}>
+                  NV: {staffList.find((u) => u.id === staffFilter)?.name ?? '?'}
+                  <button className={s.filterChipRemove} onClick={() => { setStaffFilter(''); setPage(1) }}>×</button>
+                </span>
+              )}
+              {statusFilter.map((st) => (
+                <span key={st} className={s.filterChip}>
+                  {getLabel('task_status', st, STATUS_LABELS[st])}
+                  <button className={s.filterChipRemove} onClick={() => { setStatusFilter((prev) => prev.filter((x) => x !== st)); setPage(1) }}>×</button>
+                </span>
+              ))}
+              {priorityFilter.map((pr) => (
+                <span key={pr} className={s.filterChip}>
+                  {getLabel('task_priority', pr, PRIORITY_LABELS[pr])}
+                  <button className={s.filterChipRemove} onClick={() => { setPriorityFilter((prev) => prev.filter((x) => x !== pr)); setPage(1) }}>×</button>
+                </span>
+              ))}
+              {sourceFilter.map((src) => (
+                <span key={src} className={s.filterChip}>
+                  {getLabel('task_source', src, src === 'auto' ? 'Tự động' : 'Thủ công')}
+                  <button className={s.filterChipRemove} onClick={() => { setSourceFilter((prev) => prev.filter((x) => x !== src)); setPage(1) }}>×</button>
+                </span>
+              ))}
+              {isOverdue && (
+                <span className={s.filterChip} style={{ background: '#fef2f2', color: '#dc2626', borderColor: '#fca5a5' }}>
+                  Quá hạn
+                  <button className={s.filterChipRemove} onClick={() => { setIsOverdue(false); setPage(1) }}>×</button>
+                </span>
+              )}
+              {search && (
+                <span className={s.filterChip}>
+                  &ldquo;{search}&rdquo;
+                  <button className={s.filterChipRemove} onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>×</button>
+                </span>
+              )}
+            </div>
+          )}
+
           {/* ── Stats row ── */}
           <div className={s.statsRow}>
             <div className={s.statItem}>

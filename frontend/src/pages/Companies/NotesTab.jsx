@@ -62,16 +62,14 @@ function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin 
               </>
             ) : (
               <>
-                {isAdmin && (
-                  <button
-                    className={s.noteActionBtn}
-                    onClick={() => onTogglePin(note.id, !note.isPinned)}
-                    title={note.isPinned ? 'Bỏ ghim' : 'Ghim ghi chú'}
-                  >
-                    {note.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
-                  </button>
-                )}
-                <button className={s.noteActionBtn} onClick={() => onEdit(note)} title="Chỉnh sửa">
+                <button
+                  className={`${s.noteActionBtn} ${s.noteActionBtnPin}`}
+                  onClick={() => onTogglePin(note.id, !note.isPinned)}
+                  title={note.isPinned ? 'Bỏ ghim' : 'Ghim ghi chú'}
+                >
+                  {note.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
+                </button>
+                <button className={`${s.noteActionBtn} ${s.noteActionBtnEdit}`} onClick={() => onEdit(note)} title="Chỉnh sửa">
                   <Pencil size={12} />
                 </button>
                 <button
@@ -133,7 +131,7 @@ function EditForm({ initial, onSave, onCancel }) {
 
 // ── Main NotesTab ─────────────────────────────────────────────────────────────
 
-export default function NotesTab({ company }) {
+export default function NotesTab({ company, onNoteCountChange }) {
   const companyId   = company.id
   const currentUser = useAuthStore((st) => st.user)
   const isAdmin     = currentUser?.role === 'admin'
@@ -146,6 +144,8 @@ export default function NotesTab({ company }) {
   const [showAdd,   setShowAdd]   = useState(false)
   const [editNote,  setEditNote]  = useState(null)  // note object being edited
   const newTextareaRef            = useRef(null)
+
+  useEffect(() => { onNoteCountChange?.(notes.length) }, [notes.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true)

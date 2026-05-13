@@ -25,8 +25,10 @@ function toDto(row) {
     assignedStaff:    row.staff_name
       ? { id: row.assigned_staff_id, name: row.staff_name, email: row.staff_email, jobTitle: row.staff_job_title, avatarUrl: row.staff_avatar_url ?? null }
       : null,
-    taskOpenCount:    parseInt(row.task_open_count ?? 0, 10),
-    taskOverdueCount: parseInt(row.task_overdue_count ?? 0, 10),
+    taskOpenCount:      parseInt(row.task_open_count ?? 0, 10),
+    taskOverdueCount:   parseInt(row.task_overdue_count ?? 0, 10),
+    taskCompletedCount: parseInt(row.task_completed_count ?? 0, 10),
+    taskOnTimeCount:    parseInt(row.task_on_time_count ?? 0, 10),
     createdBy:        row.created_by,
     createdAt:        row.created_at,
     updatedAt:        row.updated_at,
@@ -70,12 +72,16 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
     `SELECT c.*,
             u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
             tc.task_open_count,
-            tc.task_overdue_count
+            tc.task_overdue_count,
+            tc.task_completed_count,
+            tc.task_on_time_count
      FROM companies c
      LEFT JOIN users u ON u.id = c.assigned_staff_id
      LEFT JOIN LATERAL (
-       SELECT COUNT(*) FILTER (WHERE tk.status != 'completed')                                AS task_open_count,
-              COUNT(*) FILTER (WHERE tk.status != 'completed' AND tk.due_date < CURRENT_DATE) AS task_overdue_count
+       SELECT COUNT(*) FILTER (WHERE tk.status != 'completed')                                                                                          AS task_open_count,
+              COUNT(*) FILTER (WHERE tk.status != 'completed' AND tk.due_date < CURRENT_DATE)                                                          AS task_overdue_count,
+              COUNT(*) FILTER (WHERE tk.status = 'completed')                                                                                          AS task_completed_count,
+              COUNT(*) FILTER (WHERE tk.status = 'completed' AND (tk.due_date IS NULL OR tk.completed_at IS NULL OR tk.completed_at <= tk.due_date + INTERVAL '1 day')) AS task_on_time_count
        FROM tasks tk WHERE tk.company_id = c.id
      ) tc ON TRUE
      WHERE ${where}
@@ -95,12 +101,16 @@ async function getCompanyById(id) {
     `SELECT c.*,
             u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
             tc.task_open_count,
-            tc.task_overdue_count
+            tc.task_overdue_count,
+            tc.task_completed_count,
+            tc.task_on_time_count
      FROM companies c
      LEFT JOIN users u ON u.id = c.assigned_staff_id
      LEFT JOIN LATERAL (
-       SELECT COUNT(*) FILTER (WHERE tk.status != 'completed')                                AS task_open_count,
-              COUNT(*) FILTER (WHERE tk.status != 'completed' AND tk.due_date < CURRENT_DATE) AS task_overdue_count
+       SELECT COUNT(*) FILTER (WHERE tk.status != 'completed')                                                                                          AS task_open_count,
+              COUNT(*) FILTER (WHERE tk.status != 'completed' AND tk.due_date < CURRENT_DATE)                                                          AS task_overdue_count,
+              COUNT(*) FILTER (WHERE tk.status = 'completed')                                                                                          AS task_completed_count,
+              COUNT(*) FILTER (WHERE tk.status = 'completed' AND (tk.due_date IS NULL OR tk.completed_at IS NULL OR tk.completed_at <= tk.due_date + INTERVAL '1 day')) AS task_on_time_count
        FROM tasks tk WHERE tk.company_id = c.id
      ) tc ON TRUE
      WHERE c.id = $1`,

@@ -154,9 +154,11 @@ export default function Companies() {
 
   const hasActiveFilters = search || statusFilter || btFilter || staffFilter
   const activeFilterCount = [search, statusFilter, btFilter, staffFilter].filter(Boolean).length
-  const pageOpenTotal = companies.reduce((sum, c) => sum + (Number(c.taskOpenCount) || 0), 0)
-  const pageOverdueTotal = companies.reduce((sum, c) => sum + (Number(c.taskOverdueCount) || 0), 0)
-  const pageActiveTotal = companies.filter((c) => c.status === 'active').length
+  const pageOpenTotal      = companies.reduce((sum, c) => sum + (Number(c.taskOpenCount) || 0), 0)
+  const pageOverdueTotal   = companies.reduce((sum, c) => sum + (Number(c.taskOverdueCount) || 0), 0)
+  const pageActiveTotal    = companies.filter((c) => c.status === 'active').length
+  const pageInactiveTotal  = companies.filter((c) => c.status === 'inactive').length
+  const pageTerminatedTotal = companies.filter((c) => c.status === 'terminated').length
   const paginationFrom = pagination.total === 0 ? 0 : (page - 1) * limit + 1
   const paginationTo = Math.min(page * limit, pagination.total)
 
@@ -362,7 +364,19 @@ export default function Companies() {
               <div className={s.filterSummary}>
                 <span className={s.filterSummaryItem}>
                   <span className={s.filterSummaryValue}>{pagination.total}</span>
-                  <span className={s.filterSummaryLabel}>Kết quả</span>
+                  <span className={s.filterSummaryLabel}>Tổng KH</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={`${s.filterSummaryValue} ${s.filterSummarySuccess}`}>{pageActiveTotal}</span>
+                  <span className={s.filterSummaryLabel}>Hợp tác</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={`${s.filterSummaryValue} ${pageInactiveTotal > 0 ? s.filterSummaryWarn : ''}`}>{pageInactiveTotal}</span>
+                  <span className={s.filterSummaryLabel}>Tạm ngưng</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={s.filterSummaryValue}>{pageTerminatedTotal}</span>
+                  <span className={s.filterSummaryLabel}>Chấm dứt</span>
                 </span>
                 <span className={s.filterSummaryItem}>
                   <span className={s.filterSummaryValue}>{pageOpenTotal}</span>
@@ -371,10 +385,6 @@ export default function Companies() {
                 <span className={s.filterSummaryItem}>
                   <span className={`${s.filterSummaryValue} ${pageOverdueTotal > 0 ? s.filterSummaryDanger : ''}`}>{pageOverdueTotal}</span>
                   <span className={s.filterSummaryLabel}>Quá hạn</span>
-                </span>
-                <span className={s.filterSummaryItem}>
-                  <span className={`${s.filterSummaryValue} ${s.filterSummarySuccess}`}>{pageActiveTotal}</span>
-                  <span className={s.filterSummaryLabel}>Hoạt động</span>
                 </span>
               </div>
             )}

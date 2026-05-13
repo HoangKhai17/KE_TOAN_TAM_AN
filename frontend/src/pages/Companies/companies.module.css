@@ -328,6 +328,7 @@
 
 .filterSummaryDanger { color: var(--color-danger); }
 .filterSummarySuccess { color: var(--color-success); }
+.filterSummaryWarn { color: #d97706; }
 
 /* ── Table wrapper ───────────────────────────────────────── */
 
@@ -3036,12 +3037,6 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.noteCard:hover .noteActions {
-  opacity: 1;
 }
 
 .noteActionBtn {
@@ -3053,9 +3048,33 @@
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
-  color: #64748b;
+  color: #94a3b8;
   cursor: pointer;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.noteActionBtnPin {
+  color: #d97706;
+}
+
+.noteActionBtnPin:hover {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+.noteActionBtnEdit {
+  color: #3b82f6;
+}
+
+.noteActionBtnEdit:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.noteActionBtnDanger {
+  color: #f87171;
 }
 
 .noteActionBtn:hover {

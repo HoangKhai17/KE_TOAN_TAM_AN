@@ -566,12 +566,10 @@ export default function SchedulesTab({ company, isAdmin }) {
           <button className={s.btnGhost} onClick={load} title="Tải lại" disabled={loading}>
             <RefreshCw size={14} className={loading ? s.spin : ''} />
           </button>
-          {isAdmin && (
-            <button className={s.btnPrimary} onClick={openCreate}>
-              <Plus size={14} />
-              Thêm lịch
-            </button>
-          )}
+          <button className={s.btnPrimary} onClick={openCreate}>
+            <Plus size={14} />
+            Thêm lịch
+          </button>
         </div>
       </div>
 
@@ -587,11 +585,7 @@ export default function SchedulesTab({ company, isAdmin }) {
         <div className={s.emptyState}>
           <div className={s.emptyIcon}><CalendarDays size={24} /></div>
           <p className={s.emptyTitle}>Chưa có lịch định kỳ</p>
-          <p className={s.emptyDesc}>
-            {isAdmin
-              ? 'Nhấn "Thêm lịch" để cấu hình lịch tự động sinh công việc cho công ty này.'
-              : 'Chưa có lịch định kỳ nào được cấu hình.'}
-          </p>
+          <p className={s.emptyDesc}>Nhấn "Thêm lịch" để cấu hình lịch tự động sinh công việc cho công ty này.</p>
         </div>
       ) : (
         <div className={s.tableWrap}>
@@ -646,35 +640,31 @@ export default function SchedulesTab({ company, isAdmin }) {
                         >
                           <Eye size={14} />
                         </button>
-                        {isAdmin && (
-                          <>
-                            <button
-                              className={`${s.rowActionBtn} ${sc.isActive ? s.scToggleOff : s.scToggleOn}`}
-                              onClick={() => handleToggle(sc)}
-                              disabled={togglingId === sc.id}
-                              title={sc.isActive ? 'Tắt lịch' : 'Bật lịch'}
-                            >
-                              {togglingId === sc.id
-                                ? <Loader2 size={14} className={s.spin} />
-                                : <Power size={14} />
-                              }
-                            </button>
-                            <button
-                              className={s.rowActionBtn}
-                              onClick={() => openEdit(sc)}
-                              title="Chỉnh sửa"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              className={`${s.rowActionBtn} ${s.rowActionDanger}`}
-                              onClick={() => setDeleteTarget(sc)}
-                              title="Xóa lịch"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        )}
+                        <button
+                          className={`${s.rowActionBtn} ${sc.isActive ? s.scToggleOff : s.scToggleOn}`}
+                          onClick={() => handleToggle(sc)}
+                          disabled={togglingId === sc.id}
+                          title={sc.isActive ? 'Tắt lịch' : 'Bật lịch'}
+                        >
+                          {togglingId === sc.id
+                            ? <Loader2 size={14} className={s.spin} />
+                            : <Power size={14} />
+                          }
+                        </button>
+                        <button
+                          className={s.rowActionBtn}
+                          onClick={() => openEdit(sc)}
+                          title="Chỉnh sửa"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className={`${s.rowActionBtn} ${s.rowActionDanger}`}
+                          onClick={() => setDeleteTarget(sc)}
+                          title="Xóa lịch"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>

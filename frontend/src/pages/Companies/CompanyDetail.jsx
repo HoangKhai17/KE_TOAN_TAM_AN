@@ -80,6 +80,7 @@ export default function CompanyDetail() {
   const [error, setError]       = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
 
+  const [noteCount, setNoteCount]         = useState(0)
   const [showEdit, setShowEdit]           = useState(false)
   const [showTerminate, setShowTerminate] = useState(false)
   const [terminating, setTerminating]       = useState(false)
@@ -274,6 +275,9 @@ export default function CompanyDetail() {
             {tid === 'tasks' && (company.taskOpenCount ?? 0) > 0 && (
               <span className={s.tabCount}>{company.taskOpenCount}</span>
             )}
+            {tid === 'notes' && noteCount > 0 && (
+              <span className={s.tabCount}>{noteCount}</span>
+            )}
           </button>
         ))}
       </div>
@@ -308,7 +312,7 @@ export default function CompanyDetail() {
         />
       )}
       {activeTab === 'notes' && (
-        <NotesTab company={company} />
+        <NotesTab company={company} onNoteCountChange={setNoteCount} />
       )}
 
       {/* Edit modal */}
@@ -649,6 +653,10 @@ function StaffCard({ company, isAdmin, onAssigned }) {
 // ── PerformanceCard ────────────────────────────────────────────────────────────
 
 function PerformanceCard({ company }) {
+  const completed = company.taskCompletedCount ?? 0
+  const onTime    = company.taskOnTimeCount ?? 0
+  const slaRate   = completed > 0 ? Math.round((onTime / completed) * 100) : null
+
   return (
     <div className={s.metricCard}>
       <div className={s.metricCardHeader}>
@@ -667,12 +675,14 @@ function PerformanceCard({ company }) {
           <div className={s.metricItemLabel}>Quá hạn</div>
         </div>
         <div className={s.metricItem}>
-          <div className={`${s.metricItemValue} ${s.metricItemValueGray}`}>—</div>
+          <div className={`${s.metricItemValue} ${s.metricItemValueGreen}`}>{completed}</div>
           <div className={s.metricItemLabel}>Hoàn thành</div>
         </div>
         <div className={s.metricItem}>
-          <div className={`${s.metricItemValue} ${s.metricItemValueGray}`}>—</div>
-          <div className={s.metricItemLabel}>SLA tháng</div>
+          <div className={`${s.metricItemValue} ${slaRate === null ? s.metricItemValueGray : slaRate >= 80 ? s.metricItemValueGreen : s.metricItemValueRed}`}>
+            {slaRate === null ? '—' : `${slaRate}%`}
+          </div>
+          <div className={s.metricItemLabel}>Đúng hạn</div>
         </div>
       </div>
     </div>
@@ -936,6 +946,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const [page, setPage]             = useState(1)
   const [limit, setLimit]           = useState(20)
   const [loading, setLoading]       = useState(true)
+  const [availableYears, setAvailableYears] = useState([])
 
   const [searchInput, setSearchInput]       = useState('')
   const [search, setSearch]                 = useState('')
@@ -959,7 +970,15 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   // Reset to page 1 when filters or limit change
   useEffect(() => { setPage(1) }, [statusFilter, priorityFilter, isOverdue, monthFilter, yearFilter, limit])
 
-  useEffect(() => { loadEnums() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadEnums()
+    tasksApi.getTaskYears()
+      .then((years) => setAvailableYears(years))
+      .catch(() => {
+        const y = parseInt(CUR_YEAR, 10)
+        setAvailableYears([y, y - 1, y - 2])
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function getDateRange() {
     const y = yearFilter  ? parseInt(yearFilter, 10)  : null
@@ -1119,7 +1138,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             <label className={s.cTaskFilterLabel}>Năm</label>
             <select value={yearFilter} onChange={(e) => { setYearFilter(e.target.value); setPage(1) }} className={s.cTaskFilterSelect}>
               <option value="">Tất cả</option>
-              {[2024, 2025, 2026, 2027].map((y) => (
+              {availableYears.map((y) => (
                 <option key={y} value={y}>Năm {y}</option>
               ))}
             </select>
@@ -1147,6 +1166,41 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               Quá hạn
             </button>
           </div>
+        </div>
+
+        {/* Active filter chips */}
+        <div className={s.filterChips} style={{ padding: '4px 14px 8px', borderTop: '1px solid #f1f5f9' }}>
+          {/* Period chip — always show current period */}
+          <span
+            className={s.filterChip}
+            style={(monthFilter !== CUR_MONTH || yearFilter !== CUR_YEAR)
+              ? {}
+              : { background: '#f8fafc', color: '#64748b', borderColor: '#e2e8f0' }
+            }
+          >
+            Kỳ: {monthFilter ? `T${monthFilter}/` : ''}{yearFilter || '—'}
+            {(monthFilter !== CUR_MONTH || yearFilter !== CUR_YEAR) && (
+              <button className={s.filterChipRemove} onClick={() => { setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR); setPage(1) }}>×</button>
+            )}
+          </span>
+          {priorityFilter && (
+            <span className={s.filterChip}>
+              Ưu tiên: {PRIORITY_LABELS[priorityFilter] ?? priorityFilter}
+              <button className={s.filterChipRemove} onClick={() => { setPriorityFilter(''); setPage(1) }}>×</button>
+            </span>
+          )}
+          {isOverdue && (
+            <span className={s.filterChip} style={{ background: '#fef2f2', color: '#dc2626', borderColor: '#fca5a5' }}>
+              Quá hạn
+              <button className={s.filterChipRemove} onClick={() => { setIsOverdue(false); setPage(1) }}>×</button>
+            </span>
+          )}
+          {search && (
+            <span className={s.filterChip}>
+              &ldquo;{search}&rdquo;
+              <button className={s.filterChipRemove} onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>×</button>
+            </span>
+          )}
         </div>
 
         {/* Status count chips */}
