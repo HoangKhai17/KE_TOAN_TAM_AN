@@ -1,6 +1,6 @@
 const { query, getClient } = require('../../config/db')
 const audit = require('../../lib/audit')
-const { createAndEmit } = require('../../lib/notify')
+const { createAndEmit, emitData } = require('../../lib/notify')
 const { sendMail } = require('../../utils/mailer')
 const { getTemplate, renderTemplate } = require('../../utils/emailTemplates')
 
@@ -204,6 +204,7 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
     })
   }
 
+  emitData('data:company', { action: 'created', id: rows[0].id, actorId })
   return toDto({ ...rows[0], task_open_count: 0, task_overdue_count: 0 })
 }
 
@@ -286,6 +287,7 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent) {
     }
   }
 
+  emitData('data:company', { action: 'updated', id, actorId })
   return toDto({ ...rows[0], task_open_count: 0, task_overdue_count: 0 })
 }
 
@@ -302,6 +304,7 @@ async function terminateCompany(id, actorId, ipAddress, userAgent) {
     userId: actorId, action: 'company.terminated',
     targetType: 'company', targetId: id, meta: { name: rows[0].name }, ipAddress, userAgent,
   })
+  emitData('data:company', { action: 'updated', id, actorId })
 }
 
 async function getAssignments(companyId) {
@@ -370,6 +373,7 @@ async function deleteCompany(id, actorId, ipAddress, userAgent) {
     meta: { name: rows[0].name },
     ipAddress, userAgent,
   })
+  emitData('data:company', { action: 'deleted', id, actorId })
 }
 
 async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddress, userAgent) {
@@ -458,6 +462,7 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
       })
     }
 
+    emitData('data:company', { action: 'updated', id: companyId, actorId })
     return { assignmentId: newAssignment.id, staffId, startDate: assignDate }
   } catch (err) {
     await client.query('ROLLBACK')

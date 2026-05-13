@@ -11,6 +11,7 @@ import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import { listUserOptions } from '../../api/users'
 import { useEnumsStore } from '../../hooks/useEnums'
+import { useDataSync } from '../../hooks/useDataSync'
 import s from './companies.module.css'
 
 // ── Constants (fallbacks while enum API loads) ─────────────────────────────────
@@ -153,6 +154,7 @@ export default function Companies() {
   const [page, setPage]                 = useState(() => readSaved().page ?? 1)
   const [limit, setLimit]               = useState(() => readSaved().limit ?? 20)
 
+  const [syncKey, setSyncKey]         = useState(0)
   const [showCreate, setShowCreate]   = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)  // company to delete
   const [deleting, setDeleting]       = useState(false)
@@ -191,6 +193,9 @@ export default function Companies() {
     loadEnums()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Live sync: reload when any user creates / updates / deletes a company
+  useDataSync('data:company', () => setSyncKey((k) => k + 1), [])
+
   // Fetch companies
   useEffect(() => {
     let cancelled = false
@@ -211,7 +216,7 @@ export default function Companies() {
       .catch(() => { if (!cancelled) setError('Không thể tải danh sách khách hàng') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, limit, statusFilter, btFilter, staffFilter, search])
+  }, [page, limit, statusFilter, btFilter, staffFilter, search, syncKey])
 
   function resetFilters() {
     setSearchInput('')

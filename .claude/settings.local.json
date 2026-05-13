@@ -132,7 +132,8 @@
       "Bash(node --check \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\tasks\\\\tasks.service.js\")",
       "Bash(node --check \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\companies\\\\companies.service.js\")",
       "Bash(docker-compose exec *)",
-      "Bash(xargs grep -l \"documents.router\")"
+      "Bash(xargs grep -l \"documents.router\")",
+      "Bash(Get-ChildItem -Path . -Directory)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"

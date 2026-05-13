@@ -15,6 +15,7 @@ import {
   fmtDate, fmtDateTime, isTaskOverdue,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
+import { useDataSync } from '../../hooks/useDataSync'
 import s from './tasks.module.css'
 
 // ── Status action CSS map ─────────────────────────────────────────────────────
@@ -413,10 +414,16 @@ function CommentsTab({ taskId }) {
   const [sending, setSending]   = useState(false)
   const [editId, setEditId]     = useState(null)
   const [editText, setEditText] = useState('')
+  const [syncTick, setSyncTick] = useState(0)
+
+  // Live sync: reload when another user posts a comment on this task
+  useDataSync('data:comment', (payload) => {
+    if (payload.taskId === taskId) setSyncTick((k) => k + 1)
+  }, [taskId])
 
   useEffect(() => {
     tasksApi.getTaskComments(taskId).then(setComments).catch(() => {}).finally(() => setLoading(false))
-  }, [taskId])
+  }, [taskId, syncTick])
 
   async function submit() {
     if (!newText.trim()) return
@@ -536,10 +543,16 @@ function ActivityTab({ taskId }) {
   const [logs, setLogs]     = useState([])
   const [loading, setLoading] = useState(true)
   const getLabel = useEnumsStore((st) => st.getLabel)
+  const [syncTick, setSyncTick] = useState(0)
+
+  // Live sync: reload when task is mutated or a comment is added (both create activity entries)
+  useDataSync(['data:task', 'data:comment'], (payload) => {
+    if (payload.taskId === taskId) setSyncTick((k) => k + 1)
+  }, [taskId])
 
   useEffect(() => {
     tasksApi.getTaskActivity(taskId).then(setLogs).catch(() => {}).finally(() => setLoading(false))
-  }, [taskId])
+  }, [taskId, syncTick])
 
   if (loading) return <div className={s.loadingBox}><div className={s.spinner} /> Đang tải...</div>
 

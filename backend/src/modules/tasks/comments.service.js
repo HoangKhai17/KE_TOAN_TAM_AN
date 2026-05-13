@@ -1,6 +1,6 @@
 const { query } = require('../../config/db')
 const activity = require('../../lib/activity')
-const { createAndEmit } = require('../../lib/notify')
+const { createAndEmit, emitData } = require('../../lib/notify')
 
 function toDto(row) {
   return {
@@ -76,6 +76,7 @@ async function addComment(taskId, { content }, actorId) {
     notifyUser(taskInfo.created_by)
   }
 
+  emitData('data:comment', { taskId, actorId })
   return toDto(full)
 }
 

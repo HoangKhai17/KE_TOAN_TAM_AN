@@ -30,6 +30,7 @@ import {
   isTaskOverdue, fmtDate, progressPct,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
+import { useDataSync } from '../../hooks/useDataSync'
 import s from './tasks.module.css'
 
 // ── Sort options ──────────────────────────────────────────────────────────────
@@ -1344,6 +1345,12 @@ export default function Tasks() {
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
+  // Live sync: reload when any user mutates a task
+  useDataSync('data:task', () => {
+    setRefreshKey((k) => k + 1)
+    setStatsKey((k) => k + 1)
   }, [])
 
   // Persist filters to sessionStorage whenever they change

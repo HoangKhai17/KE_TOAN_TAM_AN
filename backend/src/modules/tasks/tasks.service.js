@@ -3,7 +3,7 @@ const audit    = require('../../lib/audit')
 const activity = require('../../lib/activity')
 const { canTransition } = require('./tasks.transitions')
 const { checkBlockers } = require('./dependencies.service')
-const { createAndEmit } = require('../../lib/notify')
+const { createAndEmit, emitData } = require('../../lib/notify')
 
 const STATUS_LABEL = {
   pending:        'Chờ xử lý',
@@ -203,6 +203,7 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     ).catch(() => {})
   }
 
+  emitData('data:task', { action: 'created', id: task.id, companyId, actorId })
   return result
 }
 
@@ -275,11 +276,12 @@ async function updateTask(id, data, actorId, ipAddress, userAgent) {
     ).catch(() => {})
   }
 
+  emitData('data:task', { action: 'updated', id, companyId: result.companyId, actorId })
   return result
 }
 
 async function deleteTask(id, actorId, ipAddress, userAgent) {
-  const { rows: [task] } = await query('SELECT id, title FROM tasks WHERE id = $1', [id])
+  const { rows: [task] } = await query('SELECT id, title, company_id FROM tasks WHERE id = $1', [id])
   if (!task) throw Object.assign(new Error('Task not found'), { status: 404 })
 
   await query('DELETE FROM tasks WHERE id = $1', [id])
@@ -288,6 +290,8 @@ async function deleteTask(id, actorId, ipAddress, userAgent) {
     userId: actorId, action: 'task.deleted',
     targetType: 'task', targetId: id, meta: { title: task.title }, ipAddress, userAgent,
   })
+
+  emitData('data:task', { action: 'deleted', id, companyId: task.company_id, actorId })
 }
 
 async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userAgent) {
@@ -398,6 +402,7 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
     }
   }
 
+  emitData('data:task', { action: 'updated', id, companyId: result.companyId, actorId })
   return result
 }
 

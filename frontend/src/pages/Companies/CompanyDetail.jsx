@@ -26,6 +26,7 @@ import {
   isTaskOverdue, fmtDate as fmtTaskDate, progressPct,
 } from '../Tasks/taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
+import { useDataSync } from '../../hooks/useDataSync'
 import ts from '../Tasks/tasks.module.css'
 import s from './companies.module.css'
 
@@ -83,6 +84,7 @@ export default function CompanyDetail() {
 
   const [noteCount, setNoteCount]         = useState(0)
   const [overviewTick, setOverviewTick]   = useState(0)
+  const [companyTick, setCompanyTick]     = useState(0)
   const [showEdit, setShowEdit]           = useState(false)
   const [showTerminate, setShowTerminate] = useState(false)
   const [terminating, setTerminating]       = useState(false)
@@ -104,6 +106,14 @@ export default function CompanyDetail() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
+  }, [id, companyTick])
+
+  // Live sync: reload company + overview cards when related data changes
+  useDataSync(['data:task', 'data:company'], (payload) => {
+    if (payload.companyId === id || payload.id === id) {
+      setCompanyTick((k) => k + 1)
+      setOverviewTick((k) => k + 1)
+    }
   }, [id])
 
   async function handleDelete() {

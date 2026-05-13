@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -14,6 +14,7 @@ import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
 import { getDashboardSummary, getDashboardCharts } from '../../api/dashboard'
+import { useDataSync } from '../../hooks/useDataSync'
 import s from './Dashboard.module.css'
 
 // ── Gradient palette for PieChart ─────────────────────────────────────────────
@@ -116,6 +117,8 @@ export default function Dashboard() {
   const [error,   setError]         = useState(null)
   const [range,   setRange]         = useState('28d')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [syncKey, setSyncKey]       = useState(0)
+  const syncTimer = useRef(null)
 
   // Fullscreen listener
   useEffect(() => {
@@ -150,7 +153,13 @@ export default function Dashboard() {
     }
     load()
     return () => { cancelled = true }
-  }, [range])
+  }, [range, syncKey])
+
+  // Live sync: debounced reload when tasks or companies change
+  useDataSync(['data:task', 'data:company'], () => {
+    clearTimeout(syncTimer.current)
+    syncTimer.current = setTimeout(() => setSyncKey((k) => k + 1), 1500)
+  }, [])
 
   const greetHour = new Date().getHours()
   const greetWord = greetHour < 12 ? 'Chào buổi sáng' : greetHour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối'

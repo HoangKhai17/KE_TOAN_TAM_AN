@@ -25,4 +25,21 @@ async function createAndEmit(userId, type, title, body, taskId = null) {
   }
 }
 
-module.exports = { createAndEmit }
+/**
+ * Broadcast a data-sync event to ALL connected clients.
+ * Clients use this to know when to re-fetch specific entities.
+ * Non-blocking — errors are logged and swallowed.
+ *
+ * @param {'data:task'|'data:company'|'data:comment'} event
+ * @param {{ action?: string, id?: string, companyId?: string, taskId?: string, actorId?: string }} payload
+ */
+function emitData(event, payload) {
+  try {
+    const io = getIo()
+    if (io) io.emit(event, payload)
+  } catch (err) {
+    logger.warn('[Notify] emitData failed', { event, error: err.message })
+  }
+}
+
+module.exports = { createAndEmit, emitData }
