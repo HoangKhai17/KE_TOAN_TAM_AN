@@ -7,7 +7,7 @@ import {
   Search, Eye, EyeOff, UserX, UserCheck, Camera, Tag,
   Play, RotateCcw, CheckCircle, XCircle,
   ChevronDown, ChevronUp, ListChecks, History,
-  Trash2, Check, X, Mail, Send,
+  Trash2, Check, X, Mail, Send, Info, ExternalLink,
 } from 'lucide-react'
 import { testEmail } from '../../api/notifications'
 import AppLayout from '../../components/layout/AppLayout'
@@ -1292,9 +1292,42 @@ function EmailSection() {
   return (
     <div>
       <p className={s.sectionText}>
-        Cấu hình SMTP để gửi email tự động (nhắc nhở deadline, báo cáo sáng, escalation).
-        Mặc định dùng Microsoft 365 — smtp.office365.com, port 587.
+        Cấu hình SMTP để gửi email tự động (phân công, nhắc nhở deadline, báo cáo sáng, escalation).
+        Khuyến nghị dùng <strong>Gmail</strong> với <strong>App Password</strong> — không cần server mail riêng.
       </p>
+
+      {/* Gmail App Password guide */}
+      <div style={{
+        background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10,
+        padding: '12px 16px', marginBottom: 20, display: 'flex', gap: 10,
+      }}>
+        <Info size={16} style={{ color: '#0369a1', flexShrink: 0, marginTop: 1 }} />
+        <div style={{ fontSize: 12, color: '#0c4a6e', lineHeight: 1.65 }}>
+          <strong style={{ display: 'block', marginBottom: 4, color: '#0369a1' }}>
+            Hướng dẫn lấy Google App Password
+          </strong>
+          <ol style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <li>Đăng nhập tài khoản Google và bật <strong>Xác minh 2 bước</strong> (nếu chưa bật).</li>
+            <li>
+              Truy cập{' '}
+              <a
+                href="https://myaccount.google.com/apppasswords"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#0369a1', fontWeight: 700 }}
+              >
+                myaccount.google.com/apppasswords
+                <ExternalLink size={10} style={{ marginLeft: 3, verticalAlign: 'middle' }} />
+              </a>
+            </li>
+            <li>Chọn ứng dụng <strong>Mail</strong>, thiết bị <strong>Other</strong>, đặt tên (vd: <em>Kế Toán Tâm An</em>).</li>
+            <li>Google tạo mật khẩu <strong>16 ký tự</strong> — copy và điền vào ô "App Password" bên dưới.</li>
+          </ol>
+          <div style={{ marginTop: 6, color: '#0369a1', fontStyle: 'italic', fontSize: 11 }}>
+            Host: smtp.gmail.com &nbsp;·&nbsp; Port: 587 (TLS) &nbsp;·&nbsp; Email: địa chỉ Gmail của bạn
+          </div>
+        </div>
+      </div>
 
       {!loaded ? (
         <div className={s.configSkeleton}>
@@ -1309,7 +1342,7 @@ function EmailSection() {
                 type="text"
                 value={form.smtp_host}
                 onChange={set('smtp_host')}
-                placeholder="smtp.office365.com"
+                placeholder="smtp.gmail.com"
                 className={s.settingsInput}
               />
             </div>
@@ -1324,25 +1357,26 @@ function EmailSection() {
                 min={1}
                 max={65535}
               />
+              <p className={s.settingsHint}>587 (TLS) hoặc 465 (SSL)</p>
             </div>
             <div>
-              <label className={s.settingsLabel}>Email (SMTP User)</label>
+              <label className={s.settingsLabel}>Gmail (SMTP User)</label>
               <input
                 type="email"
                 value={form.smtp_user}
                 onChange={set('smtp_user')}
-                placeholder="no-reply@ketoan-taman.vn"
+                placeholder="yourname@gmail.com"
                 className={s.settingsInput}
               />
             </div>
             <div>
-              <label className={s.settingsLabel}>Mật khẩu SMTP</label>
+              <label className={s.settingsLabel}>App Password (Google)</label>
               <div className={s.pwInputWrap}>
                 <input
                   type={showPw ? 'text' : 'password'}
                   value={form.smtp_pass}
                   onChange={set('smtp_pass')}
-                  placeholder="App password hoặc mật khẩu SMTP"
+                  placeholder="16 ký tự từ Google App Password"
                   className={`${s.settingsInput} ${s.pwInputField}`}
                 />
                 <button type="button" className={s.pwToggleBtn} onClick={() => setShowPw((v) => !v)}>
@@ -1358,10 +1392,10 @@ function EmailSection() {
               type="email"
               value={form.smtp_from}
               onChange={set('smtp_from')}
-              placeholder="Kế Toán Tâm An <no-reply@ketoan-taman.vn>"
+              placeholder="yourname@gmail.com"
               className={s.settingsInput}
             />
-            <p className={s.settingsHint}>Để trống sẽ dùng chính SMTP user.</p>
+            <p className={s.settingsHint}>Để trống sẽ dùng chính Gmail ở trên. Gmail yêu cầu From phải trùng với SMTP user.</p>
           </div>
 
           <div className={s.formActions}>

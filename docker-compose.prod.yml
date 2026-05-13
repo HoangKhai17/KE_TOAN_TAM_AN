@@ -28,6 +28,9 @@ services:
       - NODE_ENV=production
     networks:
       - internal
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s

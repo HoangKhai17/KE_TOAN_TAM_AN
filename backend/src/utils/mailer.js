@@ -10,13 +10,13 @@ async function getSmtpConfig() {
       `SELECT key, value FROM system_configs WHERE key IN ('smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from')`
     )
     const cfg = {}
-    rows.forEach((r) => { cfg[r.key] = r.value })
+    rows.forEach((r) => { cfg[r.key] = r.value?.trim() })
     return {
-      host: cfg.smtp_host || env.email.host,
+      host: (cfg.smtp_host || env.email.host).trim(),
       port: parseInt(cfg.smtp_port || env.email.port, 10),
-      user: cfg.smtp_user || env.email.user || '',
+      user: (cfg.smtp_user || env.email.user || '').trim(),
       pass: cfg.smtp_pass || env.email.pass || '',
-      from: cfg.smtp_from || env.email.from,
+      from: (cfg.smtp_from || env.email.from).trim(),
     }
   } catch {
     return {
@@ -30,11 +30,14 @@ async function getSmtpConfig() {
 }
 
 function buildTransport(cfg) {
+  const host = (cfg.host || '').trim()
+  const user = (cfg.user || '').trim()
+  const port = parseInt(cfg.port, 10)
   return nodemailer.createTransport({
-    host: cfg.host,
-    port: cfg.port,
-    secure: cfg.port === 465,
-    auth: cfg.user && cfg.pass ? { user: cfg.user, pass: cfg.pass } : undefined,
+    host,
+    port,
+    secure: port === 465,
+    auth: user && cfg.pass ? { user, pass: cfg.pass } : undefined,
     tls: { rejectUnauthorized: false },
   })
 }
