@@ -172,8 +172,16 @@ function createApp() {
   app.use('/api/dashboard', require('./modules/dashboard/dashboard.router'))
   app.use('/api/reports',   require('./modules/reports/reports.router'))
 
-  // Phase 14 — Attendance & Leave
+  // Phase CC-2 — Shifts & Work Schedules
+  app.use('/api/shifts',         require('./modules/attendance/shifts.router'))
+  app.use('/api/work-schedules', require('./modules/attendance/schedules.router'))
+
+  // Phase CC-3 — Attendance Check-in/out & Records
   app.use('/api/attendance', require('./modules/attendance/attendance.router'))
+
+  // Phase CC-4 — Leave & Overtime Requests
+  app.use('/api/leave-requests',    require('./modules/attendance/leave.router'))
+  app.use('/api/overtime-requests', require('./modules/attendance/overtime.router'))
 
   // Phase 12 — Notifications
   app.use('/api/notifications', require('./modules/notifications/notifications.router'))

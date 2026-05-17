@@ -1195,19 +1195,19 @@ Báo cáo Chấm Công — Tháng 5/2026      [Chọn tháng] [Xuất Excel]
 
 ### Tổng Hợp Thứ Tự & Ước Tính
 
-| Phase | Nội dung | Ước tính | Phụ thuộc |
-|-------|---------|----------|-----------|
-| **CC-1** | DB Migration | 0.5 ngày | — |
-| **CC-2** | Backend: Shifts + Schedules API | 1 ngày | CC-1 |
-| **CC-3** | Backend: Check-in/out + Bảng công | 2 ngày | CC-2 |
-| **CC-4** | Backend: Leave + OT Requests | 1.5 ngày | CC-3 |
-| **CC-5** | Backend: Điều chỉnh + Báo cáo + Payroll | 1.5 ngày | CC-4 |
-| **CC-6** | Frontend: Check-in Widget | 1 ngày | CC-3 |
-| **CC-7** | Frontend: Bảng Công Cá Nhân | 2 ngày | CC-6 |
-| **CC-8** | Frontend: Đơn Nghỉ / OT (nhân viên) | 1.5 ngày | CC-4, CC-7 |
-| **CC-9** | Frontend: Admin Dashboard | 2.5 ngày | CC-5, CC-8 |
-| **CC-10** | Frontend: Báo Cáo + Tích Hợp Lương | 1 ngày | CC-9 |
-| | **Tổng cộng** | **~14.5 ngày** | |
+| Phase | Nội dung | Ước tính | Phụ thuộc | Trạng thái |
+|-------|---------|----------|-----------|------------|
+| **CC-1** | DB Migration | 0.5 ngày | — | ✅ Hoàn thành |
+| **CC-2** | Backend: Shifts + Schedules API | 1 ngày | CC-1 | ✅ Hoàn thành |
+| **CC-3** | Backend: Check-in/out + Bảng công | 2 ngày | CC-2 | ✅ Hoàn thành |
+| **CC-4** | Backend: Leave + OT Requests | 1.5 ngày | CC-3 | ✅ Hoàn thành |
+| **CC-5** | Backend: Điều chỉnh + Báo cáo + Payroll | 1.5 ngày | CC-4 | ✅ Hoàn thành |
+| **CC-6** | Frontend: Check-in Widget | 1 ngày | CC-3 | ⬜ Chưa bắt đầu |
+| **CC-7** | Frontend: Bảng Công Cá Nhân | 2 ngày | CC-6 | ⬜ Chưa bắt đầu |
+| **CC-8** | Frontend: Đơn Nghỉ / OT (nhân viên) | 1.5 ngày | CC-4, CC-7 | ⬜ Chưa bắt đầu |
+| **CC-9** | Frontend: Admin Dashboard | 2.5 ngày | CC-5, CC-8 | ⬜ Chưa bắt đầu |
+| **CC-10** | Frontend: Báo Cáo + Tích Hợp Lương | 1 ngày | CC-9 | ⬜ Chưa bắt đầu |
+| | **Tổng cộng** | **~14.5 ngày** | | |
 
 > **Ghi chú thực tế:** Nếu làm tuần tự 1 người: ~3 tuần. Nếu backend + frontend song song từ CC-3 trở đi: ~10–12 ngày.
 
