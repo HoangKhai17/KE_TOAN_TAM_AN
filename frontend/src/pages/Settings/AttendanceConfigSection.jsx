@@ -5,10 +5,10 @@ import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
 import s from './settings.module.css'
 
+// shift_type enum values that actually exist in the DB (migration 035)
 const SHIFT_TYPES = [
   { value: 'fixed',    label: 'Cố định' },
   { value: 'flexible', label: 'Linh hoạt' },
-  { value: 'shift',    label: 'Theo ca' },
 ]
 
 const OT_MULTIPLIERS = [
@@ -16,9 +16,6 @@ const OT_MULTIPLIERS = [
   { value: 2.0, label: '× 2.0 (cuối tuần)' },
   { value: 3.0, label: '× 3.0 (ngày lễ)' },
 ]
-
-const CURRENT_YEAR = new Date().getFullYear()
-const YEAR_OPTIONS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]
 
 // ── Sub-tab strip ─────────────────────────────────────────────────────────────
 
@@ -45,31 +42,37 @@ const tabStyle = {
 
 // ── ShiftModal ────────────────────────────────────────────────────────────────
 
+// Default values for a new shift form
 const EMPTY_SHIFT = {
-  name: '',
-  type: 'fixed',
-  startTime: '08:00',
-  endTime: '17:00',
+  name:         '',
+  shiftType:    'fixed',
+  startTime:    '08:00',
+  endTime:      '17:00',
   breakMinutes: 60,
-  lateToleranceMinutes: 5,
-  earlyLeaveToleranceMinutes: 5,
-  isActive: true,
+  toleranceIn:  5,
+  toleranceOut: 5,
+  isActive:     true,
 }
 
 function ShiftModal({ shift, onClose, onSaved }) {
   const addToast = useToastStore((st) => st.toast)
   const isEdit   = Boolean(shift)
 
-  const [form, setForm]     = useState(isEdit ? {
-    name:                     shift.name,
-    type:                     shift.type,
-    startTime:                shift.start_time?.slice(0, 5) ?? '08:00',
-    endTime:                  shift.end_time?.slice(0, 5) ?? '17:00',
-    breakMinutes:             shift.break_minutes ?? 60,
-    lateToleranceMinutes:     shift.late_tolerance_minutes ?? 5,
-    earlyLeaveToleranceMinutes: shift.early_leave_tolerance_minutes ?? 5,
-    isActive:                 shift.is_active ?? true,
-  } : { ...EMPTY_SHIFT })
+  // Backend DTO uses camelCase: shiftType, startTime, endTime, breakMinutes, toleranceIn, toleranceOut, isActive
+  const [form, setForm] = useState(
+    isEdit
+      ? {
+          name:         shift.name,
+          shiftType:    shift.shiftType    ?? 'fixed',
+          startTime:    shift.startTime    ? String(shift.startTime).slice(0, 5) : '08:00',
+          endTime:      shift.endTime      ? String(shift.endTime).slice(0, 5)   : '17:00',
+          breakMinutes: shift.breakMinutes ?? 60,
+          toleranceIn:  shift.toleranceIn  ?? 5,
+          toleranceOut: shift.toleranceOut ?? 5,
+          isActive:     shift.isActive     ?? true,
+        }
+      : { ...EMPTY_SHIFT }
+  )
   const [saving, setSaving] = useState(false)
 
   function set(field, val) {
@@ -84,15 +87,16 @@ function ShiftModal({ shift, onClose, onSaved }) {
     }
     setSaving(true)
     try {
+      // Send camelCase to match what shifts.router.js expects
       const body = {
-        name:                       form.name.trim(),
-        type:                       form.type,
-        startTime:                  form.startTime,
-        endTime:                    form.endTime,
-        breakMinutes:               Number(form.breakMinutes),
-        lateToleranceMinutes:       Number(form.lateToleranceMinutes),
-        earlyLeaveToleranceMinutes: Number(form.earlyLeaveToleranceMinutes),
-        isActive:                   form.isActive,
+        name:         form.name.trim(),
+        shiftType:    form.shiftType,
+        startTime:    form.startTime,
+        endTime:      form.endTime,
+        breakMinutes: Number(form.breakMinutes),
+        toleranceIn:  Number(form.toleranceIn),
+        toleranceOut: Number(form.toleranceOut),
+        isActive:     form.isActive,
       }
       if (isEdit) {
         await attendanceApi.updateShift(shift.id, body)
@@ -124,8 +128,14 @@ function ShiftModal({ shift, onClose, onSaved }) {
           </div>
           <div>
             <label className={s.settingsLabel}>Loại ca</label>
-            <select className={s.settingsSelect} value={form.type} onChange={(e) => set('type', e.target.value)}>
-              {SHIFT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            <select
+              className={s.settingsSelect}
+              value={form.shiftType}
+              onChange={(e) => set('shiftType', e.target.value)}
+            >
+              {SHIFT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -153,7 +163,7 @@ function ShiftModal({ shift, onClose, onSaved }) {
 
         <div className={s.formGrid2}>
           <div>
-            <label className={s.settingsLabel}>Giờ nghỉ trưa (phút)</label>
+            <label className={s.settingsLabel}>Nghỉ trưa (phút)</label>
             <input
               type="number" min={0} max={120}
               className={s.settingsInput}
@@ -166,8 +176,8 @@ function ShiftModal({ shift, onClose, onSaved }) {
             <input
               type="number" min={0} max={60}
               className={s.settingsInput}
-              value={form.lateToleranceMinutes}
-              onChange={(e) => set('lateToleranceMinutes', e.target.value)}
+              value={form.toleranceIn}
+              onChange={(e) => set('toleranceIn', e.target.value)}
             />
           </div>
         </div>
@@ -178,8 +188,8 @@ function ShiftModal({ shift, onClose, onSaved }) {
             type="number" min={0} max={60}
             className={s.settingsInput}
             style={{ maxWidth: 180 }}
-            value={form.earlyLeaveToleranceMinutes}
-            onChange={(e) => set('earlyLeaveToleranceMinutes', e.target.value)}
+            value={form.toleranceOut}
+            onChange={(e) => set('toleranceOut', e.target.value)}
           />
         </div>
 
@@ -210,17 +220,18 @@ function ShiftModal({ shift, onClose, onSaved }) {
 // ── ShiftsTab ─────────────────────────────────────────────────────────────────
 
 function ShiftsTab() {
-  const addToast             = useToastStore((st) => st.toast)
-  const [shifts, setShifts]  = useState([])
+  const addToast              = useToastStore((st) => st.toast)
+  const [shifts, setShifts]   = useState([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal]    = useState(null) // null | 'create' | shift-object
+  const [modal, setModal]     = useState(null) // null | 'create' | shift-object
   const [toggling, setToggling] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await attendanceApi.listShifts(false) // all shifts including inactive
-      setShifts(data ?? [])
+      // activeOnly=false → show all including inactive
+      const data = await attendanceApi.listShifts(false)
+      setShifts(Array.isArray(data) ? data : [])
     } catch {
       addToast('Không thể tải danh sách ca làm việc', 'error')
     } finally {
@@ -233,8 +244,9 @@ function ShiftsTab() {
   async function handleToggle(shift) {
     setToggling(shift.id)
     try {
-      await attendanceApi.updateShift(shift.id, { isActive: !shift.is_active })
-      addToast(shift.is_active ? 'Đã tắt ca làm việc' : 'Đã kích hoạt ca làm việc', 'success')
+      // Only send isActive to avoid overwriting other fields with undefined
+      await attendanceApi.updateShift(shift.id, { isActive: !shift.isActive })
+      addToast(shift.isActive ? 'Đã tắt ca làm việc' : 'Đã kích hoạt ca làm việc', 'success')
       load()
     } catch {
       addToast('Không thể cập nhật trạng thái', 'error')
@@ -243,20 +255,26 @@ function ShiftsTab() {
     }
   }
 
+  // Format TIME string "HH:MM:SS" → "HH:MM"
   function fmtTime(t) {
     if (!t) return '—'
-    return t.slice(0, 5)
+    return String(t).slice(0, 5)
   }
 
-  const shiftTypeName = (type) => SHIFT_TYPES.find((t) => t.value === type)?.label ?? type
+  const shiftTypeName = (type) =>
+    SHIFT_TYPES.find((t) => t.value === type)?.label ?? type
 
   return (
     <div>
       <div className={s.usersToolbar} style={{ marginBottom: 12 }}>
         <p className={s.sectionText} style={{ margin: 0 }}>
-          Quản lý các ca làm việc trong công ty. Mỗi nhân viên sẽ được gán vào một ca khi lập lịch tháng.
+          Quản lý ca làm việc. Ca không thể xoá — chỉ có thể tắt nếu không muốn sử dụng.
         </p>
-        <button className={s.btnSave} style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setModal('create')}>
+        <button
+          className={s.btnSave}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+          onClick={() => setModal('create')}
+        >
           <Plus size={14} /> Tạo ca mới
         </button>
       </div>
@@ -287,30 +305,32 @@ function ShiftsTab() {
             </thead>
             <tbody>
               {shifts.map((sh) => (
-                <tr key={sh.id}>
+                <tr key={sh.id} style={!sh.isActive ? { opacity: 0.55 } : {}}>
                   <td><strong>{sh.name}</strong></td>
-                  <td>{shiftTypeName(sh.type)}</td>
-                  <td>{fmtTime(sh.start_time)}</td>
-                  <td>{fmtTime(sh.end_time)}</td>
-                  <td>{sh.break_minutes ?? 0} phút</td>
+                  <td>{shiftTypeName(sh.shiftType)}</td>
+                  <td>{fmtTime(sh.startTime)}</td>
+                  <td>{fmtTime(sh.endTime)}</td>
+                  <td>{sh.breakMinutes ?? 0} phút</td>
                   <td style={{ fontSize: 12, color: '#6b7280' }}>
-                    Trễ: {sh.late_tolerance_minutes ?? 0}p / Sớm: {sh.early_leave_tolerance_minutes ?? 0}p
+                    Trễ: {sh.toleranceIn ?? 0}p / Sớm: {sh.toleranceOut ?? 0}p
                   </td>
                   <td>
-                    {sh.is_active
+                    {sh.isActive
                       ? <span className={s.statusActive}>Hoạt động</span>
-                      : <span className={s.statusResigned}>Tắt</span>}
+                      : <span className={s.statusResigned}>Đã tắt</span>}
                   </td>
                   <td>
                     <div className={s.userActionsCell} style={{ justifyContent: 'flex-end' }}>
                       <button
                         className={s.iconBtn}
-                        title={sh.is_active ? 'Tắt ca' : 'Kích hoạt ca'}
+                        title={sh.isActive ? 'Tắt ca' : 'Kích hoạt ca'}
                         disabled={toggling === sh.id}
                         onClick={() => handleToggle(sh)}
-                        style={{ color: sh.is_active ? '#dc2626' : '#059669' }}
+                        style={{ color: sh.isActive ? '#dc2626' : '#059669' }}
                       >
-                        {toggling === sh.id ? <Loader2 size={15} className={s.spin} /> : <Power size={15} />}
+                        {toggling === sh.id
+                          ? <Loader2 size={15} className={s.spin} />
+                          : <Power size={15} />}
                       </button>
                       <button
                         className={s.iconBtn}
@@ -329,10 +349,17 @@ function ShiftsTab() {
       )}
 
       {modal === 'create' && (
-        <ShiftModal onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
+        <ShiftModal
+          onClose={() => setModal(null)}
+          onSaved={() => { setModal(null); load() }}
+        />
       )}
       {modal && modal !== 'create' && (
-        <ShiftModal shift={modal} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
+        <ShiftModal
+          shift={modal}
+          onClose={() => setModal(null)}
+          onSaved={() => { setModal(null); load() }}
+        />
       )}
     </div>
   )
@@ -341,9 +368,9 @@ function ShiftsTab() {
 // ── HolidayModal ──────────────────────────────────────────────────────────────
 
 function HolidayModal({ onClose, onSaved }) {
-  const addToast             = useToastStore((st) => st.toast)
-  const [form, setForm]      = useState({ holidayDate: '', name: '', otMultiplier: 3.0 })
-  const [saving, setSaving]  = useState(false)
+  const addToast            = useToastStore((st) => st.toast)
+  const [form, setForm]     = useState({ holidayDate: '', name: '', otMultiplier: 3.0 })
+  const [saving, setSaving] = useState(false)
 
   function set(field, val) { setForm((f) => ({ ...f, [field]: val })) }
 
@@ -354,8 +381,8 @@ function HolidayModal({ onClose, onSaved }) {
     setSaving(true)
     try {
       await attendanceApi.createHoliday({
-        holidayDate: form.holidayDate,
-        name:        form.name.trim(),
+        holidayDate:  form.holidayDate,
+        name:         form.name.trim(),
         otMultiplier: Number(form.otMultiplier),
       })
       addToast('Đã thêm ngày lễ', 'success')
@@ -395,7 +422,9 @@ function HolidayModal({ onClose, onSaved }) {
             value={form.otMultiplier}
             onChange={(e) => set('otMultiplier', e.target.value)}
           >
-            {OT_MULTIPLIERS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {OT_MULTIPLIERS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
         </div>
         <div className={s.modalActions}>
@@ -412,20 +441,64 @@ function HolidayModal({ onClose, onSaved }) {
 
 // ── HolidaysTab ───────────────────────────────────────────────────────────────
 
+const DOW_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
+
+// Parse a date string (YYYY-MM-DD or ISO) safely in local timezone
+function parseDateLocal(d) {
+  if (!d) return null
+  const s = typeof d === 'string' ? d : String(d)
+  // Avoid UTC shift: treat "YYYY-MM-DD" as local date
+  const [y, mo, day] = s.slice(0, 10).split('-').map(Number)
+  return new Date(y, mo - 1, day)
+}
+
+function fmtDateVI(d) {
+  const dt = parseDateLocal(d)
+  if (!dt) return '—'
+  return dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function dowVI(d) {
+  const dt = parseDateLocal(d)
+  if (!dt) return ''
+  return DOW_VI[dt.getDay()]
+}
+
 function HolidaysTab() {
-  const addToast               = useToastStore((st) => st.toast)
-  const [year, setYear]        = useState(CURRENT_YEAR)
-  const [holidays, setHolidays] = useState([])
-  const [loading, setLoading]  = useState(true)
-  const [showModal, setShowModal] = useState(false)
+  const addToast                = useToastStore((st) => st.toast)
+  const [allHolidays, setAllHolidays] = useState([]) // all holidays ever loaded
+  const [yearOptions, setYearOptions] = useState([]) // distinct years from data
+  const [year, setYear]         = useState(null)     // currently selected year
+  const [loading, setLoading]   = useState(true)
+  const [showModal, setShowModal]     = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(null)
 
-  const load = useCallback(async (y) => {
+  // Load holidays WITHOUT year filter to get all years, then derive year list
+  const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await attendanceApi.listHolidays(y)
-      setHolidays(Array.isArray(data) ? data : [])
+      const data = await attendanceApi.listHolidays() // no year → all holidays
+      const holidays = Array.isArray(data) ? data : []
+      setAllHolidays(holidays)
+
+      // Derive distinct years from data
+      const years = [...new Set(
+        holidays.map((h) => {
+          const dt = parseDateLocal(h.holidayDate)
+          return dt ? dt.getFullYear() : null
+        }).filter(Boolean)
+      )].sort()
+
+      const currentYear = new Date().getFullYear()
+      if (!years.includes(currentYear)) years.push(currentYear)
+      years.sort()
+
+      setYearOptions(years)
+      setYear((prev) => {
+        if (prev && years.includes(prev)) return prev
+        return currentYear
+      })
     } catch {
       addToast('Không thể tải danh sách ngày lễ', 'error')
     } finally {
@@ -433,7 +506,15 @@ function HolidaysTab() {
     }
   }, [addToast])
 
-  useEffect(() => { load(year) }, [year, load])
+  useEffect(() => { loadAll() }, [loadAll])
+
+  // Filter by selected year on the client side
+  const holidays = year
+    ? allHolidays.filter((h) => {
+        const dt = parseDateLocal(h.holidayDate)
+        return dt && dt.getFullYear() === year
+      })
+    : allHolidays
 
   async function handleDelete(id) {
     setDeleting(id)
@@ -441,7 +522,7 @@ function HolidaysTab() {
       await attendanceApi.deleteHoliday(id)
       addToast('Đã xoá ngày lễ', 'success')
       setDeleteTarget(null)
-      load(year)
+      loadAll()
     } catch {
       addToast('Không thể xoá ngày lễ', 'error')
     } finally {
@@ -449,38 +530,32 @@ function HolidaysTab() {
     }
   }
 
-  function fmtDate(d) {
-    if (!d) return '—'
-    const dt = new Date(d)
-    return dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  }
-
-  const dow = (d) => {
-    if (!d) return ''
-    const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
-    return days[new Date(d).getDay()]
-  }
-
   return (
     <div>
-      <div className={s.usersToolbar} style={{ marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <p className={s.sectionText} style={{ margin: 0 }}>Quản lý ngày lễ quốc gia. Hệ số OT ngày lễ ảnh hưởng tính lương ngoài giờ.</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>Năm:</span>
-            <select
-              className={s.settingsSelect}
-              style={{ width: 90 }}
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-            >
-              {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </div>
+      <div className={s.usersToolbar} style={{ marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <p className={s.sectionText} style={{ margin: 0 }}>
+            Quản lý ngày lễ quốc gia. Hệ số OT ngày lễ ảnh hưởng tính lương ngoài giờ.
+          </p>
+          {yearOptions.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>Năm:</span>
+              <select
+                className={s.settingsSelect}
+                style={{ width: 90 }}
+                value={year ?? ''}
+                onChange={(e) => setYear(Number(e.target.value))}
+              >
+                {yearOptions.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <button
           className={s.btnSave}
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
           onClick={() => setShowModal(true)}
         >
           <Plus size={14} /> Thêm ngày lễ
@@ -493,7 +568,7 @@ function HolidaysTab() {
         </div>
       ) : holidays.length === 0 ? (
         <div className={s.emptyState}>
-          <p>Không có ngày lễ nào trong năm {year}.</p>
+          <p>Không có ngày lễ nào{year ? ` trong năm ${year}` : ''}.</p>
         </div>
       ) : (
         <div className={s.userTableWrap}>
@@ -510,8 +585,8 @@ function HolidaysTab() {
             <tbody>
               {holidays.map((h) => (
                 <tr key={h.id}>
-                  <td><strong>{fmtDate(h.holiday_date)}</strong></td>
-                  <td style={{ color: '#6b7280' }}>{dow(h.holiday_date)}</td>
+                  <td><strong>{fmtDateVI(h.holidayDate)}</strong></td>
+                  <td style={{ color: '#6b7280' }}>{dowVI(h.holidayDate)}</td>
                   <td>{h.name}</td>
                   <td>
                     <span style={{
@@ -523,7 +598,7 @@ function HolidaysTab() {
                       fontSize: 12,
                       fontWeight: 600,
                     }}>
-                      × {Number(h.ot_multiplier).toFixed(1)}
+                      × {Number(h.otMultiplier).toFixed(1)}
                     </span>
                   </td>
                   <td>
@@ -538,7 +613,9 @@ function HolidaysTab() {
                             onClick={() => handleDelete(h.id)}
                             style={{ color: '#dc2626' }}
                           >
-                            {deleting === h.id ? <Loader2 size={14} className={s.spin} /> : <Check size={14} />}
+                            {deleting === h.id
+                              ? <Loader2 size={14} className={s.spin} />
+                              : <Check size={14} />}
                           </button>
                           <button
                             className={s.iconBtn}
@@ -570,7 +647,7 @@ function HolidaysTab() {
       {showModal && (
         <HolidayModal
           onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); load(year) }}
+          onSaved={() => { setShowModal(false); loadAll() }}
         />
       )}
     </div>
