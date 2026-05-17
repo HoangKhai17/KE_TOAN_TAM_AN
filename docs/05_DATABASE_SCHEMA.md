@@ -46,6 +46,23 @@
 └──────────────────────┘    └──────────────────────┘    │   KH — mã hóa AES)  │
                                      │ N:1 users         └──────────────────────┘
                                      └──────────────────────────────────────────
+
+── Module 7: Chấm Công ──────────────────────────────────────────────────────
+┌─────────┐      ┌───────────────────┐      ┌──────────────────────────────┐
+│ shifts  │─1:N──│  work_schedules   │      │      attendance_logs         │
+│ (Ca LV) │      │  (Lịch ca NV)    │      │  (Raw log check-in/out)      │
+└─────────┘      └───────────────────┘      │  APPEND-ONLY — no delete     │
+                                            └──────────────────────────────┘
+                                                         │ feeds into
+┌───────────────────────────────────┐       ┌────────────▼─────────────────┐
+│   leave_requests  (Đơn nghỉ phép)│──────►│    attendance_records         │
+└───────────────────────────────────┘       │  (1 row / người / ngày)      │
+┌───────────────────────────────────┐       └──────────────────────────────┘
+│   overtime_requests  (Đơn OT)    │                    │ adjusted by
+└───────────────────────────────────┘       ┌───────────▼──────────────────┐
+┌───────────────────────────────────┐       │  attendance_adjustments       │
+│   public_holidays  (Ngày lễ QG)  │       │  (Audit trail — immutable)    │
+└───────────────────────────────────┘       └──────────────────────────────┘
 ```
 
 ---
@@ -113,6 +130,59 @@ CREATE TYPE document_category AS ENUM (
 CREATE TYPE notification_type AS ENUM (
   'task_assigned', 'task_overdue', 'deadline_reminder',
   'escalation', 'morning_summary', 'task_status_changed'
+);
+
+-- ── Module 7: Chấm Công ──────────────────────────────────────────────────────
+
+-- Trạng thái bảng công ngày
+CREATE TYPE attendance_status AS ENUM (
+  'present',        -- Đi làm đúng giờ
+  'late',           -- Đi trễ (> tolerance_in phút)
+  'early_leave',    -- Về sớm (> tolerance_out phút)
+  'late_and_early', -- Vừa trễ vừa về sớm
+  'absent',         -- Vắng không phép
+  'on_leave',       -- Nghỉ phép được duyệt
+  'business_trip',  -- Công tác
+  'wfh',            -- Work From Home
+  'holiday',        -- Ngày lễ quốc gia
+  'unscheduled'     -- Không có ca, chờ admin xử lý
+);
+
+-- Loại nghỉ phép
+CREATE TYPE leave_type AS ENUM (
+  'annual',         -- Phép năm
+  'sick',           -- Nghỉ bệnh
+  'compensatory',   -- Nghỉ bù OT
+  'unpaid',         -- Nghỉ không phép
+  'business_trip',  -- Công tác
+  'wfh'             -- WFH
+);
+
+-- Trạng thái đơn (dùng chung leave + OT requests)
+CREATE TYPE request_status AS ENUM (
+  'pending',    -- Chờ duyệt
+  'approved',   -- Đã duyệt
+  'rejected',   -- Từ chối
+  'cancelled'   -- Nhân viên huỷ
+);
+
+-- Loại ca làm việc
+CREATE TYPE shift_type AS ENUM (
+  'fixed',     -- Ca cố định (start_time / end_time)
+  'flexible'   -- Linh hoạt (chỉ cần đủ required_hours)
+);
+
+-- Phương thức check-in
+CREATE TYPE checkin_method AS ENUM (
+  'web',     -- Web app (trong văn phòng)
+  'mobile',  -- Mobile app (WFH / công tác)
+  'manual'   -- Admin nhập tay (điều chỉnh)
+);
+
+-- Loại log chấm công
+CREATE TYPE attendance_log_type AS ENUM (
+  'check_in',
+  'check_out'
 );
 
 -- Loại báo cáo xuất
@@ -929,6 +999,297 @@ CREATE INDEX idx_cc_active     ON company_credentials(company_id, is_active) WHE
 | 21 | `payroll_periods` | Kỳ lương theo tháng | N:1 users (created_by, confirmed_by) |
 | 22 | `payroll_records` | Lương/thưởng từng nhân viên | N:1 payroll_periods, users |
 | 23 | `company_credentials` | Tài khoản hệ thống KH (mã hóa) | N:1 companies |
+| **—** | **— Module 7: Chấm Công —** | | |
+| 24 | `shifts` | Định nghĩa ca làm việc | N:1 users (created_by) |
+| 25 | `work_schedules` | Lịch ca từng ngày cho từng NV | N:1 users, shifts |
+| 26 | `attendance_logs` | Raw log check-in/out (append-only) | N:1 users |
+| 27 | `attendance_records` | Bảng công ngày (1 row/người/ngày) | N:1 users, shifts, leave_requests |
+| 28 | `leave_requests` | Đơn nghỉ phép | N:1 users (user_id, approved_by) |
+| 29 | `overtime_requests` | Đơn tăng ca / OT | N:1 users (user_id, approved_by) |
+| 30 | `attendance_adjustments` | Điều chỉnh bảng công — audit trail | N:1 attendance_records, users |
+| 31 | `public_holidays` | Ngày lễ quốc gia | — |
+
+---
+
+---
+
+## [MODULE 7] TABLE: shifts (Ca Làm Việc)
+
+> Migration: `migrations/008_attendance_module.sql`
+
+```sql
+CREATE TABLE shifts (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name           VARCHAR(100) NOT NULL,        -- 'Ca Hành Chính', 'Ca Sáng', ...
+  shift_type     shift_type NOT NULL DEFAULT 'fixed',
+  start_time     TIME,                          -- NULL nếu flexible
+  end_time       TIME,                          -- NULL nếu flexible
+  break_minutes  INTEGER NOT NULL DEFAULT 60,   -- Giờ nghỉ giữa ca (phút)
+  required_hours NUMERIC(4,2),                  -- Cho ca flexible: tổng giờ yêu cầu/ngày
+  tolerance_in   INTEGER NOT NULL DEFAULT 15,   -- Phút trễ cho phép (không tính trễ)
+  tolerance_out  INTEGER NOT NULL DEFAULT 15,   -- Phút về sớm cho phép
+  is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by     UUID NOT NULL REFERENCES users(id),
+  created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_shifts_active ON shifts(is_active);
+
+-- Seed: Ca Hành Chính 08:00–17:00 (tạo ngay sau khi có admin user)
+INSERT INTO shifts (name, shift_type, start_time, end_time, break_minutes, tolerance_in, tolerance_out, created_by)
+VALUES (
+  'Ca Hành Chính', 'fixed', '08:00:00', '17:00:00', 60, 15, 15,
+  (SELECT id FROM users WHERE role = 'admin' LIMIT 1)
+);
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `tolerance_in` | Đi muộn ≤ tolerance_in phút → vẫn tính `present`. Đi muộn hơn → `late` |
+| `break_minutes` | Trừ ra khi tính `actual_hours` (nghỉ trưa không tính vào giờ làm) |
+| `required_hours` | Chỉ dùng cho ca `flexible`: ví dụ 8.0 giờ/ngày |
+
+---
+
+## [MODULE 7] TABLE: work_schedules (Lịch Ca Nhân Viên)
+
+```sql
+-- Lịch ca từng ngày cho từng nhân viên — admin tạo trước theo tháng hoặc bulk generate.
+-- is_day_off = TRUE → ngày nghỉ lịch (T7, CN, nghỉ bù), không cần check-in.
+CREATE TABLE work_schedules (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  work_date   DATE NOT NULL,
+  shift_id    UUID REFERENCES shifts(id) ON DELETE SET NULL,  -- NULL nếu is_day_off = TRUE
+  is_day_off  BOOLEAN NOT NULL DEFAULT FALSE,
+  notes       TEXT,
+  created_by  UUID NOT NULL REFERENCES users(id),
+  created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+
+  UNIQUE (user_id, work_date)
+);
+
+CREATE INDEX idx_ws_user_date ON work_schedules(user_id, work_date);
+CREATE INDEX idx_ws_date      ON work_schedules(work_date);
+CREATE INDEX idx_ws_shift     ON work_schedules(shift_id);
+```
+
+---
+
+## [MODULE 7] TABLE: attendance_logs (Raw Log Check-in/out — Append-Only)
+
+```sql
+-- Bảng raw log — KHÔNG BAO GIỜ UPDATE/DELETE.
+-- Mỗi lần check-in hoặc check-out → append 1 row mới.
+-- Khi tính toán: MIN(logged_at) WHERE log_type='check_in' = giờ vào thực tế;
+--               MAX(logged_at) WHERE log_type='check_out' = giờ ra thực tế.
+-- Xử lý bấm nhầm nhiều lần một cách tự nhiên.
+CREATE TABLE attendance_logs (
+  id          BIGSERIAL PRIMARY KEY,           -- bigserial cho volume cao
+  user_id     UUID NOT NULL REFERENCES users(id),
+  log_type    attendance_log_type NOT NULL,
+  logged_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+  method      checkin_method NOT NULL DEFAULT 'web',
+  device_info VARCHAR(200),                    -- Browser UA hoặc tên thiết bị mobile
+  ip_address  INET,
+  notes       TEXT,                            -- Ghi chú nếu admin nhập tay
+  created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_al_user_date ON attendance_logs(user_id, logged_at);
+CREATE INDEX idx_al_logged_at ON attendance_logs(logged_at DESC);
+
+-- Bảo vệ tính bất biến của raw log
+REVOKE DELETE ON attendance_logs FROM PUBLIC;
+```
+
+---
+
+## [MODULE 7] TABLE: attendance_records (Bảng Công Ngày — 1 Row/Người/Ngày)
+
+```sql
+-- Kết quả tính toán sau mỗi ngày — tự động tạo/cập nhật khi check-in/out.
+-- Admin có thể điều chỉnh (ghi vào attendance_adjustments để audit).
+CREATE TABLE attendance_records (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID NOT NULL REFERENCES users(id),
+  work_date        DATE NOT NULL,
+  shift_id         UUID REFERENCES shifts(id) ON DELETE SET NULL,
+
+  -- Thời gian thực tế
+  check_in_time    TIMESTAMP,               -- NULL nếu absent / chưa check-in
+  check_out_time   TIMESTAMP,               -- NULL nếu chưa check-out
+  actual_hours     NUMERIC(4,2),            -- Tổng giờ thực tế (đã trừ break)
+
+  -- Lệch so với ca
+  late_minutes     INTEGER NOT NULL DEFAULT 0,   -- Phút đi trễ (0 nếu đúng giờ hoặc không trễ)
+  early_minutes    INTEGER NOT NULL DEFAULT 0,   -- Phút về sớm (0 nếu đúng giờ)
+
+  -- Kết quả tính toán
+  work_units       NUMERIC(3,1) NOT NULL DEFAULT 0.0,  -- 0.0 | 0.5 | 1.0
+  status           attendance_status NOT NULL DEFAULT 'absent',
+
+  -- Metadata
+  is_adjusted      BOOLEAN NOT NULL DEFAULT FALSE,  -- TRUE nếu admin đã điều chỉnh
+  is_holiday       BOOLEAN NOT NULL DEFAULT FALSE,  -- TRUE nếu ngày lễ quốc gia
+  leave_request_id UUID REFERENCES leave_requests(id) ON DELETE SET NULL,
+  ot_hours         NUMERIC(4,2) NOT NULL DEFAULT 0, -- Tổng giờ OT được duyệt trong ngày này
+  notes            TEXT,
+
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+  UNIQUE (user_id, work_date)
+);
+
+CREATE INDEX idx_ar_user_date ON attendance_records(user_id, work_date);
+CREATE INDEX idx_ar_date      ON attendance_records(work_date);
+CREATE INDEX idx_ar_status    ON attendance_records(status);
+CREATE INDEX idx_ar_period    ON attendance_records(work_date, user_id)
+  WHERE status NOT IN ('holiday');
+```
+
+**Quy tắc tính `work_units` sau check-out:**
+
+| Điều kiện | work_units |
+|-----------|-----------|
+| `actual_hours / required_hours ≥ 0.8` | **1.0** |
+| `actual_hours / required_hours ≥ 0.5` | **0.5** |
+| `actual_hours / required_hours < 0.5` | **0.0** |
+| Nghỉ phép được duyệt (`on_leave`, `wfh`, `business_trip`) | **1.0** |
+| Ngày lễ (`holiday`) | **1.0** |
+| Vắng không phép (`absent`) | **0.0** |
+
+---
+
+## [MODULE 7] TABLE: leave_requests (Đơn Nghỉ Phép)
+
+```sql
+CREATE TABLE leave_requests (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        UUID NOT NULL REFERENCES users(id),
+  leave_type     leave_type NOT NULL,
+  start_date     DATE NOT NULL,
+  end_date       DATE NOT NULL,
+  total_days     NUMERIC(4,1) NOT NULL,      -- Tính khi tạo (trừ T7, CN, lễ)
+  reason         TEXT,
+  status         request_status NOT NULL DEFAULT 'pending',
+  approved_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+  approved_at    TIMESTAMP,
+  rejection_note TEXT,                       -- Lý do từ chối nếu rejected
+  created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+
+  CHECK (end_date >= start_date)
+);
+
+CREATE INDEX idx_lr_user   ON leave_requests(user_id);
+CREATE INDEX idx_lr_status ON leave_requests(status);
+CREATE INDEX idx_lr_dates  ON leave_requests(start_date, end_date);
+```
+
+---
+
+## [MODULE 7] TABLE: overtime_requests (Đơn OT)
+
+```sql
+CREATE TABLE overtime_requests (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        UUID NOT NULL REFERENCES users(id),
+  ot_date        DATE NOT NULL,
+  start_time     TIME NOT NULL,
+  end_time       TIME NOT NULL,
+  ot_hours       NUMERIC(4,2) NOT NULL,      -- Tính tự động từ start–end (trừ break nếu OT > 4h)
+  ot_rate        NUMERIC(3,1) NOT NULL,      -- 1.5 (ngày thường) / 2.0 (cuối tuần) / 3.0 (ngày lễ)
+  reason         TEXT,
+  status         request_status NOT NULL DEFAULT 'pending',
+  approved_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+  approved_at    TIMESTAMP,
+  rejection_note TEXT,
+  created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_or_user   ON overtime_requests(user_id);
+CREATE INDEX idx_or_status ON overtime_requests(status);
+CREATE INDEX idx_or_date   ON overtime_requests(ot_date);
+```
+
+| ot_rate | Áp dụng khi |
+|---------|------------|
+| 1.5 | Ngày làm việc bình thường |
+| 2.0 | T7 hoặc CN (cuối tuần) |
+| 3.0 | Ngày lễ quốc gia (`public_holidays`) |
+
+---
+
+## [MODULE 7] TABLE: attendance_adjustments (Điều Chỉnh — Audit Trail)
+
+```sql
+-- Mỗi lần admin chỉnh sửa attendance_records → tạo 1 row tại đây.
+-- KHÔNG BAO GIỜ xóa hoặc sửa. Là audit trail bất biến tương tự audit_logs.
+CREATE TABLE attendance_adjustments (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  attendance_record_id UUID NOT NULL REFERENCES attendance_records(id),
+  field_name           VARCHAR(80) NOT NULL,   -- Cột bị sửa: 'check_in_time', 'status', ...
+  before_value         TEXT,
+  after_value          TEXT,
+  reason               TEXT NOT NULL,
+  adjusted_by          UUID NOT NULL REFERENCES users(id),
+  adjusted_at          TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_adj_record ON attendance_adjustments(attendance_record_id);
+CREATE INDEX idx_adj_by     ON attendance_adjustments(adjusted_by);
+
+REVOKE UPDATE, DELETE ON attendance_adjustments FROM PUBLIC;
+```
+
+---
+
+## [MODULE 7] TABLE: public_holidays (Ngày Lễ Quốc Gia)
+
+```sql
+CREATE TABLE public_holidays (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  holiday_date  DATE NOT NULL UNIQUE,
+  name          VARCHAR(200) NOT NULL,           -- 'Tết Dương Lịch', 'Giỗ Tổ Hùng Vương', ...
+  ot_multiplier NUMERIC(3,1) NOT NULL DEFAULT 3.0,
+  created_at    TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_ph_date ON public_holidays(holiday_date);
+
+-- Seed data: Ngày lễ Việt Nam năm 2026
+INSERT INTO public_holidays (holiday_date, name, ot_multiplier) VALUES
+  ('2026-01-01', 'Tết Dương Lịch', 3.0),
+  ('2026-01-27', 'Tết Nguyên Đán (29 Tháng Chạp)', 3.0),
+  ('2026-01-28', 'Tết Nguyên Đán (30 Tháng Chạp)', 3.0),
+  ('2026-01-29', 'Tết Nguyên Đán (Mùng 1)', 3.0),
+  ('2026-01-30', 'Tết Nguyên Đán (Mùng 2)', 3.0),
+  ('2026-01-31', 'Tết Nguyên Đán (Mùng 3)', 3.0),
+  ('2026-02-01', 'Tết Nguyên Đán (Mùng 4)', 3.0),
+  ('2026-02-02', 'Tết Nguyên Đán (Mùng 5)', 3.0),
+  ('2026-04-16', 'Giỗ Tổ Hùng Vương (10/3 AL)', 3.0),
+  ('2026-04-30', 'Giải Phóng Miền Nam', 3.0),
+  ('2026-05-01', 'Quốc Tế Lao Động', 3.0),
+  ('2026-09-02', 'Quốc Khánh', 3.0),
+  ('2026-09-03', 'Quốc Khánh (nghỉ bù)', 3.0);
+```
+
+---
+
+## [MODULE 7] ALTER TABLE: users (Thêm Cột Chấm Công)
+
+```sql
+-- Thêm vào users: ca mặc định và số ngày phép năm
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS default_shift_id    UUID REFERENCES shifts(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS annual_leave_days   NUMERIC(4,1) NOT NULL DEFAULT 12.0;
+
+-- annual_leave_days: Số ngày phép năm theo hợp đồng (mặc định 12 ngày/năm theo Luật LĐ VN)
+```
 
 ---
 
@@ -947,3 +1308,9 @@ CREATE INDEX idx_cc_active     ON company_credentials(company_id, is_active) WHE
 | refresh_tokens (expired) | Purge sau 7 ngày | Cleanup định kỳ |
 | payroll_records | Vĩnh viễn | Yêu cầu pháp lý kế toán lao động |
 | company_credentials | Theo vòng đời hợp đồng KH | Xóa khi `companies.status = terminated` và quá 1 năm |
+| attendance_logs | 5 năm | Yêu cầu pháp lý lao động VN |
+| attendance_records | 5 năm | Yêu cầu pháp lý lao động VN |
+| attendance_adjustments | Vĩnh viễn | Immutable audit trail |
+| leave_requests | 5 năm | Hồ sơ lao động |
+| overtime_requests | 5 năm | Hồ sơ lao động |
+| public_holidays | Vĩnh viễn | Cập nhật thủ công hàng năm |

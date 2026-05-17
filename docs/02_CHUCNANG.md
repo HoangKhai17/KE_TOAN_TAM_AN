@@ -3,14 +3,14 @@
 ## Tổng Quan Các Module
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                   HỆ THỐNG KẾ TOÁN TÂM AN                  │
-├──────────────┬──────────────┬──────────────┬────────────────┤
-│  M1: Hồ Sơ  │ M2: Nhân Sự │ M3: Công     │ M4: Báo Cáo   │
-│  Khách Hàng │              │ Việc         │ & Thống Kê     │
-├──────────────┴──────────────┴──────────────┴────────────────┤
-│  M5: Hồ Sơ Giấy Tờ         │  M6: Cấu Hình Hệ Thống       │
-└─────────────────────────────┴────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                      HỆ THỐNG KẾ TOÁN TÂM AN                            │
+├──────────────┬──────────────┬──────────────┬────────────────┬────────────┤
+│  M1: Hồ Sơ  │ M2: Nhân Sự │ M3: Công     │ M4: Báo Cáo   │ M7: Chấm  │
+│  Khách Hàng │ & Hồ Sơ NV  │ Việc         │ & Thống Kê     │ Công & OT  │
+├──────────────┴──────────────┴──────────────┴────────────────┴────────────┤
+│  M5: Hồ Sơ Giấy Tờ                  │  M6: Cấu Hình Hệ Thống            │
+└──────────────────────────────────────┴────────────────────────────────────┘
 ```
 
 ---
@@ -78,12 +78,18 @@
 - **Tổng quan công việc**: số việc đang mở, hoàn thành trong tháng, quá hạn
 - Phân quyền trong hệ thống (Admin / Nhân viên)
 
-### 2.3 Theo Dõi Khối Lượng Công Việc
+### 2.3 Theo Dõi Khối Lượng Công Việc (Module 3 link)
 - Hiển thị tải công việc hiện tại của từng nhân viên
 - So sánh khối lượng giữa các nhân viên (dùng cho phân công cân bằng)
 - Lịch sử hoàn thành công việc theo tháng
 
-### 2.4 Quản Lý Lương & Thưởng
+### 2.4 Chấm Công & Nghỉ Phép (tích hợp Module 7)
+
+- Xem nhanh tình trạng chấm công hôm nay của từng nhân viên (đã/chưa check-in)
+- Tổng ngày công, ngày vắng, ngày OT trong tháng — hiển thị ngay trên hồ sơ nhân viên
+- Link nhanh sang bảng công tháng và lịch sử đơn nghỉ phép / OT của từng nhân viên
+
+### 2.5 Quản Lý Lương & Thưởng
 
 > Lập và lưu trữ bảng lương hàng tháng cho toàn bộ nhân viên nội bộ của Tâm An.
 
@@ -375,6 +381,137 @@ Mỗi loại công việc trong Task Type Library có thể cấu hình thêm tr
 
 ---
 
+## Module 7: Chấm Công Nội Bộ
+
+> Quản lý chấm công hàng ngày, nghỉ phép, tăng ca cho nhân viên kế toán **nội bộ** của Tâm An. Phạm vi: ~5–20 nhân viên, văn phòng cố định, hỗ trợ WFH. Kết quả chấm công tự động feed vào Module 2 (Payroll) khi chốt bảng lương.
+
+### 7.1 Ca Làm Việc (Shifts)
+
+- **Ca cố định (`fixed`):** Xác định giờ vào – giờ ra cụ thể (mặc định: 08:00–17:00), nghỉ trưa 60 phút
+- **Ca linh hoạt (`flexible`):** Chỉ yêu cầu đủ tổng số giờ làm/ngày (áp dụng cho WFH)
+- Cấu hình ngưỡng cho phép trễ (`tolerance_in`) và về sớm (`tolerance_out`) — mặc định 15 phút
+- Mặc định: **Ca Hành Chính** 08:00–17:00 được seed sẵn khi deploy
+- Admin tạo và quản lý danh sách ca; gán ca mặc định (`default_shift_id`) cho từng nhân viên
+
+### 7.2 Lịch Ca Theo Nhân Viên (Work Schedules)
+
+- Admin tạo lịch ca cho từng nhân viên theo tháng (bulk generate tự động)
+- Quy tắc tự động: T7/CN và ngày lễ → `is_day_off = TRUE`, ngày thường → gán ca mặc định
+- Admin có thể điều chỉnh lịch ca thủ công cho từng ngày cụ thể
+- Nhân viên xem lịch ca của mình trên trang Chấm Công cá nhân
+
+### 7.3 Check-in / Check-out
+
+**Phương thức:**
+| Phương thức | Code | Ghi chú |
+|-------------|------|---------|
+| Web app | `web` | Trong văn phòng — click nút trên UI |
+| Mobile app | `mobile` | WFH / công tác — truy cập qua trình duyệt mobile |
+| Admin nhập tay | `manual` | Điều chỉnh khi nhân viên quên hoặc sự cố |
+
+**Luồng hàng ngày:**
+1. Nhân viên bấm **CHECK IN** → hệ thống ghi `attendance_logs` + tính trạng thái (đúng giờ/trễ)
+2. Nhân viên bấm **CHECK OUT** → ghi log out + tính `actual_hours`, `work_units`
+3. Kết quả: 1 record duy nhất/người/ngày trong `attendance_records`
+
+**Tính ngày công tự động:**
+- ≥ 80% giờ yêu cầu → **1.0 ngày công**
+- ≥ 50% → **0.5 ngày công**
+- < 50% → **0.0 ngày công**
+
+**Widget Check-in (hiển thị trên Header sau khi login):**
+- Trạng thái hôm nay: Chưa check-in / Đã check-in lúc HH:mm / Đã check-out HH:mm
+- Nút CHECK IN (disable sau khi đã check-in)
+- Nút CHECK OUT (enable sau khi đã check-in, disable sau khi đã check-out)
+
+### 7.4 Bảng Công Cá Nhân
+
+- Xem bảng công tháng hiện tại dưới dạng lịch (calendar grid)
+- Màu theo trạng thái: xanh lá (present), vàng (late), cam (early_leave), đỏ (absent), xanh dương (on_leave), tím (wfh)...
+- Click vào ngày → xem chi tiết: giờ vào, giờ ra, số phút trễ/về sớm, số giờ thực
+- Tổng hợp cuối tháng: tổng ngày công, ngày vắng, ngày nghỉ phép, giờ OT
+
+### 7.5 Đơn Nghỉ Phép (Leave Requests)
+
+| Loại nghỉ | Code | Tính công? |
+|-----------|------|-----------|
+| Phép năm | `annual` | Có (1.0 ngày) |
+| Nghỉ bệnh | `sick` | Có (1.0 ngày) |
+| Nghỉ bù OT | `compensatory` | Có (1.0 ngày) |
+| Nghỉ không phép | `unpaid` | Không (0.0) |
+| Công tác | `business_trip` | Có (1.0 ngày) |
+| WFH | `wfh` | Có (check-in qua app) |
+
+**Flow đơn nghỉ:**
+1. Nhân viên tạo đơn → trạng thái `pending`
+2. Thông báo đến Admin
+3. Admin duyệt (`approved`) hoặc từ chối (`rejected`) với lý do
+4. Khi duyệt → tự động cập nhật `attendance_records.status = 'on_leave'` cho các ngày đó
+
+### 7.6 Đơn Tăng Ca / OT (Overtime Requests)
+
+- Nhân viên tạo đơn OT **trước** hoặc **trong ngày** làm thêm
+- Khai: ngày OT, giờ bắt đầu – giờ kết thúc, lý do
+- Hệ thống tự tính: số giờ OT + hệ số lương (1.5× ngày thường / 2.0× cuối tuần / 3.0× ngày lễ)
+- Admin duyệt → OT được ghi vào bảng công và feed vào payroll
+
+### 7.7 Điều Chỉnh Bảng Công (Admin)
+
+- Admin xem danh sách yêu cầu điều chỉnh từ nhân viên (quên check-in, check-out sai giờ)
+- Duyệt / Từ chối từng yêu cầu với lý do
+- Khi duyệt: ghi `attendance_logs` với `method='manual'`, cập nhật record, tính lại ngày công
+- Mọi điều chỉnh đều ghi vào `attendance_adjustments` — audit trail bất biến, không xóa được
+
+### 7.8 Admin Dashboard Chấm Công
+
+**Tổng quan hôm nay:**
+- Danh sách ai đã check-in / chưa check-in / đang trễ
+- Số nhân viên vắng mặt, số đang OT
+
+**Bảng công tháng (Grid View):**
+- Grid 2 chiều: nhân viên (hàng) × ngày trong tháng (cột)
+- Màu từng ô theo trạng thái — nhìn là biết ngay ai vắng ngày nào
+- Click ô → xem chi tiết, click "Điều chỉnh" nếu có vấn đề
+
+**Các trang quản lý:**
+| Trang | Route | Mô tả |
+|-------|-------|--------|
+| Tổng quan | `/admin/chamcong` | Dashboard check-in hôm nay |
+| Bảng công tháng | `/admin/chamcong/bang-cong` | Grid NV × ngày |
+| Duyệt điều chỉnh | `/admin/chamcong/dieu-chinh` | Yêu cầu sửa bảng công chờ duyệt |
+| Duyệt đơn nghỉ | `/admin/chamcong/don-nghi` | Leave requests pending |
+| Duyệt đơn OT | `/admin/chamcong/tang-ca` | OT requests pending |
+| Quản lý ca | `/admin/chamcong/ca-lam-viec` | CRUD shifts |
+| Lịch ca | `/admin/chamcong/lich-ca` | Gán ca cho NV theo tháng |
+| Ngày lễ | `/admin/chamcong/ngay-le` | CRUD public_holidays |
+| Báo cáo | `/admin/chamcong/bao-cao` | Tổng hợp + xuất |
+
+### 7.9 Báo Cáo Chấm Công & Tích Hợp Lương
+
+**Báo cáo tổng hợp tháng (per nhân viên):**
+- Tổng ngày công thực tế, ngày nghỉ phép, ngày vắng, số lần đi trễ
+- Tổng giờ OT được duyệt, OT pay ước tính
+- Xuất Excel cho đối soát
+
+**Tích hợp Payroll:**
+- Khi admin chốt kỳ lương: bấm "Đồng bộ chấm công → Bảng lương"
+- Hệ thống kiểm tra: còn ngày nào `unscheduled` hoặc thiếu check-out → cảnh báo danh sách
+- Sau xác nhận: tự động merge `attendance_summary` vào `payroll_records.components`
+- Dữ liệu merge: `actual_work_days`, `leave_paid_days`, `absent_days`, `ot_hours`, `ot_pay`
+
+### 7.10 Xử Lý Ngoại Lệ
+
+| Tình huống | Xử lý |
+|-----------|--------|
+| Quên check-in/out | Nhân viên yêu cầu điều chỉnh → Admin duyệt |
+| Check-in nhiều lần (bấm nhầm) | Lấy lần đầu tiên (check-in) / lần cuối (check-out) |
+| Không có lịch ca | status=`unscheduled`, check-in vẫn được ghi nhận, Admin xử lý sau |
+| Ngày lễ quốc gia | Tự động mark `is_holiday=TRUE`, `work_units=1.0` |
+| Mất điện cả ngày | Admin bulk import thủ công cho cả nhóm |
+| Nghỉ thai sản / dài hạn | Tạo `leave_requests` bulk cho toàn bộ giai đoạn |
+
+---
+
 ## Module 6: Cấu Hình Hệ Thống
 
 > Dành cho Admin quản lý cài đặt và danh mục hệ thống.
@@ -422,3 +559,10 @@ Mỗi loại công việc trong Task Type Library có thể cấu hình thêm tr
 | M5 | Quản lý tài liệu tích hợp OneDrive | 🟡 P3 | |
 | M4 | Xuất Excel / PDF + lịch sử xuất | 🟡 P3 | |
 | M3 | Kanban board | 🟡 P3 | |
+| **M7** | **DB migration + Ca làm việc + Lịch ca** | 🔴 **P1** | **Nền tảng module chấm công** |
+| M7 | Check-in / Check-out widget + bảng công cá nhân | 🔴 P1 | Nhân viên dùng hàng ngày |
+| M7 | Đơn nghỉ phép + Đơn OT | 🔴 P1 | |
+| M7 | Admin dashboard chấm công + duyệt đơn | 🟠 P2 | |
+| M7 | Điều chỉnh bảng công (admin) + audit trail | 🟠 P2 | |
+| M7 | Báo cáo chấm công + tích hợp payroll | 🟠 P2 | Feed vào Module 2 |
+| M7 | Ngày lễ quốc gia + seed data | 🟠 P2 | |
