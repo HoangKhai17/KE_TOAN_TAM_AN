@@ -1198,10 +1198,12 @@ Báo cáo Chấm Công — Tháng 5/2026      [Chọn tháng] [Xuất Excel]
 | Phase | Nội dung | Ước tính | Phụ thuộc | Trạng thái |
 |-------|---------|----------|-----------|------------|
 | **CC-1** | DB Migration | 0.5 ngày | — | ✅ Hoàn thành |
+| **CC-1b** | Enum Metadata (Settings UI) | — | CC-1 | ✅ Hoàn thành (migration 041) |
 | **CC-2** | Backend: Shifts + Schedules API | 1 ngày | CC-1 | ✅ Hoàn thành |
 | **CC-3** | Backend: Check-in/out + Bảng công | 2 ngày | CC-2 | ✅ Hoàn thành |
 | **CC-4** | Backend: Leave + OT Requests | 1.5 ngày | CC-3 | ✅ Hoàn thành |
 | **CC-5** | Backend: Điều chỉnh + Báo cáo + Payroll | 1.5 ngày | CC-4 | ✅ Hoàn thành |
+| **CC-5b** | Settings: Cấu hình Ca + Ngày lễ | — | CC-2 | ✅ Hoàn thành (AttendanceConfigSection) |
 | **CC-6** | Frontend: Check-in Widget | 1 ngày | CC-3 | ⬜ Chưa bắt đầu |
 | **CC-7** | Frontend: Bảng Công Cá Nhân | 2 ngày | CC-6 | ⬜ Chưa bắt đầu |
 | **CC-8** | Frontend: Đơn Nghỉ / OT (nhân viên) | 1.5 ngày | CC-4, CC-7 | ⬜ Chưa bắt đầu |
