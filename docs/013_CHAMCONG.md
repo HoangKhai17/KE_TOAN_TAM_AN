@@ -1209,6 +1209,7 @@ Báo cáo Chấm Công — Tháng 5/2026      [Chọn tháng] [Xuất Excel]
 | **CC-8** | Frontend: Đơn Nghỉ / OT (nhân viên) | 1.5 ngày | CC-4, CC-7 | ✅ Hoàn thành |
 | **CC-9** | Frontend: Admin Dashboard | 2.5 ngày | CC-5, CC-8 | ✅ Hoàn thành |
 | **CC-10** | Frontend: Báo Cáo + Tích Hợp Lương | 1 ngày | CC-9 | ✅ Hoàn thành |
+| **CC-11** | Seed Data Demo (Dec 2025 – May 2026) | — | CC-10 | ✅ Hoàn thành (`seed_attendance_demo.sql`) |
 | | **Tổng cộng** | **~14.5 ngày** | | |
 
 > **Ghi chú thực tế:** Nếu làm tuần tự 1 người: ~3 tuần. Nếu backend + frontend song song từ CC-3 trở đi: ~10–12 ngày.
