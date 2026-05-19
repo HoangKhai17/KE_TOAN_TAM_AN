@@ -21,10 +21,11 @@ const NAV_GROUPS = [
   {
     label: 'QUẢN TRỊ HỆ THỐNG',
     items: [
-      { to: '/staff',      label: 'Nhân viên',   icon: Users,          adminOnly: true },
-      { to: '/attendance', label: 'Chấm công',   icon: CalendarCheck },
-      { to: '/payroll',    label: 'Bảng lương',  icon: Wallet,          adminOnly: true },
-      { to: '/settings',   label: 'Cài đặt',     icon: Settings,        adminOnly: true },
+      { to: '/staff',             label: 'Nhân viên',        icon: Users,         adminOnly: true },
+      { to: '/attendance',        label: 'Chấm công',        icon: CalendarCheck, end: true },
+      { to: '/attendance/admin',  label: 'Quản lý chấm công', icon: CalendarCheck, adminOnly: true },
+      { to: '/payroll',           label: 'Bảng lương',       icon: Wallet,        adminOnly: true },
+      { to: '/settings',          label: 'Cài đặt',          icon: Settings,      adminOnly: true },
     ],
   },
 ]
@@ -82,10 +83,11 @@ export default function Sidebar({ open, onToggle }) {
         {visibleGroups.map((group) => (
           <div key={group.label} className={s.sidebarSection}>
             {open && <div className={s.sidebarSectionLabel}>{group.label}</div>}
-            {group.items.map(({ to, label, icon: Icon }) => (
+            {group.items.map(({ to, label, icon: Icon, end: endProp }) => (
               <NavLink
                 key={to}
                 to={to}
+                end={endProp}
                 title={!open ? label : undefined}
                 className={({ isActive }) =>
                   `${s.navItem} ${isActive ? s.navItemActive : ''}`

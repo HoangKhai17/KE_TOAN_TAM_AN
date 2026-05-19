@@ -6,6 +6,7 @@ import { useNotificationStore } from '../../stores/notificationStore'
 import { logout } from '../../api/auth'
 import { listNotifications, markOneRead, markAllRead, getUnreadCount } from '../../api/notifications'
 import { connectSocket, disconnectSocket } from '../../lib/socket'
+import CheckInWidget from './CheckInWidget'
 import s from './layout.module.css'
 
 const ROUTE_LABELS = {
@@ -21,6 +22,7 @@ const ROUTE_LABELS = {
   profile:     'Hồ sơ',
   notifications: 'Thông báo',
   attendance:  'Chấm công',
+  admin:       'Quản lý',
   payroll:     'Bảng lương',
 }
 
@@ -197,6 +199,9 @@ export default function Header({ onMenuToggle }) {
           <Plus size={14} />
           Tạo công việc
         </button>
+
+        {/* Check-in widget */}
+        <CheckInWidget />
 
         {/* Notification bell */}
         <div className={s.bellWrap} ref={bellRef}>

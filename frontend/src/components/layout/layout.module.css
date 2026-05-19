@@ -1055,3 +1055,70 @@
   color: #1d4ed8;
   text-decoration: underline;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CHECK-IN WIDGET (header)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.checkInWidget {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  background: #f0fdf4;
+  border: 1.5px solid #bbf7d0;
+  border-radius: var(--radius-lg);
+}
+
+.checkInStatus {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.checkInClockIcon { color: #16a34a; flex-shrink: 0; }
+
+.checkInText      { color: #15803d; white-space: nowrap; }
+.checkInTextMuted { color: #94a3b8; white-space: nowrap; }
+
+.btnCheckIn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: #16a34a;
+  color: #fff;
+  font-family: 'Montserrat', inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.13s;
+}
+.btnCheckIn:hover:not(:disabled) { opacity: 0.88; }
+.btnCheckIn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btnCheckOut {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: #f59e0b;
+  color: #fff;
+  font-family: 'Montserrat', inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.13s;
+}
+.btnCheckOut:hover:not(:disabled) { opacity: 0.88; }
+.btnCheckOut:disabled { opacity: 0.5; cursor: not-allowed; }

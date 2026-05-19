@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard/Dashboard'
 import Staff from './pages/Staff/Staff'
 import StaffDetail from './pages/Staff/StaffDetail'
 import Attendance from './pages/Attendance/Attendance'
+import AttendanceAdmin from './pages/Attendance/AttendanceAdmin'
 import Companies from './pages/Companies/Companies'
 import CompanyDetail from './pages/Companies/CompanyDetail'
 import Settings from './pages/Settings/Settings'
@@ -109,6 +110,10 @@ function AppRoutes() {
       <Route
         path="/attendance"
         element={<ProtectedRoute><Attendance /></ProtectedRoute>}
+      />
+      <Route
+        path="/attendance/admin"
+        element={<ProtectedRoute><AttendanceAdmin /></ProtectedRoute>}
       />
       <Route
         path="/companies"

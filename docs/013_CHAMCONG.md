@@ -1204,11 +1204,11 @@ Báo cáo Chấm Công — Tháng 5/2026      [Chọn tháng] [Xuất Excel]
 | **CC-4** | Backend: Leave + OT Requests | 1.5 ngày | CC-3 | ✅ Hoàn thành |
 | **CC-5** | Backend: Điều chỉnh + Báo cáo + Payroll | 1.5 ngày | CC-4 | ✅ Hoàn thành |
 | **CC-5b** | Settings: Cấu hình Ca + Ngày lễ | — | CC-2 | ✅ Hoàn thành (AttendanceConfigSection) |
-| **CC-6** | Frontend: Check-in Widget | 1 ngày | CC-3 | ⬜ Chưa bắt đầu |
-| **CC-7** | Frontend: Bảng Công Cá Nhân | 2 ngày | CC-6 | ⬜ Chưa bắt đầu |
-| **CC-8** | Frontend: Đơn Nghỉ / OT (nhân viên) | 1.5 ngày | CC-4, CC-7 | ⬜ Chưa bắt đầu |
-| **CC-9** | Frontend: Admin Dashboard | 2.5 ngày | CC-5, CC-8 | ⬜ Chưa bắt đầu |
-| **CC-10** | Frontend: Báo Cáo + Tích Hợp Lương | 1 ngày | CC-9 | ⬜ Chưa bắt đầu |
+| **CC-6** | Frontend: Check-in Widget | 1 ngày | CC-3 | ✅ Hoàn thành |
+| **CC-7** | Frontend: Bảng Công Cá Nhân | 2 ngày | CC-6 | ✅ Hoàn thành |
+| **CC-8** | Frontend: Đơn Nghỉ / OT (nhân viên) | 1.5 ngày | CC-4, CC-7 | ✅ Hoàn thành |
+| **CC-9** | Frontend: Admin Dashboard | 2.5 ngày | CC-5, CC-8 | ✅ Hoàn thành |
+| **CC-10** | Frontend: Báo Cáo + Tích Hợp Lương | 1 ngày | CC-9 | ✅ Hoàn thành |
 | | **Tổng cộng** | **~14.5 ngày** | | |
 
 > **Ghi chú thực tế:** Nếu làm tuần tự 1 người: ~3 tuần. Nếu backend + frontend song song từ CC-3 trở đi: ~10–12 ngày.
