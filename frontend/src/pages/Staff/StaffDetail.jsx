@@ -100,17 +100,19 @@ export default function StaffDetail() {
     )
   }
 
-  const statusInfo = STATUS_MAP[user.status] ?? { label: user.status, cls: s.badgeResigned }
-  const roleInfo   = ROLE_MAP[user.role]     ?? { label: user.role,   cls: s.badgeStaff }
-  const isSelf     = self?.id === user.id
+  const statusInfo  = STATUS_MAP[user.status] ?? { label: user.status, cls: s.badgeResigned }
+  const roleInfo    = ROLE_MAP[user.role]     ?? { label: user.role,   cls: s.badgeStaff }
+  const isSelf      = self?.id === user.id
+  // Cho phép chỉnh sửa nếu là admin hoặc đang xem profile chính mình
+  const canEdit     = isAdmin || isSelf
 
   return (
     <AppLayout>
       <div className={s.page}>
 
         {/* Back */}
-        <button className={s.backBtn} onClick={() => navigate('/staff')}>
-          <ArrowLeft size={14} /> Danh sách nhân viên
+        <button className={s.backBtn} onClick={() => navigate(isAdmin ? '/staff' : '/dashboard')}>
+          <ArrowLeft size={14} /> {isAdmin ? 'Danh sách nhân viên' : 'Trang chủ'}
         </button>
 
         {/* Profile card */}
@@ -159,17 +161,17 @@ export default function StaffDetail() {
           </div>
 
           {/* Actions */}
-          {isAdmin && (
+          {canEdit && (
             <div className={s.profileActions}>
               <button className={s.btnSecondary} onClick={() => setEditOpen(true)}>
                 <Edit2 size={13} /> Chỉnh sửa
               </button>
-              {user.status !== 'active' && (
+              {isAdmin && user.status !== 'active' && (
                 <button className={s.btnPrimary} onClick={() => handleStatusChange('active')}>
                   Kích hoạt lại
                 </button>
               )}
-              {user.status === 'active' && !isSelf && (
+              {isAdmin && user.status === 'active' && !isSelf && (
                 <button
                   className={`${s.btnSecondary} ${s.btnWarning}`}
                   onClick={() => handleStatusChange('on_leave')}
@@ -197,6 +199,16 @@ export default function StaffDetail() {
             ]}
           />
           <InfoSection
+            title="Thông tin cá nhân"
+            icon={<Shield size={15} />}
+            rows={[
+              ['Ngày sinh', fmtDate(user.dob)],
+              ['Ngày vào làm', fmtDate(user.hireDate)],
+              ['CMND / CCCD', user.idCard ?? '—'],
+              ['Địa chỉ', user.address ?? '—'],
+            ]}
+          />
+          <InfoSection
             title="Bảo mật"
             icon={<Shield size={15} />}
             rows={[
@@ -209,10 +221,29 @@ export default function StaffDetail() {
           />
         </div>
 
+        {/* CV sections */}
+        {(user.education || user.experience) && (
+          <div className={s.cvGrid}>
+            {user.education && (
+              <div className={s.cvSection}>
+                <div className={s.cvSectionHead}>Bằng cấp / Chứng chỉ</div>
+                <p className={s.cvText}>{user.education}</p>
+              </div>
+            )}
+            {user.experience && (
+              <div className={s.cvSection}>
+                <div className={s.cvSectionHead}>Kinh nghiệm làm việc</div>
+                <p className={s.cvText}>{user.experience}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Edit modal */}
         {editOpen && (
           <EditUserModal
             user={user}
+            isAdmin={isAdmin}
             onClose={() => setEditOpen(false)}
             onSaved={(u) => {
               setUser(u)
@@ -251,12 +282,18 @@ function InfoSection({ title, icon, rows }) {
 
 // ── EditUserModal ─────────────────────────────────────────────────────────────
 
-function EditUserModal({ user, onClose, onSaved }) {
+function EditUserModal({ user, onClose, onSaved, isAdmin }) {
   const [form, setForm] = useState({
-    name:     user.name     ?? '',
-    role:     user.role     ?? 'staff',
-    phone:    user.phone    ?? '',
-    jobTitle: user.jobTitle ?? '',
+    name:       user.name       ?? '',
+    role:       user.role       ?? 'staff',
+    phone:      user.phone      ?? '',
+    jobTitle:   user.jobTitle   ?? '',
+    dob:        user.dob        ? user.dob.slice(0, 10) : '',
+    hireDate:   user.hireDate   ? user.hireDate.slice(0, 10) : '',
+    idCard:     user.idCard     ?? '',
+    address:    user.address    ?? '',
+    education:  user.education  ?? '',
+    experience: user.experience ?? '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
@@ -271,10 +308,15 @@ function EditUserModal({ user, onClose, onSaved }) {
     setLoading(true)
     try {
       const body = {}
-      if (form.name     !== user.name)              body.name     = form.name
-      if (form.role     !== user.role)              body.role     = form.role
-      if (form.phone    !== (user.phone    ?? ''))  body.phone    = form.phone    || null
-      if (form.jobTitle !== (user.jobTitle ?? ''))  body.jobTitle = form.jobTitle || null
+      const strFields = ['name', 'role', 'phone', 'jobTitle', 'idCard', 'address', 'education', 'experience']
+      const dateFields = ['dob', 'hireDate']
+      strFields.forEach((f) => {
+        if (form[f] !== (user[f] ?? '')) body[f] = form[f] || null
+      })
+      dateFields.forEach((f) => {
+        const cur = user[f] ? user[f].slice(0, 10) : ''
+        if (form[f] !== cur) body[f] = form[f] || null
+      })
       const saved = await usersApi.updateUser(user.id, body)
       onSaved(saved)
     } catch (err) {
@@ -285,42 +327,82 @@ function EditUserModal({ user, onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Chỉnh sửa thông tin nhân viên" onClose={onClose}>
+    <Modal title="Chỉnh sửa thông tin nhân viên" onClose={onClose} wide>
       <form onSubmit={handleSubmit} className={s.modalForm}>
-        {error && (
-          <div className={s.errorBox}>
-            {error}
-          </div>
-        )}
+        {error && <div className={s.errorBox}>{error}</div>}
+
+        <div className={s.formSectionLabel}>Thông tin cơ bản</div>
+
         <div className={s.formGroup}>
           <label className={`${s.formLabel} ${s.req}`}>Họ và tên</label>
-          <input type="text" value={form.name} onChange={set('name')} required
-            className={s.formInput} />
+          <input type="text" value={form.name} onChange={set('name')} required className={s.formInput} />
         </div>
         <div className={s.formGrid}>
-          <div className={s.formGroup}>
-            <label className={s.formLabel}>Vai trò</label>
-            <select value={form.role} onChange={set('role')}
-              className={s.formSelect}>
-              <option value="staff">Nhân viên</option>
-              <option value="admin">Quản trị viên</option>
-            </select>
-          </div>
+          {isAdmin && (
+            <div className={s.formGroup}>
+              <label className={s.formLabel}>Vai trò</label>
+              <select value={form.role} onChange={set('role')} className={s.formSelect}>
+                <option value="staff">Nhân viên</option>
+                <option value="admin">Quản trị viên</option>
+              </select>
+            </div>
+          )}
           <div className={s.formGroup}>
             <label className={s.formLabel}>Chức danh</label>
-            <input type="text" value={form.jobTitle} onChange={set('jobTitle')} placeholder="Kế toán viên"
-              className={s.formInput} />
+            <input type="text" value={form.jobTitle} onChange={set('jobTitle')}
+              placeholder="Kế toán viên" className={s.formInput} />
           </div>
         </div>
         <div className={s.formGroup}>
           <label className={s.formLabel}>Số điện thoại</label>
-          <input type="tel" value={form.phone} onChange={set('phone')} placeholder="0909 123 456"
-            className={s.formInput} />
+          <input type="tel" value={form.phone} onChange={set('phone')}
+            placeholder="0909 123 456" className={s.formInput} />
         </div>
+
+        <div className={s.formSectionLabel}>Thông tin cá nhân</div>
+
+        <div className={s.formGrid}>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Ngày sinh</label>
+            <input type="date" value={form.dob} onChange={set('dob')} className={s.formInput} />
+          </div>
+          {isAdmin && (
+            <div className={s.formGroup}>
+              <label className={s.formLabel}>Ngày vào làm</label>
+              <input type="date" value={form.hireDate} onChange={set('hireDate')} className={s.formInput} />
+            </div>
+          )}
+        </div>
+        <div className={s.formGrid}>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>CMND / CCCD</label>
+            <input type="text" value={form.idCard} onChange={set('idCard')}
+              placeholder="012345678901" maxLength={20} className={s.formInput} />
+          </div>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Địa chỉ</label>
+            <input type="text" value={form.address} onChange={set('address')}
+              placeholder="123 Nguyễn Văn Cừ, Q.5, TP.HCM" className={s.formInput} />
+          </div>
+        </div>
+
+        <div className={s.formSectionLabel}>Hồ sơ & Kinh nghiệm</div>
+
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Bằng cấp / Chứng chỉ</label>
+          <textarea value={form.education} onChange={set('education')} className={s.formTextarea}
+            placeholder="VD: Cử nhân Kế toán - ĐH Kinh tế TP.HCM (2018), CPA (2021)..."
+            rows={3} />
+        </div>
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Kinh nghiệm làm việc</label>
+          <textarea value={form.experience} onChange={set('experience')} className={s.formTextarea}
+            placeholder="VD: 3 năm kế toán tổng hợp tại Công ty ABC..."
+            rows={3} />
+        </div>
+
         <div className={s.modalActions}>
-          <button type="button" onClick={onClose} disabled={loading} className={s.btnSecondary}>
-            Hủy
-          </button>
+          <button type="button" onClick={onClose} disabled={loading} className={s.btnSecondary}>Hủy</button>
           <button type="submit" disabled={loading} className={s.btnPrimary}>
             {loading ? 'Đang lưu...' : 'Lưu thay đổi'}
           </button>

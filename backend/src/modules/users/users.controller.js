@@ -52,8 +52,14 @@ async function createUser(req, res, next) {
 
 async function updateUser(req, res, next) {
   try {
+    const body = { ...req.body }
+    // Staff cannot change role or hireDate — those are admin-only fields
+    if (req.user.role !== 'admin') {
+      delete body.role
+      delete body.hireDate
+    }
     const user = await usersService.updateUser(
-      req.params.id, req.body, req.user.id, req.ip, req.headers['user-agent']
+      req.params.id, body, req.user.id, req.ip, req.headers['user-agent']
     )
     res.json({ success: true, data: { user } })
   } catch (err) {

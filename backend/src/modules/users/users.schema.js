@@ -1,5 +1,14 @@
 const { z } = require('zod')
 
+const profileFieldsSchema = {
+  dob:        z.string().date().optional().nullable(),
+  hireDate:   z.string().date().optional().nullable(),
+  idCard:     z.string().max(20).optional().nullable(),
+  address:    z.string().max(500).optional().nullable(),
+  education:  z.string().max(2000).optional().nullable(),
+  experience: z.string().max(2000).optional().nullable(),
+}
+
 const createUserSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
@@ -12,6 +21,7 @@ const createUserSchema = z.object({
   role: z.enum(['admin', 'staff']).default('staff'),
   phone: z.string().max(20).optional().nullable(),
   jobTitle: z.string().max(100).optional().nullable(),
+  ...profileFieldsSchema,
 })
 
 const updateUserSchema = z
@@ -24,6 +34,7 @@ const updateUserSchema = z
       z.string().regex(/^data:image\//),
     ]).optional().nullable(),
     role: z.enum(['admin', 'staff']).optional(),
+    ...profileFieldsSchema,
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'No fields to update' })
 

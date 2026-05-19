@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, MoreVertical, ChevronLeft, ChevronRight, Users, Loader2 } from 'lucide-react'
+import {
+  Plus, Search, ChevronLeft, ChevronRight, Users, Loader2,
+  Edit2, Trash2, UserCheck, UserMinus, UserX,
+} from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
@@ -169,7 +172,7 @@ export default function Staff() {
                     <th>Vai trò</th>
                     <th>Trạng thái</th>
                     <th className={s.hideLg}>Đăng nhập gần nhất</th>
-                    {isAdmin && <th className={s.actionHead} />}
+                    {isAdmin && <th className={s.actionHead}>Hành động</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -271,18 +274,6 @@ export default function Staff() {
 // ── UserRow ────────────────────────────────────────────────────────────────────
 
 function UserRow({ user, isAdmin, isSelf, onRowClick, onEdit, onStatusChange, onDelete }) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef(null)
-
-  useEffect(() => {
-    if (!menuOpen) return
-    function handler(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [menuOpen])
-
   const statusInfo = STATUS_MAP[user.status] ?? { label: user.status, cls: s.badgeResigned }
   const roleInfo   = ROLE_MAP[user.role]     ?? { label: user.role,   cls: s.badgeStaff }
 
@@ -317,58 +308,61 @@ function UserRow({ user, isAdmin, isSelf, onRowClick, onEdit, onStatusChange, on
           : '—'}
       </td>
       {isAdmin && (
-        <td className={s.menuCell} ref={menuRef} onClick={(e) => e.stopPropagation()}>
-          <button
-            className={s.menuBtn}
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            <MoreVertical size={15} />
-          </button>
-          {menuOpen && (
-            <div className={s.dropdown}>
+        <td className={s.actionCell} onClick={(e) => e.stopPropagation()}>
+          <div className={s.actionBtns}>
+            {/* Chỉnh sửa – luôn hiển thị */}
+            <button
+              className={`${s.actionBtn} ${s.actionBtnEdit}`}
+              title="Chỉnh sửa thông tin"
+              onClick={onEdit}
+            >
+              <Edit2 size={14} />
+            </button>
+
+            {/* Kích hoạt lại – chỉ khi không active */}
+            {user.status !== 'active' && (
               <button
-                className={s.dropdownItem}
-                onClick={() => { setMenuOpen(false); onEdit() }}
+                className={`${s.actionBtn} ${s.actionBtnSuccess}`}
+                title="Kích hoạt lại"
+                onClick={() => onStatusChange(user.id, 'active')}
               >
-                Chỉnh sửa thông tin
+                <UserCheck size={14} />
               </button>
-              {user.status !== 'active' && (
-                <button
-                  className={`${s.dropdownItem} ${s.dropdownSuccess}`}
-                  onClick={() => { setMenuOpen(false); onStatusChange(user.id, 'active') }}
-                >
-                  Kích hoạt lại
-                </button>
-              )}
-              {user.status !== 'on_leave' && (
-                <button
-                  className={`${s.dropdownItem} ${s.dropdownWarning}`}
-                  onClick={() => { setMenuOpen(false); onStatusChange(user.id, 'on_leave') }}
-                >
-                  Đặt trạng thái nghỉ phép
-                </button>
-              )}
-              {user.status !== 'resigned' && (
-                <button
-                  className={`${s.dropdownItem} ${s.dropdownWarning}`}
-                  onClick={() => { setMenuOpen(false); onStatusChange(user.id, 'resigned') }}
-                >
-                  Đánh dấu nghỉ việc
-                </button>
-              )}
-              {!isSelf && (
-                <>
-                  <div className={s.dropdownDivider} />
-                  <button
-                    className={`${s.dropdownItem} ${s.dropdownDanger}`}
-                    onClick={() => { setMenuOpen(false); onDelete(user) }}
-                  >
-                    Xóa nhân viên
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+            )}
+
+            {/* Đặt nghỉ phép – chỉ khi đang active */}
+            {user.status === 'active' && (
+              <button
+                className={`${s.actionBtn} ${s.actionBtnWarning}`}
+                title="Đặt trạng thái nghỉ phép"
+                onClick={() => onStatusChange(user.id, 'on_leave')}
+              >
+                <UserMinus size={14} />
+              </button>
+            )}
+
+            {/* Đánh dấu nghỉ việc – khi chưa resigned */}
+            {user.status !== 'resigned' && (
+              <button
+                className={`${s.actionBtn} ${s.actionBtnOrange}`}
+                title="Đánh dấu nghỉ việc"
+                onClick={() => onStatusChange(user.id, 'resigned')}
+              >
+                <UserX size={14} />
+              </button>
+            )}
+
+            {/* Xóa – chỉ khi không phải chính mình */}
+            {!isSelf && (
+              <button
+                className={`${s.actionBtn} ${s.actionBtnDanger}`}
+                title="Xóa nhân viên"
+                onClick={() => onDelete(user)}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
         </td>
       )}
     </tr>
@@ -393,7 +387,7 @@ function SkeletonRow({ hasActions }) {
       <td><div className={`${s.skeleton} ${s.skeletonRole}`} /></td>
       <td><div className={`${s.skeleton} ${s.skeletonStatus}`} /></td>
       <td className={s.hideLg}><div className={`${s.skeleton} ${s.skeletonLogin}`} /></td>
-      {hasActions && <td><div className={`${s.skeleton} ${s.skeletonAction}`} /></td>}
+      {hasActions && <td className={s.actionCell}><div className={`${s.skeleton} ${s.skeletonAction}`} /></td>}
     </tr>
   )
 }
@@ -403,12 +397,18 @@ function SkeletonRow({ hasActions }) {
 function UserFormModal({ user, onClose, onSaved }) {
   const isEdit = !!user
   const [form, setForm] = useState({
-    name:     user?.name     ?? '',
-    email:    user?.email    ?? '',
-    password: '',
-    role:     user?.role     ?? 'staff',
-    phone:    user?.phone    ?? '',
-    jobTitle: user?.jobTitle ?? '',
+    name:       user?.name       ?? '',
+    email:      user?.email      ?? '',
+    password:   '',
+    role:       user?.role       ?? 'staff',
+    phone:      user?.phone      ?? '',
+    jobTitle:   user?.jobTitle   ?? '',
+    dob:        user?.dob        ? user.dob.slice(0, 10) : '',
+    hireDate:   user?.hireDate   ? user.hireDate.slice(0, 10) : '',
+    idCard:     user?.idCard     ?? '',
+    address:    user?.address    ?? '',
+    education:  user?.education  ?? '',
+    experience: user?.experience ?? '',
   })
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState(null)
@@ -428,19 +428,30 @@ function UserFormModal({ user, onClose, onSaved }) {
       let saved
       if (isEdit) {
         const body = {}
-        if (form.name !== user.name)                     body.name     = form.name
-        if (form.role !== user.role)                     body.role     = form.role
-        if (form.phone    !== (user.phone    ?? ''))     body.phone    = form.phone    || null
-        if (form.jobTitle !== (user.jobTitle ?? ''))     body.jobTitle = form.jobTitle || null
+        const strFields = ['name', 'role', 'phone', 'jobTitle', 'idCard', 'address', 'education', 'experience']
+        const dateFields = ['dob', 'hireDate']
+        strFields.forEach((f) => {
+          if (form[f] !== (user[f] ?? '')) body[f] = form[f] || null
+        })
+        dateFields.forEach((f) => {
+          const cur = user[f] ? user[f].slice(0, 10) : ''
+          if (form[f] !== cur) body[f] = form[f] || null
+        })
         saved = await usersApi.updateUser(user.id, body)
       } else {
         saved = await usersApi.createUser({
-          name:     form.name,
-          email:    form.email,
-          password: form.password,
-          role:     form.role,
-          phone:    form.phone    || null,
-          jobTitle: form.jobTitle || null,
+          name:       form.name,
+          email:      form.email,
+          password:   form.password,
+          role:       form.role,
+          phone:      form.phone      || null,
+          jobTitle:   form.jobTitle   || null,
+          dob:        form.dob        || null,
+          hireDate:   form.hireDate   || null,
+          idCard:     form.idCard     || null,
+          address:    form.address    || null,
+          education:  form.education  || null,
+          experience: form.experience || null,
         })
       }
       onSaved(saved)
@@ -459,34 +470,26 @@ function UserFormModal({ user, onClose, onSaved }) {
   }
 
   return (
-    <Modal title={isEdit ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên mới'} onClose={onClose}>
+    <Modal title={isEdit ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên mới'} onClose={onClose} wide>
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}
 
+        {/* ── Thông tin cơ bản ── */}
+        <div className={s.formSectionLabel}>Thông tin cơ bản</div>
+
         <div className={s.formGroup}>
           <label className={`${s.formLabel} ${s.req}`}>Họ và tên</label>
-          <input
-            type="text"
-            value={form.name}
-            onChange={set('name')}
-            required
+          <input type="text" value={form.name} onChange={set('name')} required
             className={`${s.formInput} ${fieldErrors.name ? s.inputError : ''}`}
-            placeholder="Nguyễn Văn A"
-          />
+            placeholder="Nguyễn Văn A" />
           {fieldErrors.name && <p className={s.fieldError}>{fieldErrors.name}</p>}
         </div>
 
         <div className={s.formGroup}>
           <label className={`${s.formLabel} ${s.req}`}>Email</label>
-          <input
-            type="email"
-            value={form.email}
-            onChange={set('email')}
-            required
-            disabled={isEdit}
+          <input type="email" value={form.email} onChange={set('email')} required disabled={isEdit}
             className={`${s.formInput} ${fieldErrors.email ? s.inputError : ''}`}
-            placeholder="nhanvien@email.com"
-          />
+            placeholder="nhanvien@email.com" />
           {fieldErrors.email && <p className={s.fieldError}>{fieldErrors.email}</p>}
         </div>
 
@@ -502,12 +505,7 @@ function UserFormModal({ user, onClose, onSaved }) {
                 placeholder="Tối thiểu 8 ký tự"
                 className={`${s.formInput} ${s.passwordInput} ${fieldErrors.password ? s.inputError : ''}`}
               />
-              <button
-                type="button"
-                onClick={() => setShowPw((v) => !v)}
-                className={s.pwToggle}
-                tabIndex={-1}
-              >
+              <button type="button" onClick={() => setShowPw((v) => !v)} className={s.pwToggle} tabIndex={-1}>
                 {showPassword ? '🙈' : '👁'}
               </button>
             </div>
@@ -533,6 +531,48 @@ function UserFormModal({ user, onClose, onSaved }) {
         <div className={s.formGroup}>
           <label className={s.formLabel}>Số điện thoại</label>
           <input type="tel" value={form.phone} onChange={set('phone')} className={s.formInput} placeholder="0909 123 456" />
+        </div>
+
+        {/* ── Thông tin cá nhân ── */}
+        <div className={s.formSectionLabel}>Thông tin cá nhân</div>
+
+        <div className={s.formGrid}>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Ngày sinh</label>
+            <input type="date" value={form.dob} onChange={set('dob')} className={s.formInput} />
+          </div>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Ngày vào làm</label>
+            <input type="date" value={form.hireDate} onChange={set('hireDate')} className={s.formInput} />
+          </div>
+        </div>
+
+        <div className={s.formGrid}>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>CMND / CCCD</label>
+            <input type="text" value={form.idCard} onChange={set('idCard')} className={s.formInput} placeholder="012345678901" maxLength={20} />
+          </div>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Địa chỉ</label>
+            <input type="text" value={form.address} onChange={set('address')} className={s.formInput} placeholder="123 Nguyễn Văn Cừ, Q.5, TP.HCM" />
+          </div>
+        </div>
+
+        {/* ── Hồ sơ & Kinh nghiệm ── */}
+        <div className={s.formSectionLabel}>Hồ sơ & Kinh nghiệm</div>
+
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Bằng cấp / Chứng chỉ</label>
+          <textarea value={form.education} onChange={set('education')} className={s.formTextarea}
+            placeholder="VD: Cử nhân Kế toán - ĐH Kinh tế TP.HCM (2018), Chứng chỉ CPA (2021)..."
+            rows={3} />
+        </div>
+
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Kinh nghiệm làm việc</label>
+          <textarea value={form.experience} onChange={set('experience')} className={s.formTextarea}
+            placeholder="VD: 3 năm kế toán tổng hợp tại Công ty ABC, phụ trách báo cáo thuế và quyết toán..."
+            rows={3} />
         </div>
 
         <div className={s.modalActions}>

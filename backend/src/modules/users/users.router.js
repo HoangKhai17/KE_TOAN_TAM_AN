@@ -1,6 +1,6 @@
 const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
-const { requireRole } = require('../../middleware/rbac')
+const { requireRole, requireSelfOrAdmin } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
 const { createUserSchema, updateUserSchema, updateStatusSchema, resetPasswordSchema } = require('./users.schema')
 const ctrl = require('./users.controller')
@@ -118,47 +118,11 @@ router.post('/', ...adminOnly, validate(createUserSchema), ctrl.createUser)
  *                     user: { $ref: '#/components/schemas/UserSafe' }
  *       404: { description: User not found }
  */
-router.get('/:id', ...adminOnly, ctrl.getUser)
+// GET /:id — admin xem bất kỳ ai; staff chỉ xem chính mình
+router.get('/:id', authenticate, requireSelfOrAdmin, ctrl.getUser)
 
-/**
- * @openapi
- * /users/{id}:
- *   patch:
- *     tags: [Users]
- *     summary: Update user profile (admin only)
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: string, format: uuid }
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:     { type: string }
- *               phone:    { type: string, nullable: true }
- *               jobTitle: { type: string, nullable: true }
- *               avatarUrl: { type: string, format: uri, nullable: true }
- *               role:     { type: string, enum: [admin, staff] }
- *     responses:
- *       200:
- *         description: User updated
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 data:
- *                   type: object
- *                   properties:
- *                     user: { $ref: '#/components/schemas/UserSafe' }
- *       404: { description: User not found }
- */
-router.patch('/:id', ...adminOnly, validate(updateUserSchema), ctrl.updateUser)
+// PATCH /:id — admin sửa bất kỳ ai; staff chỉ sửa chính mình (role bị strip trong controller)
+router.patch('/:id', authenticate, requireSelfOrAdmin, validate(updateUserSchema), ctrl.updateUser)
 
 /**
  * @openapi

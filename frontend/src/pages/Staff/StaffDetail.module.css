@@ -268,8 +268,40 @@
 
 .infoGrid {
   display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-7);
+}
+
+/* ── CV sections ─────────────────────────────────────────────────────────── */
+
+.cvGrid {
+  display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-7);
+}
+
+.cvSection {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7);
+}
+
+.cvSectionHead {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-extrabold);
+  color: var(--color-primary-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-4);
+}
+
+.cvText {
+  font-size: var(--fs-sm);
+  color: var(--color-text-soft);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  margin: 0;
 }
 
 .tableLabelCell {
@@ -330,6 +362,37 @@
   box-shadow: var(--shadow-focus);
 }
 
+.formSectionLabel {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-extrabold);
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: var(--space-2);
+  border-bottom: 1.5px solid var(--color-primary-bg-strong);
+  margin-top: var(--space-2);
+}
+
+.formTextarea {
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-md);
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  outline: none;
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.5;
+  transition: border-color var(--duration-base), box-shadow var(--duration-base);
+}
+
+.formTextarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
+}
+
 .errorBox {
   padding: var(--space-4) var(--space-6);
   background: var(--color-danger-bg);
@@ -368,8 +431,13 @@
 
 .spin { animation: app-spin 0.7s linear infinite; }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
+  .infoGrid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 720px) {
   .infoGrid,
+  .cvGrid,
   .formGrid {
     grid-template-columns: 1fr;
   }

@@ -12,6 +12,12 @@ function toDto(row) {
     phone: row.phone ?? null,
     jobTitle: row.job_title ?? null,
     avatarUrl: row.avatar_url ?? null,
+    dob: row.dob ?? null,
+    hireDate: row.hire_date ?? null,
+    idCard: row.id_card ?? null,
+    address: row.address ?? null,
+    education: row.education ?? null,
+    experience: row.experience ?? null,
     mustChangePw: row.must_change_pw,
     loginAttempts: row.login_attempts ?? undefined,
     lockedUntil: row.locked_until ?? null,
@@ -48,6 +54,7 @@ async function listUsers({ page = 1, limit = 20, role, status, search } = {}) {
   const dataParams = [...filterParams, limit, offset]
   const { rows } = await query(
     `SELECT id, name, email, role, status, phone, job_title, avatar_url,
+            dob, hire_date, id_card, address, education, experience,
             must_change_pw, login_attempts, locked_until, last_login_at, created_at, updated_at
      FROM users WHERE ${where}
      ORDER BY created_at DESC
@@ -79,6 +86,7 @@ async function listUserOptions({ role, status = 'active', limit = 200 } = {}) {
 async function getUserById(id) {
   const { rows } = await query(
     `SELECT id, name, email, role, status, phone, job_title, avatar_url,
+            dob, hire_date, id_card, address, education, experience,
             must_change_pw, login_attempts, locked_until, last_login_at, created_at, updated_at
      FROM users WHERE id = $1`,
     [id]
@@ -88,7 +96,7 @@ async function getUserById(id) {
 }
 
 async function createUser(data, actorId, ipAddress, userAgent) {
-  const { name, email, password, role = 'staff', phone, jobTitle } = data
+  const { name, email, password, role = 'staff', phone, jobTitle, dob, hireDate, idCard, address, education, experience } = data
 
   const existing = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()])
   if (existing.rows.length) {
@@ -97,10 +105,13 @@ async function createUser(data, actorId, ipAddress, userAgent) {
 
   const passwordHash = await bcrypt.hash(password, 12)
   const { rows } = await query(
-    `INSERT INTO users (name, email, password_hash, role, phone, job_title, must_change_pw)
-     VALUES ($1, $2, $3, $4, $5, $6, TRUE)
-     RETURNING id, name, email, role, status, phone, job_title, avatar_url, must_change_pw, created_at`,
-    [name, email.toLowerCase(), passwordHash, role, phone ?? null, jobTitle ?? null]
+    `INSERT INTO users (name, email, password_hash, role, phone, job_title, dob, hire_date, id_card, address, education, experience, must_change_pw)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE)
+     RETURNING id, name, email, role, status, phone, job_title, avatar_url,
+               dob, hire_date, id_card, address, education, experience, must_change_pw, created_at`,
+    [name, email.toLowerCase(), passwordHash, role,
+     phone ?? null, jobTitle ?? null, dob ?? null, hireDate ?? null,
+     idCard ?? null, address ?? null, education ?? null, experience ?? null]
   )
 
   await audit.log({
@@ -117,7 +128,11 @@ async function createUser(data, actorId, ipAddress, userAgent) {
 }
 
 async function updateUser(id, data, actorId, ipAddress, userAgent) {
-  const fieldMap = { name: 'name', phone: 'phone', jobTitle: 'job_title', avatarUrl: 'avatar_url', role: 'role' }
+  const fieldMap = {
+    name: 'name', phone: 'phone', jobTitle: 'job_title', avatarUrl: 'avatar_url', role: 'role',
+    dob: 'dob', hireDate: 'hire_date', idCard: 'id_card',
+    address: 'address', education: 'education', experience: 'experience',
+  }
   const updates = []
   const params = []
 
@@ -134,7 +149,8 @@ async function updateUser(id, data, actorId, ipAddress, userAgent) {
   const { rows } = await query(
     `UPDATE users SET ${updates.join(', ')}, updated_at = NOW()
      WHERE id = $${params.length}
-     RETURNING id, name, email, role, status, phone, job_title, avatar_url, must_change_pw, updated_at`,
+     RETURNING id, name, email, role, status, phone, job_title, avatar_url,
+               dob, hire_date, id_card, address, education, experience, must_change_pw, updated_at`,
     params
   )
   if (!rows[0]) throw Object.assign(new Error('User not found'), { status: 404 })

@@ -307,7 +307,7 @@ export default function Header({ onMenuToggle }) {
                 </div>
                 <button
                   className={s.headerDropdownItem}
-                  onClick={() => { setDropdownOpen(false); navigate('/profile') }}
+                  onClick={() => { setDropdownOpen(false); navigate(`/staff/${user?.id}`) }}
                 >
                   <User size={14} />
                   Hồ sơ cá nhân
