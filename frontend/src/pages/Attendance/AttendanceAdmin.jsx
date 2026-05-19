@@ -15,17 +15,31 @@ import * as payrollApi from '../../api/payroll'
 import s from './Attendance.module.css'
 import sa from './AttendanceAdmin.module.css'
 
+// ── Module-level date helpers ─────────────────────────────────────────────────
+
+const _NOW = new Date()
+const _CY  = String(_NOW.getFullYear())
+const _CM  = String(_NOW.getMonth() + 1)
+
+function ymToDates(year, month) {
+  if (!year) return { from: undefined, to: undefined }
+  if (!month) return { from: `${year}-01-01`, to: `${year}-12-31` }
+  const m       = parseInt(month, 10)
+  const lastDay = new Date(parseInt(year, 10), m, 0).getDate()
+  const mm      = String(m).padStart(2, '0')
+  return { from: `${year}-${mm}-01`, to: `${year}-${mm}-${String(lastDay).padStart(2, '0')}` }
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ADMIN_TABS = [
-  { id: 'calendar',  label: 'Lịch chấm công',   icon: CalendarCheck },
-  { id: 'today',     label: 'Hôm nay',           icon: Users },
-  { id: 'monthly',   label: 'Bảng công tháng',   icon: CalendarDays },
-  { id: 'leave',     label: 'Duyệt nghỉ phép',   icon: ClipboardList },
-  { id: 'overtime',  label: 'Duyệt tăng ca',     icon: Clock },
-  { id: 'schedule',  label: 'Lịch ca tháng',     icon: CalendarCheck2 },
-  { id: 'report',    label: 'Báo cáo',           icon: BarChart3 },
-  { id: 'att-settings', label: 'Cài đặt',        icon: Settings },
+  { id: 'calendar',     label: 'Lịch chấm công',   icon: CalendarCheck },
+  { id: 'today',        label: 'Hôm nay',           icon: Users },
+  { id: 'leave',        label: 'Duyệt nghỉ phép',   icon: ClipboardList },
+  { id: 'overtime',     label: 'Duyệt tăng ca',     icon: Clock },
+  { id: 'schedule',     label: 'Lịch ca tháng',     icon: CalendarCheck2 },
+  { id: 'report',       label: 'Báo cáo',           icon: BarChart3 },
+  { id: 'att-settings', label: 'Cài đặt',           icon: Settings },
 ]
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
@@ -139,7 +153,7 @@ export default function AttendanceAdmin() {
     else setMonth((m) => m + 1)
   }
 
-  const showMonthNav = !['today', 'leave', 'overtime', 'att-settings'].includes(activeTab)
+  const showMonthNav = ['calendar', 'monthly', 'schedule', 'report'].includes(activeTab)
 
   return (
     <AppLayout>
@@ -183,12 +197,11 @@ export default function AttendanceAdmin() {
             adminUserId={currentUser?.id}
           />
         )}
-        {activeTab === 'today'    && <TodayTab staffList={staffList} />}
-        {activeTab === 'monthly'  && <MonthlyTab year={year} month={month} />}
-        {activeTab === 'leave'    && <AdminLeaveTab year={year} month={month} staffList={staffList} />}
-        {activeTab === 'overtime' && <AdminOvertimeTab year={year} month={month} staffList={staffList} />}
+        {activeTab === 'today'        && <TodayTab staffList={staffList} />}
+        {activeTab === 'leave'        && <AdminLeaveTab staffList={staffList} />}
+        {activeTab === 'overtime'     && <AdminOvertimeTab staffList={staffList} />}
         {activeTab === 'schedule'     && <ScheduleTab year={year} month={month} staffList={staffList} />}
-        {activeTab === 'report'      && <ReportTab year={year} month={month} />}
+        {activeTab === 'report'       && <ReportTab year={year} month={month} />}
         {activeTab === 'att-settings' && <AttendanceSettingsTab />}
 
       </div>
@@ -486,97 +499,39 @@ function AdminDayModal({ dateStr, record, onClose }) {
 
 // ── MonthlyTab ────────────────────────────────────────────────────────────────
 
-function MonthlyTab({ year, month }) {
-  const addToast  = useToastStore((st) => st.toast)
-  const [rows,    setRows]    = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    attendanceApi.getRecordsSummary({ month, year })
-      .then((data) => { if (!cancelled) setRows(Array.isArray(data) ? data : []) })
-      .catch(() => { if (!cancelled) addToast('Không thể tải bảng công tháng', 'error') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [month, year]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <div className={s.section}>
-      <div className={s.sectionHead}>
-        <h3 className={s.sectionTitle}>Bảng công tháng — {monthName(year, month)}</h3>
-      </div>
-      {loading ? (
-        <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
-      ) : rows.length === 0 ? (
-        <div className={s.centered}>
-          <CalendarDays size={32} style={{ opacity: 0.35, marginBottom: 4 }} />
-          Chưa có dữ liệu tháng này
-        </div>
-      ) : (
-        <div className={s.tableWrap}>
-          <table className={s.table}>
-            <thead>
-              <tr>
-                <th>Nhân viên</th>
-                <th>Chức danh</th>
-                <th style={{ color: 'var(--color-success-dark)' }}>Ngày công</th>
-                <th style={{ color: 'var(--color-primary)' }}>Nghỉ (TL)</th>
-                <th style={{ color: 'var(--color-danger)' }}>Vắng</th>
-                <th style={{ color: 'var(--color-warning-amber)' }}>Đi muộn</th>
-                <th style={{ color: 'var(--color-warning-dark)' }}>Về sớm</th>
-                <th style={{ color: 'var(--color-purple-bright)' }}>OT (h)</th>
-                <th>Tổng bản ghi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.userId}>
-                  <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{r.userName}</td>
-                  <td style={{ color: 'var(--color-muted)' }}>{r.jobTitle ?? '—'}</td>
-                  <td style={{ fontWeight: 700, color: 'var(--color-success-dark)' }}>{r.actualWorkDays}</td>
-                  <td>{r.leavePaidDays}</td>
-                  <td style={{ fontWeight: 700, color: r.absentDays > 0 ? 'var(--color-danger)' : 'var(--color-muted)' }}>{r.absentDays}</td>
-                  <td style={{ fontWeight: r.lateCount > 0 ? 700 : 400, color: r.lateCount > 0 ? 'var(--color-warning-amber)' : 'var(--color-muted)' }}>{r.lateCount}</td>
-                  <td style={{ color: 'var(--color-muted)' }}>{r.earlyCount}</td>
-                  <td style={{ fontWeight: r.totalOtHours > 0 ? 700 : 400, color: r.totalOtHours > 0 ? 'var(--color-purple-bright)' : 'var(--color-muted)' }}>
-                    {Number(r.totalOtHours).toFixed(1)}
-                  </td>
-                  <td style={{ color: 'var(--color-muted)' }}>{r.totalRecords ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── AdminLeaveTab ─────────────────────────────────────────────────────────────
 
-function AdminLeaveTab({ year, month, staffList }) {
-  const addToast   = useToastStore((st) => st.toast)
-  const [requests,    setRequests]    = useState([])
-  const [page,        setPage]        = useState(1)
-  const [pagination,  setPagination]  = useState({ total: 0, totalPages: 1 })
-  const [loading,     setLoading]     = useState(true)
-  const [reviewTarget, setReviewTarget] = useState(null)
-  const [statusFilter,   setStatusFilter]   = useState('pending')
+function AdminLeaveTab({ staffList }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [requests,       setRequests]       = useState([])
+  const [page,           setPage]           = useState(1)
+  const [pagination,     setPagination]     = useState({ total: 0, totalPages: 1 })
+  const [loading,        setLoading]        = useState(true)
+  const [reviewTarget,   setReviewTarget]   = useState(null)
+  const [availableYears, setAvailableYears] = useState([_CY])
+  const [filterYear,     setFilterYear]     = useState(_CY)
+  const [filterMonth,    setFilterMonth]    = useState(_CM)
+  const [statusFilter,   setStatusFilter]   = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('')
-  const [rangeMode,      setRangeMode]      = useState('month') // 'month' | 'all'
 
-  const from = rangeMode === 'month' ? `${year}-${String(month).padStart(2, '0')}-01` : undefined
-  const to   = rangeMode === 'month'
-    ? `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
-    : undefined
+  // Derive available years from actual data in the system
+  useEffect(() => {
+    attendanceApi.listLeaveRequests({ limit: 1000 }).then((res) => {
+      const reqs = res.requests ?? []
+      const yearSet = new Set(reqs.map((r) => String(r.startDate ?? '').slice(0, 4)).filter((y) => y.length === 4))
+      yearSet.add(_CY)
+      setAvailableYears([...yearSet].sort())
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { from, to } = useMemo(() => ymToDates(filterYear, filterMonth), [filterYear, filterMonth])
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
     attendanceApi.listLeaveRequests({
-      status:  statusFilter  || undefined,
-      userId:  employeeFilter || undefined,
+      status: statusFilter  || undefined,
+      userId: employeeFilter || undefined,
       from, to, page, limit: 20,
     })
       .then((res) => {
@@ -590,20 +545,41 @@ function AdminLeaveTab({ year, month, staffList }) {
     return () => { cancelled = true }
   }, [statusFilter, employeeFilter, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setPage(1) }, [statusFilter, employeeFilter, rangeMode, from, to])
+  useEffect(() => { setPage(1) }, [statusFilter, employeeFilter, filterYear, filterMonth])
   useEffect(() => { return load() }, [load])
+
+  const titlePeriod = !filterYear
+    ? 'Tất cả'
+    : !filterMonth
+      ? `Năm ${filterYear}`
+      : monthName(parseInt(filterYear), parseInt(filterMonth))
 
   return (
     <>
       {/* Filter bar */}
       <div className={s.filterBar}>
-        <select className={s.filterSelect} value={rangeMode} onChange={(e) => setRangeMode(e.target.value)}>
-          <option value="month">Tháng hiện tại</option>
-          <option value="all">Tất cả thời gian</option>
+        <select
+          className={s.filterSelect}
+          value={filterYear}
+          onChange={(e) => { setFilterYear(e.target.value); setFilterMonth('') }}
+        >
+          <option value="">Tất cả năm</option>
+          {availableYears.map((y) => <option key={y} value={y}>Năm {y}</option>)}
+        </select>
+        <select
+          className={s.filterSelect}
+          value={filterMonth}
+          onChange={(e) => setFilterMonth(e.target.value)}
+          disabled={!filterYear}
+        >
+          <option value="">Cả năm</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={String(m)}>Tháng {m}</option>
+          ))}
         </select>
         <select className={s.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="pending">Chờ duyệt</option>
           <option value="">Tất cả trạng thái</option>
+          <option value="pending">Chờ duyệt</option>
           <option value="approved">Đã duyệt</option>
           <option value="rejected">Từ chối</option>
           <option value="cancelled">Đã huỷ</option>
@@ -617,7 +593,7 @@ function AdminLeaveTab({ year, month, staffList }) {
       <div className={s.section}>
         <div className={s.sectionHead}>
           <h3 className={s.sectionTitle}>
-            Đơn nghỉ phép {rangeMode === 'month' ? `— ${monthName(year, month)}` : '— Tất cả'}
+            Đơn nghỉ phép — {titlePeriod}
             {!loading && (
               <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
                 ({pagination.total} đơn)
@@ -768,28 +744,37 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
 
 // ── AdminOvertimeTab ──────────────────────────────────────────────────────────
 
-function AdminOvertimeTab({ year, month, staffList }) {
-  const addToast   = useToastStore((st) => st.toast)
-  const [requests,    setRequests]    = useState([])
-  const [page,        setPage]        = useState(1)
-  const [pagination,  setPagination]  = useState({ total: 0, totalPages: 1 })
-  const [loading,     setLoading]     = useState(true)
-  const [reviewTarget, setReviewTarget] = useState(null)
-  const [statusFilter,   setStatusFilter]   = useState('pending')
+function AdminOvertimeTab({ staffList }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [requests,       setRequests]       = useState([])
+  const [page,           setPage]           = useState(1)
+  const [pagination,     setPagination]     = useState({ total: 0, totalPages: 1 })
+  const [loading,        setLoading]        = useState(true)
+  const [reviewTarget,   setReviewTarget]   = useState(null)
+  const [availableYears, setAvailableYears] = useState([_CY])
+  const [filterYear,     setFilterYear]     = useState(_CY)
+  const [filterMonth,    setFilterMonth]    = useState(_CM)
+  const [statusFilter,   setStatusFilter]   = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('')
-  const [rangeMode,      setRangeMode]      = useState('month')
 
-  const from = rangeMode === 'month' ? `${year}-${String(month).padStart(2, '0')}-01` : undefined
-  const to   = rangeMode === 'month'
-    ? `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
-    : undefined
+  // Derive available years from actual data in the system
+  useEffect(() => {
+    attendanceApi.listOvertimeRequests({ limit: 1000 }).then((res) => {
+      const reqs = res.requests ?? res.data ?? []
+      const yearSet = new Set(reqs.map((r) => String(r.otDate ?? '').slice(0, 4)).filter((y) => y.length === 4))
+      yearSet.add(_CY)
+      setAvailableYears([...yearSet].sort())
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { from, to } = useMemo(() => ymToDates(filterYear, filterMonth), [filterYear, filterMonth])
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
     attendanceApi.listOvertimeRequests({
-      status:  statusFilter  || undefined,
-      userId:  employeeFilter || undefined,
+      status: statusFilter  || undefined,
+      userId: employeeFilter || undefined,
       from, to, page, limit: 20,
     })
       .then((res) => {
@@ -803,20 +788,41 @@ function AdminOvertimeTab({ year, month, staffList }) {
     return () => { cancelled = true }
   }, [statusFilter, employeeFilter, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setPage(1) }, [statusFilter, employeeFilter, rangeMode, from, to])
+  useEffect(() => { setPage(1) }, [statusFilter, employeeFilter, filterYear, filterMonth])
   useEffect(() => { return load() }, [load])
+
+  const titlePeriod = !filterYear
+    ? 'Tất cả'
+    : !filterMonth
+      ? `Năm ${filterYear}`
+      : monthName(parseInt(filterYear), parseInt(filterMonth))
 
   return (
     <>
       {/* Filter bar */}
       <div className={s.filterBar}>
-        <select className={s.filterSelect} value={rangeMode} onChange={(e) => setRangeMode(e.target.value)}>
-          <option value="month">Tháng hiện tại</option>
-          <option value="all">Tất cả thời gian</option>
+        <select
+          className={s.filterSelect}
+          value={filterYear}
+          onChange={(e) => { setFilterYear(e.target.value); setFilterMonth('') }}
+        >
+          <option value="">Tất cả năm</option>
+          {availableYears.map((y) => <option key={y} value={y}>Năm {y}</option>)}
+        </select>
+        <select
+          className={s.filterSelect}
+          value={filterMonth}
+          onChange={(e) => setFilterMonth(e.target.value)}
+          disabled={!filterYear}
+        >
+          <option value="">Cả năm</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={String(m)}>Tháng {m}</option>
+          ))}
         </select>
         <select className={s.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="pending">Chờ duyệt</option>
           <option value="">Tất cả trạng thái</option>
+          <option value="pending">Chờ duyệt</option>
           <option value="approved">Đã duyệt</option>
           <option value="rejected">Từ chối</option>
         </select>
@@ -829,7 +835,7 @@ function AdminOvertimeTab({ year, month, staffList }) {
       <div className={s.section}>
         <div className={s.sectionHead}>
           <h3 className={s.sectionTitle}>
-            Đơn tăng ca {rangeMode === 'month' ? `— ${monthName(year, month)}` : '— Tất cả'}
+            Đơn tăng ca — {titlePeriod}
             {!loading && (
               <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
                 ({pagination.total} đơn)
