@@ -68,6 +68,16 @@ const TABS = [
   { id: 'notes',        label: 'Ghi chú',            icon: StickyNote },
 ]
 
+const COMPANY_TASK_STATUS_TONE = {
+  '': s.cTaskStatusAll,
+  pending: s.cTaskStatusPending,
+  in_progress: s.cTaskStatusProgress,
+  on_hold: s.cTaskStatusHold,
+  pending_review: s.cTaskStatusReview,
+  needs_revision: s.cTaskStatusRevision,
+  completed: s.cTaskStatusCompleted,
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function CompanyDetail() {
@@ -165,14 +175,14 @@ export default function CompanyDetail() {
   if (error || !company) {
     return (
       <AppLayout>
-        <div className={s.placeholderTab} style={{ marginTop: 24 }}>
-          <div className={s.placeholderIcon} style={{ background: '#fef2f2' }}>
-            <AlertTriangle size={24} color="#dc2626" />
+        <div className={`${s.placeholderTab} ${s.placeholderTop}`}>
+          <div className={`${s.placeholderIcon} ${s.placeholderIconDanger}`}>
+            <AlertTriangle size={24} />
           </div>
           <p className={s.placeholderTitle}>Không tìm thấy</p>
           <p className={s.placeholderDesc}>{error ?? 'Công ty này không tồn tại hoặc đã bị xoá.'}</p>
           <Link to="/companies">
-            <button className={s.btnOutline} style={{ marginTop: 4 }}>← Quay lại danh sách</button>
+            <button className={`${s.btnOutline} ${s.btnTopTiny}`}>← Quay lại danh sách</button>
           </Link>
         </div>
       </AppLayout>
@@ -184,7 +194,7 @@ export default function CompanyDetail() {
       {/* Breadcrumb */}
       <div className={s.breadcrumb}>
         <Link to="/companies" className={s.breadcrumbLink}>Khách hàng</Link>
-        <ChevronRight size={13} style={{ color: '#d1d5db' }} />
+        <ChevronRight size={13} className={s.breadcrumbSepIcon} />
         <span className={s.breadcrumbCurrent}>{company.name}</span>
       </div>
 
@@ -197,10 +207,13 @@ export default function CompanyDetail() {
                 src={company.avatarUrl}
                 alt=""
                 className={s.heroAvatarImg}
-                onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }}
+                onError={(e) => {
+                  e.currentTarget.classList.add(s.isHidden)
+                  e.currentTarget.nextSibling?.classList.remove(s.isHidden)
+                }}
               />
             ) : null}
-            <div className={s.heroInitials} style={company.avatarUrl ? { display: 'none' } : {}}>
+            <div className={`${s.heroInitials} ${company.avatarUrl ? s.isHidden : ''}`}>
               {getInitials(company.name)}
             </div>
           </div>
@@ -342,9 +355,9 @@ export default function CompanyDetail() {
       {/* Terminate confirm */}
       {showTerminate && (
         <Modal title="Kết thúc hợp đồng" onClose={() => setShowTerminate(false)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className={s.modalStack}>
             <div className={s.terminateWarn}>
-              <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+              <AlertTriangle size={18} className={s.warnIconInline} />
               <span>
                 Bạn sắp kết thúc hợp đồng với <strong>{company.name}</strong>.
                 Công ty sẽ chuyển sang trạng thái <strong>&ldquo;Đã kết thúc&rdquo;</strong> và không thể tạo thêm công việc mới.
@@ -365,9 +378,9 @@ export default function CompanyDetail() {
       {/* Delete confirm */}
       {showDelete && (
         <Modal title="Xoá công ty" onClose={() => setShowDelete(false)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className={s.terminateWarn} style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
-              <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
+          <div className={s.modalStack}>
+            <div className={`${s.terminateWarn} ${s.terminateWarnDanger}`}>
+              <AlertTriangle size={18} className={`${s.warnIconInline} ${s.warnIconDanger}`} />
               <span>
                 Bạn sắp <strong>xoá vĩnh viễn</strong> công ty <strong>&ldquo;{company.name}&rdquo;</strong>.
                 Hành động này không thể hoàn tác. Nếu công ty đã có công việc hoặc lịch sử phân công, hãy dùng <strong>&ldquo;Kết thúc HĐ&rdquo;</strong> thay thế.
@@ -417,8 +430,8 @@ function BusinessInfoCard({ company }) {
     <div className={s.infoCard}>
       <div className={s.infoCardHeader}>
         <div className={s.infoCardTitle}>
-          <div className={s.infoCardTitleIcon} style={{ background: '#eff6ff' }}>
-            <Building2 size={14} color="#1d4ed8" />
+          <div className={`${s.infoCardTitleIcon} ${s.infoCardIconBlue}`}>
+            <Building2 size={14} />
           </div>
           Thông tin doanh nghiệp
         </div>
@@ -435,7 +448,7 @@ function BusinessInfoCard({ company }) {
           <InfoField label="Tên ngân hàng"     value={company.bankName} />
         </div>
         {company.notes && (
-          <div style={{ marginTop: 16 }}>
+          <div className={s.infoNoteWrap}>
             <div className={s.infoLabel}>Ghi chú</div>
             <div className={s.infoNote}>{company.notes}</div>
           </div>
@@ -455,18 +468,18 @@ function ContactCard({ company }) {
     <div className={s.infoCard}>
       <div className={s.infoCardHeader}>
         <div className={s.infoCardTitle}>
-          <div className={s.infoCardTitleIcon} style={{ background: '#f0fdf4' }}>
-            <User size={14} color="#059669" />
+          <div className={`${s.infoCardTitleIcon} ${s.infoCardIconGreen}`}>
+            <User size={14} />
           </div>
           Liên hệ
         </div>
       </div>
       <div className={s.infoCardBody}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px' }}>
+        <div className={s.infoContactGrid}>
           {hasLegal && (
             <div>
-              <div className={s.infoLabel} style={{ marginBottom: 10 }}>Đại diện pháp lý</div>
-              <div className={s.infoGrid} style={{ gridTemplateColumns: '1fr' }}>
+              <div className={`${s.infoLabel} ${s.infoSubsectionLabel}`}>Đại diện pháp lý</div>
+              <div className={`${s.infoGrid} ${s.infoGridSingle}`}>
                 <InfoField label="Họ tên"    value={company.legalRepName} />
                 <InfoField label="Điện thoại" value={company.legalRepPhone} />
               </div>
@@ -474,8 +487,8 @@ function ContactCard({ company }) {
           )}
           {hasContact && (
             <div>
-              <div className={s.infoLabel} style={{ marginBottom: 10 }}>Người liên hệ</div>
-              <div className={s.infoGrid} style={{ gridTemplateColumns: '1fr' }}>
+              <div className={`${s.infoLabel} ${s.infoSubsectionLabel}`}>Người liên hệ</div>
+              <div className={`${s.infoGrid} ${s.infoGridSingle}`}>
                 <InfoField label="Họ tên"    value={company.contactName} />
                 <InfoField label="Điện thoại" value={company.contactPhone} />
                 <InfoField label="Email"     value={company.contactEmail} />
@@ -543,42 +556,36 @@ function ActivityCard({ companyId, refreshTick }) {
     <div className={s.infoCard}>
       <div className={s.infoCardHeader}>
         <div className={s.infoCardTitle}>
-          <div className={s.infoCardTitleIcon} style={{ background: '#f5f3ff' }}>
-            <Clock size={14} color="#7c3aed" />
+          <div className={`${s.infoCardTitleIcon} ${s.infoCardIconPurple}`}>
+            <Clock size={14} />
           </div>
           Hoạt động gần đây
-          {total > 0 && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>{total} mục</span>}
+          {total > 0 && <span className={s.activityMetaCount}>{total} mục</span>}
         </div>
       </div>
-      <div className={s.infoCardBody} style={{ padding: 0 }}>
+      <div className={`${s.infoCardBody} ${s.infoCardBodyFlush}`}>
         {loading ? (
-          <div className={s.loadingCenter} style={{ height: 80 }}>
+          <div className={`${s.loadingCenter} ${s.loadingShort}`}>
             <Loader2 size={15} className={s.spin} />
           </div>
         ) : activities.length === 0 ? (
-          <div style={{ padding: '20px 16px', textAlign: 'center', fontSize: 12, color: 'var(--color-muted)' }}>
+          <div className={s.activityEmpty}>
             Chưa có hoạt động nào.
           </div>
         ) : (
           <>
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+            <ul className={s.activityList}>
               {activities.map((a, i) => (
-                <li key={a.id} style={{
-                  display: 'flex', gap: 10, padding: '10px 16px',
-                  borderBottom: i < activities.length - 1 ? '1px solid #f3f4f6' : 'none',
-                }}>
-                  <div style={{
-                    width: 7, height: 7, borderRadius: '50%', background: '#7c3aed',
-                    flexShrink: 0, marginTop: 5,
-                  }} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <li key={a.id} className={`${s.activityItem} ${i < activities.length - 1 ? s.activityItemBorder : ''}`}>
+                  <div className={s.activityDot} />
+                  <div className={s.activityContent}>
+                    <div className={s.activityTitle}>
                       {ACTION_LABELS[a.action] ?? a.action}
                       {a.taskTitle && (
-                        <span style={{ fontWeight: 400, color: '#6b7280' }}> · {a.taskTitle}</span>
+                        <span className={s.activityTaskTitle}> · {a.taskTitle}</span>
                       )}
                     </div>
-                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
+                    <div className={s.activityMeta}>
                       {a.actorName} · {fmtRelative(a.createdAt)}
                     </div>
                   </div>
@@ -617,7 +624,7 @@ function StaffCard({ company, isAdmin, onAssigned }) {
     <div className={s.staffCard}>
       <div className={s.staffCardHeader}>
         <span>
-          <Users size={13} style={{ marginRight: 6, verticalAlign: 'middle', color: '#6b7280' }} />
+          <Users size={13} className={s.titleInlineIcon} />
           Phụ trách
         </span>
         {isAdmin && (
@@ -671,7 +678,7 @@ function PerformanceCard({ company }) {
   return (
     <div className={s.metricCard}>
       <div className={s.metricCardHeader}>
-        <BarChart2 size={13} style={{ marginRight: 6, verticalAlign: 'middle', color: '#6b7280' }} />
+        <BarChart2 size={13} className={s.titleInlineIcon} />
         Hiệu suất
       </div>
       <div className={s.metricCardBody}>
@@ -735,12 +742,12 @@ function AssignmentsCard({ companyId, isAdmin, onAssigned, refreshTick }) {
       </div>
 
       {loading ? (
-        <div className={s.loadingCenter} style={{ height: 80 }}>
+        <div className={`${s.loadingCenter} ${s.loadingShort}`}>
           <Loader2 size={16} className={s.spin} /> Đang tải...
         </div>
       ) : assignments.length === 0 ? (
-        <div className={s.emptyState} style={{ padding: '24px' }}>
-          <p className={s.emptyDesc} style={{ fontSize: 12 }}>Chưa có lịch sử phân công.</p>
+        <div className={`${s.emptyState} ${s.emptyStatePadded}`}>
+          <p className={`${s.emptyDesc} ${s.emptyDescSmall}`}>Chưa có lịch sử phân công.</p>
         </div>
       ) : (
         <div className={s.assignmentsTableWrap}>
@@ -757,12 +764,12 @@ function AssignmentsCard({ companyId, isAdmin, onAssigned, refreshTick }) {
               {assignments.map((a) => (
                 <tr key={a.id}>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div className={s.staffAvatar} style={{ width: 26, height: 26, fontSize: 9 }}>
+                    <div className={s.assignmentPersonCell}>
+                      <div className={`${s.staffAvatar} ${s.staffAvatarSmall}`}>
                         {getInitials(a.staff?.name)}
                       </div>
                       <div>
-                        <div className={s.semiBold} style={{ fontSize: 12 }}>{a.staff?.name}</div>
+                        <div className={`${s.semiBold} ${s.textSmall}`}>{a.staff?.name}</div>
                         {a.staff?.jobTitle && <div className={s.muted}>{a.staff.jobTitle}</div>}
                       </div>
                     </div>
@@ -841,7 +848,7 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
         <div>
           <label className={`${s.formLabel} ${s.formLabelReq}`}>Người phụ trách</label>
           {loadingStaff ? (
-            <div style={{ height: 36, background: '#f0f2f5', borderRadius: 7, animation: 'skeleton-fade 1.4s ease-in-out infinite' }} />
+            <div className={s.assignSkeleton} />
           ) : (
             <select
               value={staffId}
@@ -895,17 +902,17 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
 
 // ── PlaceholderTab ─────────────────────────────────────────────────────────────
 
-function PlaceholderTab({ icon, iconBg, title, desc, phase, btnLabel, btnDisabled }) {
+function PlaceholderTab({ icon, title, desc, phase, btnLabel, btnDisabled }) {
   return (
     <div className={s.placeholderTab}>
-      <div className={s.placeholderIcon} style={{ background: iconBg ?? '#f3f4f6' }}>
+      <div className={s.placeholderIcon}>
         {icon}
       </div>
       <p className={s.placeholderTitle}>{title}</p>
       <p className={s.placeholderDesc}>{desc}</p>
       {phase && <span className={s.placeholderPhase}>{phase}</span>}
       {btnLabel && (
-        <button className={s.btnOutline} disabled={btnDisabled} style={{ marginTop: 4 }}>
+        <button className={`${s.btnOutline} ${s.btnTopTiny}`} disabled={btnDisabled}>
           {btnLabel}
         </button>
       )}
@@ -919,15 +926,15 @@ function DeleteTaskModal({ task, deleting, onClose, onConfirm }) {
   return (
     <Modal title="Xoá công việc" onClose={onClose}>
       <div className={s.modalForm}>
-        <div className={s.terminateWarn} style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
-          <span style={{ fontSize: 13 }}>
+        <div className={`${s.terminateWarn} ${s.terminateWarnDanger}`}>
+          <AlertTriangle size={16} className={`${s.warnIconInline} ${s.warnIconDanger}`} />
+          <span className={s.textSmall}>
             Bạn có chắc chắn muốn xoá công việc{' '}
             <strong>&ldquo;{task.title}&rdquo;</strong>?
             Hành động này không thể hoàn tác.
           </span>
         </div>
-        <div className={s.modalActions} style={{ marginTop: 16 }}>
+        <div className={`${s.modalActions} ${s.infoNoteWrap}`}>
           <button onClick={onClose} className={s.btnOutline} disabled={deleting}>Huỷ bỏ</button>
           <button onClick={onConfirm} disabled={deleting} className={s.btnDanger}>
             {deleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
@@ -1086,18 +1093,18 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   return (
     <div>
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--color-text)' }}>
+      <div className={s.taskPanelHeader}>
+        <div className={s.taskPanelHeaderTitle}>
+          <h3 className={s.taskPanelTitle}>
             Công việc của khách hàng
           </h3>
           {!loading && (
-            <span style={{ fontSize: 11, fontWeight: 700, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: 99, padding: '1px 8px' }}>
+            <span className={s.countPill}>
               {pagination.total}
             </span>
           )}
         </div>
-        <button className={ts.btnPrimary} style={{ height: 32, fontSize: 13 }} onClick={() => setShowCreate(true)}>
+        <button className={`${ts.btnPrimary} ${s.taskCreateBtnCompact}`} onClick={() => setShowCreate(true)}>
           <Plus size={13} /> Tạo công việc
         </button>
       </div>
@@ -1121,15 +1128,14 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           {/* Tìm kiếm */}
           <div className={`${s.cTaskFilterGroup} ${s.cTaskFilterGroupGrow}`}>
             <label className={s.cTaskFilterLabel}>Từ khoá</label>
-            <div style={{ position: 'relative' }}>
-              <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)', pointerEvents: 'none' }} />
+            <div className={s.searchFieldWrap}>
+              <Search size={12} className={s.searchFieldIcon} />
               <input
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Tìm công việc..."
-                className={s.cTaskFilterInput}
-                style={{ paddingLeft: 26 }}
+                className={`${s.cTaskFilterInput} ${s.cTaskFilterInputWithIcon}`}
               />
             </div>
           </div>
@@ -1169,7 +1175,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           </div>
 
           {/* Quá hạn */}
-          <div className={s.cTaskFilterGroup} style={{ justifyContent: 'flex-end' }}>
+          <div className={`${s.cTaskFilterGroup} ${s.filterGroupEnd}`}>
             <label className={s.cTaskFilterLabel}>&nbsp;</label>
             <button
               className={`${s.cTaskOverdueBtn} ${isOverdue ? s.cTaskOverdueBtnActive : ''}`}
@@ -1181,15 +1187,9 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         </div>
 
         {/* Active filter chips */}
-        <div className={s.filterChips} style={{ padding: '4px 14px 8px', borderTop: '1px solid #f1f5f9' }}>
+        <div className={`${s.filterChips} ${s.filterChipsCompact}`}>
           {/* Period chip — always show current period */}
-          <span
-            className={s.filterChip}
-            style={(monthFilter !== CUR_MONTH || yearFilter !== CUR_YEAR)
-              ? {}
-              : { background: '#f8fafc', color: '#64748b', borderColor: '#e2e8f0' }
-            }
-          >
+          <span className={`${s.filterChip} ${(monthFilter !== CUR_MONTH || yearFilter !== CUR_YEAR) ? '' : s.filterChipMuted}`}>
             Kỳ: {monthFilter ? `T${monthFilter}/` : ''}{yearFilter || '—'}
             {(monthFilter !== CUR_MONTH || yearFilter !== CUR_YEAR) && (
               <button className={s.filterChipRemove} onClick={() => { setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR); setPage(1) }}>×</button>
@@ -1202,7 +1202,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             </span>
           )}
           {isOverdue && (
-            <span className={s.filterChip} style={{ background: '#fef2f2', color: '#dc2626', borderColor: '#fca5a5' }}>
+            <span className={`${s.filterChip} ${s.filterChipDanger}`}>
               Quá hạn
               <button className={s.filterChipRemove} onClick={() => { setIsOverdue(false); setPage(1) }}>×</button>
             </span>
@@ -1225,18 +1225,17 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             { key: 'pending_review',label: STATUS_LABELS.pending_review,  color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
             { key: 'needs_revision',label: STATUS_LABELS.needs_revision,  color: '#b45309', bg: '#fff7ed', border: '#fed7aa' },
             { key: 'completed',     label: STATUS_LABELS.completed,       color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
-          ].map(({ key, label, color, bg, border }) => {
+          ].map(({ key, label }) => {
             const count = key === '' ? pagination.total : (statusCounts[key] ?? 0)
             const isActive = statusFilter === key
             return (
               <button
                 key={key}
-                className={`${s.cTaskStatusChip} ${isActive ? s.cTaskStatusChipActive : ''}`}
-                style={isActive ? { background: bg, borderColor: border, color } : {}}
+                className={`${s.cTaskStatusChip} ${isActive ? `${s.cTaskStatusChipActive} ${COMPANY_TASK_STATUS_TONE[key] ?? ''}` : ''}`}
                 onClick={() => { setStatusFilter(key); setPage(1) }}
               >
                 <span>{label}</span>
-                <span className={s.cTaskStatusChipCount} style={isActive ? { background: border, color } : {}}>{count}</span>
+                <span className={`${s.cTaskStatusChipCount} ${isActive ? s.cTaskStatusChipCountActive : ''}`}>{count}</span>
               </button>
             )
           })}
@@ -1256,7 +1255,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                 <th>Hết hạn</th>
                 <th>Phụ trách</th>
                 <th>Tiến độ</th>
-                <th style={{ width: isAdmin ? 72 : 44 }} />
+                <th className={isAdmin ? s.taskActionHeadAdmin : s.taskActionHeadUser} />
               </tr>
             </thead>
             <tbody>
@@ -1264,8 +1263,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
                     {[220, 100, 80, 80, 80, 100, 80].map((w, j) => (
-                      <td key={j} style={{ padding: '10px 16px' }}>
-                        <div style={{ width: w, height: 10, background: '#f1f5f9', borderRadius: 4, animation: 'app-pulse 1.5s ease-in-out infinite' }} />
+                      <td key={j} className={s.taskSkeletonCell}>
+                        <div className={s.taskSkeletonBar} style={{ '--skeleton-w': `${w}px` }} />
                       </td>
                     ))}
                     {isAdmin && <td />}
@@ -1274,8 +1273,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               ) : tasks.length === 0 ? (
                 <tr>
                   <td colSpan={colSpan}>
-                    <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--color-muted)', fontSize: 13 }}>
-                      <ListTodo size={28} style={{ opacity: 0.3, display: 'block', margin: '0 auto 8px' }} />
+                    <div className={s.taskEmptyInline}>
+                      <ListTodo size={28} className={s.taskEmptyInlineIcon} />
                       {activeFilters > 0 ? 'Không tìm thấy công việc phù hợp' : 'Chưa có công việc nào'}
                     </div>
                   </td>
@@ -1286,11 +1285,11 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                 return (
                   <tr
                     key={task.id}
-                    style={{ cursor: 'pointer', borderLeft: overdue ? '3px solid #ef4444' : undefined }}
+                    className={`${s.cTaskRow} ${overdue ? s.cTaskRowOverdue : ''}`}
                     onClick={() => setQuickViewId(task.id)}
                   >
                     <td>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: overdue ? '#dc2626' : 'var(--color-text)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                      <div className={`${s.cTaskTitle} ${overdue ? s.cTaskTitleOverdue : ''}`}>
                         {task.title}
                       </div>
                     </td>
@@ -1304,27 +1303,27 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                         {getLabel('task_priority', task.priority, PRIORITY_LABELS[task.priority])}
                       </span>
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--color-text-soft)', whiteSpace: 'nowrap' }}>
+                    <td className={s.cTaskDateCell}>
                       {fmtTaskDate(task.createdAt)}
                     </td>
-                    <td style={{ fontSize: 12, color: overdue ? '#dc2626' : 'var(--color-text-soft)', fontWeight: overdue ? 700 : 400, whiteSpace: 'nowrap' }}>
+                    <td className={`${s.cTaskDateCell} ${overdue ? s.cTaskDueOverdue : ''}`}>
                       {fmtTaskDate(task.dueDate)}
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--color-text-soft)' }}>
+                    <td className={s.cTaskAssigneeCell}>
                       {task.assignedToName ?? '—'}
                     </td>
                     <td>
                       {pct !== null ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <div style={{ flex: 1, height: 5, minWidth: 40, background: '#e2e8f0', borderRadius: 99, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#22c55e' : '#3b82f6', borderRadius: 99, transition: 'width 0.3s' }} />
+                        <div className={s.cTaskProgress}>
+                          <div className={s.cTaskProgressBar}>
+                            <div className={`${s.cTaskProgressFill} ${pct === 100 ? s.cTaskProgressFillDone : ''}`} style={{ '--progress-width': `${pct}%` }} />
                           </div>
-                          <span style={{ fontSize: 11, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{pct}%</span>
+                          <span className={s.cTaskProgressText}>{pct}%</span>
                         </div>
-                      ) : <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>—</span>}
+                      ) : <span className={s.cTaskDash}>—</span>}
                     </td>
-                    <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    <td className={s.cTaskActionCell} onClick={(e) => e.stopPropagation()}>
+                      <div className={s.cTaskActionBtns}>
                         <button
                           className={s.rowActionBtn}
                           title="Xem chi tiết"
@@ -1360,7 +1359,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1 || loading}>‹</button>
             {pageWindow().map((n, i) =>
               n === '…' ? (
-                <span key={`e${i}`} style={{ padding: '0 4px', fontSize: 12, color: 'var(--color-muted)' }}>…</span>
+                <span key={`e${i}`} className={s.paginationGap}>…</span>
               ) : (
                 <button
                   key={n}

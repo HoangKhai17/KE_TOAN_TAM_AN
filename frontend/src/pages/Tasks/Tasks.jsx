@@ -66,22 +66,20 @@ function calcDays(task) {
   return Math.max(0, differenceInDays(end, start))
 }
 
-// Status color map for quick-edit select in list view
-const STATUS_SELECT_STYLE = {
-  pending:        { background: '#f1f5f9', color: '#475569', borderColor: '#cbd5e1' },
-  in_progress:    { background: '#eff6ff', color: '#1d4ed8', borderColor: '#93c5fd' },
-  on_hold:        { background: '#fff7ed', color: '#c2410c', borderColor: '#fed7aa' },
-  pending_review: { background: '#faf5ff', color: '#7e22ce', borderColor: '#d8b4fe' },
-  needs_revision: { background: '#fff1f2', color: '#be123c', borderColor: '#fda4af' },
-  completed:      { background: '#f0fdf4', color: '#15803d', borderColor: '#86efac' },
+const STATUS_SELECT_CLASS = {
+  pending: s.qeStatusPending,
+  in_progress: s.qeStatusInProgress,
+  on_hold: s.qeStatusOnHold,
+  pending_review: s.qeStatusPendingReview,
+  needs_revision: s.qeStatusNeedsRevision,
+  completed: s.qeStatusCompleted,
 }
 
-// Priority color map for quick-edit select in list view
-const PRIORITY_SELECT_STYLE = {
-  urgent: { background: '#fef2f2', color: '#b91c1c', borderColor: '#fca5a5' },
-  high:   { background: '#fff7ed', color: '#c2410c', borderColor: '#fdba74' },
-  medium: { background: '#eff6ff', color: '#1d4ed8', borderColor: '#93c5fd' },
-  low:    { background: '#f8fafc', color: '#64748b', borderColor: '#cbd5e1' },
+const PRIORITY_SELECT_CLASS = {
+  urgent: s.qePriorityUrgent,
+  high: s.qePriorityHigh,
+  medium: s.qePriorityMedium,
+  low: s.qePriorityLow,
 }
 
 // ── Column dot class map ──────────────────────────────────────────────────────
@@ -102,11 +100,10 @@ function ListDateField({ value, onChange, isOverdue }) {
   const dateStr = value ? value.slice(0, 10) : ''
   return (
     <div
-      className={`${s.qeDate} ${isOverdue ? s.qeDateOverdue : ''}`}
-      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}
+      className={`${s.qeDate} ${s.qeDateInteractive} ${isOverdue ? s.qeDateOverdue : ''}`}
       onClick={() => ref.current?.showPicker?.()}
     >
-      <span style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <span className={s.qeDateText}>
         {dateStr ? fmtDate(dateStr) : '—'}
       </span>
       <input
@@ -114,7 +111,7 @@ function ListDateField({ value, onChange, isOverdue }) {
         type="date"
         value={dateStr}
         onChange={onChange}
-        style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer', zIndex: 1 }}
+        className={s.qeDateInputNative}
         tabIndex={-1}
       />
     </div>
@@ -262,8 +259,8 @@ function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
         <div className={s.boardCardProgress}>
           <div className={s.progressBar}>
             <div
-              className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`}
-              style={{ width: `${pct}%` }}
+              className={`${s.progressFill} ${s.progressFillDynamic} ${pct === 100 ? s.progressFillDone : ''}`}
+              style={{ '--progress-width': `${pct}%` }}
             />
           </div>
           <span className={s.boardCardProgressText}>{pct}%</span>
@@ -308,8 +305,8 @@ function DraggableCard({ task, onOpen, isAdmin, onDelete, onQuickView }) {
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      className={`${s.boardCard} ${isDragging ? s.boardCardDragging : ''}`}
-      style={transform ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` } : undefined}
+      className={`${s.boardCard} ${isDragging ? s.boardCardDragging : ''} ${transform ? s.dragTransform : ''}`}
+      style={transform ? { '--drag-x': `${transform.x}px`, '--drag-y': `${transform.y}px` } : undefined}
       onClick={() => !isDragging && onOpen(task.id)}
     >
       <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
@@ -335,7 +332,7 @@ function DroppableColumn({ status, tasks, onOpen, isAdmin, onDelete, onQuickView
           <DraggableCard key={t.id} task={t} onOpen={onOpen} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
         ))}
         {tasks.length === 0 && (
-          <p style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 11, padding: '16px 0' }}>
+          <p className={s.boardEmptyText}>
             Không có
           </p>
         )}
@@ -571,12 +568,12 @@ function CalendarView({ tasks, onOpen }) {
     return (
       <div
         key={task.id}
-        className={`${s.calTaskBar} ${taskBarClass(task)} ${continuesLeft ? s.calBarLeft : ''} ${continuesRight ? s.calBarRight : ''}`}
+        className={`${s.calTaskBar} ${s.calendarTaskBarDynamic} ${taskBarClass(task)} ${continuesLeft ? s.calBarLeft : ''} ${continuesRight ? s.calBarRight : ''}`}
         style={{
-          left:   `calc(${(si / 7) * 100}% + ${lm}px)`,
-          width:  `calc(${((ei - si + 1) / 7) * 100}% - ${lm + rm}px)`,
-          top:    `${topH + slot * slotH + 3}px`,
-          height: `${slotH - 5}px`,
+          '--cal-left':   `calc(${(si / 7) * 100}% + ${lm}px)`,
+          '--cal-width':  `calc(${((ei - si + 1) / 7) * 100}% - ${lm + rm}px)`,
+          '--cal-top':    `${topH + slot * slotH + 3}px`,
+          '--cal-height': `${slotH - 5}px`,
         }}
         onClick={() => onOpen(task.id)}
         title={task.title}
@@ -631,8 +628,8 @@ function CalendarView({ tasks, onOpen }) {
                     return (
                       <div
                         key={key}
-                        className={`${s.calDayCol} ${isOther ? s.calColOther : ''} ${isTod ? s.calColToday : ''} ${dIdx === 6 ? s.calColLast : ''}`}
-                        style={{ left: `${(dIdx / 7) * 100}%`, width: `${100 / 7}%` }}
+                        className={`${s.calDayCol} ${s.calendarDayColDynamic} ${isOther ? s.calColOther : ''} ${isTod ? s.calColToday : ''} ${dIdx === 6 ? s.calColLast : ''}`}
+                        style={{ '--cal-left': `${(dIdx / 7) * 100}%`, '--cal-width': `${100 / 7}%` }}
                       >
                         <div className={s.calDayNum}>
                           <span className={isTod ? s.calDayNumToday : ''}>{format(day, 'd')}</span>
@@ -674,16 +671,16 @@ function CalendarView({ tasks, onOpen }) {
           {/* Single week row — all tasks visible, grows to fit */}
           <div className={s.calWeeksContainer}>
             <div
-              className={`${s.calWeekRow} ${s.calWeekRowLast}`}
-              style={{ minHeight: Math.max(160, WEEK_TOP_H + weekLayout.slotCount * WEEK_SLOT_H + 32) }}
+              className={`${s.calWeekRow} ${s.calWeekRowLast} ${s.calendarWeekRowDynamic}`}
+              style={{ '--week-row-min-h': `${Math.max(160, WEEK_TOP_H + weekLayout.slotCount * WEEK_SLOT_H + 32)}px` }}
             >
               {weekDays.map((day, dIdx) => {
                 const isTod = isToday(day)
                 return (
                   <div
                     key={format(day, 'yyyy-MM-dd')}
-                    className={`${s.calDayCol} ${isTod ? s.calColToday : ''} ${dIdx === 6 ? s.calColLast : ''}`}
-                    style={{ left: `${(dIdx / 7) * 100}%`, width: `${100 / 7}%` }}
+                    className={`${s.calDayCol} ${s.calendarDayColDynamic} ${isTod ? s.calColToday : ''} ${dIdx === 6 ? s.calColLast : ''}`}
+                    style={{ '--cal-left': `${(dIdx / 7) * 100}%`, '--cal-width': `${100 / 7}%` }}
                   />
                 )
               })}
@@ -787,7 +784,7 @@ function MultiSelect({ placeholder, options, selected, onChange }) {
         {count > 0 && <span className={s.multiSelectBadge}>{count}</span>}
         <ChevronDown
           size={11}
-          style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.13s' }}
+          className={`${s.chevronRotate} ${open ? s.chevronOpen : ''}`}
         />
       </button>
       {open && (
@@ -871,22 +868,21 @@ function FilterCompanyPicker({ companies, value, onChange }) {
   }
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative' }}>
+    <div ref={wrapRef} className={s.companyPickerWrap}>
       <div
-        className={s.cpTrigger}
-        style={{ height: 32, fontSize: 'var(--fs-xs)' }}
+        className={`${s.cpTrigger} ${s.companyPickerTriggerCompact}`}
         onClick={() => setOpen((o) => !o)}
       >
-        <span className={s.cpTriggerText} style={{ color: selected ? 'var(--color-text)' : 'var(--color-muted)' }}>
+        <span className={`${s.cpTriggerText} ${selected ? s.companyPickerSelected : s.companyPickerPlaceholder}`}>
           {selected?.name ?? 'Tất cả'}
         </span>
-        <ChevronDown size={11} style={{ flexShrink: 0, color: 'var(--color-muted)', transform: open ? 'rotate(180deg)' : undefined, transition: 'transform 0.15s' }} />
+        <ChevronDown size={11} className={`${s.iconMuted} ${s.chevronRotate} ${open ? s.chevronOpen : ''}`} />
       </div>
 
       {open && (
         <div className={s.cpDropdown}>
           <div className={s.cpSearch}>
-            <Search size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+            <Search size={12} className={s.iconMuted} />
             <input
               ref={searchRef}
               type="text"
@@ -919,7 +915,7 @@ function FilterCompanyPicker({ companies, value, onChange }) {
               </div>
             ))}
             {filtered.length === 0 && (
-              <div className={s.cpEmpty}>Không tìm thấy "{search}"</div>
+              <div className={s.cpEmpty}>Không tìm thấy &quot;{search}&quot;</div>
             )}
           </div>
         </div>
@@ -952,7 +948,7 @@ function ListView({
 
   return (
     <div className={s.tableWrap}>
-      <div style={{ overflowX: 'auto' }}>
+      <div className={s.tableScrollX}>
         <table className={s.table}>
           <thead className={s.thead}>
             <tr>
@@ -971,7 +967,7 @@ function ListView({
               <th className={s.th}>Hết hạn</th>
               <th className={s.th}>Tiến độ</th>
               <th className={s.th}>Giao cho</th>
-              <th className={s.th} style={{ width: 100 }}>Hành động</th>
+              <th className={`${s.th} ${s.thAction}`}>Hành động</th>
             </tr>
           </thead>
           <tbody>
@@ -981,7 +977,7 @@ function ListView({
                   <td className={s.tdCheck} />
                   {[240, 80, 55, 110, 80, 80, 90, 110, 70].map((w, j) => (
                     <td key={j} className={s.td}>
-                      <div style={{ width: w, height: 11, background: '#f1f5f9', borderRadius: 4, animation: 'app-pulse 1.5s ease-in-out infinite' }} />
+                      <div className={s.tableSkeletonBar} style={{ '--skeleton-w': `${w}px` }} />
                     </td>
                   ))}
                 </tr>
@@ -1029,7 +1025,7 @@ function ListView({
                       <span className={`${s.daysBadge} ${t.status === 'completed' ? s.daysBadgeDone : ''}`}>
                         {days}d
                       </span>
-                    ) : <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>—</span>}
+                    ) : <span className={s.mutedDash}>—</span>}
                   </td>
 
                   {/* Quick edit: status */}
@@ -1037,9 +1033,8 @@ function ListView({
                     <select
                       value={t.status}
                       onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
-                      className={s.qeSelect}
+                      className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[t.status] ?? ''}`}
                       title="Đổi trạng thái"
-                      style={{ ...(STATUS_SELECT_STYLE[t.status] ?? {}), fontWeight: 600 }}
                     >
                       <option value={t.status}>
                         {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
@@ -1057,9 +1052,8 @@ function ListView({
                     <select
                       value={t.priority}
                       onChange={(e) => onPriorityChange(t, e.target.value)}
-                      className={s.qeSelect}
+                      className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[t.priority] ?? ''}`}
                       title="Đổi ưu tiên"
-                      style={{ ...(PRIORITY_SELECT_STYLE[t.priority] ?? {}), fontWeight: 600 }}
                     >
                       {['urgent', 'high', 'medium', 'low'].map((p) => (
                         <option key={p} value={p}>
@@ -1083,13 +1077,13 @@ function ListView({
                       <div className={s.progressWrap}>
                         <div className={s.progressBar}>
                           <div
-                            className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`}
-                            style={{ width: `${pct}%` }}
+                            className={`${s.progressFill} ${s.progressFillDynamic} ${pct === 100 ? s.progressFillDone : ''}`}
+                            style={{ '--progress-width': `${pct}%` }}
                           />
                         </div>
                         <span className={s.progressText}>{pct}%</span>
                       </div>
-                    ) : <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>—</span>}
+                    ) : <span className={s.mutedDash}>—</span>}
                   </td>
 
                   <td className={s.td}>
@@ -1099,7 +1093,7 @@ function ListView({
                         <span>{t.assignedToName}</span>
                       </div>
                     ) : (
-                      <span style={{ color: 'var(--color-muted)', fontSize: 11 }}>—</span>
+                      <span className={s.mutedDash}>—</span>
                     )}
                   </td>
 
@@ -1161,7 +1155,7 @@ function ListView({
           <button className={s.pageBtn} onClick={() => onPageChange(page - 1)} disabled={page === 1}>‹</button>
           {pageWindow().map((n, i) =>
             n === '…' ? (
-              <span key={`e${i}`} style={{ padding: '0 4px', color: 'var(--color-muted)', fontSize: 12 }}>…</span>
+              <span key={`e${i}`} className={s.paginationGap}>…</span>
             ) : (
               <button
                 key={n}
@@ -1193,7 +1187,7 @@ function loadSavedFilters() {
   catch { return {} }
 }
 function saveFilters(obj) {
-  try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(obj)) } catch (_) {}
+  try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(obj)) } catch (_) { /* ignore storage errors */ }
 }
 
 export default function Tasks() {
@@ -1520,7 +1514,7 @@ export default function Tasks() {
     setSortValue('created_at:desc')
     setView('list'); setPageSize(20)
     setPage(1)
-    try { sessionStorage.removeItem(FILTER_KEY) } catch (_) {}
+    try { sessionStorage.removeItem(FILTER_KEY) } catch (_) { /* ignore storage errors */ }
   }
 
   const activeFilterCount = [search, companyFilter, staffFilter].filter(Boolean).length
@@ -1698,14 +1692,13 @@ export default function Tasks() {
             {/* TỪ KHOÁ */}
             <div className={`${s.filterGroup} ${s.grow}`}>
               <label className={s.filterLabel}>Từ khoá</label>
-              <div style={{ position: 'relative' }}>
-                <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)', pointerEvents: 'none' }} />
+              <div className={s.filterSearchWrap}>
+                <Search size={12} className={s.filterSearchIcon} />
                 <input
                   type="text"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className={s.filterInput}
-                  style={{ paddingLeft: 28 }}
+                  className={`${s.filterInput} ${s.filterInputWithIcon}`}
                   placeholder="Tiêu đề công việc..."
                 />
               </div>
@@ -1828,7 +1821,7 @@ export default function Tasks() {
                 </span>
               ))}
               {isOverdue && (
-                <span className={s.filterChip} style={{ background: '#fef2f2', color: '#dc2626', borderColor: '#fca5a5' }}>
+                <span className={`${s.filterChip} ${s.filterChipDanger}`}>
                   Quá hạn
                   <button className={s.filterChipRemove} onClick={() => { setIsOverdue(false); setPage(1) }}>×</button>
                 </span>
@@ -1893,8 +1886,7 @@ export default function Tasks() {
             </button>
             {isAdmin && (
               <button
-                className={s.btnGhost}
-                style={{ color: 'var(--color-danger)' }}
+                className={`${s.btnGhost} ${s.btnDangerText}`}
                 onClick={() => setShowBulkDelete(true)}
               >
                 <Trash2 size={13} /> Xóa đã chọn
@@ -1948,7 +1940,7 @@ export default function Tasks() {
         )}
 
         {view === 'calendar' && !loading && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div className={s.calendarPane}>
             <CalendarView tasks={tasks} onOpen={openTask} />
           </div>
         )}

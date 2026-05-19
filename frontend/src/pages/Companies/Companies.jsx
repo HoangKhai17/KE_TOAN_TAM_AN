@@ -97,7 +97,7 @@ function AvatarUpload({ value, name, onChange }) {
         }
         <div className={s.avatarUploadOverlay}><Camera size={14} /></div>
       </div>
-      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
+      <input ref={inputRef} type="file" accept="image/*" className={s.hiddenInput} onChange={handleFile} />
       <div className={s.avatarUploadActions}>
         <button type="button" className={s.avatarUploadBtn} onClick={() => inputRef.current?.click()}>
           <Camera size={11} /> Chọn logo
@@ -422,11 +422,11 @@ export default function Companies() {
                 <thead>
                   <tr>
                     <th>Tên công ty</th>
-                    <th style={{ display: 'table-cell' }}>MST</th>
-                    <th style={{ display: 'table-cell', minWidth: 140 }}>Người liên hệ</th>
-                    <th style={{ display: 'table-cell' }}>Phụ trách</th>
-                    <th style={{ textAlign: 'center', minWidth: 64 }}>Việc mở</th>
-                    <th style={{ textAlign: 'center', minWidth: 72 }}>Quá hạn</th>
+                    <th className={s.tableCellVisible}>MST</th>
+                    <th className={s.tableContactHead}>Người liên hệ</th>
+                    <th className={s.tableCellVisible}>Phụ trách</th>
+                    <th className={s.tableMetricOpenHead}>Việc mở</th>
+                    <th className={s.tableMetricOverdueHead}>Quá hạn</th>
                     <th>Hợp đồng</th>
                     <th className={s.actionsHead}>Hành động</th>
                   </tr>
@@ -548,10 +548,13 @@ function CompanyRow({ company, isAdmin, onClick, onDelete }) {
               src={company.avatarUrl}
               alt=""
               className={s.companyAvatar}
-              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex' }}
+              onError={(e) => {
+                e.currentTarget.classList.add(s.isHidden)
+                e.currentTarget.nextSibling?.classList.remove(s.isHidden)
+              }}
             />
           ) : null}
-          <div className={s.companyInitials} style={company.avatarUrl ? { display: 'none' } : {}}>
+          <div className={`${s.companyInitials} ${company.avatarUrl ? s.isHidden : ''}`}>
             {getInitials(company.name)}
           </div>
           <div>
@@ -564,10 +567,10 @@ function CompanyRow({ company, isAdmin, onClick, onDelete }) {
           </div>
         </div>
       </td>
-      <td style={{ display: 'table-cell' }}>
+      <td className={s.tableCellVisible}>
         <span className={s.muted}>{company.taxCode || '—'}</span>
       </td>
-      <td style={{ display: 'table-cell' }}>
+      <td className={s.tableCellVisible}>
         {company.contactName ? (
           <div>
             <div className={s.contactName}>{company.contactName}</div>
@@ -592,14 +595,14 @@ function CompanyRow({ company, isAdmin, onClick, onDelete }) {
           <span className={s.unassigned}>Chưa phân công</span>
         )}
       </td>
-      <td style={{ textAlign: 'center' }}>
+      <td className={s.tableMetricCell}>
         {company.taskOpenCount > 0 ? (
           <span className={s.metricOpen}>{company.taskOpenCount}</span>
         ) : (
           <span className={s.metricZero}>0</span>
         )}
       </td>
-      <td style={{ textAlign: 'center' }}>
+      <td className={s.tableMetricCell}>
         {company.taskOverdueCount > 0 ? (
           <span className={s.pillOverdue}>{company.taskOverdueCount}</span>
         ) : (
@@ -637,25 +640,25 @@ function SkeletonRow({ isAdmin }) {
   return (
     <tr className={`${s.skeletonRow} ${s.skeletonPulse}`}>
       <td>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-          <div className={s.skeletonSquare} style={{ width: 36, height: 36, flexShrink: 0 }} />
+        <div className={s.companyNameSkeletonRow}>
+          <div className={`${s.skeletonSquare} ${s.skeletonSquareCompany}`} />
           <div>
-            <div className={s.skeletonBlock} style={{ width: 160, height: 12, marginBottom: 5 }} />
-            <div className={s.skeletonBlock} style={{ width: 100, height: 10 }} />
+            <div className={`${s.skeletonBlock} ${s.skeletonCompanyName}`} />
+            <div className={`${s.skeletonBlock} ${s.skeletonCompanyMeta}`} />
           </div>
         </div>
       </td>
-      <td><div className={s.skeletonBlock} style={{ width: 80, height: 11 }} /></td>
-      <td><div className={s.skeletonBlock} style={{ width: 100, height: 11 }} /></td>
+      <td><div className={`${s.skeletonBlock} ${s.skeletonTax}`} /></td>
+      <td><div className={`${s.skeletonBlock} ${s.skeletonContact}`} /></td>
       <td>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div className={s.skeletonCircle} style={{ width: 28, height: 28, flexShrink: 0 }} />
-          <div className={s.skeletonBlock} style={{ width: 90, height: 11 }} />
+        <div className={s.companyStaffSkeletonRow}>
+          <div className={`${s.skeletonCircle} ${s.skeletonStaffAvatar}`} />
+          <div className={`${s.skeletonBlock} ${s.skeletonStaffName}`} />
         </div>
       </td>
-      <td style={{ textAlign: 'center' }}><div className={s.skeletonBlock} style={{ width: 24, height: 14, margin: '0 auto' }} /></td>
-      <td style={{ textAlign: 'center' }}><div className={s.skeletonBlock} style={{ width: 24, height: 14, margin: '0 auto' }} /></td>
-      <td><div className={s.skeletonBlock} style={{ width: 80, height: 20, borderRadius: 999 }} /></td>
+      <td className={s.tableMetricCell}><div className={`${s.skeletonBlock} ${s.skeletonMetric}`} /></td>
+      <td className={s.tableMetricCell}><div className={`${s.skeletonBlock} ${s.skeletonMetric}`} /></td>
+      <td><div className={`${s.skeletonBlock} ${s.skeletonStatus}`} /></td>
       <td />
     </tr>
   )
@@ -668,18 +671,18 @@ function DeleteCompanyModal({ company, deleting, onClose, onConfirm }) {
 
   return (
     <Modal title="Xoá công ty" onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className={s.modalStack}>
         {hasActivities ? (
           <div className={s.terminateWarn}>
-            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <AlertTriangle size={18} className={s.warnIconInline} />
             <span>
               <strong>{company.name}</strong> đang có <strong>{company.taskOpenCount + company.taskOverdueCount} công việc</strong> chưa hoàn thành.
               Không thể xoá công ty đã có hoạt động — hãy dùng chức năng <strong>&ldquo;Kết thúc HĐ&rdquo;</strong> trên trang chi tiết để lưu giữ dữ liệu.
             </span>
           </div>
         ) : (
-          <div className={s.terminateWarn} style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
-            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1, color: '#dc2626' }} />
+          <div className={`${s.terminateWarn} ${s.terminateWarnDanger}`}>
+            <AlertTriangle size={18} className={`${s.warnIconInline} ${s.warnIconDanger}`} />
             <span>
               Bạn sắp <strong>xoá vĩnh viễn</strong> công ty <strong>&ldquo;{company.name}&rdquo;</strong>.
               Hành động này không thể hoàn tác. Chỉ xoá được nếu công ty chưa có công việc hoặc lịch sử phân công.
@@ -740,10 +743,10 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     if (!form.name.trim()) errs.name = 'Tên công ty không được để trống'
     if (form.taxCode.trim() && !/^\d{10}(-\d{3})?$/.test(form.taxCode.trim()))
       errs.taxCode = 'Mã số thuế phải gồm 10 chữ số (VD: 0123456789)'
-    const rawLP = form.legalRepPhone.replace(/[\s\-\.]/g, '')
+    const rawLP = form.legalRepPhone.replace(/[\s.-]/g, '')
     if (rawLP && !phoneRe.test(rawLP))
       errs.legalRepPhone = 'Số điện thoại không đúng định dạng (VD: 0901 234 567)'
-    const rawCP = form.contactPhone.replace(/[\s\-\.]/g, '')
+    const rawCP = form.contactPhone.replace(/[\s.-]/g, '')
     if (rawCP && !phoneRe.test(rawCP))
       errs.contactPhone = 'Số điện thoại không đúng định dạng (VD: 0901 234 567)'
     if (form.contactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail.trim()))
@@ -799,8 +802,8 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
         {/* Thông tin doanh nghiệp */}
         <div>
           <div className={s.formGroupLabel}>Thông tin doanh nghiệp</div>
-          <div className={s.formGrid2} style={{ marginBottom: 12 }}>
-            <div style={{ gridColumn: '1 / -1' }}>
+          <div className={`${s.formGrid2} ${s.formGridSpaced}`}>
+            <div className={s.formFullRow}>
               <label className={`${s.formLabel} ${s.formLabelReq}`}>Tên công ty</label>
               <input
                 type="text"
@@ -832,11 +835,11 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
               <input type="text" value={form.industry} onChange={set('industry')} className={s.formInput} placeholder="Thương mại, sản xuất..." />
             </div>
           </div>
-          <div style={{ marginTop: 12 }}>
+          <div className={s.formFieldTop}>
             <label className={s.formLabel}>Địa chỉ</label>
             <input type="text" value={form.address} onChange={set('address')} className={s.formInput} placeholder="123 Đường ABC, Quận XYZ, TP.HCM" />
           </div>
-          <div style={{ marginTop: 12 }}>
+          <div className={s.formFieldTop}>
             <label className={s.formLabel}>Logo / Ảnh đại diện</label>
             <AvatarUpload
               value={form.avatarUrl || null}
@@ -850,7 +853,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
         {/* Đại diện pháp lý & liên hệ */}
         <div>
           <div className={s.formGroupLabel}>Đại diện pháp lý & người liên hệ</div>
-          <div className={s.formGrid2} style={{ marginBottom: 12 }}>
+          <div className={`${s.formGrid2} ${s.formGridSpaced}`}>
             <div>
               <label className={s.formLabel}>Họ tên đại diện pháp lý</label>
               <input type="text" value={form.legalRepName} onChange={set('legalRepName')} className={s.formInput} placeholder="Họ và tên" />

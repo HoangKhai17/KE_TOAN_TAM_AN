@@ -12,18 +12,17 @@
 
 .greetingTitle {
   margin: 0;
-  color: #0f172a;
+  color: var(--color-text);
   font-size: 22px;
-  font-weight: 800;
+  font-weight: var(--fw-extrabold);
   line-height: 1.3;
-  letter-spacing: -0.4px;
 }
 
 .greetingDate {
   margin: 5px 0 0;
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 400;
+  color: var(--color-muted);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-regular);
 }
 
 .topBarRight {
@@ -37,32 +36,32 @@
 /* ── Range buttons ───────────────────────────────────────────────────────── */
 .rangeBtns {
   display: flex;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid var(--color-border-muted);
   border-radius: 9px;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  box-shadow: var(--shadow-sm);
 }
 
 .rangeBtn {
   padding: 7px 16px;
-  background: #fff;
+  background: var(--color-surface);
   border: none;
-  border-right: 1.5px solid #e2e8f0;
+  border-right: 1.5px solid var(--color-border-muted);
   cursor: pointer;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #64748b;
-  transition: background 0.13s, color 0.13s;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  transition: background var(--duration-fast), color var(--duration-fast);
   white-space: nowrap;
 }
 
 .rangeBtn:last-child { border-right: none; }
-.rangeBtn:hover { background: #f1f5f9; color: #1e293b; }
+.rangeBtn:hover { background: var(--color-surface-muted); color: var(--color-text-soft); }
 
 .rangeBtnActive {
-  background: #2563eb !important;
-  color: #fff !important;
-  font-weight: 700;
+  background: var(--color-info) !important;
+  color: var(--color-white) !important;
+  font-weight: var(--fw-bold);
 }
 
 /* ── Fullscreen ──────────────────────────────────────────────────────────── */
@@ -72,26 +71,26 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid var(--color-border-muted);
   border-radius: 9px;
-  background: #fff;
-  color: #64748b;
+  background: var(--color-surface);
+  color: var(--color-muted);
   cursor: pointer;
-  transition: all 0.13s;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
   flex-shrink: 0;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  box-shadow: var(--shadow-sm);
 }
 
 .fullscreenBtn:hover {
-  background: #f1f5f9;
-  color: #1e293b;
-  border-color: #93c5fd;
+  background: var(--color-surface-muted);
+  color: var(--color-text-soft);
+  border-color: var(--color-primary-ring);
 }
 
 .fullscreenActive {
-  background: #eff6ff !important;
-  color: #2563eb !important;
-  border-color: #93c5fd !important;
+  background: var(--color-info-bg) !important;
+  color: var(--color-info) !important;
+  border-color: var(--color-primary-ring) !important;
 }
 
 /* ── Error banner ────────────────────────────────────────────────────────── */
@@ -101,12 +100,12 @@
   gap: 8px;
   margin-bottom: 16px;
   padding: 11px 16px;
-  background: #fee2e2;
-  border: 1.5px solid #fca5a5;
+  background: var(--color-danger-bg);
+  border: 1.5px solid var(--color-danger-border);
   border-radius: 10px;
-  color: #991b1b;
+  color: var(--color-danger-dark);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* ── KPI Grid ────────────────────────────────────────────────────────────── */
@@ -118,17 +117,68 @@
 }
 
 .kpiCard {
+  background: var(--kpi-bg);
   padding: 16px 18px;
   border: 1.5px solid transparent;
+  border-color: var(--kpi-border);
   border-left-width: 4px;
+  border-left-color: var(--kpi-accent);
   border-radius: 14px;
-  transition: box-shadow 0.18s, transform 0.15s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: box-shadow var(--duration-base), transform var(--duration-fast);
+  box-shadow: var(--shadow-md);
 }
 
 .kpiCard:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-lg);
   transform: translateY(-2px);
+}
+
+.kpiBlue {
+  --kpi-accent: var(--color-info);
+  --kpi-value: var(--color-info);
+  --kpi-bg: var(--gradient-kpi-blue);
+  --kpi-border: rgba(37, 99, 235, 0.18);
+  --kpi-icon-bg: rgba(37, 99, 235, 0.14);
+}
+
+.kpiGreen {
+  --kpi-accent: var(--color-success);
+  --kpi-value: var(--color-success);
+  --kpi-bg: var(--gradient-kpi-green);
+  --kpi-border: rgba(5, 150, 105, 0.18);
+  --kpi-icon-bg: rgba(5, 150, 105, 0.14);
+}
+
+.kpiRed {
+  --kpi-accent: var(--color-danger);
+  --kpi-value: var(--color-danger);
+  --kpi-bg: var(--gradient-kpi-red);
+  --kpi-border: rgba(220, 38, 38, 0.18);
+  --kpi-icon-bg: rgba(220, 38, 38, 0.14);
+}
+
+.kpiAmber {
+  --kpi-accent: var(--color-accent);
+  --kpi-value: var(--color-accent-dark);
+  --kpi-bg: var(--gradient-kpi-amber);
+  --kpi-border: rgba(217, 119, 6, 0.18);
+  --kpi-icon-bg: rgba(217, 119, 6, 0.14);
+}
+
+.kpiPurple {
+  --kpi-accent: var(--color-purple-bright);
+  --kpi-value: var(--color-purple);
+  --kpi-bg: var(--gradient-kpi-purple);
+  --kpi-border: rgba(124, 58, 237, 0.18);
+  --kpi-icon-bg: rgba(124, 58, 237, 0.14);
+}
+
+.kpiCyan {
+  --kpi-accent: var(--color-cyan);
+  --kpi-value: var(--color-cyan-dark);
+  --kpi-bg: var(--gradient-kpi-cyan);
+  --kpi-border: rgba(8, 145, 178, 0.18);
+  --kpi-icon-bg: rgba(8, 145, 178, 0.14);
 }
 
 .kpiCardUrgent {
@@ -154,39 +204,41 @@
   height: 44px;
   border-radius: 12px;
   flex-shrink: 0;
+  background: var(--kpi-icon-bg);
+  color: var(--kpi-accent);
 }
 
 .kpiText { flex: 1; min-width: 0; }
 
 .kpiLabel {
   margin: 0 0 3px;
-  font-size: 11px;
-  font-weight: 700;
+  color: var(--kpi-accent);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .kpiValue {
   margin: 0 0 3px;
-  font-size: 30px;
-  font-weight: 800;
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-extrabold);
   line-height: 1.05;
-  letter-spacing: -0.8px;
-  color: #0f172a;
+  color: var(--kpi-value);
 }
 
 .kpiSub {
   margin: 0;
-  color: #64748b;
-  font-size: 11.5px;
-  font-weight: 500;
+  color: var(--color-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
 }
 
 .kpiSkeleton {
   height: 30px;
   width: 64px;
   border-radius: 7px;
-  background: rgba(0, 0, 0, 0.09);
+  background: rgba(15, 23, 42, 0.09);
   margin: 2px 0;
   animation: app-pulse 1.4s ease-in-out infinite;
 }
@@ -201,21 +253,21 @@
 
 .chartPanel {
   padding: 18px 20px 16px;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid var(--color-border-muted);
   border-top-width: 3px;
-  border-top-color: #e2e8f0;
+  border-top-color: var(--color-border-muted);
   border-radius: 14px;
-  background: #fff;
+  background: var(--color-surface);
   min-height: 120px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: box-shadow 0.18s;
+  box-shadow: var(--shadow-surface);
+  transition: box-shadow var(--duration-base), border-color var(--duration-base);
   position: relative;
 }
 
 /* Colored top accent line on hover */
 .chartPanel:hover {
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.09), 0 2px 6px rgba(0, 0, 0, 0.05);
-  border-top-color: #2563eb;
+  box-shadow: var(--shadow-lg);
+  border-top-color: var(--color-info);
 }
 
 .chartHeader {
@@ -228,18 +280,17 @@
 
 .chartTitle {
   display: block;
-  font-size: 15px;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  color: var(--color-text);
   margin-bottom: 3px;
-  letter-spacing: -0.2px;
 }
 
 .chartSub {
   display: block;
-  font-size: 12px;
-  color: #94a3b8;
-  font-weight: 500;
+  font-size: var(--fs-xs);
+  color: var(--color-muted-subtle);
+  font-weight: var(--fw-medium);
 }
 
 .chartHeaderLink {
@@ -247,21 +298,21 @@
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--color-info);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
   flex-shrink: 0;
-  transition: background 0.13s, border-color 0.13s;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 
 .chartHeaderLink:hover {
-  background: #dbeafe;
-  border-color: #93c5fd;
+  background: var(--color-primary-bg-strong);
+  border-color: var(--color-primary-ring);
 }
 
 .chartLoading {
@@ -269,7 +320,7 @@
   align-items: center;
   justify-content: center;
   height: 280px;
-  color: #94a3b8;
+  color: var(--color-muted-subtle);
 }
 
 .chartEmpty {
@@ -278,11 +329,16 @@
   align-items: center;
   justify-content: center;
   height: 280px;
-  color: #94a3b8;
-  font-size: 13.5px;
-  font-weight: 500;
+  color: var(--color-muted-subtle);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
   text-align: center;
   gap: 6px;
+}
+
+.emptySuccessIcon {
+  color: var(--color-success-light);
+  margin-bottom: var(--space-3);
 }
 
 /* ── Pie chart layout ────────────────────────────────────────────────────── */
@@ -312,14 +368,14 @@
   gap: 9px;
   padding: 7px 10px;
   border-radius: 8px;
-  transition: background 0.12s;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
   cursor: default;
   border: 1px solid transparent;
 }
 
 .pieLegendItem:hover {
-  background: #f1f5f9;
-  border-color: #e2e8f0;
+  background: var(--color-surface-muted);
+  border-color: var(--color-border-muted);
 }
 
 .pieLegendDot {
@@ -327,34 +383,43 @@
   height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
 }
+
+.pieTone0 { background: var(--color-indigo); }
+.pieTone1 { background: var(--color-success); }
+.pieTone2 { background: var(--color-accent); }
+.pieTone3 { background: var(--color-danger); }
+.pieTone4 { background: var(--color-purple-bright); }
+.pieTone5 { background: var(--color-cyan); }
+.pieTone6 { background: var(--color-warning-dark); }
+.pieTone7 { background: var(--color-lime); }
 
 .pieLegendName {
   flex: 1;
-  font-size: 12.5px;
-  color: #1e293b;
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  color: var(--color-text-soft);
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .pieLegendCount {
-  font-size: 14px;
-  font-weight: 800;
-  color: #0f172a;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-extrabold);
+  color: var(--color-text);
   min-width: 28px;
   text-align: right;
 }
 
 .pieLegendPct {
-  font-size: 11.5px;
-  color: #64748b;
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
   min-width: 36px;
   text-align: right;
-  font-weight: 600;
-  background: #f1f5f9;
+  font-weight: var(--fw-semibold);
+  background: var(--color-surface-muted);
   padding: 1px 5px;
   border-radius: 4px;
 }
@@ -362,27 +427,37 @@
 .pieLegendTotal {
   margin-top: 8px;
   padding: 8px 10px;
-  font-size: 12.5px;
-  color: #475569;
-  font-weight: 600;
-  border-top: 2px solid #f1f5f9;
+  font-size: var(--fs-sm);
+  color: var(--color-text-soft);
+  font-weight: var(--fw-semibold);
+  border-top: 2px solid var(--color-surface-muted);
 }
 
 /* ── Custom tooltip ──────────────────────────────────────────────────────── */
 .tooltip {
   padding: 10px 14px;
-  background: #1e293b;
+  background: var(--color-text-soft);
   border: none;
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  font-size: 12.5px;
+  box-shadow: var(--shadow-floating);
+  font-size: var(--fs-sm);
 }
 
 .tooltipLabel {
   margin: 0 0 5px;
-  font-weight: 700;
-  color: #f1f5f9;
-  font-size: 12px;
+  font-weight: var(--fw-bold);
+  color: var(--color-surface-muted);
+  font-size: var(--fs-xs);
+}
+
+.tooltipItem {
+  color: var(--tooltip-item-color);
+  margin: 3px 0;
+  font-size: var(--fs-sm);
+}
+
+.tooltipValue {
+  color: var(--color-bg-soft);
 }
 
 /* ── Overdue list ────────────────────────────────────────────────────────── */
@@ -396,19 +471,19 @@
 }
 
 .overdueList::-webkit-scrollbar { width: 4px; }
-.overdueList::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
-.overdueList::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-.overdueList::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.overdueList::-webkit-scrollbar-track { background: var(--color-bg-soft); border-radius: 4px; }
+.overdueList::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+.overdueList::-webkit-scrollbar-thumb:hover { background: var(--color-muted-subtle); }
 
 /* ── Task cards ──────────────────────────────────────────────────────────── */
 .overdueCard {
   padding: 12px 14px;
   border-radius: 11px;
-  border: 1.5px solid #fca5a5;
-  border-left: 4px solid #dc2626;
-  background: linear-gradient(135deg, #fff1f1 0%, #fffafa 100%);
+  border: 1.5px solid var(--color-danger-border);
+  border-left: 4px solid var(--color-danger);
+  background: linear-gradient(135deg, var(--color-danger-bg-soft) 0%, var(--color-danger-surface) 100%);
   cursor: pointer;
-  transition: box-shadow 0.15s, transform 0.12s;
+  transition: box-shadow var(--duration-fast), transform var(--duration-fast);
   box-shadow: 0 2px 6px rgba(220, 38, 38, 0.1);
 }
 
@@ -420,11 +495,11 @@
 .dueTodayCard {
   padding: 12px 14px;
   border-radius: 11px;
-  border: 1.5px solid #93c5fd;
-  border-left: 4px solid #2563eb;
-  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+  border: 1.5px solid var(--color-primary-ring);
+  border-left: 4px solid var(--color-info);
+  background: linear-gradient(135deg, var(--color-info-bg) 0%, var(--color-info-surface) 100%);
   cursor: pointer;
-  transition: box-shadow 0.15s, transform 0.12s;
+  transition: box-shadow var(--duration-fast), transform var(--duration-fast);
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.1);
 }
 
@@ -453,8 +528,8 @@
   align-items: center;
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
   white-space: nowrap;
   letter-spacing: 0.03em;
 }
@@ -464,16 +539,27 @@
   align-items: center;
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
   white-space: nowrap;
 }
 
+.priUrgent { background: var(--color-danger); color: var(--color-white); }
+.priHigh { background: var(--color-warning-dark); color: var(--color-white); }
+.priMedium { background: var(--color-info); color: var(--color-white); }
+.priLow { background: var(--color-muted); color: var(--color-white); }
+
+.statusPending { background: var(--color-border-muted); color: var(--color-text-soft); }
+.statusInProgress { background: var(--color-status-progress-bg); color: var(--color-info-dark); }
+.statusOnHold { background: var(--color-warning-bg-strong); color: var(--color-warning-dark); }
+.statusPendingReview { background: var(--color-status-review-bg); color: var(--color-purple); }
+.statusNeedsRevision { background: var(--color-status-revision-bg); color: var(--color-status-revision-text); }
+
 .overdueDaysBadge {
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  background: #dc2626;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-white);
+  background: var(--color-danger);
   padding: 3px 10px;
   border-radius: 999px;
   white-space: nowrap;
@@ -482,10 +568,10 @@
 }
 
 .dueTodayBadge {
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  background: #2563eb;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-white);
+  background: var(--color-info);
   padding: 3px 10px;
   border-radius: 999px;
   white-space: nowrap;
@@ -494,9 +580,9 @@
 
 .taskCardTitle {
   margin: 0 0 8px;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  color: var(--color-text);
   line-height: 1.45;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -514,9 +600,9 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11.5px;
-  color: #475569;
-  font-weight: 500;
+  font-size: var(--fs-xs);
+  color: var(--color-text-soft);
+  font-weight: var(--fw-medium);
   min-width: 0;
 }
 
@@ -530,12 +616,12 @@
 /* ── Due Today panel ─────────────────────────────────────────────────────── */
 .dueTodayPanel {
   padding: 18px 20px;
-  border: 1.5px solid #e2e8f0;
-  border-top: 3px solid #2563eb;
+  border: 1.5px solid var(--color-border-muted);
+  border-top: 3px solid var(--color-info);
   border-radius: 14px;
-  background: #fff;
+  background: var(--color-surface);
   margin-bottom: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-surface);
 }
 
 .dueTodayGrid {

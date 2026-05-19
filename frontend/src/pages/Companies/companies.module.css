@@ -3357,3 +3357,294 @@
   max-width: 90vw;
   box-shadow: var(--shadow-floating);
 }
+
+/* CSS style guide helpers: replace inline JSX styles in Companies pages */
+.hiddenInput { display: none; }
+.isHidden { display: none !important; }
+.tableCellVisible { display: table-cell; }
+.tableContactHead { display: table-cell; min-width: 140px; }
+.tableMetricOpenHead { min-width: 64px; text-align: center; }
+.tableMetricOverdueHead { min-width: 72px; text-align: center; }
+.tableMetricCell { text-align: center; }
+.companyNameSkeletonRow,
+.companyStaffSkeletonRow,
+.modalStack,
+.taskPanelHeader,
+.taskPanelHeaderTitle,
+.assignmentPersonCell {
+  display: flex;
+}
+.companyNameSkeletonRow,
+.companyStaffSkeletonRow,
+.assignmentPersonCell {
+  align-items: center;
+}
+.companyNameSkeletonRow { gap: 11px; }
+.companyStaffSkeletonRow,
+.assignmentPersonCell { gap: 8px; }
+.modalStack {
+  flex-direction: column;
+  gap: var(--space-7);
+}
+.skeletonSquareCompany { width: 36px; height: 36px; flex-shrink: 0; }
+.skeletonCompanyName { width: 160px; height: 12px; margin-bottom: 5px; }
+.skeletonCompanyMeta { width: 100px; height: 10px; }
+.skeletonTax { width: 80px; height: 11px; }
+.skeletonContact { width: 100px; height: 11px; }
+.skeletonStaffAvatar { width: 28px; height: 28px; flex-shrink: 0; }
+.skeletonStaffName { width: 90px; height: 11px; }
+.skeletonMetric { width: 24px; height: 14px; margin: 0 auto; }
+.skeletonStatus { width: 80px; height: 20px; border-radius: var(--radius-pill); }
+.terminateWarnDanger {
+  background: #fef2f2;
+  border-color: var(--color-danger-border);
+}
+.warnIconInline {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.warnIconDanger { color: var(--color-danger); }
+.formGridSpaced { margin-bottom: var(--space-5); }
+.formFullRow { grid-column: 1 / -1; }
+.formFieldTop { margin-top: var(--space-5); }
+.placeholderTop { margin-top: var(--space-10); }
+.placeholderIconDanger { background: #fef2f2; color: var(--color-danger); }
+.btnTopTiny { margin-top: var(--space-1); }
+.breadcrumbSepIcon { color: #d1d5db; }
+.infoCardIconBlue { background: var(--color-info-bg); color: var(--color-info-dark); }
+.infoCardIconGreen { background: #f0fdf4; color: var(--color-success); }
+.infoCardIconPurple { background: var(--color-purple-bg-soft); color: var(--color-purple-bright); }
+.infoNoteWrap { margin-top: var(--space-7); }
+.infoContactGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 var(--space-9);
+}
+.infoSubsectionLabel { margin-bottom: var(--space-4); }
+.infoGridSingle { grid-template-columns: 1fr; }
+.infoCardBodyFlush { padding: 0; }
+.loadingShort { height: 80px; }
+.activityEmpty {
+  padding: 20px 16px;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+}
+.activityList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.activityItem {
+  display: flex;
+  gap: var(--space-4);
+  padding: 10px 16px;
+}
+.activityItemBorder { border-bottom: 1px solid var(--color-border-soft); }
+.activityDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-purple-bright);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.activityContent { min-width: 0; flex: 1; }
+.activityTitle {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activityTaskTitle {
+  font-weight: var(--fw-regular);
+  color: var(--color-table-muted);
+}
+.activityMeta {
+  font-size: var(--fs-2xs);
+  color: var(--color-muted-subtle);
+  margin-top: 1px;
+}
+.activityMetaCount {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-regular);
+  color: var(--color-muted);
+  margin-left: var(--space-2);
+}
+.titleInlineIcon {
+  margin-right: var(--space-2);
+  vertical-align: middle;
+  color: var(--color-table-muted);
+}
+.emptyStatePadded { padding: var(--space-10); }
+.emptyDescSmall { font-size: var(--fs-xs); }
+.staffAvatarSmall { width: 26px; height: 26px; font-size: 9px; }
+.textSmall { font-size: var(--fs-xs); }
+.assignSkeleton {
+  height: var(--control-h-md);
+  background: var(--color-surface-muted);
+  border-radius: 7px;
+  animation: app-pulse 1.4s ease-in-out infinite;
+}
+.taskPanelHeader {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.taskPanelHeaderTitle {
+  align-items: center;
+  gap: var(--space-3);
+}
+.taskPanelTitle {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  color: var(--color-text);
+}
+.countPill {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  background: var(--color-info-bg);
+  color: var(--color-info-dark);
+  border: 1px solid var(--color-primary-ring);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+.cTaskStatusAll {
+  background: var(--color-info-bg);
+  border-color: #bfdbfe;
+  color: var(--color-info-dark);
+}
+.cTaskStatusPending {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+.cTaskStatusProgress {
+  background: var(--color-info-bg);
+  border-color: var(--color-primary-ring);
+  color: #1e40af;
+}
+.cTaskStatusHold {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #6b7280;
+}
+.cTaskStatusReview {
+  background: var(--color-purple-bg-soft);
+  border-color: #c4b5fd;
+  color: var(--color-purple);
+}
+.cTaskStatusRevision {
+  background: #fff1f2;
+  border-color: #fda4af;
+  color: var(--color-status-revision-text);
+}
+.cTaskStatusCompleted {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: var(--color-success-dark);
+}
+.cTaskStatusChipCountActive {
+  background: currentColor;
+  color: var(--color-white);
+}
+.taskCreateBtnCompact { height: var(--control-h-sm); font-size: var(--fs-md); }
+.searchFieldWrap { position: relative; }
+.searchFieldIcon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-muted);
+  pointer-events: none;
+}
+.cTaskFilterInputWithIcon { padding-left: 26px; }
+.filterGroupEnd { justify-content: flex-end; }
+.filterChipsCompact {
+  padding: 4px 14px 8px;
+  border-top: 1px solid var(--color-border-soft);
+}
+.filterChipMuted {
+  background: var(--color-bg-soft);
+  color: var(--color-muted);
+  border-color: var(--color-border-muted);
+}
+.filterChipDanger {
+  background: #fef2f2;
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+}
+.taskActionHeadAdmin { width: 72px; }
+.taskActionHeadUser { width: 44px; }
+.taskSkeletonCell { padding: 10px 16px; }
+.taskSkeletonBar {
+  width: var(--skeleton-w);
+  height: 10px;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-xs);
+  animation: app-pulse 1.5s ease-in-out infinite;
+}
+.taskEmptyInline {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--color-muted);
+  font-size: var(--fs-md);
+}
+.taskEmptyInlineIcon {
+  opacity: 0.3;
+  display: block;
+  margin: 0 auto var(--space-3);
+}
+.cTaskRow { cursor: pointer; }
+.cTaskRowOverdue { border-left: 3px solid var(--color-danger-light); }
+.cTaskTitle {
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-md);
+  color: var(--color-text);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.cTaskTitleOverdue { color: var(--color-danger); }
+.cTaskDateCell {
+  font-size: var(--fs-xs);
+  color: var(--color-text-soft);
+  white-space: nowrap;
+}
+.cTaskDueOverdue { color: var(--color-danger); font-weight: var(--fw-bold); }
+.cTaskAssigneeCell { font-size: var(--fs-xs); color: var(--color-text-soft); }
+.cTaskProgress { display: flex; align-items: center; gap: 5px; }
+.cTaskProgressBar {
+  flex: 1;
+  height: 5px;
+  min-width: 40px;
+  background: var(--color-border-muted);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.cTaskProgressFill {
+  height: 100%;
+  width: var(--progress-width);
+  background: var(--color-info-light);
+  border-radius: var(--radius-pill);
+  transition: width 0.3s;
+}
+.cTaskProgressFillDone { background: var(--color-success-light); }
+.cTaskProgressText,
+.cTaskDash {
+  font-size: var(--fs-2xs);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.cTaskActionCell { text-align: center; }
+.cTaskActionBtns {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+.paginationGap { padding: 0 var(--space-1); font-size: var(--fs-xs); color: var(--color-muted); }

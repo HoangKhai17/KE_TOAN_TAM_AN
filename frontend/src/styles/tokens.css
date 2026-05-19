@@ -1,6 +1,6 @@
 :root {
   /* Typography */
-  --font-sans: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "Inter", "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   --fs-2xs: 10.5px;
@@ -24,60 +24,92 @@
   --lh-relaxed: 1.65;
 
   /* Brand and semantic colors */
-  --color-primary: #0b4f8a;
-  --color-primary-dark: #073b6a;
-  --color-primary-deep: #001f3f;
-  --color-primary-soft: #256fb3;
-  --color-primary-bright: #1573c8;
-  --color-accent: #f0a91f;
-  --color-accent-light: #ffd45a;
-  --color-accent-dark: #c77c08;
-  --color-success: #16a34a;
-  --color-success-dark: #15803d;
-  --color-success-light: #4ade80;
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-deep: #1e3a8a;
+  --color-primary-soft: #60a5fa;
+  --color-primary-bright: #3b82f6;
+  --color-accent: #d97706;
+  --color-accent-light: #fbbf24;
+  --color-accent-dark: #b45309;
+  --color-success: #059669;
+  --color-success-dark: #047857;
+  --color-success-light: #10b981;
   --color-danger: #dc2626;
   --color-danger-dark: #991b1b;
-  --color-warning: #f59e0b;
-  --color-warning-dark: #b45309;
+  --color-danger-light: #ef4444;
+  --color-warning: #f97316;
+  --color-warning-dark: #c2410c;
+  --color-warning-amber: #d97706;
   --color-info: #2563eb;
+  --color-info-dark: #1d4ed8;
+  --color-info-light: #3b82f6;
   --color-purple: #6d28d9;
+  --color-purple-bright: #7c3aed;
+  --color-cyan: #0891b2;
+  --color-cyan-dark: #0369a1;
+  --color-lime: #65a30d;
 
   /* Surfaces, borders, text */
-  --color-bg: #eef3f9;
-  --color-bg-soft: #f7faff;
+  --color-bg: #f1f5f9;
+  --color-bg-soft: #f8fafc;
   --color-surface: #ffffff;
-  --color-surface-soft: #fdfefe;
-  --color-surface-muted: #f3f7fb;
-  --color-border: #d5dee9;
-  --color-border-soft: #edf2f7;
+  --color-surface-soft: #f8fafc;
+  --color-surface-muted: #f1f5f9;
+  --color-border: #cbd5e1;
+  --color-border-soft: #f1f5f9;
   --color-border-muted: #e2e8f0;
-  --color-border-strong: #b8c5d6;
-  --color-text: #172235;
-  --color-text-strong: #111827;
+  --color-border-strong: #94a3b8;
+  --color-text: #0f172a;
+  --color-text-strong: #0f172a;
   --color-text-soft: #334155;
-  --color-muted: #5f6f83;
-  --color-muted-soft: #7c8da3;
+  --color-muted: #64748b;
+  --color-muted-soft: #94a3b8;
   --color-muted-subtle: #94a3b8;
-  --color-table-muted: #6b7280;
+  --color-table-muted: #64748b;
   --color-white: #ffffff;
 
   /* Tints */
-  --color-primary-ink: rgba(11, 79, 138, 0.16);
-  --color-primary-ink-soft: rgba(11, 79, 138, 0.1);
-  --color-primary-ring: rgba(21, 115, 200, 0.28);
-  --color-success-bg: #eafaf0;
-  --color-warning-bg: #fff7e6;
-  --color-danger-bg: #fff0f0;
-  --color-info-bg: #eef5ff;
+  --color-primary-ink: rgba(37, 99, 235, 0.16);
+  --color-primary-ink-soft: rgba(37, 99, 235, 0.1);
+  --color-primary-ring: rgba(147, 197, 253, 0.55);
+  --color-primary-bg: #eff6ff;
+  --color-primary-bg-strong: #dbeafe;
+  --color-success-bg: #d1fae5;
+  --color-success-bg-soft: #ecfdf5;
+  --color-warning-bg: #fff7ed;
+  --color-warning-bg-strong: #fed7aa;
+  --color-accent-bg: #fef3c7;
+  --color-accent-bg-soft: #fffbeb;
+  --color-danger-bg: #fee2e2;
+  --color-danger-bg-soft: #fff1f1;
+  --color-danger-border: #fca5a5;
+  --color-danger-surface: #fffafa;
+  --color-info-bg: #eff6ff;
+  --color-info-surface: #f0f9ff;
+  --color-purple-bg: #ede9fe;
+  --color-purple-bg-soft: #f5f3ff;
+  --color-indigo: #4f46e5;
+  --color-status-progress-bg: #bfdbfe;
+  --color-status-review-bg: #e9d5ff;
+  --color-status-revision-bg: #fecdd3;
+  --color-status-revision-text: #be123c;
 
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #1573c8 0%, #073b6a 55%, #001f3f 100%);
-  --gradient-accent: linear-gradient(135deg, #f0a91f 0%, #ffd45a 100%);
-  --gradient-success: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
-  --gradient-sidebar: linear-gradient(160deg, #010923 0%, #001c6d 50%, #2563eb 100%);
+  --gradient-primary: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  --gradient-accent: linear-gradient(135deg, #d97706 0%, #fbbf24 100%);
+  --gradient-success: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  --gradient-sidebar: linear-gradient(160deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%);
   --gradient-active: linear-gradient(135deg, rgba(37, 99, 235, 0.92) 0%, rgba(29, 78, 216, 0.82) 100%);
-  --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  --gradient-table-head: linear-gradient(180deg, #f8fbff 0%, #edf4fb 100%);
+  --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  --gradient-table-head: linear-gradient(180deg, #f0f6ff 0%, #dbeafe 100%);
+  --gradient-filter-head: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
+  --gradient-kpi-blue: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+  --gradient-kpi-green: linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%);
+  --gradient-kpi-red: linear-gradient(135deg, #fee2e2 0%, #fff5f5 100%);
+  --gradient-kpi-amber: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+  --gradient-kpi-purple: linear-gradient(135deg, #ede9fe 0%, #f5f3ff 100%);
+  --gradient-kpi-cyan: linear-gradient(135deg, #bae6fd 0%, #e0f2fe 100%);
 
   /* Spacing */
   --space-0: 0;
@@ -106,14 +138,15 @@
   --radius-pill: 99px;
 
   /* Shadows and focus */
-  --shadow-xs: 0 1px 2px rgba(15, 52, 94, 0.03);
-  --shadow-sm: 0 1px 3px rgba(15, 52, 94, 0.09);
-  --shadow-md: 0 4px 20px -4px rgba(15, 52, 94, 0.16);
-  --shadow-lg: 0 20px 60px -20px rgba(9, 39, 68, 0.24);
-  --shadow-surface: 0 14px 34px -30px rgba(0, 24, 47, 0.42), 0 4px 14px -12px rgba(15, 52, 94, 0.22);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 4px rgba(15, 23, 42, 0.07);
+  --shadow-md: 0 2px 12px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-surface: 0 2px 12px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
   --shadow-floating: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
-  --shadow-focus: 0 0 0 3px rgba(15, 52, 94, 0.1);
-  --shadow-focus-blue: 0 0 0 3px rgba(0, 70, 150, 0.1);
+  --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  --shadow-focus-blue: 0 0 0 3px rgba(147, 197, 253, 0.35);
+  --shadow-focus-danger: 0 0 0 3px rgba(220, 38, 38, 0.1);
 
   /* Component sizing */
   --control-h-sm: 32px;

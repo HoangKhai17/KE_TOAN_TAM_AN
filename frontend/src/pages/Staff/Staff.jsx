@@ -21,10 +21,13 @@ const ROLE_MAP = {
   staff: { label: 'Nhân viên',     cls: s.badgeStaff },
 }
 
-function getInitials(name) {
-  if (!name) return '?'
-  return name.split(' ').slice(-2).map((w) => w[0]).join('').toUpperCase()
+function staffAvatarSrc(user) {
+  if (user?.avatarUrl) return user.avatarUrl
+  const encoded = encodeURIComponent(user?.name || '?')
+  return `https://ui-avatars.com/api/?name=${encoded}&size=56&background=e2e8f0&color=64748b&bold=true&font-size=0.4`
 }
+
+const FALLBACK_AVATAR = `https://ui-avatars.com/api/?name=&size=56&background=e2e8f0&color=94a3b8`
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
@@ -155,7 +158,7 @@ export default function Staff() {
         {/* Table */}
         <div className={s.card}>
           {error ? (
-            <div className={s.loadingBox} style={{ color: '#dc2626' }}>{error}</div>
+            <div className={`${s.loadingBox} ${s.loadingError}`}>{error}</div>
           ) : (
             <div className={s.tableWrap}>
               <table className={s.table}>
@@ -166,7 +169,7 @@ export default function Staff() {
                     <th>Vai trò</th>
                     <th>Trạng thái</th>
                     <th className={s.hideLg}>Đăng nhập gần nhất</th>
-                    {isAdmin && <th style={{ width: 48 }} />}
+                    {isAdmin && <th className={s.actionHead} />}
                   </tr>
                 </thead>
                 <tbody>
@@ -178,7 +181,7 @@ export default function Staff() {
                     <tr>
                       <td colSpan={isAdmin ? 6 : 5}>
                         <div className={s.emptyState}>
-                          <Users size={32} style={{ marginBottom: 4, opacity: 0.4 }} />
+                          <Users size={32} className={s.emptyIcon} />
                           Không tìm thấy nhân viên nào
                         </div>
                       </td>
@@ -280,7 +283,6 @@ function UserRow({ user, isAdmin, isSelf, onRowClick, onEdit, onStatusChange, on
     return () => document.removeEventListener('mousedown', handler)
   }, [menuOpen])
 
-  const initials   = getInitials(user.name)
   const statusInfo = STATUS_MAP[user.status] ?? { label: user.status, cls: s.badgeResigned }
   const roleInfo   = ROLE_MAP[user.role]     ?? { label: user.role,   cls: s.badgeStaff }
 
@@ -288,15 +290,20 @@ function UserRow({ user, isAdmin, isSelf, onRowClick, onEdit, onStatusChange, on
     <tr className={s.tableRow} onClick={onRowClick}>
       <td>
         <div className={s.userCell}>
-          <div className={s.avatar}>{initials}</div>
+          <img
+            src={staffAvatarSrc(user)}
+            alt={user.name}
+            className={s.avatar}
+            onError={(e) => { e.currentTarget.src = FALLBACK_AVATAR }}
+          />
           <div>
             <div className={s.userName}>{user.name}</div>
             <div className={s.userEmail}>{user.email}</div>
           </div>
         </div>
       </td>
-      <td className={s.hideMd} style={{ color: 'var(--color-muted)' }}>
-        {user.jobTitle ?? <span style={{ color: 'var(--color-muted-subtle)' }}>—</span>}
+      <td className={`${s.hideMd} ${s.textMuted}`}>
+        {user.jobTitle ?? <span className={s.textSubtle}>—</span>}
       </td>
       <td>
         <span className={`${s.badge} ${roleInfo.cls}`}>{roleInfo.label}</span>
@@ -304,7 +311,7 @@ function UserRow({ user, isAdmin, isSelf, onRowClick, onEdit, onStatusChange, on
       <td>
         <span className={`${s.badge} ${statusInfo.cls}`}>{statusInfo.label}</span>
       </td>
-      <td className={s.hideLg} style={{ color: 'var(--color-muted-subtle)', fontSize: 'var(--fs-xs)' }}>
+      <td className={`${s.hideLg} ${s.lastLoginCell}`}>
         {user.lastLoginAt
           ? new Date(user.lastLoginAt).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
           : '—'}
@@ -375,18 +382,18 @@ function SkeletonRow({ hasActions }) {
     <tr>
       <td>
         <div className={s.userCell}>
-          <div className={s.skeleton} style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0 }} />
+          <div className={`${s.skeleton} ${s.skeletonAvatar}`} />
           <div>
-            <div className={s.skeleton} style={{ width: 120, height: 12, marginBottom: 6 }} />
-            <div className={s.skeleton} style={{ width: 90, height: 10 }} />
+            <div className={`${s.skeleton} ${s.skeletonName}`} />
+            <div className={`${s.skeleton} ${s.skeletonEmail}`} />
           </div>
         </div>
       </td>
-      <td className={s.hideMd}><div className={s.skeleton} style={{ width: 100, height: 12 }} /></td>
-      <td><div className={s.skeleton} style={{ width: 80, height: 20, borderRadius: 99 }} /></td>
-      <td><div className={s.skeleton} style={{ width: 90, height: 20, borderRadius: 99 }} /></td>
-      <td className={s.hideLg}><div className={s.skeleton} style={{ width: 110, height: 12 }} /></td>
-      {hasActions && <td><div className={s.skeleton} style={{ width: 24, height: 24, borderRadius: 6 }} /></td>}
+      <td className={s.hideMd}><div className={`${s.skeleton} ${s.skeletonJob}`} /></td>
+      <td><div className={`${s.skeleton} ${s.skeletonRole}`} /></td>
+      <td><div className={`${s.skeleton} ${s.skeletonStatus}`} /></td>
+      <td className={s.hideLg}><div className={`${s.skeleton} ${s.skeletonLogin}`} /></td>
+      {hasActions && <td><div className={`${s.skeleton} ${s.skeletonAction}`} /></td>}
     </tr>
   )
 }
@@ -492,9 +499,8 @@ function UserFormModal({ user, onClose, onSaved }) {
                 value={form.password}
                 onChange={set('password')}
                 required
-                className={`${s.formInput} ${fieldErrors.password ? s.inputError : ''}`}
                 placeholder="Tối thiểu 8 ký tự"
-                style={{ paddingRight: 36 }}
+                className={`${s.formInput} ${s.passwordInput} ${fieldErrors.password ? s.inputError : ''}`}
               />
               <button
                 type="button"

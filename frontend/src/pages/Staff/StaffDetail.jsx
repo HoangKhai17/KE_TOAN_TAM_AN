@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Phone, Mail, Briefcase, Calendar, Shield, Loader2,
-  AlertTriangle, Building2, CheckSquare, Clock, Edit2,
+  ArrowLeft, Phone, Briefcase, Calendar, Shield, Loader2,
+  AlertTriangle, Edit2,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -24,10 +24,13 @@ const ROLE_MAP = {
   staff: { label: 'Nhân viên',     cls: s.badgeStaff },
 }
 
-function getInitials(name) {
-  if (!name) return '?'
-  return name.split(' ').slice(-2).map((w) => w[0]).join('').toUpperCase()
+function staffAvatarSrc(user) {
+  if (user?.avatarUrl) return user.avatarUrl
+  const encoded = encodeURIComponent(user?.name || '?')
+  return `https://ui-avatars.com/api/?name=${encoded}&size=144&background=e2e8f0&color=64748b&bold=true&font-size=0.4`
 }
+
+const FALLBACK_AVATAR = `https://ui-avatars.com/api/?name=&size=144&background=e2e8f0&color=94a3b8`
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -86,7 +89,7 @@ export default function StaffDetail() {
       <AppLayout>
         <div className={s.page}>
           <div className={s.centered}>
-            <AlertTriangle size={36} style={{ color: '#ef4444' }} />
+            <AlertTriangle size={36} className={s.errorIcon} />
             <p>{error ?? 'Không tìm thấy nhân viên'}</p>
             <button className={s.btnSecondary} onClick={() => navigate('/staff')}>
               <ArrowLeft size={13} /> Quay lại
@@ -112,7 +115,12 @@ export default function StaffDetail() {
 
         {/* Profile card */}
         <div className={s.profileCard}>
-          <div className={s.avatar}>{getInitials(user.name)}</div>
+          <img
+            src={staffAvatarSrc(user)}
+            alt={user.name}
+            className={s.avatar}
+            onError={(e) => { e.currentTarget.src = FALLBACK_AVATAR }}
+          />
 
           <div className={s.profileInfo}>
             <h1 className={s.profileName}>{user.name}</h1>
@@ -163,9 +171,8 @@ export default function StaffDetail() {
               )}
               {user.status === 'active' && !isSelf && (
                 <button
-                  className={s.btnSecondary}
+                  className={`${s.btnSecondary} ${s.btnWarning}`}
                   onClick={() => handleStatusChange('on_leave')}
-                  style={{ color: '#d97706', borderColor: '#fde68a' }}
                 >
                   Đặt nghỉ phép
                 </button>
@@ -175,7 +182,7 @@ export default function StaffDetail() {
         </div>
 
         {/* Info panels */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className={s.infoGrid}>
           <InfoSection
             title="Thông tin tài khoản"
             icon={<Shield size={15} />}
@@ -232,7 +239,7 @@ function InfoSection({ title, icon, rows }) {
         <tbody>
           {rows.map(([label, value]) => (
             <tr key={label}>
-              <td style={{ fontWeight: 600, color: 'var(--color-muted)', width: '45%' }}>{label}</td>
+              <td className={s.tableLabelCell}>{label}</td>
               <td>{value ?? '—'}</td>
             </tr>
           ))}
@@ -279,44 +286,42 @@ function EditUserModal({ user, onClose, onSaved }) {
 
   return (
     <Modal title="Chỉnh sửa thông tin nhân viên" onClose={onClose}>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && (
-          <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 7, fontSize: 13, color: '#dc2626' }}>
+          <div className={s.errorBox}>
             {error}
           </div>
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Họ và tên *</label>
+        <div className={s.formGroup}>
+          <label className={`${s.formLabel} ${s.req}`}>Họ và tên</label>
           <input type="text" value={form.name} onChange={set('name')} required
-            style={{ height: 36, padding: '0 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13.5, fontFamily: 'inherit', outline: 'none' }} />
+            className={s.formInput} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Vai trò</label>
+        <div className={s.formGrid}>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Vai trò</label>
             <select value={form.role} onChange={set('role')}
-              style={{ height: 36, padding: '0 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13.5, fontFamily: 'inherit', outline: 'none', background: '#fff' }}>
+              className={s.formSelect}>
               <option value="staff">Nhân viên</option>
               <option value="admin">Quản trị viên</option>
             </select>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Chức danh</label>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Chức danh</label>
             <input type="text" value={form.jobTitle} onChange={set('jobTitle')} placeholder="Kế toán viên"
-              style={{ height: 36, padding: '0 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13.5, fontFamily: 'inherit', outline: 'none' }} />
+              className={s.formInput} />
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Số điện thoại</label>
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Số điện thoại</label>
           <input type="tel" value={form.phone} onChange={set('phone')} placeholder="0909 123 456"
-            style={{ height: 36, padding: '0 10px', border: '1.5px solid #e2e8f0', borderRadius: 7, fontSize: 13.5, fontFamily: 'inherit', outline: 'none' }} />
+            className={s.formInput} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
-          <button type="button" onClick={onClose} disabled={loading}
-            style={{ height: 36, padding: '0 14px', border: '1.5px solid #dbeafe', borderRadius: 7, background: '#fff', color: '#2563eb', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+        <div className={s.modalActions}>
+          <button type="button" onClick={onClose} disabled={loading} className={s.btnSecondary}>
             Hủy
           </button>
-          <button type="submit" disabled={loading}
-            style={{ height: 36, padding: '0 16px', border: 'none', borderRadius: 7, background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', opacity: loading ? 0.6 : 1 }}>
+          <button type="submit" disabled={loading} className={s.btnPrimary}>
             {loading ? 'Đang lưu...' : 'Lưu thay đổi'}
           </button>
         </div>

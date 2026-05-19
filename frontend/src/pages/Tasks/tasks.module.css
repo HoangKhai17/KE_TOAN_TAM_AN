@@ -3322,3 +3322,226 @@
   color: #fff;
   border-color: #2563eb;
 }
+
+/* CSS style guide helpers: replace inline JSX styles in Tasks pages */
+.qeDateInteractive {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.qeDateText {
+  pointer-events: none;
+  user-select: none;
+}
+.qeDateInputNative {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  z-index: 1;
+}
+.progressBarFlex { flex: 1; }
+.progressFillDynamic { width: var(--progress-width); }
+.dragTransform { transform: translate3d(var(--drag-x), var(--drag-y), 0); }
+.boardEmptyText {
+  text-align: center;
+  color: var(--color-muted);
+  font-size: var(--fs-2xs);
+  padding: var(--space-7) 0;
+}
+.calendarTaskBarDynamic {
+  left: var(--cal-left);
+  width: var(--cal-width);
+  top: var(--cal-top);
+  height: var(--cal-height);
+}
+.calendarDayColDynamic {
+  left: var(--cal-left);
+  width: var(--cal-width);
+}
+.calendarWeekRowDynamic {
+  min-height: var(--week-row-min-h);
+}
+.chevronRotate {
+  flex-shrink: 0;
+  transition: transform var(--duration-fast);
+}
+.chevronOpen { transform: rotate(180deg); }
+.companyPickerWrap { position: relative; }
+.companyPickerTriggerCompact {
+  height: var(--control-h-sm);
+  font-size: var(--fs-xs);
+}
+.companyPickerPlaceholder { color: var(--color-muted); }
+.companyPickerSelected { color: var(--color-text); }
+.iconMuted { color: var(--color-muted); flex-shrink: 0; }
+.tableScrollX { overflow-x: auto; }
+.thAction { width: 100px; }
+.tableSkeletonBar {
+  width: var(--skeleton-w);
+  height: 11px;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-xs);
+  animation: app-pulse 1.5s ease-in-out infinite;
+}
+.mutedDash {
+  color: var(--color-muted);
+  font-size: var(--fs-2xs);
+}
+.qeSelectStyled { font-weight: var(--fw-semibold); }
+.qeStatusPending { background: var(--color-surface-muted); color: #475569; border-color: var(--color-border); }
+.qeStatusInProgress { background: var(--color-info-bg); color: var(--color-info-dark); border-color: var(--color-primary-ring); }
+.qeStatusOnHold { background: var(--color-warning-bg); color: var(--color-warning-dark); border-color: var(--color-warning-bg-strong); }
+.qeStatusPendingReview { background: #faf5ff; color: #7e22ce; border-color: #d8b4fe; }
+.qeStatusNeedsRevision { background: #fff1f2; color: var(--color-status-revision-text); border-color: #fda4af; }
+.qeStatusCompleted { background: #f0fdf4; color: var(--color-success-dark); border-color: #86efac; }
+.qePriorityUrgent { background: #fef2f2; color: #b91c1c; border-color: var(--color-danger-border); }
+.qePriorityHigh { background: var(--color-warning-bg); color: var(--color-warning-dark); border-color: #fdba74; }
+.qePriorityMedium { background: var(--color-info-bg); color: var(--color-info-dark); border-color: var(--color-primary-ring); }
+.qePriorityLow { background: var(--color-bg-soft); color: var(--color-muted); border-color: var(--color-border); }
+.paginationGap {
+  padding: 0 var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--fs-xs);
+}
+.filterSearchWrap { position: relative; }
+.filterSearchIcon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-muted);
+  pointer-events: none;
+}
+.filterInputWithIcon { padding-left: 28px; }
+.filterChipDanger {
+  background: #fef2f2;
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+}
+.btnDangerText { color: var(--color-danger); }
+.calendarPane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.descText {
+  font-size: var(--fs-base);
+  color: var(--color-text-soft);
+  line-height: var(--lh-relaxed);
+  white-space: pre-wrap;
+}
+.descEmpty {
+  font-size: var(--fs-md);
+  color: var(--color-muted);
+  font-style: italic;
+}
+.btnCompact {
+  height: 30px;
+  padding: 0 var(--space-5);
+  font-size: var(--fs-md);
+}
+.btnCompactMd {
+  height: var(--control-h-sm);
+  padding: 0 var(--space-6);
+  font-size: var(--fs-md);
+}
+.btnCompactWide {
+  height: var(--control-h-sm);
+  padding: 0 var(--space-7);
+  font-size: var(--fs-md);
+}
+.btnTiny {
+  height: 24px;
+  font-size: var(--fs-2xs);
+}
+.checklistCheckDisabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.btnIconDanger { color: var(--color-danger); }
+.btnIconTiny {
+  width: 24px;
+  height: 24px;
+}
+.emptyInline {
+  color: var(--color-muted);
+  font-size: var(--fs-md);
+}
+.emptyInlineSpaced {
+  color: var(--color-muted);
+  font-size: var(--fs-md);
+  margin-bottom: var(--space-7);
+}
+.depSearchPosition { position: relative; }
+.filterInputFull { width: 100%; }
+.spinnerInlineTiny {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+.commentEditRow {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+.commentEditActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.commentInputEdit { min-height: 56px; }
+.commentShortcut {
+  font-size: var(--fs-2xs);
+  color: var(--color-muted);
+}
+.cfLabelBlock {
+  margin-bottom: var(--space-1);
+  display: block;
+}
+.timeTotal {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  margin-bottom: var(--space-3);
+}
+.timeTotalValue { color: var(--color-primary); }
+.customBoolRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--control-h-sm);
+}
+.customBoolInput {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.customBoolText {
+  font-size: var(--fs-md);
+  color: var(--color-text-soft);
+}
+.alignEnd { display: flex; justify-content: flex-end; }
+.alignSelfEnd { align-self: flex-end; }
+.loadingBoxLarge { padding: 80px; }
+.errorIconDanger { color: var(--color-danger); }
+.detailBackBtn {
+  margin-bottom: var(--space-3);
+  height: 28px;
+  font-size: var(--fs-xs);
+}
+.detailMetaIcon { color: var(--color-muted); }
+.dateInputCompact { max-width: 140px; }
+.overdueWrap { margin-top: var(--space-3); }
+.progressWrapCompact { margin-bottom: var(--space-2); }
+.progressSummary {
+  font-size: var(--fs-2xs);
+  color: var(--color-muted);
+}

@@ -136,12 +136,12 @@ function DescriptionTab({ taskId, initialDesc, onSaved }) {
     return (
       <div>
         {desc ? (
-          <p style={{ fontSize: 14, color: 'var(--color-text-soft)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{desc}</p>
+          <p className={s.descText}>{desc}</p>
         ) : (
-          <p style={{ fontSize: 13, color: 'var(--color-muted)', fontStyle: 'italic' }}>Chưa có mô tả.</p>
+          <p className={s.descEmpty}>Chưa có mô tả.</p>
         )}
         <div className={s.descActions}>
-          <button className={s.btnSecondary} onClick={() => setEditing(true)} style={{ height: 30, padding: '0 12px', fontSize: 13 }}>
+          <button className={`${s.btnSecondary} ${s.btnCompact}`} onClick={() => setEditing(true)}>
             <Edit2 size={12} /> Chỉnh sửa
           </button>
         </div>
@@ -159,8 +159,8 @@ function DescriptionTab({ taskId, initialDesc, onSaved }) {
         autoFocus
       />
       <div className={s.descActions}>
-        <button className={s.btnSecondary} onClick={() => { setDesc(initialDesc ?? ''); setEditing(false) }} disabled={saving} style={{ height: 30, padding: '0 12px', fontSize: 13 }}>Huỷ</button>
-        <button className={s.btnPrimary} onClick={save} disabled={saving} style={{ height: 30, padding: '0 12px', fontSize: 13 }}>
+        <button className={`${s.btnSecondary} ${s.btnCompact}`} onClick={() => { setDesc(initialDesc ?? ''); setEditing(false) }} disabled={saving}>Huỷ</button>
+        <button className={`${s.btnPrimary} ${s.btnCompact}`} onClick={save} disabled={saving}>
           {saving ? 'Đang lưu...' : <><Check size={12} /> Lưu</>}
         </button>
       </div>
@@ -238,8 +238,11 @@ function ChecklistTab({ taskId, onCountChange }) {
     <div>
       {total > 0 && (
         <div className={s.checklistProgress}>
-          <div className={s.progressBar} style={{ flex: 1 }}>
-            <div className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`} style={{ width: `${pct}%` }} />
+          <div className={`${s.progressBar} ${s.progressBarFlex}`}>
+            <div
+              className={`${s.progressFill} ${s.progressFillDynamic} ${pct === 100 ? s.progressFillDone : ''}`}
+              style={{ '--progress-width': `${pct}%` }}
+            />
           </div>
           <span className={s.progressText}>{done}/{total} ({pct}%)</span>
         </div>
@@ -250,9 +253,8 @@ function ChecklistTab({ taskId, onCountChange }) {
         return (
         <div key={item.id} className={s.checklistItem}>
           <div
-            className={`${s.checklistCheck} ${item.isCompleted ? s.checklistCheckDone : ''}`}
+            className={`${s.checklistCheck} ${item.isCompleted ? s.checklistCheckDone : ''} ${isToggling ? s.checklistCheckDisabled : ''}`}
             onClick={() => toggle(item)}
-            style={isToggling ? { opacity: 0.5, pointerEvents: 'none' } : undefined}
           >
             {item.isCompleted && <Check size={10} color="#fff" />}
           </div>
@@ -275,7 +277,7 @@ function ChecklistTab({ taskId, onCountChange }) {
               <span className={`${s.checklistText} ${item.isCompleted ? s.checklistTextDone : ''}`}>{item.stepText}</span>
               <div className={s.checklistItemActions}>
                 <button className={s.btnIcon} onClick={() => { setEditId(item.id); setEditText(item.stepText) }} title="Sửa"><Edit2 size={11} /></button>
-                <button className={s.btnIcon} onClick={() => deleteItem(item.id)} title="Xoá" style={{ color: 'var(--color-danger)' }}><Trash2 size={11} /></button>
+                <button className={`${s.btnIcon} ${s.btnIconDanger}`} onClick={() => deleteItem(item.id)} title="Xoá"><Trash2 size={11} /></button>
               </div>
             </>
           )}
@@ -292,7 +294,7 @@ function ChecklistTab({ taskId, onCountChange }) {
           className={s.checklistAddInput}
           onKeyDown={(e) => { if (e.key === 'Enter') addItem() }}
         />
-        <button className={s.btnPrimary} onClick={addItem} disabled={adding || !addText.trim()} style={{ height: 32, padding: '0 12px', fontSize: 13 }}>
+        <button className={`${s.btnPrimary} ${s.btnCompactMd}`} onClick={addItem} disabled={adding || !addText.trim()}>
           <Plus size={13} /> Thêm
         </button>
       </div>
@@ -358,7 +360,7 @@ function DependenciesTab({ taskId, currentTaskId }) {
                 <StatusBadge status={dep.dependsOnStatus} />
                 <span className={s.depTitle} title={dep.dependsOnTitle}>{dep.dependsOnTitle}</span>
                 {blocked && <span className={s.depWarning}><AlertTriangle size={10} /> Chưa xong</span>}
-                <button className={s.btnIcon} onClick={() => removeDep(dep.id)} title="Xoá" style={{ color: 'var(--color-danger)', width: 24, height: 24 }}>
+                <button className={`${s.btnIcon} ${s.btnIconDanger} ${s.btnIconTiny}`} onClick={() => removeDep(dep.id)} title="Xoá">
                   <Trash2 size={11} />
                 </button>
               </div>
@@ -368,21 +370,20 @@ function DependenciesTab({ taskId, currentTaskId }) {
       )}
 
       {deps.length === 0 && (
-        <p style={{ color: 'var(--color-muted)', fontSize: 13, marginBottom: 16 }}>Chưa có phụ thuộc.</p>
+        <p className={s.emptyInlineSpaced}>Chưa có phụ thuộc.</p>
       )}
 
       <div className={s.depSearchWrap}>
-        <div style={{ position: 'relative' }}>
+        <div className={s.depSearchPosition}>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm công việc cần hoàn thành trước..."
-            className={s.filterInput}
-            style={{ width: '100%' }}
+            className={`${s.filterInput} ${s.filterInputFull}`}
           />
           {searching && (
-            <div className={s.spinner} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, borderWidth: 2 }} />
+            <div className={`${s.spinner} ${s.spinnerInlineTiny}`} />
           )}
         </div>
         {results.length > 0 && (
@@ -463,7 +464,7 @@ function CommentsTab({ taskId }) {
     <div>
       <div className={s.commentList}>
         {comments.length === 0 && (
-          <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>Chưa có bình luận.</p>
+          <p className={s.emptyInline}>Chưa có bình luận.</p>
         )}
         {comments.map((c) => {
           const canEdit = c.userId === currentUser?.id || isAdmin
@@ -477,15 +478,14 @@ function CommentsTab({ taskId }) {
                   {c.isEdited && <span className={s.commentEdited}>(đã sửa)</span>}
                 </div>
                 {editId === c.id ? (
-                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <div className={s.commentEditRow}>
                     <textarea
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
-                      className={s.commentInput}
-                      style={{ minHeight: 56 }}
+                      className={`${s.commentInput} ${s.commentInputEdit}`}
                       autoFocus
                     />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div className={s.commentEditActions}>
                       <button className={s.btnIcon} onClick={() => saveEdit(c.id)} title="Lưu"><Check size={12} /></button>
                       <button className={s.btnIcon} onClick={() => setEditId(null)} title="Huỷ"><X size={12} /></button>
                     </div>
@@ -495,10 +495,10 @@ function CommentsTab({ taskId }) {
                 )}
                 {canEdit && editId !== c.id && (
                   <div className={s.commentActions}>
-                    <button className={s.btnGhost} style={{ height: 24, fontSize: 11 }} onClick={() => { setEditId(c.id); setEditText(c.content) }}>
+                    <button className={`${s.btnGhost} ${s.btnTiny}`} onClick={() => { setEditId(c.id); setEditText(c.content) }}>
                       <Edit2 size={10} /> Sửa
                     </button>
-                    <button className={s.btnGhost} style={{ height: 24, fontSize: 11, color: 'var(--color-danger)' }} onClick={() => deleteComment(c.id)}>
+                    <button className={`${s.btnGhost} ${s.btnTiny} ${s.btnDangerText}`} onClick={() => deleteComment(c.id)}>
                       <Trash2 size={10} /> Xoá
                     </button>
                   </div>
@@ -520,12 +520,11 @@ function CommentsTab({ taskId }) {
             onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) submit() }}
           />
           <div className={s.commentSendRow}>
-            <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>Ctrl + Enter để gửi</span>
+            <span className={s.commentShortcut}>Ctrl + Enter để gửi</span>
             <button
-              className={s.btnPrimary}
+              className={`${s.btnPrimary} ${s.btnCompactWide}`}
               onClick={submit}
               disabled={sending || !newText.trim()}
-              style={{ height: 32, padding: '0 16px', fontSize: 13 }}
             >
               {sending ? <Loader2 size={13} className={s.spin} /> : <Send size={13} />}
               Gửi
@@ -557,7 +556,7 @@ function ActivityTab({ taskId }) {
   if (loading) return <div className={s.loadingBox}><div className={s.spinner} /> Đang tải...</div>
 
   if (logs.length === 0) return (
-    <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>Chưa có nhật ký hoạt động.</p>
+    <p className={s.emptyInline}>Chưa có nhật ký hoạt động.</p>
   )
 
   return (
@@ -632,7 +631,7 @@ function TimeLogsTab({ taskId }) {
     <div>
       <div className={s.timeLogAddRow}>
         <div>
-          <label className={s.cfLabel} style={{ marginBottom: 4, display: 'block' }}>Số giờ *</label>
+          <label className={`${s.cfLabel} ${s.cfLabelBlock}`}>Số giờ *</label>
           <input
             type="number" min="0.1" step="0.5"
             value={hours}
@@ -642,7 +641,7 @@ function TimeLogsTab({ taskId }) {
           />
         </div>
         <div>
-          <label className={s.cfLabel} style={{ marginBottom: 4, display: 'block' }}>Ghi chú</label>
+          <label className={`${s.cfLabel} ${s.cfLabelBlock}`}>Ghi chú</label>
           <input
             type="text"
             value={note}
@@ -651,19 +650,19 @@ function TimeLogsTab({ taskId }) {
             placeholder="Mô tả công việc đã làm..."
           />
         </div>
-        <button className={s.btnPrimary} onClick={addLog} disabled={adding || !hours} style={{ height: 32, padding: '0 14px', fontSize: 13, alignSelf: 'flex-end' }}>
+        <button className={`${s.btnPrimary} ${s.btnCompactMd} ${s.alignSelfEnd}`} onClick={addLog} disabled={adding || !hours}>
           {adding ? '...' : <><Plus size={13} /> Ghi</>}
         </button>
       </div>
 
       {total > 0 && (
-        <p style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 8 }}>
-          Tổng: <strong style={{ color: 'var(--color-primary)' }}>{total.toFixed(1)} giờ</strong>
+        <p className={s.timeTotal}>
+          Tổng: <strong className={s.timeTotalValue}>{total.toFixed(1)} giờ</strong>
         </p>
       )}
 
       <div className={s.timeLogList}>
-        {logs.length === 0 && <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>Chưa có nhật ký thời gian.</p>}
+        {logs.length === 0 && <p className={s.emptyInline}>Chưa có nhật ký thời gian.</p>}
         {logs.map((log) => {
           const canDel = log.userId === currentUser?.id || isAdmin
           return (
@@ -672,7 +671,7 @@ function TimeLogsTab({ taskId }) {
               <span className={s.timeLogNote}>{log.note || '—'}</span>
               <span className={s.timeLogMeta}>{log.userName} · {fmtDate(log.loggedDate)}</span>
               {canDel && (
-                <button className={s.btnIcon} onClick={() => deleteLog(log.id)} title="Xoá" style={{ width: 24, height: 24, color: 'var(--color-danger)' }}>
+                <button className={`${s.btnIcon} ${s.btnIconTiny} ${s.btnIconDanger}`} onClick={() => deleteLog(log.id)} title="Xoá">
                   <Trash2 size={11} />
                 </button>
               )}
@@ -745,7 +744,7 @@ function CustomFieldsTab({ taskId }) {
   if (loading) return <div className={s.loadingBox}><div className={s.spinner} /> Đang tải...</div>
 
   if (fields.length === 0) return (
-    <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>
+    <p className={s.emptyInline}>
       Loại công việc này không có trường tuỳ chỉnh.
     </p>
   )
@@ -756,9 +755,9 @@ function CustomFieldsTab({ taskId }) {
 
     if (f.dataType === 'boolean') {
       return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32 }}>
-          <input type="checkbox" checked={!!val} onChange={(e) => set(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-          <span style={{ fontSize: 13, color: 'var(--color-text-soft)' }}>{val ? 'Có' : 'Không'}</span>
+        <div className={s.customBoolRow}>
+          <input type="checkbox" checked={!!val} onChange={(e) => set(e.target.checked)} className={s.customBoolInput} />
+          <span className={s.customBoolText}>{val ? 'Có' : 'Không'}</span>
         </div>
       )
     }
@@ -790,8 +789,8 @@ function CustomFieldsTab({ taskId }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button className={s.btnPrimary} onClick={save} disabled={saving} style={{ height: 32, padding: '0 16px', fontSize: 13 }}>
+      <div className={s.alignEnd}>
+        <button className={`${s.btnPrimary} ${s.btnCompactWide}`} onClick={save} disabled={saving}>
           {saving ? 'Đang lưu...' : <><Check size={13} /> Lưu trường tuỳ chỉnh</>}
         </button>
       </div>
@@ -911,7 +910,7 @@ export default function TaskDetail() {
   if (loading) {
     return (
       <AppLayout>
-        <div className={s.loadingBox} style={{ padding: 80 }}>
+        <div className={`${s.loadingBox} ${s.loadingBoxLarge}`}>
           <div className={s.spinner} /> Đang tải công việc...
         </div>
       </AppLayout>
@@ -923,7 +922,7 @@ export default function TaskDetail() {
     return (
       <AppLayout>
         <div className={s.errorBox}>
-          <AlertTriangle size={32} style={{ color: 'var(--color-danger)' }} />
+          <AlertTriangle size={32} className={s.errorIconDanger} />
           <p className={s.errorTitle}>{error ?? 'Không tìm thấy công việc'}</p>
           <button className={s.btnSecondary} onClick={() => navigate('/tasks')}>
             <ArrowLeft size={13} /> Quay lại danh sách
@@ -946,9 +945,8 @@ export default function TaskDetail() {
           <div className={s.detailHeaderTop}>
             <div className={s.detailTitleRow}>
               <button
-                className={s.btnGhost}
+                className={`${s.btnGhost} ${s.detailBackBtn}`}
                 onClick={() => navigate('/tasks')}
-                style={{ marginBottom: 8, height: 28, fontSize: 12 }}
               >
                 <ArrowLeft size={12} /> Danh sách
               </button>
@@ -980,34 +978,34 @@ export default function TaskDetail() {
           <div className={s.detailMeta}>
             {task.companyName && (
               <div className={s.detailMetaItem}>
-                <Building2 size={12} style={{ color: 'var(--color-muted)' }} />
+                <Building2 size={12} className={s.detailMetaIcon} />
                 <span className={s.detailMetaLabel}>KH:</span>
                 <Link to={`/companies/${task.companyId}`} className={s.detailMetaLink}>{task.companyName}</Link>
               </div>
             )}
             {task.assignedToName && (
               <div className={s.detailMetaItem}>
-                <User size={12} style={{ color: 'var(--color-muted)' }} />
+                <User size={12} className={s.detailMetaIcon} />
                 <span className={s.detailMetaLabel}>Giao cho:</span>
                 <span>{task.assignedToName}</span>
               </div>
             )}
             {task.taskTypeName && (
               <div className={s.detailMetaItem}>
-                <Tag size={12} style={{ color: 'var(--color-muted)' }} />
+                <Tag size={12} className={s.detailMetaIcon} />
                 <span className={s.detailMetaLabel}>Loại:</span>
                 <span>{task.taskTypeName}</span>
               </div>
             )}
             {task.periodLabel && (
               <div className={s.detailMetaItem}>
-                <Calendar size={12} style={{ color: 'var(--color-muted)' }} />
+                <Calendar size={12} className={s.detailMetaIcon} />
                 <span className={s.detailMetaLabel}>Kỳ:</span>
                 <span>{task.periodLabel}</span>
               </div>
             )}
             <div className={s.detailMetaItem}>
-              <Clock size={12} style={{ color: 'var(--color-muted)' }} />
+              <Clock size={12} className={s.detailMetaIcon} />
               <span className={s.detailMetaLabel}>Tạo:</span>
               <span>{fmtDateTime(task.createdAt)}</span>
             </div>
@@ -1097,9 +1095,8 @@ export default function TaskDetail() {
                   type="date"
                   value={task.dueDate?.slice(0, 10) ?? ''}
                   onChange={(e) => saveDueDate(e.target.value)}
-                  className={s.dateInput}
+                  className={`${s.dateInput} ${s.dateInputCompact}`}
                   disabled={savingDue}
-                  style={{ maxWidth: 140 }}
                 />
               </div>
 
@@ -1118,7 +1115,7 @@ export default function TaskDetail() {
               )}
 
               {overdue && (
-                <div style={{ marginTop: 8 }}>
+                <div className={s.overdueWrap}>
                   <span className={s.overdueTag}><AlertTriangle size={10} /> Quá hạn</span>
                 </div>
               )}
@@ -1127,16 +1124,16 @@ export default function TaskDetail() {
             {clTotal > 0 && (
               <div className={s.infoSection}>
                 <div className={s.infoSectionTitle}>Tiến độ checklist</div>
-                <div className={s.progressWrap} style={{ marginBottom: 6 }}>
+                <div className={`${s.progressWrap} ${s.progressWrapCompact}`}>
                   <div className={s.progressBar}>
                     <div
-                      className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`}
-                      style={{ width: `${pct}%` }}
+                      className={`${s.progressFill} ${s.progressFillDynamic} ${pct === 100 ? s.progressFillDone : ''}`}
+                      style={{ '--progress-width': `${pct}%` }}
                     />
                   </div>
                   <span className={s.progressText}>{pct}%</span>
                 </div>
-                <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>{clDone}/{clTotal} bước hoàn thành</span>
+                <span className={s.progressSummary}>{clDone}/{clTotal} bước hoàn thành</span>
               </div>
             )}
 

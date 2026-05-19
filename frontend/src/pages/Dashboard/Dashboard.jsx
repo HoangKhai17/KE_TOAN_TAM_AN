@@ -17,32 +17,74 @@ import { getDashboardSummary, getDashboardCharts } from '../../api/dashboard'
 import { useDataSync } from '../../hooks/useDataSync'
 import s from './Dashboard.module.css'
 
+const DASHBOARD_COLORS = {
+  primary: '#2563eb',
+  primaryRing: '#93c5fd',
+  grid: '#f1f5f9',
+  axis: '#94a3b8',
+  axisStrong: '#64748b',
+  white: '#ffffff',
+  orange: '#f97316',
+  emerald: '#059669',
+  indigo: '#4f46e5',
+  indigoSoft: '#818cf8',
+  emeraldSoft: '#34d399',
+  amber: '#d97706',
+  amberSoft: '#fbbf24',
+  red: '#dc2626',
+  redSoft: '#f87171',
+  violet: '#7c3aed',
+  violetSoft: '#a78bfa',
+  cyan: '#0891b2',
+  cyanSoft: '#22d3ee',
+  orangeDark: '#ea580c',
+  orangeSoft: '#fb923c',
+  lime: '#65a30d',
+  limeSoft: '#a3e635',
+}
+
 // ── Gradient palette for PieChart ─────────────────────────────────────────────
 const PIE_GRADIENTS = [
-  ['#4f46e5', '#818cf8'],  // indigo vivid
-  ['#059669', '#34d399'],  // emerald vivid
-  ['#d97706', '#fbbf24'],  // amber vivid
-  ['#dc2626', '#f87171'],  // red vivid
-  ['#7c3aed', '#a78bfa'],  // violet vivid
-  ['#0891b2', '#22d3ee'],  // cyan vivid
-  ['#ea580c', '#fb923c'],  // orange vivid
-  ['#65a30d', '#a3e635'],  // lime vivid
+  [DASHBOARD_COLORS.indigo, DASHBOARD_COLORS.indigoSoft],
+  [DASHBOARD_COLORS.emerald, DASHBOARD_COLORS.emeraldSoft],
+  [DASHBOARD_COLORS.amber, DASHBOARD_COLORS.amberSoft],
+  [DASHBOARD_COLORS.red, DASHBOARD_COLORS.redSoft],
+  [DASHBOARD_COLORS.violet, DASHBOARD_COLORS.violetSoft],
+  [DASHBOARD_COLORS.cyan, DASHBOARD_COLORS.cyanSoft],
+  [DASHBOARD_COLORS.orangeDark, DASHBOARD_COLORS.orangeSoft],
+  [DASHBOARD_COLORS.lime, DASHBOARD_COLORS.limeSoft],
 ]
 
-const PRIORITY_CSS = {
-  urgent: { background: '#dc2626', color: '#fff' },
-  high:   { background: '#ea580c', color: '#fff' },
-  medium: { background: '#2563eb', color: '#fff' },
-  low:    { background: '#64748b', color: '#fff' },
+const CHART_MARGIN = {
+  trend: { top: 12, right: 16, left: -10, bottom: 0 },
+  workload: { top: 12, right: 16, left: -10, bottom: 10 },
+}
+const CHART_TICK = {
+  axis: { fontSize: 11, fill: DASHBOARD_COLORS.axis },
+  staffName: { fontSize: 10, fill: DASHBOARD_COLORS.axisStrong, fontWeight: 500 },
+}
+const CHART_LEGEND = {
+  trend: { fontSize: 12, paddingTop: 8 },
+  workload: { fontSize: 12, paddingTop: 4 },
+}
+const BAR_RADIUS = [4, 4, 0, 0]
+const AREA_DOT = { r: 5, fill: DASHBOARD_COLORS.primary, strokeWidth: 2, stroke: DASHBOARD_COLORS.white }
+const AREA_ACTIVE_DOT = { r: 7 }
+
+const PRIORITY_CLASS = {
+  urgent: s.priUrgent,
+  high: s.priHigh,
+  medium: s.priMedium,
+  low: s.priLow,
 }
 const PRIORITY_LABEL = { urgent: 'Khẩn', high: 'Cao', medium: 'TB', low: 'Thấp' }
 
-const STATUS_CSS = {
-  pending:        { background: '#e2e8f0', color: '#334155' },
-  in_progress:    { background: '#bfdbfe', color: '#1d4ed8' },
-  on_hold:        { background: '#fed7aa', color: '#c2410c' },
-  pending_review: { background: '#e9d5ff', color: '#6d28d9' },
-  needs_revision: { background: '#fecdd3', color: '#be123c' },
+const STATUS_CLASS = {
+  pending: s.statusPending,
+  in_progress: s.statusInProgress,
+  on_hold: s.statusOnHold,
+  pending_review: s.statusPendingReview,
+  needs_revision: s.statusNeedsRevision,
 }
 const STATUS_LABEL = {
   pending: 'Chờ xử lý', in_progress: 'Đang làm', on_hold: 'Tạm dừng',
@@ -79,12 +121,6 @@ function fmtWeek(dateStr) {
   catch { return String(dateStr).slice(5) }
 }
 
-function fmtDate(d) {
-  if (!d) return '—'
-  try { return format(parseISO(String(d).slice(0, 10)), 'dd/MM/yyyy') }
-  catch { return String(d).slice(0, 10) }
-}
-
 function fmtDateShort(d) {
   if (!d) return '—'
   try { return format(parseISO(String(d).slice(0, 10)), 'dd/MM/yy') }
@@ -98,8 +134,12 @@ function CustomTooltip({ active, payload, label }) {
     <div className={s.tooltip}>
       <p className={s.tooltipLabel}>{label}</p>
       {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color === '#2563eb' ? '#93c5fd' : p.color, margin: '3px 0', fontSize: 12.5 }}>
-          {p.name}: <strong style={{ color: '#f8fafc' }}>{p.value}</strong>
+        <p
+          key={p.name}
+          className={s.tooltipItem}
+          style={{ '--tooltip-item-color': p.color === DASHBOARD_COLORS.primary ? DASHBOARD_COLORS.primaryRing : p.color }}
+        >
+          {p.name}: <strong className={s.tooltipValue}>{p.value}</strong>
         </p>
       ))}
     </div>
@@ -170,27 +210,21 @@ export default function Dashboard() {
       value: loading ? null : (summary?.activeCompanies ?? '—'),
       sub:   'công ty đang hợp tác',
       icon:  Building2,
-      color: '#2563eb',
-      bg:    'linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%)',
-      accent: '#2563eb',
+      tone:  s.kpiBlue,
     },
     {
       label: 'Công việc đang mở',
       value: loading ? null : (summary?.openTasks ?? '—'),
       sub:   'cần xử lý',
       icon:  ClipboardList,
-      color: '#059669',
-      bg:    'linear-gradient(135deg, #d1fae5 0%, #ecfdf5 100%)',
-      accent: '#059669',
+      tone:  s.kpiGreen,
     },
     {
       label: 'Quá hạn',
       value: loading ? null : (summary?.overdueTasks ?? '—'),
       sub:   'cần ưu tiên xử lý ngay',
       icon:  AlertTriangle,
-      color: '#dc2626',
-      bg:    'linear-gradient(135deg, #fee2e2 0%, #fff5f5 100%)',
-      accent: '#dc2626',
+      tone:  s.kpiRed,
       urgent: (summary?.overdueTasks ?? 0) > 0,
     },
     {
@@ -198,18 +232,14 @@ export default function Dashboard() {
       value: loading ? null : (summary?.completedThisMonth ?? '—'),
       sub:   RANGE_SUB[range],
       icon:  CheckCircle2,
-      color: '#b45309',
-      bg:    'linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%)',
-      accent: '#d97706',
+      tone:  s.kpiAmber,
     },
     {
       label: 'Tuân thủ SLA',
       value: loading ? null : (summary ? `${summary.slaComplianceRate}%` : '—'),
       sub:   'hoàn thành đúng / trước hạn',
       icon:  TrendingUp,
-      color: '#6d28d9',
-      bg:    'linear-gradient(135deg, #ede9fe 0%, #f5f3ff 100%)',
-      accent: '#7c3aed',
+      tone:  s.kpiPurple,
     },
   ]
 
@@ -219,9 +249,7 @@ export default function Dashboard() {
       value: loading ? null : (summary?.myTasksToday ?? '—'),
       sub:   'việc cần hoàn thành hôm nay',
       icon:  Clock,
-      color: '#0369a1',
-      bg:    'linear-gradient(135deg, #bae6fd 0%, #e0f2fe 100%)',
-      accent: '#0284c7',
+      tone:  s.kpiCyan,
     })
   }
 
@@ -287,24 +315,24 @@ export default function Dashboard() {
             <div className={s.chartLoading}><Loader2 size={20} className={s.spin} /></div>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={charts?.weeklyTrend ?? []} margin={{ top: 12, right: 16, left: -10, bottom: 0 }}>
+              <AreaChart data={charts?.weeklyTrend ?? []} margin={CHART_MARGIN.trend}>
                 <defs>
                   <linearGradient id="areaGradBlue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"  stopColor="#2563eb" stopOpacity={0.55} />
-                    <stop offset="90%" stopColor="#2563eb" stopOpacity={0.03} />
+                    <stop offset="0%"  stopColor={DASHBOARD_COLORS.primary} stopOpacity={0.55} />
+                    <stop offset="90%" stopColor={DASHBOARD_COLORS.primary} stopOpacity={0.03} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="week" tickFormatter={fmtWeek} tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={DASHBOARD_COLORS.grid} />
+                <XAxis dataKey="week" tickFormatter={fmtWeek} tick={CHART_TICK.axis} />
+                <YAxis tick={CHART_TICK.axis} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                <Legend wrapperStyle={CHART_LEGEND.trend} />
                 <Area
                   type="monotone" dataKey="completed" name="Đã hoàn thành"
-                  stroke="#2563eb" strokeWidth={2.5}
+                  stroke={DASHBOARD_COLORS.primary} strokeWidth={2.5}
                   fill="url(#areaGradBlue)"
-                  dot={{ r: 5, fill: '#2563eb', strokeWidth: 2, stroke: '#fff' }}
-                  activeDot={{ r: 7 }}
+                  dot={AREA_DOT}
+                  activeDot={AREA_ACTIVE_DOT}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -322,21 +350,21 @@ export default function Dashboard() {
             <div className={s.chartLoading}><Loader2 size={20} className={s.spin} /></div>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={charts?.staffWorkload ?? []} margin={{ top: 12, right: 16, left: -10, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <BarChart data={charts?.staffWorkload ?? []} margin={CHART_MARGIN.workload}>
+                <CartesianGrid strokeDasharray="3 3" stroke={DASHBOARD_COLORS.grid} />
                 <XAxis
                   dataKey="name"
-                  tick={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }}
+                  tick={CHART_TICK.staffName}
                   interval={0}
                   angle={-20}
                   textAnchor="end"
                   height={58}
                 />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
+                <YAxis tick={CHART_TICK.axis} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />
-                <Bar dataKey="open"      name="Cần thực hiện" fill="#f97316" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="completed" name="Đã hoàn thành"  fill="#059669" radius={[4, 4, 0, 0]} />
+                <Legend wrapperStyle={CHART_LEGEND.workload} />
+                <Bar dataKey="open"      name="Cần thực hiện" fill={DASHBOARD_COLORS.orange} radius={BAR_RADIUS} />
+                <Bar dataKey="completed" name="Đã hoàn thành"  fill={DASHBOARD_COLORS.emerald} radius={BAR_RADIUS} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -394,8 +422,7 @@ export default function Dashboard() {
                   return (
                     <div key={i} className={s.pieLegendItem}>
                       <span
-                        className={s.pieLegendDot}
-                        style={{ background: PIE_GRADIENTS[i % PIE_GRADIENTS.length][0] }}
+                        className={`${s.pieLegendDot} ${s[`pieTone${i % PIE_GRADIENTS.length}`]}`}
                       />
                       <span className={s.pieLegendName}>{item.name}</span>
                       <span className={s.pieLegendCount}>{item.value}</span>
@@ -428,7 +455,7 @@ export default function Dashboard() {
             <div className={s.chartLoading}><Loader2 size={20} className={s.spin} /></div>
           ) : !charts?.overdueList?.length ? (
             <div className={s.chartEmpty}>
-              <CheckCircle2 size={28} style={{ color: '#10b981', marginBottom: 8 }} />
+              <CheckCircle2 size={28} className={s.emptySuccessIcon} />
               Không có công việc quá hạn 🎉
             </div>
           ) : (
@@ -466,22 +493,21 @@ export default function Dashboard() {
 }
 
 // ── KpiCard ───────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, icon: Icon, color, bg, accent, urgent, loading }) {
+function KpiCard({ label, value, sub, icon: Icon, tone, urgent, loading }) {
   return (
     <div
-      className={`${s.kpiCard} ${urgent ? s.kpiCardUrgent : ''}`}
-      style={{ background: bg, borderColor: `${accent ?? color}30`, borderLeftColor: accent ?? color }}
+      className={`${s.kpiCard} ${tone} ${urgent ? s.kpiCardUrgent : ''}`}
     >
       <div className={s.kpiCardInner}>
-        <div className={s.kpiIcon} style={{ background: `${accent ?? color}22` }}>
-          <Icon size={20} style={{ color: accent ?? color }} />
+        <div className={s.kpiIcon}>
+          <Icon size={20} />
         </div>
         <div className={s.kpiText}>
-          <p className={s.kpiLabel} style={{ color: accent ?? color }}>{label}</p>
+          <p className={s.kpiLabel}>{label}</p>
           {loading ? (
             <div className={s.kpiSkeleton} />
           ) : (
-            <p className={s.kpiValue} style={{ color }}>{value}</p>
+            <p className={s.kpiValue}>{value}</p>
           )}
           <p className={s.kpiSub}>{sub}</p>
         </div>
@@ -496,10 +522,10 @@ function OverdueCard({ task, onClick }) {
     <div className={s.overdueCard} onClick={onClick}>
       <div className={s.taskCardTop}>
         <div className={s.taskCardBadges}>
-          <span className={s.priorityBadge} style={PRIORITY_CSS[task.priority]}>
+          <span className={`${s.priorityBadge} ${PRIORITY_CLASS[task.priority] ?? s.priLow}`}>
             {PRIORITY_LABEL[task.priority] ?? task.priority}
           </span>
-          <span className={s.statusBadge} style={STATUS_CSS[task.status]}>
+          <span className={`${s.statusBadge} ${STATUS_CLASS[task.status] ?? s.statusPending}`}>
             {STATUS_LABEL[task.status] ?? task.status}
           </span>
         </div>
@@ -530,10 +556,10 @@ function DueTodayCard({ task, onClick }) {
     <div className={s.dueTodayCard} onClick={onClick}>
       <div className={s.taskCardTop}>
         <div className={s.taskCardBadges}>
-          <span className={s.priorityBadge} style={PRIORITY_CSS[task.priority]}>
+          <span className={`${s.priorityBadge} ${PRIORITY_CLASS[task.priority] ?? s.priLow}`}>
             {PRIORITY_LABEL[task.priority] ?? task.priority}
           </span>
-          <span className={s.statusBadge} style={STATUS_CSS[task.status]}>
+          <span className={`${s.statusBadge} ${STATUS_CLASS[task.status] ?? s.statusPending}`}>
             {STATUS_LABEL[task.status] ?? task.status}
           </span>
         </div>
