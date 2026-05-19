@@ -10,15 +10,15 @@
 }
 
 .todayStatNum {
-  font-size: 26px;
-  font-weight: 800;
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-extrabold);
   line-height: 1;
 }
 
 .todayStatLbl {
-  font-size: 11px;
-  color: #64748b;
-  font-weight: 600;
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  font-weight: var(--fw-semibold);
   margin-top: 4px;
   white-space: nowrap;
 }

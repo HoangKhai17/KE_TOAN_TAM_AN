@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Phone, Briefcase, Calendar, Shield, Loader2,
-  AlertTriangle, Edit2,
+  AlertTriangle, Edit2, Camera,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -24,6 +24,11 @@ const ROLE_MAP = {
   staff: { label: 'Nhân viên',     cls: s.badgeStaff },
 }
 
+function getInitials(name) {
+  if (!name) return '?'
+  return name.split(' ').slice(-2).map((w) => w[0]).join('').toUpperCase()
+}
+
 function staffAvatarSrc(user) {
   if (user?.avatarUrl) return user.avatarUrl
   const encoded = encodeURIComponent(user?.name || '?')
@@ -43,6 +48,7 @@ export default function StaffDetail() {
   const { id }    = useParams()
   const navigate  = useNavigate()
   const self      = useAuthStore((st) => st.user)
+  const patchUser = useAuthStore((st) => st.patchUser)
   const addToast  = useToastStore((st) => st.toast)
   const isAdmin   = self?.role === 'admin'
 
@@ -247,6 +253,9 @@ export default function StaffDetail() {
             onClose={() => setEditOpen(false)}
             onSaved={(u) => {
               setUser(u)
+              if (self?.id === u.id) {
+                patchUser({ name: u.name, avatarUrl: u.avatarUrl, role: u.role })
+              }
               setEditOpen(false)
               addToast('Đã cập nhật thông tin', 'success')
             }}
@@ -258,6 +267,76 @@ export default function StaffDetail() {
 }
 
 // ── InfoSection ───────────────────────────────────────────────────────────────
+
+function AvatarUpload({ value, name, onChange }) {
+  const inputRef = useRef(null)
+
+  function handleFile(e) {
+    const file = e.target.files[0]
+    if (!file || !file.type.startsWith('image/')) return
+
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const img = new Image()
+      img.onload = () => {
+        const size = 160
+        const canvas = document.createElement('canvas')
+        canvas.width = size
+        canvas.height = size
+        const ctx = canvas.getContext('2d')
+        const cropSize = Math.min(img.width, img.height)
+        const offsetX = (img.width - cropSize) / 2
+        const offsetY = (img.height - cropSize) / 2
+
+        ctx.drawImage(img, offsetX, offsetY, cropSize, cropSize, 0, 0, size, size)
+        onChange(canvas.toDataURL('image/jpeg', 0.82))
+      }
+      img.src = ev.target.result
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  return (
+    <div className={s.avatarEditRow}>
+      <button
+        type="button"
+        className={s.avatarUploadCircle}
+        onClick={() => inputRef.current?.click()}
+        title="Chọn ảnh đại diện"
+      >
+        {value ? (
+          <img src={value} alt={name} className={s.avatarUploadImg} />
+        ) : (
+          <span className={s.avatarUploadInitials}>{getInitials(name)}</span>
+        )}
+        <span className={s.avatarUploadOverlay}><Camera size={16} /></span>
+      </button>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className={s.hiddenInput}
+        onChange={handleFile}
+      />
+
+      <div className={s.avatarUploadMeta}>
+        <div className={s.avatarUploadActions}>
+          <button type="button" className={s.avatarUploadBtn} onClick={() => inputRef.current?.click()}>
+            <Camera size={12} /> Chọn ảnh
+          </button>
+          {value && (
+            <button type="button" className={s.avatarRemoveBtn} onClick={() => onChange(null)}>
+              Xoá ảnh
+            </button>
+          )}
+        </div>
+        <p className={s.avatarHelp}>Ảnh sẽ được cắt vuông và lưu cùng hồ sơ nhân viên.</p>
+      </div>
+    </div>
+  )
+}
 
 function InfoSection({ title, icon, rows }) {
   return (
@@ -294,6 +373,7 @@ function EditUserModal({ user, onClose, onSaved, isAdmin }) {
     address:    user.address    ?? '',
     education:  user.education  ?? '',
     experience: user.experience ?? '',
+    avatarUrl:  user.avatarUrl  ?? null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
@@ -317,6 +397,9 @@ function EditUserModal({ user, onClose, onSaved, isAdmin }) {
         const cur = user[f] ? user[f].slice(0, 10) : ''
         if (form[f] !== cur) body[f] = form[f] || null
       })
+      if ((form.avatarUrl ?? null) !== (user.avatarUrl ?? null)) {
+        body.avatarUrl = form.avatarUrl || null
+      }
       const saved = await usersApi.updateUser(user.id, body)
       onSaved(saved)
     } catch (err) {
@@ -332,6 +415,15 @@ function EditUserModal({ user, onClose, onSaved, isAdmin }) {
         {error && <div className={s.errorBox}>{error}</div>}
 
         <div className={s.formSectionLabel}>Thông tin cơ bản</div>
+
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Ảnh đại diện</label>
+          <AvatarUpload
+            value={form.avatarUrl}
+            name={form.name || user.name}
+            onChange={(url) => setForm((p) => ({ ...p, avatarUrl: url }))}
+          />
+        </div>
 
         <div className={s.formGroup}>
           <label className={`${s.formLabel} ${s.req}`}>Họ và tên</label>

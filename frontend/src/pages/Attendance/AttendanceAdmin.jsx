@@ -26,16 +26,16 @@ const ADMIN_TABS = [
 ]
 
 const STATUS_CFG = {
-  present:        { label: 'Có mặt',      bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' },
-  late:           { label: 'Đi muộn',     bg: '#fefce8', color: '#a16207', border: '#fde68a' },
-  early_leave:    { label: 'Về sớm',      bg: '#fff7ed', color: '#c2410c', border: '#fdba74' },
-  late_and_early: { label: 'Muộn & Sớm', bg: '#fdf4ff', color: '#9333ea', border: '#e9d5ff' },
-  absent:         { label: 'Vắng mặt',   bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
-  on_leave:       { label: 'Nghỉ phép',  bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
-  business_trip:  { label: 'Công tác',   bg: '#f0fdfa', color: '#0d9488', border: '#99f6e4' },
-  wfh:            { label: 'WFH',        bg: '#faf5ff', color: '#7c3aed', border: '#ddd6fe' },
-  holiday:        { label: 'Nghỉ lễ',    bg: '#fdf2f8', color: '#9d174d', border: '#fbcfe8' },
-  unscheduled:    { label: 'Ngoài lịch', bg: '#f8fafc', color: '#94a3b8', border: '#cbd5e1' },
+  present:        { label: 'Có mặt',      bg: 'var(--color-success-bg-soft)', color: 'var(--color-success-dark)', border: 'var(--color-success-bg)' },
+  late:           { label: 'Đi muộn',     bg: 'var(--color-accent-bg-soft)', color: 'var(--color-warning-amber)', border: 'var(--color-accent-bg)' },
+  early_leave:    { label: 'Về sớm',      bg: 'var(--color-warning-bg)', color: 'var(--color-warning-dark)', border: 'var(--color-warning-bg-strong)' },
+  late_and_early: { label: 'Muộn & Sớm', bg: 'var(--color-purple-bg-soft)', color: 'var(--color-purple)', border: 'var(--color-status-review-bg)' },
+  absent:         { label: 'Vắng mặt',   bg: 'var(--color-danger-bg)', color: 'var(--color-danger)', border: 'var(--color-danger-bg)' },
+  on_leave:       { label: 'Nghỉ phép',  bg: 'var(--color-primary-bg)', color: 'var(--color-primary)', border: 'var(--color-status-progress-bg)' },
+  business_trip:  { label: 'Công tác',   bg: 'var(--color-info-surface)', color: 'var(--color-cyan)', border: 'var(--color-info-surface)' },
+  wfh:            { label: 'WFH',        bg: 'var(--color-purple-bg-soft)', color: 'var(--color-purple-bright)', border: 'var(--color-purple-bg)' },
+  holiday:        { label: 'Nghỉ lễ',    bg: 'var(--color-danger-bg-soft)', color: 'var(--color-status-revision-text)', border: 'var(--color-status-revision-bg)' },
+  unscheduled:    { label: 'Ngoài lịch', bg: 'var(--color-bg-soft)', color: 'var(--color-muted-soft)', border: 'var(--color-border)' },
 }
 
 const LEAVE_TYPE = {
@@ -47,11 +47,6 @@ const LEAVE_TYPE = {
   wfh:           'Làm từ xa',
 }
 
-const OT_STATUS = {
-  pending:  { label: 'Chờ duyệt', bg: '#fefce8', color: '#a16207' },
-  approved: { label: 'Đã duyệt',  bg: '#f0fdf4', color: '#15803d' },
-  rejected: { label: 'Từ chối',   bg: '#fef2f2', color: '#dc2626' },
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -98,7 +93,7 @@ export default function AttendanceAdmin() {
     else setMonth((m) => m + 1)
   }
 
-  const showMonthNav = activeTab !== 'today'
+  const showMonthNav = activeTab !== 'today' && activeTab !== 'leave' && activeTab !== 'overtime'
 
   return (
     <AppLayout>
@@ -136,9 +131,9 @@ export default function AttendanceAdmin() {
         )}
 
         {activeTab === 'today'    && <TodayTab staffList={staffList} />}
-        {activeTab === 'monthly'  && <MonthlyTab year={year} month={month} staffList={staffList} />}
-        {activeTab === 'leave'    && <AdminLeaveTab year={year} month={month} />}
-        {activeTab === 'overtime' && <AdminOvertimeTab year={year} month={month} />}
+        {activeTab === 'monthly'  && <MonthlyTab year={year} month={month} />}
+        {activeTab === 'leave'    && <AdminLeaveTab />}
+        {activeTab === 'overtime' && <AdminOvertimeTab />}
         {activeTab === 'schedule' && <ScheduleTab year={year} month={month} staffList={staffList} />}
         {activeTab === 'report'   && <ReportTab year={year} month={month} />}
 
@@ -195,17 +190,17 @@ function TodayTab({ staffList }) {
       </div>
 
       {/* Quick stats */}
-      <div style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
-        <div className={sa.todayStat} style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0' }}>
-          <span className={sa.todayStatNum} style={{ color: '#15803d' }}>{checkedIn}</span>
+      <div style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--color-surface-muted)', flexWrap: 'wrap' }}>
+        <div className={sa.todayStat} style={{ background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)' }}>
+          <span className={sa.todayStatNum} style={{ color: 'var(--color-success-dark)' }}>{checkedIn}</span>
           <span className={sa.todayStatLbl}>Đã vào</span>
         </div>
-        <div className={sa.todayStat} style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe' }}>
-          <span className={sa.todayStatNum} style={{ color: '#2563eb' }}>{checkedOut}</span>
+        <div className={sa.todayStat} style={{ background: 'var(--color-primary-bg)', border: '1.5px solid var(--color-status-progress-bg)' }}>
+          <span className={sa.todayStatNum} style={{ color: 'var(--color-primary)' }}>{checkedOut}</span>
           <span className={sa.todayStatLbl}>Đã ra</span>
         </div>
-        <div className={sa.todayStat} style={{ background: '#fef2f2', border: '1.5px solid #fecaca' }}>
-          <span className={sa.todayStatNum} style={{ color: '#dc2626' }}>{staffList.length - checkedIn}</span>
+        <div className={sa.todayStat} style={{ background: 'var(--color-danger-bg)', border: '1.5px solid var(--color-danger-bg)' }}>
+          <span className={sa.todayStatNum} style={{ color: 'var(--color-danger)' }}>{staffList.length - checkedIn}</span>
           <span className={sa.todayStatLbl}>Chưa vào</span>
         </div>
       </div>
@@ -231,7 +226,7 @@ function TodayTab({ staffList }) {
                 const cfg = rec ? (STATUS_CFG[rec.status] ?? STATUS_CFG.unscheduled) : null
                 return (
                   <tr key={user.id}>
-                    <td style={{ fontWeight: 600, color: '#1e293b' }}>{user.name}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{user.name}</td>
                     <td style={{ color: 'var(--color-muted)' }}>{user.jobTitle ?? '—'}</td>
                     <td>
                       {cfg ? (
@@ -244,7 +239,7 @@ function TodayTab({ staffList }) {
                       ) : (
                         <span style={{
                           display: 'inline-flex', padding: '2px 9px', borderRadius: 99,
-                          fontSize: 11, fontWeight: 700, background: '#fef2f2', color: '#dc2626',
+                          fontSize: 11, fontWeight: 700, background: 'var(--color-danger-bg)', color: 'var(--color-danger)',
                         }}>
                           Chưa vào
                         </span>
@@ -271,7 +266,7 @@ function TodayTab({ staffList }) {
 
 // ── MonthlyTab ────────────────────────────────────────────────────────────────
 
-function MonthlyTab({ year, month, staffList }) {
+function MonthlyTab({ year, month }) {
   const addToast  = useToastStore((st) => st.toast)
   const [rows,    setRows]    = useState([])
   const [loading, setLoading] = useState(true)
@@ -305,26 +300,26 @@ function MonthlyTab({ year, month, staffList }) {
               <tr>
                 <th>Nhân viên</th>
                 <th>Chức danh</th>
-                <th style={{ color: '#15803d' }}>Ngày công</th>
-                <th style={{ color: '#2563eb' }}>Nghỉ (TL)</th>
-                <th style={{ color: '#dc2626' }}>Vắng</th>
-                <th style={{ color: '#a16207' }}>Đi muộn</th>
-                <th style={{ color: '#c2410c' }}>Về sớm</th>
-                <th style={{ color: '#7c3aed' }}>OT (h)</th>
+                <th style={{ color: 'var(--color-success-dark)' }}>Ngày công</th>
+                <th style={{ color: 'var(--color-primary)' }}>Nghỉ (TL)</th>
+                <th style={{ color: 'var(--color-danger)' }}>Vắng</th>
+                <th style={{ color: 'var(--color-warning-amber)' }}>Đi muộn</th>
+                <th style={{ color: 'var(--color-warning-dark)' }}>Về sớm</th>
+                <th style={{ color: 'var(--color-purple-bright)' }}>OT (h)</th>
                 <th>Tổng bản ghi</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.userId}>
-                  <td style={{ fontWeight: 600, color: '#1e293b' }}>{r.userName}</td>
+                  <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{r.userName}</td>
                   <td style={{ color: 'var(--color-muted)' }}>{r.jobTitle ?? '—'}</td>
-                  <td style={{ fontWeight: 700, color: '#15803d' }}>{r.actualWorkDays}</td>
+                  <td style={{ fontWeight: 700, color: 'var(--color-success-dark)' }}>{r.actualWorkDays}</td>
                   <td>{r.leavePaidDays}</td>
-                  <td style={{ fontWeight: 700, color: r.absentDays > 0 ? '#dc2626' : 'var(--color-muted)' }}>{r.absentDays}</td>
-                  <td style={{ fontWeight: r.lateCount > 0 ? 700 : 400, color: r.lateCount > 0 ? '#a16207' : 'var(--color-muted)' }}>{r.lateCount}</td>
+                  <td style={{ fontWeight: 700, color: r.absentDays > 0 ? 'var(--color-danger)' : 'var(--color-muted)' }}>{r.absentDays}</td>
+                  <td style={{ fontWeight: r.lateCount > 0 ? 700 : 400, color: r.lateCount > 0 ? 'var(--color-warning-amber)' : 'var(--color-muted)' }}>{r.lateCount}</td>
                   <td style={{ color: 'var(--color-muted)' }}>{r.earlyCount}</td>
-                  <td style={{ fontWeight: r.totalOtHours > 0 ? 700 : 400, color: r.totalOtHours > 0 ? '#7c3aed' : 'var(--color-muted)' }}>
+                  <td style={{ fontWeight: r.totalOtHours > 0 ? 700 : 400, color: r.totalOtHours > 0 ? 'var(--color-purple-bright)' : 'var(--color-muted)' }}>
                     {Number(r.totalOtHours).toFixed(1)}
                   </td>
                   <td style={{ color: 'var(--color-muted)' }}>{r.totalRecords ?? '—'}</td>
@@ -340,7 +335,7 @@ function MonthlyTab({ year, month, staffList }) {
 
 // ── AdminLeaveTab ─────────────────────────────────────────────────────────────
 
-function AdminLeaveTab({ year, month }) {
+function AdminLeaveTab() {
   const addToast   = useToastStore((st) => st.toast)
   const [requests, setRequests]   = useState([])
   const [page,     setPage]       = useState(1)
@@ -348,13 +343,10 @@ function AdminLeaveTab({ year, month }) {
   const [loading,  setLoading]    = useState(true)
   const [reviewTarget, setReviewTarget] = useState(null)
 
-  const from = `${year}-${String(month).padStart(2, '0')}-01`
-  const to   = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
-
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    attendanceApi.listLeaveRequests({ status: 'pending', from, to, page, limit: 20 })
+    attendanceApi.listLeaveRequests({ status: 'pending', page, limit: 20 })
       .then((res) => {
         if (!cancelled) {
           setRequests(res.requests ?? [])
@@ -364,7 +356,7 @@ function AdminLeaveTab({ year, month }) {
       .catch(() => { if (!cancelled) addToast('Không thể tải đơn nghỉ phép', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { return load() }, [load])
 
@@ -373,9 +365,9 @@ function AdminLeaveTab({ year, month }) {
       <div className={s.section}>
         <div className={s.sectionHead}>
           <h3 className={s.sectionTitle}>
-            Đơn nghỉ phép chờ duyệt — {monthName(year, month)}
+            Đơn nghỉ phép chờ duyệt
             {!loading && (
-              <span style={{ fontWeight: 600, color: '#64748b', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
+              <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
                 ({pagination.total} đơn)
               </span>
             )}
@@ -406,11 +398,11 @@ function AdminLeaveTab({ year, month }) {
               <tbody>
                 {requests.map((req) => (
                   <tr key={req.id}>
-                    <td style={{ fontWeight: 600, color: '#1e293b' }}>{req.userName}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{req.userName}</td>
                     <td>{LEAVE_TYPE[req.leaveType] ?? req.leaveType}</td>
                     <td>{fmtDateVI(req.startDate)}</td>
                     <td>{fmtDateVI(req.endDate)}</td>
-                    <td style={{ fontWeight: 700, color: '#2563eb' }}>{req.daysCount ?? req.totalDays} ngày</td>
+                    <td style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{req.daysCount ?? req.totalDays} ngày</td>
                     <td style={{ color: 'var(--color-muted)', maxWidth: 160 }}>{req.reason ?? '—'}</td>
                     <td>
                       <button
@@ -487,14 +479,14 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   return (
     <Modal title="Xét duyệt đơn nghỉ phép" onClose={onClose}>
       <div className={s.modalForm}>
-        <div style={{ background: '#f8fbff', border: '1.5px solid #dbeafe', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
-          <p style={{ margin: '0 0 6px', fontWeight: 700, color: '#1e3a8a' }}>{request.userName}</p>
+        <div style={{ background: 'var(--color-bg-soft)', border: '1.5px solid var(--color-primary-bg-strong)', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 700, color: 'var(--color-primary-deep)' }}>{request.userName}</p>
           <p style={{ margin: '0 0 4px', color: 'var(--color-muted)' }}>{LEAVE_TYPE[request.leaveType] ?? request.leaveType}</p>
           <p style={{ margin: 0, color: 'var(--color-muted)' }}>
             {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({request.daysCount ?? request.totalDays} ngày)
           </p>
           {request.reason && (
-            <p style={{ margin: '6px 0 0', color: '#64748b', fontStyle: 'italic' }}>{request.reason}</p>
+            <p style={{ margin: '6px 0 0', color: 'var(--color-muted)', fontStyle: 'italic' }}>{request.reason}</p>
           )}
         </div>
         <div className={s.formGroup}>
@@ -513,7 +505,7 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
 
 // ── AdminOvertimeTab ──────────────────────────────────────────────────────────
 
-function AdminOvertimeTab({ year, month }) {
+function AdminOvertimeTab() {
   const addToast   = useToastStore((st) => st.toast)
   const [requests, setRequests]   = useState([])
   const [page,     setPage]       = useState(1)
@@ -521,13 +513,10 @@ function AdminOvertimeTab({ year, month }) {
   const [loading,  setLoading]    = useState(true)
   const [reviewTarget, setReviewTarget] = useState(null)
 
-  const from = `${year}-${String(month).padStart(2, '0')}-01`
-  const to   = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
-
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    attendanceApi.listOvertimeRequests({ status: 'pending', from, to, page, limit: 20 })
+    attendanceApi.listOvertimeRequests({ status: 'pending', page, limit: 20 })
       .then((res) => {
         if (!cancelled) {
           setRequests(res.requests ?? res.data ?? [])
@@ -537,7 +526,7 @@ function AdminOvertimeTab({ year, month }) {
       .catch(() => { if (!cancelled) addToast('Không thể tải đơn tăng ca', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { return load() }, [load])
 
@@ -546,9 +535,9 @@ function AdminOvertimeTab({ year, month }) {
       <div className={s.section}>
         <div className={s.sectionHead}>
           <h3 className={s.sectionTitle}>
-            Đơn tăng ca chờ duyệt — {monthName(year, month)}
+            Đơn tăng ca chờ duyệt
             {!loading && (
-              <span style={{ fontWeight: 600, color: '#64748b', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
+              <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
                 ({pagination.total} đơn)
               </span>
             )}
@@ -579,11 +568,11 @@ function AdminOvertimeTab({ year, month }) {
               <tbody>
                 {requests.map((req) => (
                   <tr key={req.id}>
-                    <td style={{ fontWeight: 600, color: '#1e293b' }}>{req.userName}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{req.userName}</td>
                     <td>{fmtDateVI(req.otDate)}</td>
                     <td style={{ fontWeight: 600 }}>{req.startTime ?? '—'}</td>
                     <td style={{ fontWeight: 600 }}>{req.endTime ?? '—'}</td>
-                    <td style={{ fontWeight: 700, color: '#7c3aed' }}>
+                    <td style={{ fontWeight: 700, color: 'var(--color-purple-bright)' }}>
                       {req.otHours != null ? `${Number(req.otHours).toFixed(1)}h` : '—'}
                     </td>
                     <td style={{ color: 'var(--color-muted)', maxWidth: 160 }}>{req.reason ?? '—'}</td>
@@ -662,18 +651,18 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
   return (
     <Modal title="Xét duyệt đơn tăng ca" onClose={onClose}>
       <div className={s.modalForm}>
-        <div style={{ background: '#fdf4ff', border: '1.5px solid #e9d5ff', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
-          <p style={{ margin: '0 0 6px', fontWeight: 700, color: '#7c3aed' }}>{request.userName}</p>
+        <div style={{ background: 'var(--color-purple-bg-soft)', border: '1.5px solid var(--color-status-review-bg)', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 700, color: 'var(--color-purple-bright)' }}>{request.userName}</p>
           <p style={{ margin: '0 0 4px', color: 'var(--color-muted)' }}>
             Ngày: {fmtDateVI(request.otDate)} · {request.startTime} – {request.endTime}
           </p>
           {request.otHours != null && (
-            <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#7c3aed' }}>
+            <p style={{ margin: '4px 0 0', fontWeight: 700, color: 'var(--color-purple-bright)' }}>
               {Number(request.otHours).toFixed(1)} giờ tăng ca
             </p>
           )}
           {request.reason && (
-            <p style={{ margin: '6px 0 0', color: '#64748b', fontStyle: 'italic' }}>{request.reason}</p>
+            <p style={{ margin: '6px 0 0', color: 'var(--color-muted)', fontStyle: 'italic' }}>{request.reason}</p>
           )}
         </div>
         <div className={s.formGroup}>
@@ -744,10 +733,10 @@ function ScheduleTab({ year, month, staffList }) {
         </button>
 
         {result && (
-          <div style={{ padding: '12px 16px', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 8, fontSize: 'var(--fs-sm)' }}>
-            <p style={{ margin: 0, fontWeight: 700, color: '#15803d' }}>Tạo lịch ca thành công!</p>
+          <div style={{ padding: '12px 16px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 8, fontSize: 'var(--fs-sm)' }}>
+            <p style={{ margin: 0, fontWeight: 700, color: 'var(--color-success-dark)' }}>Tạo lịch ca thành công!</p>
             {result.created != null && (
-              <p style={{ margin: '4px 0 0', color: '#64748b' }}>
+              <p style={{ margin: '4px 0 0', color: 'var(--color-muted)' }}>
                 Đã tạo: {result.created} ngày · Bỏ qua: {result.skipped ?? 0} ngày
               </p>
             )}
@@ -856,35 +845,35 @@ function ReportTab({ year, month }) {
                 <tr>
                   <th>Nhân viên</th>
                   <th>Chức danh</th>
-                  <th style={{ color: '#15803d' }}>Ngày công</th>
-                  <th style={{ color: '#2563eb' }}>Nghỉ (TL)</th>
-                  <th style={{ color: '#dc2626' }}>Vắng</th>
-                  <th style={{ color: '#a16207' }}>Đi muộn</th>
-                  <th style={{ color: '#c2410c' }}>Về sớm</th>
-                  <th style={{ color: '#7c3aed' }}>OT (h)</th>
-                  <th style={{ color: '#0d9488' }}>OT Pay</th>
+                  <th style={{ color: 'var(--color-success-dark)' }}>Ngày công</th>
+                  <th style={{ color: 'var(--color-primary)' }}>Nghỉ (TL)</th>
+                  <th style={{ color: 'var(--color-danger)' }}>Vắng</th>
+                  <th style={{ color: 'var(--color-warning-amber)' }}>Đi muộn</th>
+                  <th style={{ color: 'var(--color-warning-dark)' }}>Về sớm</th>
+                  <th style={{ color: 'var(--color-purple-bright)' }}>OT (h)</th>
+                  <th style={{ color: 'var(--color-cyan)' }}>OT Pay</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={r.userId ?? i}>
-                    <td style={{ fontWeight: 600, color: '#1e293b' }}>{r.userName ?? r.name}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{r.userName ?? r.name}</td>
                     <td style={{ color: 'var(--color-muted)' }}>{r.jobTitle ?? '—'}</td>
-                    <td style={{ fontWeight: 700, color: '#15803d' }}>
+                    <td style={{ fontWeight: 700, color: 'var(--color-success-dark)' }}>
                       {Number(r.actualWorkDays ?? r.workDays ?? 0).toFixed(1)}
                     </td>
                     <td>{Number(r.leavePaidDays ?? r.leaveDays ?? 0).toFixed(1)}</td>
-                    <td style={{ fontWeight: r.absentDays > 0 ? 700 : 400, color: r.absentDays > 0 ? '#dc2626' : 'var(--color-muted)' }}>
+                    <td style={{ fontWeight: r.absentDays > 0 ? 700 : 400, color: r.absentDays > 0 ? 'var(--color-danger)' : 'var(--color-muted)' }}>
                       {r.absentDays ?? 0}
                     </td>
-                    <td style={{ fontWeight: (r.lateCount ?? r.lateDays ?? 0) > 0 ? 700 : 400, color: (r.lateCount ?? r.lateDays ?? 0) > 0 ? '#a16207' : 'var(--color-muted)' }}>
+                    <td style={{ fontWeight: (r.lateCount ?? r.lateDays ?? 0) > 0 ? 700 : 400, color: (r.lateCount ?? r.lateDays ?? 0) > 0 ? 'var(--color-warning-amber)' : 'var(--color-muted)' }}>
                       {r.lateCount ?? r.lateDays ?? 0}
                     </td>
                     <td style={{ color: 'var(--color-muted)' }}>{r.earlyCount ?? 0}</td>
-                    <td style={{ fontWeight: (r.totalOtHours ?? r.otHours ?? 0) > 0 ? 700 : 400, color: (r.totalOtHours ?? r.otHours ?? 0) > 0 ? '#7c3aed' : 'var(--color-muted)' }}>
+                    <td style={{ fontWeight: (r.totalOtHours ?? r.otHours ?? 0) > 0 ? 700 : 400, color: (r.totalOtHours ?? r.otHours ?? 0) > 0 ? 'var(--color-purple-bright)' : 'var(--color-muted)' }}>
                       {Number(r.totalOtHours ?? r.otHours ?? 0).toFixed(1)}
                     </td>
-                    <td style={{ fontWeight: r.otPay > 0 ? 700 : 400, color: r.otPay > 0 ? '#0d9488' : 'var(--color-muted)' }}>
+                    <td style={{ fontWeight: r.otPay > 0 ? 700 : 400, color: r.otPay > 0 ? 'var(--color-cyan)' : 'var(--color-muted)' }}>
                       {fmtCurrency(r.otPay)}
                     </td>
                   </tr>
@@ -892,17 +881,17 @@ function ReportTab({ year, month }) {
               </tbody>
               {totals && (
                 <tfoot>
-                  <tr style={{ background: 'linear-gradient(180deg,#f8fbff 0%,#edf4fb 100%)', borderTop: '2px solid #dbeafe' }}>
-                    <td colSpan={2} style={{ fontWeight: 800, color: '#1e3a8a', padding: '10px 14px', fontSize: 'var(--fs-xs)', textTransform: 'uppercase' }}>
+                  <tr style={{ background: 'linear-gradient(180deg,var(--color-bg-soft) 0%,var(--color-primary-bg) 100%)', borderTop: '2px solid var(--color-primary-bg-strong)' }}>
+                    <td colSpan={2} style={{ fontWeight: 800, color: 'var(--color-primary-deep)', padding: '10px 14px', fontSize: 'var(--fs-xs)', textTransform: 'uppercase' }}>
                       Tổng cộng
                     </td>
-                    <td style={{ fontWeight: 800, color: '#15803d' }}>{totals.workDays.toFixed(1)}</td>
+                    <td style={{ fontWeight: 800, color: 'var(--color-success-dark)' }}>{totals.workDays.toFixed(1)}</td>
                     <td style={{ fontWeight: 700 }}>{totals.leaveDays.toFixed(1)}</td>
-                    <td style={{ fontWeight: totals.absent > 0 ? 800 : 400, color: totals.absent > 0 ? '#dc2626' : 'var(--color-muted)' }}>{totals.absent}</td>
-                    <td style={{ fontWeight: totals.late > 0 ? 800 : 400, color: totals.late > 0 ? '#a16207' : 'var(--color-muted)' }}>{totals.late}</td>
+                    <td style={{ fontWeight: totals.absent > 0 ? 800 : 400, color: totals.absent > 0 ? 'var(--color-danger)' : 'var(--color-muted)' }}>{totals.absent}</td>
+                    <td style={{ fontWeight: totals.late > 0 ? 800 : 400, color: totals.late > 0 ? 'var(--color-warning-amber)' : 'var(--color-muted)' }}>{totals.late}</td>
                     <td>—</td>
-                    <td style={{ fontWeight: 800, color: '#7c3aed' }}>{totals.otHours.toFixed(1)}</td>
-                    <td style={{ fontWeight: 800, color: '#0d9488' }}>{fmtCurrency(totals.otPay)}</td>
+                    <td style={{ fontWeight: 800, color: 'var(--color-purple-bright)' }}>{totals.otHours.toFixed(1)}</td>
+                    <td style={{ fontWeight: 800, color: 'var(--color-cyan)' }}>{fmtCurrency(totals.otPay)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -967,7 +956,7 @@ function SyncPayrollModal({ year, month, onClose }) {
   return (
     <Modal title="Đồng bộ chấm công vào Bảng Lương" onClose={onClose}>
       <div className={s.modalForm}>
-        <div style={{ padding: '10px 14px', background: '#fefce8', border: '1.5px solid #fde68a', borderRadius: 8, fontSize: 'var(--fs-sm)', color: '#a16207' }}>
+        <div style={{ padding: '10px 14px', background: 'var(--color-accent-bg-soft)', border: '1.5px solid var(--color-accent-bg)', borderRadius: 8, fontSize: 'var(--fs-sm)', color: 'var(--color-warning-amber)' }}>
           Dữ liệu chấm công tháng {month}/{year} sẽ được ghi vào mục
           <strong> attendance_summary</strong> trong kỳ lương đã chọn.
           Thao tác này có thể ghi đè dữ liệu cũ nếu đã sync trước đó.
@@ -995,7 +984,7 @@ function SyncPayrollModal({ year, month, onClose }) {
         </div>
 
         {periods.length === 0 && !loading && (
-          <div style={{ fontSize: 'var(--fs-sm)', color: '#dc2626' }}>
+          <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-danger)' }}>
             Không tìm thấy kỳ lương nào. Vui lòng tạo kỳ lương trước.
           </div>
         )}

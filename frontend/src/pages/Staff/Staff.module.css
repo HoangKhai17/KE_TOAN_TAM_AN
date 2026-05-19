@@ -254,8 +254,8 @@
 .actionBtnWarning { color: var(--color-warning-amber); }
 .actionBtnWarning:hover { background: var(--color-accent-bg-soft); }
 
-.actionBtnOrange  { color: #d97706; }
-.actionBtnOrange:hover  { background: #fef3c7; }
+.actionBtnOrange  { color: var(--color-warning-amber); }
+.actionBtnOrange:hover  { background: var(--color-accent-bg); }
 
 .actionBtnDanger  { color: var(--color-danger); }
 .actionBtnDanger:hover  { background: var(--color-danger-bg); }
@@ -273,7 +273,7 @@
   background: var(--gradient-primary);
   color: var(--color-white);
   font-size: var(--fs-sm);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
   box-shadow: var(--shadow-focus-blue);
   transition: opacity 0.14s, box-shadow 0.14s;
@@ -297,7 +297,7 @@
   background: var(--color-surface);
   color: var(--color-primary);
   font-size: var(--fs-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
 }
@@ -522,7 +522,7 @@
   padding: 56px var(--space-10);
   color: var(--color-muted-subtle);
   font-size: var(--fs-sm);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .emptyIcon {

@@ -68,6 +68,7 @@
   --color-muted-subtle: #94a3b8;
   --color-table-muted: #64748b;
   --color-white: #ffffff;
+  --color-overlay-strong: rgba(15, 23, 42, 0.45);
 
   /* Tints */
   --color-primary-ink: rgba(37, 99, 235, 0.16);

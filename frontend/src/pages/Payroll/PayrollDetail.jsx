@@ -331,8 +331,8 @@ export default function PayrollDetail() {
       <AppLayout>
         <div className={s.page}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 60, gap: 12 }}>
-            <AlertTriangle size={36} style={{ color: '#ef4444' }} />
-            <p style={{ fontSize: 14, color: '#374151' }}>{error ?? 'Không tìm thấy kỳ lương'}</p>
+            <AlertTriangle size={36} style={{ color: 'var(--color-danger-light)' }} />
+            <p style={{ fontSize: 14, color: 'var(--color-text-soft)' }}>{error ?? 'Không tìm thấy kỳ lương'}</p>
             <button className={s.btnSecondary} onClick={() => navigate('/payroll')}>
               <ArrowLeft size={13} /> Quay lại
             </button>
@@ -366,7 +366,7 @@ export default function PayrollDetail() {
           <div className={s.detailMeta}>
             <span>Kỳ: {fmtDate(period.startDate)} — {fmtDate(period.endDate)}</span>
             <span>{records.length} nhân viên</span>
-            <span style={{ fontWeight: 700, color: '#15803d' }}>
+            <span style={{ fontWeight: 700, color: 'var(--color-success-dark)' }}>
               Tổng chi: {fmtVND(totalNet)}
             </span>
             {period.notes && <span style={{ fontStyle: 'italic' }}>{period.notes}</span>}
@@ -426,7 +426,7 @@ export default function PayrollDetail() {
                     <th className={s.moneyCol}>BHXH NV</th>
                     <th className={s.moneyCol}>Thuế TNCN</th>
                     <th className={s.moneyCol}>KT khác</th>
-                    <th className={s.moneyCol} style={{ color: '#15803d' }}>Thực nhận</th>
+                    <th className={s.moneyCol} style={{ color: 'var(--color-success-dark)' }}>Thực nhận</th>
                     {isAdmin && isDraft && <th style={{ width: 70 }} />}
                   </tr>
                 </thead>
@@ -435,7 +435,7 @@ export default function PayrollDetail() {
                     const net = calcNet(rec)
                     return (
                       <tr key={rec.id}>
-                        <td style={{ fontWeight: 600, color: '#1e293b' }}>{rec.userName ?? '—'}</td>
+                        <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{rec.userName ?? '—'}</td>
                         <td className={s.moneyCol}>{fmtVND(rec.baseSalary)}</td>
                         <td className={s.moneyCol}>{fmtVND(rec.allowances)}</td>
                         <td className={s.moneyCol}>{fmtVND(rec.bonus)}</td>

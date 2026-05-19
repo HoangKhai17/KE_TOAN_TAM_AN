@@ -8,7 +8,6 @@ import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
-import * as usersApi from '../../api/users'
 import s from './Attendance.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -21,16 +20,16 @@ const TABS = [
 ]
 
 const STATUS_CFG = {
-  present:        { label: 'Có mặt',      bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' },
-  late:           { label: 'Đi muộn',     bg: '#fefce8', color: '#a16207', border: '#fde68a' },
-  early_leave:    { label: 'Về sớm',      bg: '#fff7ed', color: '#c2410c', border: '#fdba74' },
-  late_and_early: { label: 'Muộn & Sớm', bg: '#fdf4ff', color: '#9333ea', border: '#e9d5ff' },
-  absent:         { label: 'Vắng mặt',   bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
-  on_leave:       { label: 'Nghỉ phép',  bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
-  business_trip:  { label: 'Công tác',   bg: '#f0fdfa', color: '#0d9488', border: '#99f6e4' },
-  wfh:            { label: 'WFH',        bg: '#faf5ff', color: '#7c3aed', border: '#ddd6fe' },
-  holiday:        { label: 'Nghỉ lễ',    bg: '#fdf2f8', color: '#9d174d', border: '#fbcfe8' },
-  unscheduled:    { label: 'Ngoài lịch', bg: '#f8fafc', color: '#94a3b8', border: '#cbd5e1', dashed: true },
+  present:        { label: 'Có mặt',      bg: 'var(--color-success-bg-soft)', color: 'var(--color-success-dark)', border: 'var(--color-success-bg)' },
+  late:           { label: 'Đi muộn',     bg: 'var(--color-accent-bg-soft)', color: 'var(--color-warning-amber)', border: 'var(--color-accent-bg)' },
+  early_leave:    { label: 'Về sớm',      bg: 'var(--color-warning-bg)', color: 'var(--color-warning-dark)', border: 'var(--color-warning-bg-strong)' },
+  late_and_early: { label: 'Muộn & Sớm', bg: 'var(--color-purple-bg-soft)', color: 'var(--color-purple)', border: 'var(--color-status-review-bg)' },
+  absent:         { label: 'Vắng mặt',   bg: 'var(--color-danger-bg)', color: 'var(--color-danger)', border: 'var(--color-danger-bg)' },
+  on_leave:       { label: 'Nghỉ phép',  bg: 'var(--color-primary-bg)', color: 'var(--color-primary)', border: 'var(--color-status-progress-bg)' },
+  business_trip:  { label: 'Công tác',   bg: 'var(--color-info-surface)', color: 'var(--color-cyan)', border: 'var(--color-info-surface)' },
+  wfh:            { label: 'WFH',        bg: 'var(--color-purple-bg-soft)', color: 'var(--color-purple-bright)', border: 'var(--color-purple-bg)' },
+  holiday:        { label: 'Nghỉ lễ',    bg: 'var(--color-danger-bg-soft)', color: 'var(--color-status-revision-text)', border: 'var(--color-status-revision-bg)' },
+  unscheduled:    { label: 'Ngoài lịch', bg: 'var(--color-bg-soft)', color: 'var(--color-muted-soft)', border: 'var(--color-border)', dashed: true },
 }
 
 const LEAVE_TYPE = {
@@ -43,16 +42,16 @@ const LEAVE_TYPE = {
 }
 
 const LEAVE_STATUS = {
-  pending:   { label: 'Chờ duyệt', bg: '#fefce8', color: '#a16207' },
-  approved:  { label: 'Đã duyệt',  bg: '#f0fdf4', color: '#15803d' },
-  rejected:  { label: 'Từ chối',   bg: '#fef2f2', color: '#dc2626' },
-  cancelled: { label: 'Đã huỷ',    bg: '#f1f5f9', color: '#64748b' },
+  pending:   { label: 'Chờ duyệt', bg: 'var(--color-accent-bg-soft)', color: 'var(--color-warning-amber)' },
+  approved:  { label: 'Đã duyệt',  bg: 'var(--color-success-bg-soft)', color: 'var(--color-success-dark)' },
+  rejected:  { label: 'Từ chối',   bg: 'var(--color-danger-bg)', color: 'var(--color-danger)' },
+  cancelled: { label: 'Đã huỷ',    bg: 'var(--color-surface-muted)', color: 'var(--color-muted)' },
 }
 
 const OT_STATUS = {
-  pending:  { label: 'Chờ duyệt', bg: '#fefce8', color: '#a16207' },
-  approved: { label: 'Đã duyệt',  bg: '#f0fdf4', color: '#15803d' },
-  rejected: { label: 'Từ chối',   bg: '#fef2f2', color: '#dc2626' },
+  pending:  { label: 'Chờ duyệt', bg: 'var(--color-accent-bg-soft)', color: 'var(--color-warning-amber)' },
+  approved: { label: 'Đã duyệt',  bg: 'var(--color-success-bg-soft)', color: 'var(--color-success-dark)' },
+  rejected: { label: 'Từ chối',   bg: 'var(--color-danger-bg)', color: 'var(--color-danger)' },
 }
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
@@ -114,16 +113,9 @@ export default function Attendance() {
   const isAdmin = user?.role === 'admin'
   const now     = new Date()
 
-  const [activeTab,  setActiveTab]  = useState('calendar')
-  const [year,       setYear]       = useState(now.getFullYear())
-  const [month,      setMonth]      = useState(now.getMonth() + 1)
-  const [userFilter, setUserFilter] = useState('')
-  const [staffList,  setStaffList]  = useState([])
-
-  useEffect(() => {
-    if (!isAdmin) return
-    usersApi.listUsers({ status: 'active', limit: 200 }).then(({ users }) => setStaffList(users))
-  }, [isAdmin])
+  const [activeTab, setActiveTab] = useState('calendar')
+  const [year,      setYear]      = useState(now.getFullYear())
+  const [month,     setMonth]     = useState(now.getMonth() + 1)
 
   function prevMonth() {
     if (month === 1) { setYear((y) => y - 1); setMonth(12) }
@@ -135,7 +127,7 @@ export default function Attendance() {
   }
 
   const visibleTabs  = isAdmin ? TABS : TABS.filter((t) => t.id !== 'summary')
-  const targetUserId = isAdmin ? (userFilter || undefined) : user?.id
+  const targetUserId = user?.id
 
   return (
     <AppLayout>
@@ -168,18 +160,6 @@ export default function Attendance() {
             <span className={s.monthLabel}>{monthName(year, month)}</span>
             <button className={s.iconBtn} onClick={nextMonth}><ChevronRight size={14} /></button>
           </div>
-          {isAdmin && (
-            <select
-              className={s.filterSelect}
-              value={userFilter}
-              onChange={(e) => setUserFilter(e.target.value)}
-            >
-              <option value="">Tất cả nhân viên</option>
-              {staffList.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-          )}
         </div>
 
         {activeTab === 'calendar' && (
@@ -257,33 +237,47 @@ function CalendarTab({ year, month, userId, isAdmin }) {
 
   return (
     <>
+      {/* Admin notice */}
+      {isAdmin && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 16px', margin: '0 0 4px',
+          background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)',
+          borderRadius: 8, fontSize: 'var(--fs-sm)', color: 'var(--color-success-dark)',
+          fontWeight: 600,
+        }}>
+          <span style={{ fontSize: 16 }}>✓</span>
+          Tài khoản quản trị viên được hệ thống tự động ghi nhận đủ công — không cần chấm công thủ công.
+        </div>
+      )}
+
       {/* Summary bar */}
       {!loading && records.length > 0 && (
         <div className={s.summaryBar}>
           <div className={s.summaryItem}>
-            <span className={s.summaryVal} style={{ color: '#15803d' }}>{summary.workDays}</span>
+            <span className={s.summaryVal} style={{ color: 'var(--color-success-dark)' }}>{summary.workDays}</span>
             <span className={s.summaryLbl}>Ngày công</span>
           </div>
           <div className={s.summarySep} />
           <div className={s.summaryItem}>
-            <span className={s.summaryVal} style={{ color: '#2563eb' }}>{summary.leaveDays}</span>
+            <span className={s.summaryVal} style={{ color: 'var(--color-primary)' }}>{summary.leaveDays}</span>
             <span className={s.summaryLbl}>Nghỉ phép</span>
           </div>
           <div className={s.summarySep} />
           <div className={s.summaryItem}>
-            <span className={s.summaryVal} style={{ color: '#dc2626' }}>{summary.absentDays}</span>
+            <span className={s.summaryVal} style={{ color: 'var(--color-danger)' }}>{summary.absentDays}</span>
             <span className={s.summaryLbl}>Vắng mặt</span>
           </div>
           <div className={s.summarySep} />
           <div className={s.summaryItem}>
-            <span className={s.summaryVal} style={{ color: '#a16207' }}>{summary.lateCnt}</span>
+            <span className={s.summaryVal} style={{ color: 'var(--color-warning-amber)' }}>{summary.lateCnt}</span>
             <span className={s.summaryLbl}>Lần muộn</span>
           </div>
           {summary.otHours > 0 && (
             <>
               <div className={s.summarySep} />
               <div className={s.summaryItem}>
-                <span className={s.summaryVal} style={{ color: '#7c3aed' }}>{Number(summary.otHours).toFixed(1)}h</span>
+                <span className={s.summaryVal} style={{ color: 'var(--color-purple-bright)' }}>{Number(summary.otHours).toFixed(1)}h</span>
                 <span className={s.summaryLbl}>OT</span>
               </div>
             </>
@@ -316,7 +310,7 @@ function CalendarTab({ year, month, userId, isAdmin }) {
                   : cfg
                   ? { color: cfg.color }
                   : isWeekend
-                  ? { color: '#ef4444' }
+                  ? { color: 'var(--color-danger-light)' }
                   : {}
 
                 return (
@@ -350,7 +344,7 @@ function CalendarTab({ year, month, userId, isAdmin }) {
                       </span>
                     )}
                     {record?.lateMinutes > 0 && (
-                      <span className={s.calendarDayExtra} style={{ color: '#a16207' }}>
+                      <span className={s.calendarDayExtra} style={{ color: 'var(--color-warning-amber)' }}>
                         Muộn {record.lateMinutes}p
                       </span>
                     )}
@@ -394,7 +388,7 @@ function DayDetailModal({ dateStr, record, onClose }) {
     <Modal title={`Chi tiết ngày ${d}/${m}/${y}`} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 280 }}>
         {!record ? (
-          <div style={{ color: '#94a3b8', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>
+          <div style={{ color: 'var(--color-muted-soft)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>
             Không có dữ liệu chấm công ngày này
           </div>
         ) : (
@@ -410,68 +404,68 @@ function DayDetailModal({ dateStr, record, onClose }) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 13 }}>
               <div>
-                <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>GIỜ VÀO</div>
-                <div style={{ fontWeight: 700, color: '#1e293b' }}>{fmtTime(record.checkInTime) ?? '—'}</div>
+                <div style={{ color: 'var(--color-muted-soft)', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>GIỜ VÀO</div>
+                <div style={{ fontWeight: 700, color: 'var(--color-text-soft)' }}>{fmtTime(record.checkInTime) ?? '—'}</div>
               </div>
               <div>
-                <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>GIỜ RA</div>
-                <div style={{ fontWeight: 700, color: '#1e293b' }}>{fmtTime(record.checkOutTime) ?? '—'}</div>
+                <div style={{ color: 'var(--color-muted-soft)', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>GIỜ RA</div>
+                <div style={{ fontWeight: 700, color: 'var(--color-text-soft)' }}>{fmtTime(record.checkOutTime) ?? '—'}</div>
               </div>
               {record.actualHours != null && (
                 <div>
-                  <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>GIỜ THỰC TẾ</div>
-                  <div style={{ fontWeight: 700, color: '#1e293b' }}>{Number(record.actualHours).toFixed(1)}h</div>
+                  <div style={{ color: 'var(--color-muted-soft)', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>GIỜ THỰC TẾ</div>
+                  <div style={{ fontWeight: 700, color: 'var(--color-text-soft)' }}>{Number(record.actualHours).toFixed(1)}h</div>
                 </div>
               )}
               {record.lateMinutes > 0 && (
                 <div>
-                  <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>ĐI MUỘN</div>
-                  <div style={{ fontWeight: 700, color: '#a16207' }}>{record.lateMinutes} phút</div>
+                  <div style={{ color: 'var(--color-muted-soft)', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>ĐI MUỘN</div>
+                  <div style={{ fontWeight: 700, color: 'var(--color-warning-amber)' }}>{record.lateMinutes} phút</div>
                 </div>
               )}
               {record.earlyMinutes > 0 && (
                 <div>
-                  <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>VỀ SỚM</div>
-                  <div style={{ fontWeight: 700, color: '#c2410c' }}>{record.earlyMinutes} phút</div>
+                  <div style={{ color: 'var(--color-muted-soft)', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>VỀ SỚM</div>
+                  <div style={{ fontWeight: 700, color: 'var(--color-warning-dark)' }}>{record.earlyMinutes} phút</div>
                 </div>
               )}
               {record.otHours > 0 && (
                 <div>
-                  <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>OT</div>
-                  <div style={{ fontWeight: 700, color: '#7c3aed' }}>{Number(record.otHours).toFixed(1)}h</div>
+                  <div style={{ color: 'var(--color-muted-soft)', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>OT</div>
+                  <div style={{ fontWeight: 700, color: 'var(--color-purple-bright)' }}>{Number(record.otHours).toFixed(1)}h</div>
                 </div>
               )}
               <div>
-                <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>NGÀY CÔNG</div>
-                <div style={{ fontWeight: 700, color: '#1e293b' }}>{Number(record.workUnits ?? 0).toFixed(1)}</div>
+                <div style={{ color: 'var(--color-muted-soft)', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>NGÀY CÔNG</div>
+                <div style={{ fontWeight: 700, color: 'var(--color-text-soft)' }}>{Number(record.workUnits ?? 0).toFixed(1)}</div>
               </div>
             </div>
 
             {record.shiftName && (
-              <div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 10px' }}>
+              <div style={{ fontSize: 12, color: 'var(--color-muted)', background: 'var(--color-bg-soft)', border: '1px solid var(--color-border-muted)', borderRadius: 6, padding: '4px 10px' }}>
                 Ca: {record.shiftName}
               </div>
             )}
 
             {record.notes && (
-              <div style={{ fontSize: 13, color: '#64748b', fontStyle: 'italic', borderTop: '1px solid #f1f5f9', paddingTop: 8 }}>
+              <div style={{ fontSize: 13, color: 'var(--color-muted)', fontStyle: 'italic', borderTop: '1px solid var(--color-surface-muted)', paddingTop: 8 }}>
                 {record.notes}
               </div>
             )}
 
             {record.isAdjusted && (
-              <div style={{ fontSize: 12, color: '#7c3aed', background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: 6, padding: '4px 10px' }}>
+              <div style={{ fontSize: 12, color: 'var(--color-purple-bright)', background: 'var(--color-purple-bg-soft)', border: '1px solid var(--color-status-review-bg)', borderRadius: 6, padding: '4px 10px' }}>
                 Đã điều chỉnh
               </div>
             )}
           </>
         )}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--color-surface-muted)' }}>
           <button
             onClick={onClose}
             style={{
-              height: 34, padding: '0 16px', border: '1.5px solid #e2e8f0',
-              borderRadius: 7, background: '#fff', color: '#374151',
+              height: 34, padding: '0 16px', border: '1.5px solid var(--color-border-muted)',
+              borderRadius: 7, background: 'var(--color-white)', color: 'var(--color-text-soft)',
               fontSize: 13, fontWeight: 600, cursor: 'pointer',
             }}
           >
@@ -531,7 +525,7 @@ function LeaveTab({ isAdmin, year, month, userId }) {
           <h3 className={s.sectionTitle}>
             Đơn nghỉ phép — {monthName(year, month)}
             {!loading && (
-              <span style={{ fontWeight: 600, color: '#64748b', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
+              <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
                 ({pagination.total} đơn)
               </span>
             )}
@@ -572,7 +566,7 @@ function LeaveTab({ isAdmin, year, month, userId }) {
                       <td>{LEAVE_TYPE[req.leaveType] ?? req.leaveType}</td>
                       <td>{fmtDateVI(req.startDate)}</td>
                       <td>{fmtDateVI(req.endDate)}</td>
-                      <td style={{ fontWeight: 600, color: '#2563eb' }}>{req.daysCount ?? req.totalDays} ngày</td>
+                      <td style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{req.daysCount ?? req.totalDays} ngày</td>
                       <td style={{ color: 'var(--color-muted)', maxWidth: 160 }}>{req.reason ?? '—'}</td>
                       <td>
                         <span style={{
@@ -742,14 +736,14 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   return (
     <Modal title="Xét duyệt đơn nghỉ phép" onClose={onClose}>
       <div className={s.modalForm}>
-        <div style={{ background: '#f8fbff', border: '1.5px solid #dbeafe', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
-          <p style={{ margin: '0 0 6px', fontWeight: 700, color: '#1e3a8a' }}>{request.userName}</p>
+        <div style={{ background: 'var(--color-bg-soft)', border: '1.5px solid var(--color-primary-bg-strong)', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 700, color: 'var(--color-primary-deep)' }}>{request.userName}</p>
           <p style={{ margin: '0 0 4px', color: 'var(--color-muted)' }}>{LEAVE_TYPE[request.leaveType] ?? request.leaveType}</p>
           <p style={{ margin: 0, color: 'var(--color-muted)' }}>
             {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({request.daysCount ?? request.totalDays} ngày)
           </p>
           {request.reason && (
-            <p style={{ margin: '6px 0 0', color: '#64748b', fontStyle: 'italic' }}>{request.reason}</p>
+            <p style={{ margin: '6px 0 0', color: 'var(--color-muted)', fontStyle: 'italic' }}>{request.reason}</p>
           )}
         </div>
         <div className={s.formGroup}>
@@ -814,7 +808,7 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
           <h3 className={s.sectionTitle}>
             Đơn tăng ca — {monthName(year, month)}
             {!loading && (
-              <span style={{ fontWeight: 600, color: '#64748b', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
+              <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
                 ({pagination.total} đơn)
               </span>
             )}
@@ -857,7 +851,7 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
                       <td>{fmtDateVI(req.otDate)}</td>
                       <td style={{ fontWeight: 600 }}>{req.startTime ?? '—'}</td>
                       <td style={{ fontWeight: 600 }}>{req.endTime ?? '—'}</td>
-                      <td style={{ fontWeight: 700, color: '#7c3aed' }}>
+                      <td style={{ fontWeight: 700, color: 'var(--color-purple-bright)' }}>
                         {req.otHours != null ? `${Number(req.otHours).toFixed(1)}h` : '—'}
                       </td>
                       <td style={{ color: 'var(--color-muted)', maxWidth: 160 }}>{req.reason ?? '—'}</td>
@@ -977,8 +971,8 @@ function OvertimeFormModal({ onClose, onSaved }) {
         </div>
         {estimatedHours && (
           <div style={{
-            padding: '8px 12px', background: '#faf5ff', border: '1.5px solid #e9d5ff',
-            borderRadius: 7, fontSize: 13, color: '#7c3aed', fontWeight: 600,
+            padding: '8px 12px', background: 'var(--color-purple-bg-soft)', border: '1.5px solid var(--color-status-review-bg)',
+            borderRadius: 7, fontSize: 13, color: 'var(--color-purple-bright)', fontWeight: 600,
           }}>
             Ước tính: ~{estimatedHours} giờ tăng ca
           </div>
@@ -1033,18 +1027,18 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
   return (
     <Modal title="Xét duyệt đơn tăng ca" onClose={onClose}>
       <div className={s.modalForm}>
-        <div style={{ background: '#fdf4ff', border: '1.5px solid #e9d5ff', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
-          <p style={{ margin: '0 0 6px', fontWeight: 700, color: '#7c3aed' }}>{request.userName}</p>
+        <div style={{ background: 'var(--color-purple-bg-soft)', border: '1.5px solid var(--color-status-review-bg)', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 700, color: 'var(--color-purple-bright)' }}>{request.userName}</p>
           <p style={{ margin: '0 0 4px', color: 'var(--color-muted)' }}>
             Ngày: {fmtDateVI(request.otDate)} · {request.startTime} – {request.endTime}
           </p>
           {request.otHours != null && (
-            <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#7c3aed' }}>
+            <p style={{ margin: '4px 0 0', fontWeight: 700, color: 'var(--color-purple-bright)' }}>
               {Number(request.otHours).toFixed(1)} giờ
             </p>
           )}
           {request.reason && (
-            <p style={{ margin: '6px 0 0', color: '#64748b', fontStyle: 'italic' }}>{request.reason}</p>
+            <p style={{ margin: '6px 0 0', color: 'var(--color-muted)', fontStyle: 'italic' }}>{request.reason}</p>
           )}
         </div>
         <div className={s.formGroup}>
@@ -1107,25 +1101,25 @@ function SummaryTab({ year, month, userId }) {
               <tr>
                 <th>Nhân viên</th>
                 <th>Chức danh</th>
-                <th style={{ color: '#15803d' }}>Ngày công</th>
-                <th style={{ color: '#2563eb' }}>Nghỉ (trả lương)</th>
-                <th style={{ color: '#dc2626' }}>Vắng</th>
-                <th style={{ color: '#a16207' }}>Đi muộn</th>
-                <th style={{ color: '#c2410c' }}>Về sớm</th>
-                <th style={{ color: '#7c3aed' }}>OT (giờ)</th>
+                <th style={{ color: 'var(--color-success-dark)' }}>Ngày công</th>
+                <th style={{ color: 'var(--color-primary)' }}>Nghỉ (trả lương)</th>
+                <th style={{ color: 'var(--color-danger)' }}>Vắng</th>
+                <th style={{ color: 'var(--color-warning-amber)' }}>Đi muộn</th>
+                <th style={{ color: 'var(--color-warning-dark)' }}>Về sớm</th>
+                <th style={{ color: 'var(--color-purple-bright)' }}>OT (giờ)</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.userId}>
-                  <td style={{ fontWeight: 600, color: '#1e293b' }}>{r.userName}</td>
+                  <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{r.userName}</td>
                   <td style={{ color: 'var(--color-muted)' }}>{r.jobTitle ?? '—'}</td>
-                  <td style={{ fontWeight: 700, color: '#15803d' }}>{r.actualWorkDays}</td>
+                  <td style={{ fontWeight: 700, color: 'var(--color-success-dark)' }}>{r.actualWorkDays}</td>
                   <td style={{ color: 'var(--color-muted)' }}>{r.leavePaidDays}</td>
-                  <td style={{ fontWeight: 700, color: r.absentDays > 0 ? '#dc2626' : 'var(--color-muted)' }}>{r.absentDays}</td>
-                  <td style={{ fontWeight: 700, color: r.lateCount > 0 ? '#a16207' : 'var(--color-muted)' }}>{r.lateCount}</td>
+                  <td style={{ fontWeight: 700, color: r.absentDays > 0 ? 'var(--color-danger)' : 'var(--color-muted)' }}>{r.absentDays}</td>
+                  <td style={{ fontWeight: 700, color: r.lateCount > 0 ? 'var(--color-warning-amber)' : 'var(--color-muted)' }}>{r.lateCount}</td>
                   <td style={{ color: 'var(--color-muted)' }}>{r.earlyCount}</td>
-                  <td style={{ fontWeight: 700, color: r.totalOtHours > 0 ? '#7c3aed' : 'var(--color-muted)' }}>
+                  <td style={{ fontWeight: 700, color: r.totalOtHours > 0 ? 'var(--color-purple-bright)' : 'var(--color-muted)' }}>
                     {Number(r.totalOtHours).toFixed(1)}
                   </td>
                 </tr>
