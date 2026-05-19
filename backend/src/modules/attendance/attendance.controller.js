@@ -1,6 +1,7 @@
-const svc      = require('./attendance.service')
-const adjSvc   = require('./adjustments.service')
-const reportSvc = require('./report.service')
+const svc        = require('./attendance.service')
+const adjSvc     = require('./adjustments.service')
+const reportSvc  = require('./report.service')
+const settingsSvc = require('./settings.service')
 
 async function checkIn(req, res, next) {
   try {
@@ -136,9 +137,30 @@ async function deleteHoliday(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// ── Attendance Settings ───────────────────────────────────────────────────────
+
+async function getSettings(req, res, next) {
+  try {
+    const result = await settingsSvc.getAttendanceSettings()
+    res.json(result)
+  } catch (err) { next(err) }
+}
+
+async function updateSettings(req, res, next) {
+  try {
+    const { saturdayShiftId } = req.body
+    const result = await settingsSvc.updateAttendanceSettings({
+      saturdayShiftId: saturdayShiftId ?? null,
+      updatedBy: req.user.id,
+    })
+    res.json(result)
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   checkIn, checkOut, getToday, listRecords, getSummary,
   adjustRecord, listAdjustments,
   getReport, syncPayroll,
   listHolidays, createHoliday, deleteHoliday,
+  getSettings, updateSettings,
 }

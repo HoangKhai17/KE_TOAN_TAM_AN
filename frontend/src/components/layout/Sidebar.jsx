@@ -21,8 +21,8 @@ const NAV_GROUPS = [
   {
     label: 'QUẢN TRỊ HỆ THỐNG',
     items: [
-      { to: '/staff',             label: 'Nhân viên',        icon: Users,         adminOnly: true },
-      { to: '/attendance',        label: 'Chấm công',        icon: CalendarCheck, end: true },
+      { to: '/staff',             label: 'Nhân viên',         icon: Users,         adminOnly: true },
+      { to: '/attendance',        label: 'Chấm công',         icon: CalendarCheck, staffOnly: true, end: true },
       { to: '/attendance/admin',  label: 'Quản lý chấm công', icon: CalendarCheck, adminOnly: true },
       { to: '/payroll',           label: 'Bảng lương',       icon: Wallet,        adminOnly: true },
       { to: '/settings',          label: 'Cài đặt',          icon: Settings,      adminOnly: true },
@@ -49,7 +49,9 @@ export default function Sidebar({ open, onToggle }) {
   const visibleGroups = NAV_GROUPS
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !item.adminOnly || isAdmin),
+      items: group.items.filter((item) =>
+        (!item.adminOnly || isAdmin) && (!item.staffOnly || !isAdmin)
+      ),
     }))
     .filter((group) => group.items.length > 0)
 

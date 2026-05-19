@@ -90,3 +90,11 @@ export const approveOvertimeRequest = (id) =>
 
 export const rejectOvertimeRequest = (id, body = {}) =>
   api.put(`/overtime-requests/${id}/reject`, body).then(r => r.data)
+
+// ── Attendance Settings ───────────────────────────────────────────────────────
+
+export const getAttendanceSettings = () =>
+  api.get('/attendance/settings').then(r => r.data)
+
+export const updateAttendanceSettings = (body) =>
+  api.patch('/attendance/settings', body).then(r => r.data)

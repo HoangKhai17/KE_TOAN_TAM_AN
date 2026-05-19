@@ -62,6 +62,12 @@ async function generateMonthlySchedule({ userId, month, year, createdBy }) {
     })
   )
 
+  // Read Saturday config: empty/null = day off; UUID = use that shift
+  const satCfg = await query(
+    `SELECT value FROM system_configs WHERE key = 'attendance.saturday_shift_id' LIMIT 1`
+  )
+  const saturdayShiftId = satCfg.rows[0]?.value || null
+
   const created = []
   let skipped = 0
 
@@ -69,8 +75,11 @@ async function generateMonthlySchedule({ userId, month, year, createdBy }) {
     const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const dayOfWeek = new Date(`${dateStr}T00:00:00`).getDay() // 0=Sun, 6=Sat
 
-    const isDayOff = dayOfWeek === 0 || dayOfWeek === 6 || holidays.has(dateStr)
-    const shiftId  = isDayOff ? null : (defaultShiftId ?? null)
+    const isSaturday = dayOfWeek === 6
+    const isDayOff   = dayOfWeek === 0 || holidays.has(dateStr) || (isSaturday && !saturdayShiftId)
+    const shiftId    = isSaturday
+      ? (saturdayShiftId ?? null)
+      : (isDayOff ? null : (defaultShiftId ?? null))
 
     const { rows } = await query(
       `INSERT INTO work_schedules (user_id, work_date, shift_id, is_day_off, created_by)

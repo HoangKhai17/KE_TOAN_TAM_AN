@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Users, CalendarDays, ClipboardList, Clock, CalendarCheck2,
+  Users, CalendarDays, ClipboardList, Clock, CalendarCheck2, CalendarCheck,
   ChevronLeft, ChevronRight, Loader2, Check, X, RefreshCw,
-  Download, BarChart3,
+  Download, BarChart3, Settings,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
+import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
 import * as usersApi from '../../api/users'
@@ -17,13 +18,30 @@ import sa from './AttendanceAdmin.module.css'
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ADMIN_TABS = [
-  { id: 'today',    label: 'Hôm nay',          icon: Users },
-  { id: 'monthly',  label: 'Bảng công tháng',   icon: CalendarDays },
-  { id: 'leave',    label: 'Duyệt nghỉ phép',   icon: ClipboardList },
-  { id: 'overtime', label: 'Duyệt tăng ca',     icon: Clock },
-  { id: 'schedule', label: 'Lịch ca tháng',     icon: CalendarCheck2 },
-  { id: 'report',   label: 'Báo cáo',           icon: BarChart3 },
+  { id: 'calendar',  label: 'Lịch chấm công',   icon: CalendarCheck },
+  { id: 'today',     label: 'Hôm nay',           icon: Users },
+  { id: 'monthly',   label: 'Bảng công tháng',   icon: CalendarDays },
+  { id: 'leave',     label: 'Duyệt nghỉ phép',   icon: ClipboardList },
+  { id: 'overtime',  label: 'Duyệt tăng ca',     icon: Clock },
+  { id: 'schedule',  label: 'Lịch ca tháng',     icon: CalendarCheck2 },
+  { id: 'report',    label: 'Báo cáo',           icon: BarChart3 },
+  { id: 'att-settings', label: 'Cài đặt',        icon: Settings },
 ]
+
+const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+
+const LEAVE_STATUS_CFG = {
+  pending:   { label: 'Chờ duyệt', bg: '#fefce8', color: '#a16207' },
+  approved:  { label: 'Đã duyệt',  bg: '#f0fdf4', color: '#15803d' },
+  rejected:  { label: 'Từ chối',   bg: '#fef2f2', color: '#dc2626' },
+  cancelled: { label: 'Đã huỷ',    bg: '#f1f5f9', color: '#64748b' },
+}
+
+const OT_STATUS_CFG = {
+  pending:  { label: 'Chờ duyệt', bg: '#fefce8', color: '#a16207' },
+  approved: { label: 'Đã duyệt',  bg: '#f0fdf4', color: '#15803d' },
+  rejected: { label: 'Từ chối',   bg: '#fef2f2', color: '#dc2626' },
+}
 
 const STATUS_CFG = {
   present:        { label: 'Có mặt',      bg: 'var(--color-success-bg-soft)', color: 'var(--color-success-dark)', border: 'var(--color-success-bg)' },
@@ -71,11 +89,39 @@ function fmtCurrency(n) {
   return Number(n).toLocaleString('vi-VN') + ' ₫'
 }
 
+function buildCalendar(year, month, recordMap) {
+  const first       = new Date(year, month - 1, 1)
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const startOffset = (first.getDay() + 6) % 7
+  const totalCells  = Math.ceil((startOffset + daysInMonth) / 7) * 7
+  const now         = new Date()
+  const todayStr    = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const cells = []
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - startOffset + 1
+    if (dayNum < 1 || dayNum > daysInMonth) {
+      cells.push({ type: 'empty', key: `e-${i}` })
+    } else {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
+      const jsDay   = new Date(dateStr + 'T00:00:00').getDay()
+      cells.push({
+        type: 'day', key: dateStr, dateStr, dayNum,
+        record:    recordMap[dateStr] ?? null,
+        isToday:   dateStr === todayStr,
+        isFuture:  dateStr > todayStr,
+        isWeekend: jsDay === 0 || jsDay === 6,
+      })
+    }
+  }
+  return cells
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function AttendanceAdmin() {
-  const now = new Date()
-  const [activeTab, setActiveTab] = useState('today')
+  const now         = new Date()
+  const currentUser = useAuthStore((st) => st.user)
+  const [activeTab, setActiveTab] = useState('calendar')
   const [year,      setYear]      = useState(now.getFullYear())
   const [month,     setMonth]     = useState(now.getMonth() + 1)
   const [staffList, setStaffList] = useState([])
@@ -93,7 +139,7 @@ export default function AttendanceAdmin() {
     else setMonth((m) => m + 1)
   }
 
-  const showMonthNav = activeTab !== 'today' && activeTab !== 'leave' && activeTab !== 'overtime'
+  const showMonthNav = !['today', 'leave', 'overtime', 'att-settings'].includes(activeTab)
 
   return (
     <AppLayout>
@@ -130,12 +176,20 @@ export default function AttendanceAdmin() {
           </div>
         )}
 
+        {activeTab === 'calendar' && (
+          <AdminCalendarTab
+            year={year} month={month}
+            staffList={staffList}
+            adminUserId={currentUser?.id}
+          />
+        )}
         {activeTab === 'today'    && <TodayTab staffList={staffList} />}
         {activeTab === 'monthly'  && <MonthlyTab year={year} month={month} />}
-        {activeTab === 'leave'    && <AdminLeaveTab />}
-        {activeTab === 'overtime' && <AdminOvertimeTab />}
-        {activeTab === 'schedule' && <ScheduleTab year={year} month={month} staffList={staffList} />}
-        {activeTab === 'report'   && <ReportTab year={year} month={month} />}
+        {activeTab === 'leave'    && <AdminLeaveTab year={year} month={month} staffList={staffList} />}
+        {activeTab === 'overtime' && <AdminOvertimeTab year={year} month={month} staffList={staffList} />}
+        {activeTab === 'schedule'     && <ScheduleTab year={year} month={month} staffList={staffList} />}
+        {activeTab === 'report'      && <ReportTab year={year} month={month} />}
+        {activeTab === 'att-settings' && <AttendanceSettingsTab />}
 
       </div>
     </AppLayout>
@@ -264,6 +318,172 @@ function TodayTab({ staffList }) {
   )
 }
 
+// ── AdminCalendarTab ──────────────────────────────────────────────────────────
+
+function AdminCalendarTab({ year, month, staffList, adminUserId }) {
+  const addToast    = useToastStore((st) => st.toast)
+  const [selectedId, setSelectedId] = useState(adminUserId ?? '')
+  const [records,    setRecords]    = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [selectedDay, setSelectedDay] = useState(null)
+
+  const load = useCallback(() => {
+    if (!selectedId) return () => {}
+    let cancelled = false
+    setLoading(true)
+    attendanceApi.listAttendanceRecords({ userId: selectedId, month, year, limit: 31 })
+      .then((res) => { if (!cancelled) setRecords(res.records ?? []) })
+      .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu chấm công', 'error') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [selectedId, month, year]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { return load() }, [load])
+
+  const recordMap = useMemo(() => {
+    const m = {}
+    records.forEach((r) => { m[String(r.workDate).slice(0, 10)] = r })
+    return m
+  }, [records])
+
+  const cells = useMemo(() => buildCalendar(year, month, recordMap), [year, month, recordMap])
+
+  return (
+    <>
+      {/* Employee selector */}
+      <div className={s.filterBar}>
+        <select
+          className={s.filterSelect}
+          value={selectedId}
+          onChange={(e) => setSelectedId(e.target.value)}
+        >
+          {staffList.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}{u.id === adminUserId ? ' (Bạn)' : ''}
+            </option>
+          ))}
+        </select>
+        {selectedId === adminUserId && (
+          <span style={{
+            fontSize: 'var(--fs-sm)', color: '#15803d', fontWeight: 600,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: '#f0fdf4', border: '1.5px solid #bbf7d0',
+            borderRadius: 7, padding: '3px 10px',
+          }}>
+            ✓ Admin — tự động ghi nhận đủ công
+          </span>
+        )}
+      </div>
+
+      <div className={s.section}>
+        {loading ? (
+          <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
+        ) : (
+          <>
+            <div className={s.calendarGrid}>
+              {DAY_NAMES.map((d) => (
+                <div key={d} className={`${s.calendarCell} ${s.calendarHeaderCell}`}>{d}</div>
+              ))}
+              {cells.map((cell) => {
+                if (cell.type === 'empty') {
+                  return <div key={cell.key} className={`${s.calendarCell} ${s.calendarEmpty}`} />
+                }
+                const { dateStr, dayNum, record, isToday, isFuture, isWeekend } = cell
+                const cfg = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
+                return (
+                  <div
+                    key={dateStr}
+                    className={[
+                      s.calendarCell, s.calendarDay,
+                      isToday   ? s.calendarDayToday   : '',
+                      isFuture  ? s.calendarDayFuture  : '',
+                      isWeekend ? s.calendarDayWeekend : '',
+                      record    ? s.calendarDayHasRecord : '',
+                    ].filter(Boolean).join(' ')}
+                    style={cfg ? { background: cfg.bg, borderColor: cfg.border } : {}}
+                    onClick={() => record && setSelectedDay({ dateStr, record })}
+                    title={cfg?.label}
+                  >
+                    <span className={`${s.calendarDayNum} ${isToday ? s.calendarDayNumToday : ''}`}>
+                      {dayNum}
+                    </span>
+                    {cfg && (
+                      <span className={s.calendarDayLabel} style={{ color: cfg.color }}>
+                        {cfg.label}
+                      </span>
+                    )}
+                    {record?.checkInTime && (
+                      <span className={s.calendarDayTime}>{fmtTime(record.checkInTime)}</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {records.length === 0 && (
+              <div className={s.centered}>
+                <CalendarDays size={32} style={{ opacity: 0.35, marginBottom: 4 }} />
+                Chưa có dữ liệu chấm công tháng này
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {selectedDay && (
+        <AdminDayModal
+          dateStr={selectedDay.dateStr}
+          record={selectedDay.record}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
+    </>
+  )
+}
+
+function AdminDayModal({ dateStr, record, onClose }) {
+  const cfg = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
+  const [y, m, d] = dateStr.split('-')
+  return (
+    <Modal title={`Chi tiết ngày ${d}/${m}/${y}`} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 280 }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px',
+          borderRadius: 99, background: cfg?.bg, color: cfg?.color, fontSize: 13,
+          fontWeight: 700, alignSelf: 'flex-start', border: `1.5px solid ${cfg?.border}`,
+        }}>
+          {cfg?.label ?? record?.status}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 13 }}>
+          {[
+            ['GIỜ VÀO',    fmtTime(record?.checkInTime)  ?? '—'],
+            ['GIỜ RA',     fmtTime(record?.checkOutTime) ?? '—'],
+            record?.actualHours != null && ['GIỜ THỰC TẾ', `${Number(record.actualHours).toFixed(1)}h`],
+            record?.lateMinutes > 0 && ['ĐI MUỘN', `${record.lateMinutes} phút`],
+          ].filter(Boolean).map(([label, val]) => (
+            <div key={label}>
+              <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{label}</div>
+              <div style={{ fontWeight: 700, color: '#1e293b' }}>{val}</div>
+            </div>
+          ))}
+        </div>
+        {record?.notes && (
+          <div style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic', borderTop: '1px solid #f1f5f9', paddingTop: 8 }}>
+            {record.notes}
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+          <button
+            onClick={onClose}
+            style={{ height: 34, padding: '0 16px', border: '1.5px solid #e2e8f0', borderRadius: 7, background: '#fff', color: '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ── MonthlyTab ────────────────────────────────────────────────────────────────
 
 function MonthlyTab({ year, month }) {
@@ -335,18 +555,30 @@ function MonthlyTab({ year, month }) {
 
 // ── AdminLeaveTab ─────────────────────────────────────────────────────────────
 
-function AdminLeaveTab() {
+function AdminLeaveTab({ year, month, staffList }) {
   const addToast   = useToastStore((st) => st.toast)
-  const [requests, setRequests]   = useState([])
-  const [page,     setPage]       = useState(1)
-  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
-  const [loading,  setLoading]    = useState(true)
+  const [requests,    setRequests]    = useState([])
+  const [page,        setPage]        = useState(1)
+  const [pagination,  setPagination]  = useState({ total: 0, totalPages: 1 })
+  const [loading,     setLoading]     = useState(true)
   const [reviewTarget, setReviewTarget] = useState(null)
+  const [statusFilter,   setStatusFilter]   = useState('pending')
+  const [employeeFilter, setEmployeeFilter] = useState('')
+  const [rangeMode,      setRangeMode]      = useState('month') // 'month' | 'all'
+
+  const from = rangeMode === 'month' ? `${year}-${String(month).padStart(2, '0')}-01` : undefined
+  const to   = rangeMode === 'month'
+    ? `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
+    : undefined
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    attendanceApi.listLeaveRequests({ status: 'pending', page, limit: 20 })
+    attendanceApi.listLeaveRequests({
+      status:  statusFilter  || undefined,
+      userId:  employeeFilter || undefined,
+      from, to, page, limit: 20,
+    })
       .then((res) => {
         if (!cancelled) {
           setRequests(res.requests ?? [])
@@ -356,16 +588,36 @@ function AdminLeaveTab() {
       .catch(() => { if (!cancelled) addToast('Không thể tải đơn nghỉ phép', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilter, employeeFilter, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => { setPage(1) }, [statusFilter, employeeFilter, rangeMode, from, to])
   useEffect(() => { return load() }, [load])
 
   return (
     <>
+      {/* Filter bar */}
+      <div className={s.filterBar}>
+        <select className={s.filterSelect} value={rangeMode} onChange={(e) => setRangeMode(e.target.value)}>
+          <option value="month">Tháng hiện tại</option>
+          <option value="all">Tất cả thời gian</option>
+        </select>
+        <select className={s.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option value="pending">Chờ duyệt</option>
+          <option value="">Tất cả trạng thái</option>
+          <option value="approved">Đã duyệt</option>
+          <option value="rejected">Từ chối</option>
+          <option value="cancelled">Đã huỷ</option>
+        </select>
+        <select className={s.filterSelect} value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}>
+          <option value="">Tất cả nhân viên</option>
+          {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+      </div>
+
       <div className={s.section}>
         <div className={s.sectionHead}>
           <h3 className={s.sectionTitle}>
-            Đơn nghỉ phép chờ duyệt
+            Đơn nghỉ phép {rangeMode === 'month' ? `— ${monthName(year, month)}` : '— Tất cả'}
             {!loading && (
               <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
                 ({pagination.total} đơn)
@@ -379,7 +631,7 @@ function AdminLeaveTab() {
         ) : requests.length === 0 ? (
           <div className={s.centered}>
             <ClipboardList size={32} style={{ opacity: 0.35, marginBottom: 4 }} />
-            Không có đơn nào chờ duyệt
+            Không có đơn nào
           </div>
         ) : (
           <div className={s.tableWrap}>
@@ -391,30 +643,41 @@ function AdminLeaveTab() {
                   <th>Từ ngày</th>
                   <th>Đến ngày</th>
                   <th>Số ngày</th>
+                  <th>Trạng thái</th>
                   <th>Lý do</th>
-                  <th style={{ width: 140 }} />
+                  <th style={{ width: 110 }} />
                 </tr>
               </thead>
               <tbody>
-                {requests.map((req) => (
+                {requests.map((req) => {
+                  const st = LEAVE_STATUS_CFG[req.status] ?? LEAVE_STATUS_CFG.pending
+                  return (
                   <tr key={req.id}>
                     <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{req.userName}</td>
                     <td>{LEAVE_TYPE[req.leaveType] ?? req.leaveType}</td>
                     <td>{fmtDateVI(req.startDate)}</td>
                     <td>{fmtDateVI(req.endDate)}</td>
                     <td style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{req.daysCount ?? req.totalDays} ngày</td>
+                    <td>
+                      <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color }}>
+                        {st.label}
+                      </span>
+                    </td>
                     <td style={{ color: 'var(--color-muted)', maxWidth: 160 }}>{req.reason ?? '—'}</td>
                     <td>
-                      <button
-                        className={s.btnSuccess}
-                        style={{ height: 28, padding: '0 8px', fontSize: 11 }}
-                        onClick={() => setReviewTarget(req)}
-                      >
-                        Xét duyệt
-                      </button>
+                      {req.status === 'pending' && (
+                        <button
+                          className={s.btnSuccess}
+                          style={{ height: 28, padding: '0 8px', fontSize: 11 }}
+                          onClick={() => setReviewTarget(req)}
+                        >
+                          Xét duyệt
+                        </button>
+                      )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -505,18 +768,30 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
 
 // ── AdminOvertimeTab ──────────────────────────────────────────────────────────
 
-function AdminOvertimeTab() {
+function AdminOvertimeTab({ year, month, staffList }) {
   const addToast   = useToastStore((st) => st.toast)
-  const [requests, setRequests]   = useState([])
-  const [page,     setPage]       = useState(1)
-  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
-  const [loading,  setLoading]    = useState(true)
+  const [requests,    setRequests]    = useState([])
+  const [page,        setPage]        = useState(1)
+  const [pagination,  setPagination]  = useState({ total: 0, totalPages: 1 })
+  const [loading,     setLoading]     = useState(true)
   const [reviewTarget, setReviewTarget] = useState(null)
+  const [statusFilter,   setStatusFilter]   = useState('pending')
+  const [employeeFilter, setEmployeeFilter] = useState('')
+  const [rangeMode,      setRangeMode]      = useState('month')
+
+  const from = rangeMode === 'month' ? `${year}-${String(month).padStart(2, '0')}-01` : undefined
+  const to   = rangeMode === 'month'
+    ? `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
+    : undefined
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    attendanceApi.listOvertimeRequests({ status: 'pending', page, limit: 20 })
+    attendanceApi.listOvertimeRequests({
+      status:  statusFilter  || undefined,
+      userId:  employeeFilter || undefined,
+      from, to, page, limit: 20,
+    })
       .then((res) => {
         if (!cancelled) {
           setRequests(res.requests ?? res.data ?? [])
@@ -526,16 +801,35 @@ function AdminOvertimeTab() {
       .catch(() => { if (!cancelled) addToast('Không thể tải đơn tăng ca', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilter, employeeFilter, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => { setPage(1) }, [statusFilter, employeeFilter, rangeMode, from, to])
   useEffect(() => { return load() }, [load])
 
   return (
     <>
+      {/* Filter bar */}
+      <div className={s.filterBar}>
+        <select className={s.filterSelect} value={rangeMode} onChange={(e) => setRangeMode(e.target.value)}>
+          <option value="month">Tháng hiện tại</option>
+          <option value="all">Tất cả thời gian</option>
+        </select>
+        <select className={s.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option value="pending">Chờ duyệt</option>
+          <option value="">Tất cả trạng thái</option>
+          <option value="approved">Đã duyệt</option>
+          <option value="rejected">Từ chối</option>
+        </select>
+        <select className={s.filterSelect} value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}>
+          <option value="">Tất cả nhân viên</option>
+          {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+      </div>
+
       <div className={s.section}>
         <div className={s.sectionHead}>
           <h3 className={s.sectionTitle}>
-            Đơn tăng ca chờ duyệt
+            Đơn tăng ca {rangeMode === 'month' ? `— ${monthName(year, month)}` : '— Tất cả'}
             {!loading && (
               <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
                 ({pagination.total} đơn)
@@ -549,7 +843,7 @@ function AdminOvertimeTab() {
         ) : requests.length === 0 ? (
           <div className={s.centered}>
             <Clock size={32} style={{ opacity: 0.35, marginBottom: 4 }} />
-            Không có đơn nào chờ duyệt
+            Không có đơn nào
           </div>
         ) : (
           <div className={s.tableWrap}>
@@ -561,12 +855,15 @@ function AdminOvertimeTab() {
                   <th>Bắt đầu</th>
                   <th>Kết thúc</th>
                   <th>Số giờ</th>
+                  <th>Trạng thái</th>
                   <th>Lý do</th>
-                  <th style={{ width: 120 }} />
+                  <th style={{ width: 110 }} />
                 </tr>
               </thead>
               <tbody>
-                {requests.map((req) => (
+                {requests.map((req) => {
+                  const st = OT_STATUS_CFG[req.status] ?? OT_STATUS_CFG.pending
+                  return (
                   <tr key={req.id}>
                     <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{req.userName}</td>
                     <td>{fmtDateVI(req.otDate)}</td>
@@ -575,18 +872,26 @@ function AdminOvertimeTab() {
                     <td style={{ fontWeight: 700, color: 'var(--color-purple-bright)' }}>
                       {req.otHours != null ? `${Number(req.otHours).toFixed(1)}h` : '—'}
                     </td>
+                    <td>
+                      <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color }}>
+                        {st.label}
+                      </span>
+                    </td>
                     <td style={{ color: 'var(--color-muted)', maxWidth: 160 }}>{req.reason ?? '—'}</td>
                     <td>
-                      <button
-                        className={s.btnSuccess}
-                        style={{ height: 28, padding: '0 8px', fontSize: 11 }}
-                        onClick={() => setReviewTarget(req)}
-                      >
-                        Xét duyệt
-                      </button>
+                      {req.status === 'pending' && (
+                        <button
+                          className={s.btnSuccess}
+                          style={{ height: 28, padding: '0 8px', fontSize: 11 }}
+                          onClick={() => setReviewTarget(req)}
+                        >
+                          Xét duyệt
+                        </button>
+                      )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -956,7 +1261,7 @@ function SyncPayrollModal({ year, month, onClose }) {
   return (
     <Modal title="Đồng bộ chấm công vào Bảng Lương" onClose={onClose}>
       <div className={s.modalForm}>
-        <div style={{ padding: '10px 14px', background: 'var(--color-accent-bg-soft)', border: '1.5px solid var(--color-accent-bg)', borderRadius: 8, fontSize: 'var(--fs-sm)', color: 'var(--color-warning-amber)' }}>
+        <div style={{ padding: '10px 14px', background: 'var(--color-accent-bg-soft)', border: '1.5px solid var(--color-accent-bg)', borderRadius: 8, fontSize: 'var(--fs-sm)', color: 'var(--color-warning-amber)', marginBottom: 4 }}>
           Dữ liệu chấm công tháng {month}/{year} sẽ được ghi vào mục
           <strong> attendance_summary</strong> trong kỳ lương đã chọn.
           Thao tác này có thể ghi đè dữ liệu cũ nếu đã sync trước đó.
@@ -1004,5 +1309,159 @@ function SyncPayrollModal({ year, month, onClose }) {
         </div>
       </div>
     </Modal>
+  )
+}
+
+// ── AttendanceSettingsTab ─────────────────────────────────────────────────────
+
+function AttendanceSettingsTab() {
+  const addToast  = useToastStore((st) => st.toast)
+  const [loading,  setLoading]  = useState(true)
+  const [saving,   setSaving]   = useState(false)
+  const [shifts,   setShifts]   = useState([])
+  const [mode,     setMode]     = useState('dayoff') // 'dayoff' | 'workday'
+  const [shiftId,  setShiftId]  = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      attendanceApi.getAttendanceSettings(),
+      attendanceApi.listShifts(false),
+    ]).then(([cfg, shiftData]) => {
+      if (cancelled) return
+      setMode(cfg.saturdayMode ?? 'dayoff')
+      setShiftId(cfg.saturdayShiftId ?? '')
+      const arr = Array.isArray(shiftData) ? shiftData : (shiftData?.shifts ?? [])
+      setShifts(arr)
+    }).catch(() => {
+      if (!cancelled) addToast('Không thể tải cài đặt chấm công', 'error')
+    }).finally(() => {
+      if (!cancelled) setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSave() {
+    if (mode === 'workday' && !shiftId) {
+      addToast('Vui lòng chọn ca làm việc cho Thứ 7', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      await attendanceApi.updateAttendanceSettings({
+        saturdayShiftId: mode === 'workday' ? shiftId : null,
+      })
+      addToast('Đã lưu cài đặt chấm công', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể lưu cài đặt', 'error')
+    } finally { setSaving(false) }
+  }
+
+  if (loading) {
+    return (
+      <div className={s.section}>
+        <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
+      </div>
+    )
+  }
+
+  const selectedShift = shifts.find((sh) => sh.id === shiftId)
+
+  return (
+    <div className={s.section}>
+      <div className={s.sectionHead}>
+        <h3 className={s.sectionTitle}>Cài đặt chấm công</h3>
+      </div>
+
+      <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 560 }}>
+
+        {/* Saturday config */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 'var(--fs-sm)', color: 'var(--color-text)' }}>
+            Quy định Thứ 7
+          </div>
+          <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', lineHeight: 1.6, marginTop: -6 }}>
+            Áp dụng khi tạo lịch ca mới. Các lịch đã tạo trước đó không bị ảnh hưởng.
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '12px 14px', border: `2px solid ${mode === 'dayoff' ? 'var(--color-primary)' : 'var(--color-border)'}`, borderRadius: 8, background: mode === 'dayoff' ? 'var(--color-primary-bg)' : 'var(--color-surface)' }}>
+            <input
+              type="radio"
+              name="saturday-mode"
+              value="dayoff"
+              checked={mode === 'dayoff'}
+              onChange={() => setMode('dayoff')}
+              style={{ accentColor: 'var(--color-primary)', width: 16, height: 16 }}
+            />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 'var(--fs-sm)', color: mode === 'dayoff' ? 'var(--color-primary-deep)' : 'var(--color-text)' }}>
+                Thứ 7 là ngày nghỉ
+              </div>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', marginTop: 2 }}>
+                Không phát sinh chấm công Thứ 7
+              </div>
+            </div>
+          </label>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '12px 14px', border: `2px solid ${mode === 'workday' ? 'var(--color-primary)' : 'var(--color-border)'}`, borderRadius: 8, background: mode === 'workday' ? 'var(--color-primary-bg)' : 'var(--color-surface)' }}>
+            <input
+              type="radio"
+              name="saturday-mode"
+              value="workday"
+              checked={mode === 'workday'}
+              onChange={() => setMode('workday')}
+              style={{ accentColor: 'var(--color-primary)', width: 16, height: 16 }}
+            />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 'var(--fs-sm)', color: mode === 'workday' ? 'var(--color-primary-deep)' : 'var(--color-text)' }}>
+                Thứ 7 là ngày đi làm
+              </div>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', marginTop: 2 }}>
+                Chọn ca làm việc (nửa ngày hoặc cả ngày) để áp dụng cho Thứ 7
+              </div>
+            </div>
+          </label>
+
+          {mode === 'workday' && (
+            <div className={s.formGroup} style={{ marginTop: 4 }}>
+              <label className={`${s.formLabel} ${s.req}`}>Ca làm việc Thứ 7</label>
+              <select
+                value={shiftId}
+                onChange={(e) => setShiftId(e.target.value)}
+                className={s.formSelect}
+              >
+                <option value="">-- Chọn ca --</option>
+                {shifts.map((sh) => (
+                  <option key={sh.id} value={sh.id}>
+                    {sh.name} ({sh.startTime ?? sh.start_time} – {sh.endTime ?? sh.end_time}
+                    {sh.requiredHours != null ? `, ${sh.requiredHours}h` : ''})
+                  </option>
+                ))}
+              </select>
+              {selectedShift && (
+                <div style={{ marginTop: 6, padding: '8px 12px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 6, fontSize: 'var(--fs-xs)', color: 'var(--color-success-dark)' }}>
+                  Ca <strong>{selectedShift.name}</strong> — {selectedShift.requiredHours ?? '?'}h/ngày.
+                  {selectedShift.requiredHours < 8
+                    ? ' Nhân viên đủ giờ sẽ được tính 0.5 ngày công.'
+                    : ' Nhân viên đủ giờ sẽ được tính 1 ngày công đầy đủ.'}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div style={{ paddingTop: 4, borderTop: '1px solid var(--color-border-soft)' }}>
+          <button
+            className={s.btnPrimary}
+            onClick={handleSave}
+            disabled={saving}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            {saving && <Loader2 size={13} className={s.spin} />}
+            {saving ? 'Đang lưu...' : <><Check size={13} /> Lưu cài đặt</>}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

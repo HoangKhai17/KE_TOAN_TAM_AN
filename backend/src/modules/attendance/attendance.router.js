@@ -270,4 +270,38 @@ router.get('/holidays',      ...auth,  ctrl.listHolidays)
 router.post('/holidays',     ...admin, ctrl.createHoliday)
 router.delete('/holidays/:id', ...admin, ctrl.deleteHoliday)
 
+/**
+ * @openapi
+ * /attendance/settings:
+ *   get:
+ *     tags: [Attendance]
+ *     summary: Get attendance system settings (admin)
+ *     responses:
+ *       200:
+ *         description: Current settings
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 saturdayShiftId: { type: string, format: uuid, nullable: true }
+ *                 saturdayMode:    { type: string, enum: [dayoff, workday] }
+ *   patch:
+ *     tags: [Attendance]
+ *     summary: Update attendance system settings (admin)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               saturdayShiftId: { type: string, format: uuid, nullable: true }
+ *     responses:
+ *       200:
+ *         description: Updated settings
+ */
+router.get('/settings',   ...admin, ctrl.getSettings)
+router.patch('/settings', ...admin, ctrl.updateSettings)
+
 module.exports = router
