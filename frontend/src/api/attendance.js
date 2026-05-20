@@ -98,3 +98,11 @@ export const getAttendanceSettings = () =>
 
 export const updateAttendanceSettings = (body) =>
   api.patch('/attendance/settings', body).then(r => r.data)
+
+// ── Dev Simulation (dev env only) ────────────────────────────────────────────
+
+export const simDay       = (body)   => api.post('/dev/simulate/day', body).then(r => r.data)
+export const simMonth     = (body)   => api.post('/dev/simulate/month', body).then(r => r.data)
+export const simTeamMonth = (body)   => api.post('/dev/simulate/team-month', body).then(r => r.data)
+export const simClear     = (body)   => api.delete('/dev/simulate/clear', { data: body }).then(r => r.data)
+export const simStatus    = (params) => api.get('/dev/simulate/status', { params }).then(r => r.data)

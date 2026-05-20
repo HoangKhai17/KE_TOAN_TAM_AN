@@ -137,10 +137,13 @@
       "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\" -Directory -ErrorAction SilentlyContinue)",
       "Bash(npx tsc *)",
       "Bash(Get-Content \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Attendance\\\\AttendanceAdmin.jsx\")",
-      "Bash(Measure-Object -Line)"
+      "Bash(Measure-Object -Line)",
+      "Bash(mkdir -p \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\dev\")",
+      "Bash(curl -s \"http://localhost:3000/api/dev/simulate/status?month=5&year=2026\")"
     ],
     "additionalDirectories": [
-      "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky"
+      "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",
+      "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\backend\\src\\modules"
     ]
   }
 }

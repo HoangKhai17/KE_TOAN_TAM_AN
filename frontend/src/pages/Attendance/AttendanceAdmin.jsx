@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Users, CalendarDays, ClipboardList, Clock, CalendarCheck2, CalendarCheck,
   ChevronLeft, ChevronRight, Loader2, Check, X, RefreshCw,
-  Download, BarChart3, Settings,
+  Download, BarChart3, Settings, Terminal,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -40,6 +40,7 @@ const ADMIN_TABS = [
   { id: 'schedule',     label: 'Lịch ca tháng',     icon: CalendarCheck2 },
   { id: 'report',       label: 'Báo cáo',           icon: BarChart3 },
   { id: 'att-settings', label: 'Cài đặt',           icon: Settings },
+  ...(import.meta.env.DEV ? [{ id: 'devtools', label: 'Dev Tools', icon: Terminal, dev: true }] : []),
 ]
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
@@ -168,13 +169,18 @@ export default function AttendanceAdmin() {
 
         {/* Tab bar */}
         <div className={s.tabBar}>
-          {ADMIN_TABS.map(({ id, label, icon: Icon }) => (
+          {ADMIN_TABS.map(({ id, label, icon: Icon, dev }) => (
             <button
               key={id}
               className={`${s.tab} ${activeTab === id ? s.tabActive : ''}`}
               onClick={() => setActiveTab(id)}
             >
               <Icon size={14} /> {label}
+              {dev && (
+                <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 700, color: '#fff', background: '#f97316', borderRadius: 4, padding: '1px 5px', lineHeight: '14px' }}>
+                  DEV
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -203,6 +209,7 @@ export default function AttendanceAdmin() {
         {activeTab === 'schedule'     && <ScheduleTab year={year} month={month} staffList={staffList} />}
         {activeTab === 'report'       && <ReportTab year={year} month={month} />}
         {activeTab === 'att-settings' && <AttendanceSettingsTab />}
+        {activeTab === 'devtools'     && <AdminDevToolsTab staffList={staffList} />}
 
       </div>
     </AppLayout>
@@ -1467,6 +1474,228 @@ function AttendanceSettingsTab() {
             {saving ? 'Đang lưu...' : <><Check size={13} /> Lưu cài đặt</>}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── AdminDevToolsTab ──────────────────────────────────────────────────────────
+
+function AdminDevToolsTab({ staffList }) {
+  const addToast = useToastStore((st) => st.toast)
+  const now = new Date()
+
+  // ── Section A: simulate one day ───────────────────────────────────────────
+  const [dayUserId,  setDayUserId]  = useState('')
+  const [dayDate,    setDayDate]    = useState(now.toISOString().slice(0, 10))
+  const [dayIn,      setDayIn]      = useState('08:00')
+  const [dayOut,     setDayOut]     = useState('17:00')
+  const [dayAbsent,  setDayAbsent]  = useState(false)
+  const [dayLoading, setDayLoading] = useState(false)
+  const [dayResult,  setDayResult]  = useState(null)
+
+  async function handleSimDay() {
+    if (!dayUserId || !dayDate) return addToast('Vui lòng chọn nhân viên và ngày', 'error')
+    setDayLoading(true); setDayResult(null)
+    try {
+      const res = await attendanceApi.simDay({
+        userId:       dayUserId,
+        date:         dayDate,
+        checkInTime:  dayAbsent ? null : dayIn,
+        checkOutTime: dayAbsent ? null : dayOut,
+      })
+      setDayResult(res.data?.record ?? null)
+      addToast('Giả lập thành công!', 'success')
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Lỗi giả lập', 'error')
+    } finally {
+      setDayLoading(false)
+    }
+  }
+
+  // ── Section B: simulate full month ────────────────────────────────────────
+  const [mthUserId,   setMthUserId]   = useState('all')
+  const [mthYear,     setMthYear]     = useState(String(now.getFullYear()))
+  const [mthMonth,    setMthMonth]    = useState(String(now.getMonth() + 1))
+  const [mthScenario, setMthScenario] = useState('normal')
+  const [mthLoading,  setMthLoading]  = useState(false)
+  const [mthResult,   setMthResult]   = useState(null)
+  const [clrLoading,  setClrLoading]  = useState(false)
+
+  async function handleSimMonth() {
+    setMthLoading(true); setMthResult(null)
+    try {
+      let res
+      if (mthUserId === 'all') {
+        res = await attendanceApi.simTeamMonth({ month: mthMonth, year: mthYear, scenario: mthScenario })
+        const d = res.data
+        addToast(`Giả lập xong: ${d.totalUsers} nhân viên, ${d.totalDays} ngày`, 'success')
+      } else {
+        res = await attendanceApi.simMonth({ userId: mthUserId, month: mthMonth, year: mthYear, scenario: mthScenario })
+        addToast(`Giả lập xong: ${res.data?.simulated} ngày`, 'success')
+      }
+      setMthResult(res.data)
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Lỗi giả lập', 'error')
+    } finally {
+      setMthLoading(false)
+    }
+  }
+
+  async function handleClear() {
+    if (!window.confirm(`Xóa toàn bộ data giả lập tháng ${mthMonth}/${mthYear}?`)) return
+    setClrLoading(true)
+    try {
+      const res = await attendanceApi.simClear({
+        userId: mthUserId === 'all' ? null : mthUserId,
+        month: mthMonth,
+        year: mthYear,
+      })
+      addToast(`Đã xóa: ${res.data?.recordsDeleted} records, ${res.data?.logsDeleted} logs`, 'success')
+      setMthResult(null)
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Lỗi xóa data', 'error')
+    } finally {
+      setClrLoading(false)
+    }
+  }
+
+  const devBox = { background: 'var(--color-surface)', border: '1.5px solid #f97316', borderRadius: 10, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }
+  const devH = { fontSize: 'var(--fs-sm)', fontWeight: 700, color: '#ea580c', borderBottom: '1px solid #fed7aa', paddingBottom: 8, marginBottom: 4 }
+  const row = { display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }
+  const fgGrp = { display: 'flex', flexDirection: 'column', gap: 4 }
+  const lbl = { fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', fontWeight: 600 }
+
+  return (
+    <div className={s.section}>
+      <div className={s.sectionHead}>
+        <h3 className={s.sectionTitle} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Terminal size={16} />
+          Dev Tools — Giả lập chấm công
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#f97316', borderRadius: 4, padding: '2px 7px' }}>DEV ONLY</span>
+        </h3>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: 16 }}>
+
+        {/* Section A */}
+        <div style={devBox}>
+          <div style={devH}>A — Giả lập 1 ngày, 1 nhân viên</div>
+
+          <div style={row}>
+            <div style={fgGrp}>
+              <span style={lbl}>Nhân viên</span>
+              <select value={dayUserId} onChange={(e) => setDayUserId(e.target.value)} className={s.formSelect} style={{ minWidth: 180 }}>
+                <option value="">-- Chọn nhân viên --</option>
+                {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div style={fgGrp}>
+              <span style={lbl}>Ngày</span>
+              <input type="date" value={dayDate} onChange={(e) => setDayDate(e.target.value)} className={s.formInput} />
+            </div>
+            {!dayAbsent && (
+              <>
+                <div style={fgGrp}>
+                  <span style={lbl}>Giờ vào</span>
+                  <input type="time" value={dayIn} onChange={(e) => setDayIn(e.target.value)} className={s.formInput} style={{ width: 110 }} />
+                </div>
+                <div style={fgGrp}>
+                  <span style={lbl}>Giờ ra</span>
+                  <input type="time" value={dayOut} onChange={(e) => setDayOut(e.target.value)} className={s.formInput} style={{ width: 110 }} />
+                </div>
+              </>
+            )}
+            <div style={fgGrp}>
+              <span style={lbl}>&nbsp;</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, cursor: 'pointer', fontSize: 'var(--fs-sm)', color: 'var(--color-text)' }}>
+                <input type="checkbox" checked={dayAbsent} onChange={(e) => setDayAbsent(e.target.checked)} style={{ accentColor: '#f97316' }} />
+                Vắng mặt
+              </label>
+            </div>
+            <div style={fgGrp}>
+              <span style={lbl}>&nbsp;</span>
+              <button className={s.btnPrimary} onClick={handleSimDay} disabled={dayLoading} style={{ background: '#f97316', borderColor: '#f97316' }}>
+                {dayLoading ? <Loader2 size={13} className={s.spin} /> : null}
+                {dayLoading ? 'Đang chạy...' : 'Giả lập ngày này'}
+              </button>
+            </div>
+          </div>
+
+          {dayResult && (
+            <div style={{ padding: '10px 14px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 8, fontSize: 'var(--fs-xs)', color: 'var(--color-success-dark)' }}>
+              Kết quả: <strong>{dayResult.status}</strong> |
+              Vào: {dayResult.checkInTime ? fmtTime(dayResult.checkInTime) : '—'} |
+              Ra: {dayResult.checkOutTime ? fmtTime(dayResult.checkOutTime) : '—'} |
+              Muộn: {dayResult.lateMinutes ?? 0}' |
+              Sớm: {dayResult.earlyMinutes ?? 0}' |
+              Ngày công: {dayResult.workUnits ?? 0}
+            </div>
+          )}
+        </div>
+
+        {/* Section B */}
+        <div style={devBox}>
+          <div style={devH}>B — Giả lập cả tháng</div>
+
+          <div style={row}>
+            <div style={fgGrp}>
+              <span style={lbl}>Nhân viên</span>
+              <select value={mthUserId} onChange={(e) => setMthUserId(e.target.value)} className={s.formSelect} style={{ minWidth: 180 }}>
+                <option value="all">Tất cả nhân viên</option>
+                {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div style={fgGrp}>
+              <span style={lbl}>Tháng</span>
+              <select value={mthMonth} onChange={(e) => setMthMonth(e.target.value)} className={s.formSelect} style={{ width: 80 }}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                  <option key={m} value={String(m)}>Tháng {m}</option>
+                ))}
+              </select>
+            </div>
+            <div style={fgGrp}>
+              <span style={lbl}>Năm</span>
+              <select value={mthYear} onChange={(e) => setMthYear(e.target.value)} className={s.formSelect} style={{ width: 80 }}>
+                {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <div style={fgGrp}>
+              <span style={lbl}>Kịch bản</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['perfect', 'normal', 'mixed'].map((sc) => (
+                  <label key={sc} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 'var(--fs-xs)', fontWeight: mthScenario === sc ? 700 : 400, color: mthScenario === sc ? '#ea580c' : 'var(--color-text)' }}>
+                    <input type="radio" name="sim-scenario" value={sc} checked={mthScenario === sc} onChange={() => setMthScenario(sc)} style={{ accentColor: '#f97316' }} />
+                    {sc === 'perfect' ? 'Perfect' : sc === 'normal' ? 'Normal' : 'Mixed'}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={row}>
+            <button className={s.btnSecondary} onClick={handleClear} disabled={clrLoading}>
+              {clrLoading ? <Loader2 size={13} className={s.spin} /> : <X size={13} />}
+              Xóa data tháng này
+            </button>
+            <button className={s.btnPrimary} onClick={handleSimMonth} disabled={mthLoading} style={{ background: '#f97316', borderColor: '#f97316' }}>
+              {mthLoading ? <Loader2 size={13} className={s.spin} /> : null}
+              {mthLoading ? 'Đang giả lập...' : 'Giả lập cả tháng'}
+            </button>
+          </div>
+
+          {mthResult && (
+            <div style={{ padding: '10px 14px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 8, fontSize: 'var(--fs-xs)', color: 'var(--color-success-dark)' }}>
+              {mthUserId === 'all'
+                ? `Đã giả lập ${mthResult.totalUsers} nhân viên, tổng ${mthResult.totalDays} ngày công`
+                : `Đã giả lập ${mthResult.simulated} ngày làm việc`}
+              . Vào tab <strong>Lịch chấm công</strong> hoặc <strong>Báo cáo</strong> để kiểm tra kết quả.
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   )

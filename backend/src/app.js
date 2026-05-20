@@ -217,6 +217,12 @@ function createApp() {
     }
   })
 
+  // Dev simulation routes — disabled in production
+  if (process.env.NODE_ENV !== 'production') {
+    app.use('/api/dev', require('./modules/dev/dev.router'))
+    logger.warn('⚠️  Dev simulation routes enabled — disable in production')
+  }
+
   // 404 & error handlers
   app.use(notFound)
   app.use(errorHandler)
