@@ -137,6 +137,9 @@ async function calculateAttendanceRecord(userId, date) {
   )
   if (leaveRes.rows.length > 0) {
     const leave = leaveRes.rows[0]
+    // Map leave_type → attendance_status (enum only has on_leave/business_trip/wfh)
+    const leaveStatusMap = { business_trip: 'business_trip', wfh: 'wfh' }
+    const attendanceStatus = leaveStatusMap[leave.leave_type] ?? 'on_leave'
     const { rows } = await query(
       `INSERT INTO attendance_records (user_id, work_date, shift_id, status, work_units, leave_request_id)
        VALUES ($1, $2, $3, $4, 1.0, $5)
@@ -144,7 +147,7 @@ async function calculateAttendanceRecord(userId, date) {
          status = $4, work_units = 1.0, leave_request_id = $5,
          shift_id = $3, updated_at = NOW()
        RETURNING *`,
-      [userId, date, ws.shift_id ?? null, leave.leave_type, leave.id]
+      [userId, date, ws.shift_id ?? null, attendanceStatus, leave.id]
     )
     return toRecordDto(rows[0])
   }
