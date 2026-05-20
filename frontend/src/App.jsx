@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import { refreshSession } from './api/session'
 import { useTokenRefresh } from './hooks/useTokenRefresh'
+import SocketProvider from './providers/SocketProvider'
 import Login from './pages/Login/Login'
 import Dashboard from './pages/Dashboard/Dashboard'
 import Staff from './pages/Staff/Staff'
@@ -184,7 +185,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <SocketProvider>
+        <AppRoutes />
+      </SocketProvider>
     </BrowserRouter>
   )
 }

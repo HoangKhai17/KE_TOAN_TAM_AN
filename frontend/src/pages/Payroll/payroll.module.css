@@ -7,7 +7,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: var(--space-0);
   min-height: 100%;
   padding: var(--space-8);
 }
@@ -18,8 +18,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: var(--space-7);
+  margin-bottom: var(--space-9);
   flex-wrap: wrap;
 }
 
@@ -34,7 +34,7 @@
 .pageSubtitle {
   font-size: var(--fs-md);
   color: var(--color-muted);
-  margin: 4px 0 0;
+  margin: var(--space-1) 0 0;
   font-weight: var(--fw-medium);
 }
 
@@ -57,20 +57,20 @@
 }
 
 .table th {
-  padding: 9px 14px;
+  padding: var(--space-4) var(--space-6);
   text-align: left;
   font-size: var(--fs-xs);
-  font-weight: var(--fw-bold);
-  color: var(--color-muted);
+  font-weight: var(--fw-extrabold);
+  color: var(--color-primary-deep);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: var(--color-bg-soft);
-  border-bottom: 1px solid var(--color-border);
+  letter-spacing: 0.04em;
+  background: var(--gradient-table-head);
+  border-bottom: 1.5px solid var(--color-primary-bg-strong);
   white-space: nowrap;
 }
 
 .table td {
-  padding: 11px 14px;
+  padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--color-surface-muted);
   vertical-align: middle;
 }
@@ -83,37 +83,55 @@
   background: var(--color-bg-soft);
 }
 
+.tableWrap {
+  overflow-x: auto;
+}
+
+.tableRowClickable {
+  cursor: pointer;
+}
+
+.periodNameCell {
+  color: var(--color-primary-deep);
+  font-weight: var(--fw-bold);
+}
+
+.tableDateCell {
+  color: var(--color-text-soft);
+  font-size: var(--fs-sm);
+}
+
+.tableNoteCell {
+  max-width: 200px;
+  color: var(--color-muted);
+  font-size: var(--fs-sm);
+}
+
 /* ── Status badges ───────────────────────────────────── */
 
-.badgeDraft {
+.badgeDraft,
+.badgeConfirmed,
+.badgePaid {
   display: inline-flex;
   align-items: center;
-  padding: 2px 9px;
-  border-radius: 99px;
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
   font-size: var(--fs-xs);
   font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+
+.badgeDraft {
   background: var(--color-surface-muted);
   color: var(--color-muted);
 }
 
 .badgeConfirmed {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 9px;
-  border-radius: 99px;
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-bold);
   background: var(--color-primary-bg);
   color: var(--color-primary-dark);
 }
 
 .badgePaid {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 9px;
-  border-radius: 99px;
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-bold);
   background: var(--color-success-bg-soft);
   color: var(--color-success-dark);
 }
@@ -123,9 +141,9 @@
 .btnPrimary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 16px;
-  height: 36px;
+  gap: var(--space-2);
+  padding: 0 var(--space-7);
+  height: var(--control-h-md);
   border: none;
   border-radius: var(--radius-md);
   background: var(--gradient-primary);
@@ -143,9 +161,9 @@
 .btnSecondary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  height: 36px;
+  gap: var(--space-2);
+  padding: 0 var(--space-6);
+  height: var(--control-h-md);
   border: 1.5px solid var(--color-primary-bg-strong);
   border-radius: var(--radius-md);
   background: var(--color-white);
@@ -162,9 +180,9 @@
 .btnDanger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  height: 34px;
+  gap: var(--space-2);
+  padding: 0 var(--space-6);
+  height: var(--space-13);
   border: 1px solid var(--color-danger-border);
   border-radius: var(--radius-md);
   background: var(--color-white);
@@ -181,9 +199,9 @@
 .btnSuccess {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  height: 36px;
+  gap: var(--space-2);
+  padding: 0 var(--space-6);
+  height: var(--control-h-md);
   border: 1px solid var(--color-success-light);
   border-radius: var(--radius-md);
   background: var(--color-success-light);
@@ -200,11 +218,11 @@
 .btnGhost {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 10px;
+  gap: var(--space-1);
+  padding: 0 var(--space-4);
   height: 30px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-muted);
   font-size: var(--fs-sm);
@@ -238,13 +256,17 @@
 .formGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: var(--space-6);
 }
 
 .formGroup {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-1);
+}
+
+.formSpan2 {
+  grid-column: span 2;
 }
 
 .formLabel {
@@ -259,10 +281,10 @@
 }
 
 .formInput {
-  height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--color-border-muted);
-  border-radius: 7px;
+  height: var(--control-h-md);
+  padding: 0 var(--space-4);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
   font-size: var(--fs-md);
   font-family: inherit;
   color: var(--color-text-soft);
@@ -277,9 +299,9 @@
 }
 
 .formTextarea {
-  padding: 8px 10px;
-  border: 1px solid var(--color-border-muted);
-  border-radius: 7px;
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
   font-size: var(--fs-md);
   font-family: inherit;
   color: var(--color-text-soft);
@@ -297,16 +319,16 @@
 
 .formActions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-3);
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: var(--space-3);
 }
 
 .errorBox {
-  padding: 10px 14px;
+  padding: var(--space-4) var(--space-6);
   background: var(--color-danger-bg);
-  border: 1px solid var(--color-danger-bg);
-  border-radius: 7px;
+  border: 1.5px solid var(--color-danger-border);
+  border-radius: var(--radius-md);
   font-size: var(--fs-sm);
   color: var(--color-danger);
 }
@@ -317,8 +339,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 40px;
+  gap: var(--space-3);
+  padding: var(--space-14);
   font-size: var(--fs-base);
   color: var(--color-muted);
 }
@@ -327,8 +349,21 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 48px;
+  padding: var(--space-15);
   color: var(--color-muted-soft);
+}
+
+.emptyIcon {
+  margin-bottom: var(--space-3);
+}
+
+.emptyText {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.emptyAction {
+  margin-top: var(--space-5);
 }
 
 /* ── Pagination ──────────────────────────────────────── */
@@ -337,7 +372,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: var(--space-4) var(--space-7);
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-soft);
 }
@@ -349,15 +384,15 @@
 
 .paginationBtns {
   display: flex;
-  gap: 3px;
+  gap: var(--space-1);
 }
 
 .paginationBtn {
   min-width: 30px;
   height: 30px;
-  padding: 0 6px;
+  padding: 0 var(--space-2);
   border: 1px solid var(--color-border-muted);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--color-white);
   font-size: var(--fs-sm);
   color: var(--color-text-soft);
@@ -381,15 +416,15 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: 20px 24px;
-  margin-bottom: 16px;
+  padding: var(--space-9) var(--space-10);
+  margin-bottom: var(--space-7);
 }
 
 .detailTitleRow {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
   flex-wrap: wrap;
 }
 
@@ -402,16 +437,29 @@
 
 .detailActions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-3);
   flex-wrap: wrap;
+}
+
+.detailActionsSpaced {
+  margin-top: var(--space-6);
 }
 
 .detailMeta {
   display: flex;
-  gap: 20px;
+  gap: var(--space-9);
   font-size: var(--fs-sm);
   color: var(--color-muted);
   flex-wrap: wrap;
+}
+
+.detailTotal {
+  color: var(--color-success-dark);
+  font-weight: var(--fw-bold);
+}
+
+.detailNote {
+  font-style: italic;
 }
 
 /* ── Records table ───────────────────────────────────── */
@@ -421,6 +469,10 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   overflow: auto;
+}
+
+.recordsTable {
+  min-width: 900px;
 }
 
 .moneyCol {
@@ -434,25 +486,41 @@
   font-weight: var(--fw-bold);
 }
 
+.netPayHead {
+  color: var(--color-success-dark);
+}
+
+.actionHead {
+  width: 80px;
+  text-align: right;
+}
+
+.recordName {
+  color: var(--color-text-soft);
+  font-weight: var(--fw-semibold);
+}
+
+.recordActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
 .sectionLabel {
   font-size: var(--fs-xs);
   font-weight: var(--fw-bold);
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 6px 14px;
+  padding: var(--space-2) var(--space-6);
   background: var(--color-bg-soft);
   border-bottom: 1px solid var(--color-border-muted);
 }
 
 /* ── Spin animation ──────────────────────────────────── */
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .spin {
-  animation: spin 0.8s linear infinite;
+  animation: app-spin 0.8s linear infinite;
 }
 
 /* ── Create/upsert form modal ────────────────────────── */
@@ -460,14 +528,42 @@
 .modalForm {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-6);
 }
 
 .modalActions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.modalText {
+  margin: 0;
+  color: var(--color-text-soft);
+  font-size: var(--fs-base);
+}
+
+.loadingBoxLarge {
+  padding: var(--space-15);
+}
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-15);
+}
+
+.errorIcon {
+  color: var(--color-danger-light);
+}
+
+.errorText {
+  margin: 0;
+  color: var(--color-text-soft);
+  font-size: var(--fs-base);
 }
 
 /* ── Record form ─────────────────────────────────────── */
@@ -475,7 +571,7 @@
 .recordFormGrid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
+  gap: var(--space-5);
 }
 
 .recordFormSection {
@@ -483,8 +579,8 @@
   font-weight: var(--fw-bold);
   color: var(--color-primary-deep);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.04em;
   grid-column: span 3;
-  padding-bottom: 4px;
+  padding-bottom: var(--space-1);
   border-bottom: 1px solid var(--color-primary-bg-strong);
 }

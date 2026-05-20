@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { getSocket } from '../lib/socket'
+import { useAuthStore } from '../stores/authStore'
 
 /**
  * Listen for data-sync broadcast events emitted by the backend after mutations.
@@ -10,6 +11,10 @@ import { getSocket } from '../lib/socket'
  * @param {Array}    deps     extra dependencies that recreate the listener (e.g. IDs to filter on)
  */
 export function useDataSync(events, handler, deps = []) {
+  // accessToken được đưa vào deps để effect re-run sau khi socket được tạo
+  // (socket được tạo bởi SocketProvider khi accessToken thay đổi từ null → có giá trị)
+  const accessToken = useAuthStore((s) => s.accessToken)
+
   useEffect(() => {
     const socket = getSocket()
     if (!socket) return
@@ -25,5 +30,5 @@ export function useDataSync(events, handler, deps = []) {
       listeners.forEach(({ event, fn }) => socket.off(event, fn))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+  }, [accessToken, ...deps])
 }

@@ -1,14 +1,23 @@
 import { io } from 'socket.io-client'
 
 let socket = null
+let socketToken = null
 
 export function getSocket() {
   return socket
 }
 
 export function connectSocket(accessToken) {
-  if (socket?.connected) return socket
+  if (!accessToken) return null
 
+  if (socket && socketToken !== accessToken) {
+    socket.disconnect()
+    socket = null
+  }
+
+  if (socket?.active) return socket
+
+  socketToken = accessToken
   socket = io(window.location.origin, {
     path: '/socket.io',
     auth: { token: accessToken },
@@ -24,5 +33,6 @@ export function disconnectSocket() {
   if (socket) {
     socket.disconnect()
     socket = null
+    socketToken = null
   }
 }

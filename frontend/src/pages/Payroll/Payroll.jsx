@@ -113,7 +113,7 @@ function CreatePeriodModal({ onClose, onCreated }) {
               className={s.formInput}
             />
           </div>
-          <div className={s.formGroup} style={{ gridColumn: 'span 2' }}>
+          <div className={`${s.formGroup} ${s.formSpan2}`}>
             <label className={s.formLabel}>Ghi chú</label>
             <textarea
               value={form.notes}
@@ -187,10 +187,10 @@ export default function Payroll() {
             </div>
           ) : periods.length === 0 ? (
             <div className={s.emptyState}>
-              <DollarSign size={36} style={{ marginBottom: 8 }} />
-              <p style={{ fontSize: 13 }}>Chưa có kỳ lương nào.</p>
+              <DollarSign size={36} className={s.emptyIcon} />
+              <p className={s.emptyText}>Chưa có kỳ lương nào.</p>
               {isAdmin && (
-                <button className={s.btnPrimary} onClick={() => setShowCreate(true)} style={{ marginTop: 12 }}>
+                <button className={`${s.btnPrimary} ${s.emptyAction}`} onClick={() => setShowCreate(true)}>
                   <Plus size={13} /> Tạo kỳ lương đầu tiên
                 </button>
               )}
@@ -211,10 +211,10 @@ export default function Payroll() {
                   {periods.map((period) => (
                     <tr
                       key={period.id}
-                      style={{ cursor: 'pointer' }}
+                      className={s.tableRowClickable}
                       onClick={() => navigate(`/payroll/${period.id}`)}
                     >
-                      <td style={{ fontWeight: 700, color: 'var(--color-primary-deep)' }}>
+                      <td className={s.periodNameCell}>
                         Tháng {period.periodMonth}/{period.periodYear}
                       </td>
                       <td>
@@ -222,13 +222,13 @@ export default function Payroll() {
                           {STATUS_LABEL[period.status] ?? period.status}
                         </span>
                       </td>
-                      <td style={{ color: 'var(--color-text-soft)', fontSize: 13 }}>
+                      <td className={s.tableDateCell}>
                         {fmtDate(period.startDate)}
                       </td>
-                      <td style={{ color: 'var(--color-text-soft)', fontSize: 13 }}>
+                      <td className={s.tableDateCell}>
                         {fmtDate(period.endDate)}
                       </td>
-                      <td style={{ color: 'var(--color-muted)', fontSize: 13, maxWidth: 200 }}>
+                      <td className={s.tableNoteCell}>
                         {period.notes ?? '—'}
                       </td>
                     </tr>

@@ -127,7 +127,6 @@ function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) 
             onChange={set('userId')}
             className={s.formInput}
             disabled={!!existing}
-            style={{ height: 36 }}
           >
             <option value="">Chọn nhân viên...</option>
             {staffList.map((u) => (
@@ -193,7 +192,7 @@ function DeleteRecordModal({ record, onClose, onDeleted }) {
   return (
     <Modal title="Xoá bản ghi lương" onClose={onClose}>
       <div className={s.modalForm}>
-        <p style={{ fontSize: 14, color: 'var(--color-text-soft)' }}>
+        <p className={s.modalText}>
           Xoá bảng lương của <strong>{record.userName}</strong> khỏi kỳ này?
         </p>
         <div className={s.modalActions}>
@@ -318,7 +317,7 @@ export default function PayrollDetail() {
     return (
       <AppLayout>
         <div className={s.page}>
-          <div className={s.loadingBox} style={{ padding: 80 }}>
+          <div className={`${s.loadingBox} ${s.loadingBoxLarge}`}>
             <Loader2 size={20} className={s.spin} /> Đang tải...
           </div>
         </div>
@@ -330,9 +329,9 @@ export default function PayrollDetail() {
     return (
       <AppLayout>
         <div className={s.page}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 60, gap: 12 }}>
-            <AlertTriangle size={36} style={{ color: 'var(--color-danger-light)' }} />
-            <p style={{ fontSize: 14, color: 'var(--color-text-soft)' }}>{error ?? 'Không tìm thấy kỳ lương'}</p>
+          <div className={s.errorState}>
+            <AlertTriangle size={36} className={s.errorIcon} />
+            <p className={s.errorText}>{error ?? 'Không tìm thấy kỳ lương'}</p>
             <button className={s.btnSecondary} onClick={() => navigate('/payroll')}>
               <ArrowLeft size={13} /> Quay lại
             </button>
@@ -366,14 +365,14 @@ export default function PayrollDetail() {
           <div className={s.detailMeta}>
             <span>Kỳ: {fmtDate(period.startDate)} — {fmtDate(period.endDate)}</span>
             <span>{records.length} nhân viên</span>
-            <span style={{ fontWeight: 700, color: 'var(--color-success-dark)' }}>
+            <span className={s.detailTotal}>
               Tổng chi: {fmtVND(totalNet)}
             </span>
-            {period.notes && <span style={{ fontStyle: 'italic' }}>{period.notes}</span>}
+            {period.notes && <span className={s.detailNote}>{period.notes}</span>}
           </div>
 
           {isAdmin && (
-            <div className={s.detailActions} style={{ marginTop: 14 }}>
+            <div className={`${s.detailActions} ${s.detailActionsSpaced}`}>
               {isDraft && (
                 <>
                   <button
@@ -406,17 +405,17 @@ export default function PayrollDetail() {
         <div className={s.recordsCard}>
           {records.length === 0 ? (
             <div className={s.emptyState}>
-              <UserCog size={32} style={{ marginBottom: 8 }} />
-              <p style={{ fontSize: 13 }}>Chưa có bản ghi lương nào.</p>
+              <UserCog size={32} className={s.emptyIcon} />
+              <p className={s.emptyText}>Chưa có bản ghi lương nào.</p>
               {isAdmin && isDraft && (
-                <button className={s.btnPrimary} onClick={() => { setEditRecord(null); setShowUpsert(true) }} style={{ marginTop: 12 }}>
+                <button className={`${s.btnPrimary} ${s.emptyAction}`} onClick={() => { setEditRecord(null); setShowUpsert(true) }}>
                   <Plus size={13} /> Thêm nhân viên
                 </button>
               )}
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className={s.table} style={{ minWidth: 900 }}>
+            <div className={s.tableWrap}>
+              <table className={`${s.table} ${s.recordsTable}`}>
                 <thead>
                   <tr>
                     <th>Nhân viên</th>
@@ -426,8 +425,8 @@ export default function PayrollDetail() {
                     <th className={s.moneyCol}>BHXH NV</th>
                     <th className={s.moneyCol}>Thuế TNCN</th>
                     <th className={s.moneyCol}>KT khác</th>
-                    <th className={s.moneyCol} style={{ color: 'var(--color-success-dark)' }}>Thực nhận</th>
-                    {isAdmin && isDraft && <th style={{ width: 80, textAlign: 'right' }}>Hành động</th>}
+                    <th className={`${s.moneyCol} ${s.netPayHead}`}>Thực nhận</th>
+                    {isAdmin && isDraft && <th className={s.actionHead}>Hành động</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -435,7 +434,7 @@ export default function PayrollDetail() {
                     const net = calcNet(rec)
                     return (
                       <tr key={rec.id}>
-                        <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{rec.userName ?? '—'}</td>
+                        <td className={s.recordName}>{rec.userName ?? '—'}</td>
                         <td className={s.moneyCol}>{fmtVND(rec.baseSalary)}</td>
                         <td className={s.moneyCol}>{fmtVND(rec.allowances)}</td>
                         <td className={s.moneyCol}>{fmtVND(rec.bonus)}</td>
@@ -445,7 +444,7 @@ export default function PayrollDetail() {
                         <td className={`${s.moneyCol} ${s.netPay}`}>{fmtVND(net)}</td>
                         {isAdmin && isDraft && (
                           <td>
-                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                            <div className={s.recordActions}>
                               <button
                                 className={s.iconBtn}
                                 onClick={() => { setEditRecord(rec); setShowUpsert(true) }}

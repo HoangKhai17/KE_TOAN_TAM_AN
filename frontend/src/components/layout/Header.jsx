@@ -5,7 +5,6 @@ import { useAuthStore } from '../../stores/authStore'
 import { useNotificationStore } from '../../stores/notificationStore'
 import { logout } from '../../api/auth'
 import { listNotifications, markOneRead, markAllRead, getUnreadCount } from '../../api/notifications'
-import { connectSocket, disconnectSocket } from '../../lib/socket'
 import CheckInWidget from './CheckInWidget'
 import s from './layout.module.css'
 
@@ -68,7 +67,7 @@ export default function Header({ onMenuToggle }) {
   const { user, accessToken, logout: clearAuth } = useAuthStore()
   const {
     unreadCount, recent, hasLoaded,
-    setUnreadCount, setRecent, addNew, markOneRead: storeMarkOne, markAllRead: storeMarkAll,
+    setUnreadCount, setRecent, markOneRead: storeMarkOne, markAllRead: storeMarkAll,
   } = useNotificationStore()
 
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -94,24 +93,6 @@ export default function Header({ onMenuToggle }) {
     return () => { cancelled = true }
   }, [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Socket.io: connect when authenticated, disconnect on logout
-  useEffect(() => {
-    if (!accessToken) {
-      disconnectSocket()
-      return
-    }
-
-    const sock = connectSocket(accessToken)
-
-    sock.on('notification', (notif) => {
-      addNew(notif)
-    })
-
-    return () => {
-      sock.off('notification')
-    }
-  }, [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // Close bell dropdown on outside click
   useEffect(() => {
     if (!bellOpen) return
@@ -134,8 +115,7 @@ export default function Header({ onMenuToggle }) {
   async function handleLogout() {
     setDropdownOpen(false)
     try { await logout() } catch { /* ignore */ }
-    clearAuth()
-    disconnectSocket()
+    clearAuth() // → accessToken becomes null → SocketProvider's useEffect disconnects socket
     navigate('/login', { replace: true })
   }
 
