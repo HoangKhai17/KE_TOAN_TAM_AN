@@ -64,4 +64,37 @@ async function updateShift(id, { name, shiftType, startTime, endTime, breakMinut
   return toDto(rows[0])
 }
 
-module.exports = { listShifts, getShift, createShift, updateShift }
+async function deleteShift(id) {
+  // Block if used as default or saturday shift in system config
+  const cfgRes = await query(
+    `SELECT key FROM system_configs
+     WHERE key IN ('attendance.default_shift_id', 'attendance.saturday_shift_id') AND value = $1`,
+    [id]
+  )
+  if (cfgRes.rows.length > 0) {
+    const labels = cfgRes.rows.map((r) =>
+      r.key === 'attendance.default_shift_id' ? 'ca mặc định hệ thống' : 'ca làm việc Thứ 7'
+    ).join(', ')
+    throw Object.assign(
+      new Error(`Ca đang được dùng làm ${labels}. Vui lòng đổi cài đặt trước khi xoá.`),
+      { status: 409 }
+    )
+  }
+
+  // Block if used in any work_schedule row
+  const schedRes = await query(
+    `SELECT 1 FROM work_schedules WHERE shift_id = $1 LIMIT 1`,
+    [id]
+  )
+  if (schedRes.rows.length > 0) {
+    throw Object.assign(
+      new Error('Ca đang được dùng trong lịch làm việc của nhân viên. Không thể xoá.'),
+      { status: 409 }
+    )
+  }
+
+  const { rowCount } = await query('DELETE FROM shifts WHERE id = $1', [id])
+  if (rowCount === 0) throw Object.assign(new Error('Shift not found'), { status: 404 })
+}
+
+module.exports = { listShifts, getShift, createShift, updateShift, deleteShift }

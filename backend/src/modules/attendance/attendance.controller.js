@@ -148,9 +148,10 @@ async function getSettings(req, res, next) {
 
 async function updateSettings(req, res, next) {
   try {
-    const { saturdayShiftId } = req.body
+    const { defaultShiftId, saturdayShiftId } = req.body
     const result = await settingsSvc.updateAttendanceSettings({
-      saturdayShiftId: saturdayShiftId ?? null,
+      defaultShiftId:  defaultShiftId  ?? undefined,
+      saturdayShiftId: saturdayShiftId ?? undefined,
       updatedBy: req.user.id,
     })
     res.json(result)

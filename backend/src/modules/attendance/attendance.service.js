@@ -40,11 +40,62 @@ function toLogDto(r) {
   }
 }
 
+// ── Work Schedule Resolution ──────────────────────────────────────────────────
+// Returns an effective "ws" object for a given date — either from an explicit
+// override in work_schedules, or derived from system config (day-of-week + shifts).
+// Returns null if the date is a day off with no logs to record.
+
+async function resolveWorkSchedule(date) {
+  const jsDay = new Date(date + 'T00:00:00').getDay() // 0=Sun, 6=Sat
+
+  // 1. Read both system config keys in one query
+  const cfgRes = await query(
+    `SELECT key, value FROM system_configs WHERE key IN ('attendance.default_shift_id', 'attendance.saturday_shift_id')`
+  )
+  const cfg = Object.fromEntries(cfgRes.rows.map((r) => [r.key, r.value ?? '']))
+  const defaultShiftId  = cfg['attendance.default_shift_id']  || null
+  const saturdayShiftId = cfg['attendance.saturday_shift_id'] || null
+
+  // Determine the applicable shiftId for this day
+  let shiftId = null
+  let isDayOff = false
+
+  if (jsDay === 0) {
+    isDayOff = true // Sunday always off
+  } else if (jsDay === 6) {
+    shiftId  = saturdayShiftId
+    isDayOff = !shiftId  // Saturday: off if no shift configured
+  } else {
+    shiftId = defaultShiftId
+  }
+
+  if (isDayOff) return { is_day_off: true, shift_id: null }
+
+  // 2. Fetch shift details
+  const shift = shiftId
+    ? (await query('SELECT * FROM shifts WHERE id = $1', [shiftId])).rows[0] ?? null
+    : null
+
+  return {
+    shift_id:       shiftId,
+    is_day_off:     false,
+    start_time:     shift?.start_time     ?? null,
+    end_time:       shift?.end_time       ?? null,
+    break_minutes:  shift?.break_minutes  ?? 60,
+    required_hours: shift?.required_hours ?? null,
+    tolerance_in:   shift?.tolerance_in   ?? 15,
+    tolerance_out:  shift?.tolerance_out  ?? 15,
+    shift_type:     shift?.shift_type     ?? null,
+  }
+}
+
 // ── Core Calculation ──────────────────────────────────────────────────────────
 
 async function calculateAttendanceRecord(userId, date) {
-  // Step 1: work schedule → shift
-  const wsRes = await query(
+  // Step 1: Check for an explicit work_schedule override for this user/date.
+  // These are written only for exceptions (e.g. a specific day off, or a
+  // different shift for one employee). Fall back to system-derived schedule.
+  const wsOverrideRes = await query(
     `SELECT ws.*, ws.is_day_off,
             s.start_time, s.end_time, s.break_minutes, s.required_hours,
             s.tolerance_in, s.tolerance_out, s.shift_type
@@ -53,28 +104,9 @@ async function calculateAttendanceRecord(userId, date) {
      WHERE ws.user_id = $1 AND ws.work_date = $2`,
     [userId, date]
   )
-  const ws = wsRes.rows[0]
+  const ws = wsOverrideRes.rows[0] ?? await resolveWorkSchedule(date)
 
-  // Step 2: no schedule → mark unscheduled only if there are logs
-  if (!ws) {
-    const logCheck = await query(
-      `SELECT id FROM attendance_logs WHERE user_id = $1 AND logged_at::date = $2 LIMIT 1`,
-      [userId, date]
-    )
-    if (logCheck.rows.length === 0) return null
-
-    const { rows } = await query(
-      `INSERT INTO attendance_records (user_id, work_date, status, work_units)
-       VALUES ($1, $2, 'unscheduled', 0.0)
-       ON CONFLICT (user_id, work_date) DO UPDATE SET
-         status = 'unscheduled', work_units = 0.0, updated_at = NOW()
-       RETURNING *`,
-      [userId, date]
-    )
-    return toRecordDto(rows[0])
-  }
-
-  // Step 3: day off → no record needed
+  // Step 2: day off → no record needed
   if (ws.is_day_off) return null
 
   // Step 4: public holiday

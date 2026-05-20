@@ -107,4 +107,11 @@ router.put('/:id', ...admin, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+router.delete('/:id', ...admin, async (req, res, next) => {
+  try {
+    await svc.deleteShift(req.params.id)
+    res.json({ success: true })
+  } catch (err) { next(err) }
+})
+
 module.exports = router

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Users, CalendarDays, ClipboardList, Clock, CalendarCheck2, CalendarCheck,
+  Users, CalendarDays, ClipboardList, Clock, CalendarCheck,
   ChevronLeft, ChevronRight, Loader2, Check, X, RefreshCw,
   Download, BarChart3, Settings, Terminal,
 } from 'lucide-react'
@@ -37,7 +37,6 @@ const ADMIN_TABS = [
   { id: 'today',        label: 'Hôm nay',           icon: Users },
   { id: 'leave',        label: 'Duyệt nghỉ phép',   icon: ClipboardList },
   { id: 'overtime',     label: 'Duyệt tăng ca',     icon: Clock },
-  { id: 'schedule',     label: 'Lịch ca tháng',     icon: CalendarCheck2 },
   { id: 'report',       label: 'Báo cáo',           icon: BarChart3 },
   { id: 'att-settings', label: 'Cài đặt',           icon: Settings },
   ...(import.meta.env.DEV ? [{ id: 'devtools', label: 'Dev Tools', icon: Terminal, dev: true }] : []),
@@ -154,7 +153,7 @@ export default function AttendanceAdmin() {
     else setMonth((m) => m + 1)
   }
 
-  const showMonthNav = ['calendar', 'monthly', 'schedule', 'report'].includes(activeTab)
+  const showMonthNav = ['calendar', 'monthly', 'report'].includes(activeTab)
 
   return (
     <AppLayout>
@@ -206,7 +205,6 @@ export default function AttendanceAdmin() {
         {activeTab === 'today'        && <TodayTab staffList={staffList} />}
         {activeTab === 'leave'        && <AdminLeaveTab staffList={staffList} />}
         {activeTab === 'overtime'     && <AdminOvertimeTab staffList={staffList} />}
-        {activeTab === 'schedule'     && <ScheduleTab year={year} month={month} staffList={staffList} />}
         {activeTab === 'report'       && <ReportTab year={year} month={month} />}
         {activeTab === 'att-settings' && <AttendanceSettingsTab />}
         {activeTab === 'devtools'     && <AdminDevToolsTab staffList={staffList} />}
@@ -997,73 +995,7 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
   )
 }
 
-// ── ScheduleTab ───────────────────────────────────────────────────────────────
 
-function ScheduleTab({ year, month, staffList }) {
-  const addToast    = useToastStore((st) => st.toast)
-  const [userId,    setUserId]    = useState('')
-  const [overwrite, setOverwrite] = useState(false)
-  const [busy,      setBusy]      = useState(false)
-  const [result,    setResult]    = useState(null)
-
-  async function handleGenerate() {
-    if (!userId) { addToast('Vui lòng chọn nhân viên', 'error'); return }
-    setBusy(true)
-    setResult(null)
-    try {
-      const res = await attendanceApi.generateMonthlySchedule({ userId, month, year, overwrite })
-      setResult(res)
-      addToast(`Đã tạo lịch ca tháng ${month}/${year}`, 'success')
-    } catch (err) {
-      addToast(err.response?.data?.error?.message ?? 'Không thể tạo lịch ca', 'error')
-    } finally { setBusy(false) }
-  }
-
-  return (
-    <div className={s.section}>
-      <div className={s.sectionHead}>
-        <h3 className={s.sectionTitle}>Tạo lịch ca tháng — {monthName(year, month)}</h3>
-      </div>
-      <div style={{ padding: '20px 20px', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
-        <div className={s.formGroup}>
-          <label className={`${s.formLabel} ${s.req}`}>Nhân viên</label>
-          <select value={userId} onChange={(e) => setUserId(e.target.value)} className={s.formSelect}>
-            <option value="">-- Chọn nhân viên --</option>
-            {staffList.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-sm)', cursor: 'pointer', userSelect: 'none' }}>
-          <input
-            type="checkbox"
-            checked={overwrite}
-            onChange={(e) => setOverwrite(e.target.checked)}
-            style={{ width: 15, height: 15, cursor: 'pointer' }}
-          />
-          <span>Ghi đè lịch đã có</span>
-        </label>
-
-        <button className={s.btnPrimary} onClick={handleGenerate} disabled={busy || !userId} style={{ alignSelf: 'flex-start' }}>
-          {busy && <Loader2 size={13} className={s.spin} />}
-          {busy ? 'Đang tạo...' : <><CalendarCheck2 size={13} /> Tạo lịch ca</>}
-        </button>
-
-        {result && (
-          <div style={{ padding: '12px 16px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 8, fontSize: 'var(--fs-sm)' }}>
-            <p style={{ margin: 0, fontWeight: 700, color: 'var(--color-success-dark)' }}>Tạo lịch ca thành công!</p>
-            {result.created != null && (
-              <p style={{ margin: '4px 0 0', color: 'var(--color-muted)' }}>
-                Đã tạo: {result.created} ngày · Bỏ qua: {result.skipped ?? 0} ngày
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 // ── ReportTab ─────────────────────────────────────────────────────────────────
 
@@ -1328,12 +1260,13 @@ function SyncPayrollModal({ year, month, onClose }) {
 // ── AttendanceSettingsTab ─────────────────────────────────────────────────────
 
 function AttendanceSettingsTab() {
-  const addToast  = useToastStore((st) => st.toast)
-  const [loading,  setLoading]  = useState(true)
-  const [saving,   setSaving]   = useState(false)
-  const [shifts,   setShifts]   = useState([])
-  const [mode,     setMode]     = useState('dayoff') // 'dayoff' | 'workday'
-  const [shiftId,  setShiftId]  = useState('')
+  const addToast       = useToastStore((st) => st.toast)
+  const [loading,      setLoading]      = useState(true)
+  const [saving,       setSaving]       = useState(false)
+  const [shifts,       setShifts]       = useState([])
+  const [defaultId,    setDefaultId]    = useState('')
+  const [mode,         setMode]         = useState('dayoff') // 'dayoff' | 'workday'
+  const [satShiftId,   setSatShiftId]   = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -1342,8 +1275,9 @@ function AttendanceSettingsTab() {
       attendanceApi.listShifts(false),
     ]).then(([cfg, shiftData]) => {
       if (cancelled) return
+      setDefaultId(cfg.defaultShiftId ?? '')
       setMode(cfg.saturdayMode ?? 'dayoff')
-      setShiftId(cfg.saturdayShiftId ?? '')
+      setSatShiftId(cfg.saturdayShiftId ?? '')
       const arr = Array.isArray(shiftData) ? shiftData : (shiftData?.shifts ?? [])
       setShifts(arr)
     }).catch(() => {
@@ -1355,14 +1289,19 @@ function AttendanceSettingsTab() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSave() {
-    if (mode === 'workday' && !shiftId) {
+    if (!defaultId) {
+      addToast('Vui lòng chọn ca làm việc mặc định', 'error')
+      return
+    }
+    if (mode === 'workday' && !satShiftId) {
       addToast('Vui lòng chọn ca làm việc cho Thứ 7', 'error')
       return
     }
     setSaving(true)
     try {
       await attendanceApi.updateAttendanceSettings({
-        saturdayShiftId: mode === 'workday' ? shiftId : null,
+        defaultShiftId:  defaultId || null,
+        saturdayShiftId: mode === 'workday' ? satShiftId : null,
       })
       addToast('Đã lưu cài đặt chấm công', 'success')
     } catch (err) {
@@ -1378,7 +1317,8 @@ function AttendanceSettingsTab() {
     )
   }
 
-  const selectedShift = shifts.find((sh) => sh.id === shiftId)
+  const selectedDefault = shifts.find((sh) => sh.id === defaultId)
+  const selectedSatShift = shifts.find((sh) => sh.id === satShiftId)
 
   return (
     <div className={s.section}>
@@ -1388,13 +1328,40 @@ function AttendanceSettingsTab() {
 
       <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 560 }}>
 
+        {/* Default shift config */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontWeight: 700, fontSize: 'var(--fs-sm)', color: 'var(--color-text)' }}>
+            Ca làm việc mặc định (Thứ 2 – Thứ 6)
+          </div>
+          <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', lineHeight: 1.6, marginTop: -6 }}>
+            Ca áp dụng cho toàn bộ nhân viên vào các ngày thường. Hệ thống tự động dùng ca này để tính chấm công mà không cần tạo lịch riêng.
+          </div>
+          <div className={s.formGroup} style={{ marginBottom: 0 }}>
+            <label className={`${s.formLabel} ${s.req}`}>Ca mặc định</label>
+            <select value={defaultId} onChange={(e) => setDefaultId(e.target.value)} className={s.formSelect}>
+              <option value="">-- Chọn ca --</option>
+              {shifts.map((sh) => (
+                <option key={sh.id} value={sh.id}>
+                  {sh.name} ({sh.startTime ?? sh.start_time} – {sh.endTime ?? sh.end_time}
+                  {sh.requiredHours != null ? `, ${sh.requiredHours}h` : ''})
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedDefault && (
+            <div style={{ padding: '8px 12px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 6, fontSize: 'var(--fs-xs)', color: 'var(--color-success-dark)' }}>
+              Ca <strong>{selectedDefault.name}</strong> — {selectedDefault.requiredHours ?? '?'}h/ngày.
+              {selectedDefault.requiredHours < 8
+                ? ' Nhân viên đủ giờ sẽ được tính 0.5 ngày công.'
+                : ' Nhân viên đủ giờ sẽ được tính 1 ngày công đầy đủ.'}
+            </div>
+          )}
+        </div>
+
         {/* Saturday config */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontWeight: 700, fontSize: 'var(--fs-sm)', color: 'var(--color-text)' }}>
             Quy định Thứ 7
-          </div>
-          <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', lineHeight: 1.6, marginTop: -6 }}>
-            Áp dụng khi tạo lịch ca mới. Các lịch đã tạo trước đó không bị ảnh hưởng.
           </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '12px 14px', border: `2px solid ${mode === 'dayoff' ? 'var(--color-primary)' : 'var(--color-border)'}`, borderRadius: 8, background: mode === 'dayoff' ? 'var(--color-primary-bg)' : 'var(--color-surface)' }}>
@@ -1439,8 +1406,8 @@ function AttendanceSettingsTab() {
             <div className={s.formGroup} style={{ marginTop: 4 }}>
               <label className={`${s.formLabel} ${s.req}`}>Ca làm việc Thứ 7</label>
               <select
-                value={shiftId}
-                onChange={(e) => setShiftId(e.target.value)}
+                value={satShiftId}
+                onChange={(e) => setSatShiftId(e.target.value)}
                 className={s.formSelect}
               >
                 <option value="">-- Chọn ca --</option>
@@ -1451,10 +1418,10 @@ function AttendanceSettingsTab() {
                   </option>
                 ))}
               </select>
-              {selectedShift && (
+              {selectedSatShift && (
                 <div style={{ marginTop: 6, padding: '8px 12px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 6, fontSize: 'var(--fs-xs)', color: 'var(--color-success-dark)' }}>
-                  Ca <strong>{selectedShift.name}</strong> — {selectedShift.requiredHours ?? '?'}h/ngày.
-                  {selectedShift.requiredHours < 8
+                  Ca <strong>{selectedSatShift.name}</strong> — {selectedSatShift.requiredHours ?? '?'}h/ngày.
+                  {selectedSatShift.requiredHours < 8
                     ? ' Nhân viên đủ giờ sẽ được tính 0.5 ngày công.'
                     : ' Nhân viên đủ giờ sẽ được tính 1 ngày công đầy đủ.'}
                 </div>

@@ -1,6 +1,5 @@
 const { query } = require('../../config/db')
 const { calculateAttendanceRecord } = require('../attendance/attendance.service')
-const { generateMonthlySchedule } = require('../attendance/schedules.service')
 
 // ── Time helpers ──────────────────────────────────────────────────────────────
 
@@ -22,17 +21,11 @@ function randomInt(min, max) {
 
 function applyScenario(scenario, shiftStart = '08:00', shiftEnd = '17:00') {
   const rand = Math.random()
-
-  if (scenario === 'perfect') {
-    return { checkInTime: shiftStart, checkOutTime: shiftEnd }
-  }
-
+  if (scenario === 'perfect') return { checkInTime: shiftStart, checkOutTime: shiftEnd }
   if (scenario === 'normal') {
-    // 90% on time, 10% slightly late (5-30 min)
     if (rand < 0.9) return { checkInTime: shiftStart, checkOutTime: shiftEnd }
     return { checkInTime: addMinutes(shiftStart, randomInt(5, 30)), checkOutTime: shiftEnd }
   }
-
   // mixed: 70% on-time, 20% late, 5% early-leave, 5% absent
   if (rand < 0.70) return { checkInTime: shiftStart, checkOutTime: shiftEnd }
   if (rand < 0.90) return { checkInTime: addMinutes(shiftStart, randomInt(10, 45)), checkOutTime: shiftEnd }
@@ -40,38 +33,18 @@ function applyScenario(scenario, shiftStart = '08:00', shiftEnd = '17:00') {
   return { checkInTime: null, checkOutTime: null }
 }
 
-async function getSystemUserId() {
-  const { rows } = await query(`SELECT id FROM users WHERE role = 'admin' LIMIT 1`)
-  if (!rows[0]) throw new Error('No admin user found for simulation createdBy')
-  return rows[0].id
-}
-
 function dateRangeFor(month, year) {
   const y = parseInt(year, 10)
   const m = parseInt(month, 10)
   const lastDay = new Date(y, m, 0).getDate()
   const mm = String(m).padStart(2, '0')
-  return {
-    from: `${y}-${mm}-01`,
-    to:   `${y}-${mm}-${String(lastDay).padStart(2, '0')}`,
-  }
+  return { from: `${y}-${mm}-01`, to: `${y}-${mm}-${String(lastDay).padStart(2, '0')}` }
 }
 
 // ── Core: simulate one day for one user ──────────────────────────────────────
 
 async function simulateDay({ userId, date, checkInTime, checkOutTime }) {
-  // Ensure a work_schedule exists for this date; generate the month if not
-  const schedCheck = await query(
-    `SELECT id FROM work_schedules WHERE user_id = $1 AND work_date = $2`,
-    [userId, date]
-  )
-  if (schedCheck.rows.length === 0) {
-    const [year, month] = date.split('-')
-    const createdBy = await getSystemUserId()
-    await generateMonthlySchedule({ userId, month, year, createdBy })
-  }
-
-  // Remove any previous logs for this day (real + sim) to avoid conflicts
+  // Clear previous logs so we start from a clean state
   await query(
     `DELETE FROM attendance_logs WHERE user_id = $1 AND logged_at::date = $2`,
     [userId, date]
@@ -93,7 +66,6 @@ async function simulateDay({ userId, date, checkInTime, checkOutTime }) {
   }
 
   const record = await calculateAttendanceRecord(userId, date)
-
   if (record) {
     await query(
       `UPDATE attendance_records SET notes = '[simulation]' WHERE user_id = $1 AND work_date = $2`,
@@ -101,43 +73,63 @@ async function simulateDay({ userId, date, checkInTime, checkOutTime }) {
     )
     record.notes = '[simulation]'
   }
-
   return record
 }
 
 // ── Simulate full month for one user ─────────────────────────────────────────
+// Derives work days directly from system config — no work_schedules needed.
 
 async function simulateMonth({ userId, month, year, scenario = 'normal' }) {
-  const { from, to } = dateRangeFor(month, year)
+  const y = parseInt(year, 10)
+  const m = parseInt(month, 10)
+  const lastDay = new Date(y, m, 0).getDate()
+  const mm = String(m).padStart(2, '0')
+  const from = `${y}-${mm}-01`
+  const to   = `${y}-${mm}-${String(lastDay).padStart(2, '0')}`
 
-  // Auto-generate work_schedules if the month has none
-  const schedCount = await query(
-    `SELECT COUNT(*) FROM work_schedules WHERE user_id = $1 AND work_date BETWEEN $2 AND $3`,
-    [userId, from, to]
-  )
-  if (parseInt(schedCount.rows[0].count, 10) === 0) {
-    const createdBy = await getSystemUserId()
-    await generateMonthlySchedule({ userId, month, year, createdBy })
+  // Load config + holidays once
+  const [cfgRes, holidayRes] = await Promise.all([
+    query(`SELECT key, value FROM system_configs WHERE key IN ('attendance.default_shift_id', 'attendance.saturday_shift_id')`),
+    query(`SELECT holiday_date::text FROM public_holidays WHERE holiday_date BETWEEN $1 AND $2`, [from, to]),
+  ])
+  const cfg = Object.fromEntries(cfgRes.rows.map((r) => [r.key, r.value ?? '']))
+  const defaultShiftId  = cfg['attendance.default_shift_id']  || null
+  const saturdayShiftId = cfg['attendance.saturday_shift_id'] || null
+  const holidays = new Set(holidayRes.rows.map((r) => String(r.holiday_date).slice(0, 10)))
+
+  // Load shift start/end for timing
+  const shiftIds = [...new Set([defaultShiftId, saturdayShiftId].filter(Boolean))]
+  const shiftMap = {}
+  if (shiftIds.length) {
+    const { rows } = await query(`SELECT id, start_time, end_time FROM shifts WHERE id = ANY($1)`, [shiftIds])
+    rows.forEach((s) => { shiftMap[s.id] = s })
   }
 
-  const { rows: schedules } = await query(
-    `SELECT ws.work_date, ws.is_day_off, s.start_time, s.end_time
-     FROM work_schedules ws
-     LEFT JOIN shifts s ON ws.shift_id = s.id
-     WHERE ws.user_id = $1 AND ws.work_date BETWEEN $2 AND $3
-     ORDER BY ws.work_date`,
-    [userId, from, to]
-  )
+  function shiftTimes(id) {
+    const s = id ? shiftMap[id] : null
+    return {
+      start: s?.start_time ? String(s.start_time).slice(0, 5) : '08:00',
+      end:   s?.end_time   ? String(s.end_time).slice(0, 5)   : '17:00',
+    }
+  }
 
   const results = []
-  for (const sched of schedules) {
-    if (sched.is_day_off) continue
+  for (let d = 1; d <= lastDay; d++) {
+    const dateStr = `${y}-${mm}-${String(d).padStart(2, '0')}`
+    const jsDay   = new Date(dateStr + 'T00:00:00').getDay()
 
-    const dateStr = String(sched.work_date).slice(0, 10)
-    const shiftStart = sched.start_time ? String(sched.start_time).slice(0, 5) : '08:00'
-    const shiftEnd   = sched.end_time   ? String(sched.end_time).slice(0, 5)   : '17:00'
+    if (jsDay === 0 || holidays.has(dateStr)) continue // Sunday or holiday
 
-    const { checkInTime, checkOutTime } = applyScenario(scenario, shiftStart, shiftEnd)
+    let shiftId
+    if (jsDay === 6) {
+      if (!saturdayShiftId) continue // Saturday is day off
+      shiftId = saturdayShiftId
+    } else {
+      shiftId = defaultShiftId
+    }
+
+    const { start, end } = shiftTimes(shiftId)
+    const { checkInTime, checkOutTime } = applyScenario(scenario, start, end)
     const record = await simulateDay({ userId, date: dateStr, checkInTime, checkOutTime })
     results.push({ date: dateStr, record })
   }
@@ -151,13 +143,11 @@ async function simulateTeamMonth({ month, year, scenario = 'normal' }) {
   const { rows: staff } = await query(
     `SELECT id, name FROM users WHERE status = 'active' AND role != 'admin' ORDER BY name`
   )
-
   const results = []
   for (const user of staff) {
     const result = await simulateMonth({ userId: user.id, month, year, scenario })
     results.push({ userId: user.id, userName: user.name, simulated: result.simulated })
   }
-
   return { totalUsers: staff.length, totalDays: results.reduce((s, r) => s + r.simulated, 0), results }
 }
 
@@ -169,16 +159,13 @@ async function clearSimulation({ userId, month, year }) {
   const params   = userId ? [from, to, userId] : [from, to]
 
   const logsDel = await query(
-    `DELETE FROM attendance_logs
-     WHERE method = 'simulation' AND logged_at::date BETWEEN $1 AND $2 ${userCond}`,
+    `DELETE FROM attendance_logs WHERE method = 'simulation' AND logged_at::date BETWEEN $1 AND $2 ${userCond}`,
     params
   )
   const recsDel = await query(
-    `DELETE FROM attendance_records
-     WHERE notes = '[simulation]' AND work_date BETWEEN $1 AND $2 ${userCond}`,
+    `DELETE FROM attendance_records WHERE notes = '[simulation]' AND work_date BETWEEN $1 AND $2 ${userCond}`,
     params
   )
-
   return { logsDeleted: logsDel.rowCount, recordsDeleted: recsDel.rowCount }
 }
 
@@ -186,31 +173,22 @@ async function clearSimulation({ userId, month, year }) {
 
 async function getSimulationStatus({ month, year }) {
   const { from, to } = dateRangeFor(month, year)
-
   const [logsRes, recsRes] = await Promise.all([
+    query(`SELECT COUNT(*) FROM attendance_logs WHERE method = 'simulation' AND logged_at::date BETWEEN $1 AND $2`, [from, to]),
     query(
-      `SELECT COUNT(*) FROM attendance_logs
-       WHERE method = 'simulation' AND logged_at::date BETWEEN $1 AND $2`,
-      [from, to]
-    ),
-    query(
-      `SELECT
-         COUNT(*)                                                              AS total,
-         COUNT(*) FILTER (WHERE status = 'present')                           AS present,
-         COUNT(*) FILTER (WHERE status = 'late')                              AS late,
-         COUNT(*) FILTER (WHERE status = 'early_leave')                       AS early_leave,
-         COUNT(*) FILTER (WHERE status = 'late_and_early')                    AS late_and_early,
-         COUNT(*) FILTER (WHERE status = 'absent')                            AS absent
-       FROM attendance_records
-       WHERE notes = '[simulation]' AND work_date BETWEEN $1 AND $2`,
+      `SELECT COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE status = 'present')      AS present,
+              COUNT(*) FILTER (WHERE status = 'late')         AS late,
+              COUNT(*) FILTER (WHERE status = 'early_leave')  AS early_leave,
+              COUNT(*) FILTER (WHERE status = 'late_and_early') AS late_and_early,
+              COUNT(*) FILTER (WHERE status = 'absent')       AS absent
+       FROM attendance_records WHERE notes = '[simulation]' AND work_date BETWEEN $1 AND $2`,
       [from, to]
     ),
   ])
-
   const r = recsRes.rows[0]
   return {
-    month: parseInt(month, 10),
-    year:  parseInt(year, 10),
+    month: parseInt(month, 10), year: parseInt(year, 10),
     simulatedLogs:    parseInt(logsRes.rows[0].count, 10),
     simulatedRecords: parseInt(r.total, 10),
     breakdown: {

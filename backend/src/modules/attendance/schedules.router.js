@@ -71,7 +71,7 @@ router.get('/', ...auth, async (req, res, next) => {
 
 router.post('/bulk', ...admin, async (req, res, next) => {
   try {
-    const { userId, month, year } = req.body
+    const { userId, month, year, overwrite } = req.body
     if (!userId || !month || !year) {
       return res.status(400).json({ error: { message: 'userId, month và year là bắt buộc' } })
     }
@@ -80,6 +80,7 @@ router.post('/bulk', ...admin, async (req, res, next) => {
       month: parseInt(month, 10),
       year:  parseInt(year,  10),
       createdBy: req.user.id,
+      overwrite: !!overwrite,
     })
     res.status(201).json(result)
   } catch (err) { next(err) }

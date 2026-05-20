@@ -39,7 +39,7 @@ async function listWorkSchedules({ userId, month, year }) {
   return rows.map(toDto)
 }
 
-async function generateMonthlySchedule({ userId, month, year, createdBy }) {
+async function generateMonthlySchedule({ userId, month, year, createdBy, overwrite = false }) {
   const y = parseInt(year, 10)
   const m = parseInt(month, 10)
 
@@ -82,10 +82,16 @@ async function generateMonthlySchedule({ userId, month, year, createdBy }) {
       : (isDayOff ? null : (defaultShiftId ?? null))
 
     const { rows } = await query(
-      `INSERT INTO work_schedules (user_id, work_date, shift_id, is_day_off, created_by)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (user_id, work_date) DO NOTHING
-       RETURNING *`,
+      overwrite
+        ? `INSERT INTO work_schedules (user_id, work_date, shift_id, is_day_off, created_by)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (user_id, work_date) DO UPDATE SET
+             shift_id = $3, is_day_off = $4, updated_at = NOW()
+           RETURNING *`
+        : `INSERT INTO work_schedules (user_id, work_date, shift_id, is_day_off, created_by)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (user_id, work_date) DO NOTHING
+           RETURNING *`,
       [userId, dateStr, shiftId, isDayOff, createdBy]
     )
     if (rows[0]) created.push(toDto(rows[0]))

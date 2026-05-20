@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Loader2, Power, Check, X, Clock } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, Power, Check, X, Clock, Star } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
@@ -220,18 +220,27 @@ function ShiftModal({ shift, onClose, onSaved }) {
 // ── ShiftsTab ─────────────────────────────────────────────────────────────────
 
 function ShiftsTab() {
-  const addToast              = useToastStore((st) => st.toast)
-  const [shifts, setShifts]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [modal, setModal]     = useState(null) // null | 'create' | shift-object
-  const [toggling, setToggling] = useState(null)
+  const addToast               = useToastStore((st) => st.toast)
+  const [shifts,    setShifts]    = useState([])
+  const [defaultId, setDefaultId] = useState(null)  // attendance.default_shift_id
+  const [satId,     setSatId]     = useState(null)  // attendance.saturday_shift_id
+  const [loading,   setLoading]   = useState(true)
+  const [modal,     setModal]     = useState(null)   // null | 'create' | shift-object
+  const [toggling,  setToggling]  = useState(null)
+  const [setDefBusy, setSetDefBusy] = useState(null) // shiftId being set as default
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting,  setDeleting]  = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      // activeOnly=false → show all including inactive
-      const data = await attendanceApi.listShifts(false)
+      const [data, cfg] = await Promise.all([
+        attendanceApi.listShifts(false),
+        attendanceApi.getAttendanceSettings(),
+      ])
       setShifts(Array.isArray(data) ? data : [])
+      setDefaultId(cfg.defaultShiftId ?? null)
+      setSatId(cfg.saturdayShiftId ?? null)
     } catch {
       addToast('Không thể tải danh sách ca làm việc', 'error')
     } finally {
@@ -244,18 +253,39 @@ function ShiftsTab() {
   async function handleToggle(shift) {
     setToggling(shift.id)
     try {
-      // Only send isActive to avoid overwriting other fields with undefined
       await attendanceApi.updateShift(shift.id, { isActive: !shift.isActive })
       addToast(shift.isActive ? 'Đã tắt ca làm việc' : 'Đã kích hoạt ca làm việc', 'success')
       load()
     } catch {
       addToast('Không thể cập nhật trạng thái', 'error')
     } finally {
-      setToggling(null)
-    }
+      setToggling(null) }
   }
 
-  // Format TIME string "HH:MM:SS" → "HH:MM"
+  async function handleSetDefault(shiftId) {
+    setSetDefBusy(shiftId)
+    try {
+      await attendanceApi.updateAttendanceSettings({ defaultShiftId: shiftId })
+      setDefaultId(shiftId)
+      addToast('Đã đặt ca mặc định', 'success')
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
+    } finally { setSetDefBusy(null) }
+  }
+
+  async function handleDelete(id) {
+    setDeleting(id)
+    try {
+      await attendanceApi.deleteShift(id)
+      addToast('Đã xoá ca làm việc', 'success')
+      setDeleteTarget(null)
+      load()
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Không thể xoá ca này', 'error')
+      setDeleteTarget(null)
+    } finally { setDeleting(null) }
+  }
+
   function fmtTime(t) {
     if (!t) return '—'
     return String(t).slice(0, 5)
@@ -268,7 +298,7 @@ function ShiftsTab() {
     <div>
       <div className={s.usersToolbar} style={{ marginBottom: 12 }}>
         <p className={s.sectionText} style={{ margin: 0 }}>
-          Quản lý ca làm việc. Ca không thể xoá — chỉ có thể tắt nếu không muốn sử dụng.
+          Quản lý ca làm việc. Ca đang dùng làm mặc định hoặc gắn với lịch nhân viên sẽ không thể xoá.
         </p>
         <button
           className={s.btnSave}
@@ -278,6 +308,19 @@ function ShiftsTab() {
           <Plus size={14} /> Tạo ca mới
         </button>
       </div>
+
+      {/* Default shift indicator */}
+      {defaultId && !loading && (
+        <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fefce8', border: '1.5px solid #fde68a', borderRadius: 7, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <Star size={13} fill="#f59e0b" color="#f59e0b" />
+          Ca mặc định hệ thống (Thứ 2–6): <strong>{shifts.find((sh) => sh.id === defaultId)?.name ?? '—'}</strong>
+          {satId && (
+            <span style={{ marginLeft: 12, color: '#6b7280' }}>
+              · Thứ 7: <strong>{shifts.find((sh) => sh.id === satId)?.name ?? '—'}</strong>
+            </span>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className={s.skeletonStack}>
@@ -304,45 +347,110 @@ function ShiftsTab() {
               </tr>
             </thead>
             <tbody>
-              {shifts.map((sh) => (
-                <tr key={sh.id} style={!sh.isActive ? { opacity: 0.55 } : {}}>
-                  <td><strong>{sh.name}</strong></td>
-                  <td>{shiftTypeName(sh.shiftType)}</td>
-                  <td>{fmtTime(sh.startTime)}</td>
-                  <td>{fmtTime(sh.endTime)}</td>
-                  <td>{sh.breakMinutes ?? 0} phút</td>
-                  <td style={{ fontSize: 12, color: '#6b7280' }}>
-                    Trễ: {sh.toleranceIn ?? 0}p / Sớm: {sh.toleranceOut ?? 0}p
-                  </td>
-                  <td>
-                    {sh.isActive
-                      ? <span className={s.statusActive}>Hoạt động</span>
-                      : <span className={s.statusResigned}>Đã tắt</span>}
-                  </td>
-                  <td>
-                    <div className={s.userActionsCell} style={{ justifyContent: 'flex-end' }}>
-                      <button
-                        className={s.iconBtn}
-                        title={sh.isActive ? 'Tắt ca' : 'Kích hoạt ca'}
-                        disabled={toggling === sh.id}
-                        onClick={() => handleToggle(sh)}
-                        style={{ color: sh.isActive ? '#dc2626' : '#059669' }}
-                      >
-                        {toggling === sh.id
-                          ? <Loader2 size={15} className={s.spin} />
-                          : <Power size={15} />}
-                      </button>
-                      <button
-                        className={s.iconBtn}
-                        title="Chỉnh sửa"
-                        onClick={() => setModal(sh)}
-                      >
-                        <Pencil size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {shifts.map((sh) => {
+                const isDefault = sh.id === defaultId
+                const isSat     = sh.id === satId
+                return (
+                  <tr key={sh.id} style={!sh.isActive ? { opacity: 0.55 } : {}}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                        <strong>{sh.name}</strong>
+                        {isDefault && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: '#fef3c7', color: '#92400e', border: '1.5px solid #fde68a' }}>
+                            <Star size={10} fill="#f59e0b" color="#f59e0b" /> Mặc định
+                          </span>
+                        )}
+                        {isSat && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' }}>
+                            Thứ 7
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td>{shiftTypeName(sh.shiftType)}</td>
+                    <td>{fmtTime(sh.startTime)}</td>
+                    <td>{fmtTime(sh.endTime)}</td>
+                    <td>{sh.breakMinutes ?? 0} phút</td>
+                    <td style={{ fontSize: 12, color: '#6b7280' }}>
+                      Trễ: {sh.toleranceIn ?? 0}p / Sớm: {sh.toleranceOut ?? 0}p
+                    </td>
+                    <td>
+                      {sh.isActive
+                        ? <span className={s.statusActive}>Hoạt động</span>
+                        : <span className={s.statusResigned}>Đã tắt</span>}
+                    </td>
+                    <td>
+                      <div className={s.userActionsCell} style={{ justifyContent: 'flex-end', gap: 2 }}>
+                        {/* Set as default */}
+                        {!isDefault && (
+                          <button
+                            className={s.iconBtn}
+                            title="Đặt làm ca mặc định (Thứ 2–6)"
+                            disabled={setDefBusy === sh.id}
+                            onClick={() => handleSetDefault(sh.id)}
+                            style={{ color: '#d97706' }}
+                          >
+                            {setDefBusy === sh.id
+                              ? <Loader2 size={14} className={s.spin} />
+                              : <Star size={14} />}
+                          </button>
+                        )}
+                        {/* Toggle active */}
+                        <button
+                          className={s.iconBtn}
+                          title={sh.isActive ? 'Tắt ca' : 'Kích hoạt ca'}
+                          disabled={toggling === sh.id}
+                          onClick={() => handleToggle(sh)}
+                          style={{ color: sh.isActive ? '#dc2626' : '#059669' }}
+                        >
+                          {toggling === sh.id
+                            ? <Loader2 size={15} className={s.spin} />
+                            : <Power size={15} />}
+                        </button>
+                        {/* Edit */}
+                        <button
+                          className={s.iconBtn}
+                          title="Chỉnh sửa"
+                          onClick={() => setModal(sh)}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        {/* Delete */}
+                        {deleteTarget === sh.id ? (
+                          <>
+                            <span style={{ fontSize: 11, color: '#dc2626', whiteSpace: 'nowrap' }}>Xoá?</span>
+                            <button
+                              className={s.iconBtn}
+                              title="Xác nhận xoá"
+                              disabled={deleting === sh.id}
+                              onClick={() => handleDelete(sh.id)}
+                              style={{ color: '#dc2626' }}
+                            >
+                              {deleting === sh.id ? <Loader2 size={14} className={s.spin} /> : <Check size={14} />}
+                            </button>
+                            <button
+                              className={s.iconBtn}
+                              title="Huỷ"
+                              onClick={() => setDeleteTarget(null)}
+                            >
+                              <X size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className={s.iconBtn}
+                            title="Xoá ca"
+                            onClick={() => setDeleteTarget(sh.id)}
+                            style={{ color: '#dc2626' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

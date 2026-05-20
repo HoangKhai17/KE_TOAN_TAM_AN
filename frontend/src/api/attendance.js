@@ -52,6 +52,9 @@ export const createShift = (body) =>
 export const updateShift = (id, body) =>
   api.put(`/shifts/${id}`, body).then(r => r.data)
 
+export const deleteShift = (id) =>
+  api.delete(`/shifts/${id}`).then(r => r.data)
+
 // ── Work Schedules ────────────────────────────────────────────────────────────
 
 export const listWorkSchedules = (params) =>
