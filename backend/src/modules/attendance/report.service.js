@@ -89,28 +89,33 @@ async function getMonthlyReport({ month, year }) {
     [from, to]
   )
 
-  // Get OT details for rate calculation (multiply ot_hours by ot_rate per request)
+  // Raw approved OT hours (giờ thực tế đã duyệt, từ overtime_requests)
   const { rows: otRows } = await query(
-    `SELECT user_id, SUM(ot_hours * ot_rate) AS weighted_ot
+    `SELECT user_id,
+            SUM(ot_hours)              AS approved_ot_hours,
+            SUM(ot_hours * ot_rate)    AS weighted_ot
      FROM overtime_requests
      WHERE ot_date BETWEEN $1 AND $2 AND status = 'approved'
      GROUP BY user_id`,
     [from, to]
   )
-  const otMap = new Map(otRows.map((r) => [r.user_id, parseFloat(r.weighted_ot ?? 0)]))
+  const otMap = new Map(otRows.map((r) => [r.user_id, {
+    approvedOtHours: parseFloat(r.approved_ot_hours ?? 0),
+    weightedOtHours: parseFloat(r.weighted_ot ?? 0),
+  }]))
 
   return attRows.map((r) => ({
-    userId:        r.user_id,
-    userName:      r.user_name,
-    jobTitle:      r.job_title,
-    actualWorkDays: parseFloat(r.actual_work_days),
-    leavePaidDays:  parseFloat(r.leave_paid_days),
-    absentDays:     parseInt(r.absent_days,    10),
-    lateCount:      parseInt(r.late_count,     10),
-    earlyCount:     parseInt(r.early_count,    10),
-    totalOtHours:   parseFloat(r.total_ot_hours),
-    weightedOtHours: otMap.get(r.user_id) ?? 0,
-    totalRecords:   parseInt(r.total_records,  10),
+    userId:          r.user_id,
+    userName:        r.user_name,
+    jobTitle:        r.job_title,
+    actualWorkDays:  parseFloat(r.actual_work_days),
+    leavePaidDays:   parseFloat(r.leave_paid_days),
+    absentDays:      parseInt(r.absent_days,   10),
+    lateCount:       parseInt(r.late_count,    10),
+    earlyCount:      parseInt(r.early_count,   10),
+    approvedOtHours: otMap.get(r.user_id)?.approvedOtHours ?? 0,
+    weightedOtHours: otMap.get(r.user_id)?.weightedOtHours ?? 0,
+    totalRecords:    parseInt(r.total_records, 10),
   }))
 }
 

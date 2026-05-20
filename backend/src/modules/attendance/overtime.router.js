@@ -110,7 +110,8 @@ router.post('/', ...auth, async (req, res, next) => {
  */
 router.put('/:id/approve', ...admin, async (req, res, next) => {
   try {
-    const request = await svc.approveOvertimeRequest(req.params.id, req.user.id)
+    const { approvalNote } = req.body ?? {}
+    const request = await svc.approveOvertimeRequest(req.params.id, req.user.id, approvalNote)
     res.json(request)
   } catch (err) { next(err) }
 })

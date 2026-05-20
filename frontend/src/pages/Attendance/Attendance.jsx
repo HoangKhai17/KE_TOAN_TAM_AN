@@ -102,6 +102,21 @@ function fmtDateVI(iso) {
   return `${d}/${m}/${y}`
 }
 
+function countWeekdays(startDate, endDate) {
+  if (!startDate || !endDate) return 0
+  const [sy, sm, sd] = String(startDate).slice(0, 10).split('-').map(Number)
+  const [ey, em, ed] = String(endDate).slice(0, 10).split('-').map(Number)
+  const cur = new Date(sy, sm - 1, sd)
+  const end = new Date(ey, em - 1, ed)
+  let n = 0
+  while (cur <= end) {
+    const dow = cur.getDay()
+    if (dow !== 0 && dow !== 6) n++
+    cur.setDate(cur.getDate() + 1)
+  }
+  return n
+}
+
 function buildCalendar(year, month, recordMap) {
   const first      = new Date(year, month - 1, 1)
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -227,9 +242,13 @@ export default function Attendance() {
 
 function CalendarTab({ year, month, userId, isAdmin }) {
   const addToast = useToastStore((st) => st.toast)
-  const [records,     setRecords]     = useState([])
-  const [loading,     setLoading]     = useState(true)
-  const [selectedDay, setSelectedDay] = useState(null)
+  const [records,        setRecords]        = useState([])
+  const [loading,        setLoading]        = useState(true)
+  const [selectedDay,    setSelectedDay]    = useState(null)
+  const [totalApprovedOt, setTotalApprovedOt] = useState(0)
+
+  const from = `${year}-${String(month).padStart(2, '0')}-01`
+  const to   = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
 
   const load = useCallback(() => {
     let cancelled = false
@@ -242,6 +261,21 @@ function CalendarTab({ year, month, userId, isAdmin }) {
   }, [userId, month, year]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { return load() }, [load])
+
+  // Fetch tổng OT đã duyệt cả tháng từ overtime_requests (chính xác hơn attendance_records)
+  useEffect(() => {
+    if (isAdmin) return
+    let cancelled = false
+    attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 })
+      .then((res) => {
+        if (!cancelled) {
+          const all = res.requests ?? res.data ?? []
+          setTotalApprovedOt(all.reduce((sum, r) => sum + (Number(r.otHours) || 0), 0))
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [userId, from, to, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const recordMap = useMemo(() => {
     const m = {}
@@ -295,12 +329,12 @@ function CalendarTab({ year, month, userId, isAdmin }) {
             <span className={`${s.summaryVal} ${s.summaryWarning}`}>{summary.lateCnt}</span>
             <span className={s.summaryLbl}>Lần muộn</span>
           </div>
-          {summary.otHours > 0 && (
+          {!isAdmin && (
             <>
               <div className={s.summarySep} />
               <div className={s.summaryItem}>
-                <span className={`${s.summaryVal} ${s.summaryPurple}`}>{Number(summary.otHours).toFixed(1)}h</span>
-                <span className={s.summaryLbl}>OT</span>
+                <span className={`${s.summaryVal} ${s.summaryPurple}`}>{totalApprovedOt.toFixed(1)}h</span>
+                <span className={s.summaryLbl}>OT duyệt</span>
               </div>
             </>
           )}
@@ -553,6 +587,7 @@ function LeaveTab({ isAdmin, year, month, userId }) {
                   <th>Số ngày</th>
                   <th>Lý do</th>
                   <th>Trạng thái</th>
+                  <th>Ghi chú Admin</th>
                   <th className={s.actionsCell} />
                 </tr>
               </thead>
@@ -565,12 +600,20 @@ function LeaveTab({ isAdmin, year, month, userId }) {
                       <td>{LEAVE_TYPE[req.leaveType] ?? req.leaveType}</td>
                       <td>{fmtDateVI(req.startDate)}</td>
                       <td>{fmtDateVI(req.endDate)}</td>
-                      <td className={s.tablePrimary}>{req.daysCount ?? req.totalDays} ngày</td>
+                      <td className={s.tablePrimary}>{req.totalDays > 0 ? req.totalDays : countWeekdays(req.startDate, req.endDate)} ngày</td>
                       <td className={s.tableReason}>{req.reason ?? '—'}</td>
                       <td>
                         <span className={`${s.statusPill} ${getRequestStatusClass(req.status)}`}>
                           {st.label}
                         </span>
+                      </td>
+                      <td className={s.adminNoteCell}>
+                        {req.status === 'rejected' && req.rejectionNote
+                          ? <span className={s.adminNoteReject}>{req.rejectionNote}</span>
+                          : req.status === 'approved' && req.approvalNote
+                            ? <span className={s.adminNoteApprove}>{req.approvalNote}</span>
+                            : <span className={s.tableMuted}>—</span>
+                        }
                       </td>
                       <td>
                         <div className={s.rowActions}>
@@ -706,7 +749,7 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   async function handleApprove() {
     setSaving(true)
     try {
-      await attendanceApi.approveLeaveRequest(request.id)
+      await attendanceApi.approveLeaveRequest(request.id, { approvalNote: note || undefined })
       addToast('Đã duyệt đơn nghỉ phép', 'success')
       onSaved()
     } catch (err) {
@@ -718,7 +761,7 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   async function handleReject() {
     setSaving(true)
     try {
-      await attendanceApi.rejectLeaveRequest(request.id, { reason: note || undefined })
+      await attendanceApi.rejectLeaveRequest(request.id, { rejectionNote: note || undefined })
       addToast('Đã từ chối đơn', 'success')
       onSaved()
     } catch (err) {
@@ -734,7 +777,7 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
           <p className={s.reviewCardTitle}>{request.userName}</p>
           <p className={s.reviewCardText}>{LEAVE_TYPE[request.leaveType] ?? request.leaveType}</p>
           <p className={s.reviewCardText}>
-            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({request.daysCount ?? request.totalDays} ngày)
+            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({request.totalDays > 0 ? request.totalDays : countWeekdays(request.startDate, request.endDate)} ngày)
           </p>
           {request.reason && (
             <p className={s.reviewCardNote}>{request.reason}</p>
@@ -768,12 +811,13 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
 
 function OvertimeTab({ isAdmin, year, month, userId }) {
   const addToast = useToastStore((st) => st.toast)
-  const [requests,     setRequests]     = useState([])
-  const [pagination,   setPagination]   = useState({ total: 0, totalPages: 1 })
-  const [page,         setPage]         = useState(1)
-  const [loading,      setLoading]      = useState(true)
-  const [showForm,     setShowForm]     = useState(false)
-  const [reviewTarget, setReviewTarget] = useState(null)
+  const [requests,        setRequests]        = useState([])
+  const [pagination,      setPagination]      = useState({ total: 0, totalPages: 1 })
+  const [page,            setPage]            = useState(1)
+  const [loading,         setLoading]         = useState(true)
+  const [showForm,        setShowForm]        = useState(false)
+  const [reviewTarget,    setReviewTarget]    = useState(null)
+  const [totalApprovedOt, setTotalApprovedOt] = useState(0)
 
   const from = `${year}-${String(month).padStart(2, '0')}-01`
   const to   = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
@@ -795,6 +839,21 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
 
   useEffect(() => { return load() }, [load])
 
+  // Fetch tổng OT được duyệt cả tháng (không phụ thuộc pagination)
+  useEffect(() => {
+    if (isAdmin) return
+    let cancelled = false
+    attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 })
+      .then((res) => {
+        if (!cancelled) {
+          const all = res.requests ?? res.data ?? []
+          setTotalApprovedOt(all.reduce((sum, r) => sum + (Number(r.otHours) || 0), 0))
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [userId, from, to, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       <div className={s.section}>
@@ -813,6 +872,13 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
             </button>
           )}
         </div>
+
+        {!isAdmin && (
+          <div className={s.otSummaryBar}>
+            <Clock size={14} />
+            Tổng giờ OT đã được duyệt tháng này:&nbsp;<strong>{totalApprovedOt.toFixed(1)} giờ</strong>
+          </div>
+        )}
 
         {loading ? (
           <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
@@ -833,6 +899,7 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
                   <th>Số giờ</th>
                   <th>Lý do</th>
                   <th>Trạng thái</th>
+                  <th>Ghi chú Admin</th>
                   <th className={s.actionsCell} />
                 </tr>
               </thead>
@@ -853,6 +920,14 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
                         <span className={`${s.statusPill} ${getRequestStatusClass(req.status)}`}>
                           {st.label}
                         </span>
+                      </td>
+                      <td className={s.adminNoteCell}>
+                        {req.status === 'rejected' && req.rejectionNote
+                          ? <span className={s.adminNoteReject}>{req.rejectionNote}</span>
+                          : req.status === 'approved' && req.approvalNote
+                            ? <span className={s.adminNoteApprove}>{req.approvalNote}</span>
+                            : <span className={s.tableMuted}>—</span>
+                        }
                       </td>
                       <td>
                         {isAdmin && req.status === 'pending' && (
@@ -990,7 +1065,7 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
   async function handleApprove() {
     setSaving(true)
     try {
-      await attendanceApi.approveOvertimeRequest(request.id)
+      await attendanceApi.approveOvertimeRequest(request.id, { approvalNote: note || undefined })
       addToast('Đã duyệt đơn tăng ca', 'success')
       onSaved()
     } catch (err) {
@@ -1106,8 +1181,8 @@ function SummaryTab({ year, month, userId }) {
                   <td className={r.absentDays > 0 ? s.tableDanger : s.tableMuted}>{r.absentDays}</td>
                   <td className={r.lateCount > 0 ? s.tableWarning : s.tableMuted}>{r.lateCount}</td>
                   <td className={s.tableMuted}>{r.earlyCount}</td>
-                  <td className={r.totalOtHours > 0 ? s.tablePurple : s.tableMuted}>
-                    {Number(r.totalOtHours).toFixed(1)}
+                  <td className={(r.approvedOtHours ?? r.totalOtHours ?? 0) > 0 ? s.tablePurple : s.tableMuted}>
+                    {Number(r.approvedOtHours ?? r.totalOtHours ?? 0).toFixed(1)}
                   </td>
                 </tr>
               ))}

@@ -138,6 +138,21 @@ function fmtCurrency(n) {
   return Number(n).toLocaleString('vi-VN') + ' ₫'
 }
 
+function countWeekdays(startDate, endDate) {
+  if (!startDate || !endDate) return 0
+  const [sy, sm, sd] = String(startDate).slice(0, 10).split('-').map(Number)
+  const [ey, em, ed] = String(endDate).slice(0, 10).split('-').map(Number)
+  const cur = new Date(sy, sm - 1, sd)
+  const end = new Date(ey, em - 1, ed)
+  let n = 0
+  while (cur <= end) {
+    const dow = cur.getDay()
+    if (dow !== 0 && dow !== 6) n++
+    cur.setDate(cur.getDate() + 1)
+  }
+  return n
+}
+
 function buildCalendar(year, month, recordMap, holidaySet = new Set()) {
   const first       = new Date(year, month - 1, 1)
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -841,7 +856,8 @@ function AdminLeaveTab({ staffList }) {
                   <th>Số ngày</th>
                   <th>Trạng thái</th>
                   <th>Lý do</th>
-                  <th className={s.actionsCell} />
+                  <th>Ghi chú Admin</th>
+                  <th className={s.actionsCell}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
@@ -853,13 +869,21 @@ function AdminLeaveTab({ staffList }) {
                     <td>{LEAVE_TYPE[req.leaveType] ?? req.leaveType}</td>
                     <td>{fmtDateVI(req.startDate)}</td>
                     <td>{fmtDateVI(req.endDate)}</td>
-                    <td className={s.tablePrimary}>{req.daysCount ?? req.totalDays} ngày</td>
+                    <td className={s.tablePrimary}>{req.totalDays > 0 ? req.totalDays : countWeekdays(req.startDate, req.endDate)} ngày</td>
                     <td>
                       <span className={`${s.statusPill} ${getRequestStatusClass(req.status)}`}>
                         {st.label}
                       </span>
                     </td>
                     <td className={s.tableReason}>{req.reason ?? '—'}</td>
+                    <td className={s.adminNoteCell}>
+                      {req.status === 'rejected' && req.rejectionNote
+                        ? <span className={s.adminNoteReject}>{req.rejectionNote}</span>
+                        : req.status === 'approved' && req.approvalNote
+                          ? <span className={s.adminNoteApprove}>{req.approvalNote}</span>
+                          : <span className={s.tableMuted}>—</span>
+                      }
+                    </td>
                     <td>
                       {req.status === 'pending' && (
                         <button
@@ -913,7 +937,7 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   async function handleApprove() {
     setSaving(true)
     try {
-      await attendanceApi.approveLeaveRequest(request.id)
+      await attendanceApi.approveLeaveRequest(request.id, { approvalNote: note || undefined })
       addToast('Đã duyệt đơn nghỉ phép', 'success')
       onSaved()
     } catch (err) {
@@ -925,7 +949,7 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   async function handleReject() {
     setSaving(true)
     try {
-      await attendanceApi.rejectLeaveRequest(request.id, { reason: note || undefined })
+      await attendanceApi.rejectLeaveRequest(request.id, { rejectionNote: note || undefined })
       addToast('Đã từ chối đơn', 'success')
       onSaved()
     } catch (err) {
@@ -941,14 +965,14 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
           <p className={s.reviewCardTitle}>{request.userName}</p>
           <p className={s.reviewCardText}>{LEAVE_TYPE[request.leaveType] ?? request.leaveType}</p>
           <p className={s.reviewCardText}>
-            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({request.daysCount ?? request.totalDays} ngày)
+            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({request.totalDays > 0 ? request.totalDays : countWeekdays(request.startDate, request.endDate)} ngày)
           </p>
           {request.reason && (
             <p className={s.reviewCardNote}>{request.reason}</p>
           )}
         </div>
         <div className={s.formGroup}>
-          <label className={s.formLabel}>Ghi chú</label>
+          <label className={s.formLabel}>Ghi chú (khi duyệt hoặc từ chối)</label>
           <textarea value={note} onChange={(e) => setNote(e.target.value)} className={s.formTextarea} rows={2} placeholder="Ghi chú..." />
         </div>
         <div className={s.modalActions}>
@@ -1082,7 +1106,8 @@ function AdminOvertimeTab({ staffList }) {
                   <th>Số giờ</th>
                   <th>Trạng thái</th>
                   <th>Lý do</th>
-                  <th className={s.actionsCell} />
+                  <th>Ghi chú Admin</th>
+                  <th className={s.actionsCell}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
@@ -1103,6 +1128,14 @@ function AdminOvertimeTab({ staffList }) {
                       </span>
                     </td>
                     <td className={s.tableReason}>{req.reason ?? '—'}</td>
+                    <td className={s.adminNoteCell}>
+                      {req.status === 'rejected' && req.rejectionNote
+                        ? <span className={s.adminNoteReject}>{req.rejectionNote}</span>
+                        : req.status === 'approved' && req.approvalNote
+                          ? <span className={s.adminNoteApprove}>{req.approvalNote}</span>
+                          : <span className={s.tableMuted}>—</span>
+                      }
+                    </td>
                     <td>
                       {req.status === 'pending' && (
                         <button
@@ -1156,7 +1189,7 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
   async function handleApprove() {
     setSaving(true)
     try {
-      await attendanceApi.approveOvertimeRequest(request.id)
+      await attendanceApi.approveOvertimeRequest(request.id, { approvalNote: note || undefined })
       addToast('Đã duyệt đơn tăng ca', 'success')
       onSaved()
     } catch (err) {
@@ -1195,7 +1228,7 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
           )}
         </div>
         <div className={s.formGroup}>
-          <label className={s.formLabel}>Ghi chú</label>
+          <label className={s.formLabel}>Ghi chú (khi duyệt hoặc từ chối)</label>
           <textarea value={note} onChange={(e) => setNote(e.target.value)} className={s.formTextarea} rows={2} placeholder="Ghi chú..." />
         </div>
         <div className={s.modalActions}>
@@ -1235,18 +1268,22 @@ function ReportTab({ year, month }) {
 
   function handleExportCSV() {
     if (rows.length === 0) return
-    const header = ['Nhân viên', 'Chức danh', 'Ngày công', 'Nghỉ (TL)', 'Vắng', 'Đi muộn', 'Về sớm', 'Giờ OT', 'OT Pay (₫)']
-    const csvRows = rows.map((r) => [
-      `"${r.userName ?? r.name ?? ''}"`,
-      `"${r.jobTitle ?? ''}"`,
-      r.actualWorkDays ?? r.workDays ?? 0,
-      r.leavePaidDays  ?? r.leaveDays ?? 0,
-      r.absentDays     ?? 0,
-      r.lateCount      ?? r.lateDays  ?? 0,
-      r.earlyCount     ?? 0,
-      Number(r.totalOtHours ?? r.otHours ?? 0).toFixed(1),
-      r.otPay          ?? 0,
-    ])
+    const header = ['Nhân viên', 'Chức danh', 'Ngày công TT', 'Nghỉ (TL)', 'Tổng công', 'Vắng', 'Đi muộn', 'Về sớm', 'Giờ OT (đã duyệt)']
+    const csvRows = rows.map((r) => {
+      const work  = Number(r.actualWorkDays ?? r.workDays ?? 0)
+      const leave = Number(r.leavePaidDays  ?? r.leaveDays ?? 0)
+      return [
+        `"${r.userName ?? r.name ?? ''}"`,
+        `"${r.jobTitle ?? ''}"`,
+        work.toFixed(1),
+        leave.toFixed(1),
+        (work + leave).toFixed(1),
+        r.absentDays ?? 0,
+        r.lateCount  ?? r.lateDays ?? 0,
+        r.earlyCount ?? 0,
+        Number(r.approvedOtHours ?? 0).toFixed(1),
+      ]
+    })
     const csv = [header, ...csvRows].map((row) => row.join(',')).join('\r\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
     const url  = URL.createObjectURL(blob)
@@ -1257,109 +1294,164 @@ function ReportTab({ year, month }) {
     URL.revokeObjectURL(url)
   }
 
-  // Totals
+  // Aggregated totals + derived metrics
   const totals = useMemo(() => {
     if (!rows.length) return null
-    return rows.reduce((acc, r) => ({
-      workDays:  acc.workDays  + Number(r.actualWorkDays ?? r.workDays  ?? 0),
-      leaveDays: acc.leaveDays + Number(r.leavePaidDays  ?? r.leaveDays ?? 0),
-      absent:    acc.absent    + Number(r.absentDays     ?? 0),
-      late:      acc.late      + Number(r.lateCount      ?? r.lateDays  ?? 0),
-      otHours:   acc.otHours   + Number(r.totalOtHours   ?? r.otHours   ?? 0),
-      otPay:     acc.otPay     + Number(r.otPay          ?? 0),
-    }), { workDays: 0, leaveDays: 0, absent: 0, late: 0, otHours: 0, otPay: 0 })
+    return rows.reduce((acc, r) => {
+      const work  = Number(r.actualWorkDays ?? r.workDays ?? 0)
+      const leave = Number(r.leavePaidDays  ?? r.leaveDays ?? 0)
+      return {
+        employees: acc.employees + 1,
+        workDays:  acc.workDays  + work,
+        leaveDays: acc.leaveDays + leave,
+        total:     acc.total     + work + leave,
+        absent:    acc.absent    + Number(r.absentDays ?? 0),
+        late:      acc.late      + Number(r.lateCount  ?? r.lateDays ?? 0),
+        early:     acc.early     + Number(r.earlyCount ?? 0),
+        otHours:   acc.otHours   + Number(r.approvedOtHours ?? 0),
+        perfect:   acc.perfect   + (Number(r.absentDays ?? 0) === 0 && Number(r.lateCount ?? 0) === 0 ? 1 : 0),
+      }
+    }, { employees: 0, workDays: 0, leaveDays: 0, total: 0, absent: 0, late: 0, early: 0, otHours: 0, perfect: 0 })
   }, [rows])
 
   return (
     <>
-      <div className={s.section}>
-        <div className={s.sectionHead}>
-          <h3 className={s.sectionTitle}>Báo cáo chấm công — {monthName(year, month)}</h3>
-          <div className={sa.reportActions}>
-            <button
-              className={`${s.btnSecondary} ${s.btnShort}`}
-              onClick={handleExportCSV}
-              disabled={rows.length === 0}
-            >
-              <Download size={13} /> Xuất CSV
-            </button>
-            <button
-              className={`${s.btnPrimary} ${s.btnShort}`}
-              onClick={() => setShowSync(true)}
-            >
-              <RefreshCw size={13} /> Đồng bộ vào Bảng Lương
-            </button>
-          </div>
+      {/* Header */}
+      <div className={sa.reportHeader}>
+        <h3 className={s.sectionTitle}>Báo cáo chấm công — {monthName(year, month)}</h3>
+        <div className={sa.reportActions}>
+          <button
+            className={`${s.btnSecondary} ${s.btnShort}`}
+            onClick={handleExportCSV}
+            disabled={rows.length === 0}
+          >
+            <Download size={13} /> Xuất CSV
+          </button>
+          <button
+            className={`${s.btnPrimary} ${s.btnShort}`}
+            onClick={() => setShowSync(true)}
+          >
+            <RefreshCw size={13} /> Đồng bộ Bảng Lương
+          </button>
         </div>
+      </div>
 
-        {loading ? (
+      {loading ? (
+        <div className={s.section}>
           <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
-        ) : rows.length === 0 ? (
+        </div>
+      ) : rows.length === 0 ? (
+        <div className={s.section}>
           <div className={s.centered}>
             <BarChart3 size={32} className={s.emptyIcon} />
             Chưa có dữ liệu báo cáo tháng này
           </div>
-        ) : (
-          <div className={s.tableWrap}>
-            <table className={s.table}>
-              <thead>
-                <tr>
-                  <th>Nhân viên</th>
-                  <th>Chức danh</th>
-                  <th className={s.summarySuccess}>Ngày công</th>
-                  <th className={s.summaryPrimary}>Nghỉ (TL)</th>
-                  <th className={s.summaryDanger}>Vắng</th>
-                  <th className={s.summaryWarning}>Đi muộn</th>
-                  <th className={s.detailValueWarningDark}>Về sớm</th>
-                  <th className={s.summaryPurple}>OT (h)</th>
-                  <th className={s.tableCyan}>OT Pay</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={r.userId ?? i}>
-                    <td className={s.tableStrong}>{r.userName ?? r.name}</td>
-                    <td className={s.tableMuted}>{r.jobTitle ?? '—'}</td>
-                    <td className={s.tableSuccess}>
-                      {Number(r.actualWorkDays ?? r.workDays ?? 0).toFixed(1)}
-                    </td>
-                    <td>{Number(r.leavePaidDays ?? r.leaveDays ?? 0).toFixed(1)}</td>
-                    <td className={r.absentDays > 0 ? s.tableDanger : s.tableMuted}>
-                      {r.absentDays ?? 0}
-                    </td>
-                    <td className={(r.lateCount ?? r.lateDays ?? 0) > 0 ? s.tableWarning : s.tableMuted}>
-                      {r.lateCount ?? r.lateDays ?? 0}
-                    </td>
-                    <td className={s.tableMuted}>{r.earlyCount ?? 0}</td>
-                    <td className={(r.totalOtHours ?? r.otHours ?? 0) > 0 ? s.tablePurple : s.tableMuted}>
-                      {Number(r.totalOtHours ?? r.otHours ?? 0).toFixed(1)}
-                    </td>
-                    <td className={r.otPay > 0 ? s.tableCyan : s.tableMuted}>
-                      {fmtCurrency(r.otPay)}
-                    </td>
+        </div>
+      ) : (
+        <>
+          {/* Stats cards */}
+          {totals && (
+            <div className={sa.reportStats}>
+              <div className={sa.reportStat}>
+                <div className={sa.reportStatNum}>{totals.employees}</div>
+                <div className={sa.reportStatLbl}>Nhân viên</div>
+              </div>
+              <div className={`${sa.reportStat} ${sa.reportStatSuccess}`}>
+                <div className={sa.reportStatNum}>{totals.total.toFixed(1)}</div>
+                <div className={sa.reportStatLbl}>Tổng công (ngày)</div>
+              </div>
+              <div className={`${sa.reportStat} ${sa.reportStatPrimary}`}>
+                <div className={sa.reportStatNum}>{totals.leaveDays.toFixed(1)}</div>
+                <div className={sa.reportStatLbl}>Nghỉ có lương</div>
+              </div>
+              <div className={`${sa.reportStat} ${totals.absent > 0 ? sa.reportStatDanger : ''}`}>
+                <div className={sa.reportStatNum}>{totals.absent}</div>
+                <div className={sa.reportStatLbl}>Vắng không phép</div>
+              </div>
+              <div className={`${sa.reportStat} ${totals.late > 0 ? sa.reportStatWarning : ''}`}>
+                <div className={sa.reportStatNum}>{totals.late}</div>
+                <div className={sa.reportStatLbl}>Lần đi muộn</div>
+              </div>
+              <div className={`${sa.reportStat} ${sa.reportStatPurple}`}>
+                <div className={sa.reportStatNum}>{totals.otHours.toFixed(1)}h</div>
+                <div className={sa.reportStatLbl}>Tổng giờ OT</div>
+              </div>
+              <div className={`${sa.reportStat} ${sa.reportStatGreen}`}>
+                <div className={sa.reportStatNum}>{totals.perfect}</div>
+                <div className={sa.reportStatLbl}>Chuyên cần</div>
+              </div>
+            </div>
+          )}
+
+          {/* Detail table */}
+          <div className={s.section}>
+            <div className={s.sectionHead}>
+              <h4 className={sa.reportTableTitle}>Chi tiết theo nhân viên</h4>
+              <span className={sa.reportMeta}>{rows.length} nhân viên</span>
+            </div>
+            <div className={s.tableWrap}>
+              <table className={s.table}>
+                <thead>
+                  <tr>
+                    <th>Nhân viên</th>
+                    <th>Chức danh</th>
+                    <th className={s.summarySuccess}>Ngày công TT</th>
+                    <th className={s.summaryPrimary}>Nghỉ (TL)</th>
+                    <th>Tổng công</th>
+                    <th className={s.summaryDanger}>Vắng</th>
+                    <th className={s.summaryWarning}>Đi muộn</th>
+                    <th className={s.detailValueWarningDark}>Về sớm</th>
+                    <th className={s.summaryPurple}>OT đã duyệt (h)</th>
                   </tr>
-                ))}
-              </tbody>
-              {totals && (
-                <tfoot>
-                  <tr className={s.tableTotalRow}>
-                    <td colSpan={2} className={s.tableTotalLabel}>
-                      Tổng cộng
-                    </td>
-                    <td className={s.tableSuccess}>{totals.workDays.toFixed(1)}</td>
-                    <td className={s.tableBold}>{totals.leaveDays.toFixed(1)}</td>
-                    <td className={totals.absent > 0 ? s.tableDanger : s.tableMuted}>{totals.absent}</td>
-                    <td className={totals.late > 0 ? s.tableWarning : s.tableMuted}>{totals.late}</td>
-                    <td>—</td>
-                    <td className={s.tablePurple}>{totals.otHours.toFixed(1)}</td>
-                    <td className={s.tableCyan}>{fmtCurrency(totals.otPay)}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => {
+                    const work  = Number(r.actualWorkDays ?? r.workDays ?? 0)
+                    const leave = Number(r.leavePaidDays  ?? r.leaveDays ?? 0)
+                    const total = work + leave
+                    const absent = Number(r.absentDays ?? 0)
+                    const late   = Number(r.lateCount ?? r.lateDays ?? 0)
+                    const ot     = Number(r.approvedOtHours ?? 0)
+                    const isPerfect = absent === 0 && late === 0
+                    return (
+                      <tr key={r.userId ?? i} className={isPerfect ? sa.reportRowPerfect : ''}>
+                        <td>
+                          <div className={sa.reportEmployee}>
+                            <span className={s.tableStrong}>{r.userName ?? r.name}</span>
+                            {isPerfect && <span className={sa.perfectBadge}>Chuyên cần</span>}
+                          </div>
+                        </td>
+                        <td className={s.tableMuted}>{r.jobTitle ?? '—'}</td>
+                        <td className={s.tableSuccess}>{work.toFixed(1)}</td>
+                        <td className={leave > 0 ? s.tablePrimary : s.tableMuted}>{leave.toFixed(1)}</td>
+                        <td className={s.tableSemibold}>{total.toFixed(1)}</td>
+                        <td className={absent > 0 ? s.tableDanger : s.tableMuted}>{absent}</td>
+                        <td className={late > 0 ? s.tableWarning : s.tableMuted}>{late}</td>
+                        <td className={s.tableMuted}>{r.earlyCount ?? 0}</td>
+                        <td className={ot > 0 ? s.tablePurple : s.tableMuted}>{ot.toFixed(1)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                {totals && (
+                  <tfoot>
+                    <tr className={s.tableTotalRow}>
+                      <td colSpan={2} className={s.tableTotalLabel}>Tổng cộng</td>
+                      <td className={s.tableSuccess}>{totals.workDays.toFixed(1)}</td>
+                      <td className={s.tableBold}>{totals.leaveDays.toFixed(1)}</td>
+                      <td className={s.tableSemibold}>{totals.total.toFixed(1)}</td>
+                      <td className={totals.absent > 0 ? s.tableDanger : s.tableMuted}>{totals.absent}</td>
+                      <td className={totals.late > 0 ? s.tableWarning : s.tableMuted}>{totals.late}</td>
+                      <td className={s.tableMuted}>{totals.early}</td>
+                      <td className={s.tablePurple}>{totals.otHours.toFixed(1)}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {showSync && (
         <SyncPayrollModal

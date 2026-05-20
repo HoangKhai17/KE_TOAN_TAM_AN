@@ -80,8 +80,8 @@ export const listLeaveRequests = (params) =>
 export const createLeaveRequest = (body) =>
   api.post('/leave-requests', body).then(r => r.data)
 
-export const approveLeaveRequest = (id) =>
-  api.put(`/leave-requests/${id}/approve`).then(r => r.data)
+export const approveLeaveRequest = (id, body = {}) =>
+  api.put(`/leave-requests/${id}/approve`, body).then(r => r.data)
 
 export const rejectLeaveRequest = (id, body = {}) =>
   api.put(`/leave-requests/${id}/reject`, body).then(r => r.data)
@@ -97,8 +97,8 @@ export const listOvertimeRequests = (params) =>
 export const createOvertimeRequest = (body) =>
   api.post('/overtime-requests', body).then(r => r.data)
 
-export const approveOvertimeRequest = (id) =>
-  api.put(`/overtime-requests/${id}/approve`).then(r => r.data)
+export const approveOvertimeRequest = (id, body = {}) =>
+  api.put(`/overtime-requests/${id}/approve`, body).then(r => r.data)
 
 export const rejectOvertimeRequest = (id, body = {}) =>
   api.put(`/overtime-requests/${id}/reject`, body).then(r => r.data)

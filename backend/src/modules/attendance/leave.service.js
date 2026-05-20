@@ -18,7 +18,8 @@ function toDto(r) {
     approvedBy:    r.approved_by,
     approverName:  r.approver_name ?? undefined,
     approvedAt:    r.approved_at,
-    rejectionNote: r.rejection_note,
+    approvalNote:  r.approval_note  ?? undefined,
+    rejectionNote: r.rejection_note ?? undefined,
     createdAt:     r.created_at,
     updatedAt:     r.updated_at,
   }
@@ -114,13 +115,14 @@ async function createLeaveRequest({ userId, leaveType, startDate, endDate, reaso
   return toDto(rows[0])
 }
 
-async function approveLeaveRequest(id, approvedBy) {
+async function approveLeaveRequest(id, approvedBy, approvalNote) {
   const { rows } = await query(
     `UPDATE leave_requests
-     SET status = 'approved', approved_by = $1, approved_at = NOW(), updated_at = NOW()
+     SET status = 'approved', approved_by = $1, approved_at = NOW(),
+         approval_note = $3, updated_at = NOW()
      WHERE id = $2 AND status = 'pending'
      RETURNING *`,
-    [approvedBy, id]
+    [approvedBy, id, approvalNote ?? null]
   )
   if (!rows[0]) throw Object.assign(new Error('Leave request not found or already reviewed'), { status: 404 })
   const leave = rows[0]
