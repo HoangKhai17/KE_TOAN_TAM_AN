@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Check, Lock, DollarSign, Download, Plus, Trash2,
+  ArrowLeft, Check, Pencil, DollarSign, Download, Plus, Trash2,
   AlertTriangle, Loader2, UserCog,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
@@ -427,7 +427,7 @@ export default function PayrollDetail() {
                     <th className={s.moneyCol}>Thuế TNCN</th>
                     <th className={s.moneyCol}>KT khác</th>
                     <th className={s.moneyCol} style={{ color: 'var(--color-success-dark)' }}>Thực nhận</th>
-                    {isAdmin && isDraft && <th style={{ width: 70 }} />}
+                    {isAdmin && isDraft && <th style={{ width: 80, textAlign: 'right' }}>Hành động</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -451,7 +451,7 @@ export default function PayrollDetail() {
                                 onClick={() => { setEditRecord(rec); setShowUpsert(true) }}
                                 title="Chỉnh sửa"
                               >
-                                <Lock size={12} style={{ opacity: 0.7 }} />
+                                <Pencil size={12} />
                               </button>
                               <button
                                 className={`${s.iconBtn} ${s.iconBtnDanger}`}
