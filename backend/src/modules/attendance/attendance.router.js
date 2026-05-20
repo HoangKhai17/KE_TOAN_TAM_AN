@@ -266,8 +266,9 @@ router.post('/sync-payroll', ...admin, ctrl.syncPayroll)
  *       200: { description: Deleted }
  *       404: { description: Not found }
  */
-router.get('/holidays',      ...auth,  ctrl.listHolidays)
-router.post('/holidays',     ...admin, ctrl.createHoliday)
+router.get('/holidays',        ...auth,  ctrl.listHolidays)
+router.post('/holidays',       ...admin, ctrl.createHoliday)
+router.put('/holidays/:id',    ...admin, ctrl.updateHoliday)
 router.delete('/holidays/:id', ...admin, ctrl.deleteHoliday)
 
 /**

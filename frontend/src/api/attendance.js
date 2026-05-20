@@ -38,6 +38,9 @@ export const listHolidays = (year) =>
 export const createHoliday = (body) =>
   api.post('/attendance/holidays', body).then(r => r.data)
 
+export const updateHoliday = (id, body) =>
+  api.put(`/attendance/holidays/${id}`, body).then(r => r.data)
+
 export const deleteHoliday = (id) =>
   api.delete(`/attendance/holidays/${id}`).then(r => r.data)
 

@@ -130,6 +130,14 @@ async function createHoliday(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function updateHoliday(req, res, next) {
+  try {
+    const { name, otMultiplier } = req.body
+    const holiday = await reportSvc.updateHoliday(req.params.id, { name, otMultiplier })
+    res.json(holiday)
+  } catch (err) { next(err) }
+}
+
 async function deleteHoliday(req, res, next) {
   try {
     await reportSvc.deleteHoliday(req.params.id)
@@ -162,6 +170,6 @@ module.exports = {
   checkIn, checkOut, getToday, listRecords, getSummary,
   adjustRecord, listAdjustments,
   getReport, syncPayroll,
-  listHolidays, createHoliday, deleteHoliday,
+  listHolidays, createHoliday, updateHoliday, deleteHoliday,
   getSettings, updateSettings,
 }

@@ -21,6 +21,13 @@ const _NOW = new Date()
 const _CY  = String(_NOW.getFullYear())
 const _CM  = String(_NOW.getMonth() + 1)
 
+function parseDateLocal(d) {
+  if (!d) return null
+  const str = typeof d === 'string' ? d : String(d)
+  const [y, mo, day] = str.slice(0, 10).split('-').map(Number)
+  return new Date(y, mo - 1, day)
+}
+
 function ymToDates(year, month) {
   if (!year) return { from: undefined, to: undefined }
   if (!month) return { from: `${year}-01-01`, to: `${year}-12-31` }
@@ -103,7 +110,7 @@ function fmtCurrency(n) {
   return Number(n).toLocaleString('vi-VN') + ' ₫'
 }
 
-function buildCalendar(year, month, recordMap) {
+function buildCalendar(year, month, recordMap, holidaySet = new Set()) {
   const first       = new Date(year, month - 1, 1)
   const daysInMonth = new Date(year, month, 0).getDate()
   const startOffset = (first.getDay() + 6) % 7
@@ -116,14 +123,18 @@ function buildCalendar(year, month, recordMap) {
     if (dayNum < 1 || dayNum > daysInMonth) {
       cells.push({ type: 'empty', key: `e-${i}` })
     } else {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
-      const jsDay   = new Date(dateStr + 'T00:00:00').getDay()
+      const dateStr  = `${year}-${String(month).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
+      const jsDay    = new Date(dateStr + 'T00:00:00').getDay()
+      const isHoliday = holidaySet.has(dateStr)
+      // If it's a holiday but no record yet, synthesize a virtual holiday record for display
+      const record   = recordMap[dateStr] ?? (isHoliday ? { status: 'holiday', isHoliday: true } : null)
       cells.push({
         type: 'day', key: dateStr, dateStr, dayNum,
-        record:    recordMap[dateStr] ?? null,
+        record,
         isToday:   dateStr === todayStr,
         isFuture:  dateStr > todayStr,
         isWeekend: jsDay === 0 || jsDay === 6,
+        isHoliday,
       })
     }
   }
@@ -342,6 +353,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
   const addToast    = useToastStore((st) => st.toast)
   const [selectedId, setSelectedId] = useState(adminUserId ?? '')
   const [records,    setRecords]    = useState([])
+  const [holidays,   setHolidays]   = useState([])
   const [loading,    setLoading]    = useState(true)
   const [selectedDay, setSelectedDay] = useState(null)
 
@@ -349,8 +361,15 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
     if (!selectedId) return () => {}
     let cancelled = false
     setLoading(true)
-    attendanceApi.listAttendanceRecords({ userId: selectedId, month, year, limit: 31 })
-      .then((res) => { if (!cancelled) setRecords(res.records ?? []) })
+    Promise.all([
+      attendanceApi.listAttendanceRecords({ userId: selectedId, month, year, limit: 31 }),
+      attendanceApi.listHolidays(year),
+    ])
+      .then(([res, hols]) => {
+        if (cancelled) return
+        setRecords(res.records ?? [])
+        setHolidays(Array.isArray(hols) ? hols : [])
+      })
       .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu chấm công', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -364,7 +383,17 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
     return m
   }, [records])
 
-  const cells = useMemo(() => buildCalendar(year, month, recordMap), [year, month, recordMap])
+  const holidaySet = useMemo(() => {
+    const s = new Set()
+    holidays.forEach((h) => {
+      const d = String(h.holidayDate).slice(0, 10)
+      const dt = parseDateLocal(d)
+      if (dt && dt.getMonth() + 1 === month) s.add(d)
+    })
+    return s
+  }, [holidays, month])
+
+  const cells = useMemo(() => buildCalendar(year, month, recordMap, holidaySet), [year, month, recordMap, holidaySet])
 
   return (
     <>

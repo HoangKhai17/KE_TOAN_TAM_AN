@@ -39,6 +39,18 @@ async function createHoliday({ holidayDate, name, otMultiplier = 3.0 }) {
   return toHolidayDto(rows[0])
 }
 
+async function updateHoliday(id, { name, otMultiplier }) {
+  const { rows } = await query(
+    `UPDATE public_holidays
+     SET name = COALESCE($1, name), ot_multiplier = COALESCE($2, ot_multiplier)
+     WHERE id = $3
+     RETURNING *`,
+    [name ?? null, otMultiplier != null ? Number(otMultiplier) : null, id]
+  )
+  if (!rows[0]) throw Object.assign(new Error('Holiday not found'), { status: 404 })
+  return toHolidayDto(rows[0])
+}
+
 async function deleteHoliday(id) {
   const { rows } = await query(
     'DELETE FROM public_holidays WHERE id = $1 RETURNING id',
@@ -196,4 +208,4 @@ async function syncAttendanceToPayroll(payrollPeriodId) {
   }
 }
 
-module.exports = { listHolidays, createHoliday, deleteHoliday, getMonthlyReport, syncAttendanceToPayroll }
+module.exports = { listHolidays, createHoliday, updateHoliday, deleteHoliday, getMonthlyReport, syncAttendanceToPayroll }

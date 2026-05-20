@@ -11,11 +11,6 @@ const SHIFT_TYPES = [
   { value: 'flexible', label: 'Linh hoạt' },
 ]
 
-const OT_MULTIPLIERS = [
-  { value: 1.5, label: '× 1.5 (ngày thường)' },
-  { value: 2.0, label: '× 2.0 (cuối tuần)' },
-  { value: 3.0, label: '× 3.0 (ngày lễ)' },
-]
 
 // ── Sub-tab strip ─────────────────────────────────────────────────────────────
 
@@ -475,35 +470,50 @@ function ShiftsTab() {
 
 // ── HolidayModal ──────────────────────────────────────────────────────────────
 
-function HolidayModal({ onClose, onSaved }) {
-  const addToast            = useToastStore((st) => st.toast)
-  const [form, setForm]     = useState({ holidayDate: '', name: '', otMultiplier: 3.0 })
+function HolidayModal({ holiday, onClose, onSaved }) {
+  const addToast  = useToastStore((st) => st.toast)
+  const isEdit    = Boolean(holiday)
+  const [form, setForm] = useState({
+    holidayDate:  holiday ? String(holiday.holidayDate).slice(0, 10) : '',
+    name:         holiday?.name ?? '',
+    otMultiplier: holiday?.otMultiplier ?? 3.0,
+  })
   const [saving, setSaving] = useState(false)
 
   function set(field, val) { setForm((f) => ({ ...f, [field]: val })) }
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.holidayDate) { addToast('Vui lòng chọn ngày lễ', 'error'); return }
+    if (!isEdit && !form.holidayDate) { addToast('Vui lòng chọn ngày lễ', 'error'); return }
     if (!form.name.trim()) { addToast('Tên ngày lễ không được để trống', 'error'); return }
+    const multiplier = Number(form.otMultiplier)
+    if (!multiplier || multiplier < 1) { addToast('Hệ số OT phải lớn hơn hoặc bằng 1', 'error'); return }
     setSaving(true)
     try {
-      await attendanceApi.createHoliday({
-        holidayDate:  form.holidayDate,
-        name:         form.name.trim(),
-        otMultiplier: Number(form.otMultiplier),
-      })
-      addToast('Đã thêm ngày lễ', 'success')
+      if (isEdit) {
+        await attendanceApi.updateHoliday(holiday.id, {
+          name:         form.name.trim(),
+          otMultiplier: Number(form.otMultiplier),
+        })
+        addToast('Đã cập nhật ngày lễ', 'success')
+      } else {
+        await attendanceApi.createHoliday({
+          holidayDate:  form.holidayDate,
+          name:         form.name.trim(),
+          otMultiplier: Number(form.otMultiplier),
+        })
+        addToast('Đã thêm ngày lễ', 'success')
+      }
       onSaved()
     } catch (err) {
-      addToast(err?.response?.data?.error?.message ?? 'Không thể thêm ngày lễ', 'error')
+      addToast(err?.response?.data?.error?.message ?? 'Không thể lưu ngày lễ', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <Modal onClose={onClose} title="Thêm ngày lễ">
+    <Modal onClose={onClose} title={isEdit ? 'Chỉnh sửa ngày lễ' : 'Thêm ngày lễ'}>
       <form onSubmit={handleSubmit} className={s.modalForm}>
         <div>
           <label className={s.settingsLabel}>Ngày lễ *</label>
@@ -512,7 +522,11 @@ function HolidayModal({ onClose, onSaved }) {
             className={s.settingsInput}
             value={form.holidayDate}
             onChange={(e) => set('holidayDate', e.target.value)}
+            disabled={isEdit}
           />
+          {isEdit && (
+            <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>Không thể đổi ngày — xoá và tạo lại nếu cần.</p>
+          )}
         </div>
         <div>
           <label className={s.settingsLabel}>Tên ngày lễ *</label>
@@ -525,21 +539,26 @@ function HolidayModal({ onClose, onSaved }) {
         </div>
         <div>
           <label className={s.settingsLabel}>Hệ số OT ngày lễ</label>
-          <select
-            className={s.settingsSelect}
+          <input
+            type="number"
+            min={1}
+            max={10}
+            step={0.5}
+            className={s.settingsInput}
+            style={{ maxWidth: 140 }}
             value={form.otMultiplier}
             onChange={(e) => set('otMultiplier', e.target.value)}
-          >
-            {OT_MULTIPLIERS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+            placeholder="VD: 3.0"
+          />
+          <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+            Theo luật: ngày thường × 1.5 · cuối tuần × 2.0 · ngày lễ × 3.0
+          </p>
         </div>
         <div className={s.modalActions}>
           <button type="button" className={s.btnOutline} onClick={onClose} disabled={saving}>Huỷ</button>
           <button type="submit" className={s.btnSave} disabled={saving}>
             {saving && <Loader2 size={13} className={s.spin} />}
-            Thêm ngày lễ
+            {isEdit ? 'Cập nhật' : 'Thêm ngày lễ'}
           </button>
         </div>
       </form>
@@ -574,11 +593,12 @@ function dowVI(d) {
 
 function HolidaysTab() {
   const addToast                = useToastStore((st) => st.toast)
-  const [allHolidays, setAllHolidays] = useState([]) // all holidays ever loaded
-  const [yearOptions, setYearOptions] = useState([]) // distinct years from data
-  const [year, setYear]         = useState(null)     // currently selected year
+  const [allHolidays, setAllHolidays] = useState([])
+  const [yearOptions, setYearOptions] = useState([])
+  const [year, setYear]         = useState(null)
   const [loading, setLoading]   = useState(true)
   const [showModal, setShowModal]     = useState(false)
+  const [editTarget, setEditTarget]   = useState(null) // holiday object to edit
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(null)
 
@@ -734,14 +754,23 @@ function HolidaysTab() {
                           </button>
                         </>
                       ) : (
-                        <button
-                          className={s.iconBtn}
-                          title="Xoá"
-                          onClick={() => setDeleteTarget(h.id)}
-                          style={{ color: '#dc2626' }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        <>
+                          <button
+                            className={s.iconBtn}
+                            title="Chỉnh sửa"
+                            onClick={() => { setEditTarget(h); setDeleteTarget(null) }}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            className={s.iconBtn}
+                            title="Xoá"
+                            onClick={() => { setDeleteTarget(h.id); setEditTarget(null) }}
+                            style={{ color: '#dc2626' }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -756,6 +785,13 @@ function HolidaysTab() {
         <HolidayModal
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); loadAll() }}
+        />
+      )}
+      {editTarget && (
+        <HolidayModal
+          holiday={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { setEditTarget(null); loadAll() }}
         />
       )}
     </div>
