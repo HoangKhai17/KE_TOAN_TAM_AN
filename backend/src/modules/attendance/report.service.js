@@ -68,37 +68,39 @@ async function getMonthlyReport({ month, year }) {
   const lastDay = new Date(y, m, 0).getDate()
   const to   = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-  const { rows: attRows } = await query(
-    `SELECT
-       u.id         AS user_id,
-       u.name       AS user_name,
-       u.job_title,
-       COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('present','late','early_leave','late_and_early')), 0) AS actual_work_days,
-       COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('on_leave','wfh','business_trip','holiday')),       0) AS leave_paid_days,
-       COUNT(*) FILTER (WHERE ar.status = 'absent')    AS absent_days,
-       COUNT(*) FILTER (WHERE ar.status = 'late')      AS late_count,
-       COUNT(*) FILTER (WHERE ar.status IN ('early_leave','late_and_early')) AS early_count,
-       COALESCE(SUM(ar.ot_hours), 0)                   AS total_ot_hours,
-       COUNT(ar.id)                                     AS total_records
-     FROM users u
-     LEFT JOIN attendance_records ar
-       ON ar.user_id = u.id AND ar.work_date BETWEEN $1 AND $2
-     WHERE u.status IN ('active','on_leave')
-     GROUP BY u.id, u.name, u.job_title
-     ORDER BY u.name`,
-    [from, to]
-  )
+  const [{ rows: attRows }, { rows: otRows }] = await Promise.all([
+    query(
+      `SELECT
+         u.id         AS user_id,
+         u.name       AS user_name,
+         u.job_title,
+         COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('present','late','early_leave','late_and_early')), 0) AS actual_work_days,
+         COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('on_leave','wfh','business_trip','holiday')),       0) AS leave_paid_days,
+         COUNT(*) FILTER (WHERE ar.status = 'absent')    AS absent_days,
+         COUNT(*) FILTER (WHERE ar.status = 'late')      AS late_count,
+         COUNT(*) FILTER (WHERE ar.status IN ('early_leave','late_and_early')) AS early_count,
+         COALESCE(SUM(ar.ot_hours), 0)                   AS total_ot_hours,
+         COUNT(ar.id)                                     AS total_records
+       FROM users u
+       LEFT JOIN attendance_records ar
+         ON ar.user_id = u.id AND ar.work_date BETWEEN $1 AND $2
+       WHERE u.status IN ('active','on_leave')
+       GROUP BY u.id, u.name, u.job_title
+       ORDER BY u.name`,
+      [from, to]
+    ),
+    // Raw approved OT hours (giờ thực tế đã duyệt, từ overtime_requests)
+    query(
+      `SELECT user_id,
+              SUM(ot_hours)              AS approved_ot_hours,
+              SUM(ot_hours * ot_rate)    AS weighted_ot
+       FROM overtime_requests
+       WHERE ot_date BETWEEN $1 AND $2 AND status = 'approved'
+       GROUP BY user_id`,
+      [from, to]
+    ),
+  ])
 
-  // Raw approved OT hours (giờ thực tế đã duyệt, từ overtime_requests)
-  const { rows: otRows } = await query(
-    `SELECT user_id,
-            SUM(ot_hours)              AS approved_ot_hours,
-            SUM(ot_hours * ot_rate)    AS weighted_ot
-     FROM overtime_requests
-     WHERE ot_date BETWEEN $1 AND $2 AND status = 'approved'
-     GROUP BY user_id`,
-    [from, to]
-  )
   const otMap = new Map(otRows.map((r) => [r.user_id, {
     approvedOtHours: parseFloat(r.approved_ot_hours ?? 0),
     weightedOtHours: parseFloat(r.weighted_ot ?? 0),
@@ -156,40 +158,48 @@ async function syncAttendanceToPayroll(payrollPeriodId) {
     []
   )
 
-  const updatedUsers = []
-  for (const emp of employees) {
-    // Attendance summary for this employee
-    const { rows: attRows } = await query(
-      `SELECT
+  const empIds = employees.map((e) => e.id)
+
+  // Batch: aggregate attendance + OT for ALL employees in 2 queries (not 2×N)
+  const [{ rows: attAggRows }, { rows: otAggRows }] = await Promise.all([
+    query(
+      `SELECT user_id,
          COALESCE(SUM(work_units) FILTER (WHERE status IN ('present','late','early_leave','late_and_early')), 0) AS actual_work_days,
          COALESCE(SUM(work_units) FILTER (WHERE status IN ('on_leave','wfh','business_trip','holiday')),       0) AS leave_paid_days,
-         COUNT(*)   FILTER (WHERE status = 'absent')  AS absent_days,
-         COUNT(*)   FILTER (WHERE status = 'late')    AS late_count,
-         COALESCE(SUM(ot_hours), 0)                   AS total_ot_hours
+         COUNT(*) FILTER (WHERE status = 'absent') AS absent_days,
+         COUNT(*) FILTER (WHERE status = 'late')   AS late_count
        FROM attendance_records
-       WHERE user_id = $1 AND work_date BETWEEN $2 AND $3`,
-      [emp.id, from, to]
-    )
-    const att = attRows[0]
-
-    // Raw approved OT hours + weighted OT (hours × rate) from overtime_requests
-    const { rows: otRows } = await query(
-      `SELECT
+       WHERE work_date BETWEEN $1 AND $2 AND user_id = ANY($3::uuid[])
+       GROUP BY user_id`,
+      [from, to, empIds]
+    ),
+    query(
+      `SELECT user_id,
          COALESCE(SUM(ot_hours), 0)           AS approved_ot_hours,
          COALESCE(SUM(ot_hours * ot_rate), 0) AS weighted_ot
        FROM overtime_requests
-       WHERE user_id = $1 AND ot_date BETWEEN $2 AND $3 AND status = 'approved'`,
-      [emp.id, from, to]
-    )
+       WHERE ot_date BETWEEN $1 AND $2 AND status = 'approved' AND user_id = ANY($3::uuid[])
+       GROUP BY user_id`,
+      [from, to, empIds]
+    ),
+  ])
+
+  const attMap = new Map(attAggRows.map((r) => [r.user_id, r]))
+  const otMap  = new Map(otAggRows.map((r)  => [r.user_id, r]))
+
+  const updatedUsers = []
+  for (const emp of employees) {
+    const att = attMap.get(emp.id) ?? {}
+    const ot  = otMap.get(emp.id)  ?? {}
 
     const summary = {
-      actual_work_days:  parseFloat(att.actual_work_days),
-      leave_paid_days:   parseFloat(att.leave_paid_days),
-      total_paid_days:   parseFloat(att.actual_work_days) + parseFloat(att.leave_paid_days),
-      absent_days:       parseInt(att.absent_days, 10),
-      late_count:        parseInt(att.late_count,  10),
-      ot_hours:          parseFloat(otRows[0].approved_ot_hours),
-      ot_weighted_hours: parseFloat(otRows[0].weighted_ot),
+      actual_work_days:  parseFloat(att.actual_work_days  ?? 0),
+      leave_paid_days:   parseFloat(att.leave_paid_days   ?? 0),
+      total_paid_days:   parseFloat(att.actual_work_days  ?? 0) + parseFloat(att.leave_paid_days ?? 0),
+      absent_days:       parseInt(att.absent_days  ?? 0, 10),
+      late_count:        parseInt(att.late_count   ?? 0, 10),
+      ot_hours:          parseFloat(ot.approved_ot_hours ?? 0),
+      ot_weighted_hours: parseFloat(ot.weighted_ot       ?? 0),
     }
 
     // UPSERT: tạo mới nếu chưa có, cập nhật attendance_summary nếu đã có

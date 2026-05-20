@@ -336,12 +336,18 @@ async function getToday(userId) {
 
 // ── List / Summary ────────────────────────────────────────────────────────────
 
-async function listAttendanceRecords({ userId, month, year, status, page = 1, limit = 31 } = {}) {
-  const y = parseInt(year, 10)
-  const m = parseInt(month, 10)
-  const from = `${y}-${String(m).padStart(2, '0')}-01`
-  const lastDay = new Date(y, m, 0).getDate()
-  const to   = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+async function listAttendanceRecords({ userId, month, year, from: fromOverride, to: toOverride, status, page = 1, limit = 31 } = {}) {
+  let from, to
+  if (fromOverride && toOverride) {
+    from = fromOverride
+    to   = toOverride
+  } else {
+    const y = parseInt(year, 10)
+    const m = parseInt(month, 10)
+    from = `${y}-${String(m).padStart(2, '0')}-01`
+    const lastDay = new Date(y, m, 0).getDate()
+    to   = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+  }
 
   const conditions = ['ar.work_date BETWEEN $1 AND $2']
   const params = [from, to]
@@ -352,21 +358,19 @@ async function listAttendanceRecords({ userId, month, year, status, page = 1, li
   const where  = conditions.join(' AND ')
   const offset = (page - 1) * limit
 
-  const countRes = await query(`SELECT COUNT(*) FROM attendance_records ar WHERE ${where}`, params)
-  const total    = parseInt(countRes.rows[0].count, 10)
-
-  const dataParams = [...params, limit, offset]
+  // Single query with window COUNT — eliminates the separate COUNT(*) round-trip
   const { rows } = await query(
-    `SELECT ar.*, u.name AS user_name, s.name AS shift_name
+    `SELECT ar.*, u.name AS user_name, s.name AS shift_name, COUNT(*) OVER() AS _total
      FROM attendance_records ar
      JOIN  users u ON ar.user_id  = u.id
      LEFT JOIN shifts s ON ar.shift_id = s.id
      WHERE ${where}
      ORDER BY ar.work_date DESC, u.name
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    dataParams
+    [...params, limit, offset]
   )
 
+  const total = parseInt(rows[0]?._total ?? 0, 10)
   return {
     records: rows.map(toRecordDto),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },

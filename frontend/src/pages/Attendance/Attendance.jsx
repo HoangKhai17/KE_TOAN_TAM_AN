@@ -253,29 +253,23 @@ function CalendarTab({ year, month, userId, isAdmin }) {
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    attendanceApi.listAttendanceRecords({ userId, month, year, limit: 31 })
-      .then((res) => { if (!cancelled) setRecords(res.records ?? []) })
-      .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu chấm công', 'error') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [userId, month, year]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { return load() }, [load])
-
-  // Fetch tổng OT đã duyệt cả tháng từ overtime_requests (chính xác hơn attendance_records)
-  useEffect(() => {
-    if (isAdmin) return
-    let cancelled = false
-    attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 })
-      .then((res) => {
-        if (!cancelled) {
-          const all = res.requests ?? res.data ?? []
+    const requests = [attendanceApi.listAttendanceRecords({ userId, month, year, limit: 31 })]
+    if (!isAdmin) requests.push(attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 }))
+    Promise.all(requests)
+      .then(([attRes, otRes]) => {
+        if (cancelled) return
+        setRecords(attRes.records ?? [])
+        if (otRes) {
+          const all = otRes.requests ?? otRes.data ?? []
           setTotalApprovedOt(all.reduce((sum, r) => sum + (Number(r.otHours) || 0), 0))
         }
       })
-      .catch(() => {})
+      .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu chấm công', 'error') })
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [userId, from, to, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, month, year, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { return load() }, [load])
 
   const recordMap = useMemo(() => {
     const m = {}
@@ -825,34 +819,25 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    attendanceApi.listOvertimeRequests({ userId, from, to, page, limit: 20 })
-      .then((res) => {
-        if (!cancelled) {
-          setRequests(res.requests ?? res.data ?? [])
-          setPagination(res.pagination ?? { total: 0, totalPages: 1 })
+    // Run paginated list + monthly total concurrently (total is independent of pagination)
+    const requests = [attendanceApi.listOvertimeRequests({ userId, from, to, page, limit: 20 })]
+    if (!isAdmin) requests.push(attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 }))
+    Promise.all(requests)
+      .then(([pageRes, totalRes]) => {
+        if (cancelled) return
+        setRequests(pageRes.requests ?? pageRes.data ?? [])
+        setPagination(pageRes.pagination ?? { total: 0, totalPages: 1 })
+        if (totalRes) {
+          const all = totalRes.requests ?? totalRes.data ?? []
+          setTotalApprovedOt(all.reduce((sum, r) => sum + (Number(r.otHours) || 0), 0))
         }
       })
       .catch(() => { if (!cancelled) addToast('Không thể tải đơn tăng ca', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [userId, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, from, to, page, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { return load() }, [load])
-
-  // Fetch tổng OT được duyệt cả tháng (không phụ thuộc pagination)
-  useEffect(() => {
-    if (isAdmin) return
-    let cancelled = false
-    attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 })
-      .then((res) => {
-        if (!cancelled) {
-          const all = res.requests ?? res.data ?? []
-          setTotalApprovedOt(all.reduce((sum, r) => sum + (Number(r.otHours) || 0), 0))
-        }
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [userId, from, to, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>

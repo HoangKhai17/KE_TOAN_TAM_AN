@@ -77,12 +77,11 @@ async function listOvertimeRequests({ userId, status, from, to, page = 1, limit 
   if (from)   { params.push(from);   conditions.push(`o.ot_date >= $${params.length}`) }
   if (to)     { params.push(to);     conditions.push(`o.ot_date <= $${params.length}`) }
 
-  const where    = conditions.join(' AND ')
-  const countRes = await query(`SELECT COUNT(*) FROM overtime_requests o WHERE ${where}`, params)
-  const total    = parseInt(countRes.rows[0].count, 10)
+  const where = conditions.join(' AND ')
 
+  // Single query with window COUNT — eliminates the separate COUNT(*) round-trip
   const { rows } = await query(
-    `SELECT o.*, u.name AS user_name, a.name AS approver_name
+    `SELECT o.*, u.name AS user_name, a.name AS approver_name, COUNT(*) OVER() AS _total
      FROM overtime_requests o
      JOIN  users u ON o.user_id    = u.id
      LEFT JOIN users a ON o.approved_by = a.id
@@ -91,6 +90,7 @@ async function listOvertimeRequests({ userId, status, from, to, page = 1, limit 
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   )
+  const total = parseInt(rows[0]?._total ?? 0, 10)
   return { requests: rows.map(toDto), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } }
 }
 

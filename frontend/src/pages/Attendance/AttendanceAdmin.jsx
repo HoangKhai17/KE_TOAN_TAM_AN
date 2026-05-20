@@ -280,13 +280,9 @@ function TodayTab({ staffList }) {
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    attendanceApi.listAttendanceRecords({ month: now.getMonth() + 1, year: now.getFullYear(), limit: 500 })
-      .then((res) => {
-        if (!cancelled) {
-          const todayRecords = (res.records ?? []).filter((r) => String(r.workDate).slice(0, 10) === todayStr)
-          setRecords(todayRecords)
-        }
-      })
+    // Pass today as from/to — avoids fetching the entire month just to filter client-side
+    attendanceApi.listAttendanceRecords({ from: todayStr, to: todayStr, limit: 200 })
+      .then((res) => { if (!cancelled) setRecords(res.records ?? []) })
       .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu hôm nay', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }

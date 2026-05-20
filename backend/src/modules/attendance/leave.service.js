@@ -79,12 +79,11 @@ async function listLeaveRequests({ userId, status, leaveType, from, to, page = 1
   if (from)      { params.push(from);      conditions.push(`l.start_date >= $${params.length}`) }
   if (to)        { params.push(to);        conditions.push(`l.end_date   <= $${params.length}`) }
 
-  const where    = conditions.join(' AND ')
-  const countRes = await query(`SELECT COUNT(*) FROM leave_requests l WHERE ${where}`, params)
-  const total    = parseInt(countRes.rows[0].count, 10)
+  const where = conditions.join(' AND ')
 
+  // Single query with window COUNT — eliminates the separate COUNT(*) round-trip
   const { rows } = await query(
-    `SELECT l.*, u.name AS user_name, a.name AS approver_name
+    `SELECT l.*, u.name AS user_name, a.name AS approver_name, COUNT(*) OVER() AS _total
      FROM leave_requests l
      JOIN  users u ON l.user_id    = u.id
      LEFT JOIN users a ON l.approved_by = a.id
@@ -93,6 +92,7 @@ async function listLeaveRequests({ userId, status, leaveType, from, to, page = 1
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   )
+  const total = parseInt(rows[0]?._total ?? 0, 10)
   return { requests: rows.map(toDto), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } }
 }
 
@@ -127,17 +127,20 @@ async function approveLeaveRequest(id, approvedBy, approvalNote) {
   if (!rows[0]) throw Object.assign(new Error('Leave request not found or already reviewed'), { status: 404 })
   const leave = rows[0]
 
-  // Recalculate attendance for every day in the leave period
+  // Recalculate attendance for every day in the leave period (parallel — each day is independent)
   const [sy, sm, sd] = toDateStr(leave.start_date).split('-').map(Number)
   const endStr = toDateStr(leave.end_date)
   const [ey, em, ed] = endStr.split('-').map(Number)
   const cur = new Date(sy, sm - 1, sd)
   const end = new Date(ey, em - 1, ed)
+  const datesToRecalc = []
   while (cur <= end) {
-    const dateStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
-    try { await calculateAttendanceRecord(leave.user_id, dateStr) } catch (_) { /* non-fatal */ }
+    datesToRecalc.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`)
     cur.setDate(cur.getDate() + 1)
   }
+  await Promise.all(
+    datesToRecalc.map((d) => calculateAttendanceRecord(leave.user_id, d).catch(() => {}))
+  )
 
   await createAndEmit(
     leave.user_id, 'task_status_changed',
