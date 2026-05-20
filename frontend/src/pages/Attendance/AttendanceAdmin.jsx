@@ -1491,8 +1491,12 @@ function SyncPayrollModal({ year, month, onClose }) {
     if (!selected) { addToast('Vui lòng chọn kỳ lương', 'error'); return }
     setSyncing(true)
     try {
-      await attendanceApi.syncPayroll(selected)
-      addToast('Đồng bộ chấm công vào bảng lương thành công!', 'success')
+      const result = await attendanceApi.syncPayroll(selected)
+      const warn = result?.warnings?.length ?? 0
+      addToast(
+        `Đồng bộ thành công ${result?.updatedCount ?? 0} nhân viên${warn > 0 ? ` — ${warn} cảnh báo chấm công` : ''}`,
+        'success'
+      )
       onClose()
       navigate('/payroll')
     } catch (err) {

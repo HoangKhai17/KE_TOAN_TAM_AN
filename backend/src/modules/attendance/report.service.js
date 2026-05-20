@@ -150,15 +150,15 @@ async function syncAttendanceToPayroll(payrollPeriodId) {
     [from, to]
   )
 
-  // Get all payroll records for this period
-  const { rows: prRows } = await query(
-    'SELECT id, user_id FROM payroll_records WHERE period_id = $1',
-    [payrollPeriodId]
+  // Get all active employees
+  const { rows: employees } = await query(
+    `SELECT id FROM users WHERE status IN ('active', 'on_leave') ORDER BY name`,
+    []
   )
 
   const updatedUsers = []
-  for (const pr of prRows) {
-    // Attendance summary
+  for (const emp of employees) {
+    // Attendance summary for this employee
     const { rows: attRows } = await query(
       `SELECT
          COALESCE(SUM(work_units) FILTER (WHERE status IN ('present','late','early_leave','late_and_early')), 0) AS actual_work_days,
@@ -168,36 +168,43 @@ async function syncAttendanceToPayroll(payrollPeriodId) {
          COALESCE(SUM(ot_hours), 0)                   AS total_ot_hours
        FROM attendance_records
        WHERE user_id = $1 AND work_date BETWEEN $2 AND $3`,
-      [pr.user_id, from, to]
+      [emp.id, from, to]
     )
     const att = attRows[0]
 
-    // OT pay weight (weighted ot hours = sum of ot_hours * ot_rate for approved OT)
+    // Raw approved OT hours + weighted OT (hours × rate) from overtime_requests
     const { rows: otRows } = await query(
-      `SELECT COALESCE(SUM(ot_hours * ot_rate), 0) AS weighted_ot
+      `SELECT
+         COALESCE(SUM(ot_hours), 0)           AS approved_ot_hours,
+         COALESCE(SUM(ot_hours * ot_rate), 0) AS weighted_ot
        FROM overtime_requests
        WHERE user_id = $1 AND ot_date BETWEEN $2 AND $3 AND status = 'approved'`,
-      [pr.user_id, from, to]
+      [emp.id, from, to]
     )
 
     const summary = {
-      actual_work_days: parseFloat(att.actual_work_days),
-      leave_paid_days:  parseFloat(att.leave_paid_days),
-      total_paid_days:  parseFloat(att.actual_work_days) + parseFloat(att.leave_paid_days),
-      absent_days:      parseInt(att.absent_days,    10),
-      late_count:       parseInt(att.late_count,     10),
-      ot_hours:         parseFloat(att.total_ot_hours),
+      actual_work_days:  parseFloat(att.actual_work_days),
+      leave_paid_days:   parseFloat(att.leave_paid_days),
+      total_paid_days:   parseFloat(att.actual_work_days) + parseFloat(att.leave_paid_days),
+      absent_days:       parseInt(att.absent_days, 10),
+      late_count:        parseInt(att.late_count,  10),
+      ot_hours:          parseFloat(otRows[0].approved_ot_hours),
       ot_weighted_hours: parseFloat(otRows[0].weighted_ot),
     }
 
+    // UPSERT: tạo mới nếu chưa có, cập nhật attendance_summary nếu đã có
     await query(
-      `UPDATE payroll_records
-       SET components  = COALESCE(components, '{}') || jsonb_build_object('attendance_summary', $1::jsonb),
-           updated_at  = NOW()
-       WHERE id = $2`,
-      [JSON.stringify(summary), pr.id]
+      `INSERT INTO payroll_records
+         (payroll_period_id, user_id, created_by, components)
+       VALUES ($1, $2, $3, jsonb_build_object('attendance_summary', $4::jsonb))
+       ON CONFLICT (payroll_period_id, user_id)
+       DO UPDATE SET
+         components = COALESCE(payroll_records.components, '{}') ||
+                      jsonb_build_object('attendance_summary', $4::jsonb),
+         updated_at = NOW()`,
+      [payrollPeriodId, emp.id, period.created_by, JSON.stringify(summary)]
     )
-    updatedUsers.push(pr.user_id)
+    updatedUsers.push(emp.id)
   }
 
   return {
