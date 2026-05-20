@@ -77,6 +77,32 @@ async function adjustRecord(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function manualAdjustRecord(req, res, next) {
+  try {
+    const { checkInTime, checkOutTime, reason } = req.body
+    if (!reason?.trim()) {
+      return res.status(400).json({ error: { message: 'reason là bắt buộc' } })
+    }
+    const result = await adjSvc.manualAdjust(req.params.id, {
+      checkInTime, checkOutTime, reason, adjustedBy: req.user.id,
+    })
+    res.json(result)
+  } catch (err) { next(err) }
+}
+
+async function createManualAttendanceRecord(req, res, next) {
+  try {
+    const { userId, workDate, checkInTime, checkOutTime, reason } = req.body
+    if (!userId || !workDate || !reason?.trim()) {
+      return res.status(400).json({ error: { message: 'userId, workDate và reason là bắt buộc' } })
+    }
+    const result = await adjSvc.createManualRecord(userId, workDate, {
+      checkInTime, checkOutTime, reason, adjustedBy: req.user.id,
+    })
+    res.status(201).json(result)
+  } catch (err) { next(err) }
+}
+
 async function listAdjustments(req, res, next) {
   try {
     const result = await adjSvc.listAdjustments(req.params.id)
@@ -168,7 +194,7 @@ async function updateSettings(req, res, next) {
 
 module.exports = {
   checkIn, checkOut, getToday, listRecords, getSummary,
-  adjustRecord, listAdjustments,
+  adjustRecord, manualAdjustRecord, createManualAttendanceRecord, listAdjustments,
   getReport, syncPayroll,
   listHolidays, createHoliday, updateHoliday, deleteHoliday,
   getSettings, updateSettings,

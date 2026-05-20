@@ -162,8 +162,10 @@ router.get('/records/summary', ...admin, ctrl.getSummary)
  *               type: array
  *               items: { $ref: '#/components/schemas/AttendanceAdjustment' }
  */
-router.put('/records/:id/adjust',      ...admin, ctrl.adjustRecord)
-router.get('/records/:id/adjustments', ...admin, ctrl.listAdjustments)
+router.put('/records/:id/adjust',         ...admin, ctrl.adjustRecord)
+router.post('/records/:id/manual-adjust', ...admin, ctrl.manualAdjustRecord)
+router.get('/records/:id/adjustments',    ...admin, ctrl.listAdjustments)
+router.post('/manual-record',             ...admin, ctrl.createManualAttendanceRecord)
 
 /**
  * @openapi

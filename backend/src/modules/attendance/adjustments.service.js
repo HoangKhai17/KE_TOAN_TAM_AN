@@ -1,4 +1,5 @@
 const { query } = require('../../config/db')
+const { calculateAttendanceRecord } = require('./attendance.service')
 
 // ── DTO ───────────────────────────────────────────────────────────────────────
 
@@ -45,18 +46,43 @@ function toDateStr(d) {
   return `${obj.getUTCFullYear()}-${String(obj.getUTCMonth() + 1).padStart(2, '0')}-${String(obj.getUTCDate()).padStart(2, '0')}`
 }
 
-// ── Inline recalculation after time adjustment ────────────────────────────────
+// ── Work schedule resolver (override → system config fallback) ────────────────
 
-async function recalcTimes(record, checkInTime, checkOutTime) {
-  const wsRes = await query(
+async function resolveWsForDate(userId, workDate) {
+  const dateStr = String(workDate).slice(0, 10)
+
+  // Check per-user override first
+  const ovRes = await query(
     `SELECT ws.*, s.start_time, s.end_time, s.break_minutes, s.required_hours,
             s.tolerance_in, s.tolerance_out
      FROM work_schedules ws
      LEFT JOIN shifts s ON ws.shift_id = s.id
      WHERE ws.user_id = $1 AND ws.work_date = $2`,
-    [record.user_id, record.work_date]
+    [userId, dateStr]
   )
-  const ws = wsRes.rows[0]
+  if (ovRes.rows[0]) return ovRes.rows[0]
+
+  // Fall back to system config
+  const jsDay = new Date(dateStr + 'T00:00:00').getDay()
+  const cfgRes = await query(
+    `SELECT key, value FROM system_configs
+     WHERE key IN ('attendance.default_shift_id','attendance.saturday_shift_id')`
+  )
+  const cfg = Object.fromEntries(cfgRes.rows.map((r) => [r.key, r.value ?? '']))
+  let shiftId = null
+  if (jsDay === 0) return null
+  else if (jsDay === 6) shiftId = cfg['attendance.saturday_shift_id'] || null
+  else shiftId = cfg['attendance.default_shift_id'] || null
+  if (!shiftId) return null
+
+  const shiftRes = await query('SELECT * FROM shifts WHERE id = $1', [shiftId])
+  return shiftRes.rows[0] ?? null
+}
+
+// ── Inline recalculation after time adjustment ────────────────────────────────
+
+async function recalcTimes(userId, workDate, checkInTime, checkOutTime, currentStatus = 'present') {
+  const ws = await resolveWsForDate(userId, workDate)
 
   let actualHours = null
   const breakHours = ws ? (ws.break_minutes ?? 60) / 60 : 1
@@ -98,7 +124,7 @@ async function recalcTimes(record, checkInTime, checkOutTime) {
     else if (ratio >= 0.5) workUnits = 0.5
   }
 
-  let status = record.status
+  let status = currentStatus
   if (!['on_leave','wfh','business_trip','holiday','absent','unscheduled'].includes(status)) {
     if (lateMinutes > 0 && earlyMinutes > 0)  status = 'late_and_early'
     else if (lateMinutes > 0)                  status = 'late'
@@ -143,7 +169,7 @@ async function adjustAttendanceRecord(id, { field, newValue, reason, adjustedBy 
     const newCheckOut = field === 'check_out_time' ? new Date(newValue) : record.check_out_time
 
     const { actualHours, lateMinutes, earlyMinutes, workUnits, status } =
-      await recalcTimes(record, newCheckIn, newCheckOut)
+      await recalcTimes(record.user_id, record.work_date, newCheckIn, newCheckOut, record.status)
 
     const { rows } = await query(
       `UPDATE attendance_records SET
@@ -191,6 +217,121 @@ async function adjustAttendanceRecord(id, { field, newValue, reason, adjustedBy 
   }
 }
 
+// Adjust both check-in and check-out at once (admin use-case)
+async function manualAdjust(recordId, { checkInTime, checkOutTime, reason, adjustedBy }) {
+  const recordRes = await query('SELECT * FROM attendance_records WHERE id = $1', [recordId])
+  if (!recordRes.rows[0]) throw Object.assign(new Error('Attendance record not found'), { status: 404 })
+  const record = recordRes.rows[0]
+
+  const dateStr = String(record.work_date).slice(0, 10)
+
+  // Build timestamps from date + HH:MM inputs
+  const toTs = (hhmm) => hhmm ? `${dateStr} ${String(hhmm).slice(0, 5)}:00` : null
+  const newCheckIn  = checkInTime  !== undefined ? toTs(checkInTime)  : record.check_in_time
+  const newCheckOut = checkOutTime !== undefined ? toTs(checkOutTime) : record.check_out_time
+
+  // Audit trail — log only changed fields
+  const auditFields = []
+  if (checkInTime !== undefined)  auditFields.push({ field: 'check_in_time',  before: record.check_in_time  ? String(record.check_in_time)  : null, after: newCheckIn })
+  if (checkOutTime !== undefined) auditFields.push({ field: 'check_out_time', before: record.check_out_time ? String(record.check_out_time) : null, after: newCheckOut })
+
+  for (const { field, before, after } of auditFields) {
+    await query(
+      `INSERT INTO attendance_adjustments
+         (attendance_record_id, field_name, before_value, after_value, reason, adjusted_by)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [recordId, field, before, after, reason, adjustedBy]
+    )
+  }
+
+  // Insert manual logs
+  if (checkInTime !== undefined) {
+    await query(
+      `INSERT INTO attendance_logs (user_id, log_type, logged_at, method, notes)
+       VALUES ($1, 'check_in', $2, 'manual', $3)`,
+      [record.user_id, newCheckIn, `Admin điều chỉnh: ${reason}`]
+    )
+  }
+  if (checkOutTime !== undefined) {
+    await query(
+      `INSERT INTO attendance_logs (user_id, log_type, logged_at, method, notes)
+       VALUES ($1, 'check_out', $2, 'manual', $3)`,
+      [record.user_id, newCheckOut, `Admin điều chỉnh: ${reason}`]
+    )
+  }
+
+  // Recalc using system config
+  const { actualHours, lateMinutes, earlyMinutes, workUnits, status } =
+    await recalcTimes(record.user_id, record.work_date, newCheckIn, newCheckOut, record.status)
+
+  const { rows } = await query(
+    `UPDATE attendance_records SET
+       check_in_time  = $1,
+       check_out_time = $2,
+       actual_hours   = $3,
+       late_minutes   = $4,
+       early_minutes  = $5,
+       work_units     = $6,
+       status         = $7,
+       is_adjusted    = TRUE,
+       updated_at     = NOW()
+     WHERE id = $8 RETURNING *`,
+    [newCheckIn, newCheckOut, actualHours, lateMinutes, earlyMinutes, workUnits, status, recordId]
+  )
+  return toRecordDto(rows[0])
+}
+
+// Create a record from scratch when none exists (employee forgot to check in)
+async function createManualRecord(userId, workDate, { checkInTime, checkOutTime, reason, adjustedBy }) {
+  const dateStr = String(workDate).slice(0, 10)
+  const toTs = (hhmm) => hhmm ? `${dateStr} ${String(hhmm).slice(0, 5)}:00` : null
+
+  const ciTs = toTs(checkInTime)
+  const coTs = toTs(checkOutTime)
+
+  // Insert attendance_logs so calculateAttendanceRecord has data
+  if (ciTs) {
+    await query(
+      `INSERT INTO attendance_logs (user_id, log_type, logged_at, method, notes)
+       VALUES ($1, 'check_in', $2, 'manual', $3)`,
+      [userId, ciTs, `Admin tạo thủ công: ${reason}`]
+    )
+  }
+  if (coTs) {
+    await query(
+      `INSERT INTO attendance_logs (user_id, log_type, logged_at, method, notes)
+       VALUES ($1, 'check_out', $2, 'manual', $3)`,
+      [userId, coTs, `Admin tạo thủ công: ${reason}`]
+    )
+  }
+
+  // Run full calculation (handles shift, status, work_units, etc.)
+  const record = await calculateAttendanceRecord(userId, dateStr)
+  if (!record) throw Object.assign(new Error('Không thể tạo bản ghi (ngày nghỉ hoặc không có ca)'), { status: 422 })
+
+  // Mark as adjusted + write audit trail
+  await query(
+    `UPDATE attendance_records SET is_adjusted = TRUE WHERE user_id = $1 AND work_date = $2`,
+    [userId, dateStr]
+  )
+  await query(
+    `INSERT INTO attendance_adjustments
+       (attendance_record_id, field_name, before_value, after_value, reason, adjusted_by)
+     VALUES ($1, 'check_in_time', NULL, $2, $3, $4)`,
+    [record.id, ciTs, reason, adjustedBy]
+  )
+  if (coTs) {
+    await query(
+      `INSERT INTO attendance_adjustments
+         (attendance_record_id, field_name, before_value, after_value, reason, adjusted_by)
+       VALUES ($1, 'check_out_time', NULL, $2, $3, $4)`,
+      [record.id, coTs, reason, adjustedBy]
+    )
+  }
+
+  return { ...record, isAdjusted: true }
+}
+
 async function listAdjustments(attendanceRecordId) {
   const { rows } = await query(
     `SELECT aa.*, u.name AS adjuster_name
@@ -203,4 +344,4 @@ async function listAdjustments(attendanceRecordId) {
   return rows.map(toAdjDto)
 }
 
-module.exports = { adjustAttendanceRecord, listAdjustments }
+module.exports = { adjustAttendanceRecord, manualAdjust, createManualRecord, listAdjustments }

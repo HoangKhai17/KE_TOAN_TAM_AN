@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Users, CalendarDays, ClipboardList, Clock, CalendarCheck,
   ChevronLeft, ChevronRight, Loader2, Check, X, RefreshCw,
-  Download, BarChart3, Settings, Terminal,
+  Download, BarChart3, Settings, Terminal, Pencil,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -52,16 +52,16 @@ const ADMIN_TABS = [
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 
 const LEAVE_STATUS_CFG = {
-  pending:   { label: 'Chờ duyệt', bg: '#fefce8', color: '#a16207' },
-  approved:  { label: 'Đã duyệt',  bg: '#f0fdf4', color: '#15803d' },
-  rejected:  { label: 'Từ chối',   bg: '#fef2f2', color: '#dc2626' },
-  cancelled: { label: 'Đã huỷ',    bg: '#f1f5f9', color: '#64748b' },
+  pending:   { label: 'Chờ duyệt' },
+  approved:  { label: 'Đã duyệt' },
+  rejected:  { label: 'Từ chối' },
+  cancelled: { label: 'Đã huỷ' },
 }
 
 const OT_STATUS_CFG = {
-  pending:  { label: 'Chờ duyệt', bg: '#fefce8', color: '#a16207' },
-  approved: { label: 'Đã duyệt',  bg: '#f0fdf4', color: '#15803d' },
-  rejected: { label: 'Từ chối',   bg: '#fef2f2', color: '#dc2626' },
+  pending:  { label: 'Chờ duyệt' },
+  approved: { label: 'Đã duyệt' },
+  rejected: { label: 'Từ chối' },
 }
 
 const STATUS_CFG = {
@@ -84,6 +84,34 @@ const LEAVE_TYPE = {
   unpaid:        'Nghỉ không lương',
   business_trip: 'Công tác',
   wfh:           'Làm từ xa',
+}
+
+const STATUS_CLASS = {
+  present:        'status_present',
+  late:           'status_late',
+  early_leave:    'status_early_leave',
+  late_and_early: 'status_late_and_early',
+  absent:         'status_absent',
+  on_leave:       'status_on_leave',
+  business_trip:  'status_business_trip',
+  wfh:            'status_wfh',
+  holiday:        'status_holiday',
+  unscheduled:    'status_unscheduled',
+}
+
+const REQUEST_STATUS_CLASS = {
+  pending:   'request_pending',
+  approved:  'request_approved',
+  rejected:  'request_rejected',
+  cancelled: 'request_cancelled',
+}
+
+function getStatusClass(status) {
+  return s[STATUS_CLASS[status] ?? STATUS_CLASS.unscheduled]
+}
+
+function getRequestStatusClass(status) {
+  return s[REQUEST_STATUS_CLASS[status] ?? REQUEST_STATUS_CLASS.pending]
 }
 
 
@@ -187,7 +215,7 @@ export default function AttendanceAdmin() {
             >
               <Icon size={14} /> {label}
               {dev && (
-                <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 700, color: '#fff', background: '#f97316', borderRadius: 4, padding: '1px 5px', lineHeight: '14px' }}>
+                <span className={sa.devBadge}>
                   DEV
                 </span>
               )}
@@ -267,23 +295,23 @@ function TodayTab({ staffList }) {
         <h3 className={s.sectionTitle}>
           Hôm nay — {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </h3>
-        <button className={s.btnSecondary} onClick={load} style={{ height: 32 }}>
+        <button className={`${s.btnSecondary} ${s.btnShort}`} onClick={load}>
           <RefreshCw size={13} /> Làm mới
         </button>
       </div>
 
       {/* Quick stats */}
-      <div style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--color-surface-muted)', flexWrap: 'wrap' }}>
-        <div className={sa.todayStat} style={{ background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)' }}>
-          <span className={sa.todayStatNum} style={{ color: 'var(--color-success-dark)' }}>{checkedIn}</span>
+      <div className={sa.todayStats}>
+        <div className={`${sa.todayStat} ${sa.todayStatSuccess}`}>
+          <span className={sa.todayStatNum}>{checkedIn}</span>
           <span className={sa.todayStatLbl}>Đã vào</span>
         </div>
-        <div className={sa.todayStat} style={{ background: 'var(--color-primary-bg)', border: '1.5px solid var(--color-status-progress-bg)' }}>
-          <span className={sa.todayStatNum} style={{ color: 'var(--color-primary)' }}>{checkedOut}</span>
+        <div className={`${sa.todayStat} ${sa.todayStatPrimary}`}>
+          <span className={sa.todayStatNum}>{checkedOut}</span>
           <span className={sa.todayStatLbl}>Đã ra</span>
         </div>
-        <div className={sa.todayStat} style={{ background: 'var(--color-danger-bg)', border: '1.5px solid var(--color-danger-bg)' }}>
-          <span className={sa.todayStatNum} style={{ color: 'var(--color-danger)' }}>{staffList.length - checkedIn}</span>
+        <div className={`${sa.todayStat} ${sa.todayStatDanger}`}>
+          <span className={sa.todayStatNum}>{staffList.length - checkedIn}</span>
           <span className={sa.todayStatLbl}>Chưa vào</span>
         </div>
       </div>
@@ -309,35 +337,29 @@ function TodayTab({ staffList }) {
                 const cfg = rec ? (STATUS_CFG[rec.status] ?? STATUS_CFG.unscheduled) : null
                 return (
                   <tr key={user.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{user.name}</td>
-                    <td style={{ color: 'var(--color-muted)' }}>{user.jobTitle ?? '—'}</td>
+                    <td className={s.tableStrong}>{user.name}</td>
+                    <td className={s.tableMuted}>{user.jobTitle ?? '—'}</td>
                     <td>
                       {cfg ? (
-                        <span style={{
-                          display: 'inline-flex', padding: '2px 9px', borderRadius: 99,
-                          fontSize: 11, fontWeight: 700, background: cfg.bg, color: cfg.color,
-                        }}>
+                        <span className={`${s.statusPill} ${getStatusClass(rec.status)}`}>
                           {cfg.label}
                         </span>
                       ) : (
-                        <span style={{
-                          display: 'inline-flex', padding: '2px 9px', borderRadius: 99,
-                          fontSize: 11, fontWeight: 700, background: 'var(--color-danger-bg)', color: 'var(--color-danger)',
-                        }}>
+                        <span className={`${s.statusPill} ${getStatusClass('absent')}`}>
                           Chưa vào
                         </span>
                       )}
                     </td>
-                    <td style={{ fontWeight: 600 }}>{rec?.checkInTime ? fmtTime(rec.checkInTime) : '—'}</td>
-                    <td style={{ color: 'var(--color-muted)' }}>{rec?.checkOutTime ? fmtTime(rec.checkOutTime) : '—'}</td>
-                    <td style={{ color: 'var(--color-muted)' }}>
+                    <td className={s.tableSemibold}>{rec?.checkInTime ? fmtTime(rec.checkInTime) : '—'}</td>
+                    <td className={s.tableMuted}>{rec?.checkOutTime ? fmtTime(rec.checkOutTime) : '—'}</td>
+                    <td className={s.tableMuted}>
                       {rec?.actualHours != null ? `${Number(rec.actualHours).toFixed(1)}h` : '—'}
                     </td>
                   </tr>
                 )
               })}
               {staffList.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-muted)', padding: '32px 0' }}>Không có nhân viên</td></tr>
+                <tr><td colSpan={6} className={s.tableEmpty}>Không có nhân viên</td></tr>
               )}
             </tbody>
           </table>
@@ -411,12 +433,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
           ))}
         </select>
         {selectedId === adminUserId && (
-          <span style={{
-            fontSize: 'var(--fs-sm)', color: '#15803d', fontWeight: 600,
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: '#f0fdf4', border: '1.5px solid #bbf7d0',
-            borderRadius: 7, padding: '3px 10px',
-          }}>
+          <span className={sa.adminNotice}>
             ✓ Admin — tự động ghi nhận đủ công
           </span>
         )}
@@ -437,6 +454,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                 }
                 const { dateStr, dayNum, record, isToday, isFuture, isWeekend } = cell
                 const cfg = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
+                const statusClass = cfg ? getStatusClass(record.status) : ''
                 return (
                   <div
                     key={dateStr}
@@ -446,16 +464,17 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                       isFuture  ? s.calendarDayFuture  : '',
                       isWeekend ? s.calendarDayWeekend : '',
                       record    ? s.calendarDayHasRecord : '',
+                      statusClass ? s.calendarStatus : '',
+                      statusClass,
                     ].filter(Boolean).join(' ')}
-                    style={cfg ? { background: cfg.bg, borderColor: cfg.border } : {}}
-                    onClick={() => record && setSelectedDay({ dateStr, record })}
+                    onClick={() => !isFuture && setSelectedDay({ dateStr, record })}
                     title={cfg?.label}
                   >
                     <span className={`${s.calendarDayNum} ${isToday ? s.calendarDayNumToday : ''}`}>
                       {dayNum}
                     </span>
                     {cfg && (
-                      <span className={s.calendarDayLabel} style={{ color: cfg.color }}>
+                      <span className={s.calendarDayLabel}>
                         {cfg.label}
                       </span>
                     )}
@@ -468,7 +487,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
             </div>
             {records.length === 0 && (
               <div className={s.centered}>
-                <CalendarDays size={32} style={{ opacity: 0.35, marginBottom: 4 }} />
+                <CalendarDays size={32} className={s.emptyIcon} />
                 Chưa có dữ liệu chấm công tháng này
               </div>
             )}
@@ -480,52 +499,219 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
         <AdminDayModal
           dateStr={selectedDay.dateStr}
           record={selectedDay.record}
+          userId={selectedId}
           onClose={() => setSelectedDay(null)}
+          onSaved={() => { setSelectedDay(null); load() }}
         />
       )}
     </>
   )
 }
 
-function AdminDayModal({ dateStr, record, onClose }) {
-  const cfg = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
-  const [y, m, d] = dateStr.split('-')
+function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
+  const addToast        = useToastStore((st) => st.toast)
+  const [y, m, d]       = dateStr.split('-')
+  const hasRecord       = record && !record.isHoliday   // virtual holiday records shouldn't be edited
+  const cfg             = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
+
+  const [mode,       setMode]       = useState('view') // 'view' | 'edit'
+  const [checkIn,    setCheckIn]    = useState(record?.checkInTime  ? fmtTime(record.checkInTime)  : '')
+  const [checkOut,   setCheckOut]   = useState(record?.checkOutTime ? fmtTime(record.checkOutTime) : '')
+  const [reason,     setReason]     = useState('')
+  const [saving,     setSaving]     = useState(false)
+  const [history,    setHistory]    = useState([])
+  const [loadingHist, setLoadingHist] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+
+  function loadHistory() {
+    if (!hasRecord || !record.id) return
+    setLoadingHist(true)
+    attendanceApi.listRecordAdjustments(record.id)
+      .then((data) => setHistory(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoadingHist(false))
+  }
+
+  useEffect(() => {
+    if (showHistory) loadHistory()
+  }, [showHistory]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSave() {
+    if (!reason.trim()) { addToast('Vui lòng nhập lý do điều chỉnh', 'error'); return }
+    if (!checkIn && !checkOut) { addToast('Vui lòng nhập ít nhất giờ vào hoặc giờ ra', 'error'); return }
+    setSaving(true)
+    try {
+      if (hasRecord) {
+        await attendanceApi.manualAdjustRecord(record.id, {
+          checkInTime:  checkIn  || undefined,
+          checkOutTime: checkOut || undefined,
+          reason: reason.trim(),
+        })
+      } else {
+        await attendanceApi.createManualRecord({
+          userId, workDate: dateStr,
+          checkInTime:  checkIn  || undefined,
+          checkOutTime: checkOut || undefined,
+          reason: reason.trim(),
+        })
+      }
+      addToast('Đã lưu điều chỉnh chấm công', 'success')
+      onSaved()
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Không thể lưu điều chỉnh', 'error')
+    } finally { setSaving(false) }
+  }
+
+  const fieldLabel = (f) => f === 'check_in_time' ? 'Giờ vào' : f === 'check_out_time' ? 'Giờ ra' : f === 'status' ? 'Trạng thái' : f
+  const fmtTs = (v) => { if (!v) return '—'; const t = new Date(v); return isNaN(t) ? String(v).slice(0,16) : t.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) }
+
   return (
-    <Modal title={`Chi tiết ngày ${d}/${m}/${y}`} onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 280 }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px',
-          borderRadius: 99, background: cfg?.bg, color: cfg?.color, fontSize: 13,
-          fontWeight: 700, alignSelf: 'flex-start', border: `1.5px solid ${cfg?.border}`,
-        }}>
-          {cfg?.label ?? record?.status}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: 13 }}>
-          {[
-            ['GIỜ VÀO',    fmtTime(record?.checkInTime)  ?? '—'],
-            ['GIỜ RA',     fmtTime(record?.checkOutTime) ?? '—'],
-            record?.actualHours != null && ['GIỜ THỰC TẾ', `${Number(record.actualHours).toFixed(1)}h`],
-            record?.lateMinutes > 0 && ['ĐI MUỘN', `${record.lateMinutes} phút`],
-          ].filter(Boolean).map(([label, val]) => (
-            <div key={label}>
-              <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{label}</div>
-              <div style={{ fontWeight: 700, color: '#1e293b' }}>{val}</div>
+    <Modal title={mode === 'edit' ? `Chỉnh sửa chấm công ${d}/${m}/${y}` : `Chi tiết ngày ${d}/${m}/${y}`} onClose={onClose}>
+      <div className={`${s.detailPanel} ${s.detailPanelWide}`}>
+
+        {mode === 'view' ? (
+          <>
+            {/* Status + edit button */}
+            <div className={s.detailHeader}>
+              {cfg ? (
+                <div className={`${s.statusPill} ${getStatusClass(record.status)}`}>
+                  {cfg.label}
+                </div>
+              ) : (
+                <div className={s.detailEmpty}>Chưa có dữ liệu</div>
+              )}
+              {record?.isAdjusted && (
+                <span className={`${s.statusPill} ${s.request_pending}`}>Đã điều chỉnh</span>
+              )}
+              <button
+                onClick={() => setMode('edit')}
+                className={`${s.btnSecondary} ${s.btnCompact}`}
+              >
+                <Pencil size={12} /> Chỉnh sửa
+              </button>
             </div>
-          ))}
-        </div>
-        {record?.notes && (
-          <div style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic', borderTop: '1px solid #f1f5f9', paddingTop: 8 }}>
-            {record.notes}
-          </div>
+
+            {/* Times */}
+            <div className={s.detailGrid}>
+              {[
+                ['GIỜ VÀO',    fmtTime(record?.checkInTime)  ?? '—'],
+                ['GIỜ RA',     fmtTime(record?.checkOutTime) ?? '—'],
+                record?.actualHours != null ? ['GIỜ THỰC TẾ', `${Number(record.actualHours).toFixed(1)}h`] : null,
+                record?.lateMinutes  > 0    ? ['ĐI MUỘN',     `${record.lateMinutes} phút`]                : null,
+                record?.earlyMinutes > 0    ? ['VỀ SỚM',      `${record.earlyMinutes} phút`]               : null,
+                record?.workUnits    != null ? ['NGÀY CÔNG',   `${record.workUnits} công`]                  : null,
+              ].filter(Boolean).map(([label, val]) => (
+                <div key={label}>
+                  <div className={s.detailLabel}>{label}</div>
+                  <div className={s.detailValue}>{val}</div>
+                </div>
+              ))}
+            </div>
+
+            {record?.notes && (
+              <div className={s.mutedNote}>{record.notes}</div>
+            )}
+
+            {/* History toggle */}
+            {hasRecord && (
+              <div className={s.mutedNote}>
+                <button
+                  onClick={() => setShowHistory((v) => !v)}
+                  className={s.historyToggle}
+                >
+                  {showHistory ? '▲ Ẩn lịch sử điều chỉnh' : '▼ Xem lịch sử điều chỉnh'}
+                </button>
+                {showHistory && (
+                  <div className={s.historyBlock}>
+                    {loadingHist ? (
+                      <div className={s.historyLoading}>
+                        <Loader2 size={13} className={s.spin} /> Đang tải...
+                      </div>
+                    ) : history.length === 0 ? (
+                      <div className={s.historyEmpty}>Chưa có điều chỉnh nào</div>
+                    ) : (
+                      <div className={s.historyList}>
+                        {history.map((h) => (
+                          <div key={h.id} className={s.historyItem}>
+                            <div className={s.historyTitle}>
+                              {fieldLabel(h.fieldName)} — {h.adjusterName}
+                              <span className={s.historyDate}>{fmtTs(h.adjustedAt)}</span>
+                            </div>
+                            <div className={s.historyText}>
+                              {h.beforeValue ? fmtTs(h.beforeValue) : 'Chưa có'} → <strong>{fmtTs(h.afterValue)}</strong>
+                            </div>
+                            {h.reason && <div className={s.historyReason}>{h.reason}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className={s.modalFooter}>
+              <button onClick={onClose} className={`${s.btnSecondary} ${s.btnShort}`}>
+                Đóng
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Edit form */}
+            <div className={s.infoNote}>
+              {hasRecord ? 'Điều chỉnh giờ chấm công. Hệ thống sẽ tự tính lại trạng thái sau khi lưu.' : 'Tạo chấm công thủ công cho ngày này.'}
+            </div>
+
+            <div className={s.formGrid}>
+              <div className={s.formGroup}>
+                <label className={s.formLabel}>Giờ vào</label>
+                <input
+                  type="time"
+                  value={checkIn}
+                  onChange={(e) => setCheckIn(e.target.value)}
+                  className={s.formInput}
+                />
+              </div>
+              <div className={s.formGroup}>
+                <label className={s.formLabel}>Giờ ra</label>
+                <input
+                  type="time"
+                  value={checkOut}
+                  onChange={(e) => setCheckOut(e.target.value)}
+                  className={s.formInput}
+                />
+              </div>
+            </div>
+
+            <div className={s.formGroup}>
+              <label className={`${s.formLabel} ${s.req}`}>
+                Lý do điều chỉnh
+              </label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="VD: Nhân viên quên chấm công, đã xác nhận với quản lý..."
+                rows={3}
+                className={s.formTextarea}
+              />
+            </div>
+
+            <div className={s.modalActions}>
+              <button onClick={() => setMode('view')} disabled={saving} className={s.btnSecondary}>
+                Huỷ
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={s.btnPrimary}
+              >
+                {saving && <Loader2 size={13} className={s.spin} />}
+                {saving ? 'Đang lưu...' : 'Lưu điều chỉnh'}
+              </button>
+            </div>
+          </>
         )}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
-          <button
-            onClick={onClose}
-            style={{ height: 34, padding: '0 16px', border: '1.5px solid #e2e8f0', borderRadius: 7, background: '#fff', color: '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-          >
-            Đóng
-          </button>
-        </div>
       </div>
     </Modal>
   )
@@ -629,7 +815,7 @@ function AdminLeaveTab({ staffList }) {
           <h3 className={s.sectionTitle}>
             Đơn nghỉ phép — {titlePeriod}
             {!loading && (
-              <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
+              <span className={s.sectionTitleMeta}>
                 ({pagination.total} đơn)
               </span>
             )}
@@ -640,7 +826,7 @@ function AdminLeaveTab({ staffList }) {
           <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
         ) : requests.length === 0 ? (
           <div className={s.centered}>
-            <ClipboardList size={32} style={{ opacity: 0.35, marginBottom: 4 }} />
+            <ClipboardList size={32} className={s.emptyIcon} />
             Không có đơn nào
           </div>
         ) : (
@@ -655,7 +841,7 @@ function AdminLeaveTab({ staffList }) {
                   <th>Số ngày</th>
                   <th>Trạng thái</th>
                   <th>Lý do</th>
-                  <th style={{ width: 110 }} />
+                  <th className={s.actionsCell} />
                 </tr>
               </thead>
               <tbody>
@@ -663,22 +849,21 @@ function AdminLeaveTab({ staffList }) {
                   const st = LEAVE_STATUS_CFG[req.status] ?? LEAVE_STATUS_CFG.pending
                   return (
                   <tr key={req.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{req.userName}</td>
+                    <td className={s.tableStrong}>{req.userName}</td>
                     <td>{LEAVE_TYPE[req.leaveType] ?? req.leaveType}</td>
                     <td>{fmtDateVI(req.startDate)}</td>
                     <td>{fmtDateVI(req.endDate)}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{req.daysCount ?? req.totalDays} ngày</td>
+                    <td className={s.tablePrimary}>{req.daysCount ?? req.totalDays} ngày</td>
                     <td>
-                      <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color }}>
+                      <span className={`${s.statusPill} ${getRequestStatusClass(req.status)}`}>
                         {st.label}
                       </span>
                     </td>
-                    <td style={{ color: 'var(--color-muted)', maxWidth: 160 }}>{req.reason ?? '—'}</td>
+                    <td className={s.tableReason}>{req.reason ?? '—'}</td>
                     <td>
                       {req.status === 'pending' && (
                         <button
-                          className={s.btnSuccess}
-                          style={{ height: 28, padding: '0 8px', fontSize: 11 }}
+                          className={`${s.btnSuccess} ${s.btnCompact}`}
                           onClick={() => setReviewTarget(req)}
                         >
                           Xét duyệt
@@ -752,14 +937,14 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   return (
     <Modal title="Xét duyệt đơn nghỉ phép" onClose={onClose}>
       <div className={s.modalForm}>
-        <div style={{ background: 'var(--color-bg-soft)', border: '1.5px solid var(--color-primary-bg-strong)', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
-          <p style={{ margin: '0 0 6px', fontWeight: 700, color: 'var(--color-primary-deep)' }}>{request.userName}</p>
-          <p style={{ margin: '0 0 4px', color: 'var(--color-muted)' }}>{LEAVE_TYPE[request.leaveType] ?? request.leaveType}</p>
-          <p style={{ margin: 0, color: 'var(--color-muted)' }}>
+        <div className={s.reviewCard}>
+          <p className={s.reviewCardTitle}>{request.userName}</p>
+          <p className={s.reviewCardText}>{LEAVE_TYPE[request.leaveType] ?? request.leaveType}</p>
+          <p className={s.reviewCardText}>
             {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({request.daysCount ?? request.totalDays} ngày)
           </p>
           {request.reason && (
-            <p style={{ margin: '6px 0 0', color: 'var(--color-muted)', fontStyle: 'italic' }}>{request.reason}</p>
+            <p className={s.reviewCardNote}>{request.reason}</p>
           )}
         </div>
         <div className={s.formGroup}>
@@ -871,7 +1056,7 @@ function AdminOvertimeTab({ staffList }) {
           <h3 className={s.sectionTitle}>
             Đơn tăng ca — {titlePeriod}
             {!loading && (
-              <span style={{ fontWeight: 600, color: 'var(--color-muted)', marginLeft: 8, fontSize: 'var(--fs-sm)' }}>
+              <span className={s.sectionTitleMeta}>
                 ({pagination.total} đơn)
               </span>
             )}
@@ -882,7 +1067,7 @@ function AdminOvertimeTab({ staffList }) {
           <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
         ) : requests.length === 0 ? (
           <div className={s.centered}>
-            <Clock size={32} style={{ opacity: 0.35, marginBottom: 4 }} />
+            <Clock size={32} className={s.emptyIcon} />
             Không có đơn nào
           </div>
         ) : (
@@ -897,7 +1082,7 @@ function AdminOvertimeTab({ staffList }) {
                   <th>Số giờ</th>
                   <th>Trạng thái</th>
                   <th>Lý do</th>
-                  <th style={{ width: 110 }} />
+                  <th className={s.actionsCell} />
                 </tr>
               </thead>
               <tbody>
@@ -905,24 +1090,23 @@ function AdminOvertimeTab({ staffList }) {
                   const st = OT_STATUS_CFG[req.status] ?? OT_STATUS_CFG.pending
                   return (
                   <tr key={req.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{req.userName}</td>
+                    <td className={s.tableStrong}>{req.userName}</td>
                     <td>{fmtDateVI(req.otDate)}</td>
-                    <td style={{ fontWeight: 600 }}>{req.startTime ?? '—'}</td>
-                    <td style={{ fontWeight: 600 }}>{req.endTime ?? '—'}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--color-purple-bright)' }}>
+                    <td className={s.tableSemibold}>{req.startTime ?? '—'}</td>
+                    <td className={s.tableSemibold}>{req.endTime ?? '—'}</td>
+                    <td className={s.tablePurple}>
                       {req.otHours != null ? `${Number(req.otHours).toFixed(1)}h` : '—'}
                     </td>
                     <td>
-                      <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color }}>
+                      <span className={`${s.statusPill} ${getRequestStatusClass(req.status)}`}>
                         {st.label}
                       </span>
                     </td>
-                    <td style={{ color: 'var(--color-muted)', maxWidth: 160 }}>{req.reason ?? '—'}</td>
+                    <td className={s.tableReason}>{req.reason ?? '—'}</td>
                     <td>
                       {req.status === 'pending' && (
                         <button
-                          className={s.btnSuccess}
-                          style={{ height: 28, padding: '0 8px', fontSize: 11 }}
+                          className={`${s.btnSuccess} ${s.btnCompact}`}
                           onClick={() => setReviewTarget(req)}
                         >
                           Xét duyệt
@@ -996,18 +1180,18 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
   return (
     <Modal title="Xét duyệt đơn tăng ca" onClose={onClose}>
       <div className={s.modalForm}>
-        <div style={{ background: 'var(--color-purple-bg-soft)', border: '1.5px solid var(--color-status-review-bg)', borderRadius: 8, padding: '12px 14px', fontSize: 'var(--fs-sm)' }}>
-          <p style={{ margin: '0 0 6px', fontWeight: 700, color: 'var(--color-purple-bright)' }}>{request.userName}</p>
-          <p style={{ margin: '0 0 4px', color: 'var(--color-muted)' }}>
+        <div className={`${s.reviewCard} ${s.reviewCardPurple}`}>
+          <p className={s.reviewCardTitle}>{request.userName}</p>
+          <p className={s.reviewCardText}>
             Ngày: {fmtDateVI(request.otDate)} · {request.startTime} – {request.endTime}
           </p>
           {request.otHours != null && (
-            <p style={{ margin: '4px 0 0', fontWeight: 700, color: 'var(--color-purple-bright)' }}>
+            <p className={s.reviewCardMetric}>
               {Number(request.otHours).toFixed(1)} giờ tăng ca
             </p>
           )}
           {request.reason && (
-            <p style={{ margin: '6px 0 0', color: 'var(--color-muted)', fontStyle: 'italic' }}>{request.reason}</p>
+            <p className={s.reviewCardNote}>{request.reason}</p>
           )}
         </div>
         <div className={s.formGroup}>
@@ -1091,19 +1275,17 @@ function ReportTab({ year, month }) {
       <div className={s.section}>
         <div className={s.sectionHead}>
           <h3 className={s.sectionTitle}>Báo cáo chấm công — {monthName(year, month)}</h3>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className={sa.reportActions}>
             <button
-              className={s.btnSecondary}
+              className={`${s.btnSecondary} ${s.btnShort}`}
               onClick={handleExportCSV}
               disabled={rows.length === 0}
-              style={{ height: 34 }}
             >
               <Download size={13} /> Xuất CSV
             </button>
             <button
-              className={s.btnPrimary}
+              className={`${s.btnPrimary} ${s.btnShort}`}
               onClick={() => setShowSync(true)}
-              style={{ height: 34 }}
             >
               <RefreshCw size={13} /> Đồng bộ vào Bảng Lương
             </button>
@@ -1114,7 +1296,7 @@ function ReportTab({ year, month }) {
           <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
         ) : rows.length === 0 ? (
           <div className={s.centered}>
-            <BarChart3 size={32} style={{ opacity: 0.35, marginBottom: 4 }} />
+            <BarChart3 size={32} className={s.emptyIcon} />
             Chưa có dữ liệu báo cáo tháng này
           </div>
         ) : (
@@ -1124,35 +1306,35 @@ function ReportTab({ year, month }) {
                 <tr>
                   <th>Nhân viên</th>
                   <th>Chức danh</th>
-                  <th style={{ color: 'var(--color-success-dark)' }}>Ngày công</th>
-                  <th style={{ color: 'var(--color-primary)' }}>Nghỉ (TL)</th>
-                  <th style={{ color: 'var(--color-danger)' }}>Vắng</th>
-                  <th style={{ color: 'var(--color-warning-amber)' }}>Đi muộn</th>
-                  <th style={{ color: 'var(--color-warning-dark)' }}>Về sớm</th>
-                  <th style={{ color: 'var(--color-purple-bright)' }}>OT (h)</th>
-                  <th style={{ color: 'var(--color-cyan)' }}>OT Pay</th>
+                  <th className={s.summarySuccess}>Ngày công</th>
+                  <th className={s.summaryPrimary}>Nghỉ (TL)</th>
+                  <th className={s.summaryDanger}>Vắng</th>
+                  <th className={s.summaryWarning}>Đi muộn</th>
+                  <th className={s.detailValueWarningDark}>Về sớm</th>
+                  <th className={s.summaryPurple}>OT (h)</th>
+                  <th className={s.tableCyan}>OT Pay</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={r.userId ?? i}>
-                    <td style={{ fontWeight: 600, color: 'var(--color-text-soft)' }}>{r.userName ?? r.name}</td>
-                    <td style={{ color: 'var(--color-muted)' }}>{r.jobTitle ?? '—'}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--color-success-dark)' }}>
+                    <td className={s.tableStrong}>{r.userName ?? r.name}</td>
+                    <td className={s.tableMuted}>{r.jobTitle ?? '—'}</td>
+                    <td className={s.tableSuccess}>
                       {Number(r.actualWorkDays ?? r.workDays ?? 0).toFixed(1)}
                     </td>
                     <td>{Number(r.leavePaidDays ?? r.leaveDays ?? 0).toFixed(1)}</td>
-                    <td style={{ fontWeight: r.absentDays > 0 ? 700 : 400, color: r.absentDays > 0 ? 'var(--color-danger)' : 'var(--color-muted)' }}>
+                    <td className={r.absentDays > 0 ? s.tableDanger : s.tableMuted}>
                       {r.absentDays ?? 0}
                     </td>
-                    <td style={{ fontWeight: (r.lateCount ?? r.lateDays ?? 0) > 0 ? 700 : 400, color: (r.lateCount ?? r.lateDays ?? 0) > 0 ? 'var(--color-warning-amber)' : 'var(--color-muted)' }}>
+                    <td className={(r.lateCount ?? r.lateDays ?? 0) > 0 ? s.tableWarning : s.tableMuted}>
                       {r.lateCount ?? r.lateDays ?? 0}
                     </td>
-                    <td style={{ color: 'var(--color-muted)' }}>{r.earlyCount ?? 0}</td>
-                    <td style={{ fontWeight: (r.totalOtHours ?? r.otHours ?? 0) > 0 ? 700 : 400, color: (r.totalOtHours ?? r.otHours ?? 0) > 0 ? 'var(--color-purple-bright)' : 'var(--color-muted)' }}>
+                    <td className={s.tableMuted}>{r.earlyCount ?? 0}</td>
+                    <td className={(r.totalOtHours ?? r.otHours ?? 0) > 0 ? s.tablePurple : s.tableMuted}>
                       {Number(r.totalOtHours ?? r.otHours ?? 0).toFixed(1)}
                     </td>
-                    <td style={{ fontWeight: r.otPay > 0 ? 700 : 400, color: r.otPay > 0 ? 'var(--color-cyan)' : 'var(--color-muted)' }}>
+                    <td className={r.otPay > 0 ? s.tableCyan : s.tableMuted}>
                       {fmtCurrency(r.otPay)}
                     </td>
                   </tr>
@@ -1160,17 +1342,17 @@ function ReportTab({ year, month }) {
               </tbody>
               {totals && (
                 <tfoot>
-                  <tr style={{ background: 'linear-gradient(180deg,var(--color-bg-soft) 0%,var(--color-primary-bg) 100%)', borderTop: '2px solid var(--color-primary-bg-strong)' }}>
-                    <td colSpan={2} style={{ fontWeight: 800, color: 'var(--color-primary-deep)', padding: '10px 14px', fontSize: 'var(--fs-xs)', textTransform: 'uppercase' }}>
+                  <tr className={s.tableTotalRow}>
+                    <td colSpan={2} className={s.tableTotalLabel}>
                       Tổng cộng
                     </td>
-                    <td style={{ fontWeight: 800, color: 'var(--color-success-dark)' }}>{totals.workDays.toFixed(1)}</td>
-                    <td style={{ fontWeight: 700 }}>{totals.leaveDays.toFixed(1)}</td>
-                    <td style={{ fontWeight: totals.absent > 0 ? 800 : 400, color: totals.absent > 0 ? 'var(--color-danger)' : 'var(--color-muted)' }}>{totals.absent}</td>
-                    <td style={{ fontWeight: totals.late > 0 ? 800 : 400, color: totals.late > 0 ? 'var(--color-warning-amber)' : 'var(--color-muted)' }}>{totals.late}</td>
+                    <td className={s.tableSuccess}>{totals.workDays.toFixed(1)}</td>
+                    <td className={s.tableBold}>{totals.leaveDays.toFixed(1)}</td>
+                    <td className={totals.absent > 0 ? s.tableDanger : s.tableMuted}>{totals.absent}</td>
+                    <td className={totals.late > 0 ? s.tableWarning : s.tableMuted}>{totals.late}</td>
                     <td>—</td>
-                    <td style={{ fontWeight: 800, color: 'var(--color-purple-bright)' }}>{totals.otHours.toFixed(1)}</td>
-                    <td style={{ fontWeight: 800, color: 'var(--color-cyan)' }}>{fmtCurrency(totals.otPay)}</td>
+                    <td className={s.tablePurple}>{totals.otHours.toFixed(1)}</td>
+                    <td className={s.tableCyan}>{fmtCurrency(totals.otPay)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -1235,7 +1417,7 @@ function SyncPayrollModal({ year, month, onClose }) {
   return (
     <Modal title="Đồng bộ chấm công vào Bảng Lương" onClose={onClose}>
       <div className={s.modalForm}>
-        <div style={{ padding: '10px 14px', background: 'var(--color-accent-bg-soft)', border: '1.5px solid var(--color-accent-bg)', borderRadius: 8, fontSize: 'var(--fs-sm)', color: 'var(--color-warning-amber)', marginBottom: 4 }}>
+        <div className={sa.syncWarning}>
           Dữ liệu chấm công tháng {month}/{year} sẽ được ghi vào mục
           <strong> attendance_summary</strong> trong kỳ lương đã chọn.
           Thao tác này có thể ghi đè dữ liệu cũ nếu đã sync trước đó.
@@ -1244,8 +1426,8 @@ function SyncPayrollModal({ year, month, onClose }) {
         <div className={s.formGroup}>
           <label className={`${s.formLabel} ${s.req}`}>Chọn kỳ lương</label>
           {loading ? (
-            <div style={{ color: 'var(--color-muted)', fontSize: 'var(--fs-sm)' }}>
-              <Loader2 size={13} className={s.spin} style={{ marginRight: 6 }} />
+            <div className={s.historyLoading}>
+              <Loader2 size={13} className={s.spin} />
               Đang tải...
             </div>
           ) : (
@@ -1263,7 +1445,7 @@ function SyncPayrollModal({ year, month, onClose }) {
         </div>
 
         {periods.length === 0 && !loading && (
-          <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-danger)' }}>
+          <div className={s.dangerText}>
             Không tìm thấy kỳ lương nào. Vui lòng tạo kỳ lương trước.
           </div>
         )}
@@ -1355,17 +1537,17 @@ function AttendanceSettingsTab() {
         <h3 className={s.sectionTitle}>Cài đặt chấm công</h3>
       </div>
 
-      <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 560 }}>
+      <div className={sa.settingsBody}>
 
         {/* Default shift config */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 'var(--fs-sm)', color: 'var(--color-text)' }}>
+        <div className={sa.settingsGroup}>
+          <div className={sa.settingsHeading}>
             Ca làm việc mặc định (Thứ 2 – Thứ 6)
           </div>
-          <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', lineHeight: 1.6, marginTop: -6 }}>
+          <div className={sa.settingsHelp}>
             Ca áp dụng cho toàn bộ nhân viên vào các ngày thường. Hệ thống tự động dùng ca này để tính chấm công mà không cần tạo lịch riêng.
           </div>
-          <div className={s.formGroup} style={{ marginBottom: 0 }}>
+          <div className={s.formGroup}>
             <label className={`${s.formLabel} ${s.req}`}>Ca mặc định</label>
             <select value={defaultId} onChange={(e) => setDefaultId(e.target.value)} className={s.formSelect}>
               <option value="">-- Chọn ca --</option>
@@ -1378,7 +1560,7 @@ function AttendanceSettingsTab() {
             </select>
           </div>
           {selectedDefault && (
-            <div style={{ padding: '8px 12px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 6, fontSize: 'var(--fs-xs)', color: 'var(--color-success-dark)' }}>
+            <div className={sa.settingsInfo}>
               Ca <strong>{selectedDefault.name}</strong> — {selectedDefault.requiredHours ?? '?'}h/ngày.
               {selectedDefault.requiredHours < 8
                 ? ' Nhân viên đủ giờ sẽ được tính 0.5 ngày công.'
@@ -1388,51 +1570,51 @@ function AttendanceSettingsTab() {
         </div>
 
         {/* Saturday config */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 'var(--fs-sm)', color: 'var(--color-text)' }}>
+        <div className={sa.settingsGroup}>
+          <div className={sa.settingsHeading}>
             Quy định Thứ 7
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '12px 14px', border: `2px solid ${mode === 'dayoff' ? 'var(--color-primary)' : 'var(--color-border)'}`, borderRadius: 8, background: mode === 'dayoff' ? 'var(--color-primary-bg)' : 'var(--color-surface)' }}>
+          <label className={`${sa.modeCard} ${mode === 'dayoff' ? sa.modeCardActive : ''}`}>
             <input
               type="radio"
               name="saturday-mode"
               value="dayoff"
               checked={mode === 'dayoff'}
               onChange={() => setMode('dayoff')}
-              style={{ accentColor: 'var(--color-primary)', width: 16, height: 16 }}
+              className={sa.radioInput}
             />
             <div>
-              <div style={{ fontWeight: 600, fontSize: 'var(--fs-sm)', color: mode === 'dayoff' ? 'var(--color-primary-deep)' : 'var(--color-text)' }}>
+              <div className={sa.modeTitle}>
                 Thứ 7 là ngày nghỉ
               </div>
-              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', marginTop: 2 }}>
+              <div className={sa.modeDesc}>
                 Không phát sinh chấm công Thứ 7
               </div>
             </div>
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '12px 14px', border: `2px solid ${mode === 'workday' ? 'var(--color-primary)' : 'var(--color-border)'}`, borderRadius: 8, background: mode === 'workday' ? 'var(--color-primary-bg)' : 'var(--color-surface)' }}>
+          <label className={`${sa.modeCard} ${mode === 'workday' ? sa.modeCardActive : ''}`}>
             <input
               type="radio"
               name="saturday-mode"
               value="workday"
               checked={mode === 'workday'}
               onChange={() => setMode('workday')}
-              style={{ accentColor: 'var(--color-primary)', width: 16, height: 16 }}
+              className={sa.radioInput}
             />
             <div>
-              <div style={{ fontWeight: 600, fontSize: 'var(--fs-sm)', color: mode === 'workday' ? 'var(--color-primary-deep)' : 'var(--color-text)' }}>
+              <div className={sa.modeTitle}>
                 Thứ 7 là ngày đi làm
               </div>
-              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', marginTop: 2 }}>
+              <div className={sa.modeDesc}>
                 Chọn ca làm việc (nửa ngày hoặc cả ngày) để áp dụng cho Thứ 7
               </div>
             </div>
           </label>
 
           {mode === 'workday' && (
-            <div className={s.formGroup} style={{ marginTop: 4 }}>
+            <div className={s.formGroup}>
               <label className={`${s.formLabel} ${s.req}`}>Ca làm việc Thứ 7</label>
               <select
                 value={satShiftId}
@@ -1448,7 +1630,7 @@ function AttendanceSettingsTab() {
                 ))}
               </select>
               {selectedSatShift && (
-                <div style={{ marginTop: 6, padding: '8px 12px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 6, fontSize: 'var(--fs-xs)', color: 'var(--color-success-dark)' }}>
+                <div className={sa.settingsInfo}>
                   Ca <strong>{selectedSatShift.name}</strong> — {selectedSatShift.requiredHours ?? '?'}h/ngày.
                   {selectedSatShift.requiredHours < 8
                     ? ' Nhân viên đủ giờ sẽ được tính 0.5 ngày công.'
@@ -1459,12 +1641,11 @@ function AttendanceSettingsTab() {
           )}
         </div>
 
-        <div style={{ paddingTop: 4, borderTop: '1px solid var(--color-border-soft)' }}>
+        <div className={sa.settingsFooter}>
           <button
             className={s.btnPrimary}
             onClick={handleSave}
             disabled={saving}
-            style={{ alignSelf: 'flex-start' }}
           >
             {saving && <Loader2 size={13} className={s.spin} />}
             {saving ? 'Đang lưu...' : <><Check size={13} /> Lưu cài đặt</>}
@@ -1556,62 +1737,56 @@ function AdminDevToolsTab({ staffList }) {
     }
   }
 
-  const devBox = { background: 'var(--color-surface)', border: '1.5px solid #f97316', borderRadius: 10, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }
-  const devH = { fontSize: 'var(--fs-sm)', fontWeight: 700, color: '#ea580c', borderBottom: '1px solid #fed7aa', paddingBottom: 8, marginBottom: 4 }
-  const row = { display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }
-  const fgGrp = { display: 'flex', flexDirection: 'column', gap: 4 }
-  const lbl = { fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', fontWeight: 600 }
-
   return (
     <div className={s.section}>
       <div className={s.sectionHead}>
-        <h3 className={s.sectionTitle} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h3 className={s.sectionTitle}>
           <Terminal size={16} />
           Dev Tools — Giả lập chấm công
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#f97316', borderRadius: 4, padding: '2px 7px' }}>DEV ONLY</span>
+          <span className={sa.devBadge}>DEV ONLY</span>
         </h3>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: 16 }}>
+      <div className={sa.devToolsBody}>
 
         {/* Section A */}
-        <div style={devBox}>
-          <div style={devH}>A — Giả lập 1 ngày, 1 nhân viên</div>
+        <div className={sa.devPanel}>
+          <div className={sa.devPanelTitle}>A — Giả lập 1 ngày, 1 nhân viên</div>
 
-          <div style={row}>
-            <div style={fgGrp}>
-              <span style={lbl}>Nhân viên</span>
-              <select value={dayUserId} onChange={(e) => setDayUserId(e.target.value)} className={s.formSelect} style={{ minWidth: 180 }}>
+          <div className={sa.devRow}>
+            <div className={sa.devField}>
+              <span className={sa.devLabel}>Nhân viên</span>
+              <select value={dayUserId} onChange={(e) => setDayUserId(e.target.value)} className={`${s.formSelect} ${sa.selectWide}`}>
                 <option value="">-- Chọn nhân viên --</option>
                 {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
-            <div style={fgGrp}>
-              <span style={lbl}>Ngày</span>
+            <div className={sa.devField}>
+              <span className={sa.devLabel}>Ngày</span>
               <input type="date" value={dayDate} onChange={(e) => setDayDate(e.target.value)} className={s.formInput} />
             </div>
             {!dayAbsent && (
               <>
-                <div style={fgGrp}>
-                  <span style={lbl}>Giờ vào</span>
-                  <input type="time" value={dayIn} onChange={(e) => setDayIn(e.target.value)} className={s.formInput} style={{ width: 110 }} />
+                <div className={sa.devField}>
+                  <span className={sa.devLabel}>Giờ vào</span>
+                  <input type="time" value={dayIn} onChange={(e) => setDayIn(e.target.value)} className={`${s.formInput} ${sa.inputTime}`} />
                 </div>
-                <div style={fgGrp}>
-                  <span style={lbl}>Giờ ra</span>
-                  <input type="time" value={dayOut} onChange={(e) => setDayOut(e.target.value)} className={s.formInput} style={{ width: 110 }} />
+                <div className={sa.devField}>
+                  <span className={sa.devLabel}>Giờ ra</span>
+                  <input type="time" value={dayOut} onChange={(e) => setDayOut(e.target.value)} className={`${s.formInput} ${sa.inputTime}`} />
                 </div>
               </>
             )}
-            <div style={fgGrp}>
-              <span style={lbl}>&nbsp;</span>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, cursor: 'pointer', fontSize: 'var(--fs-sm)', color: 'var(--color-text)' }}>
-                <input type="checkbox" checked={dayAbsent} onChange={(e) => setDayAbsent(e.target.checked)} style={{ accentColor: '#f97316' }} />
+            <div className={sa.devField}>
+              <span className={sa.devLabel}>&nbsp;</span>
+              <label className={sa.devCheck}>
+                <input type="checkbox" checked={dayAbsent} onChange={(e) => setDayAbsent(e.target.checked)} className={sa.devAccentInput} />
                 Vắng mặt
               </label>
             </div>
-            <div style={fgGrp}>
-              <span style={lbl}>&nbsp;</span>
-              <button className={s.btnPrimary} onClick={handleSimDay} disabled={dayLoading} style={{ background: '#f97316', borderColor: '#f97316' }}>
+            <div className={sa.devField}>
+              <span className={sa.devLabel}>&nbsp;</span>
+              <button className={`${s.btnPrimary} ${sa.devPrimaryButton}`} onClick={handleSimDay} disabled={dayLoading}>
                 {dayLoading ? <Loader2 size={13} className={s.spin} /> : null}
                 {dayLoading ? 'Đang chạy...' : 'Giả lập ngày này'}
               </button>
@@ -1619,51 +1794,51 @@ function AdminDevToolsTab({ staffList }) {
           </div>
 
           {dayResult && (
-            <div style={{ padding: '10px 14px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 8, fontSize: 'var(--fs-xs)', color: 'var(--color-success-dark)' }}>
+            <div className={sa.devResult}>
               Kết quả: <strong>{dayResult.status}</strong> |
               Vào: {dayResult.checkInTime ? fmtTime(dayResult.checkInTime) : '—'} |
               Ra: {dayResult.checkOutTime ? fmtTime(dayResult.checkOutTime) : '—'} |
-              Muộn: {dayResult.lateMinutes ?? 0}' |
-              Sớm: {dayResult.earlyMinutes ?? 0}' |
+              Muộn: {dayResult.lateMinutes ?? 0} phút |
+              Sớm: {dayResult.earlyMinutes ?? 0} phút |
               Ngày công: {dayResult.workUnits ?? 0}
             </div>
           )}
         </div>
 
         {/* Section B */}
-        <div style={devBox}>
-          <div style={devH}>B — Giả lập cả tháng</div>
+        <div className={sa.devPanel}>
+          <div className={sa.devPanelTitle}>B — Giả lập cả tháng</div>
 
-          <div style={row}>
-            <div style={fgGrp}>
-              <span style={lbl}>Nhân viên</span>
-              <select value={mthUserId} onChange={(e) => setMthUserId(e.target.value)} className={s.formSelect} style={{ minWidth: 180 }}>
+          <div className={sa.devRow}>
+            <div className={sa.devField}>
+              <span className={sa.devLabel}>Nhân viên</span>
+              <select value={mthUserId} onChange={(e) => setMthUserId(e.target.value)} className={`${s.formSelect} ${sa.selectWide}`}>
                 <option value="all">Tất cả nhân viên</option>
                 {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
-            <div style={fgGrp}>
-              <span style={lbl}>Tháng</span>
-              <select value={mthMonth} onChange={(e) => setMthMonth(e.target.value)} className={s.formSelect} style={{ width: 80 }}>
+            <div className={sa.devField}>
+              <span className={sa.devLabel}>Tháng</span>
+              <select value={mthMonth} onChange={(e) => setMthMonth(e.target.value)} className={`${s.formSelect} ${sa.selectNarrow}`}>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                   <option key={m} value={String(m)}>Tháng {m}</option>
                 ))}
               </select>
             </div>
-            <div style={fgGrp}>
-              <span style={lbl}>Năm</span>
-              <select value={mthYear} onChange={(e) => setMthYear(e.target.value)} className={s.formSelect} style={{ width: 80 }}>
+            <div className={sa.devField}>
+              <span className={sa.devLabel}>Năm</span>
+              <select value={mthYear} onChange={(e) => setMthYear(e.target.value)} className={`${s.formSelect} ${sa.selectNarrow}`}>
                 {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (
                   <option key={y} value={String(y)}>{y}</option>
                 ))}
               </select>
             </div>
-            <div style={fgGrp}>
-              <span style={lbl}>Kịch bản</span>
-              <div style={{ display: 'flex', gap: 8 }}>
+            <div className={sa.devField}>
+              <span className={sa.devLabel}>Kịch bản</span>
+              <div className={sa.scenarioList}>
                 {['perfect', 'normal', 'mixed'].map((sc) => (
-                  <label key={sc} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 'var(--fs-xs)', fontWeight: mthScenario === sc ? 700 : 400, color: mthScenario === sc ? '#ea580c' : 'var(--color-text)' }}>
-                    <input type="radio" name="sim-scenario" value={sc} checked={mthScenario === sc} onChange={() => setMthScenario(sc)} style={{ accentColor: '#f97316' }} />
+                  <label key={sc} className={`${sa.scenarioOption} ${mthScenario === sc ? sa.scenarioOptionActive : ''}`}>
+                    <input type="radio" name="sim-scenario" value={sc} checked={mthScenario === sc} onChange={() => setMthScenario(sc)} className={sa.devAccentInput} />
                     {sc === 'perfect' ? 'Perfect' : sc === 'normal' ? 'Normal' : 'Mixed'}
                   </label>
                 ))}
@@ -1671,19 +1846,19 @@ function AdminDevToolsTab({ staffList }) {
             </div>
           </div>
 
-          <div style={row}>
+          <div className={sa.devRow}>
             <button className={s.btnSecondary} onClick={handleClear} disabled={clrLoading}>
               {clrLoading ? <Loader2 size={13} className={s.spin} /> : <X size={13} />}
               Xóa data tháng này
             </button>
-            <button className={s.btnPrimary} onClick={handleSimMonth} disabled={mthLoading} style={{ background: '#f97316', borderColor: '#f97316' }}>
+            <button className={`${s.btnPrimary} ${sa.devPrimaryButton}`} onClick={handleSimMonth} disabled={mthLoading}>
               {mthLoading ? <Loader2 size={13} className={s.spin} /> : null}
               {mthLoading ? 'Đang giả lập...' : 'Giả lập cả tháng'}
             </button>
           </div>
 
           {mthResult && (
-            <div style={{ padding: '10px 14px', background: 'var(--color-success-bg-soft)', border: '1.5px solid var(--color-success-bg)', borderRadius: 8, fontSize: 'var(--fs-xs)', color: 'var(--color-success-dark)' }}>
+            <div className={sa.devResult}>
               {mthUserId === 'all'
                 ? `Đã giả lập ${mthResult.totalUsers} nhân viên, tổng ${mthResult.totalDays} ngày công`
                 : `Đã giả lập ${mthResult.simulated} ngày làm việc`}

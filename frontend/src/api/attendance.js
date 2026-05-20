@@ -19,6 +19,12 @@ export const getRecordsSummary = (params) =>
 export const adjustRecord = (id, body) =>
   api.put(`/attendance/records/${id}/adjust`, body).then(r => r.data)
 
+export const manualAdjustRecord = (id, body) =>
+  api.post(`/attendance/records/${id}/manual-adjust`, body).then(r => r.data)
+
+export const createManualRecord = (body) =>
+  api.post('/attendance/manual-record', body).then(r => r.data)
+
 export const listRecordAdjustments = (id) =>
   api.get(`/attendance/records/${id}/adjustments`).then(r => r.data)
 
