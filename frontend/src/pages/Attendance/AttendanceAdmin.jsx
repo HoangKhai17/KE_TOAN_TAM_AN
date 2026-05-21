@@ -295,13 +295,18 @@ function TodayTab({ staffList }) {
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    // Pass today as from/to — avoids fetching the entire month just to filter client-side
-    attendanceApi.listAttendanceRecords({ from: todayStr, to: todayStr, limit: 200 })
-      .then((res) => { if (!cancelled) setRecords(res.records ?? []) })
+    const limit = Math.max(staffList.length + 10, 100)
+    attendanceApi.listAttendanceRecords({ from: todayStr, to: todayStr, limit })
+      .then((res) => {
+        if (cancelled) return
+        // Client-side guard: only keep records whose workDate matches today
+        const all = res.records ?? []
+        setRecords(all.filter((r) => String(r.workDate).slice(0, 10) === todayStr))
+      })
       .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu hôm nay', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [staffList.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { return load() }, [load])
 

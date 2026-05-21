@@ -32,7 +32,7 @@ async function getToday(req, res, next) {
 
 async function listRecords(req, res, next) {
   try {
-    const { userId, month, year, status, page, limit } = req.query
+    const { userId, month, year, from, to, status, page, limit } = req.query
     const now     = new Date()
     const isAdmin = req.user.role === 'admin'
     const effectiveUserId = isAdmin ? (userId || undefined) : req.user.id
@@ -41,6 +41,8 @@ async function listRecords(req, res, next) {
       userId: effectiveUserId,
       month:  month ? parseInt(month, 10) : now.getMonth() + 1,
       year:   year  ? parseInt(year,  10) : now.getFullYear(),
+      from,
+      to,
       status,
       page:  page  ? parseInt(page,  10) : 1,
       limit: limit ? parseInt(limit, 10) : 31,
