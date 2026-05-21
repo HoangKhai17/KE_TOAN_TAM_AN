@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Users, CalendarDays, ClipboardList, Clock, CalendarCheck,
   ChevronLeft, ChevronRight, Loader2, Check, X, RefreshCw,
-  Download, BarChart3, Settings, Terminal, Pencil,
+  Download, BarChart3, Settings, Terminal, Pencil, LayoutGrid,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -76,6 +76,21 @@ const STATUS_CFG = {
   holiday:        { label: 'Nghỉ lễ',    bg: 'var(--color-danger-bg-soft)', color: 'var(--color-status-revision-text)', border: 'var(--color-status-revision-bg)' },
   unscheduled:    { label: 'Ngoài lịch', bg: 'var(--color-bg-soft)', color: 'var(--color-muted-soft)', border: 'var(--color-border)' },
 }
+
+const STATUS_SHORT = {
+  present:        'Có',
+  late:           'Muộn',
+  early_leave:    'Sớm',
+  late_and_early: 'M+S',
+  absent:         'Vắng',
+  on_leave:       'NP',
+  business_trip:  'CT',
+  wfh:            'WFH',
+  holiday:        'Lễ',
+  unscheduled:    '',
+}
+
+const WEEK_NAMES = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
 
 const LEAVE_TYPE = {
   annual:        'Nghỉ phép năm',
@@ -383,14 +398,25 @@ function TodayTab({ staffList }) {
 // ── AdminCalendarTab ──────────────────────────────────────────────────────────
 
 function AdminCalendarTab({ year, month, staffList, adminUserId }) {
-  const addToast    = useToastStore((st) => st.toast)
-  const [selectedId, setSelectedId] = useState(adminUserId ?? '')
-  const [records,    setRecords]    = useState([])
-  const [holidays,   setHolidays]   = useState([])
-  const [loading,    setLoading]    = useState(true)
+  const addToast = useToastStore((st) => st.toast)
+  const [viewMode,    setViewMode]    = useState('calendar') // 'calendar' | 'table'
+
+  // Calendar view state
+  const [selectedId,  setSelectedId]  = useState(adminUserId ?? '')
+  const [records,     setRecords]     = useState([])
+  const [holidays,    setHolidays]    = useState([])
+  const [loading,     setLoading]     = useState(true)
   const [selectedDay, setSelectedDay] = useState(null)
 
-  const load = useCallback(() => {
+  // Table view state
+  const [allRecords, setAllRecords]   = useState([])
+  const [allLoading, setAllLoading]   = useState(false)
+  const [tableDay,   setTableDay]     = useState(null)
+
+  const now      = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+  const loadCalendar = useCallback(() => {
     if (!selectedId) return () => {}
     let cancelled = false
     setLoading(true)
@@ -408,8 +434,29 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
     return () => { cancelled = true }
   }, [selectedId, month, year]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { return load() }, [load])
+  const loadTable = useCallback(() => {
+    let cancelled = false
+    setAllLoading(true)
+    Promise.all([
+      attendanceApi.listAttendanceRecords({ month, year, limit: 2000 }),
+      attendanceApi.listHolidays(year),
+    ])
+      .then(([res, hols]) => {
+        if (cancelled) return
+        setAllRecords(res.records ?? [])
+        setHolidays(Array.isArray(hols) ? hols : [])
+      })
+      .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu chấm công', 'error') })
+      .finally(() => { if (!cancelled) setAllLoading(false) })
+    return () => { cancelled = true }
+  }, [month, year]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (viewMode === 'calendar') return loadCalendar()
+    return loadTable()
+  }, [viewMode, loadCalendar, loadTable])
+
+  // Calendar memos
   const recordMap = useMemo(() => {
     const m = {}
     records.forEach((r) => { m[String(r.workDate).slice(0, 10)] = r })
@@ -417,94 +464,256 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
   }, [records])
 
   const holidaySet = useMemo(() => {
-    const s = new Set()
+    const set = new Set()
     holidays.forEach((h) => {
       const d = String(h.holidayDate).slice(0, 10)
       const dt = parseDateLocal(d)
-      if (dt && dt.getMonth() + 1 === month) s.add(d)
+      if (dt && dt.getMonth() + 1 === month) set.add(d)
     })
-    return s
+    return set
   }, [holidays, month])
 
   const cells = useMemo(() => buildCalendar(year, month, recordMap, holidaySet), [year, month, recordMap, holidaySet])
 
+  // Table memos
+  const allRecordMap = useMemo(() => {
+    const m = {}
+    allRecords.forEach((r) => {
+      const date = String(r.workDate).slice(0, 10)
+      if (!m[r.userId]) m[r.userId] = {}
+      m[r.userId][date] = r
+    })
+    return m
+  }, [allRecords])
+
+  const daysInMonth = new Date(year, month, 0).getDate()
+
   return (
     <>
-      {/* Employee selector */}
+      {/* Filter bar: view toggle + per-mode controls */}
       <div className={s.filterBar}>
-        <select
-          className={s.filterSelect}
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-        >
-          {staffList.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}{u.id === adminUserId ? ' (Bạn)' : ''}
-            </option>
-          ))}
-        </select>
-        {selectedId === adminUserId && (
-          <span className={sa.adminNotice}>
-            ✓ Admin — tự động ghi nhận đủ công
-          </span>
-        )}
-      </div>
+        <div className={sa.viewToggle}>
+          <button
+            className={`${sa.viewToggleBtn} ${viewMode === 'calendar' ? sa.viewToggleBtnActive : ''}`}
+            onClick={() => setViewMode('calendar')}
+          >
+            <CalendarDays size={13} /> Lịch
+          </button>
+          <button
+            className={`${sa.viewToggleBtn} ${viewMode === 'table' ? sa.viewToggleBtnActive : ''}`}
+            onClick={() => setViewMode('table')}
+          >
+            <LayoutGrid size={13} /> Tất cả nhân viên
+          </button>
+        </div>
 
-      <div className={s.section}>
-        {loading ? (
-          <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
-        ) : (
+        {viewMode === 'calendar' && (
           <>
-            <div className={s.calendarGrid}>
-              {DAY_NAMES.map((d) => (
-                <div key={d} className={`${s.calendarCell} ${s.calendarHeaderCell}`}>{d}</div>
+            <select
+              className={s.filterSelect}
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+            >
+              {staffList.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}{u.id === adminUserId ? ' (Bạn)' : ''}
+                </option>
               ))}
-              {cells.map((cell) => {
-                if (cell.type === 'empty') {
-                  return <div key={cell.key} className={`${s.calendarCell} ${s.calendarEmpty}`} />
-                }
-                const { dateStr, dayNum, record, isToday, isFuture, isWeekend } = cell
-                const cfg = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
-                const statusClass = cfg ? getStatusClass(record.status) : ''
-                return (
-                  <div
-                    key={dateStr}
-                    className={[
-                      s.calendarCell, s.calendarDay,
-                      isToday   ? s.calendarDayToday   : '',
-                      isFuture  ? s.calendarDayFuture  : '',
-                      isWeekend ? s.calendarDayWeekend : '',
-                      record    ? s.calendarDayHasRecord : '',
-                      statusClass ? s.calendarStatus : '',
-                      statusClass,
-                    ].filter(Boolean).join(' ')}
-                    onClick={() => !isFuture && setSelectedDay({ dateStr, record })}
-                    title={cfg?.label}
-                  >
-                    <span className={`${s.calendarDayNum} ${isToday ? s.calendarDayNumToday : ''}`}>
-                      {dayNum}
-                    </span>
-                    {cfg && (
-                      <span className={s.calendarDayLabel}>
-                        {cfg.label}
-                      </span>
-                    )}
-                    {record?.checkInTime && (
-                      <span className={s.calendarDayTime}>{fmtTime(record.checkInTime)}</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            {records.length === 0 && (
-              <div className={s.centered}>
-                <CalendarDays size={32} className={s.emptyIcon} />
-                Chưa có dữ liệu chấm công tháng này
-              </div>
+            </select>
+            {selectedId === adminUserId && (
+              <span className={sa.adminNotice}>
+                ✓ Admin — tự động ghi nhận đủ công
+              </span>
             )}
           </>
         )}
+        {viewMode === 'table' && (
+          <button
+            className={`${s.btnSecondary} ${s.btnShort}`}
+            onClick={loadTable}
+            disabled={allLoading}
+          >
+            <RefreshCw size={13} /> Làm mới
+          </button>
+        )}
       </div>
+
+      {/* ── Calendar view ── */}
+      {viewMode === 'calendar' && (
+        <div className={`${s.section} ${sa.adminCalendarSection}`}>
+          {loading ? (
+            <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
+          ) : (
+            <>
+              <div className={`${s.calendarGrid} ${sa.adminCalendarGrid}`}>
+                {DAY_NAMES.map((d) => (
+                  <div key={d} className={`${s.calendarCell} ${s.calendarHeaderCell}`}>{d}</div>
+                ))}
+                {cells.map((cell) => {
+                  if (cell.type === 'empty') {
+                    return <div key={cell.key} className={`${s.calendarCell} ${s.calendarEmpty}`} />
+                  }
+                  const { dateStr, dayNum, record, isToday, isFuture, isWeekend } = cell
+                  const cfg = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
+                  const statusClass = cfg ? getStatusClass(record.status) : ''
+                  return (
+                    <div
+                      key={dateStr}
+                      className={[
+                        s.calendarCell, s.calendarDay, sa.adminCalendarDay,
+                        isToday   ? s.calendarDayToday   : '',
+                        isFuture  ? s.calendarDayFuture  : '',
+                        isWeekend ? s.calendarDayWeekend : '',
+                        record    ? s.calendarDayHasRecord : '',
+                        record    ? sa.adminCalendarDayFilled : '',
+                        statusClass ? s.calendarStatus : '',
+                        statusClass,
+                      ].filter(Boolean).join(' ')}
+                      onClick={() => !isFuture && setSelectedDay({ dateStr, record })}
+                      title={cfg?.label}
+                    >
+                      <span className={`${s.calendarDayNum} ${isToday ? s.calendarDayNumToday : ''}`}>
+                        {dayNum}
+                      </span>
+                      {cfg && <span className={`${s.calendarDayLabel} ${sa.adminCalendarLabel}`}>{cfg.label}</span>}
+                      {record?.lateMinutes > 0 && (
+                        <span className={`${s.calendarDayExtra} ${s.summaryWarning}`}>
+                          Muộn {record.lateMinutes}p
+                        </span>
+                      )}
+                      {record?.earlyMinutes > 0 && (
+                        <span className={`${s.calendarDayExtra} ${s.detailValueWarningDark}`}>
+                          Sớm {record.earlyMinutes}p
+                        </span>
+                      )}
+                      {record?.checkInTime && (
+                        <span className={`${s.calendarDayTime} ${sa.adminCalendarTime}`}>
+                          <span className={sa.timePrefix}>In</span>
+                          {fmtTime(record.checkInTime)}
+                        </span>
+                      )}
+                      {record?.checkOutTime && (
+                        <span className={`${s.calendarDayTime} ${sa.adminCalendarTime}`}>
+                          <span className={sa.timePrefix}>Out</span>
+                          {fmtTime(record.checkOutTime)}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              {records.length === 0 && (
+                <div className={s.centered}>
+                  <CalendarDays size={32} className={s.emptyIcon} />
+                  Chưa có dữ liệu chấm công tháng này
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── All-staff table view ── */}
+      {viewMode === 'table' && (
+        <div className={`${s.section} ${sa.allStaffSection}`}>
+          {allLoading ? (
+            <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
+          ) : (
+            <div className={sa.allStaffTableWrap}>
+              <table className={sa.allStaffTable}>
+                <thead>
+                  <tr>
+                    <th className={sa.allStaffNameHeader}>Nhân viên</th>
+                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+                      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                      const jsDay = new Date(dateStr + 'T00:00:00').getDay()
+                      const isWeekend = jsDay === 0 || jsDay === 6
+                      const isToday   = dateStr === todayStr
+                      return (
+                        <th
+                          key={d}
+                          className={[
+                            sa.allStaffDayHeader,
+                            isWeekend ? sa.allStaffDayHeaderWeekend : '',
+                            isToday   ? sa.allStaffDayHeaderToday   : '',
+                          ].filter(Boolean).join(' ')}
+                        >
+                          <span className={sa.allStaffDayNum}>{d}</span>
+                          <span className={sa.allStaffDayWeek}>{WEEK_NAMES[jsDay]}</span>
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {staffList.map((user) => (
+                    <tr key={user.id}>
+                      <td className={sa.allStaffNameCell}>{user.name}</td>
+                      {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+                        const dateStr  = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                        const jsDay    = new Date(dateStr + 'T00:00:00').getDay()
+                        const isWeekend = jsDay === 0 || jsDay === 6
+                        const isFuture  = dateStr > todayStr
+                        const isHoliday = holidaySet.has(dateStr)
+                        let record = allRecordMap[user.id]?.[dateStr] ?? null
+                        if (!record && isHoliday) record = { status: 'holiday', isHoliday: true }
+                        const cfg = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
+                        const tableStatusClass = record?.status ? sa[`allStaffStatus_${record.status}`] : ''
+                        const isClickable = record && !record.isHoliday && !isFuture
+                        return (
+                          <td
+                            key={d}
+                            className={[
+                              sa.allStaffCell,
+                              isWeekend  ? sa.allStaffCellWeekend   : '',
+                              isFuture   ? sa.allStaffCellFuture    : '',
+                              isClickable ? sa.allStaffCellClickable : '',
+                              cfg         ? sa.allStaffCellFilled    : '',
+                              !cfg        ? sa.allStaffCellEmpty     : '',
+                              tableStatusClass,
+                            ].filter(Boolean).join(' ')}
+                            onClick={() => isClickable && setTableDay({ dateStr, userId: user.id, record })}
+                            title={cfg ? `${user.name} — ${cfg.label}` : undefined}
+                          >
+                            {cfg && (
+                              <div className={sa.allStaffCellContent}>
+                                <span className={sa.allStaffChip}>{STATUS_SHORT[record.status] ?? ''}</span>
+                                {record?.lateMinutes > 0 && (
+                                  <span className={sa.allStaffNoteLate}>+{record.lateMinutes}p</span>
+                                )}
+                                {record?.earlyMinutes > 0 && (
+                                  <span className={sa.allStaffNoteEarly}>-{record.earlyMinutes}p</span>
+                                )}
+                                {record?.checkInTime && (
+                                  <span className={sa.allStaffTime}>
+                                    <span className={sa.timePrefix}>In</span>
+                                    {fmtTime(record.checkInTime)}
+                                  </span>
+                                )}
+                                {record?.checkOutTime && (
+                                  <span className={sa.allStaffTime}>
+                                    <span className={sa.timePrefix}>Out</span>
+                                    {fmtTime(record.checkOutTime)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                  {staffList.length === 0 && (
+                    <tr>
+                      <td colSpan={daysInMonth + 1} className={s.centered}>Không có nhân viên</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {selectedDay && (
         <AdminDayModal
@@ -512,7 +721,16 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
           record={selectedDay.record}
           userId={selectedId}
           onClose={() => setSelectedDay(null)}
-          onSaved={() => { setSelectedDay(null); load() }}
+          onSaved={() => { setSelectedDay(null); loadCalendar() }}
+        />
+      )}
+      {tableDay && (
+        <AdminDayModal
+          dateStr={tableDay.dateStr}
+          record={tableDay.record}
+          userId={tableDay.userId}
+          onClose={() => setTableDay(null)}
+          onSaved={() => { setTableDay(null); loadTable() }}
         />
       )}
     </>

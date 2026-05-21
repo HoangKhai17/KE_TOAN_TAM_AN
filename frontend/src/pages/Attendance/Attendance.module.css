@@ -521,8 +521,8 @@
 }
 
 .calendarCell {
-  border-right: 1px solid var(--color-surface-muted);
-  border-bottom: 1px solid var(--color-surface-muted);
+  border-right: 1px solid var(--color-border-muted);
+  border-bottom: 1px solid var(--color-border-muted);
   min-height: 112px;
 }
 
@@ -534,7 +534,7 @@
   text-align: center;
   font-size: var(--fs-xs);
   font-weight: var(--fw-extrabold);
-  color: var(--color-muted);
+  color: var(--color-primary-deep);
   background: var(--gradient-table-head);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -611,25 +611,25 @@
 
 /* Shared status variants */
 .status_present {
-  --status-bg: var(--color-success-bg-soft);
+  --status-bg: var(--color-success-bg);
   --status-color: var(--color-success-dark);
-  --status-border: var(--color-success-bg);
+  --status-border: var(--color-success-light);
 }
 
 .status_late {
-  --status-bg: var(--color-accent-bg-soft);
+  --status-bg: var(--color-accent-bg);
   --status-color: var(--color-warning-amber);
-  --status-border: var(--color-accent-bg);
-}
-
-.status_early_leave {
-  --status-bg: var(--color-warning-bg);
-  --status-color: var(--color-warning-dark);
   --status-border: var(--color-warning-bg-strong);
 }
 
+.status_early_leave {
+  --status-bg: var(--color-warning-bg-strong);
+  --status-color: var(--color-warning-dark);
+  --status-border: var(--color-warning);
+}
+
 .status_late_and_early {
-  --status-bg: var(--color-purple-bg-soft);
+  --status-bg: var(--color-purple-bg);
   --status-color: var(--color-purple);
   --status-border: var(--color-status-review-bg);
 }
@@ -637,29 +637,29 @@
 .status_absent {
   --status-bg: var(--color-danger-bg);
   --status-color: var(--color-danger);
-  --status-border: var(--color-danger-bg);
+  --status-border: var(--color-danger-border);
 }
 
 .status_on_leave {
-  --status-bg: var(--color-primary-bg);
-  --status-color: var(--color-primary);
+  --status-bg: var(--color-primary-bg-strong);
+  --status-color: var(--color-primary-dark);
   --status-border: var(--color-status-progress-bg);
 }
 
 .status_business_trip {
-  --status-bg: var(--color-info-surface);
-  --status-color: var(--color-cyan);
-  --status-border: var(--color-info-surface);
+  --status-bg: var(--color-info-bg);
+  --status-color: var(--color-cyan-dark);
+  --status-border: var(--color-cyan-dark);
 }
 
 .status_wfh {
-  --status-bg: var(--color-purple-bg-soft);
+  --status-bg: var(--color-purple-bg);
   --status-color: var(--color-purple-bright);
-  --status-border: var(--color-purple-bg);
+  --status-border: var(--color-status-review-bg);
 }
 
 .status_holiday {
-  --status-bg: var(--color-danger-bg-soft);
+  --status-bg: var(--color-danger-bg);
   --status-color: var(--color-status-revision-text);
   --status-border: var(--color-status-revision-bg);
 }

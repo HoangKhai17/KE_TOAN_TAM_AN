@@ -387,8 +387,16 @@ function CalendarTab({ year, month, userId, isAdmin }) {
                         Muộn {record.lateMinutes}p
                       </span>
                     )}
+                    {record?.earlyMinutes > 0 && (
+                      <span className={`${s.calendarDayExtra} ${s.detailValueWarningDark}`}>
+                        Sớm {record.earlyMinutes}p
+                      </span>
+                    )}
                     {record?.checkInTime && (
                       <span className={s.calendarDayTime}>{fmtTime(record.checkInTime)}</span>
+                    )}
+                    {record?.checkOutTime && (
+                      <span className={s.calendarDayTime}>{fmtTime(record.checkOutTime)}</span>
                     )}
                   </div>
                 )
