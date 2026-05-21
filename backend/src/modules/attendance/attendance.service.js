@@ -1,4 +1,6 @@
-const { query } = require('../../config/db')
+const { query }                          = require('../../config/db')
+const { sendMail }                       = require('../../utils/mailer')
+const { getTemplate, renderTemplate }    = require('../../utils/emailTemplates')
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
@@ -423,6 +425,184 @@ async function getAttendanceSummary({ userId, month, year }) {
   }))
 }
 
+// ── Attendance Confirmation Email ─────────────────────────────────────────────
+
+const STATUS_LABEL = {
+  present: 'Có mặt', late: 'Đi muộn', early_leave: 'Về sớm',
+  late_and_early: 'Muộn & Sớm', absent: 'Vắng mặt', on_leave: 'Nghỉ phép',
+  business_trip: 'Công tác', wfh: 'WFH', holiday: 'Nghỉ lễ', unscheduled: '—',
+}
+
+const STATUS_COLOR = {
+  present: '#047857', late: '#b45309', early_leave: '#c2410c',
+  late_and_early: '#7e22ce', absent: '#dc2626', on_leave: '#4f46e5',
+  business_trip: '#0e7490', wfh: '#8b5cf6', holiday: '#be123c', unscheduled: '#64748b',
+}
+
+function buildAttendanceTableHtml(records, month, year) {
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const recMap = {}
+  records.forEach((r) => { recMap[String(r.workDate).slice(0, 10)] = r })
+
+  const pad = (n) => String(n).padStart(2, '0')
+  const fmtTime = (ts) => {
+    if (!ts) return ''
+    const d = new Date(ts)
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
+
+  let rows = ''
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${pad(month)}-${pad(d)}`
+    const jsDay  = new Date(dateStr + 'T00:00:00').getDay()
+    const rec    = recMap[dateStr]
+    const isWeekend = jsDay === 0 || jsDay === 6
+    const bgRow  = isWeekend ? '#f8fafc' : '#ffffff'
+    const label  = rec ? (STATUS_LABEL[rec.status] ?? '—') : '—'
+    const color  = rec ? (STATUS_COLOR[rec.status] ?? '#64748b') : '#94a3b8'
+    const checkIn  = rec?.checkInTime  ? fmtTime(rec.checkInTime)  : '—'
+    const checkOut = rec?.checkOutTime ? fmtTime(rec.checkOutTime) : '—'
+    const late  = rec?.lateMinutes  > 0 ? `+${rec.lateMinutes}p` : ''
+    const early = rec?.earlyMinutes > 0 ? `-${rec.earlyMinutes}p` : ''
+
+    rows += `
+    <tr style="background:${bgRow}">
+      <td style="padding:7px 12px;border:1px solid #e2e8f0;color:#64748b;text-align:center;white-space:nowrap">
+        ${d} <span style="font-size:11px;color:#94a3b8">(${dayNames[jsDay]})</span>
+      </td>
+      <td style="padding:7px 12px;border:1px solid #e2e8f0;font-weight:600;color:${color}">${label}</td>
+      <td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center">${checkIn}</td>
+      <td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center">${checkOut}</td>
+      <td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center;font-size:12px;color:#d97706">${late}</td>
+      <td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center;font-size:12px;color:#c2410c">${early}</td>
+    </tr>`
+  }
+
+  return `
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead>
+      <tr style="background:#1e3a8a;color:#fff">
+        <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Ngày</th>
+        <th style="padding:8px 12px;border:1px solid #1e40af">Trạng thái</th>
+        <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Giờ vào</th>
+        <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Giờ ra</th>
+        <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Muộn</th>
+        <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Sớm</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`
+}
+
+async function sendAttendanceConfirmation({ month, year }) {
+  const m = parseInt(month, 10)
+  const y = parseInt(year, 10)
+  const pad = (n) => String(n).padStart(2, '0')
+  const from = `${y}-${pad(m)}-01`
+  const lastDay = new Date(y, m, 0).getDate()
+  const to = `${y}-${pad(m)}-${pad(lastDay)}`
+  const monthYear = `Tháng ${pad(m)}/${y}`
+
+  // Fetch all active staff with email + attendance summary + approved OT in parallel
+  const [
+    { rows: users },
+    { rows: attSummaryRows },
+    { rows: otRows },
+  ] = await Promise.all([
+    query(
+      `SELECT id, name, email FROM users
+       WHERE role = 'staff' AND status IN ('active','on_leave')
+         AND email IS NOT NULL AND email <> ''
+       ORDER BY name`
+    ),
+    // Summary per user matching the report's logic (work_units sums, not raw counts)
+    query(
+      `SELECT
+         u.id AS user_id,
+         COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('present','late','early_leave','late_and_early')), 0) AS actual_work_days,
+         COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('on_leave','wfh','business_trip','holiday')),       0) AS leave_paid_days,
+         COUNT(*) FILTER (WHERE ar.status = 'absent')                                     AS absent_days,
+         COUNT(*) FILTER (WHERE ar.status = 'late')                                       AS late_count,
+         COUNT(*) FILTER (WHERE ar.status IN ('early_leave','late_and_early'))             AS early_count
+       FROM users u
+       LEFT JOIN attendance_records ar
+         ON ar.user_id = u.id AND ar.work_date BETWEEN $1 AND $2
+       WHERE u.role = 'staff' AND u.status IN ('active','on_leave')
+       GROUP BY u.id`,
+      [from, to]
+    ),
+    // Approved OT from overtime_requests (same source as Report tab)
+    query(
+      `SELECT user_id, COALESCE(SUM(ot_hours), 0) AS approved_ot_hours
+       FROM overtime_requests
+       WHERE ot_date BETWEEN $1 AND $2 AND status = 'approved'
+       GROUP BY user_id`,
+      [from, to]
+    ),
+  ])
+
+  if (users.length === 0) return { sent: 0, failed: 0, skipped: 0 }
+
+  // Build lookup maps
+  const summaryMap = new Map(attSummaryRows.map((r) => [r.user_id, r]))
+  const otMap      = new Map(otRows.map((r) => [r.user_id, parseFloat(r.approved_ot_hours ?? 0)]))
+
+  // Fetch all attendance records for the month (for per-day detail table)
+  const { rows: allRows } = await query(
+    `SELECT ar.*, u.name AS user_name
+     FROM attendance_records ar
+     JOIN users u ON ar.user_id = u.id
+     WHERE ar.work_date BETWEEN $1 AND $2
+     ORDER BY ar.user_id, ar.work_date`,
+    [from, to]
+  )
+  const recsByUser = {}
+  allRows.forEach((r) => {
+    if (!recsByUser[r.user_id]) recsByUser[r.user_id] = []
+    recsByUser[r.user_id].push(toRecordDto(r))
+  })
+
+  const tpl = await getTemplate('email_tpl_attendance_confirmation')
+
+  let sent = 0, failed = 0, skipped = 0
+  await Promise.all(users.map(async (user) => {
+    const records  = recsByUser[user.id] ?? []
+    const summary  = summaryMap.get(user.id)
+    const workDays  = parseFloat(summary?.actual_work_days ?? 0)
+    const leaveDays = parseFloat(summary?.leave_paid_days  ?? 0)
+    const totalWork = workDays + leaveDays
+    const absentDays = parseInt(summary?.absent_days ?? 0, 10)
+    const lateCnt    = parseInt(summary?.late_count  ?? 0, 10)
+    const earlyCnt   = parseInt(summary?.early_count ?? 0, 10)
+    const otHours    = otMap.get(user.id) ?? 0
+
+    const attendanceTable = buildAttendanceTableHtml(records, m, y)
+    const html = renderTemplate(tpl, {
+      user_name:        user.name,
+      month_year:       monthYear,
+      work_days:        workDays.toFixed(1),
+      leave_days:       leaveDays.toFixed(1),
+      total_work:       totalWork.toFixed(1),
+      absent_days:      String(absentDays),
+      late_count:       String(lateCnt),
+      early_count:      String(earlyCnt),
+      ot_hours:         otHours.toFixed(1),
+      attendance_table: attendanceTable,
+    })
+
+    const ok = await sendMail({
+      to:      user.email,
+      subject: `[Kế Toán Tâm An] Bảng chấm công ${monthYear} — ${user.name}`,
+      html,
+    })
+    if (ok) sent++; else failed++
+  }))
+
+  return { sent, failed, skipped, total: users.length }
+}
+
 module.exports = {
   calculateAttendanceRecord,
   checkIn,
@@ -430,4 +610,5 @@ module.exports = {
   getToday,
   listAttendanceRecords,
   getAttendanceSummary,
+  sendAttendanceConfirmation,
 }

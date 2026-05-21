@@ -362,6 +362,276 @@
   font-size: var(--fs-xs);
 }
 
+/* ── Send confirmation button ────────────────────────────────────────────── */
+
+.btnSendConfirm {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── Attendance Confirm Modal ────────────────────────────────────────────── */
+
+.confirmHeader {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-primary-bg-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-bg);
+}
+
+.confirmHeaderInfo {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.confirmHeaderIcon {
+  color: var(--color-primary);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.confirmHeaderTitle {
+  margin: 0 0 4px;
+  font-size: var(--fs-sm);
+  color: var(--color-text-soft);
+  line-height: 1.4;
+}
+
+.confirmHeaderSub {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.confirmTableWrap {
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+}
+
+.confirmTable {
+  width: 100%;
+  min-width: 620px;
+}
+
+.confirmTh {
+  text-align: center !important;
+  width: 76px;
+}
+
+.confirmEmail {
+  font-size: var(--fs-xs);
+  color: var(--color-primary);
+}
+
+.confirmNoEmail {
+  font-size: var(--fs-xs);
+  color: var(--color-danger);
+  font-style: italic;
+}
+
+.confirmFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-muted);
+}
+
+/* Result screen */
+.confirmResult {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+}
+
+.confirmResultIcon {
+  color: var(--color-success-dark);
+}
+
+.confirmResultTitle {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  color: var(--color-text-soft);
+}
+
+.confirmResultStats {
+  display: flex;
+  gap: var(--space-5);
+}
+
+.confirmStat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-4) var(--space-8);
+  border: 1.5px solid var(--stat-border);
+  border-radius: var(--radius-lg);
+  background: var(--stat-bg);
+  min-width: 90px;
+}
+
+.confirmStatSuccess {
+  --stat-bg: var(--color-success-bg-soft);
+  --stat-border: var(--color-success-bg);
+  --stat-color: var(--color-success-dark);
+}
+
+.confirmStatDanger {
+  --stat-bg: var(--color-danger-bg);
+  --stat-border: var(--color-danger-bg);
+  --stat-color: var(--color-danger);
+}
+
+.confirmStatNum {
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-extrabold);
+  color: var(--stat-color);
+  line-height: 1;
+}
+
+.confirmStatLbl {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  font-weight: var(--fw-semibold);
+  margin-top: 4px;
+}
+
+.confirmResultNote {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+  max-width: 380px;
+  line-height: 1.6;
+}
+
+/* ── Confirm modal grid overrides ────────────────────────────────────────── */
+
+.confirmNameHeader {
+  min-width: 200px;
+  width: 200px;
+  height: 48px;
+  font-size: var(--fs-2xs);
+}
+
+.confirmDayHeader {
+  width: 100px;
+  min-width: 100px;
+  height: 48px;
+  font-size: 10px;
+  padding: 0 4px;
+}
+
+.confirmNameCell {
+  min-width: 200px;
+  max-width: 200px;
+  height: auto;
+  min-height: 68px;
+  padding: 8px 12px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.confirmNameText {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-text);
+  white-space: normal;
+  line-height: 1.3;
+  margin-bottom: 2px;
+}
+
+.confirmNameStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.confirmStatChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: #e0e7ff;
+  color: #4338ca;
+  font-size: 9px;
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.confirmStatChipLeave {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.confirmStatChipTotal {
+  background: #f0fdf4;
+  color: #166534;
+  font-weight: var(--fw-extrabold);
+}
+
+.confirmStatChipDanger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.confirmStatChipWarn {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.confirmStatChipOt {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.confirmGridCell {
+  width: 100px;
+  min-width: 100px;
+  height: 68px;
+}
+
+.confirmCellContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.confirmCellTime {
+  font-size: 9.5px;
+  font-weight: var(--fw-semibold);
+  color: var(--staff-cell-fg);
+  opacity: 0.9;
+  line-height: 1.2;
+}
+
+.confirmCellOt {
+  font-size: 9px;
+  font-weight: var(--fw-bold);
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.12);
+  padding: 1px 4px;
+  border-radius: var(--radius-pill);
+  line-height: 1.3;
+}
+
 /* ── View mode toggle ────────────────────────────────────────────────────── */
 
 .viewToggle {

@@ -95,6 +95,61 @@ DEFAULTS.email_tpl_company_unassignment = WRAPPER(`
 </table>
 <p style="margin-top:16px;font-size:13px;color:#64748b;line-height:1.6">Nếu có thắc mắc, vui lòng liên hệ quản lý trực tiếp.</p>`)
 
+DEFAULTS.email_tpl_attendance_confirmation = WRAPPER(`
+<h2 style="color:#1e3a8a;margin-top:0;border-bottom:2px solid #dbeafe;padding-bottom:10px">
+  📋 Bảng chấm công tháng {{month_year}}
+</h2>
+<p>Xin chào <strong>{{user_name}}</strong>,</p>
+<p>Bộ phận kế toán gửi bảng chấm công của bạn trong tháng <strong>{{month_year}}</strong> để bạn xem lại và xác nhận.</p>
+
+<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:13.5px">
+  <thead>
+    <tr style="background:#1e3a8a;color:#fff">
+      <th style="padding:10px 14px;font-weight:700;text-align:left;border:1px solid #1e40af">Chỉ tiêu</th>
+      <th style="padding:10px 14px;font-weight:700;text-align:right;border:1px solid #1e40af">Số liệu</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569">Ngày công thực tế (TT)</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600">{{work_days}} ngày</td>
+    </tr>
+    <tr style="background:#f8fafc">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#4338ca">Nghỉ có lương (NP/WFH/Lễ)</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#4338ca">{{leave_days}} ngày</td>
+    </tr>
+    <tr style="background:#f0fdf4">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#166534;font-weight:700">Tổng công</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:700;color:#166534">{{total_work}} ngày</td>
+    </tr>
+    <tr>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#dc2626">Vắng mặt</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#dc2626">{{absent_days}} ngày</td>
+    </tr>
+    <tr style="background:#f8fafc">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#d97706">Đi muộn</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#d97706">{{late_count}} lần</td>
+    </tr>
+    <tr>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#c2410c">Về sớm</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#c2410c">{{early_count}} lần</td>
+    </tr>
+    <tr style="background:#f8fafc">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#7c3aed">Tăng ca (OT đã duyệt)</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#7c3aed">{{ot_hours}}h</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 style="color:#1e3a8a;font-size:14px;margin-bottom:8px">Chi tiết từng ngày</h3>
+{{attendance_table}}
+
+<div style="margin-top:24px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px">
+  <p style="margin:0;font-size:13px;color:#1e40af;line-height:1.6">
+    <strong>Lưu ý:</strong> Nếu bạn phát hiện sai sót trong bảng chấm công, vui lòng phản hồi lại cho bộ phận kế toán trong vòng <strong>3 ngày làm việc</strong> kể từ ngày nhận email này.
+  </p>
+</div>`)
+
 async function getTemplate(key) {
   try {
     const { rows: [row] } = await query(

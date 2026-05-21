@@ -182,6 +182,18 @@ async function getSettings(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function sendConfirmation(req, res, next) {
+  try {
+    const now = new Date()
+    const { month = now.getMonth() + 1, year = now.getFullYear() } = req.body
+    const result = await svc.sendAttendanceConfirmation({
+      month: parseInt(month, 10),
+      year:  parseInt(year,  10),
+    })
+    res.json(result)
+  } catch (err) { next(err) }
+}
+
 async function updateSettings(req, res, next) {
   try {
     const { defaultShiftId, saturdayShiftId } = req.body
@@ -200,4 +212,5 @@ module.exports = {
   getReport, syncPayroll,
   listHolidays, createHoliday, updateHoliday, deleteHoliday,
   getSettings, updateSettings,
+  sendConfirmation,
 }

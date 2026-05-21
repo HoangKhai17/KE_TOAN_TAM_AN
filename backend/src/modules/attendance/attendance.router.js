@@ -219,8 +219,9 @@ router.post('/manual-record',             ...admin, ctrl.createManualAttendanceR
  *                       status:   { type: string }
  *       409: { description: Payroll period already paid — cannot update }
  */
-router.get('/report',       ...admin, ctrl.getReport)
-router.post('/sync-payroll', ...admin, ctrl.syncPayroll)
+router.get('/report',              ...admin, ctrl.getReport)
+router.post('/sync-payroll',        ...admin, ctrl.syncPayroll)
+router.post('/send-confirmation',   ...admin, ctrl.sendConfirmation)
 
 /**
  * @openapi

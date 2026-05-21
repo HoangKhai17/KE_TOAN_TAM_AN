@@ -68,6 +68,24 @@ const TEMPLATES = [
       { name: '{{due_date}}',       desc: 'Ngày hết hạn' },
     ],
   },
+  {
+    key: 'email_tpl_attendance_confirmation',
+    label: 'Xác nhận chấm công',
+    icon: '📋',
+    desc: 'Gửi cho nhân viên khi admin xác nhận bảng chấm công tháng',
+    vars: [
+      { name: '{{user_name}}',         desc: 'Tên nhân viên' },
+      { name: '{{month_year}}',        desc: 'Tháng/năm (VD: Tháng 05/2026)' },
+      { name: '{{work_days}}',         desc: 'Ngày công thực tế (TT)' },
+      { name: '{{leave_days}}',        desc: 'Nghỉ có lương (NP/WFH/Lễ)' },
+      { name: '{{total_work}}',        desc: 'Tổng công = TT + Nghỉ lương' },
+      { name: '{{absent_days}}',       desc: 'Số ngày vắng mặt' },
+      { name: '{{late_count}}',        desc: 'Số lần đi muộn' },
+      { name: '{{early_count}}',       desc: 'Số lần về sớm' },
+      { name: '{{ot_hours}}',          desc: 'Giờ OT đã duyệt (từ overtime_requests)' },
+      { name: '{{attendance_table}}',  desc: 'Bảng chi tiết ngày công (HTML tự động)' },
+    ],
+  },
 ]
 
 // Sample values shown in Preview mode
@@ -98,6 +116,28 @@ const PREVIEW_VARS = {
       </tbody>
     </table>`,
   admin_name: 'Admin Tâm An',
+  month_year: 'Tháng 05/2026',
+  work_days: '22.0',
+  leave_days: '1.0',
+  total_work: '23.0',
+  absent_days: '0',
+  late_count: '2',
+  early_count: '1',
+  ot_hours: '4.5',
+  attendance_table: `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:#1e3a8a;color:#fff">
+      <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Ngày</th>
+      <th style="padding:8px 12px;border:1px solid #1e40af">Trạng thái</th>
+      <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Giờ vào</th>
+      <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Giờ ra</th>
+      <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Muộn</th>
+      <th style="padding:8px 12px;border:1px solid #1e40af;text-align:center">Sớm</th>
+    </tr></thead>
+    <tbody>
+      <tr><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center">1 <span style="font-size:11px;color:#94a3b8">(T5)</span></td><td style="padding:7px 12px;border:1px solid #e2e8f0;font-weight:600;color:#047857">Có mặt</td><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center">08:00</td><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center">17:30</td><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center"></td><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center"></td></tr>
+      <tr style="background:#f8fafc"><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center">2 <span style="font-size:11px;color:#94a3b8">(T6)</span></td><td style="padding:7px 12px;border:1px solid #e2e8f0;font-weight:600;color:#b45309">Đi muộn</td><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center">08:22</td><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center">17:30</td><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center;font-size:12px;color:#d97706">+22p</td><td style="padding:7px 12px;border:1px solid #e2e8f0;text-align:center"></td></tr>
+    </tbody>
+  </table>`,
 }
 
 function renderPreview(html) {

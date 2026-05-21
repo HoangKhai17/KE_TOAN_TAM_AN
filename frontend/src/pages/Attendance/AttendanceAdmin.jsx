@@ -4,6 +4,7 @@ import {
   Users, CalendarDays, ClipboardList, Clock, CalendarCheck,
   ChevronLeft, ChevronRight, Loader2, Check, X, RefreshCw,
   Download, BarChart3, Settings, Terminal, Pencil, LayoutGrid,
+  Mail, SendHorizonal, CheckCircle2,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -418,6 +419,9 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
   const [allLoading, setAllLoading]   = useState(false)
   const [tableDay,   setTableDay]     = useState(null)
 
+  // Confirmation email modal
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
   const now      = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
@@ -443,7 +447,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
     let cancelled = false
     setAllLoading(true)
     Promise.all([
-      attendanceApi.listAttendanceRecords({ month, year, limit: 2000 }),
+      attendanceApi.listAttendanceRecords({ month, year, limit: 9999 }),
       attendanceApi.listHolidays(year),
     ])
       .then(([res, hols]) => {
@@ -541,6 +545,14 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
             <RefreshCw size={13} /> Làm mới
           </button>
         )}
+
+        {/* Send confirmation button — always visible in calendar tab */}
+        <button
+          className={`${s.btnPrimary} ${s.btnShort} ${sa.btnSendConfirm}`}
+          onClick={() => setConfirmOpen(true)}
+        >
+          <Mail size={13} /> Gửi xác nhận chấm công
+        </button>
       </div>
 
       {/* ── Calendar view ── */}
@@ -738,7 +750,260 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
           onSaved={() => { setTableDay(null); loadTable() }}
         />
       )}
+
+      {confirmOpen && (
+        <AttendanceConfirmModal
+          month={month}
+          year={year}
+          staffList={staffList}
+          onClose={() => setConfirmOpen(false)}
+        />
+      )}
     </>
+  )
+}
+
+// ── AttendanceConfirmModal ────────────────────────────────────────────────────
+
+function AttendanceConfirmModal({ month, year, staffList, onClose }) {
+  const addToast    = useToastStore((st) => st.toast)
+  const pad         = (n) => String(n).padStart(2, '0')
+  const monthYear   = `Tháng ${pad(month)}/${year}`
+  const staffOnly   = staffList.filter((u) => u.role !== 'admin')
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const days        = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  const now         = new Date()
+  const todayStr    = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+
+  const [byUser,    setByUser]    = useState({})
+  const [holidaySet,setHolidaySet]= useState(new Set())
+  const [summaries, setSummaries] = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [sending,   setSending]   = useState(false)
+  const [result,    setResult]    = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    Promise.all([
+      attendanceApi.listAttendanceRecords({ month, year, limit: 9999 }),
+      attendanceApi.listHolidays(year),
+      attendanceApi.getMonthlyReport({ month, year }),
+    ])
+      .then(([res, hols, reportData]) => {
+        if (cancelled) return
+        const records = res.records ?? []
+
+        // byUser: { [userId]: { [dateStr]: record } }
+        const byU = {}
+        records.forEach((r) => {
+          const date = String(r.workDate).slice(0, 10)
+          if (!byU[r.userId]) byU[r.userId] = {}
+          byU[r.userId][date] = r
+        })
+        setByUser(byU)
+
+        // holiday set for current month
+        const holSet = new Set()
+        ;(Array.isArray(hols) ? hols : []).forEach((h) => {
+          const d = String(h.holidayDate).slice(0, 10)
+          const dt = parseDateLocal(d)
+          if (dt && dt.getMonth() + 1 === month) holSet.add(d)
+        })
+        setHolidaySet(holSet)
+
+        // Build report map keyed by userId — same source as Report tab (approved OT from overtime_requests)
+        const reportArr = Array.isArray(reportData) ? reportData : (reportData?.rows ?? [])
+        const reportMap = {}
+        reportArr.forEach((r) => { reportMap[r.userId] = r })
+
+        // per-staff summaries using report data (correct sources, matching Report tab exactly)
+        const sums = staffOnly.map((user) => {
+          const rep       = reportMap[user.id] ?? {}
+          const workDays  = Number(rep.actualWorkDays ?? 0)
+          const leaveDays = Number(rep.leavePaidDays  ?? 0)
+          return {
+            id:         user.id,
+            workDays,
+            leaveDays,
+            totalWork:  workDays + leaveDays,
+            absentDays: Number(rep.absentDays    ?? 0),
+            lateCnt:    Number(rep.lateCount     ?? 0),
+            earlyCnt:   Number(rep.earlyCount    ?? 0),
+            otHours:    Number(rep.approvedOtHours ?? 0),
+          }
+        })
+        setSummaries(sums)
+      })
+      .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu xem trước', 'error') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [month, year]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSend = async () => {
+    setSending(true)
+    try {
+      const res = await attendanceApi.sendAttendanceConfirmation({ month, year })
+      setResult(res)
+    } catch {
+      addToast('Gửi email thất bại — kiểm tra cấu hình SMTP', 'error')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const fmtT = (ts) => {
+    if (!ts) return ''
+    const d = new Date(ts)
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  return (
+    <Modal title={`Gửi xác nhận chấm công — ${monthYear}`} onClose={onClose} wide>
+      {result ? (
+        /* ── Result screen ── */
+        <div className={sa.confirmResult}>
+          <CheckCircle2 size={48} className={sa.confirmResultIcon} />
+          <h3 className={sa.confirmResultTitle}>Đã gửi email thành công!</h3>
+          <div className={sa.confirmResultStats}>
+            <div className={`${sa.confirmStat} ${sa.confirmStatSuccess}`}>
+              <span className={sa.confirmStatNum}>{result.sent}</span>
+              <span className={sa.confirmStatLbl}>Gửi thành công</span>
+            </div>
+            {result.failed > 0 && (
+              <div className={`${sa.confirmStat} ${sa.confirmStatDanger}`}>
+                <span className={sa.confirmStatNum}>{result.failed}</span>
+                <span className={sa.confirmStatLbl}>Thất bại</span>
+              </div>
+            )}
+          </div>
+          <p className={sa.confirmResultNote}>
+            Nhân viên đã nhận được bảng chấm công {monthYear} qua email và có thể xem lại chi tiết.
+          </p>
+          <button className={`${s.btnPrimary} ${s.btnShort}`} onClick={onClose}>Đóng</button>
+        </div>
+      ) : (
+        <>
+          {/* ── Header info ── */}
+          <div className={sa.confirmHeader}>
+            <div className={sa.confirmHeaderInfo}>
+              <Mail size={18} className={sa.confirmHeaderIcon} />
+              <div>
+                <p className={sa.confirmHeaderTitle}>
+                  Bảng chấm công chi tiết <strong>{monthYear}</strong> — sẽ gửi đến{' '}
+                  <strong>{staffOnly.length} nhân viên</strong>
+                </p>
+                <p className={sa.confirmHeaderSub}>
+                  Mỗi nhân viên nhận 1 email riêng chứa toàn bộ ngày công tháng này. Kiểm tra dữ liệu bên dưới rồi nhấn Gửi.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Attendance grid ── */}
+          {loading ? (
+            <div className={s.centered}>
+              <Loader2 size={20} className={s.spin} /> Đang tải dữ liệu...
+            </div>
+          ) : (
+            <div className={sa.confirmTableWrap}>
+              <table className={sa.allStaffTable}>
+                <thead>
+                  <tr>
+                    <th className={`${sa.allStaffNameHeader} ${sa.confirmNameHeader}`}>Nhân viên</th>
+                    {days.map((d) => {
+                      const dateStr  = `${year}-${pad(month)}-${pad(d)}`
+                      const jsDay    = new Date(dateStr + 'T00:00:00').getDay()
+                      const isWeekend = jsDay === 0 || jsDay === 6
+                      const isToday  = dateStr === todayStr
+                      return (
+                        <th key={d} className={[
+                          sa.allStaffDayHeader,
+                          sa.confirmDayHeader,
+                          isWeekend ? sa.allStaffDayHeaderWeekend : '',
+                          isToday   ? sa.allStaffDayHeaderToday   : '',
+                        ].filter(Boolean).join(' ')}>
+                          <span className={sa.allStaffDayNum}>{d}</span>
+                          <span className={sa.allStaffDayWeek}>{WEEK_NAMES[jsDay]}</span>
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {staffOnly.map((user) => {
+                    const sum = summaries.find((sm) => sm.id === user.id) ?? {}
+                    return (
+                      <tr key={user.id}>
+                        <td className={`${sa.allStaffNameCell} ${sa.confirmNameCell}`}>
+                          <span className={sa.confirmNameText}>{user.name}</span>
+                          {user.email
+                            ? <span className={sa.confirmEmail}>{user.email}</span>
+                            : <span className={sa.confirmNoEmail}>Chưa có email</span>}
+                          <div className={sa.confirmNameStats}>
+                            <span className={sa.confirmStatChip}>{Number(sum.workDays ?? 0).toFixed(1)} TT</span>
+                            {(sum.leaveDays ?? 0) > 0 && <span className={`${sa.confirmStatChip} ${sa.confirmStatChipLeave}`}>{Number(sum.leaveDays).toFixed(1)} NP</span>}
+                            <span className={`${sa.confirmStatChip} ${sa.confirmStatChipTotal}`}>{Number(sum.totalWork ?? 0).toFixed(1)} TC</span>
+                            {(sum.absentDays ?? 0) > 0 && <span className={`${sa.confirmStatChip} ${sa.confirmStatChipDanger}`}>{sum.absentDays} vắng</span>}
+                            {(sum.lateCnt ?? 0) > 0    && <span className={`${sa.confirmStatChip} ${sa.confirmStatChipWarn}`}>{sum.lateCnt} muộn</span>}
+                            {(sum.earlyCnt ?? 0) > 0   && <span className={`${sa.confirmStatChip} ${sa.confirmStatChipWarn}`}>{sum.earlyCnt} sớm</span>}
+                            {(sum.otHours ?? 0) > 0    && <span className={`${sa.confirmStatChip} ${sa.confirmStatChipOt}`}>OT {Number(sum.otHours).toFixed(1)}h</span>}
+                          </div>
+                        </td>
+                        {days.map((d) => {
+                          const dateStr   = `${year}-${pad(month)}-${pad(d)}`
+                          const jsDay     = new Date(dateStr + 'T00:00:00').getDay()
+                          const isWeekend = jsDay === 0 || jsDay === 6
+                          const isFuture  = dateStr > todayStr
+                          const isHoliday = holidaySet.has(dateStr)
+                          let record = byUser[user.id]?.[dateStr] ?? null
+                          if (!record && isHoliday) record = { status: 'holiday' }
+                          const cfg         = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
+                          const statusClass = record?.status ? sa[`allStaffStatus_${record.status}`] : ''
+                          return (
+                            <td key={d} className={[
+                              sa.allStaffCell,
+                              sa.confirmGridCell,
+                              isWeekend ? sa.allStaffCellWeekend : '',
+                              isFuture  ? sa.allStaffCellFuture  : '',
+                              cfg       ? sa.allStaffCellFilled  : sa.allStaffCellEmpty,
+                              statusClass,
+                            ].filter(Boolean).join(' ')}>
+                              {cfg && (
+                                <div className={sa.confirmCellContent}>
+                                  <span className={sa.allStaffChip}>{STATUS_SHORT[record.status] ?? ''}</span>
+                                  {record?.checkInTime  && <span className={sa.confirmCellTime}>{fmtT(record.checkInTime)}</span>}
+                                  {record?.checkOutTime && <span className={sa.confirmCellTime}>{fmtT(record.checkOutTime)}</span>}
+                                  {record?.lateMinutes  > 0 && <span className={sa.allStaffNoteLate}>+{record.lateMinutes}p</span>}
+                                  {record?.earlyMinutes > 0 && <span className={sa.allStaffNoteEarly}>-{record.earlyMinutes}p</span>}
+                                  {(record?.otHours ?? 0) > 0 && <span className={sa.confirmCellOt}>OT {record.otHours.toFixed(1)}h</span>}
+                                </div>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── Footer ── */}
+          <div className={sa.confirmFooter}>
+            <button className={`${s.btnSecondary} ${s.btnShort}`} onClick={onClose} disabled={sending}>
+              <X size={13} /> Huỷ
+            </button>
+            <button className={`${s.btnPrimary} ${s.btnShort}`} onClick={handleSend} disabled={loading || sending}>
+              {sending
+                ? <><Loader2 size={13} className={s.spin} /> Đang gửi...</>
+                : <><SendHorizonal size={13} /> Gửi email ({staffOnly.length} nhân viên)</>}
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
   )
 }
 

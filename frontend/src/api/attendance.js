@@ -36,6 +36,9 @@ export const getMonthlyReport = (params) =>
 export const syncPayroll = (payrollPeriodId) =>
   api.post('/attendance/sync-payroll', { payrollPeriodId }).then(r => r.data)
 
+export const sendAttendanceConfirmation = (body) =>
+  api.post('/attendance/send-confirmation', body).then(r => r.data)
+
 // ── Holidays ──────────────────────────────────────────────────────────────────
 
 export const listHolidays = (year) =>
