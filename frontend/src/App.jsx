@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import ToastContainer from './components/ui/Toast'
 import { useAuthStore } from './stores/authStore'
 import { refreshSession } from './api/session'
 import { useTokenRefresh } from './hooks/useTokenRefresh'
@@ -188,6 +189,7 @@ export default function App() {
       <SocketProvider>
         <AppRoutes />
       </SocketProvider>
+      <ToastContainer />
     </BrowserRouter>
   )
 }

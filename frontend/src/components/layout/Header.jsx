@@ -65,10 +65,13 @@ const TYPE_ICON = {
 export default function Header({ onMenuToggle }) {
   const navigate   = useNavigate()
   const { user, accessToken, logout: clearAuth } = useAuthStore()
-  const {
-    unreadCount, recent, hasLoaded,
-    setUnreadCount, setRecent, markOneRead: storeMarkOne, markAllRead: storeMarkAll,
-  } = useNotificationStore()
+  const unreadCount  = useNotificationStore((s) => s.unreadCount)
+  const recent       = useNotificationStore((s) => s.recent)
+  const hasLoaded    = useNotificationStore((s) => s.hasLoaded)
+  const setUnreadCount  = useNotificationStore((s) => s.setUnreadCount)
+  const setRecent       = useNotificationStore((s) => s.setRecent)
+  const storeMarkOne    = useNotificationStore((s) => s.markOneRead)
+  const storeMarkAll    = useNotificationStore((s) => s.markAllRead)
 
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [bellOpen, setBellOpen]         = useState(false)

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import Footer from './Footer'
-import ToastContainer from '../ui/Toast'
 import s from './layout.module.css'
 
 export default function AppLayout({ children }) {
@@ -23,7 +22,6 @@ export default function AppLayout({ children }) {
         </main>
 
         <Footer />
-        <ToastContainer />
       </div>
     </div>
   )

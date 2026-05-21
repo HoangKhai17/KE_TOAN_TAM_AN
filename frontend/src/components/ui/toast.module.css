@@ -40,10 +40,11 @@
 
 /* ── Type variants ────────────────────────────────── */
 
-.toastSuccess { border-left-color: var(--color-success); }
-.toastError   { border-left-color: var(--color-danger); }
-.toastWarning { border-left-color: var(--color-warning); }
-.toastInfo    { border-left-color: var(--color-info); }
+.toastSuccess      { border-left-color: var(--color-success); }
+.toastError        { border-left-color: var(--color-danger); }
+.toastWarning      { border-left-color: var(--color-warning); }
+.toastInfo         { border-left-color: var(--color-info); }
+.toastNotification { border-left-color: #7c3aed; }
 
 /* ── Inner elements ───────────────────────────────── */
 
@@ -56,6 +57,21 @@
 .toastError   .toastIcon { color: var(--color-danger); }
 .toastWarning .toastIcon { color: var(--color-warning); }
 .toastInfo    .toastIcon { color: var(--color-info); }
+
+.toastEmojiIcon {
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.toastClickable {
+  cursor: pointer;
+}
+
+.toastClickable:hover {
+  background: var(--color-surface-hover, #f8fafc);
+}
 
 .toastBody {
   flex: 1;

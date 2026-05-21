@@ -52,7 +52,12 @@ module.exports = {
   },
 
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    // Comma-separated origins: e.g. "http://localhost:5173,http://localhost:8080"
+    // Dev default supports both Vite (:5173) and Docker/nginx (:8080)
+    origin: (process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:8080')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
 
   email: {

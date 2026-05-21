@@ -15,7 +15,20 @@ async function createAndEmit(userId, type, title, body, taskId = null) {
 
     const io = getIo()
     if (io && notif) {
-      io.to(`user:${userId}`).emit('notification', notif)
+      const room = `user:${userId}`
+
+      // Diagnostic: log socket count in target room (only in non-prod to avoid overhead)
+      if (process.env.NODE_ENV !== 'production') {
+        io.in(room).allSockets().then((sids) => {
+          if (sids.size === 0) {
+            logger.warn(`[Notify] ⚠ room ${room} has 0 sockets — client may be disconnected or CORS is blocking the connection`, { type, title })
+          } else {
+            logger.debug(`[Notify] emit → ${room} (${sids.size} socket(s)) type=${type}`)
+          }
+        }).catch(() => {})
+      }
+
+      io.to(room).emit('notification', notif)
     }
 
     return notif
