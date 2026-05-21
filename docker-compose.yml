@@ -4,7 +4,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - nginx_static:/usr/share/nginx/html:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -77,7 +77,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  nginx_static:
 
 networks:
   internal:
