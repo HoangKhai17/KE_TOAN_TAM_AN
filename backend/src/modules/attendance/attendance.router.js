@@ -220,6 +220,7 @@ router.post('/manual-record',             ...admin, ctrl.createManualAttendanceR
  *       409: { description: Payroll period already paid — cannot update }
  */
 router.get('/report',              ...admin, ctrl.getReport)
+router.get('/report/export',       ...admin, ctrl.exportReport)
 router.post('/sync-payroll',        ...admin, ctrl.syncPayroll)
 router.post('/send-confirmation',   ...admin, ctrl.sendConfirmation)
 

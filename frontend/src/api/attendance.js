@@ -33,6 +33,9 @@ export const listRecordAdjustments = (id) =>
 export const getMonthlyReport = (params) =>
   api.get('/attendance/report', { params }).then(r => r.data)
 
+export const exportAttendanceReport = (params) =>
+  api.get('/attendance/report/export', { params, responseType: 'blob' })
+
 export const syncPayroll = (payrollPeriodId) =>
   api.post('/attendance/sync-payroll', { payrollPeriodId }).then(r => r.data)
 

@@ -79,7 +79,14 @@ async function exportExcel(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function sendPayrollEmails(req, res, next) {
+  try {
+    const result = await svc.sendPayrollEmails(req.params.id)
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listPeriods, getPeriod, createPeriod, updatePeriod, confirmPeriod, markPaid,
-  listRecords, upsertRecord, deleteRecord, exportExcel,
+  listRecords, upsertRecord, deleteRecord, exportExcel, sendPayrollEmails,
 }

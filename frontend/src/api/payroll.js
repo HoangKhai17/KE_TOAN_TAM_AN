@@ -48,3 +48,8 @@ export async function upsertRecord(id, body) {
 export async function deleteRecord(id, recordId) {
   await api.delete(`/payroll/${id}/records/${recordId}`)
 }
+
+export async function sendPayrollEmails(id) {
+  const { data } = await api.post(`/payroll/${id}/send-emails`)
+  return data.data
+}

@@ -306,9 +306,65 @@ async function exportExcel(periodId, res) {
   await workbook.xlsx.write(res)
 }
 
+// --- Send Payroll Email ---
+
+async function sendPayrollEmails(periodId) {
+  const { sendMail }                    = require('../../utils/mailer')
+  const { getTemplate, renderTemplate } = require('../../utils/emailTemplates')
+
+  const { rows: [period] } = await query('SELECT * FROM payroll_periods WHERE id = $1', [periodId])
+  if (!period) throw Object.assign(new Error('Payroll period not found'), { status: 404 })
+
+  const monthYear = `Tháng ${String(period.period_month).padStart(2,'0')}/${period.period_year}`
+
+  const { rows: records } = await query(
+    `SELECT pr.*, u.name AS user_name, u.email, u.role
+     FROM payroll_records pr
+     JOIN users u ON u.id = pr.user_id
+     WHERE pr.payroll_period_id = $1
+       AND u.role = 'staff'
+       AND u.email IS NOT NULL AND u.email <> ''
+     ORDER BY u.name`,
+    [periodId]
+  )
+
+  if (records.length === 0) return { sent: 0, failed: 0, skipped: 0, total: 0 }
+
+  const fmt = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(Number(n ?? 0))) + ' ₫'
+  const tpl = await getTemplate('email_tpl_payroll_slip')
+
+  let sent = 0, failed = 0
+  await Promise.all(records.map(async (r) => {
+    const net = Number(r.net_salary ?? 0)
+    const html = renderTemplate(tpl, {
+      user_name:        r.user_name,
+      month_year:       monthYear,
+      base_salary:      fmt(r.base_salary),
+      allowances:       fmt(r.allowances),
+      bonus:            fmt(r.bonus),
+      gross_income:     fmt(r.gross_income),
+      bhxh_employee:    fmt(r.bhxh_employee),
+      bhyt_employee:    fmt(r.bhyt_employee),
+      bhtn_employee:    fmt(r.bhtn_employee),
+      pit_deduction:    fmt(r.pit_deduction),
+      other_deductions: fmt(r.other_deductions),
+      net_salary:       fmt(net),
+      notes:            r.notes ?? '',
+    })
+    const ok = await sendMail({
+      to:      r.email,
+      subject: `[Kế Toán Tâm An] Bảng lương ${monthYear} — ${r.user_name}`,
+      html,
+    })
+    if (ok) sent++; else failed++
+  }))
+
+  return { sent, failed, skipped: 0, total: records.length }
+}
+
 module.exports = {
   listPeriods, getPeriod, createPeriod, updatePeriod,
   confirmPeriod, markPaid,
   listRecords, upsertRecord, deleteRecord,
-  exportExcel,
+  exportExcel, sendPayrollEmails,
 }

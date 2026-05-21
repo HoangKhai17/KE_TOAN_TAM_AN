@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Check, Pencil, DollarSign, Download, Plus, Trash2,
-  AlertTriangle, Loader2, UserCog,
+  AlertTriangle, Loader2, UserCog, Mail, CheckCircle2,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -227,6 +227,8 @@ export default function PayrollDetail() {
   const [confirming, setConfirming] = useState(false)
   const [markingPaid, setMarkingPaid] = useState(false)
   const [exporting, setExporting]   = useState(false)
+  const [sendingMail, setSendingMail] = useState(false)
+  const [mailResult, setMailResult]   = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -270,6 +272,20 @@ export default function PayrollDetail() {
       addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
     } finally {
       setMarkingPaid(false)
+    }
+  }
+
+  async function handleSendMail() {
+    setSendingMail(true)
+    setMailResult(null)
+    try {
+      const result = await payrollApi.sendPayrollEmails(id)
+      setMailResult(result)
+      addToast(`Đã gửi ${result.sent}/${result.total} email bảng lương`, 'success')
+    } catch {
+      addToast('Gửi email thất bại — kiểm tra cấu hình SMTP', 'error')
+    } finally {
+      setSendingMail(false)
     }
   }
 
@@ -396,6 +412,18 @@ export default function PayrollDetail() {
               <button className={s.btnSecondary} onClick={handleExport} disabled={exporting}>
                 {exporting ? <Loader2 size={13} className={s.spin} /> : <Download size={13} />}
                 {exporting ? 'Đang xuất...' : 'Xuất Excel'}
+              </button>
+              <button
+                className={s.btnPrimary}
+                onClick={handleSendMail}
+                disabled={sendingMail || records.length === 0}
+                title="Gửi bảng lương qua email đến từng nhân viên"
+              >
+                {sendingMail
+                  ? <><Loader2 size={13} className={s.spin} /> Đang gửi...</>
+                  : mailResult
+                    ? <><CheckCircle2 size={13} /> Đã gửi {mailResult.sent}/{mailResult.total}</>
+                    : <><Mail size={13} /> Gửi email bảng lương</>}
               </button>
             </div>
           )}

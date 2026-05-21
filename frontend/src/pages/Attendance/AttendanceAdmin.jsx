@@ -1750,32 +1750,21 @@ function ReportTab({ year, month }) {
     return () => { cancelled = true }
   }, [month, year]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleExportCSV() {
+  async function handleExportExcel() {
     if (rows.length === 0) return
-    const header = ['Nhân viên', 'Chức danh', 'Ngày công TT', 'Nghỉ (TL)', 'Tổng công', 'Vắng', 'Đi muộn', 'Về sớm', 'Giờ OT (đã duyệt)']
-    const csvRows = rows.map((r) => {
-      const work  = Number(r.actualWorkDays ?? r.workDays ?? 0)
-      const leave = Number(r.leavePaidDays  ?? r.leaveDays ?? 0)
-      return [
-        `"${r.userName ?? r.name ?? ''}"`,
-        `"${r.jobTitle ?? ''}"`,
-        work.toFixed(1),
-        leave.toFixed(1),
-        (work + leave).toFixed(1),
-        r.absentDays ?? 0,
-        r.lateCount  ?? r.lateDays ?? 0,
-        r.earlyCount ?? 0,
-        Number(r.approvedOtHours ?? 0).toFixed(1),
-      ]
-    })
-    const csv = [header, ...csvRows].map((row) => row.join(',')).join('\r\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href     = url
-    a.download = `bao-cao-cham-cong-T${String(month).padStart(2,'0')}-${year}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    try {
+      const response = await attendanceApi.exportAttendanceReport({ month, year })
+      const url  = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href     = url
+      link.download = `BaoCao_ChamCong_T${String(month).padStart(2,'0')}_${year}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      addToast('Không thể xuất Excel', 'error')
+    }
   }
 
   // Aggregated totals + derived metrics
@@ -1806,10 +1795,10 @@ function ReportTab({ year, month }) {
         <div className={sa.reportActions}>
           <button
             className={`${s.btnSecondary} ${s.btnShort}`}
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             disabled={rows.length === 0}
           >
-            <Download size={13} /> Xuất CSV
+            <Download size={13} /> Xuất Excel
           </button>
           <button
             className={`${s.btnPrimary} ${s.btnShort}`}

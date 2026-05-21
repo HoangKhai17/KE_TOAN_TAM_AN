@@ -230,4 +230,67 @@ async function syncAttendanceToPayroll(payrollPeriodId) {
   }
 }
 
-module.exports = { listHolidays, createHoliday, updateHoliday, deleteHoliday, getMonthlyReport, syncAttendanceToPayroll }
+// ── Excel Export ──────────────────────────────────────────────────────────────
+
+async function exportMonthlyReportExcel(month, year, res) {
+  const ExcelJS = require('exceljs')
+  const rows = await getMonthlyReport({ month, year })
+
+  const pad = (n) => String(n).padStart(2, '0')
+  const workbook = new ExcelJS.Workbook()
+  const sheet    = workbook.addWorksheet(`BaoCao_T${pad(month)}_${year}`)
+
+  sheet.columns = [
+    { header: 'STT',                  key: 'stt',             width: 5  },
+    { header: 'Họ tên',               key: 'userName',        width: 24 },
+    { header: 'Chức danh',            key: 'jobTitle',        width: 18 },
+    { header: 'Ngày công TT',         key: 'actualWorkDays',  width: 14 },
+    { header: 'Nghỉ có lương (TL)',   key: 'leavePaidDays',   width: 16 },
+    { header: 'Tổng công',            key: 'totalWork',       width: 12 },
+    { header: 'Vắng',                 key: 'absentDays',      width: 8  },
+    { header: 'Đi muộn (lần)',        key: 'lateCount',       width: 13 },
+    { header: 'Về sớm (lần)',         key: 'earlyCount',      width: 13 },
+    { header: 'OT đã duyệt (h)',      key: 'approvedOtHours', width: 15 },
+  ]
+
+  // Blue header
+  const headerRow = sheet.getRow(1)
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } }
+  headerRow.alignment = { horizontal: 'center', vertical: 'middle' }
+  headerRow.height = 22
+
+  rows.forEach((r, idx) => {
+    sheet.addRow({
+      stt:             idx + 1,
+      userName:        r.userName,
+      jobTitle:        r.jobTitle ?? '—',
+      actualWorkDays:  r.actualWorkDays,
+      leavePaidDays:   r.leavePaidDays,
+      totalWork:       r.actualWorkDays + r.leavePaidDays,
+      absentDays:      r.absentDays,
+      lateCount:       r.lateCount,
+      earlyCount:      r.earlyCount,
+      approvedOtHours: r.approvedOtHours,
+    })
+  })
+
+  // Number format for decimal columns
+  ;[4, 5, 6, 10].forEach((c) => { sheet.getColumn(c).numFmt = '0.0' })
+
+  // Zebra rows
+  sheet.eachRow((row, rowNum) => {
+    if (rowNum === 1) return
+    const fill = rowNum % 2 === 0
+      ? { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F4FF' } }
+      : { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }
+    row.eachCell((cell) => { cell.fill = fill })
+  })
+
+  const filename = `BaoCao_ChamCong_T${pad(month)}_${year}.xlsx`
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  await workbook.xlsx.write(res)
+}
+
+module.exports = { listHolidays, createHoliday, updateHoliday, deleteHoliday, getMonthlyReport, syncAttendanceToPayroll, exportMonthlyReportExcel }

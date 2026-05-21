@@ -150,6 +150,74 @@ DEFAULTS.email_tpl_attendance_confirmation = WRAPPER(`
   </p>
 </div>`)
 
+DEFAULTS.email_tpl_payroll_slip = WRAPPER(`
+<h2 style="color:#1e3a8a;margin-top:0;border-bottom:2px solid #dbeafe;padding-bottom:10px">
+  💰 Bảng lương tháng {{month_year}}
+</h2>
+<p>Xin chào <strong>{{user_name}}</strong>,</p>
+<p>Bộ phận kế toán gửi bảng lương của bạn trong tháng <strong>{{month_year}}</strong> để bạn xem lại và xác nhận.</p>
+
+<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:13.5px">
+  <thead>
+    <tr style="background:#1e3a8a;color:#fff">
+      <th style="padding:10px 14px;font-weight:700;text-align:left;border:1px solid #1e40af">Khoản mục</th>
+      <th style="padding:10px 14px;font-weight:700;text-align:right;border:1px solid #1e40af">Số tiền</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background:#f0fdf4">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#166534;font-weight:700">Thu nhập gộp</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:700;color:#166534">{{gross_income}}</td>
+    </tr>
+    <tr>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">Lương cơ bản</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600">{{base_salary}}</td>
+    </tr>
+    <tr style="background:#f8fafc">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">Phụ cấp</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600">{{allowances}}</td>
+    </tr>
+    <tr>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">Thưởng</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600">{{bonus}}</td>
+    </tr>
+    <tr style="background:#fff7ed">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#c2410c;font-weight:600">Khấu trừ</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right"></td>
+    </tr>
+    <tr style="background:#f8fafc">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">BHXH (8%)</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#c2410c">- {{bhxh_employee}}</td>
+    </tr>
+    <tr>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">BHYT (1.5%)</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#c2410c">- {{bhyt_employee}}</td>
+    </tr>
+    <tr style="background:#f8fafc">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">BHTN (1%)</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#c2410c">- {{bhtn_employee}}</td>
+    </tr>
+    <tr>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">Thuế TNCN</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#c2410c">- {{pit_deduction}}</td>
+    </tr>
+    <tr style="background:#f8fafc">
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">Khấu trừ khác</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#c2410c">- {{other_deductions}}</td>
+    </tr>
+    <tr style="background:#1e3a8a;color:#fff">
+      <td style="padding:12px 14px;font-weight:700;font-size:15px;border:1px solid #1e40af">THỰC NHẬN</td>
+      <td style="padding:12px 14px;text-align:right;font-weight:800;font-size:16px;border:1px solid #1e40af">{{net_salary}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<div style="margin-top:24px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px">
+  <p style="margin:0;font-size:13px;color:#1e40af;line-height:1.6">
+    <strong>Lưu ý:</strong> Nếu bạn có thắc mắc về bảng lương, vui lòng liên hệ bộ phận kế toán trong vòng <strong>3 ngày làm việc</strong> kể từ ngày nhận email này.
+  </p>
+</div>`)
+
 async function getTemplate(key) {
   try {
     const { rows: [row] } = await query(

@@ -126,6 +126,18 @@ async function getReport(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function exportReport(req, res, next) {
+  try {
+    const { month, year } = req.query
+    const now = new Date()
+    await reportSvc.exportMonthlyReportExcel(
+      month ? parseInt(month, 10) : now.getMonth() + 1,
+      year  ? parseInt(year,  10) : now.getFullYear(),
+      res
+    )
+  } catch (err) { next(err) }
+}
+
 async function syncPayroll(req, res, next) {
   try {
     const { payrollPeriodId } = req.body
@@ -209,7 +221,7 @@ async function updateSettings(req, res, next) {
 module.exports = {
   checkIn, checkOut, getToday, listRecords, getSummary,
   adjustRecord, manualAdjustRecord, createManualAttendanceRecord, listAdjustments,
-  getReport, syncPayroll,
+  getReport, exportReport, syncPayroll,
   listHolidays, createHoliday, updateHoliday, deleteHoliday,
   getSettings, updateSettings,
   sendConfirmation,
