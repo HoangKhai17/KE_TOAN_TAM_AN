@@ -839,6 +839,91 @@
   color: var(--color-muted);
 }
 
+/* ── Enhanced calendar styles (synced with admin view) ──────────────── */
+
+.calendarSectionEnhanced {
+  border-color: var(--color-primary-ring);
+  background: linear-gradient(180deg, var(--color-primary-bg) 0%, var(--color-surface) 90px);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.10);
+}
+
+.calendarGridEnhanced {
+  gap: 2px;
+  padding: var(--space-2);
+  background: var(--color-primary-bg-strong);
+}
+
+.calendarGridEnhanced > * {
+  border-right: none;
+  border-bottom: none;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.calendarGridEnhanced > :nth-child(-n + 7) {
+  min-height: 34px;
+  border: 1px solid var(--color-primary-bg-strong);
+  background: linear-gradient(180deg, var(--color-primary-bg-strong), var(--color-primary-bg));
+}
+
+.calendarGridEnhanced > :nth-child(n + 8) {
+  min-height: 124px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background-color: var(--color-surface);
+}
+
+.calendarGridEnhanced > :nth-child(n + 8):hover {
+  border-color: var(--color-primary-ring);
+}
+
+.calendarDayEnhanced {
+  gap: 5px;
+  padding: 9px 10px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.02);
+}
+
+.calendarDayFilledEnhanced {
+  border-color: var(--status-border);
+  box-shadow:
+    inset 4px 0 0 var(--status-border),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.calendarLabelEnhanced {
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 7px;
+  border: 1px solid var(--status-border);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.62);
+  line-height: 1.3;
+}
+
+.calendarTimeEnhanced {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 0;
+  color: inherit;
+  font-size: var(--fs-2xs);
+  line-height: 1.25;
+}
+
+.calendarTimePrefix {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-muted);
+  font-size: 9px;
+  font-weight: var(--fw-extrabold);
+  text-transform: uppercase;
+}
+
 .statusCell {
   display: flex;
   flex-direction: column;

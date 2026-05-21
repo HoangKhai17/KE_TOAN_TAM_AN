@@ -335,12 +335,12 @@ function CalendarTab({ year, month, userId, isAdmin }) {
         </div>
       )}
 
-      <div className={s.section}>
+      <div className={`${s.section} ${s.calendarSectionEnhanced}`}>
         {loading ? (
           <div className={s.centered}><Loader2 size={20} className={s.spin} /> Đang tải...</div>
         ) : (
           <>
-            <div className={s.calendarGrid}>
+            <div className={`${s.calendarGrid} ${s.calendarGridEnhanced}`}>
               {/* Day headers */}
               {DAY_NAMES.map((d) => (
                 <div key={d} className={`${s.calendarCell} ${s.calendarHeaderCell}`}>{d}</div>
@@ -362,10 +362,12 @@ function CalendarTab({ year, month, userId, isAdmin }) {
                     className={[
                       s.calendarCell,
                       s.calendarDay,
+                      s.calendarDayEnhanced,
                       isToday   ? s.calendarDayToday   : '',
                       isFuture  ? s.calendarDayFuture  : '',
                       isWeekend ? s.calendarDayWeekend : '',
                       record    ? s.calendarDayHasRecord : '',
+                      record    ? s.calendarDayFilledEnhanced : '',
                       statusClass ? s.calendarStatus : '',
                       statusClass,
                     ].filter(Boolean).join(' ')}
@@ -378,7 +380,7 @@ function CalendarTab({ year, month, userId, isAdmin }) {
                       {dayNum}
                     </span>
                     {cfg && (
-                      <span className={s.calendarDayLabel}>
+                      <span className={`${s.calendarDayLabel} ${s.calendarLabelEnhanced}`}>
                         {cfg.label}
                       </span>
                     )}
@@ -393,10 +395,16 @@ function CalendarTab({ year, month, userId, isAdmin }) {
                       </span>
                     )}
                     {record?.checkInTime && (
-                      <span className={s.calendarDayTime}>{fmtTime(record.checkInTime)}</span>
+                      <span className={`${s.calendarDayTime} ${s.calendarTimeEnhanced}`}>
+                        <span className={s.calendarTimePrefix}>In</span>
+                        {fmtTime(record.checkInTime)}
+                      </span>
                     )}
                     {record?.checkOutTime && (
-                      <span className={s.calendarDayTime}>{fmtTime(record.checkOutTime)}</span>
+                      <span className={`${s.calendarDayTime} ${s.calendarTimeEnhanced}`}>
+                        <span className={s.calendarTimePrefix}>Out</span>
+                        {fmtTime(record.checkOutTime)}
+                      </span>
                     )}
                   </div>
                 )
