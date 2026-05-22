@@ -26,6 +26,7 @@ function toDto(row) {
     lastReminderAt:     row.last_reminder_at ?? null,
     remindedEmail:      row.reminded_email ?? null,
     hasPublicLink:      !!row.public_token,
+    publicToken:        row.public_token ?? null,
     tokenExpiresAt:     row.token_expires_at ?? null,
     tokenSubmittedAt:   row.token_submitted_at ?? null,
     tokenSubmittedData: row.token_submitted_data ?? null,

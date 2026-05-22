@@ -190,14 +190,15 @@ export default function ClientRequestsTab({ company }) {
     setGeneratingLink(true)
     try {
       const data = await cdrApi.generateLink(linkTarget.id, { expiresInDays: 30 })
-      const url = `${window.location.origin}/public/form/${data.publicToken}`
+      // Backend returns { token, expiresAt, publicUrl }
+      const url = `${window.location.origin}/public/form/${data.token}`
       setGeneratedUrl(url)
       setItems((prev) => prev.map((r) =>
         r.id === linkTarget.id
-          ? { ...r, publicToken: data.publicToken, tokenExpiresAt: data.tokenExpiresAt }
+          ? { ...r, publicToken: data.token, tokenExpiresAt: data.expiresAt }
           : r
       ))
-      setLinkTarget((prev) => ({ ...prev, publicToken: data.publicToken, tokenExpiresAt: data.tokenExpiresAt }))
+      setLinkTarget((prev) => ({ ...prev, publicToken: data.token, tokenExpiresAt: data.expiresAt }))
       addToast('Đã tạo link chia sẻ', 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể tạo link', 'error')
@@ -732,39 +733,99 @@ function LinkModal({ item, generatedUrl, generating, copied, onGenerate, onCopy,
 // ── SubmittedDataModal ────────────────────────────────────────────────────────
 
 function SubmittedDataModal({ item, onClose }) {
+  // DB stores JSONB with snake_case keys: contact_name, phone, description, shared_link, notes
   const data = item.tokenSubmittedData ?? {}
+
   const fields = [
-    { label: 'Tên liên hệ',   value: data.contactName },
-    { label: 'Số điện thoại', value: data.phone },
-    { label: 'Mô tả tài liệu', value: data.description },
-    { label: 'Link chia sẻ',   value: data.sharedLink, isLink: true },
-    { label: 'Ghi chú thêm',  value: data.notes },
+    { label: 'Tên liên hệ',    value: data.contact_name ?? data.contactName, icon: '👤' },
+    { label: 'Số điện thoại',  value: data.phone,                            icon: '📞' },
+    { label: 'Mô tả tài liệu', value: data.description,                      icon: '📄', multiline: true },
+    { label: 'Link chia sẻ',   value: data.shared_link ?? data.sharedLink,   icon: '🔗', isLink: true },
+    { label: 'Ghi chú thêm',   value: data.notes,                            icon: '💬', multiline: true },
   ]
+
+  const submittedAt = item.tokenSubmittedAt
+    ? new Date(item.tokenSubmittedAt).toLocaleString('vi-VN', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+    : null
+
   return (
     <Modal title="Dữ liệu khách hàng đã gửi" onClose={onClose}>
       <div className={s.modalStack}>
-        <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
-          Gửi lúc: {new Date(item.tokenSubmittedAt).toLocaleString('vi-VN')}
+
+        {/* Meta header */}
+        <div style={{
+          background: '#f0fdf4', border: '1px solid #86efac',
+          borderRadius: 8, padding: '10px 14px',
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 13, color: '#15803d',
+        }}>
+          <span style={{ fontSize: 16 }}>✅</span>
+          <div>
+            <strong>{item.documentName}</strong>
+            {submittedAt && (
+              <span style={{ color: '#4ade80', fontSize: 12, marginLeft: 8 }}>
+                · Gửi lúc {submittedAt}
+              </span>
+            )}
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {fields.filter((f) => f.value).map((f) => (
-            <div key={f.label}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
-                {f.label}
-              </div>
-              {f.isLink ? (
-                <a href={f.value} target="_blank" rel="noopener noreferrer"
-                  style={{ fontSize: 13, color: '#2563eb', wordBreak: 'break-all' }}>
-                  {f.value}
-                </a>
-              ) : (
-                <div style={{ fontSize: 13, color: '#1e293b', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  {f.value}
+
+        {/* Fields */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {fields.map((f) => {
+            const isEmpty = !f.value
+            return (
+              <div key={f.label} style={{
+                padding: '11px 0',
+                borderBottom: '1px solid #f1f5f9',
+                display: 'grid',
+                gridTemplateColumns: '140px 1fr',
+                gap: '8px 12px',
+                alignItems: 'start',
+              }}>
+                {/* Label */}
+                <div style={{
+                  fontSize: 12, fontWeight: 600, color: '#64748b',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  paddingTop: 1,
+                }}>
+                  <span style={{ fontSize: 13 }}>{f.icon}</span>
+                  {f.label}
                 </div>
-              )}
-            </div>
-          ))}
+
+                {/* Value */}
+                {isEmpty ? (
+                  <span style={{ fontSize: 13, color: '#cbd5e1', fontStyle: 'italic' }}>Không có</span>
+                ) : f.isLink ? (
+                  <a
+                    href={f.value}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      fontSize: 13, color: '#2563eb',
+                      wordBreak: 'break-all', lineHeight: 1.5,
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    {f.value}
+                  </a>
+                ) : (
+                  <div style={{
+                    fontSize: 13, color: '#1e293b',
+                    whiteSpace: f.multiline ? 'pre-wrap' : 'normal',
+                    wordBreak: 'break-word', lineHeight: 1.6,
+                  }}>
+                    {f.value}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
+
         <div className={s.modalActions}>
           <button onClick={onClose} className={s.btnOutline}>Đóng</button>
         </div>

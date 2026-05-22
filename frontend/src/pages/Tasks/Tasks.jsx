@@ -118,6 +118,28 @@ function ListDateField({ value, onChange, isOverdue }) {
   )
 }
 
+// ── CDR status badge (read-only, for client_request rows in list view) ────────
+
+const CDR_STATUS_CFG = {
+  pending:      { bg: '#fffbeb', color: '#92400e', border: '#fcd34d', label: 'Chờ KH' },
+  received:     { bg: '#f0fdf4', color: '#15803d', border: '#86efac', label: 'Đã nhận' },
+  not_required: { bg: '#f8fafc', color: '#64748b', border: '#cbd5e1', label: 'Không cần' },
+  overdue:      { bg: '#fef2f2', color: '#b91c1c', border: '#fca5a5', label: 'Quá hạn' },
+}
+
+function CdrStatusBadge({ status }) {
+  const cfg = CDR_STATUS_CFG[status] ?? CDR_STATUS_CFG.pending
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', padding: '2px 9px',
+      borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
+    }}>
+      {cfg.label}
+    </span>
+  )
+}
+
 // ── Shared badges ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
@@ -1030,37 +1052,45 @@ function ListView({
 
                   {/* Quick edit: status */}
                   <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={t.status}
-                      onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
-                      className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[t.status] ?? ''}`}
-                      title="Đổi trạng thái"
-                    >
-                      <option value={t.status}>
-                        {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
-                      </option>
-                      {(STATUS_TRANSITIONS[t.status] ?? []).map((st) => (
-                        <option key={st} value={st}>
-                          {getLabel('task_status', st, STATUS_LABELS[st])}
+                    {t._type === 'client_request' ? (
+                      <CdrStatusBadge status={t.status} />
+                    ) : (
+                      <select
+                        value={t.status}
+                        onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
+                        className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[t.status] ?? ''}`}
+                        title="Đổi trạng thái"
+                      >
+                        <option value={t.status}>
+                          {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
                         </option>
-                      ))}
-                    </select>
+                        {(STATUS_TRANSITIONS[t.status] ?? []).map((st) => (
+                          <option key={st} value={st}>
+                            {getLabel('task_status', st, STATUS_LABELS[st])}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
 
                   {/* Quick edit: priority */}
                   <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={t.priority}
-                      onChange={(e) => onPriorityChange(t, e.target.value)}
-                      className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[t.priority] ?? ''}`}
-                      title="Đổi ưu tiên"
-                    >
-                      {['urgent', 'high', 'medium', 'low'].map((p) => (
-                        <option key={p} value={p}>
-                          {getLabel('task_priority', p, PRIORITY_LABELS[p])}
-                        </option>
-                      ))}
-                    </select>
+                    {t._type === 'client_request' ? (
+                      <span className={s.mutedDash}>—</span>
+                    ) : (
+                      <select
+                        value={t.priority ?? ''}
+                        onChange={(e) => onPriorityChange(t, e.target.value)}
+                        className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[t.priority] ?? ''}`}
+                        title="Đổi ưu tiên"
+                      >
+                        {['urgent', 'high', 'medium', 'low'].map((p) => (
+                          <option key={p} value={p}>
+                            {getLabel('task_priority', p, PRIORITY_LABELS[p])}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
 
                   {/* Quick edit: due date */}
