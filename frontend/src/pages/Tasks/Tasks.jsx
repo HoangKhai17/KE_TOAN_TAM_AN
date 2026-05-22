@@ -1201,13 +1201,15 @@ export default function Tasks() {
   const isAdmin     = currentUser?.role === 'admin'
 
   // Handle URL params from header shortcuts (?new=1, ?search=...)
-  const _urlNew    = searchParams.get('new')
-  const _urlSearch = searchParams.get('search')
+  const _urlNew      = searchParams.get('new')
+  const _urlSearch   = searchParams.get('search')
+  const _urlAudience = searchParams.get('audience')
 
   // Restore saved filters from sessionStorage (once on mount)
   const [initF] = useState(() => {
     const saved = loadSavedFilters()
-    if (_urlSearch) saved.searchInput = _urlSearch
+    if (_urlSearch)   saved.searchInput   = _urlSearch
+    if (_urlAudience) saved.audienceFilter = _urlAudience
     return saved
   })
 
@@ -1244,6 +1246,7 @@ export default function Tasks() {
   const [priorityFilter, setPriorityFilter] = useState(initF.priorityFilter ?? [])
   const [sourceFilter, setSourceFilter]     = useState(initF.sourceFilter   ?? [])
   const [isOverdue, setIsOverdue]           = useState(initF.isOverdue      ?? false)
+  const [audienceFilter, setAudienceFilter] = useState(initF.audienceFilter ?? 'internal')
 
   // Stats (counts across base filters, ignoring status/priority/isOverdue)
   const [stats, setStats] = useState({
@@ -1285,10 +1288,11 @@ export default function Tasks() {
   // On first mount: handle URL params from header shortcuts
   useEffect(() => {
     if (_urlNew === '1') setShowCreate(true)
-    if (_urlNew || _urlSearch) {
+    if (_urlNew || _urlSearch || _urlAudience) {
       setSearchParams((prev) => {
         prev.delete('new')
         prev.delete('search')
+        prev.delete('audience')
         return prev
       }, { replace: true })
     }
@@ -1303,7 +1307,7 @@ export default function Tasks() {
   // Reset page on filter changes
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter, sortValue])
+  }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter, sortValue, audienceFilter])
 
   // Load reference data + enums + years
   useEffect(() => {
@@ -1352,9 +1356,9 @@ export default function Tasks() {
     saveFilters({
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
       sortValue, searchInput, companyFilter, staffFilter,
-      statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize,
+      statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize, audienceFilter,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize, audienceFilter])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1396,6 +1400,7 @@ export default function Tasks() {
       isOverdue:   isOverdue      ? true : undefined,
       dueDateFrom: dueDateFrom    || undefined,
       dueDateTo:   dueDateTo      || undefined,
+      audience:    audienceFilter || 'internal',
       limit:       view === 'list' ? pageSize : 500,
       page:        view === 'list' ? page : 1,
       sortBy,
@@ -1412,7 +1417,7 @@ export default function Tasks() {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view, sortValue, refreshKey])
+  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view, sortValue, refreshKey, audienceFilter])
 
   // ── Date filter handlers ──────────────────────────────────────────────────────
 
@@ -1513,6 +1518,7 @@ export default function Tasks() {
     setDueDateTo(INIT_DATES.to)
     setSortValue('created_at:desc')
     setView('list'); setPageSize(20)
+    setAudienceFilter('internal')
     setPage(1)
     try { sessionStorage.removeItem(FILTER_KEY) } catch (_) { /* ignore storage errors */ }
   }
@@ -1595,6 +1601,29 @@ export default function Tasks() {
             {pagination.total > 0 && !loading && (
               <span className={s.totalBadge}>{pagination.total}</span>
             )}
+            <div className={s.viewSwitch} style={{ marginLeft: 8 }}>
+              <button
+                className={`${s.viewBtn} ${audienceFilter === 'internal' ? s.viewBtnActive : ''}`}
+                onClick={() => setAudienceFilter('internal')}
+                title="Chỉ hiển thị công việc nội bộ"
+              >
+                Nội bộ
+              </button>
+              <button
+                className={`${s.viewBtn} ${audienceFilter === 'client_request' ? s.viewBtnActive : ''}`}
+                onClick={() => setAudienceFilter('client_request')}
+                title="Chỉ hiển thị yêu cầu tài liệu khách hàng"
+              >
+                <ClipboardList size={12} /> Yêu cầu KH
+              </button>
+              <button
+                className={`${s.viewBtn} ${audienceFilter === 'all' ? s.viewBtnActive : ''}`}
+                onClick={() => setAudienceFilter('all')}
+                title="Hiển thị tất cả"
+              >
+                Tất cả
+              </button>
+            </div>
           </div>
 
           <div className={s.toolbarRight}>

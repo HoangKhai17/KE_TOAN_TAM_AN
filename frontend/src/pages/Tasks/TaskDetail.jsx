@@ -828,6 +828,7 @@ export default function TaskDetail() {
   const [onHoldVisible, setOnHoldVisible] = useState(false)
   const [pendingStatus, setPendingStatus] = useState(null)
   const [forceVisible, setForceVisible]   = useState(false)
+  const [cdrBlockMsg, setCdrBlockMsg]     = useState(null)  // non-null = show CDR-block warning
 
   // Inline title edit
   const [titleEdit, setTitleEdit] = useState('')
@@ -878,7 +879,12 @@ export default function TaskDetail() {
         setForceVisible(true)
       } else if (httpStatus === 422) {
         setOnHoldVisible(false)
-        addToast(msg ?? 'Task bị chặn bởi dependency chưa hoàn thành', 'error')
+        const code = err.response?.data?.error?.code
+        if (code === 'CLIENT_REQUESTS_PENDING') {
+          setCdrBlockMsg(msg ?? 'Còn yêu cầu tài liệu KH chưa hoàn thành.')
+        } else {
+          addToast(msg ?? 'Task bị chặn bởi dependency chưa hoàn thành', 'error')
+        }
         setPendingStatus(null)
       } else {
         addToast(msg ?? 'Không thể cập nhật trạng thái', 'error')
@@ -1182,6 +1188,24 @@ export default function TaskDetail() {
           onConfirm={() => changeStatus(pendingStatus, { force: true })}
           onClose={() => { setForceVisible(false); setPendingStatus(null) }}
         />
+      )}
+
+      {cdrBlockMsg && (
+        <div className={s.miniOverlay}>
+          <div className={s.miniDialog}>
+            <h4 className={s.miniTitle} style={{ color: '#b45309' }}>
+              <AlertTriangle size={15} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              Không thể hoàn thành
+            </h4>
+            <p className={s.miniBody}>{cdrBlockMsg}</p>
+            <p className={s.miniBody} style={{ marginTop: 8, color: '#64748b', fontSize: 12 }}>
+              Vào tab <strong>Yêu cầu KH</strong> của công ty để xem và xử lý các yêu cầu tài liệu còn chờ.
+            </p>
+            <div className={s.miniActions}>
+              <button onClick={() => setCdrBlockMsg(null)} className={s.btnPrimary}>Đã hiểu</button>
+            </div>
+          </div>
+        </div>
       )}
     </AppLayout>
   )

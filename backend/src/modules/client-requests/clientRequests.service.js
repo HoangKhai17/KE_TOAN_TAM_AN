@@ -50,7 +50,7 @@ const CDR_SELECT = `
 async function listClientRequests(filters = {}) {
   const {
     page = 1, limit = 20,
-    companyId, taskId, status, deadlineDateFrom, deadlineDateTo,
+    companyId, taskId, requestedBy, status, deadlineDateFrom, deadlineDateTo,
     sortBy = 'created_at', sortDir = 'desc',
   } = filters
 
@@ -58,8 +58,9 @@ async function listClientRequests(filters = {}) {
   const conditions = ['1=1']
   const params = []
 
-  if (companyId)        { params.push(companyId);        conditions.push(`cdr.company_id = $${params.length}`) }
-  if (taskId)           { params.push(taskId);           conditions.push(`cdr.task_id = $${params.length}`) }
+  if (companyId)   { params.push(companyId);   conditions.push(`cdr.company_id = $${params.length}`) }
+  if (taskId)      { params.push(taskId);       conditions.push(`cdr.task_id = $${params.length}`) }
+  if (requestedBy) { params.push(requestedBy);  conditions.push(`cdr.requested_by = $${params.length}`) }
   if (status) {
     const arr = Array.isArray(status) ? status : [status]
     params.push(arr)
@@ -358,6 +359,8 @@ async function submitPublicForm(token, data) {
          token_submitted_data = $1::jsonb,
          status               = 'received',
          received_at          = NOW(),
+         public_token         = NULL,
+         token_expires_at     = NULL,
          updated_at           = NOW()
      WHERE id = $2`,
     [JSON.stringify(submittedData), row.id]

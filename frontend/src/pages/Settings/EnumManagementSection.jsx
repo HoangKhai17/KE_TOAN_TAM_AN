@@ -187,13 +187,20 @@ export default function EnumManagementSection() {
               <div className={s.enumContentHead}>
                 <div className={s.enumContentTitle}>{activeData.label || activeType}</div>
                 <code className={s.codePill}>{activeType}</code>
-                <button
-                  className={s.btnAddSmall}
-                  style={{ marginLeft: 'auto' }}
-                  onClick={openAdd}
-                >
-                  <Plus size={12} /> Thêm mới
-                </button>
+                {activeData.isEditable !== false && (
+                  <button
+                    className={s.btnAddSmall}
+                    style={{ marginLeft: 'auto' }}
+                    onClick={openAdd}
+                  >
+                    <Plus size={12} /> Thêm mới
+                  </button>
+                )}
+                {activeData.isEditable === false && (
+                  <span className={s.enumFixedNote} style={{ marginLeft: 'auto' }}>
+                    Giá trị cố định — không thể thêm mới
+                  </span>
+                )}
               </div>
 
               {/* Add form */}

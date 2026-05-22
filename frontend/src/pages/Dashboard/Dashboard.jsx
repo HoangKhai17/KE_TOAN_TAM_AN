@@ -14,6 +14,7 @@ import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
 import { getDashboardSummary, getDashboardCharts } from '../../api/dashboard'
+import { getAdminOverview as getCdrOverview } from '../../api/clientRequests'
 import { useDataSync } from '../../hooks/useDataSync'
 import s from './Dashboard.module.css'
 
@@ -153,6 +154,7 @@ export default function Dashboard() {
 
   const [summary, setSummary]       = useState(null)
   const [charts,  setCharts]        = useState(null)
+  const [cdrStats, setCdrStats]     = useState(null)
   const [loading, setLoading]       = useState(true)
   const [error,   setError]         = useState(null)
   const [range,   setRange]         = useState('28d')
@@ -180,11 +182,12 @@ export default function Dashboard() {
       setError(null)
       const params = getRangeDates(range)
       try {
-        const [sum, chrt] = await Promise.all([
+        const [sum, chrt, cdr] = await Promise.all([
           getDashboardSummary(params),
           getDashboardCharts(params),
+          getCdrOverview().catch(() => null),
         ])
-        if (!cancelled) { setSummary(sum); setCharts(chrt) }
+        if (!cancelled) { setSummary(sum); setCharts(chrt); if (cdr) setCdrStats(cdr.stats) }
       } catch (err) {
         if (!cancelled) setError(err?.response?.data?.message ?? err?.message ?? 'Lỗi tải dashboard')
       } finally {
@@ -228,18 +231,27 @@ export default function Dashboard() {
       urgent: (summary?.overdueTasks ?? 0) > 0,
     },
     {
+      label: 'Chờ KH cung cấp',
+      value: loading ? null : ((cdrStats?.pending ?? 0) + (cdrStats?.overdue ?? 0) || 0),
+      sub:   `${cdrStats?.overdue ?? 0} quá hạn`,
+      icon:  ClipboardList,
+      tone:  s.kpiAmber,
+      urgent: (cdrStats?.overdue ?? 0) > 0,
+      onClick: () => navigate('/tasks?audience=client_request'),
+    },
+    {
       label: 'Hoàn thành',
       value: loading ? null : (summary?.completedThisMonth ?? '—'),
       sub:   RANGE_SUB[range],
       icon:  CheckCircle2,
-      tone:  s.kpiAmber,
+      tone:  s.kpiPurple,
     },
     {
       label: 'Tuân thủ SLA',
       value: loading ? null : (summary ? `${summary.slaComplianceRate}%` : '—'),
       sub:   'hoàn thành đúng / trước hạn',
       icon:  TrendingUp,
-      tone:  s.kpiPurple,
+      tone:  s.kpiCyan,
     },
   ]
 
@@ -493,10 +505,12 @@ export default function Dashboard() {
 }
 
 // ── KpiCard ───────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, icon: Icon, tone, urgent, loading }) {
+function KpiCard({ label, value, sub, icon: Icon, tone, urgent, loading, onClick }) {
   return (
     <div
       className={`${s.kpiCard} ${tone} ${urgent ? s.kpiCardUrgent : ''}`}
+      onClick={onClick}
+      style={onClick ? { cursor: 'pointer' } : undefined}
     >
       <div className={s.kpiCardInner}>
         <div className={s.kpiIcon}>

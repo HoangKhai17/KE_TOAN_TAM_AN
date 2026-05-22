@@ -4,7 +4,41 @@ const activity = require('../../lib/activity')
 const { canTransition } = require('./tasks.transitions')
 const { checkBlockers } = require('./dependencies.service')
 const { createAndEmit, emitData } = require('../../lib/notify')
-const { countPendingByTask } = require('../client-requests/clientRequests.service')
+const { countPendingByTask, listClientRequests } = require('../client-requests/clientRequests.service')
+
+function cdrToTaskDto(cdr) {
+  return {
+    id:             cdr.id,
+    _type:          'client_request',
+    title:          cdr.documentName,
+    description:    cdr.description,
+    companyId:      cdr.companyId,
+    companyName:    cdr.companyName,
+    taskTypeId:     null,
+    taskTypeName:   null,
+    customerTaskScheduleId: null,
+    assignedTo:     cdr.requestedBy,
+    assignedToName: cdr.requestedByName,
+    assignedBy:     null,
+    status:         cdr.status,
+    priority:       null,
+    source:         'client_request',
+    startDate:      null,
+    dueDate:        cdr.deadlineDate,
+    periodLabel:    cdr.periodLabel,
+    completedAt:    cdr.receivedAt,
+    onHoldReason:   null,
+    slaDays:        null,
+    actualHours:    null,
+    checklistTotal: 0,
+    checklistDone:  0,
+    createdBy:      cdr.requestedBy,
+    createdAt:      cdr.createdAt,
+    updatedAt:      cdr.updatedAt,
+    linkedTaskId:   cdr.taskId,
+    linkedTaskTitle: cdr.taskTitle,
+  }
+}
 
 const STATUS_LABEL = {
   pending:        'Chờ xử lý',
@@ -70,7 +104,58 @@ async function listTasks(filters = {}) {
     companyId, assignedTo, status, priority, source,
     dueDateFrom, dueDateTo, periodLabel, isOverdue, search,
     sortBy = 'created_at', sortDir = 'desc',
+    audience = 'internal',
   } = filters
+
+  // audience=client_request: return CDRs mapped to task-like shape
+  if (audience === 'client_request') {
+    const cdrFilters = {
+      page: parseInt(page, 10),
+      limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
+      companyId,
+      requestedBy:      assignedTo,
+      periodLabel,
+      deadlineDateFrom: dueDateFrom,
+      deadlineDateTo:   dueDateTo,
+      sortBy: sortBy === 'due_date' ? 'deadline_date' : sortBy === 'priority' ? 'created_at' : sortBy,
+      sortDir,
+    }
+    if (isOverdue === 'true' || isOverdue === true) cdrFilters.status = ['overdue', 'pending']
+    const result = await listClientRequests(cdrFilters)
+    return {
+      tasks:        result.items.map(cdrToTaskDto),
+      pagination:   result.pagination,
+      statusCounts: {},
+    }
+  }
+
+  // audience=all: fetch tasks + CDRs, merge and paginate in memory
+  if (audience === 'all') {
+    const [tasksResult, cdrsResult] = await Promise.all([
+      listTasks({ ...filters, audience: 'internal', page: 1, limit: 1000 }),
+      listClientRequests({
+        companyId, requestedBy: assignedTo, periodLabel,
+        deadlineDateFrom: dueDateFrom, deadlineDateTo: dueDateTo,
+        page: 1, limit: 1000,
+      }),
+    ])
+
+    const allItems = [
+      ...tasksResult.tasks,
+      ...cdrsResult.items.map(cdrToTaskDto),
+    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+
+    const pageInt   = parseInt(page, 10)
+    const limitInt  = Math.min(100, Math.max(1, parseInt(limit, 10)))
+    const offset    = (pageInt - 1) * limitInt
+    const total     = allItems.length
+
+    return {
+      tasks:        allItems.slice(offset, offset + limitInt),
+      pagination:   { page: pageInt, limit: limitInt, total, totalPages: Math.ceil(total / limitInt) },
+      statusCounts: tasksResult.statusCounts,
+    }
+  }
 
   const offset = (page - 1) * limit
 

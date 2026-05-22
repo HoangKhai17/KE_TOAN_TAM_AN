@@ -1724,6 +1724,16 @@
   font-size: 12px;
 }
 
+.enumFixedNote {
+  font-size: 11px;
+  color: #94a3b8;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
 .enumBadgeActive {
   display: inline-block;
   padding: 2px 8px;

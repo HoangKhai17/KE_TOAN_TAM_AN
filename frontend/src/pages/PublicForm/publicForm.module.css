@@ -1,0 +1,265 @@
+.page {
+  min-height: 100vh;
+  background: #f1f5f9;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px 64px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+  width: 100%;
+  max-width: 600px;
+  padding: 36px 40px;
+}
+
+/* ── Header ── */
+.header {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.logo {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.companyLine {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0 0 8px;
+}
+
+.docTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.periodBadge {
+  display: inline-block;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 20px;
+  padding: 2px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── Description block ── */
+.descBlock {
+  background: #f8fafc;
+  border-left: 3px solid #3b82f6;
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.descLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.descText {
+  font-size: 14px;
+  color: #334155;
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* ── Deadline bar ── */
+.deadlineBar {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #9a3412;
+  margin-bottom: 24px;
+}
+
+/* ── Form ── */
+.formSection {
+  margin-bottom: 20px;
+}
+
+.formSectionTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #111827;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+}
+
+.inputError {
+  border-color: #ef4444;
+}
+
+.inputError:focus {
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.12);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.fieldErr {
+  font-size: 12px;
+  color: #dc2626;
+  margin: 4px 0 0;
+}
+
+.globalErr {
+  font-size: 13px;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 8px;
+}
+
+/* ── Hint ── */
+.hint {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #166534;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+/* ── Submit button ── */
+.submitBtn {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.submitBtn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.submitBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Status screens ── */
+.statusIcon {
+  font-size: 52px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.statusTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: center;
+  margin: 0 0 12px;
+}
+
+.statusText {
+  font-size: 14px;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* ── Loading ── */
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 16px auto 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingText {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+  margin: 12px 0 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .card {
+    padding: 24px 20px;
+  }
+}

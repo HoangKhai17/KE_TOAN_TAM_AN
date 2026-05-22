@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, CheckSquare,
   Users, BarChart3, Settings,
-  ChevronLeft, ChevronRight, LogOut, Wallet, CalendarCheck,
+  ChevronLeft, ChevronRight, LogOut, Wallet, CalendarCheck, ClipboardList,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { logout } from '../../api/auth'
@@ -21,6 +21,7 @@ const NAV_GROUPS = [
   {
     label: 'QUẢN TRỊ HỆ THỐNG',
     items: [
+      { to: '/admin/client-requests', label: 'Yêu cầu tài liệu KH', icon: ClipboardList, adminOnly: true },
       { to: '/staff',             label: 'Nhân viên',         icon: Users,         adminOnly: true },
       { to: '/attendance',        label: 'Chấm công',         icon: CalendarCheck, staffOnly: true, end: true },
       { to: '/attendance/admin',  label: 'Quản lý chấm công', icon: CalendarCheck, adminOnly: true },

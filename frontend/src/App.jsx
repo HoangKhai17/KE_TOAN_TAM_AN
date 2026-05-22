@@ -20,6 +20,8 @@ import Payroll from './pages/Payroll/Payroll'
 import PayrollDetail from './pages/Payroll/PayrollDetail'
 import Reports from './pages/Reports/Reports'
 import Notifications from './pages/Notifications/Notifications'
+import PublicForm from './pages/PublicForm/PublicForm'
+import AdminClientRequests from './pages/AdminClientRequests/AdminClientRequests'
 import s from './App.module.css'
 
 // ── Route guards ──────────────────────────────────────────────────────
@@ -173,6 +175,15 @@ function AppRoutes() {
         path="/change-password"
         element={<ProtectedRoute><Navigate to="/dashboard" replace /></ProtectedRoute>}
       />
+
+      {/* Phase 17 — Admin CDR overview */}
+      <Route
+        path="/admin/client-requests"
+        element={<ProtectedRoute><AdminClientRequests /></ProtectedRoute>}
+      />
+
+      {/* Phase 17 — Public form (no auth required) */}
+      <Route path="/public/form/:token" element={<PublicForm />} />
 
       {/* Catch-all */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

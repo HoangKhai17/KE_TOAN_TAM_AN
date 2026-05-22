@@ -5,7 +5,7 @@ import {
   Hash, Calendar, Briefcase,
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
-  Plus, Search, RotateCcw, Filter, Eye,
+  Plus, Search, RotateCcw, Filter, Eye, ClipboardList,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -19,6 +19,7 @@ import SchedulesTab from './SchedulesTab'
 import CredentialsTab from './CredentialsTab'
 import DocumentsTab from './DocumentsTab'
 import NotesTab from './NotesTab'
+import ClientRequestsTab from './ClientRequestsTab'
 import TaskFormModal from '../Tasks/TaskFormModal'
 import TaskQuickView from '../Tasks/TaskQuickView'
 import {
@@ -60,12 +61,13 @@ function InfoField({ label, value, fullWidth }) {
 // ── Tab config ─────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'overview',     label: 'Tổng quan',         icon: BarChart2 },
-  { id: 'tasks',        label: 'Công việc',          icon: ListTodo },
-  { id: 'schedules',    label: 'Lịch định kỳ',       icon: CalendarDays },
-  { id: 'credentials',  label: 'Tài khoản hệ thống', icon: Lock },
-  { id: 'documents',    label: 'Tài liệu',           icon: FileText },
-  { id: 'notes',        label: 'Ghi chú',            icon: StickyNote },
+  { id: 'overview',          label: 'Tổng quan',         icon: BarChart2 },
+  { id: 'tasks',             label: 'Công việc',          icon: ListTodo },
+  { id: 'client-requests',   label: 'Yêu cầu KH',        icon: ClipboardList },
+  { id: 'schedules',         label: 'Lịch định kỳ',       icon: CalendarDays },
+  { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
+  { id: 'documents',         label: 'Tài liệu',           icon: FileText },
+  { id: 'notes',             label: 'Ghi chú',            icon: StickyNote },
 ]
 
 const COMPANY_TASK_STATUS_TONE = {
@@ -324,6 +326,9 @@ export default function CompanyDetail() {
           company={company}
           onTaskCountChange={(openCount) => setCompany((c) => ({ ...c, taskOpenCount: openCount }))}
         />
+      )}
+      {activeTab === 'client-requests' && (
+        <ClientRequestsTab company={company} />
       )}
       {activeTab === 'schedules' && (
         <SchedulesTab company={company} isAdmin={isAdmin} />
