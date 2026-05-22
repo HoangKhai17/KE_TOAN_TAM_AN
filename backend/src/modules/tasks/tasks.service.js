@@ -4,6 +4,7 @@ const activity = require('../../lib/activity')
 const { canTransition } = require('./tasks.transitions')
 const { checkBlockers } = require('./dependencies.service')
 const { createAndEmit, emitData } = require('../../lib/notify')
+const { countPendingByTask } = require('../client-requests/clientRequests.service')
 
 const STATUS_LABEL = {
   pending:        'Chờ xử lý',
@@ -333,6 +334,17 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
       { status: 409, uncheckedCount: unchecked }
     )
     throw err
+  }
+
+  // Soft-block completion when linked client document requests are still pending
+  if (newStatus === 'completed') {
+    const pendingCdrCount = await countPendingByTask(id)
+    if (pendingCdrCount > 0) {
+      throw Object.assign(
+        new Error(`${pendingCdrCount} yêu cầu tài liệu khách hàng chưa hoàn thành.`),
+        { status: 422, code: 'CLIENT_REQUESTS_PENDING', pendingCdrCount }
+      )
+    }
   }
 
   const setClauses = ['status = $1', 'updated_at = NOW()']

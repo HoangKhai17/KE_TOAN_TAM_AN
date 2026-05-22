@@ -186,6 +186,11 @@ function createApp() {
   // Phase 12 — Notifications
   app.use('/api/notifications', require('./modules/notifications/notifications.router'))
 
+  // Phase 17 — Client Document Requests
+  app.use('/api/client-requests',        require('./modules/client-requests/clientRequests.router'))
+  app.use('/api/public/client-forms',    require('./modules/client-requests/clientRequestsPublic.router'))
+  app.use('/api/admin/client-requests',  require('./modules/client-requests/clientRequestsAdmin.router'))
+
   // Dev helper: send a test notification to the calling user
   app.post('/api/notifications/test', require('./middleware/auth').authenticate, async (req, res, next) => {
     try {

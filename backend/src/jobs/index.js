@@ -9,6 +9,7 @@ const { runOverdueEscalation } = require('./overdueEscalation.job')
 const { runOnHoldReminder }   = require('./onHoldReminder.job')
 const { runMorningSummary }        = require('./morningSummary.job')
 const { runAdminAttendanceJob }    = require('./adminAttendance.job')
+const { runClientDocOverdueJob }   = require('./clientDocOverdue.job')
 
 let schedulerTask = null
 let lastRunAt     = null
@@ -197,7 +198,14 @@ function startNotificationJobs() {
     }
   }, { timezone: 'UTC' })
 
-  logger.info('[Jobs] Notification cron jobs scheduled (07:00/07:30/08:00/08:05 VN + 06:30 VN admin attendance)')
+  // Client Document Overdue — 08:30 VN = 01:30 UTC
+  cron.schedule('30 1 * * *', async () => {
+    try { await runClientDocOverdueJob() } catch (err) {
+      logger.error('[Jobs] Client doc overdue job failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  logger.info('[Jobs] Notification cron jobs scheduled (07:00/07:30/08:00/08:05/08:30 VN + 06:30 VN admin attendance)')
 }
 
 module.exports = { startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs, deleteLog, clearLogs, startNotificationJobs }
