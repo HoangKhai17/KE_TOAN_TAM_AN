@@ -262,18 +262,32 @@ Mỗi loại công việc trong Task Type Library có thể cấu hình thêm tr
 
 ### 3.11 Yêu Cầu Tài Liệu Từ Khách Hàng (Client Document Requests)
 
-> Theo dõi những tài liệu / chứng từ mà staff cần KH cung cấp để hoàn thành task. Đây là công cụ dành cho staff — KH **không cần tài khoản** trong hệ thống.
+> CDR là **entity độc lập** — không phải con của task. Staff tạo và theo dõi tài liệu / chứng từ cần KH cung cấp. KH **không cần tài khoản** trong hệ thống.
 
 **Bài toán nghiệp vụ:** Nhiều loại công việc kế toán (kê khai thuế, lập bảng lương, quyết toán...) đòi hỏi KH cung cấp hóa đơn, chứng từ, bảng chấm công... trước khi staff có thể thực hiện. Nếu không theo dõi có hệ thống, dễ bị trễ hạn do chờ KH mà không có ai đôn đốc.
 
+**Loại task khi tạo mới:**
+
+Khi staff / admin tạo task, họ chọn **Loại task**:
+- **Nội bộ (Internal):** Task thực hiện bởi staff — luồng quản lý công việc thông thường
+- **Yêu cầu KH (Client Request):** CDR — staff yêu cầu KH cung cấp tài liệu; hiển thị riêng trong list tasks (với filter) và trong trang công ty
+
+**Nơi hiển thị CDR:**
+
+| Vị trí | Cách thể hiện |
+|--------|---------------|
+| Trang `/companies/:id` | Tab riêng **"Yêu cầu KH"** — toàn bộ CDR của công ty đó |
+| Trang `/tasks` (danh sách chính) | Filter toggle **[Tất cả \| Nội bộ \| Yêu cầu KH]** — CDR row hiển thị khác biệt về màu sắc/icon |
+
 **Phạm vi tính năng:**
-- Gắn danh sách tài liệu cần thiết vào từng task
+- Staff tạo CDR từ: trang công ty (tab "Yêu cầu KH") hoặc danh sách `/tasks` (loại "Yêu cầu KH")
+- CDR có thể liên kết tùy chọn với một task nội bộ (để tham chiếu ngữ cảnh — không bắt buộc)
 - Staff chủ động thêm / đánh dấu nhận / huỷ bỏ từng mục
-- **Soft block:** khi task có mục đang `pending` mà staff cố chuyển sang `completed` → hệ thống cảnh báo nhưng không chặn cứng (staff tự quyết)
+- **Soft block:** khi task nội bộ liên kết có CDR đang `pending` mà staff cố chuyển sang `completed` → hệ thống cảnh báo nhưng không chặn cứng (staff tự quyết)
 - Cron job tự động chuyển trạng thái `overdue` khi qua `deadline_date`
 
 **Workflow cơ bản:**
-1. Staff mở task → tab "Yêu cầu KH" → thêm mục tài liệu cần (tên, mô tả, hạn nộp)
+1. Staff vào trang công ty (tab "Yêu cầu KH") **hoặc** trang `/tasks` (chọn loại "Yêu cầu KH") → tạo yêu cầu mới (tên tài liệu, mô tả, hạn nộp, liên kết task tùy chọn)
 2. Chọn cách đôn đốc KH: **Email nhắc nhở** hoặc **Tạo link form**
 3. Staff theo dõi trạng thái từng mục; khi KH cung cấp đủ → đánh dấu "Đã nhận"
 4. Admin có trang tổng quan "Yêu cầu KH đang pending" toàn hệ thống
@@ -287,9 +301,9 @@ Mỗi loại công việc trong Task Type Library có thể cấu hình thêm tr
 **Kênh 2 — Shareable public link (form điền trực tuyến):**
 - Staff bấm "Tạo link" → hệ thống sinh token UUID → URL `/public/form/:token`
 - URL này **không yêu cầu đăng nhập** — chia sẻ qua bất kỳ kênh nào (Zalo, Telegram, email, SMS...)
-- KH mở link → xem yêu cầu tài liệu + điền thông tin vào form + upload file đính kèm
+- KH mở link → xem yêu cầu tài liệu + điền thông tin vào form + **dán link chia sẻ** (Google Drive, Zalo, Dropbox... — **không upload file** lên hệ thống)
 - Sau khi KH submit → dữ liệu lưu thẳng vào `client_document_requests.token_submitted_data`
-- Staff nhận thông báo, review dữ liệu KH điền, xác nhận "Đã nhận" → trạng thái chuyển `received`
+- Staff nhận thông báo, review dữ liệu KH điền + link chia sẻ, xác nhận "Đã nhận" → trạng thái chuyển `received`
 - Staff có thể thu hồi link bất kỳ lúc nào (revoke token)
 - Link có thể đặt thời hạn hết hạn (token_expires_at)
 
@@ -305,7 +319,8 @@ Mỗi loại công việc trong Task Type Library có thể cấu hình thêm tr
 **Admin Overview:**
 - Widget trên Dashboard: số lượng yêu cầu pending toàn hệ thống
 - Trang `/admin/client-requests`: lọc theo KH / nhân viên / trạng thái / trễ hạn
-- Badge trên task card nếu task có item pending (ví dụ: 🔴 2 chờ KH)
+- Badge trên CDR row trong `/tasks` nếu có item pending/overdue
+- Tab "Yêu cầu KH" trên từng trang công ty hiển thị đầy đủ CDR của công ty đó
 
 ---
 
@@ -598,7 +613,7 @@ Mỗi loại công việc trong Task Type Library có thể cấu hình thêm tr
 | M3 | Task Dependencies | 🟠 P2 | |
 | M3 | Time Tracking | 🟠 P2 | |
 | M3 | Custom Fields theo loại công việc | 🟠 P2 | |
-| M3 | Yêu cầu tài liệu từ KH (Client Document Requests) | 🟠 P2 | Tab trong task detail + shareable public link + admin overview |
+| M3 | Yêu cầu tài liệu từ KH (Client Document Requests) | 🟠 P2 | Entity độc lập: tab trong company detail + filter trong /tasks + shareable public link (link đính kèm, không upload file) + admin overview |
 | M4 | Dashboard tổng quan + KPI Cards | 🟠 P2 | |
 | M3 | Calendar view | 🟠 P2 | |
 | M4 | Báo cáo SLA, Aging, Velocity | 🟠 P2 | |

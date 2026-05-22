@@ -291,17 +291,18 @@ FLOW 7: Yêu cầu tài liệu từ khách hàng (Client Document Requests)
 
 ### 7A — Luồng Cơ Bản (Thêm & Quản Lý Yêu Cầu)
 
+> CDR là entity độc lập. Điểm tạo: trang công ty (tab "Yêu cầu KH") hoặc trang `/tasks` (chọn loại "Yêu cầu KH"). Không tạo từ task detail.
+
 ```
-[Staff mở trang chi tiết task]
+[Điểm khởi tạo — 1 trong 2:]
+  A) Trang /companies/:id → tab "Yêu cầu KH" → bấm [+ Thêm yêu cầu]
+  B) Trang /tasks → filter "Yêu cầu KH" → bấm [+ Tạo yêu cầu KH mới]
         │
         ▼
-[Vào tab "Yêu cầu KH"]
-  - Hiển thị danh sách các mục tài liệu đã tạo (nếu có)
-  - Badge trên tab: số mục đang pending
-        │
-        ▼
-[Thêm mục tài liệu mới]
-  - Nhập: Tên tài liệu, Mô tả/hướng dẫn, Kỳ (period_label), Hạn nộp (deadline_date)
+[Điền thông tin yêu cầu]
+  - Tên tài liệu, Mô tả/hướng dẫn, Kỳ (period_label), Hạn nộp (deadline_date)
+  - Chọn công ty KH (bắt buộc)
+  - Liên kết task (tùy chọn — để tham chiếu ngữ cảnh)
   - Xác nhận → tạo record với status = 'pending'
         │
         ▼
@@ -389,12 +390,18 @@ FLOW 7: Yêu cầu tài liệu từ khách hàng (Client Document Requests)
   - Trang hiển thị:
     · Tên công ty (hiển thị từ company.name)
     · Tên tài liệu cần cung cấp + mô tả/hướng dẫn
-    · Form điền thông tin (các trường do staff cấu hình khi tạo yêu cầu)
+    · Form điền thông tin:
+        - Tên liên hệ *
+        - Số điện thoại *
+        - Mô tả tài liệu *  (KH mô tả ngắn gọn)
+        - Link chia sẻ *     (dán link Google Drive / Zalo / Dropbox / bất kỳ)
+        - Ghi chú thêm
+    → KHÔNG có trường upload file — KH tự lưu file trên cloud và dán link vào đây
         │
         ▼
 [KH điền form + submit]
   - Kiểm tra: token còn hợp lệ và chưa hết hạn
-  - Lưu: token_submitted_at = NOW(), token_submitted_data = {dữ liệu KH điền}
+  - Lưu: token_submitted_at = NOW(), token_submitted_data = { contact_name, phone, description, shared_link, notes }
   - Trả về trang xác nhận "Đã gửi thành công"
         │
         ▼
@@ -447,10 +454,12 @@ FLOW 7: Yêu cầu tài liệu từ khách hàng (Client Document Requests)
 | Xem báo cáo SLA / Aging / Velocity | ❌ | ✅ |
 | Cấu hình ngưỡng escalation | ❌ | ✅ |
 | Quản lý tài khoản người dùng | ❌ | ✅ |
-| Thêm / xem yêu cầu tài liệu KH trên task của mình | ✅ | ✅ |
-| Gửi email nhắc nhở KH | ✅ (task của mình) | ✅ |
-| Tạo / thu hồi shareable link form | ✅ (task của mình) | ✅ |
-| Đánh dấu đã nhận tài liệu | ✅ (task của mình) | ✅ |
+| Tạo yêu cầu tài liệu KH (CDR) cho KH mình phụ trách | ✅ | ✅ |
+| Xem / quản lý CDR trong tab "Yêu cầu KH" trên trang công ty | ✅ (KH mình) | ✅ |
+| Xem CDR trong danh sách /tasks (filter "Yêu cầu KH") | ✅ (KH mình) | ✅ |
+| Gửi email nhắc nhở KH | ✅ (CDR mình tạo) | ✅ |
+| Tạo / thu hồi shareable link form | ✅ (CDR mình tạo) | ✅ |
+| Đánh dấu đã nhận tài liệu | ✅ (CDR mình tạo) | ✅ |
 | Xem tổng quan yêu cầu tài liệu toàn hệ thống | ❌ | ✅ |
 
 ---

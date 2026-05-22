@@ -984,12 +984,12 @@ CREATE INDEX idx_cc_active     ON company_credentials(company_id, is_active) WHE
 
 ## TABLE: client_document_requests (Yêu Cầu Tài Liệu Từ Khách Hàng)
 
-> Theo dõi những tài liệu / chứng từ mà staff cần yêu cầu KH cung cấp để hoàn thành task. Gắn trực tiếp vào từng task để dễ theo dõi. Hỗ trợ 2 kênh nhắc nhở: email và shareable public link.
+> Theo dõi những tài liệu / chứng từ mà staff cần yêu cầu KH cung cấp. CDR là **entity độc lập** (không bắt buộc gắn vào task), hiển thị trong tab "Yêu cầu KH" trên trang công ty và trong danh sách `/tasks` (filter riêng). Hỗ trợ 2 kênh đôn đốc: email nhắc nhở và shareable public link (KH điền form + dán link chia sẻ, không cần upload file lên hệ thống).
 
 ```sql
 CREATE TABLE client_document_requests (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  task_id         UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  task_id         UUID REFERENCES tasks(id) ON DELETE SET NULL,
   company_id      UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   requested_by    UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
@@ -1030,14 +1030,14 @@ CREATE INDEX idx_cdr_token     ON client_document_requests(public_token) WHERE p
 
 | Column | Mô tả |
 |--------|-------|
-| `task_id` | Gắn yêu cầu với task cụ thể — khi task xóa thì yêu cầu cũng xóa |
+| `task_id` | **Nullable** — tham chiếu task tùy chọn (ngữ cảnh). Khi task bị xóa → `SET NULL`, CDR vẫn còn |
 | `company_id` | Denormalized từ task để query tổng quan theo KH nhanh hơn |
 | `document_name` | Tên tài liệu KH cần cung cấp, ví dụ: "Bảng chấm công tháng 5" |
 | `deadline_date` | NULL = không đặt hạn; có giá trị = cron job tự đánh dấu `overdue` khi qua hạn |
 | `status` | `pending` → `received` (staff xác nhận) hoặc `overdue` (cron tự chuyển) hoặc `not_required` (huỷ) |
 | `public_token` | Token 64 ký tự (UUID v4 no-dashes) để tạo URL `/public/form/:token` — NULL nếu chưa tạo link |
 | `token_expires_at` | Staff đặt thời hạn link khi tạo (thường 7–30 ngày); NULL = không hết hạn |
-| `token_submitted_data` | JSONB chứa toàn bộ dữ liệu KH điền — staff review và confirm `status = received` |
+| `token_submitted_data` | JSONB chứa dữ liệu KH điền: tên liên hệ, mô tả, ghi chú, và **link chia sẻ** (Google Drive / Zalo / Dropbox…) — **không upload file** lên hệ thống |
 
 ---
 
@@ -1078,7 +1078,7 @@ CREATE INDEX idx_cdr_token     ON client_document_requests(public_token) WHERE p
 | 30 | `attendance_adjustments` | Điều chỉnh bảng công — audit trail | N:1 attendance_records, users |
 | 31 | `public_holidays` | Ngày lễ quốc gia | — |
 | **—** | **— Module 8: Client Document Requests —** | | |
-| 32 | `client_document_requests` | Yêu cầu tài liệu từ KH | N:1 tasks, companies, users |
+| 32 | `client_document_requests` | Yêu cầu tài liệu từ KH (entity độc lập) | N:1 companies, users; N:0..1 tasks (nullable) |
 
 ---
 
@@ -1385,4 +1385,4 @@ ALTER TABLE users
 | leave_requests | 5 năm | Hồ sơ lao động |
 | overtime_requests | 5 năm | Hồ sơ lao động |
 | public_holidays | Vĩnh viễn | Cập nhật thủ công hàng năm |
-| client_document_requests | 5 năm | Lịch sử theo dõi tài liệu KH theo từng task |
+| client_document_requests | 5 năm | Lịch sử theo dõi yêu cầu tài liệu KH (giữ ngay cả khi task bị xóa) |
