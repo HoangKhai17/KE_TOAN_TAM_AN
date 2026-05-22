@@ -190,6 +190,16 @@ CREATE TYPE report_type_enum AS ENUM (
   'monthly_summary', 'staff_performance', 'customer_status',
   'sla_compliance', 'aging', 'velocity', 'forecast', 'custom'
 );
+
+-- ── Module 8: Yêu Cầu Tài Liệu Khách Hàng ───────────────────────────────────
+
+-- Trạng thái yêu cầu tài liệu từ KH
+CREATE TYPE client_doc_status AS ENUM (
+  'pending',       -- Đang chờ KH cung cấp
+  'received',      -- KH đã cung cấp, staff đã xác nhận
+  'not_required',  -- Không cần thiết nữa
+  'overdue'        -- Quá deadline mà KH chưa cung cấp (tự động bởi cron)
+);
 ```
 
 ---
@@ -972,6 +982,65 @@ CREATE INDEX idx_cc_active     ON company_credentials(company_id, is_active) WHE
 
 ---
 
+## TABLE: client_document_requests (Yêu Cầu Tài Liệu Từ Khách Hàng)
+
+> Theo dõi những tài liệu / chứng từ mà staff cần yêu cầu KH cung cấp để hoàn thành task. Gắn trực tiếp vào từng task để dễ theo dõi. Hỗ trợ 2 kênh nhắc nhở: email và shareable public link.
+
+```sql
+CREATE TABLE client_document_requests (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id         UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  company_id      UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  requested_by    UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+
+  -- Mô tả tài liệu cần
+  document_name   VARCHAR(200) NOT NULL,   -- Ví dụ: "Hóa đơn đầu vào tháng 5"
+  description     TEXT,                    -- Hướng dẫn chi tiết cho KH
+  period_label    VARCHAR(20),             -- Ví dụ: "T05/2026"
+  deadline_date   DATE,                    -- Hạn KH phải cung cấp
+
+  -- Trạng thái
+  status          client_doc_status NOT NULL DEFAULT 'pending',
+  received_at     TIMESTAMP,               -- Thời điểm staff xác nhận đã nhận
+  received_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+
+  -- Email nhắc nhở
+  reminder_sent_count  INTEGER NOT NULL DEFAULT 0,
+  last_reminder_at     TIMESTAMP,
+  reminded_email       VARCHAR(150),       -- Email KH đã gửi nhắc nhở tới
+
+  -- Shareable public link
+  public_token         VARCHAR(64) UNIQUE,     -- UUID token để tạo link công khai
+  token_expires_at     TIMESTAMP,              -- Thời điểm link hết hạn
+  token_submitted_at   TIMESTAMP,              -- Thời điểm KH submit qua link
+  token_submitted_data JSONB,                  -- Dữ liệu thô KH điền vào form
+
+  notes           TEXT,                    -- Ghi chú nội bộ của staff
+
+  created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_cdr_task      ON client_document_requests(task_id);
+CREATE INDEX idx_cdr_company   ON client_document_requests(company_id);
+CREATE INDEX idx_cdr_status    ON client_document_requests(status);
+CREATE INDEX idx_cdr_deadline  ON client_document_requests(deadline_date) WHERE status = 'pending';
+CREATE INDEX idx_cdr_token     ON client_document_requests(public_token) WHERE public_token IS NOT NULL;
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `task_id` | Gắn yêu cầu với task cụ thể — khi task xóa thì yêu cầu cũng xóa |
+| `company_id` | Denormalized từ task để query tổng quan theo KH nhanh hơn |
+| `document_name` | Tên tài liệu KH cần cung cấp, ví dụ: "Bảng chấm công tháng 5" |
+| `deadline_date` | NULL = không đặt hạn; có giá trị = cron job tự đánh dấu `overdue` khi qua hạn |
+| `status` | `pending` → `received` (staff xác nhận) hoặc `overdue` (cron tự chuyển) hoặc `not_required` (huỷ) |
+| `public_token` | Token 64 ký tự (UUID v4 no-dashes) để tạo URL `/public/form/:token` — NULL nếu chưa tạo link |
+| `token_expires_at` | Staff đặt thời hạn link khi tạo (thường 7–30 ngày); NULL = không hết hạn |
+| `token_submitted_data` | JSONB chứa toàn bộ dữ liệu KH điền — staff review và confirm `status = received` |
+
+---
+
 ## Tóm Tắt Các Bảng
 
 | # | Bảng | Mô tả | Quan hệ chính |
@@ -1008,6 +1077,8 @@ CREATE INDEX idx_cc_active     ON company_credentials(company_id, is_active) WHE
 | 29 | `overtime_requests` | Đơn tăng ca / OT | N:1 users (user_id, approved_by) |
 | 30 | `attendance_adjustments` | Điều chỉnh bảng công — audit trail | N:1 attendance_records, users |
 | 31 | `public_holidays` | Ngày lễ quốc gia | — |
+| **—** | **— Module 8: Client Document Requests —** | | |
+| 32 | `client_document_requests` | Yêu cầu tài liệu từ KH | N:1 tasks, companies, users |
 
 ---
 
@@ -1314,3 +1385,4 @@ ALTER TABLE users
 | leave_requests | 5 năm | Hồ sơ lao động |
 | overtime_requests | 5 năm | Hồ sơ lao động |
 | public_holidays | Vĩnh viễn | Cập nhật thủ công hàng năm |
+| client_document_requests | 5 năm | Lịch sử theo dõi tài liệu KH theo từng task |

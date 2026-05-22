@@ -260,6 +260,53 @@ Mỗi loại công việc trong Task Type Library có thể cấu hình thêm tr
 - **Email tổng hợp buổi sáng** gửi quản lý: danh sách task quá hạn + task sắp đến hạn hôm nay
 - Cấu hình ngưỡng N ngày riêng theo từng loại công việc hoặc mức độ ưu tiên (P1/P2/P3)
 
+### 3.11 Yêu Cầu Tài Liệu Từ Khách Hàng (Client Document Requests)
+
+> Theo dõi những tài liệu / chứng từ mà staff cần KH cung cấp để hoàn thành task. Đây là công cụ dành cho staff — KH **không cần tài khoản** trong hệ thống.
+
+**Bài toán nghiệp vụ:** Nhiều loại công việc kế toán (kê khai thuế, lập bảng lương, quyết toán...) đòi hỏi KH cung cấp hóa đơn, chứng từ, bảng chấm công... trước khi staff có thể thực hiện. Nếu không theo dõi có hệ thống, dễ bị trễ hạn do chờ KH mà không có ai đôn đốc.
+
+**Phạm vi tính năng:**
+- Gắn danh sách tài liệu cần thiết vào từng task
+- Staff chủ động thêm / đánh dấu nhận / huỷ bỏ từng mục
+- **Soft block:** khi task có mục đang `pending` mà staff cố chuyển sang `completed` → hệ thống cảnh báo nhưng không chặn cứng (staff tự quyết)
+- Cron job tự động chuyển trạng thái `overdue` khi qua `deadline_date`
+
+**Workflow cơ bản:**
+1. Staff mở task → tab "Yêu cầu KH" → thêm mục tài liệu cần (tên, mô tả, hạn nộp)
+2. Chọn cách đôn đốc KH: **Email nhắc nhở** hoặc **Tạo link form**
+3. Staff theo dõi trạng thái từng mục; khi KH cung cấp đủ → đánh dấu "Đã nhận"
+4. Admin có trang tổng quan "Yêu cầu KH đang pending" toàn hệ thống
+
+**Kênh 1 — Email nhắc nhở:**
+- Staff nhập email KH + nội dung nhắc → hệ thống gửi email qua SMTP
+- Ghi nhận số lần gửi và thời điểm gửi lần cuối
+- KH nhận email, chuẩn bị tài liệu, giao trực tiếp hoặc gửi qua kênh ngoài hệ thống
+- Staff nhận tài liệu → vào hệ thống đánh dấu "Đã nhận"
+
+**Kênh 2 — Shareable public link (form điền trực tuyến):**
+- Staff bấm "Tạo link" → hệ thống sinh token UUID → URL `/public/form/:token`
+- URL này **không yêu cầu đăng nhập** — chia sẻ qua bất kỳ kênh nào (Zalo, Telegram, email, SMS...)
+- KH mở link → xem yêu cầu tài liệu + điền thông tin vào form + upload file đính kèm
+- Sau khi KH submit → dữ liệu lưu thẳng vào `client_document_requests.token_submitted_data`
+- Staff nhận thông báo, review dữ liệu KH điền, xác nhận "Đã nhận" → trạng thái chuyển `received`
+- Staff có thể thu hồi link bất kỳ lúc nào (revoke token)
+- Link có thể đặt thời hạn hết hạn (token_expires_at)
+
+**Trạng thái vòng đời:**
+```
+[pending] ──► [received]     — Staff xác nhận đã nhận tài liệu
+    │
+    ├──► [overdue]           — Cron job tự chuyển khi qua deadline_date
+    │
+    └──► [not_required]      — Staff huỷ bỏ (không cần thiết nữa)
+```
+
+**Admin Overview:**
+- Widget trên Dashboard: số lượng yêu cầu pending toàn hệ thống
+- Trang `/admin/client-requests`: lọc theo KH / nhân viên / trạng thái / trễ hạn
+- Badge trên task card nếu task có item pending (ví dụ: 🔴 2 chờ KH)
+
 ---
 
 ## Module 4: Báo Cáo & Thống Kê
@@ -551,6 +598,7 @@ Mỗi loại công việc trong Task Type Library có thể cấu hình thêm tr
 | M3 | Task Dependencies | 🟠 P2 | |
 | M3 | Time Tracking | 🟠 P2 | |
 | M3 | Custom Fields theo loại công việc | 🟠 P2 | |
+| M3 | Yêu cầu tài liệu từ KH (Client Document Requests) | 🟠 P2 | Tab trong task detail + shareable public link + admin overview |
 | M4 | Dashboard tổng quan + KPI Cards | 🟠 P2 | |
 | M3 | Calendar view | 🟠 P2 | |
 | M4 | Báo cáo SLA, Aging, Velocity | 🟠 P2 | |

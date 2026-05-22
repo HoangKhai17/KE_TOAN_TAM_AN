@@ -9,6 +9,7 @@ FLOW 3: Giao và thực hiện công việc
 FLOW 4: Quản lý theo dõi & xử lý vấn đề
 FLOW 5: Tổng kết & báo cáo cuối kỳ
 FLOW 6: Escalation tự động (xử lý task tồn đọng)
+FLOW 7: Yêu cầu tài liệu từ khách hàng (Client Document Requests)
 ```
 
 ---
@@ -284,6 +285,148 @@ FLOW 6: Escalation tự động (xử lý task tồn đọng)
 
 ---
 
+## Flow 7: Yêu Cầu Tài Liệu Từ Khách Hàng
+
+> Staff theo dõi tài liệu / chứng từ KH cần cung cấp để hoàn thành task. Hỗ trợ 2 kênh: nhắc nhở qua email và link form công khai không cần đăng nhập.
+
+### 7A — Luồng Cơ Bản (Thêm & Quản Lý Yêu Cầu)
+
+```
+[Staff mở trang chi tiết task]
+        │
+        ▼
+[Vào tab "Yêu cầu KH"]
+  - Hiển thị danh sách các mục tài liệu đã tạo (nếu có)
+  - Badge trên tab: số mục đang pending
+        │
+        ▼
+[Thêm mục tài liệu mới]
+  - Nhập: Tên tài liệu, Mô tả/hướng dẫn, Kỳ (period_label), Hạn nộp (deadline_date)
+  - Xác nhận → tạo record với status = 'pending'
+        │
+        ▼
+[Chọn kênh đôn đốc KH]
+        │
+        ├──► [Kênh Email]        → xem Flow 7B
+        │
+        └──► [Kênh Link Form]    → xem Flow 7C
+        │
+        ▼
+[KH cung cấp tài liệu (ngoài / qua link)]
+        │
+        ▼
+[Staff xác nhận "Đã nhận"]
+  - Bấm nút "Đánh dấu đã nhận" trên mục tương ứng
+  - Hệ thống cập nhật: status = 'received', received_at = NOW(), received_by = staff
+        │
+        ▼
+[Cron job kiểm tra hàng ngày]
+  - Nếu deadline_date < today và status = 'pending'
+    → Chuyển status = 'overdue'
+    → Tạo in-app notification cho staff phụ trách
+        │
+        ▼
+[Staff hoàn thành task]
+  - Nếu còn mục pending/overdue → hiện cảnh báo:
+    "Còn X yêu cầu KH chưa nhận. Vẫn tiếp tục hoàn thành?"
+  - Staff có thể bỏ qua (soft block) hoặc huỷ mục ('not_required')
+  - Sau xác nhận → task chuyển 'completed' bình thường
+```
+
+### 7B — Luồng Nhắc Nhở Qua Email
+
+```
+[Staff ở tab "Yêu cầu KH"]
+        │
+        ▼
+[Chọn mục cần nhắc → bấm "Gửi email nhắc nhở"]
+  - Hệ thống tự điền email từ companies.contact_email (có thể override)
+  - Nhập nội dung email nhắc (template có sẵn, chỉnh sửa được)
+        │
+        ▼
+[Xác nhận gửi]
+        │
+        ▼
+[Backend gửi email qua SMTP (mailer.js)]
+  - Cập nhật: reminder_sent_count + 1, last_reminder_at = NOW(), reminded_email
+        │
+        ▼
+[KH nhận email]
+  - Chuẩn bị tài liệu
+  - Giao tài liệu cho staff qua kênh trực tiếp / email riêng / Zalo...
+        │
+        ▼
+[Staff nhận tài liệu ngoài hệ thống]
+  - Vào tab "Yêu cầu KH" → đánh dấu "Đã nhận" thủ công
+        │
+        ▼
+[HOÀN TẤT MỤC NÀY ✅]
+```
+
+### 7C — Luồng Link Form Công Khai (Shareable Link)
+
+```
+[Staff ở tab "Yêu cầu KH"]
+        │
+        ▼
+[Chọn mục → bấm "Tạo link form"]
+  - Đặt thời hạn link (mặc định 14 ngày, có thể tùy chỉnh hoặc không hết hạn)
+  - Bấm "Tạo link"
+        │
+        ▼
+[Backend sinh public_token (UUID v4, 36 ký tự)]
+  - Lưu: public_token, token_expires_at
+  - Trả về URL: https://app.ketoan-taman.vn/public/form/{token}
+        │
+        ▼
+[Staff nhận URL → chia sẻ cho KH]
+  - Qua: Zalo, Telegram, email, SMS, bất kỳ kênh nào
+  - Staff copy link (1 click) trực tiếp từ UI
+        │
+        ▼
+[KH nhận link, mở trình duyệt bất kỳ]
+  - KHÔNG cần đăng nhập
+  - Trang hiển thị:
+    · Tên công ty (hiển thị từ company.name)
+    · Tên tài liệu cần cung cấp + mô tả/hướng dẫn
+    · Form điền thông tin (các trường do staff cấu hình khi tạo yêu cầu)
+        │
+        ▼
+[KH điền form + submit]
+  - Kiểm tra: token còn hợp lệ và chưa hết hạn
+  - Lưu: token_submitted_at = NOW(), token_submitted_data = {dữ liệu KH điền}
+  - Trả về trang xác nhận "Đã gửi thành công"
+        │
+        ▼
+[Staff nhận in-app notification: "KH đã submit yêu cầu: {tên tài liệu}"]
+        │
+        ▼
+[Staff vào hệ thống, review dữ liệu KH điền]
+  - Xem nội dung token_submitted_data trong tab "Yêu cầu KH"
+  - Kiểm tra thông tin đầy đủ và chính xác
+        │
+        ▼
+[Staff xác nhận "Đã nhận"]
+  - status = 'received', received_at = NOW()
+  - (Tùy chọn: Staff có thể yêu cầu KH bổ sung qua email nếu thiếu)
+        │
+        ▼
+[HOÀN TẤT MỤC NÀY ✅]
+
+[Staff có thể thu hồi link bất kỳ lúc nào]
+  - Bấm "Thu hồi link" → public_token = NULL
+  - Link cũ trả về 404 / "Link không còn hợp lệ"
+```
+
+**Lưu ý bảo mật link:**
+- Token là UUID random — không đoán được
+- Link không tiết lộ thông tin nhạy cảm (chỉ hiển thị tên công ty + nội dung yêu cầu)
+- Staff luôn kiểm soát: tạo, thu hồi, xem thời hạn bất kỳ lúc nào
+- Sau khi KH submit, backend tự xóa public_token để link không dùng được lần 2
+  (nếu cần KH bổ sung → staff tạo link mới)
+
+---
+
 ## Sơ Đồ Phân Quyền Theo Luồng
 
 | Hành động | Nhân Viên | Quản Lý |
@@ -304,6 +447,11 @@ FLOW 6: Escalation tự động (xử lý task tồn đọng)
 | Xem báo cáo SLA / Aging / Velocity | ❌ | ✅ |
 | Cấu hình ngưỡng escalation | ❌ | ✅ |
 | Quản lý tài khoản người dùng | ❌ | ✅ |
+| Thêm / xem yêu cầu tài liệu KH trên task của mình | ✅ | ✅ |
+| Gửi email nhắc nhở KH | ✅ (task của mình) | ✅ |
+| Tạo / thu hồi shareable link form | ✅ (task của mình) | ✅ |
+| Đánh dấu đã nhận tài liệu | ✅ (task của mình) | ✅ |
+| Xem tổng quan yêu cầu tài liệu toàn hệ thống | ❌ | ✅ |
 
 ---
 

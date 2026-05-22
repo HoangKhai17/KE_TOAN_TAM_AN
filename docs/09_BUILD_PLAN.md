@@ -25,8 +25,9 @@
 | 14 | Security Hardening | 2–3 ngày | Phase 13 | ⏳ Chưa bắt đầu |
 | 15 | Observability — Logging, Sentry, Metrics | 2–3 ngày | Phase 14 | ⏳ Chưa bắt đầu |
 | 16 | Production Deployment | 2–3 ngày | Phase 15 | ⏳ Chưa bắt đầu |
+| 17 | Client Document Requests (Yêu Cầu Tài Liệu KH) | 4–5 ngày | Phase 6, 12 | ⏳ Chưa bắt đầu |
 
-**Tổng ước tính:** 50–65 ngày làm việc (solo developer)
+**Tổng ước tính:** 54–70 ngày làm việc (solo developer)
 
 ---
 
@@ -944,6 +945,434 @@ src/jobs/taskGenerator.job.js
 
 ---
 
+## PHASE 17 — Client Document Requests (Yêu Cầu Tài Liệu Từ KH)
+
+**Mục tiêu:** Staff theo dõi tài liệu / chứng từ cần KH cung cấp cho từng task. Hỗ trợ 2 kênh đôn đốc: email nhắc nhở và shareable public link (KH điền form không cần đăng nhập). Dữ liệu KH submit tự động lưu vào hệ thống.
+
+**Phụ thuộc:** Phase 6 (tasks), Phase 12 (mailer.js + notifications)
+
+---
+
+### 17.1 Backend — Migration
+
+- [ ] `migration/033_create_client_doc_status_enum.sql` — tạo ENUM `client_doc_status`
+- [ ] `migration/034_create_client_document_requests.sql` — tạo bảng + 5 indexes (xem schema 05_DATABASE_SCHEMA.md)
+
+---
+
+### 17.2 Backend — API (Authenticated — staff/admin)
+
+**File:** `src/modules/client-requests/`
+
+```
+src/modules/client-requests/
+├── clientRequests.router.js
+├── clientRequests.controller.js
+├── clientRequests.service.js
+└── clientRequests.schema.js   ← Zod validation schemas
+```
+
+**Endpoints (yêu cầu auth):**
+
+| Method | Endpoint | Mô tả | Quyền |
+|--------|----------|-------|-------|
+| `GET` | `/api/tasks/:taskId/client-requests` | Danh sách yêu cầu của task | staff (task mình) / admin |
+| `POST` | `/api/tasks/:taskId/client-requests` | Tạo yêu cầu mới | staff (task mình) / admin |
+| `PATCH` | `/api/tasks/:taskId/client-requests/:id` | Sửa tên/mô tả/hạn | staff (task mình) / admin |
+| `DELETE` | `/api/tasks/:taskId/client-requests/:id` | Xóa mục (khi không cần nữa) | staff (task mình) / admin |
+| `POST` | `/api/tasks/:taskId/client-requests/:id/receive` | Đánh dấu đã nhận | staff (task mình) / admin |
+| `POST` | `/api/tasks/:taskId/client-requests/:id/unreceive` | Hoàn tác đã nhận | staff (task mình) / admin |
+| `POST` | `/api/tasks/:taskId/client-requests/:id/dismiss` | Huỷ bỏ (not_required) | staff (task mình) / admin |
+| `POST` | `/api/tasks/:taskId/client-requests/:id/remind` | Gửi email nhắc KH | staff (task mình) / admin |
+| `POST` | `/api/tasks/:taskId/client-requests/:id/generate-link` | Tạo shareable token | staff (task mình) / admin |
+| `POST` | `/api/tasks/:taskId/client-requests/:id/revoke-link` | Thu hồi token | staff (task mình) / admin |
+| `GET` | `/api/admin/client-requests/overview` | Tổng quan toàn hệ thống | admin only |
+
+**Logic `POST /receive`:**
+```
+- Kiểm tra status phải là 'pending' hoặc 'overdue'
+- Set: status = 'received', received_at = NOW(), received_by = req.user.id
+- Ghi task_activity_log action = 'client_doc_received'
+```
+
+**Logic `POST /remind`:**
+```
+Body: { email?: string, message?: string }
+- email mặc định lấy từ companies.contact_email nếu không truyền
+- Gọi mailer.js gửi email (template HTML đơn giản)
+- Cập nhật: reminder_sent_count += 1, last_reminder_at = NOW(), reminded_email
+```
+
+**Logic `POST /generate-link`:**
+```
+Body: { expires_in_days?: number }  — mặc định 14 ngày; null = không hết hạn
+- Tạo token: crypto.randomUUID().replace(/-/g, '') — 32 ký tự hex
+- Set: public_token = token, token_expires_at = NOW() + expires_in_days
+- Trả về: { token, url: `${FRONTEND_URL}/public/form/${token}`, expires_at }
+```
+
+**Logic `POST /revoke-link`:**
+```
+- Set: public_token = NULL, token_expires_at = NULL
+- Nếu token_submitted_at IS NULL → xóa luôn token_submitted_data (chưa có gì)
+```
+
+**Logic `GET /admin/client-requests/overview`:**
+```
+Query params: companyId?, staffId?, status?, isOverdue (boolean)
+- JOIN tasks ON client_document_requests.task_id = tasks.id
+- Trả về: danh sách + group counts theo status
+```
+
+---
+
+### 17.3 Backend — Public API (KHÔNG yêu cầu auth)
+
+> Đây là endpoints công khai — KH truy cập qua shareable link. Phải tách riêng khỏi middleware auth.
+
+**Mount point:** `/api/public/` — **không áp dụng** middleware `auth.js` và `rbac.js`
+
+**Endpoints:**
+
+| Method | Endpoint | Mô tả |
+|--------|----------|-------|
+| `GET` | `/api/public/client-forms/:token` | Lấy thông tin form để hiển thị cho KH |
+| `POST` | `/api/public/client-forms/:token/submit` | KH submit dữ liệu |
+
+**Logic `GET /api/public/client-forms/:token`:**
+```
+1. Tìm record theo public_token = :token
+2. Nếu không tìm thấy → 404 { error: 'LINK_NOT_FOUND' }
+3. Nếu token_expires_at IS NOT NULL AND token_expires_at < NOW() → 410 { error: 'LINK_EXPIRED' }
+4. Nếu token_submitted_at IS NOT NULL → 410 { error: 'ALREADY_SUBMITTED' }
+5. Trả về (không có thông tin nhạy cảm):
+   {
+     document_name,
+     description,
+     period_label,
+     deadline_date,
+     company_name,   ← từ companies.name
+     expires_at: token_expires_at
+   }
+```
+
+**Logic `POST /api/public/client-forms/:token/submit`:**
+```
+Body: { submitted_data: { [key: string]: any } }  — dữ liệu KH điền tự do
+1. Validate token tương tự GET (kiểm tra tồn tại, chưa hết hạn, chưa submit)
+2. Set: token_submitted_at = NOW(), token_submitted_data = submitted_data
+3. Sau khi submit: public_token = NULL (link vô hiệu hoá, tránh submit lần 2)
+4. Tạo in-app notification cho requested_by:
+   type = 'task_status_changed', title = "KH đã submit: {document_name}"
+5. Trả về: { success: true, message: 'Đã gửi thành công' }
+```
+
+**Rate limiting cho public endpoints:**
+- `POST /api/public/client-forms/:token/submit`: 3 req / 10 phút / IP (chống spam)
+
+---
+
+### 17.4 Backend — Cron Job (Overdue Detection)
+
+**File:** `src/jobs/clientDocOverdue.job.js`
+
+```
+Chạy mỗi ngày lúc 08:30 (sau escalation job)
+     │
+     ▼
+Query: SELECT * FROM client_document_requests
+       WHERE status = 'pending'
+         AND deadline_date IS NOT NULL
+         AND deadline_date < CURRENT_DATE
+     │
+     ▼
+Với mỗi record tìm thấy:
+  - UPDATE status = 'overdue'
+  - Tạo in-app notification cho requested_by:
+    "Yêu cầu tài liệu '{document_name}' đã quá hạn ({deadline_date})"
+  - Ghi log
+```
+
+---
+
+### 17.5 Backend — Task Completion Warning Hook
+
+**File:** `src/modules/tasks/tasks.service.js` (sửa hàm `changeStatus`)
+
+```javascript
+// Khi chuyển sang 'completed':
+const pendingCount = await db.query(
+  `SELECT COUNT(*) FROM client_document_requests
+   WHERE task_id = $1 AND status IN ('pending','overdue')`,
+  [taskId]
+)
+if (pendingCount > 0 && !body.force) {
+  return res.status(422).json({
+    code: 'CLIENT_REQUESTS_PENDING',
+    message: `Task còn ${pendingCount} yêu cầu tài liệu KH chưa nhận. Bỏ qua và hoàn thành?`,
+    pending_count: pendingCount
+  })
+}
+// Nếu force = true → cho qua bình thường
+```
+
+---
+
+### 17.6 Frontend — Layout Changes
+
+#### A. Thêm tab trong trang Task Detail (`/tasks/:id`)
+
+**File:** `src/pages/Tasks/TaskDetail.jsx`
+
+Thêm tab mới: **"Yêu cầu KH"** vào thanh tab hiện tại (sau tab "Custom Fields"):
+
+```
+[Mô tả] [Checklist] [Phụ thuộc] [Comments] [Activity Log] [Time Log] [Custom Fields] [Yêu cầu KH 🔴2]
+```
+
+- Badge đỏ trên tab nếu có item pending/overdue: `Yêu cầu KH 🔴{count}`
+- Badge chỉ hiện khi count > 0
+
+**File mới:** `src/pages/Tasks/tabs/ClientRequestsTab.jsx`
+
+**Layout ClientRequestsTab:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Yêu cầu tài liệu từ khách hàng          [+ Thêm yêu cầu]     │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 🟡 PENDING  │  Hóa đơn đầu vào tháng 5                 │   │
+│  │             │  Hạn: 15/05/2026 · T05/2026               │   │
+│  │             │  [Gửi email] [Tạo link] [Đánh dấu nhận]   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 🔴 OVERDUE  │  Bảng chấm công tháng 4                  │   │
+│  │             │  Quá hạn 3 ngày · đã nhắc 2 lần           │   │
+│  │             │  [Gửi email] [Tạo link] [Đánh dấu nhận]   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ ✅ RECEIVED │  Giấy phép kinh doanh                     │   │
+│  │             │  Đã nhận 10/05/2026 bởi Lan               │   │
+│  │             │  [Xem dữ liệu KH điền]                    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Modal "Thêm yêu cầu":**
+```
+┌─────────────────────────────────────┐
+│  Thêm yêu cầu tài liệu KH          │
+├─────────────────────────────────────┤
+│  Tên tài liệu *  [input text]       │
+│  Mô tả / Hướng dẫn  [textarea]     │
+│  Kỳ (period_label)  [input text]    │
+│  Hạn nộp  [date picker]             │
+│                   [Huỷ] [Thêm]      │
+└─────────────────────────────────────┘
+```
+
+**Modal "Gửi email nhắc nhở":**
+```
+┌──────────────────────────────────────────┐
+│  Gửi email nhắc nhở                      │
+├──────────────────────────────────────────┤
+│  Tới email *  [input, prefill contact_email] │
+│  Nội dung nhắc  [textarea, template text] │
+│               [Huỷ] [Gửi email]          │
+└──────────────────────────────────────────┘
+```
+
+**Modal "Tạo link form KH":**
+```
+┌──────────────────────────────────────────┐
+│  Tạo link form cho khách hàng            │
+├──────────────────────────────────────────┤
+│  Thời hạn link  [select: 7 ngày / 14 ngày / 30 ngày / Không hết hạn] │
+│                 [Tạo link]               │
+├──────────────────────────────────────────┤
+│  https://...../public/form/abc123...     │
+│  [Copy link]   Hết hạn: 05/06/2026      │
+│  [Thu hồi link]                          │
+└──────────────────────────────────────────┘
+```
+
+**Panel "Xem dữ liệu KH điền" (khi status = received và có token_submitted_data):**
+```
+┌──────────────────────────────────────────┐
+│  Dữ liệu KH đã submit (10/05/2026)      │
+├──────────────────────────────────────────┤
+│  [Hiển thị JSON format hoặc key-value]   │
+│  Mô tả: ...                              │
+│  Liên hệ: ...                            │
+│  Ghi chú: ...                            │
+└──────────────────────────────────────────┘
+```
+
+#### B. Badge trên Task Card
+
+**File:** `src/components/shared/TaskCard.jsx`
+
+Thêm badge nhỏ phía dưới card nếu task có `pending_client_requests_count > 0`:
+```
+🔴 2 chờ KH cung cấp tài liệu
+```
+
+API `GET /api/tasks` cần trả thêm field `pending_client_requests_count` (computed).
+
+#### C. Warning khi Complete Task
+
+**File:** `src/pages/Tasks/TaskDetail.jsx` (hàm handleStatusChange)
+
+Khi API trả về `422 CLIENT_REQUESTS_PENDING`:
+```
+┌─────────────────────────────────────────────────┐
+│  ⚠️  Còn yêu cầu tài liệu KH chưa nhận         │
+│  Task này còn 2 yêu cầu tài liệu từ KH          │
+│  đang ở trạng thái chờ hoặc quá hạn.            │
+│                                                  │
+│  Bạn có muốn hoàn thành task mà không chờ?      │
+│                                                  │
+│  [Quay lại]     [Vẫn hoàn thành]                │
+└─────────────────────────────────────────────────┘
+```
+
+Nếu chọn "Vẫn hoàn thành" → gọi lại API với `{ force: true }`.
+
+#### D. Admin Overview Widget trên Dashboard
+
+**File:** `src/pages/Dashboard/Dashboard.jsx`
+
+Thêm card KPI mới trong KPI Row:
+```
+┌──────────────────────┐
+│  📋 Chờ KH cung cấp │
+│        12            │
+│  yêu cầu tài liệu   │
+│  [4 quá hạn 🔴]     │
+└──────────────────────┘
+```
+
+Click vào card → điều hướng tới `/admin/client-requests`.
+
+#### E. Trang Admin Overview (`/admin/client-requests`)
+
+**File mới:** `src/pages/AdminClientRequests/AdminClientRequests.jsx`
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Yêu Cầu Tài Liệu Khách Hàng                                       │
+├──────────────────────────────────────────────────────────────────────┤
+│  Filter: [KH ▾] [Nhân viên ▾] [Trạng thái ▾] [Quá hạn ☐]  [Tìm]  │
+├──────────────────────────────────────────────────────────────────────┤
+│  Tài liệu         │ Task            │ KH       │ NV    │ Hạn   │ TT │
+│  Hóa đơn T05/2026 │ Kê khai GTGT.. │ Cty ABC  │ Lan   │ 15/05 │ 🟡 │
+│  Bảng CC tháng 4  │ Bảng lương T04 │ Cty XYZ  │ Minh  │ 01/05 │ 🔴 │
+│  ...              │                │          │       │       │    │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+Thêm route trong `App.jsx` (protected, admin only):
+```jsx
+<Route path="/admin/client-requests" element={<AdminClientRequests />} />
+```
+
+Thêm menu item trong Sidebar (admin section).
+
+#### F. Trang Public Form (`/public/form/:token`)
+
+**File mới:** `src/pages/PublicForm/PublicForm.jsx`
+
+> **Quan trọng:** Route này **KHÔNG** wrap trong `ProtectedRoute`.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                  KẾ TOÁN TÂM AN                              │
+│                  Logo + tên công ty                          │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Cty ABC yêu cầu bạn cung cấp:                             │
+│  📄 Hóa đơn đầu vào tháng 5/2026                           │
+│                                                              │
+│  Hướng dẫn: Vui lòng cung cấp toàn bộ hóa đơn mua vào     │
+│  phát sinh trong tháng 5/2026 bao gồm...                    │
+│                                                              │
+│  Hạn cung cấp: 15/05/2026                                  │
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│  Thông tin cung cấp                                         │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │  Tên liên hệ *      [input]                          │   │
+│  │  Số điện thoại *    [input]                          │   │
+│  │  Mô tả tài liệu *   [textarea]                       │   │
+│  │  Ghi chú thêm       [textarea]                       │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                              │
+│                         [Gửi thông tin]                      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Xử lý các trạng thái lỗi trên trang này:**
+- Loading → spinner
+- Token không tìm thấy → "Link không hợp lệ hoặc đã bị thu hồi"
+- Token hết hạn → "Link đã hết hạn. Vui lòng liên hệ kế toán viên để nhận link mới."
+- Đã submit rồi → "Bạn đã gửi thông tin thành công trước đó. Cảm ơn!"
+- Submit thành công → "Cảm ơn! Chúng tôi đã nhận được thông tin. Kế toán viên sẽ liên hệ nếu cần bổ sung."
+
+**Route setup trong `App.jsx`:**
+```jsx
+// Ngoài ProtectedRoute wrapper
+<Route path="/public/form/:token" element={<PublicForm />} />
+```
+
+---
+
+### 17.7 Frontend — API Client
+
+**File mới:** `src/api/clientRequests.js`
+
+```javascript
+// Authenticated APIs
+export const getClientRequests = (taskId) => api.get(`/tasks/${taskId}/client-requests`)
+export const createClientRequest = (taskId, data) => api.post(`/tasks/${taskId}/client-requests`, data)
+export const updateClientRequest = (taskId, id, data) => api.patch(`/tasks/${taskId}/client-requests/${id}`, data)
+export const deleteClientRequest = (taskId, id) => api.delete(`/tasks/${taskId}/client-requests/${id}`)
+export const receiveClientRequest = (taskId, id) => api.post(`/tasks/${taskId}/client-requests/${id}/receive`)
+export const unreceiveClientRequest = (taskId, id) => api.post(`/tasks/${taskId}/client-requests/${id}/unreceive`)
+export const dismissClientRequest = (taskId, id) => api.post(`/tasks/${taskId}/client-requests/${id}/dismiss`)
+export const sendReminder = (taskId, id, data) => api.post(`/tasks/${taskId}/client-requests/${id}/remind`, data)
+export const generateLink = (taskId, id, data) => api.post(`/tasks/${taskId}/client-requests/${id}/generate-link`, data)
+export const revokeLink = (taskId, id) => api.post(`/tasks/${taskId}/client-requests/${id}/revoke-link`)
+export const getAdminOverview = (params) => api.get('/admin/client-requests/overview', { params })
+
+// Public APIs (không có Authorization header)
+const publicApi = axios.create({ baseURL: '/api/public' })
+export const getPublicForm = (token) => publicApi.get(`/client-forms/${token}`)
+export const submitPublicForm = (token, data) => publicApi.post(`/client-forms/${token}/submit`, data)
+```
+
+---
+
+### 17.8 Acceptance Criteria Phase 17
+
+```
+□ Thêm yêu cầu vào task → hiển thị trong tab "Yêu cầu KH" với status pending
+□ Deadline qua → cron job chuyển status = overdue + notification cho staff
+□ Gửi email nhắc → reminder_sent_count tăng, last_reminder_at cập nhật
+□ Tạo link → URL /public/form/:token hoạt động (không cần login)
+□ KH submit form → token_submitted_data lưu vào DB, public_token = NULL (link vô hiệu)
+□ Mở link đã submit → trang hiển thị "Đã gửi thành công trước đó"
+□ Mở link thu hồi → 404 "Link không hợp lệ"
+□ Staff đánh dấu nhận → status = received, received_at + received_by set
+□ Chuyển task completed với item pending → 422 CLIENT_REQUESTS_PENDING
+□ Confirm force complete → task completed mặc dù còn item pending
+□ Admin overview lọc được theo KH, NV, status, is_overdue
+□ Badge đỏ trên task card hiển thị đúng số lượng pending
+□ Rate limit: POST /public/client-forms/:token/submit 3 req/10min/IP
+□ Public form không lộ thông tin nhạy cảm (chỉ document_name, description, company_name)
+```
+
+---
+
 ## PHASE 14 — Security Hardening
 
 **Mục tiêu:** Áp dụng đầy đủ security checklist trước khi deploy.
@@ -1123,6 +1552,7 @@ Phase 0 ────────────────────────
                        │        Phase 11 (depends on 6)
                        │        Phase 12 (depends on 6, 8)
                        │        Phase 13 (depends on 6, 7)
+                       │        Phase 17 (depends on 6, 12)
                        │
                        └──────────────────────────────────────────► Phase 14
                                                                           │
@@ -1161,6 +1591,7 @@ Phase 0 ────────────────────────
 | 14 — Security | ⬜ | | | |
 | 15 — Observability | ⬜ | | | |
 | 16 — Deployment | ⬜ | | | |
+| 17 — Client Document Requests | ⬜ | | | |
 
 ## Issues / Decisions Log
 - [date] [phase] [issue/decision]
