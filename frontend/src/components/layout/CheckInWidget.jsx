@@ -53,8 +53,9 @@ export default function CheckInWidget() {
     }
   }
 
-  const canCheckIn  = !state?.hasCheckedIn
-  const canCheckOut = state?.hasCheckedIn && !state?.hasCheckedOut
+  const isAdmin     = user?.role === 'admin'
+  const canCheckIn  = !isAdmin && !state?.hasCheckedIn
+  const canCheckOut = !isAdmin && state?.hasCheckedIn && !state?.hasCheckedOut
 
   return (
     <div className={s.checkInWidget}>
@@ -62,6 +63,10 @@ export default function CheckInWidget() {
         <Clock size={13} className={s.checkInClockIcon} />
         {!state ? (
           <span className={s.checkInTextMuted}>...</span>
+        ) : isAdmin ? (
+          <span className={s.checkInText}>
+            {state.record?.status === 'present' ? 'Đủ công' : 'Tự động'}
+          </span>
         ) : state.hasCheckedOut ? (
           <span className={s.checkInText}>Ra: {fmtTime(state.checkOutTime)}</span>
         ) : state.hasCheckedIn ? (

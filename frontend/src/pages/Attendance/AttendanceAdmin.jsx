@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartTooltip, Legend, ResponsiveContainer,
+} from 'recharts'
+import {
   Users, CalendarDays, ClipboardList, Clock, CalendarCheck,
   ChevronLeft, ChevronRight, Loader2, Check, X, RefreshCw,
   Download, BarChart3, Settings, Terminal, Pencil, LayoutGrid,
@@ -1727,6 +1731,85 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
 
 
 
+// ── AttendanceBarChart ────────────────────────────────────────────────────────
+
+function AttendanceBarChart({ rows }) {
+  const chartData = rows.map((r) => {
+    const work   = Number(r.actualWorkDays  ?? r.workDays  ?? 0)
+    const leave  = Number(r.leavePaidDays   ?? r.leaveDays ?? 0)
+    const absent = Number(r.absentDays ?? 0)
+    const late   = Number(r.lateCount  ?? r.lateDays ?? 0)
+    const name   = r.userName ?? r.name ?? ''
+    return { name, work, leave, absent, late }
+  })
+
+  function CustomTooltip({ active, payload, label }) {
+    if (!active || !payload?.length) return null
+    const item  = chartData.find((d) => d.name === label) ?? {}
+    const total = (item.work ?? 0) + (item.leave ?? 0)
+    const rate  = total > 0 ? Math.round(((item.work ?? 0) / total) * 100) : 0
+    return (
+      <div className={sa.chartTooltip}>
+        <p className={sa.chartTooltipTitle}>{label}</p>
+        {payload.map((p) => (
+          <p key={p.dataKey} style={{ color: p.fill, margin: '2px 0', fontSize: 12 }}>
+            {p.name}: <strong>{typeof p.value === 'number' ? p.value.toFixed(1) : p.value}</strong>
+          </p>
+        ))}
+        <p className={sa.chartTooltipRate}>Tỉ lệ đi làm: <strong>{rate}%</strong></p>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${s.section} ${sa.chartSection}`}>
+      <div className={s.sectionHead}>
+        <h4 className={sa.reportTableTitle}>Biểu đồ Hiệu Suất Chấm Công</h4>
+        <span className={sa.reportMeta}>{rows.length} nhân viên</span>
+      </div>
+      <div className={sa.chartWrap}>
+        <ResponsiveContainer width="100%" height={420}>
+          <BarChart
+            data={chartData}
+            margin={{ top: 8, right: 16, left: -8, bottom: 64 }}
+            barCategoryGap="18%"
+            barGap={4}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis
+              dataKey="name"
+              angle={-35}
+              textAnchor="end"
+              interval={0}
+              height={80}
+              tick={{ fontSize: 11, fill: '#64748b' }}
+              axisLine={{ stroke: '#cbd5e1' }}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: '#64748b' }}
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={true}
+              width={32}
+            />
+            <RechartTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.06)' }} />
+            <Legend
+              iconType="rect"
+              iconSize={10}
+              wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+            />
+            <Bar dataKey="work"   name="Ngày công TT"  fill="#059669" radius={[3, 3, 0, 0]} maxBarSize={52} />
+            <Bar dataKey="leave"  name="Nghỉ có lương" fill="#2563eb" radius={[3, 3, 0, 0]} maxBarSize={52} />
+            <Bar dataKey="absent" name="Vắng mặt"      fill="#dc2626" radius={[3, 3, 0, 0]} maxBarSize={52} />
+            <Bar dataKey="late"   name="Lần đi muộn"   fill="#f59e0b" radius={[3, 3, 0, 0]} maxBarSize={52} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
 // ── ReportTab ─────────────────────────────────────────────────────────────────
 
 function ReportTab({ year, month }) {
@@ -1923,6 +2006,9 @@ function ReportTab({ year, month }) {
               </table>
             </div>
           </div>
+
+          {/* Attendance efficiency bar chart */}
+          <AttendanceBarChart rows={rows} />
         </>
       )}
 

@@ -200,6 +200,42 @@
   border-left: 3px solid var(--color-success);
 }
 
+/* ── Attendance Bar Chart ─────────────────────────────────────────────────── */
+
+.chartSection {
+  margin-top: var(--space-2);
+}
+
+.chartWrap {
+  padding: var(--space-3) var(--space-1) var(--space-2);
+}
+
+.chartTooltip {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-md);
+  min-width: 170px;
+}
+
+.chartTooltipTitle {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  color: var(--color-text);
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.chartTooltipRate {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  margin: var(--space-2) 0 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
 .syncWarning {
   padding: var(--space-4) var(--space-6);
   margin-bottom: var(--space-1);

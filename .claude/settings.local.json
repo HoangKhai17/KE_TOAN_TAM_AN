@@ -147,7 +147,8 @@
       "Bash(curl -sv \"http://localhost:8080/socket.io/?EIO=4&transport=polling\" -H \"Origin: http://localhost:5173\")",
       "Bash(curl -sv \"http://localhost:8080/socket.io/?EIO=4&transport=polling\" -H \"Origin: http://localhost:8080\")",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\attendance\" -Recurse -Force)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

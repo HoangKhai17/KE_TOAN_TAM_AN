@@ -7,7 +7,8 @@ const { runTaskGenerator }    = require('./taskGenerator.job')
 const { runDeadlineReminder } = require('./deadlineReminder.job')
 const { runOverdueEscalation } = require('./overdueEscalation.job')
 const { runOnHoldReminder }   = require('./onHoldReminder.job')
-const { runMorningSummary }   = require('./morningSummary.job')
+const { runMorningSummary }        = require('./morningSummary.job')
+const { runAdminAttendanceJob }    = require('./adminAttendance.job')
 
 let schedulerTask = null
 let lastRunAt     = null
@@ -188,7 +189,15 @@ function startNotificationJobs() {
     }
   }, { timezone: 'UTC' })
 
-  logger.info('[Jobs] Notification cron jobs scheduled (07:00/07:30/08:00/08:05 VN daily)')
+  // Admin Auto Attendance — 06:30 VN = 23:30 UTC (previous UTC day)
+  // Creates a full-day 'present' record for every active admin before the workday starts.
+  cron.schedule('30 23 * * *', async () => {
+    try { await runAdminAttendanceJob() } catch (err) {
+      logger.error('[Jobs] Admin attendance job failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  logger.info('[Jobs] Notification cron jobs scheduled (07:00/07:30/08:00/08:05 VN + 06:30 VN admin attendance)')
 }
 
 module.exports = { startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs, deleteLog, clearLogs, startNotificationJobs }

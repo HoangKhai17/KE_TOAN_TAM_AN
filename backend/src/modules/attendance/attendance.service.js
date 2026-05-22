@@ -129,6 +129,44 @@ async function calculateAttendanceRecord(userId, date) {
     return toRecordDto(rows[0])
   }
 
+  // Step 4.5: admin users get full attendance automatically — no check-in required.
+  // check_in/out times are derived from the shift's configured start/end times.
+  const userRoleRes = await query('SELECT role FROM users WHERE id = $1', [userId])
+  if (userRoleRes.rows[0]?.role === 'admin') {
+    let adminCheckIn   = null
+    let adminCheckOut  = null
+    let adminActualHrs = null
+
+    if (ws.start_time) adminCheckIn  = `${date} ${ws.start_time}`
+    if (ws.end_time)   adminCheckOut = `${date} ${ws.end_time}`
+    if (ws.start_time && ws.end_time) {
+      const [sh, sm] = ws.start_time.split(':').map(Number)
+      const [eh, em] = ws.end_time.split(':').map(Number)
+      adminActualHrs = Math.max(0, (eh * 60 + em - sh * 60 - sm) / 60 - (ws.break_minutes ?? 60) / 60)
+    }
+
+    const { rows } = await query(
+      `INSERT INTO attendance_records
+         (user_id, work_date, shift_id, check_in_time, check_out_time, actual_hours,
+          late_minutes, early_minutes, status, work_units, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 'present', 1.0, 'Tự động - Admin')
+       ON CONFLICT (user_id, work_date) DO UPDATE SET
+         status         = CASE WHEN attendance_records.is_adjusted THEN attendance_records.status         ELSE 'present'         END,
+         work_units     = CASE WHEN attendance_records.is_adjusted THEN attendance_records.work_units     ELSE 1.0               END,
+         check_in_time  = CASE WHEN attendance_records.is_adjusted THEN attendance_records.check_in_time  ELSE $4               END,
+         check_out_time = CASE WHEN attendance_records.is_adjusted THEN attendance_records.check_out_time ELSE $5               END,
+         actual_hours   = CASE WHEN attendance_records.is_adjusted THEN attendance_records.actual_hours   ELSE $6               END,
+         late_minutes   = CASE WHEN attendance_records.is_adjusted THEN attendance_records.late_minutes   ELSE 0                END,
+         early_minutes  = CASE WHEN attendance_records.is_adjusted THEN attendance_records.early_minutes  ELSE 0                END,
+         notes          = CASE WHEN attendance_records.is_adjusted THEN attendance_records.notes          ELSE 'Tự động - Admin' END,
+         shift_id       = $3,
+         updated_at     = NOW()
+       RETURNING *`,
+      [userId, date, ws.shift_id ?? null, adminCheckIn, adminCheckOut, adminActualHrs]
+    )
+    return toRecordDto(rows[0])
+  }
+
   // Step 5: approved leave covers this date
   const leaveRes = await query(
     `SELECT id, leave_type FROM leave_requests
