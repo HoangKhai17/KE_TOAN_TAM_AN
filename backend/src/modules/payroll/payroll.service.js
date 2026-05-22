@@ -48,17 +48,37 @@ function recordToDto(row) {
 
 // --- Periods ---
 
-async function listPeriods({ page = 1, limit = 24 } = {}) {
+async function listPeriods({ page = 1, limit = 24, year } = {}) {
   const offset = (page - 1) * limit
-  const { rows: [{ count }] } = await query('SELECT COUNT(*) FROM payroll_periods', [])
+  const params = []
+  let where = ''
+
+  if (year) {
+    params.push(parseInt(year, 10))
+    where = `WHERE period_year = $${params.length}`
+  }
+
+  const { rows: [{ count }] } = await query(
+    `SELECT COUNT(*) FROM payroll_periods ${where}`,
+    params
+  )
   const { rows } = await query(
-    'SELECT * FROM payroll_periods ORDER BY period_year DESC, period_month DESC LIMIT $1 OFFSET $2',
-    [limit, offset]
+    `SELECT * FROM payroll_periods ${where}
+     ORDER BY period_year DESC, period_month DESC
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
   )
   return {
     periods: rows.map(periodToDto),
     pagination: { page, limit, total: parseInt(count, 10), totalPages: Math.ceil(count / limit) },
   }
+}
+
+async function listDistinctYears() {
+  const { rows } = await query(
+    'SELECT DISTINCT period_year FROM payroll_periods ORDER BY period_year DESC'
+  )
+  return rows.map((r) => r.period_year)
 }
 
 async function getPeriod(id) {
@@ -260,9 +280,9 @@ async function exportExcel(periodId, res) {
     { header: 'Phụ cấp',        key: 'allowances',       width: 12 },
     { header: 'Thưởng',         key: 'bonus',            width: 12 },
     { header: 'Tổng thu nhập',  key: 'gross_income',     width: 16 },
-    { header: 'BHXH NV (8%)',   key: 'bhxh_employee',   width: 14 },
-    { header: 'BHYT NV (1.5%)', key: 'bhyt_employee',   width: 16 },
-    { header: 'BHTN NV (1%)',   key: 'bhtn_employee',   width: 14 },
+    { header: 'BHXH NV',   key: 'bhxh_employee',   width: 14 },
+    { header: 'BHYT NV', key: 'bhyt_employee',   width: 16 },
+    { header: 'BHTN NV',   key: 'bhtn_employee',   width: 14 },
     { header: 'TNCN',           key: 'pit_deduction',    width: 12 },
     { header: 'Khấu trừ khác',  key: 'other_deductions', width: 14 },
     { header: 'Thực nhận',      key: 'net_salary',       width: 14 },
@@ -363,7 +383,7 @@ async function sendPayrollEmails(periodId) {
 }
 
 module.exports = {
-  listPeriods, getPeriod, createPeriod, updatePeriod,
+  listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod,
   confirmPeriod, markPaid,
   listRecords, upsertRecord, deleteRecord,
   exportExcel, sendPayrollEmails,

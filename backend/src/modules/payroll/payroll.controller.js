@@ -3,12 +3,20 @@ const svc = require('./payroll.service')
 // --- Periods ---
 async function listPeriods(req, res, next) {
   try {
-    const { page = '1', limit = '24' } = req.query
+    const { page = '1', limit = '24', year } = req.query
     const result = await svc.listPeriods({
       page:  Math.max(1, parseInt(page, 10)),
       limit: Math.min(60, Math.max(1, parseInt(limit, 10))),
+      year:  year ? parseInt(year, 10) : null,
     })
     res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
+async function listDistinctYears(req, res, next) {
+  try {
+    const years = await svc.listDistinctYears()
+    res.json({ success: true, data: { years } })
   } catch (err) { next(err) }
 }
 
@@ -87,6 +95,6 @@ async function sendPayrollEmails(req, res, next) {
 }
 
 module.exports = {
-  listPeriods, getPeriod, createPeriod, updatePeriod, confirmPeriod, markPaid,
+  listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod, confirmPeriod, markPaid,
   listRecords, upsertRecord, deleteRecord, exportExcel, sendPayrollEmails,
 }

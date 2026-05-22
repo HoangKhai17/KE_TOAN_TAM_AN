@@ -5,6 +5,11 @@ export async function listPeriods(params = {}) {
   return data.data
 }
 
+export async function listDistinctYears() {
+  const { data } = await api.get('/payroll/years')
+  return data.data.years
+}
+
 export async function createPeriod(body) {
   const { data } = await api.post('/payroll', body)
   return data.data.period

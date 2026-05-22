@@ -517,6 +517,41 @@
   border-bottom: 1px solid var(--color-border-muted);
 }
 
+/* ── Year filter bar ─────────────────────────────────── */
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.filterSelect {
+  height: var(--control-h-md);
+  padding: 0 var(--space-5);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-md);
+  font-family: inherit;
+  color: var(--color-text-soft);
+  background: var(--color-white);
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  min-width: 140px;
+}
+
+.filterSelect:focus {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
+}
+
+.filterLabel {
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}
+
 /* ── Spin animation ──────────────────────────────────── */
 
 .spin {

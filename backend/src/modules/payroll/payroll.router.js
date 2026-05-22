@@ -52,8 +52,9 @@ const admin = [authenticate, requireRole('admin')]
  *       201: { description: Period created }
  *       409: { description: Period for this month/year already exists }
  */
-router.get('/',  ...auth,  ctrl.listPeriods)
-router.post('/', ...admin, validate(createPeriodSchema), ctrl.createPeriod)
+router.get('/',       ...auth,  ctrl.listPeriods)
+router.get('/years',  ...auth,  ctrl.listDistinctYears)
+router.post('/',      ...admin, validate(createPeriodSchema), ctrl.createPeriod)
 
 /**
  * @openapi

@@ -144,16 +144,37 @@ export default function Payroll() {
   const isAdmin   = useAuthStore((st) => st.user?.role === 'admin')
   const addToast  = useToastStore((st) => st.toast)
 
-  const [periods, setPeriods]   = useState([])
-  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
-  const [page, setPage]         = useState(1)
-  const [loading, setLoading]   = useState(true)
-  const [showCreate, setShowCreate] = useState(false)
+  const [periods,      setPeriods]      = useState([])
+  const [pagination,   setPagination]   = useState({ total: 0, totalPages: 1 })
+  const [page,         setPage]         = useState(1)
+  const [loading,      setLoading]      = useState(true)
+  const [showCreate,   setShowCreate]   = useState(false)
+  const [availableYears, setAvailableYears] = useState([])
+  const [selectedYear,   setSelectedYear]   = useState('')   // '' = tất cả năm
 
-  async function load(p = page) {
+  // Fetch distinct years from DB on mount
+  useEffect(() => {
+    payrollApi.listDistinctYears()
+      .then((years) => {
+        setAvailableYears(years ?? [])
+        // Auto-select current year if it exists in DB
+        const currentYear = new Date().getFullYear()
+        if (years?.includes(currentYear)) setSelectedYear(String(currentYear))
+      })
+      .catch(() => {})
+  }, [])
+
+  // Reset to page 1 when year filter changes
+  useEffect(() => { setPage(1) }, [selectedYear])
+
+  async function load(p = page, year = selectedYear) {
     setLoading(true)
     try {
-      const result = await payrollApi.listPeriods({ page: p, limit: 24 })
+      const result = await payrollApi.listPeriods({
+        page:  p,
+        limit: 24,
+        ...(year ? { year } : {}),
+      })
       setPeriods(result.periods ?? [])
       setPagination(result.pagination ?? { total: 0, totalPages: 1 })
     } catch {
@@ -163,7 +184,7 @@ export default function Payroll() {
     }
   }
 
-  useEffect(() => { load(page) }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(page, selectedYear) }, [page, selectedYear]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <AppLayout>
@@ -180,6 +201,26 @@ export default function Payroll() {
           )}
         </div>
 
+        {/* Year filter bar */}
+        <div className={s.filterBar}>
+          <select
+            className={s.filterSelect}
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value)}
+          >
+            <option value="">Tất cả năm</option>
+            {availableYears.map((y) => (
+              <option key={y} value={String(y)}>Năm {y}</option>
+            ))}
+          </select>
+          {selectedYear && (
+            <span className={s.filterLabel}>
+              Đang xem: <strong>Năm {selectedYear}</strong>
+              {!loading && ` — ${pagination.total} kỳ lương`}
+            </span>
+          )}
+        </div>
+
         <div className={s.card}>
           {loading ? (
             <div className={s.loadingBox}>
@@ -188,8 +229,10 @@ export default function Payroll() {
           ) : periods.length === 0 ? (
             <div className={s.emptyState}>
               <DollarSign size={36} className={s.emptyIcon} />
-              <p className={s.emptyText}>Chưa có kỳ lương nào.</p>
-              {isAdmin && (
+              <p className={s.emptyText}>
+                {selectedYear ? `Chưa có kỳ lương nào trong năm ${selectedYear}.` : 'Chưa có kỳ lương nào.'}
+              </p>
+              {isAdmin && !selectedYear && (
                 <button className={`${s.btnPrimary} ${s.emptyAction}`} onClick={() => setShowCreate(true)}>
                   <Plus size={13} /> Tạo kỳ lương đầu tiên
                 </button>
