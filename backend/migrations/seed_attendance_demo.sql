@@ -9,6 +9,13 @@
 BEGIN;
 
 -- ── Xóa dữ liệu demo cũ trong khoảng thời gian này ────────
+-- Xóa adjustments trước để tránh vi phạm foreign key
+DELETE FROM attendance_adjustments
+  WHERE attendance_record_id IN (
+    SELECT id FROM attendance_records
+    WHERE work_date BETWEEN '2025-12-01' AND '2026-05-19'
+  );
+
 DELETE FROM attendance_records
   WHERE work_date BETWEEN '2025-12-01' AND '2026-05-19';
 
