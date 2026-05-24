@@ -9,10 +9,11 @@ async function listTasks(req, res, next) {
   try {
     const { page = '1', limit = '20', status, priority, ...rest } = req.query
     const result = await svc.listTasks({
-      page:     Math.max(1, parseInt(page, 10)),
-      limit:    Math.min(100, Math.max(1, parseInt(limit, 10))),
-      status:   status   ? (Array.isArray(status)   ? status   : [status])   : undefined,
-      priority: priority ? (Array.isArray(priority) ? priority : [priority]) : undefined,
+      page:             Math.max(1, parseInt(page, 10)),
+      limit:            Math.min(100, Math.max(1, parseInt(limit, 10))),
+      status:           status   ? (Array.isArray(status)   ? status   : [status])   : undefined,
+      priority:         priority ? (Array.isArray(priority) ? priority : [priority]) : undefined,
+      forceAssignedTo:  req.user.role === 'staff' ? req.user.id : undefined,
       ...rest,
     })
     res.json({ success: true, data: result })
@@ -21,7 +22,7 @@ async function listTasks(req, res, next) {
 
 async function getTask(req, res, next) {
   try {
-    const task = await svc.getTaskById(req.params.id)
+    const task = await svc.getTaskById(req.params.id, req.user)
     res.json({ success: true, data: { task } })
   } catch (err) { next(err) }
 }
@@ -35,7 +36,7 @@ async function createTask(req, res, next) {
 
 async function updateTask(req, res, next) {
   try {
-    const task = await svc.updateTask(req.params.id, req.body, req.user.id, req.ip, req.headers['user-agent'])
+    const task = await svc.updateTask(req.params.id, req.body, req.user.id, req.ip, req.headers['user-agent'], req.user)
     res.json({ success: true, data: { task } })
   } catch (err) { next(err) }
 }
@@ -52,7 +53,7 @@ async function changeTaskStatus(req, res, next) {
     const { status, onHoldReason, force } = req.body
     const task = await svc.changeTaskStatus(
       req.params.id, status, { onHoldReason, force },
-      req.user.id, req.ip, req.headers['user-agent']
+      req.user.id, req.ip, req.headers['user-agent'], req.user
     )
     res.json({ success: true, data: { task } })
   } catch (err) { next(err) }
@@ -79,6 +80,7 @@ async function listChecklist(req, res, next) {
 
 async function addChecklistItem(req, res, next) {
   try {
+    await svc.assertTaskAccess(req.params.id, req.user)
     const item = await checklistSvc.addItem(req.params.id, req.body, req.user.id)
     res.status(201).json({ success: true, data: { item } })
   } catch (err) { next(err) }
@@ -86,6 +88,7 @@ async function addChecklistItem(req, res, next) {
 
 async function updateChecklistItem(req, res, next) {
   try {
+    await svc.assertTaskAccess(req.params.id, req.user)
     const item = await checklistSvc.updateItem(req.params.id, req.params.itemId, req.body, req.user.id)
     res.json({ success: true, data: { item } })
   } catch (err) { next(err) }
@@ -93,6 +96,7 @@ async function updateChecklistItem(req, res, next) {
 
 async function deleteChecklistItem(req, res, next) {
   try {
+    await svc.assertTaskAccess(req.params.id, req.user)
     await checklistSvc.deleteItem(req.params.id, req.params.itemId)
     res.status(204).end()
   } catch (err) { next(err) }
@@ -134,6 +138,7 @@ async function listComments(req, res, next) {
 
 async function addComment(req, res, next) {
   try {
+    await svc.assertTaskAccess(req.params.id, req.user)
     const comment = await commentsSvc.addComment(req.params.id, req.body, req.user.id)
     res.status(201).json({ success: true, data: { comment } })
   } catch (err) { next(err) }
@@ -141,6 +146,7 @@ async function addComment(req, res, next) {
 
 async function updateComment(req, res, next) {
   try {
+    await svc.assertTaskAccess(req.params.id, req.user)
     const isAdmin = req.user.role === 'admin'
     const comment = await commentsSvc.updateComment(
       req.params.id, req.params.commentId, req.body, req.user.id, isAdmin
@@ -151,6 +157,7 @@ async function updateComment(req, res, next) {
 
 async function deleteComment(req, res, next) {
   try {
+    await svc.assertTaskAccess(req.params.id, req.user)
     const isAdmin = req.user.role === 'admin'
     await commentsSvc.deleteComment(req.params.id, req.params.commentId, req.user.id, isAdmin)
     res.status(204).end()
@@ -167,6 +174,7 @@ async function listTimeLogs(req, res, next) {
 
 async function addTimeLog(req, res, next) {
   try {
+    await svc.assertTaskAccess(req.params.id, req.user)
     const timeLog = await timeLogsSvc.addTimeLog(req.params.id, req.body, req.user.id)
     res.status(201).json({ success: true, data: { timeLog } })
   } catch (err) { next(err) }
@@ -174,6 +182,7 @@ async function addTimeLog(req, res, next) {
 
 async function deleteTimeLog(req, res, next) {
   try {
+    await svc.assertTaskAccess(req.params.id, req.user)
     const isAdmin = req.user.role === 'admin'
     await timeLogsSvc.deleteTimeLog(req.params.id, req.params.logId, req.user.id, isAdmin)
     res.status(204).end()

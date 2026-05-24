@@ -817,6 +817,7 @@ export default function TaskDetail() {
   const getLabel  = useEnumsStore((st) => st.getLabel)
   const getOptions = useEnumsStore((st) => st.getOptions)
   const loadEnums  = useEnumsStore((st) => st.load)
+  const currentUser = useAuthStore((s) => s.user)
 
   const [task, setTask]       = useState(null)
   const [loading, setLoading] = useState(true)
@@ -848,7 +849,14 @@ export default function TaskDetail() {
     setError(null)
     tasksApi.getTask(id)
       .then((t) => { setTask(t); setTitleEdit(t.title) })
-      .catch(() => setError('Không thể tải công việc'))
+      .catch((err) => {
+        const status = err.response?.status
+        setError(
+          status === 403 ? 'Bạn không có quyền xem công việc này' :
+          status === 404 ? 'Không tìm thấy công việc' :
+          'Không thể tải công việc'
+        )
+      })
       .finally(() => setLoading(false))
   }, [id])
 

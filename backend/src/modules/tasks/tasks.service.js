@@ -98,6 +98,15 @@ const TASK_SELECT = `
     FROM task_checklist_items ci WHERE ci.task_id = t.id
   ) cl ON TRUE`
 
+async function assertTaskAccess(taskId, user) {
+  if (!user || user.role !== 'staff') return
+  const { rows: [task] } = await query('SELECT assigned_to FROM tasks WHERE id = $1', [taskId])
+  if (!task) throw Object.assign(new Error('Task not found'), { status: 404 })
+  if (task.assigned_to !== user.id) {
+    throw Object.assign(new Error('Bạn không có quyền thực hiện thao tác này'), { status: 403 })
+  }
+}
+
 async function listTasks(filters = {}) {
   const {
     page = 1, limit = 20,
@@ -105,7 +114,10 @@ async function listTasks(filters = {}) {
     dueDateFrom, dueDateTo, periodLabel, isOverdue, search,
     sortBy = 'created_at', sortDir = 'desc',
     audience = 'internal',
+    forceAssignedTo,
   } = filters
+
+  const effectiveAssignedTo = forceAssignedTo ?? assignedTo
 
   // audience=client_request: return CDRs mapped to task-like shape
   if (audience === 'client_request') {
@@ -113,7 +125,7 @@ async function listTasks(filters = {}) {
       page: parseInt(page, 10),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
       companyId,
-      requestedBy:      assignedTo,
+      requestedBy:      effectiveAssignedTo,
       periodLabel,
       deadlineDateFrom: dueDateFrom,
       deadlineDateTo:   dueDateTo,
@@ -134,7 +146,7 @@ async function listTasks(filters = {}) {
     const [tasksResult, cdrsResult] = await Promise.all([
       listTasks({ ...filters, audience: 'internal', page: 1, limit: 1000 }),
       listClientRequests({
-        companyId, requestedBy: assignedTo, periodLabel,
+        companyId, requestedBy: effectiveAssignedTo, periodLabel,
         deadlineDateFrom: dueDateFrom, deadlineDateTo: dueDateTo,
         page: 1, limit: 1000,
       }),
@@ -163,8 +175,8 @@ async function listTasks(filters = {}) {
   const baseConditions = ['1=1']
   const baseParams = []
 
-  if (companyId)  { baseParams.push(companyId);  baseConditions.push(`t.company_id = $${baseParams.length}`) }
-  if (assignedTo) { baseParams.push(assignedTo); baseConditions.push(`t.assigned_to = $${baseParams.length}`) }
+  if (companyId)           { baseParams.push(companyId);           baseConditions.push(`t.company_id = $${baseParams.length}`) }
+  if (effectiveAssignedTo) { baseParams.push(effectiveAssignedTo); baseConditions.push(`t.assigned_to = $${baseParams.length}`) }
   if (source)      { baseParams.push(source);      baseConditions.push(`t.source = $${baseParams.length}::task_source`) }
   if (dueDateFrom) { baseParams.push(dueDateFrom); baseConditions.push(`t.due_date >= $${baseParams.length}`) }
   if (dueDateTo)   { baseParams.push(dueDateTo);   baseConditions.push(`t.due_date <= $${baseParams.length}`) }
@@ -226,9 +238,12 @@ async function listTasks(filters = {}) {
   }
 }
 
-async function getTaskById(id) {
+async function getTaskById(id, user = null) {
   const { rows } = await query(`${TASK_SELECT} WHERE t.id = $1`, [id])
   if (!rows[0]) throw Object.assign(new Error('Task not found'), { status: 404 })
+  if (user?.role === 'staff' && rows[0].assigned_to !== user.id) {
+    throw Object.assign(new Error('Bạn không có quyền xem công việc này'), { status: 403 })
+  }
   return toDto(rows[0])
 }
 
@@ -293,7 +308,7 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   return result
 }
 
-async function updateTask(id, data, actorId, ipAddress, userAgent) {
+async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) {
   const fieldMap = {
     title:       'title',
     description: 'description',
@@ -306,6 +321,13 @@ async function updateTask(id, data, actorId, ipAddress, userAgent) {
 
   const { rows: [current] } = await query('SELECT * FROM tasks WHERE id = $1', [id])
   if (!current) throw Object.assign(new Error('Task not found'), { status: 404 })
+
+  if (user?.role === 'staff') {
+    if (current.assigned_to !== actorId) {
+      throw Object.assign(new Error('Bạn không có quyền chỉnh sửa công việc này'), { status: 403 })
+    }
+    delete fieldMap.assignedTo
+  }
 
   const updates = []
   const params = []
@@ -380,7 +402,7 @@ async function deleteTask(id, actorId, ipAddress, userAgent) {
   emitData('data:task', { action: 'deleted', id, companyId: task.company_id, actorId })
 }
 
-async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userAgent) {
+async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userAgent, user = null) {
   const { onHoldReason, force = false } = params
 
   const { rows } = await query(
@@ -391,6 +413,10 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
   )
   const task = rows[0]
   if (!task) throw Object.assign(new Error('Task not found'), { status: 404 })
+
+  if (user?.role === 'staff' && task.assigned_to !== user.id) {
+    throw Object.assign(new Error('Bạn không có quyền thay đổi trạng thái công việc này'), { status: 403 })
+  }
 
   const currentStatus = task.status
   if (!canTransition(currentStatus, newStatus)) {
@@ -543,4 +569,5 @@ async function getAvailableYears() {
 module.exports = {
   listTasks, getTaskById, createTask, updateTask, deleteTask,
   changeTaskStatus, getActivityLog, getAvailableYears,
+  assertTaskAccess,
 }

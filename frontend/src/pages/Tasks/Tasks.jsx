@@ -1228,7 +1228,7 @@ export default function Tasks() {
   const getOptions  = useEnumsStore((st) => st.getOptions)
   const getLabel    = useEnumsStore((st) => st.getLabel)
   const loadEnums   = useEnumsStore((st) => st.load)
-  const isAdmin     = currentUser?.role === 'admin'
+  const isAdmin = currentUser?.role === 'admin'
 
   // Handle URL params from header shortcuts (?new=1, ?search=...)
   const _urlNew      = searchParams.get('new')
@@ -1277,6 +1277,8 @@ export default function Tasks() {
   const [sourceFilter, setSourceFilter]     = useState(initF.sourceFilter   ?? [])
   const [isOverdue, setIsOverdue]           = useState(initF.isOverdue      ?? false)
   const [audienceFilter, setAudienceFilter] = useState(initF.audienceFilter ?? 'internal')
+
+  const effectiveAssignedTo = isAdmin ? staffFilter : currentUser?.id
 
   // Stats (counts across base filters, ignoring status/priority/isOverdue)
   const [stats, setStats] = useState({
@@ -1394,11 +1396,11 @@ export default function Tasks() {
   useEffect(() => {
     let cancelled = false
     const base = {
-      search:      search        || undefined,
-      companyId:   companyFilter || undefined,
-      assignedTo:  staffFilter   || undefined,
-      dueDateFrom: dueDateFrom   || undefined,
-      dueDateTo:   dueDateTo     || undefined,
+      search:      search                  || undefined,
+      companyId:   companyFilter           || undefined,
+      assignedTo:  effectiveAssignedTo     || undefined,
+      dueDateFrom: dueDateFrom             || undefined,
+      dueDateTo:   dueDateTo               || undefined,
       limit: 1, page: 1,
     }
     const statusKeys = ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed']
@@ -1421,9 +1423,9 @@ export default function Tasks() {
     setLoading(true)
     const [sortBy, sortDir] = sortValue.split(':')
     const params = {
-      search:      search         || undefined,
-      companyId:   companyFilter  || undefined,
-      assignedTo:  staffFilter    || undefined,
+      search:      search              || undefined,
+      companyId:   companyFilter       || undefined,
+      assignedTo:  effectiveAssignedTo || undefined,
       status:      statusFilter.length   > 0 ? statusFilter   : undefined,
       priority:    priorityFilter.length > 0 ? priorityFilter : undefined,
       source:      sourceFilter.length   > 0 ? sourceFilter[0] : undefined,
@@ -1773,14 +1775,16 @@ export default function Tasks() {
               />
             </div>
 
-            {/* NHÂN VIÊN */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Nhân viên</label>
-              <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
-                <option value="">Tất cả</option>
-                {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
-            </div>
+            {/* NHÂN VIÊN — admin only */}
+            {isAdmin && (
+              <div className={s.filterGroup}>
+                <label className={s.filterLabel}>Nhân viên</label>
+                <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
+                  <option value="">Tất cả</option>
+                  {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+            )}
 
             {/* TRẠNG THÁI — multi-select */}
             <div className={s.filterGroup}>
@@ -1855,7 +1859,7 @@ export default function Tasks() {
                   <button className={s.filterChipRemove} onClick={() => { setCompanyFilter(''); setPage(1) }}>×</button>
                 </span>
               )}
-              {staffFilter && (
+              {isAdmin && staffFilter && (
                 <span className={s.filterChip}>
                   NV: {staffList.find((u) => u.id === staffFilter)?.name ?? '?'}
                   <button className={s.filterChipRemove} onClick={() => { setStaffFilter(''); setPage(1) }}>×</button>
