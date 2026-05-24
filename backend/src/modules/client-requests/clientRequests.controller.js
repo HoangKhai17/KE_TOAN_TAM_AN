@@ -112,6 +112,13 @@ async function manualSubmit(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function getAvailableYears(req, res, next) {
+  try {
+    const years = await svc.getAvailableYears()
+    res.json({ success: true, data: { years } })
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listClientRequests,
   getClientRequest,
@@ -128,4 +135,5 @@ module.exports = {
   getAdminOverview,
   getPublicForm,
   submitPublicForm,
+  getAvailableYears,
 }

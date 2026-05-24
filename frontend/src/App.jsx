@@ -176,9 +176,9 @@ function AppRoutes() {
         element={<ProtectedRoute><Navigate to="/dashboard" replace /></ProtectedRoute>}
       />
 
-      {/* Phase 17 — Admin CDR overview */}
+      {/* CDR management */}
       <Route
-        path="/admin/client-requests"
+        path="/client-requests"
         element={<ProtectedRoute><AdminClientRequests /></ProtectedRoute>}
       />
 

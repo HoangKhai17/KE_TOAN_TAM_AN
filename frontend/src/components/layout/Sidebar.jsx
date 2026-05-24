@@ -15,7 +15,7 @@ const NAV_GROUPS = [
       { to: '/dashboard',             label: 'Dashboard',       icon: LayoutDashboard },
       { to: '/companies',             label: 'Công ty',         icon: Building2 },
       { to: '/tasks',                 label: 'Công việc',       icon: CheckSquare },
-      { to: '/admin/client-requests', label: 'Yêu cầu KH',     icon: ClipboardList },
+      { to: '/client-requests',        label: 'Yêu cầu KH',     icon: ClipboardList },
       { to: '/reports',               label: 'Báo cáo',         icon: BarChart3 },
     ],
   },

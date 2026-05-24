@@ -238,7 +238,6 @@
   border: 1px solid var(--color-border-muted);
   border-radius: var(--radius-lg);
   margin-bottom: var(--space-5);
-  overflow: hidden;
 }
 
 .filterBarHead {
@@ -248,6 +247,7 @@
   padding: var(--space-4) var(--space-7);
   border-bottom: 1px solid var(--color-border-soft);
   background: var(--gradient-filter-head);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .filterBarTitle {
@@ -345,6 +345,53 @@
 }
 .filterInputWithIcon { padding-left: 28px; }
 .filterInput:focus { outline: none; border-color: var(--color-primary-soft); box-shadow: var(--shadow-focus); }
+
+/* ── Stats row (inside filter panel) ────────────────────────── */
+
+.statsRow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border-soft);
+  background: var(--color-surface-muted);
+  flex-wrap: wrap;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.statItem {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 14px 2px 0;
+}
+
+.statValue {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-extrabold);
+  color: var(--color-text-strong);
+  line-height: 1;
+}
+
+.statLabel {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.statDivider {
+  width: 1px;
+  height: 22px;
+  background: var(--color-border);
+  margin: 0 14px 0 0;
+  flex-shrink: 0;
+}
+
+.statPending     { color: var(--color-accent); }
+.statOverdue     { color: var(--color-danger); }
+.statReceived    { color: var(--color-success); }
+.statNotRequired { color: var(--color-muted); }
+.statTotal       { color: var(--color-primary); }
 
 /* ── Status chips ────────────────────────────────────────────── */
 
@@ -606,8 +653,41 @@
   gap: var(--space-3);
 }
 
-.paginationLeft { display: flex; align-items: center; gap: var(--space-5); }
+.paginationLeft { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; }
 .paginationInfo { font-size: var(--fs-xs); color: var(--color-muted); }
+
+.pageSizeBtns { display: flex; align-items: center; gap: 2px; }
+
+.pageSizeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.pageSizeBtn:hover {
+  border-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+.pageSizeBtnActive {
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-color: var(--color-primary);
+}
+.pageSizeBtnActive:hover {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+  color: var(--color-white);
+}
 
 .paginationBtns { display: flex; align-items: center; gap: 2px; }
 
@@ -1141,3 +1221,104 @@
 
 .reminderNote  { font-size: var(--fs-sm); color: var(--color-text-soft); line-height: var(--lh-relaxed); }
 .reminderCount { font-size: var(--fs-xs); color: var(--color-muted-soft); }
+
+/* ── FilterCompanyPicker ─────────────────────────────────────── */
+
+.companyPickerWrap { position: relative; }
+
+.cpTrigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+  min-width: 160px;
+  transition: border-color var(--duration-fast);
+}
+.cpTrigger:hover { border-color: var(--color-primary-soft); }
+
+.companyPickerTriggerCompact { min-width: 150px; }
+
+.cpTriggerText {
+  flex: 1;
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.companyPickerSelected    { color: var(--color-text); }
+.companyPickerPlaceholder { color: var(--color-muted-soft); }
+
+.iconMuted        { color: var(--color-muted-soft); flex-shrink: 0; }
+.chevronRotate    { transition: transform var(--duration-fast); }
+.chevronOpen      { transform: rotate(180deg); }
+
+.cpDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  min-width: 220px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.cpSearch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.cpSearchInput {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  outline: none;
+}
+
+.cpSearchClear {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--color-muted-soft);
+  cursor: pointer;
+  padding: 2px;
+}
+.cpSearchClear:hover { color: var(--color-text); }
+
+.cpList { max-height: 200px; overflow-y: auto; }
+
+.cpItem {
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--fs-sm);
+  color: var(--color-text-soft);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.cpItem:hover { background: var(--color-surface-soft); }
+
+.cpItemActive {
+  background: var(--color-primary-bg);
+  color: var(--color-primary-dark);
+  font-weight: var(--fw-semibold);
+}
+
+.cpEmpty {
+  padding: var(--space-5);
+  font-size: var(--fs-sm);
+  color: var(--color-muted-soft);
+  text-align: center;
+}

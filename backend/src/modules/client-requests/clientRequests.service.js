@@ -493,6 +493,16 @@ async function countPendingByTask(taskId) {
   return parseInt(r.cnt, 10)
 }
 
+async function getAvailableYears() {
+  const { rows } = await query(
+    `SELECT DISTINCT EXTRACT(YEAR FROM deadline_date)::int AS year
+     FROM client_document_requests
+     WHERE deadline_date IS NOT NULL
+     ORDER BY year DESC`
+  )
+  return rows.map((r) => r.year)
+}
+
 module.exports = {
   listClientRequests,
   getById,
@@ -510,4 +520,5 @@ module.exports = {
   submitPublicForm,
   getAdminOverview,
   countPendingByTask,
+  getAvailableYears,
 }

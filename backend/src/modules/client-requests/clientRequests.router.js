@@ -18,9 +18,10 @@ const admin = [authenticate, requireRole('admin')]
 
 // ─── List & CRUD ──────────────────────────────────────────────────────────────
 
-router.get('/',    ...auth, ctrl.listClientRequests)
-router.post('/',   ...auth, validate(createClientRequestSchema), ctrl.createClientRequest)
-router.get('/:id', ...auth, ctrl.getClientRequest)
+router.get('/',             ...auth, ctrl.listClientRequests)
+router.get('/meta/years',   ...auth, ctrl.getAvailableYears)
+router.post('/',            ...auth, validate(createClientRequestSchema), ctrl.createClientRequest)
+router.get('/:id',          ...auth, ctrl.getClientRequest)
 router.patch('/:id', ...auth, validate(updateClientRequestSchema), ctrl.updateClientRequest)
 router.delete('/:id', ...admin, ctrl.deleteClientRequest)
 

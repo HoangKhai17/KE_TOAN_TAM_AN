@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ClipboardList, Search, Filter, RotateCcw, Plus, Loader2,
   Trash2, AlertTriangle, Link2, Link2Off, CheckCircle2, XCircle,
   Eye, Copy, Check, Bell, ExternalLink, PenLine, Building2, List, Columns,
+  ChevronDown, X,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
@@ -56,6 +57,29 @@ const BOARD_COLS = [
 function fmtDate(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function yearMonthToDates(year, month) {
+  if (!year) return { from: '', to: '' }
+  if (!month) return { from: `${year}-01-01`, to: `${year}-12-31` }
+  const m = parseInt(month, 10)
+  const lastDay = new Date(parseInt(year, 10), m, 0).getDate()
+  const mm = String(m).padStart(2, '0')
+  return { from: `${year}-${mm}-01`, to: `${year}-${mm}-${String(lastDay).padStart(2, '0')}` }
+}
+
+const CUR_YEAR   = String(new Date().getFullYear())
+const CUR_MONTH  = String(new Date().getMonth() + 1)
+const INIT_DATES = yearMonthToDates(CUR_YEAR, CUR_MONTH)
+
+const FILTER_KEY = 'cdr_filter_v1'
+
+function loadSavedFilters() {
+  try { return JSON.parse(sessionStorage.getItem(FILTER_KEY)) ?? {} }
+  catch { return {} }
+}
+function saveFilters(obj) {
+  try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(obj)) } catch (_) {}
 }
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
@@ -477,6 +501,71 @@ function ReminderModal({ item, onClose, onSent }) {
   )
 }
 
+// ── FilterCompanyPicker ───────────────────────────────────────────────────────
+
+function FilterCompanyPicker({ companies, value, onChange }) {
+  const [search,   setSearch] = useState('')
+  const [open,     setOpen]   = useState(false)
+  const wrapRef   = useRef(null)
+  const searchRef = useRef(null)
+
+  const selected = companies.find((c) => c.id === value)
+  const filtered = search.trim()
+    ? companies.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
+    : companies
+
+  useEffect(() => {
+    if (!open) return
+    searchRef.current?.focus()
+    function onOutside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onOutside)
+    return () => document.removeEventListener('mousedown', onOutside)
+  }, [open])
+
+  function select(id) { onChange(id); setOpen(false); setSearch('') }
+
+  return (
+    <div ref={wrapRef} className={s.companyPickerWrap}>
+      <div className={`${s.cpTrigger} ${s.companyPickerTriggerCompact}`} onClick={() => setOpen((o) => !o)}>
+        <span className={`${s.cpTriggerText} ${selected ? s.companyPickerSelected : s.companyPickerPlaceholder}`}>
+          {selected?.name ?? 'Tất cả'}
+        </span>
+        <ChevronDown size={11} className={`${s.iconMuted} ${s.chevronRotate} ${open ? s.chevronOpen : ''}`} />
+      </div>
+      {open && (
+        <div className={s.cpDropdown}>
+          <div className={s.cpSearch}>
+            <Search size={12} className={s.iconMuted} />
+            <input ref={searchRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+              placeholder="Tìm khách hàng..." className={s.cpSearchInput} />
+            {search && (
+              <button type="button" className={s.cpSearchClear} onClick={() => setSearch('')}>
+                <X size={10} />
+              </button>
+            )}
+          </div>
+          <div className={s.cpList}>
+            <div className={`${s.cpItem} ${!value ? s.cpItemActive : ''}`} onClick={() => select('')}>
+              Tất cả khách hàng
+            </div>
+            {filtered.map((c) => (
+              <div key={c.id} className={`${s.cpItem} ${value === c.id ? s.cpItemActive : ''}`} onClick={() => select(c.id)}>
+                {c.name}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className={s.cpEmpty}>Không tìm thấy &quot;{search}&quot;</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── BoardView ─────────────────────────────────────────────────────────────────
 
 function BoardView({ items, isAdmin, navigate, actionLoading, onEdit, onReceive, onUnreceive, onDismiss, onManualSubmit, onViewSubmitted, onOpenLink, onDelete }) {
@@ -575,30 +664,42 @@ export default function AdminClientRequests() {
   const addToast    = useToastStore((st) => st.toast)
   const isAdmin     = currentUser?.role === 'admin'
 
+  // Restore saved filters on mount
+  const [initF] = useState(() => loadSavedFilters())
+
   // View
-  const [view, setView] = useState('list')
+  const [view, setView] = useState(initF.view ?? 'list')
 
   // Reference data
-  const [companies, setCompanies] = useState([])
-  const [staffList, setStaffList] = useState([])
+  const [companies, setCompanies]         = useState([])
+  const [staffList, setStaffList]         = useState([])
+  const [availableYears, setAvailableYears] = useState([])
 
   // Stats
   const [stats, setStats]               = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
+  const [statsKey, setStatsKey]         = useState(0)
 
   // List data
   const [items, setItems]           = useState([])
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
   const [loading, setLoading]       = useState(true)
   const [page, setPage]             = useState(1)
+  const [pageSize, setPageSize]     = useState(initF.pageSize ?? 20)
+
+  // Date filters — default: current month
+  const [yearFilter,   setYearFilter]   = useState(initF.yearFilter   ?? CUR_YEAR)
+  const [monthFilter,  setMonthFilter]  = useState(initF.monthFilter  ?? CUR_MONTH)
+  const [deadlineFrom, setDeadlineFrom] = useState(initF.deadlineFrom ?? INIT_DATES.from)
+  const [deadlineTo,   setDeadlineTo]   = useState(initF.deadlineTo   ?? INIT_DATES.to)
 
   // Filters
-  const [statusFilter, setStatusFilter]       = useState('')
-  const [companyFilter, setCompanyFilter]     = useState('')
-  const [staffFilter, setStaffFilter]         = useState('')
-  const [searchQuery, setSearchQuery]         = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [sortFilter, setSortFilter]           = useState('deadline_date:asc')
+  const [statusFilter, setStatusFilter]       = useState(initF.statusFilter  ?? '')
+  const [companyFilter, setCompanyFilter]     = useState(initF.companyFilter ?? '')
+  const [staffFilter, setStaffFilter]         = useState(initF.staffFilter   ?? '')
+  const [searchQuery, setSearchQuery]         = useState(initF.searchQuery   ?? '')
+  const [debouncedSearch, setDebouncedSearch] = useState(initF.searchQuery   ?? '')
+  const [sortFilter, setSortFilter]           = useState(initF.sortFilter    ?? 'deadline_date:asc')
 
   // Modals
   const [showCreate, setShowCreate]                 = useState(false)
@@ -622,18 +723,50 @@ export default function AdminClientRequests() {
     listUserOptions({ status: 'active' })
       .then(({ users: u }) => setStaffList(u))
       .catch(() => {})
+    cdrApi.getCdrYears()
+      .then((years) => {
+        setAvailableYears(years)
+        if (years.length > 0 && !years.includes(parseInt(CUR_YEAR, 10))) {
+          const firstYear = String(years[0])
+          setYearFilter(firstYear)
+          const { from, to } = yearMonthToDates(firstYear, '')
+          setDeadlineFrom(from); setDeadlineTo(to)
+        }
+      })
+      .catch(() => {
+        const y = parseInt(CUR_YEAR, 10)
+        setAvailableYears([y, y - 1, y - 2])
+      })
   }, [])
 
-  // Load stats
-  const loadStats = useCallback(() => {
+  // Load stats via parallel calls — works for both admin and staff roles
+  useEffect(() => {
+    let cancelled = false
     setStatsLoading(true)
-    cdrApi.getAdminOverview()
-      .then((d) => setStats(d?.stats ?? {}))
-      .catch(() => setStats({}))
-      .finally(() => setStatsLoading(false))
-  }, [])
-
-  useEffect(() => { loadStats() }, [loadStats])
+    const base = {
+      companyId:        companyFilter   || undefined,
+      requestedBy:      !isAdmin ? currentUser?.id : (staffFilter || undefined),
+      search:           debouncedSearch || undefined,
+      deadlineDateFrom: deadlineFrom    || undefined,
+      deadlineDateTo:   deadlineTo      || undefined,
+      limit: 1, page: 1,
+    }
+    const statusKeys = ['pending', 'overdue', 'received', 'not_required']
+    Promise.all([
+      cdrApi.getClientRequests(base),
+      ...statusKeys.map((st) => cdrApi.getClientRequests({ ...base, status: st })),
+    ]).then(([all, ...bySt]) => {
+      if (!cancelled) {
+        const counts = { total: all.pagination.total }
+        statusKeys.forEach((st, i) => { counts[st] = bySt[i].pagination.total })
+        setStats(counts)
+        setStatsLoading(false)
+      }
+    }).catch(() => {
+      if (!cancelled) { setStats({}); setStatsLoading(false) }
+    })
+    return () => { cancelled = true }
+  }, [companyFilter, staffFilter, debouncedSearch, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounce search
   useEffect(() => {
@@ -642,7 +775,15 @@ export default function AdminClientRequests() {
   }, [searchQuery])
 
   // Reset page on filter change
-  useEffect(() => { setPage(1) }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter])
+  useEffect(() => { setPage(1) }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, deadlineFrom, deadlineTo, pageSize])
+
+  // Persist filters to sessionStorage
+  useEffect(() => {
+    saveFilters({
+      view, yearFilter, monthFilter, deadlineFrom, deadlineTo,
+      sortFilter, searchQuery, companyFilter, staffFilter, statusFilter, pageSize,
+    })
+  }, [view, yearFilter, monthFilter, deadlineFrom, deadlineTo, sortFilter, searchQuery, companyFilter, staffFilter, statusFilter, pageSize])
 
   // Load list — staff always forced to their own, admin can filter
   const loadList = useCallback(() => {
@@ -650,12 +791,14 @@ export default function AdminClientRequests() {
     setLoading(true)
     const [sortBy, sortDir] = sortFilter.split(':')
     cdrApi.getClientRequests({
-      status:      statusFilter || undefined,
-      companyId:   companyFilter || undefined,
-      requestedBy: !isAdmin ? currentUser?.id : (staffFilter || undefined),
-      search:      debouncedSearch || undefined,
+      status:           statusFilter  || undefined,
+      companyId:        companyFilter || undefined,
+      requestedBy:      !isAdmin ? currentUser?.id : (staffFilter || undefined),
+      search:           debouncedSearch || undefined,
+      deadlineDateFrom: deadlineFrom  || undefined,
+      deadlineDateTo:   deadlineTo    || undefined,
       page,
-      limit: view === 'board' ? 500 : 20,
+      limit: view === 'board' ? 500 : pageSize,
       sortBy,
       sortDir,
     })
@@ -668,7 +811,7 @@ export default function AdminClientRequests() {
       .catch(() => { if (!cancelled) setItems([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, page, isAdmin, currentUser?.id, view])
+  }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, page, pageSize, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, view])
 
   useEffect(() => {
     const cancel = loadList()
@@ -682,7 +825,7 @@ export default function AdminClientRequests() {
     try {
       const updated = await cdrApi.receiveClientRequest(item.id)
       setItems((prev) => prev.map((r) => r.id === item.id ? updated : r))
-      loadStats()
+      setStatsKey((k) => k + 1)
       addToast('Đã đánh dấu đã nhận', 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
@@ -694,7 +837,7 @@ export default function AdminClientRequests() {
     try {
       const updated = await cdrApi.unreceiveClientRequest(item.id)
       setItems((prev) => prev.map((r) => r.id === item.id ? updated : r))
-      loadStats()
+      setStatsKey((k) => k + 1)
       addToast('Đã hoàn tác trạng thái nhận', 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
@@ -706,7 +849,7 @@ export default function AdminClientRequests() {
     try {
       const updated = await cdrApi.dismissClientRequest(item.id)
       setItems((prev) => prev.map((r) => r.id === item.id ? updated : r))
-      loadStats()
+      setStatsKey((k) => k + 1)
       addToast('Đã đánh dấu không cần', 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
@@ -732,7 +875,7 @@ export default function AdminClientRequests() {
       setItems((prev) => prev.filter((r) => r.id !== deleteTarget.id))
       setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }))
       setDeleteTarget(null)
-      loadStats()
+      setStatsKey((k) => k + 1)
       addToast(`Đã xoá yêu cầu "${deleteTarget.documentName}"`, 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể xoá', 'error')
@@ -768,20 +911,38 @@ export default function AdminClientRequests() {
     } catch { addToast('Không thể copy, hãy copy thủ công', 'warning') }
   }
 
+  function handleYearChange(year) {
+    setYearFilter(year)
+    const { from, to } = yearMonthToDates(year, year ? monthFilter : '')
+    setDeadlineFrom(from); setDeadlineTo(to)
+  }
+
+  function handleMonthChange(month) {
+    setMonthFilter(month)
+    if (!yearFilter) return
+    const { from, to } = yearMonthToDates(yearFilter, month)
+    setDeadlineFrom(from); setDeadlineTo(to)
+  }
+
   function resetFilters() {
     setStatusFilter(''); setCompanyFilter(''); setStaffFilter('')
     setSearchQuery(''); setSortFilter('deadline_date:asc'); setPage(1)
+    setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
+    setDeadlineFrom(INIT_DATES.from); setDeadlineTo(INIT_DATES.to)
+    setPageSize(20)
+    try { sessionStorage.removeItem(FILTER_KEY) } catch (_) {}
   }
 
   const activeFilterCount = [statusFilter, companyFilter, staffFilter, debouncedSearch].filter(Boolean).length
     + (sortFilter !== 'deadline_date:asc' ? 1 : 0)
+    + (yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH ? 1 : 0)
 
-  const kpiCards = [
-    { label: 'Đang chờ',  value: stats?.pending     ?? 0, icon: '🕐', cardCls: s.kpiPending,     valueCls: s.kpiValuePending },
-    { label: 'Quá hạn',   value: stats?.overdue     ?? 0, icon: '⚠️', cardCls: s.kpiOverdue,     valueCls: s.kpiValueOverdue,     urgent: (stats?.overdue ?? 0) > 0 },
-    { label: 'Đã nhận',   value: stats?.received    ?? 0, icon: '✅', cardCls: s.kpiReceived,    valueCls: s.kpiValueReceived },
-    { label: 'Không cần', value: stats?.notRequired ?? 0, icon: '⊘',  cardCls: s.kpiNotRequired, valueCls: s.kpiValueNotRequired },
-    { label: 'Tổng cộng', value: stats?.total       ?? 0, icon: '📋', cardCls: s.kpiTotal,       valueCls: s.kpiValueTotal },
+  const statItems = [
+    { label: 'Tổng',      value: stats?.total        ?? 0, cls: s.statTotal },
+    { label: 'Chờ KH',    value: stats?.pending      ?? 0, cls: s.statPending },
+    { label: 'Quá hạn',   value: stats?.overdue      ?? 0, cls: s.statOverdue },
+    { label: 'Đã nhận',   value: stats?.received     ?? 0, cls: s.statReceived },
+    { label: 'Không cần', value: stats?.not_required ?? 0, cls: s.statNotRequired },
   ]
 
   function pageWindow() {
@@ -792,8 +953,8 @@ export default function AdminClientRequests() {
     return [1, '…', page - 1, page, page + 1, '…', total]
   }
 
-  const from = pagination.total === 0 ? 0 : (page - 1) * 20 + 1
-  const to   = Math.min(page * 20, pagination.total)
+  const from = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
+  const to   = Math.min(page * pageSize, pagination.total)
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -824,22 +985,6 @@ export default function AdminClientRequests() {
           </div>
         </div>
 
-        {/* ── KPI cards ── */}
-        <div className={s.kpiGrid}>
-          {kpiCards.map((card) => (
-            <div key={card.label} className={`${s.kpiCard} ${card.cardCls} ${card.urgent ? s.kpiCardUrgent : ''}`}>
-              <div className={s.kpiIconWrap}>{card.icon}</div>
-              <div className={s.kpiBody}>
-                {statsLoading
-                  ? <div className={s.kpiSkeleton} />
-                  : <div className={`${s.kpiValue} ${card.valueCls}`}>{card.value}</div>
-                }
-                <div className={s.kpiLabel}>{card.label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
         {/* ── Filter bar ── */}
         <div className={s.filterBar}>
           <div className={s.filterBarHead}>
@@ -857,6 +1002,28 @@ export default function AdminClientRequests() {
 
           <div className={s.filterGrid}>
 
+            {/* Năm */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Năm</label>
+              <select value={yearFilter} onChange={(e) => handleYearChange(e.target.value)} className={s.filterSelect}>
+                <option value="">Tất cả năm</option>
+                {availableYears.map((y) => (
+                  <option key={y} value={String(y)}>Năm {y}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tháng */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Tháng</label>
+              <select value={monthFilter} onChange={(e) => handleMonthChange(e.target.value)} className={s.filterSelect} disabled={!yearFilter}>
+                <option value="">Cả năm</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                  <option key={m} value={String(m)}>Tháng {m}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Sắp xếp */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Sắp xếp</label>
@@ -867,18 +1034,19 @@ export default function AdminClientRequests() {
 
             {/* Công ty */}
             <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Công ty</label>
-              <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className={s.filterSelect} style={{ minWidth: 160 }}>
-                <option value="">Tất cả</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <label className={s.filterLabel}>Khách hàng</label>
+              <FilterCompanyPicker
+                companies={companies}
+                value={companyFilter}
+                onChange={(id) => { setCompanyFilter(id); setPage(1) }}
+              />
             </div>
 
             {/* Nhân viên (admin only) */}
             {isAdmin && staffList.length > 0 && (
               <div className={s.filterGroup}>
                 <label className={s.filterLabel}>Nhân viên</label>
-                <select value={staffFilter} onChange={(e) => setStaffFilter(e.target.value)} className={s.filterSelect} style={{ minWidth: 140 }}>
+                <select value={staffFilter} onChange={(e) => setStaffFilter(e.target.value)} className={s.filterSelect}>
                   <option value="">Tất cả</option>
                   {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
@@ -915,8 +1083,14 @@ export default function AdminClientRequests() {
           </div>
 
           {/* Active filter chips */}
-          {(companyFilter || staffFilter || debouncedSearch) && (
+          {(yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH || companyFilter || staffFilter || debouncedSearch) && (
             <div className={s.filterChipsRow}>
+              {(yearFilter || monthFilter) && (yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH) && (
+                <span className={s.filterChip}>
+                  {monthFilter && yearFilter ? `T${monthFilter}/${yearFilter}` : yearFilter ? `Năm ${yearFilter}` : `T${monthFilter}`}
+                  <button className={s.filterChipRemove} onClick={() => { setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH); setDeadlineFrom(INIT_DATES.from); setDeadlineTo(INIT_DATES.to) }}>×</button>
+                </span>
+              )}
               {companyFilter && (
                 <span className={s.filterChip}>
                   KH: {companies.find((c) => c.id === companyFilter)?.name ?? '?'}
@@ -937,6 +1111,21 @@ export default function AdminClientRequests() {
               )}
             </div>
           )}
+
+          {/* ── Stats row ── */}
+          <div className={s.statsRow}>
+            {statItems.map((item, i) => (
+              <Fragment key={item.label}>
+                <div className={s.statItem}>
+                  <span className={`${s.statValue} ${item.cls}`}>
+                    {statsLoading ? '…' : item.value}
+                  </span>
+                  <span className={s.statLabel}>{item.label}</span>
+                </div>
+                {i < statItems.length - 1 && <span className={s.statDivider} />}
+              </Fragment>
+            ))}
+          </div>
         </div>
 
         {/* ── Loading spinner (non-list views) ── */}
@@ -1128,6 +1317,17 @@ export default function AdminClientRequests() {
                 <span className={s.paginationInfo}>
                   {loading ? '...' : `${from}–${to} / ${pagination.total} yêu cầu`}
                 </span>
+                <div className={s.pageSizeBtns}>
+                  {[20, 50, 100].map((n) => (
+                    <button
+                      key={n}
+                      className={`${s.pageSizeBtn} ${pageSize === n ? s.pageSizeBtnActive : ''}`}
+                      onClick={() => setPageSize(n)}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className={s.paginationBtns}>
                 <button className={s.pageBtn} onClick={() => setPage(1)} disabled={page === 1}>«</button>
@@ -1161,7 +1361,7 @@ export default function AdminClientRequests() {
               addToast('Đã cập nhật yêu cầu', 'success')
             } else {
               loadList()
-              loadStats()
+              setStatsKey((k) => k + 1)
               addToast(`Đã tạo yêu cầu "${saved.documentName}"`, 'success')
             }
           }}
