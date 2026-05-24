@@ -105,6 +105,13 @@ async function submitPublicForm(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function manualSubmit(req, res, next) {
+  try {
+    const item = await svc.manualSubmit(req.params.id, req.body, req.user.id)
+    res.json({ success: true, data: { item } })
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listClientRequests,
   getClientRequest,
@@ -117,6 +124,7 @@ module.exports = {
   sendReminder,
   generateLink,
   revokeLink,
+  manualSubmit,
   getAdminOverview,
   getPublicForm,
   submitPublicForm,

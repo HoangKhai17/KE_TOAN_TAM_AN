@@ -445,6 +445,45 @@ async function getAdminOverview(filters = {}) {
   }
 }
 
+async function manualSubmit(id, data, submittedBy) {
+  const { rows: [row] } = await query(
+    'SELECT id FROM client_document_requests WHERE id = $1', [id]
+  )
+  if (!row) throw Object.assign(new Error('Client request not found'), { status: 404 })
+
+  const submittedData = {
+    contact_name:  data.contactName ?? null,
+    phone:         data.phone ?? null,
+    description:   data.description ?? null,
+    shared_links:  data.sharedLinks ?? [],
+    notes:         data.notes ?? null,
+    submitted_via: 'manual',
+  }
+
+  const params = [JSON.stringify(submittedData)]
+  const setClauses = [
+    `token_submitted_data = $${params.length}`,
+    `token_submitted_at = NOW()`,
+    `updated_at = NOW()`,
+  ]
+
+  if (data.markReceived) {
+    params.push(submittedBy)
+    setClauses.push(
+      `status = 'received'`,
+      `received_at = NOW()`,
+      `received_by = $${params.length}`,
+    )
+  }
+
+  params.push(id)
+  await query(
+    `UPDATE client_document_requests SET ${setClauses.join(', ')} WHERE id = $${params.length}`,
+    params
+  )
+  return getById(id)
+}
+
 async function countPendingByTask(taskId) {
   const { rows: [r] } = await query(
     `SELECT COUNT(*) AS cnt FROM client_document_requests
@@ -466,6 +505,7 @@ module.exports = {
   sendReminder,
   generateLink,
   revokeLink,
+  manualSubmit,
   getPublicForm,
   submitPublicForm,
   getAdminOverview,

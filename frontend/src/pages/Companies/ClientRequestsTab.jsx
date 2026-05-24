@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Loader2, Trash2, AlertTriangle, Link2, Link2Off,
   CheckCircle2, XCircle, RotateCcw, Bell, Eye, Copy, Check,
-  ClipboardList, RefreshCw, Search, ExternalLink, Filter,
+  ClipboardList, RefreshCw, Search, ExternalLink, Filter, PenLine,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -88,6 +88,7 @@ export default function ClientRequestsTab({ company }) {
 
   const [viewSubmitted, setViewSubmitted] = useState(null)
   const [reminderTarget, setReminderTarget] = useState(null)
+  const [manualSubmitTarget, setManualSubmitTarget] = useState(null)
 
   const [actionLoading, setActionLoading] = useState({})
 
@@ -459,12 +460,25 @@ export default function ClientRequestsTab({ company }) {
                       <div style={{ display: 'flex', gap: 3, justifyContent: 'flex-end' }}>
                         <button
                           className={s.rowActionBtn}
-                          title="Chỉnh sửa"
+                          title="Chỉnh sửa yêu cầu"
                           onClick={() => setEditTarget(item)}
                           disabled={!!busy}
                         >
                           <Eye size={13} />
                         </button>
+
+                        {/* Nhập dữ liệu KH thủ công */}
+                        {item.status !== 'not_required' && (
+                          <button
+                            className={s.rowActionBtn}
+                            title={item.tokenSubmittedAt ? 'Cập nhật dữ liệu KH' : 'Nhập dữ liệu KH thủ công'}
+                            onClick={() => setManualSubmitTarget(item)}
+                            disabled={!!busy}
+                            style={{ color: '#7c3aed' }}
+                          >
+                            <PenLine size={13} />
+                          </button>
+                        )}
 
                         {(item.status === 'pending' || item.status === 'overdue') && (
                           <button
@@ -628,6 +642,19 @@ export default function ClientRequestsTab({ company }) {
             setItems((prev) => prev.map((r) => r.id === updated.id ? updated : r))
             setReminderTarget(null)
             addToast('Đã gửi nhắc nhở', 'success')
+          }}
+        />
+      )}
+
+      {/* ── Manual submit modal ── */}
+      {manualSubmitTarget && (
+        <ManualSubmitModal
+          item={manualSubmitTarget}
+          onClose={() => setManualSubmitTarget(null)}
+          onSaved={(updated) => {
+            setItems((prev) => prev.map((r) => r.id === updated.id ? updated : r))
+            setManualSubmitTarget(null)
+            addToast('Đã lưu dữ liệu khách hàng', 'success')
           }}
         />
       )}
@@ -881,12 +908,21 @@ function SubmittedDataModal({ item, onClose }) {
           display: 'flex', alignItems: 'center', gap: 8,
           fontSize: 13, color: '#15803d',
         }}>
-          <span style={{ fontSize: 16 }}>✅</span>
-          <div>
+          <span style={{ fontSize: 16 }}>{data.submitted_via === 'manual' ? '📋' : '✅'}</span>
+          <div style={{ flex: 1 }}>
             <strong>{item.documentName}</strong>
             {submittedAt && (
               <span style={{ color: '#4ade80', fontSize: 12, marginLeft: 8 }}>
-                · Gửi lúc {submittedAt}
+                · {data.submitted_via === 'manual' ? 'Nhập lúc' : 'Gửi lúc'} {submittedAt}
+              </span>
+            )}
+            {data.submitted_via === 'manual' && (
+              <span style={{
+                display: 'inline-block', marginLeft: 8,
+                fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
+                background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd',
+              }}>
+                Nhập thủ công
               </span>
             )}
           </div>
@@ -981,6 +1017,218 @@ function SubmittedDataModal({ item, onClose }) {
           <button onClick={onClose} className={s.btnOutline}>Đóng</button>
         </div>
       </div>
+    </Modal>
+  )
+}
+
+// ── ManualSubmitModal ─────────────────────────────────────────────────────────
+
+function ManualSubmitModal({ item, onClose, onSaved }) {
+  const existing = item.tokenSubmittedData ?? {}
+  const existingLinks = Array.isArray(existing.shared_links)
+    ? existing.shared_links.filter(Boolean)
+    : existing.shared_link ? [existing.shared_link] : []
+
+  const [form, setForm] = useState({
+    contactName: existing.contact_name ?? existing.contactName ?? '',
+    phone:       existing.phone ?? '',
+    description: existing.description ?? '',
+    notes:       existing.notes ?? '',
+  })
+  const [sharedLinks, setSharedLinks] = useState(existingLinks.length ? existingLinks : [''])
+  const [markReceived, setMarkReceived] = useState(
+    item.status === 'pending' || item.status === 'overdue'
+  )
+  const [saving, setSaving] = useState(false)
+  const [err, setErr]       = useState('')
+
+  function setF(k, v) { setForm((p) => ({ ...p, [k]: v })); setErr('') }
+
+  function handleLinkChange(idx, val) {
+    setSharedLinks((p) => p.map((l, i) => i === idx ? val : l))
+  }
+  function addLink() { setSharedLinks((p) => [...p, '']) }
+  function removeLink(idx) { setSharedLinks((p) => p.filter((_, i) => i !== idx)) }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true); setErr('')
+    try {
+      const validLinks = sharedLinks.map((l) => l.trim()).filter(Boolean)
+      // Validate URLs
+      for (const l of validLinks) {
+        try { new URL(l) } catch {
+          setErr(`Link không hợp lệ: ${l}`); setSaving(false); return
+        }
+      }
+      const updated = await cdrApi.manualSubmit(item.id, {
+        contactName:  form.contactName.trim() || null,
+        phone:        form.phone.trim() || null,
+        description:  form.description.trim() || null,
+        sharedLinks:  validLinks,
+        notes:        form.notes.trim() || null,
+        markReceived,
+      })
+      onSaved(updated)
+    } catch (e) {
+      setErr(e.response?.data?.error?.message ?? 'Không thể lưu dữ liệu')
+      setSaving(false)
+    }
+  }
+
+  const isUpdate = !!item.tokenSubmittedAt
+
+  return (
+    <Modal
+      title={isUpdate ? 'Cập nhật dữ liệu KH' : 'Nhập dữ liệu KH thủ công'}
+      onClose={onClose}
+      maxWidth={600}
+    >
+      <form onSubmit={handleSubmit} className={s.modalStack}>
+        {/* Context banner */}
+        <div style={{
+          background: '#faf5ff', border: '1px solid #d8b4fe',
+          borderRadius: 8, padding: '10px 14px',
+          fontSize: 12, color: '#6b21a8', lineHeight: 1.6,
+        }}>
+          <strong>📋 {item.documentName}</strong>
+          <br />
+          {isUpdate
+            ? 'Cập nhật lại dữ liệu KH đã nhập trước đó. Dữ liệu cũ sẽ bị thay thế.'
+            : 'Nhập thông tin KH đã gửi qua Zalo / điện thoại / email trực tiếp vào hệ thống.'}
+        </div>
+
+        {err && <div className={s.errorBox}>{err}</div>}
+
+        {/* Tên liên hệ */}
+        <div>
+          <label className={s.formLabel}>Tên liên hệ</label>
+          <input
+            type="text"
+            value={form.contactName}
+            onChange={(e) => setF('contactName', e.target.value)}
+            className={s.formInput}
+            placeholder="Họ tên người liên hệ bên khách hàng"
+          />
+        </div>
+
+        {/* Số điện thoại */}
+        <div>
+          <label className={s.formLabel}>Số điện thoại</label>
+          <input
+            type="tel"
+            value={form.phone}
+            onChange={(e) => setF('phone', e.target.value)}
+            className={s.formInput}
+            placeholder="0901 234 567"
+          />
+        </div>
+
+        {/* Mô tả tài liệu */}
+        <div>
+          <label className={s.formLabel}>Mô tả tài liệu</label>
+          <textarea
+            value={form.description}
+            onChange={(e) => setF('description', e.target.value)}
+            rows={3}
+            className={s.formTextarea}
+            placeholder="Mô tả ngắn về tài liệu KH đã gửi..."
+          />
+        </div>
+
+        {/* Links tài liệu */}
+        <div>
+          <label className={s.formLabel}>
+            Link tài liệu
+            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>
+              (tuỳ chọn — có thể thêm nhiều)
+            </span>
+          </label>
+          {sharedLinks.map((link, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+              <input
+                type="url"
+                value={link}
+                onChange={(e) => handleLinkChange(idx, e.target.value)}
+                className={s.formInput}
+                style={{ flex: 1, marginBottom: 0 }}
+                placeholder={`https://drive.google.com/...${idx > 0 ? ` (tài liệu ${idx + 1})` : ''}`}
+              />
+              {sharedLinks.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeLink(idx)}
+                  style={{
+                    flexShrink: 0, padding: '0 10px', borderRadius: 6,
+                    border: '1px solid #fca5a5', background: '#fff',
+                    color: '#ef4444', cursor: 'pointer', fontSize: 16, lineHeight: 1,
+                  }}
+                >×</button>
+              )}
+            </div>
+          ))}
+          {sharedLinks.length < 10 && (
+            <button
+              type="button"
+              onClick={addLink}
+              style={{
+                padding: '5px 12px', borderRadius: 6,
+                border: '1px dashed #93c5fd', background: '#eff6ff',
+                color: '#2563eb', cursor: 'pointer', fontSize: 12,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <span style={{ fontSize: 14 }}>+</span> Thêm link
+            </button>
+          )}
+        </div>
+
+        {/* Ghi chú */}
+        <div>
+          <label className={s.formLabel}>Ghi chú thêm</label>
+          <textarea
+            value={form.notes}
+            onChange={(e) => setF('notes', e.target.value)}
+            rows={2}
+            className={s.formTextarea}
+            placeholder="Ghi chú nội bộ về dữ liệu KH gửi..."
+          />
+        </div>
+
+        {/* Checkbox đánh dấu đã nhận */}
+        {(item.status === 'pending' || item.status === 'overdue') && (
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 12px', borderRadius: 8,
+            background: markReceived ? '#f0fdf4' : '#f8fafc',
+            border: `1px solid ${markReceived ? '#86efac' : '#e2e8f0'}`,
+            cursor: 'pointer', transition: 'all 0.15s',
+          }}>
+            <input
+              type="checkbox"
+              checked={markReceived}
+              onChange={(e) => setMarkReceived(e.target.checked)}
+              style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#16a34a' }}
+            />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: markReceived ? '#15803d' : '#374151' }}>
+                Đồng thời đánh dấu "Đã nhận"
+              </div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                Chuyển trạng thái yêu cầu này sang Đã nhận sau khi lưu
+              </div>
+            </div>
+          </label>
+        )}
+
+        <div className={s.modalActions}>
+          <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
+          <button type="submit" disabled={saving} className={s.btnPrimary}>
+            {saving ? <Loader2 size={13} className={s.spin} /> : <PenLine size={13} />}
+            {saving ? 'Đang lưu...' : isUpdate ? 'Cập nhật dữ liệu' : 'Lưu dữ liệu KH'}
+          </button>
+        </div>
+      </form>
     </Modal>
   )
 }

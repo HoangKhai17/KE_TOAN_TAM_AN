@@ -36,6 +36,9 @@ export const generateLink = (id, data) =>
 export const revokeLink = (id) =>
   api.post(`/client-requests/${id}/revoke-link`).then((r) => r.data)
 
+export const manualSubmit = (id, data) =>
+  api.post(`/client-requests/${id}/manual-submit`, data).then((r) => r.data.data.item)
+
 export const getAdminOverview = (params) =>
   api.get('/admin/client-requests/overview', { params }).then((r) => r.data.data)
 

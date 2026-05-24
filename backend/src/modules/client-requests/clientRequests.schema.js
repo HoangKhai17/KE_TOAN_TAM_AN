@@ -31,6 +31,15 @@ const generateLinkSchema = z.object({
   expiresInDays: z.number().int().min(1).max(90).optional(),
 })
 
+const manualSubmitSchema = z.object({
+  contactName:  z.string().max(150).optional().nullable(),
+  phone:        z.string().max(20).optional().nullable(),
+  description:  z.string().max(2000).optional().nullable(),
+  sharedLinks:  z.array(z.string().url('Invalid URL').max(500)).max(10).optional(),
+  notes:        z.string().max(1000).optional().nullable(),
+  markReceived: z.boolean().optional(),
+})
+
 const submitPublicFormSchema = z.object({
   contactName:  z.string().min(1).max(150),
   phone:        z.string().min(7).max(20),
@@ -45,4 +54,5 @@ module.exports = {
   remindSchema,
   generateLinkSchema,
   submitPublicFormSchema,
+  manualSubmitSchema,
 }

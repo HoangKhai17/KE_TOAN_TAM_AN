@@ -8,6 +8,7 @@ const {
   updateClientRequestSchema,
   remindSchema,
   generateLinkSchema,
+  manualSubmitSchema,
 } = require('./clientRequests.schema')
 const ctrl = require('./clientRequests.controller')
 
@@ -29,7 +30,8 @@ router.post('/:id/receive',       ...auth,  ctrl.receiveClientRequest)
 router.post('/:id/unreceive',     ...auth,  ctrl.unreceiveClientRequest)
 router.post('/:id/dismiss',       ...admin, ctrl.dismissClientRequest)
 router.post('/:id/remind',        ...auth,  validate(remindSchema), ctrl.sendReminder)
-router.post('/:id/generate-link', ...auth,  validate(generateLinkSchema), ctrl.generateLink)
-router.post('/:id/revoke-link',   ...auth,  ctrl.revokeLink)
+router.post('/:id/generate-link',  ...auth,  validate(generateLinkSchema),  ctrl.generateLink)
+router.post('/:id/revoke-link',    ...auth,  ctrl.revokeLink)
+router.post('/:id/manual-submit',  ...auth,  validate(manualSubmitSchema),   ctrl.manualSubmit)
 
 module.exports = router
