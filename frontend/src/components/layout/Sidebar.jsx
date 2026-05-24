@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Building2, CheckSquare,
   Users, BarChart3, Settings,
   ChevronLeft, ChevronRight, LogOut, Wallet, CalendarCheck, ClipboardList,
+  ClipboardCheck,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { logout } from '../../api/auth'
@@ -12,11 +13,12 @@ const NAV_GROUPS = [
   {
     label: 'ĐIỀU HƯỚNG',
     items: [
-      { to: '/dashboard',             label: 'Dashboard',       icon: LayoutDashboard },
-      { to: '/companies',             label: 'Công ty',         icon: Building2 },
-      { to: '/tasks',                 label: 'Công việc',       icon: CheckSquare },
-      { to: '/client-requests',        label: 'Yêu cầu KH',     icon: ClipboardList },
-      { to: '/reports',               label: 'Báo cáo',         icon: BarChart3 },
+      { to: '/dashboard',              label: 'Dashboard',          icon: LayoutDashboard },
+      { to: '/companies',              label: 'Công ty',            icon: Building2 },
+      { to: '/tasks',                  label: 'Công việc',          icon: CheckSquare },
+      { to: '/internal-assignments',   label: 'Nội bộ',             icon: ClipboardCheck },
+      { to: '/client-requests',        label: 'Yêu cầu KH',        icon: ClipboardList },
+      { to: '/reports',                label: 'Báo cáo',            icon: BarChart3 },
     ],
   },
   {

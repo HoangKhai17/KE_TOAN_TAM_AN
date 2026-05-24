@@ -168,7 +168,8 @@
       "PowerShell(docker exec ke_toan_tam_an-postgres-1 psql $DB -c \"SELECT email, role FROM users WHERE role='admin' LIMIT 3;\" 2>&1)",
       "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\companies\" -File)",
       "PowerShell(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\companies\" -File | ForEach-Object { $_.FullName })",
-      "PowerShell(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Companies\" -File | ForEach-Object { $_.FullName })"
+      "PowerShell(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Companies\" -File | ForEach-Object { $_.FullName })",
+      "Bash(node -e \"console.log\\('node ok'\\)\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

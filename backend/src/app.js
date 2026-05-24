@@ -186,6 +186,9 @@ function createApp() {
   // Phase 12 — Notifications
   app.use('/api/notifications', require('./modules/notifications/notifications.router'))
 
+  // Phase 18 — Internal Assignments (Phiếu giao việc nội bộ)
+  app.use('/api/internal-assignments', require('./modules/internal-assignments/internalAssignments.router'))
+
   // Phase 17 — Client Document Requests
   app.use('/api/client-requests',        require('./modules/client-requests/clientRequests.router'))
   app.use('/api/public/client-forms',    require('./modules/client-requests/clientRequestsPublic.router'))
