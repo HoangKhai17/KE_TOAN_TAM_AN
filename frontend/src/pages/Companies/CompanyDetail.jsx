@@ -83,8 +83,9 @@ const COMPANY_TASK_STATUS_TONE = {
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function CompanyDetail() {
-  const { id }    = useParams()
-  const isAdmin   = useAuthStore((st) => st.user?.role === 'admin')
+  const { id }      = useParams()
+  const currentUser = useAuthStore((st) => st.user)
+  const isAdmin     = currentUser?.role === 'admin'
   const addToast  = useToastStore((st) => st.toast)
   const getLabel  = useEnumsStore((st) => st.getLabel)
   const loadEnums = useEnumsStore((st) => st.load)
@@ -113,8 +114,14 @@ export default function CompanyDetail() {
       .getCompany(id)
       .then((c) => { if (!cancelled) setCompany(c) })
       .catch((err) => {
-        if (!cancelled)
-          setError(err.response?.status === 404 ? 'Không tìm thấy công ty' : 'Lỗi tải dữ liệu')
+        if (!cancelled) {
+          const status = err.response?.status
+          setError(
+            status === 404 ? 'Không tìm thấy công ty' :
+            status === 403 ? 'Bạn không có quyền xem thông tin công ty này' :
+            'Lỗi tải dữ liệu'
+          )
+        }
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -267,23 +274,25 @@ export default function CompanyDetail() {
             )}
           </div>
 
-          {isAdmin && (
+          {(isAdmin || company.assignedStaffId === currentUser?.id) && (
             <div className={s.heroActions}>
               <button className={s.btnOutline} onClick={() => setShowEdit(true)}>
                 <Pencil size={13} /> Chỉnh sửa
               </button>
-              {company.status !== 'terminated' && (
+              {isAdmin && company.status !== 'terminated' && (
                 <button className={s.btnDanger} onClick={() => setShowTerminate(true)}>
                   Kết thúc HĐ
                 </button>
               )}
-              <button
-                className={s.btnDeleteIcon}
-                onClick={() => setShowDelete(true)}
-                title="Xoá công ty"
-              >
-                <Trash2 size={14} />
-              </button>
+              {isAdmin && (
+                <button
+                  className={s.btnDeleteIcon}
+                  onClick={() => setShowDelete(true)}
+                  title="Xoá công ty"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
           )}
         </div>

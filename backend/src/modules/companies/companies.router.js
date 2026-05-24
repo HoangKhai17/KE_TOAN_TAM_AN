@@ -149,7 +149,7 @@ router.get('/:id', ...auth, ctrl.getCompany)
  *       200: { description: Updated }
  *       404: { description: Not found }
  */
-router.patch('/:id', ...admin, validate(updateCompanySchema), ctrl.updateCompany)
+router.patch('/:id', ...auth, validate(updateCompanySchema), ctrl.updateCompany)
 
 /**
  * @openapi

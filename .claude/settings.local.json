@@ -165,12 +165,16 @@
       "PowerShell(docker exec ke_toan_tam_an-backend-1 cat /app/migrations/049_create_client_document_requests.sql)",
       "PowerShell(docker exec ke_toan_tam_an-backend-1 cat /app/migrations/050_add_client_doc_status_enum_metadata.sql)",
       "PowerShell(docker restart ke_toan_tam_an-backend-1 2>&1)",
-      "PowerShell(docker exec ke_toan_tam_an-postgres-1 psql $DB -c \"SELECT email, role FROM users WHERE role='admin' LIMIT 3;\" 2>&1)"
+      "PowerShell(docker exec ke_toan_tam_an-postgres-1 psql $DB -c \"SELECT email, role FROM users WHERE role='admin' LIMIT 3;\" 2>&1)",
+      "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\companies\" -File)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\companies\" -File | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Companies\" -File | ForEach-Object { $_.FullName })"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\backend\\src\\modules",
-      "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN"
+      "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN",
+      "C:\\Users\\ACER\\.claude\\projects\\d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM_AN\\memory"
     ]
   }
 }

@@ -134,7 +134,8 @@ export function StatusPill({ status }) {
 
 export default function Companies() {
   const navigate  = useNavigate()
-  const isAdmin   = useAuthStore((s) => s.user?.role === 'admin')
+  const currentUser = useAuthStore((s) => s.user)
+  const isAdmin   = currentUser?.role === 'admin'
   const addToast  = useToastStore((st) => st.toast)
   const getOptions = useEnumsStore((st) => st.getOptions)
   const getLabel   = useEnumsStore((st) => st.getLabel)
@@ -208,7 +209,8 @@ export default function Companies() {
         status:          statusFilter || undefined,
         businessType:    btFilter     || undefined,
         search:          search       || undefined,
-        assignedStaffId: staffFilter  || undefined,
+        // Staff always scoped to their own companies; admin can filter by any staff
+        assignedStaffId: isAdmin ? (staffFilter || undefined) : currentUser?.id,
       })
       .then(({ companies: c, pagination: p }) => {
         if (!cancelled) { setCompanies(c); setPagination(p) }
@@ -265,7 +267,9 @@ export default function Companies() {
           <div className={s.pageTitleGroup}>
             <h1 className={s.pageTitle}>Khách hàng</h1>
             <p className={s.pageSubtitle}>
-              {loading ? '...' : `${pagination.total} doanh nghiệp đang quản lý`}
+              {loading ? '...' : isAdmin
+                ? `${pagination.total} doanh nghiệp đang quản lý`
+                : `${pagination.total} công ty tôi phụ trách`}
             </p>
           </div>
           {isAdmin && (
@@ -289,7 +293,7 @@ export default function Companies() {
 
           {/* Controls row */}
           <div className={s.filterGrid}>
-            {staffList.length > 0 && (
+            {isAdmin && staffList.length > 0 && (
               <div className={s.filterField}>
                 <label className={s.filterFieldLabel}>Phụ trách</label>
                 <select value={staffFilter} onChange={(e) => setStaffFilter(e.target.value)} className={s.filterSelect}>
@@ -364,7 +368,7 @@ export default function Companies() {
                     <button className={s.filterChipRemove} onClick={() => setBtFilter('')}>×</button>
                   </span>
                 )}
-                {staffFilter && (
+                {isAdmin && staffFilter && (
                   <span className={s.filterChip}>
                     Phụ trách: {staffList.find((u) => u.id === staffFilter)?.name ?? '?'}
                     <button className={s.filterChipRemove} onClick={() => setStaffFilter('')}>×</button>

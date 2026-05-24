@@ -61,7 +61,7 @@ function toDto(row) {
   }
 }
 
-async function listCompanies({ page = 1, limit = 20, status, businessType, assignedStaffId, search } = {}) {
+async function listCompanies({ page = 1, limit = 20, status, businessType, assignedStaffId, search, forceStaffId } = {}) {
   const offset = (page - 1) * limit
   const conditions = ['1=1']
   const filterParams = []
@@ -74,8 +74,10 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
     filterParams.push(businessType)
     conditions.push(`c.business_type = $${filterParams.length}`)
   }
-  if (assignedStaffId) {
-    filterParams.push(assignedStaffId)
+  // forceStaffId (staff role) overrides any assignedStaffId from query string
+  const effectiveStaffId = forceStaffId ?? assignedStaffId
+  if (effectiveStaffId) {
+    filterParams.push(effectiveStaffId)
     conditions.push(`c.assigned_staff_id = $${filterParams.length}`)
   }
   if (search && search.trim()) {
@@ -122,7 +124,7 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
   }
 }
 
-async function getCompanyById(id) {
+async function getCompanyById(id, user = null) {
   const { rows } = await query(
     `SELECT c.*,
             u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
@@ -143,6 +145,9 @@ async function getCompanyById(id) {
     [id]
   )
   if (!rows[0]) throw Object.assign(new Error('Company not found'), { status: 404 })
+  if (user?.role === 'staff' && rows[0].assigned_staff_id !== user.id) {
+    throw Object.assign(new Error('Bạn không có quyền xem thông tin công ty này'), { status: 403 })
+  }
   return toDto(rows[0])
 }
 
@@ -208,12 +213,19 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
   return toDto({ ...rows[0], task_open_count: 0, task_overdue_count: 0 })
 }
 
-async function updateCompany(id, data, actorId, ipAddress, userAgent) {
+async function updateCompany(id, data, actorId, ipAddress, userAgent, user = null) {
   // Pre-fetch current state to detect assignment changes
   const { rows: [current] } = await query(
     'SELECT name, assigned_staff_id FROM companies WHERE id = $1', [id]
   )
   if (!current) throw Object.assign(new Error('Company not found'), { status: 404 })
+
+  // Staff can only update their own assigned company and cannot reassign staff
+  if (user?.role === 'staff') {
+    if (current.assigned_staff_id !== actorId) {
+      throw Object.assign(new Error('Bạn không có quyền chỉnh sửa công ty này'), { status: 403 })
+    }
+  }
 
   const fieldMap = {
     name: 'name', taxCode: 'tax_code', address: 'address', businessType: 'business_type',
@@ -222,6 +234,8 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent) {
     bankAccount: 'bank_account', bankName: 'bank_name', serviceStartDate: 'service_start_date',
     notes: 'notes', assignedStaffId: 'assigned_staff_id', avatarUrl: 'avatar_url',
   }
+  // Staff cannot reassign themselves or others
+  if (user?.role === 'staff') delete fieldMap.assignedStaffId
 
   const updates = []
   const params = []

@@ -7,6 +7,7 @@ async function listCompanies(req, res, next) {
       page: Math.max(1, parseInt(page, 10)),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
       status, businessType, assignedStaffId, search,
+      forceStaffId: req.user.role === 'staff' ? req.user.id : undefined,
     })
     res.json({ success: true, data: result })
   } catch (err) { next(err) }
@@ -14,7 +15,7 @@ async function listCompanies(req, res, next) {
 
 async function getCompany(req, res, next) {
   try {
-    const company = await svc.getCompanyById(req.params.id)
+    const company = await svc.getCompanyById(req.params.id, req.user)
     res.json({ success: true, data: { company } })
   } catch (err) { next(err) }
 }
@@ -28,7 +29,7 @@ async function createCompany(req, res, next) {
 
 async function updateCompany(req, res, next) {
   try {
-    const company = await svc.updateCompany(req.params.id, req.body, req.user.id, req.ip, req.headers['user-agent'])
+    const company = await svc.updateCompany(req.params.id, req.body, req.user.id, req.ip, req.headers['user-agent'], req.user)
     res.json({ success: true, data: { company } })
   } catch (err) { next(err) }
 }
