@@ -25,6 +25,7 @@ function toDto(row) {
     reminderSentCount:  row.reminder_sent_count,
     lastReminderAt:     row.last_reminder_at ?? null,
     remindedEmail:      row.reminded_email ?? null,
+    contactEmail:       row.reminded_email ?? null,
     hasPublicLink:      !!row.public_token,
     publicToken:        row.public_token ?? null,
     tokenExpiresAt:     row.token_expires_at ?? null,
@@ -52,6 +53,7 @@ async function listClientRequests(filters = {}) {
   const {
     page = 1, limit = 20,
     companyId, taskId, requestedBy, status, deadlineDateFrom, deadlineDateTo,
+    search,
     sortBy = 'created_at', sortDir = 'desc',
   } = filters
 
@@ -69,6 +71,11 @@ async function listClientRequests(filters = {}) {
   }
   if (deadlineDateFrom) { params.push(deadlineDateFrom); conditions.push(`cdr.deadline_date >= $${params.length}`) }
   if (deadlineDateTo)   { params.push(deadlineDateTo);   conditions.push(`cdr.deadline_date <= $${params.length}`) }
+  if (search) {
+    const idx = params.length + 1
+    params.push(`%${search}%`)
+    conditions.push(`(cdr.document_name ILIKE $${idx} OR cdr.reminded_email ILIKE $${idx})`)
+  }
 
   const where = conditions.join(' AND ')
 
@@ -141,6 +148,7 @@ async function updateClientRequest(id, data) {
     deadlineDate:  'deadline_date',
     taskId:        'task_id',
     remindedEmail: 'reminded_email',
+    contactEmail:  'reminded_email',
     notes:         'notes',
   }
 
@@ -347,11 +355,11 @@ async function submitPublicForm(token, data) {
   }
 
   const submittedData = {
-    contact_name: data.contactName,
-    phone:        data.phone,
-    description:  data.description,
-    shared_link:  data.sharedLink,
-    notes:        data.notes ?? null,
+    contact_name:  data.contactName,
+    phone:         data.phone,
+    description:   data.description,
+    shared_links:  data.sharedLinks,
+    notes:         data.notes ?? null,
   }
 
   await query(

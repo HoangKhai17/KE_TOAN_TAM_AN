@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { getPublicForm, submitPublicForm } from '../../api/clientRequests'
 import s from './publicForm.module.css'
 
-const INIT = { contactName: '', phone: '', description: '', sharedLink: '', notes: '' }
+const INIT = { contactName: '', phone: '', description: '', notes: '' }
 
 export default function PublicForm() {
   const { token } = useParams()
@@ -12,6 +12,7 @@ export default function PublicForm() {
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState(null)   // 'not_found' | 'expired' | 'already_submitted'
   const [fields,      setFields]      = useState(INIT)
+  const [sharedLinks, setSharedLinks] = useState([''])   // array of link strings
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitting,  setSubmitting]  = useState(false)
   const [submitted,   setSubmitted]   = useState(false)
@@ -36,15 +37,34 @@ export default function PublicForm() {
     setFieldErrors((prev) => ({ ...prev, [name]: '' }))
   }
 
+  function handleLinkChange(idx, value) {
+    setSharedLinks((prev) => prev.map((l, i) => i === idx ? value : l))
+    setFieldErrors((prev) => ({ ...prev, [`link_${idx}`]: '' }))
+  }
+
+  function addLink() {
+    setSharedLinks((prev) => [...prev, ''])
+  }
+
+  function removeLink(idx) {
+    setSharedLinks((prev) => prev.filter((_, i) => i !== idx))
+  }
+
   function validate() {
     const errs = {}
     if (!fields.contactName.trim())  errs.contactName  = 'Vui lòng nhập tên liên hệ'
     if (!fields.phone.trim())        errs.phone        = 'Vui lòng nhập số điện thoại'
     if (!fields.description.trim())  errs.description  = 'Vui lòng mô tả tài liệu'
-    if (!fields.sharedLink.trim())   errs.sharedLink   = 'Vui lòng dán link chia sẻ'
-    else {
-      try { new URL(fields.sharedLink.trim()) }
-      catch { errs.sharedLink = 'Link không hợp lệ (phải bắt đầu bằng https://)' }
+
+    const validLinks = sharedLinks.filter((l) => l.trim())
+    if (validLinks.length === 0) {
+      errs.link_0 = 'Vui lòng dán ít nhất 1 link chia sẻ'
+    } else {
+      sharedLinks.forEach((link, idx) => {
+        if (!link.trim()) return
+        try { new URL(link.trim()) }
+        catch { errs[`link_${idx}`] = 'Link không hợp lệ (phải bắt đầu bằng https://)' }
+      })
     }
     return errs
   }
@@ -60,7 +80,7 @@ export default function PublicForm() {
         contactName: fields.contactName.trim(),
         phone:       fields.phone.trim(),
         description: fields.description.trim(),
-        sharedLink:  fields.sharedLink.trim(),
+        sharedLinks: sharedLinks.map((l) => l.trim()).filter(Boolean),
         notes:       fields.notes.trim() || null,
       })
       setSubmitted(true)
@@ -220,17 +240,62 @@ export default function PublicForm() {
               {fieldErrors.description && <p className={s.fieldErr}>{fieldErrors.description}</p>}
             </div>
 
+            {/* ── Multiple shared links ── */}
             <div className={s.field}>
-              <label className={s.label}>Link chia sẻ <span className={s.required}>*</span></label>
-              <input
-                className={`${s.input} ${fieldErrors.sharedLink ? s.inputError : ''}`}
-                name="sharedLink"
-                type="url"
-                value={fields.sharedLink}
-                onChange={handleChange}
-                placeholder="https://drive.google.com/..."
-              />
-              {fieldErrors.sharedLink && <p className={s.fieldErr}>{fieldErrors.sharedLink}</p>}
+              <label className={s.label}>
+                Link chia sẻ tài liệu <span className={s.required}>*</span>
+                <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>
+                  (có thể thêm nhiều link)
+                </span>
+              </label>
+
+              {sharedLinks.map((link, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      className={`${s.input} ${fieldErrors[`link_${idx}`] ? s.inputError : ''}`}
+                      type="url"
+                      value={link}
+                      onChange={(e) => handleLinkChange(idx, e.target.value)}
+                      placeholder={`https://drive.google.com/...${idx > 0 ? ` (tài liệu ${idx + 1})` : ''}`}
+                    />
+                    {fieldErrors[`link_${idx}`] && (
+                      <p className={s.fieldErr}>{fieldErrors[`link_${idx}`]}</p>
+                    )}
+                  </div>
+                  {sharedLinks.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeLink(idx)}
+                      style={{
+                        flexShrink: 0, marginTop: 1,
+                        padding: '8px 10px', borderRadius: 6,
+                        border: '1px solid #fca5a5', background: '#fff',
+                        color: '#ef4444', cursor: 'pointer', fontSize: 16,
+                        lineHeight: 1,
+                      }}
+                      title="Xoá link này"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {sharedLinks.length < 10 && (
+                <button
+                  type="button"
+                  onClick={addLink}
+                  style={{
+                    marginTop: 2, padding: '6px 12px', borderRadius: 6,
+                    border: '1px dashed #93c5fd', background: '#eff6ff',
+                    color: '#2563eb', cursor: 'pointer', fontSize: 12,
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>+</span> Thêm link tài liệu
+                </button>
+              )}
             </div>
 
             <div className={s.field}>
@@ -253,7 +318,7 @@ export default function PublicForm() {
           <div className={s.hint}>
             💡 <strong>Hướng dẫn:</strong> Upload tài liệu lên Google Drive / Zalo / Dropbox,
             sau đó copy link chia sẻ và dán vào ô "Link chia sẻ" phía trên.
-            Không cần upload file trực tiếp lên hệ thống này.
+            Nếu có nhiều tài liệu, nhấn "Thêm link tài liệu" để thêm.
           </div>
 
           <button

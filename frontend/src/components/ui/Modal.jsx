@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import s from './Modal.module.css'
 
-export default function Modal({ title, onClose, children, wide = false }) {
+export default function Modal({ title, onClose, children, wide = false, maxWidth }) {
   useEffect(() => {
     function handler(e) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handler)
@@ -13,6 +13,7 @@ export default function Modal({ title, onClose, children, wide = false }) {
       <div className={s.backdrop} onClick={onClose} />
       <div
         className={`${s.dialog} ${wide ? s.dialogWide : ''}`}
+        style={maxWidth ? { maxWidth } : undefined}
       >
         <div className={s.header}>
           <h3 className={s.title}>{title}</h3>

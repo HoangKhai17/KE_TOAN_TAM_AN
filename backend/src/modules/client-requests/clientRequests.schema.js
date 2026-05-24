@@ -32,11 +32,11 @@ const generateLinkSchema = z.object({
 })
 
 const submitPublicFormSchema = z.object({
-  contactName: z.string().min(1).max(150),
-  phone:       z.string().min(7).max(20),
-  description: z.string().min(1).max(2000),
-  sharedLink:  z.string().url('Invalid URL').max(500),
-  notes:       z.string().max(1000).optional().nullable(),
+  contactName:  z.string().min(1).max(150),
+  phone:        z.string().min(7).max(20),
+  description:  z.string().min(1).max(2000),
+  sharedLinks:  z.array(z.string().url('Invalid URL').max(500)).min(1).max(10),
+  notes:        z.string().max(1000).optional().nullable(),
 })
 
 module.exports = {

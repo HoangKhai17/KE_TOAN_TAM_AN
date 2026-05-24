@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Loader2, Trash2, AlertTriangle, Link2, Link2Off,
   CheckCircle2, XCircle, RotateCcw, Bell, Eye, Copy, Check,
-  ClipboardList, RefreshCw,
+  ClipboardList, RefreshCw, Search, ExternalLink, Filter,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -25,6 +25,22 @@ const STATUS_COLOR = {
   not_required: { bg: '#f8fafc', color: '#64748b', border: '#cbd5e1' },
   overdue:      { bg: '#fef2f2', color: '#b91c1c', border: '#fca5a5' },
 }
+
+const SORT_OPTIONS = [
+  { value: 'created_at:desc',    label: 'Mới nhất' },
+  { value: 'created_at:asc',     label: 'Cũ nhất' },
+  { value: 'deadline_date:asc',  label: 'Hạn nộp: Sớm nhất' },
+  { value: 'deadline_date:desc', label: 'Hạn nộp: Muộn nhất' },
+  { value: 'document_name:asc',  label: 'Tên A → Z' },
+]
+
+const STATUS_FILTERS = [
+  { key: '', label: 'Tất cả' },
+  { key: 'pending',      label: STATUS_LABEL.pending },
+  { key: 'overdue',      label: STATUS_LABEL.overdue },
+  { key: 'received',     label: STATUS_LABEL.received },
+  { key: 'not_required', label: STATUS_LABEL.not_required },
+]
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -56,33 +72,46 @@ export default function ClientRequestsTab({ company }) {
   const [loading, setLoading]       = useState(true)
   const [page, setPage]             = useState(1)
   const [statusFilter, setStatusFilter] = useState('')
+  const [searchQuery, setSearchQuery]   = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [sortFilter, setSortFilter]     = useState('created_at:desc')
 
   const [showCreate, setShowCreate] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting]     = useState(false)
 
-  const [linkTarget, setLinkTarget] = useState(null)   // CDR to generate/show link
+  const [linkTarget, setLinkTarget] = useState(null)
   const [generatingLink, setGeneratingLink] = useState(false)
   const [generatedUrl, setGeneratedUrl] = useState(null)
   const [copied, setCopied]         = useState(false)
 
-  const [viewSubmitted, setViewSubmitted] = useState(null)  // CDR with submitted data
+  const [viewSubmitted, setViewSubmitted] = useState(null)
   const [reminderTarget, setReminderTarget] = useState(null)
 
-  // action loading per-row
-  const [actionLoading, setActionLoading] = useState({}) // { [id]: 'receive'|'unreceive'|'dismiss'|'revoke' }
+  const [actionLoading, setActionLoading] = useState({})
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 350)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Reset page on filter change
+  useEffect(() => { setPage(1) }, [statusFilter, debouncedSearch, sortFilter])
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
+    const [sortBy, sortDir] = sortFilter.split(':')
     cdrApi.getClientRequests({
       companyId: company.id,
-      status: statusFilter || undefined,
+      status:    statusFilter || undefined,
+      search:    debouncedSearch || undefined,
       page,
       limit: 20,
-      sortBy: 'created_at',
-      sortDir: 'desc',
+      sortBy,
+      sortDir,
     })
       .then(({ items: it, pagination: p }) => {
         if (!cancelled) {
@@ -93,14 +122,12 @@ export default function ClientRequestsTab({ company }) {
       .catch(() => { if (!cancelled) setItems([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [company.id, statusFilter, page])
+  }, [company.id, statusFilter, debouncedSearch, sortFilter, page])
 
   useEffect(() => {
     const cancel = load()
     return cancel
   }, [load])
-
-  useEffect(() => { setPage(1) }, [statusFilter])
 
   // ── Row actions ──────────────────────────────────────────────────────────────
 
@@ -190,7 +217,6 @@ export default function ClientRequestsTab({ company }) {
     setGeneratingLink(true)
     try {
       const data = await cdrApi.generateLink(linkTarget.id, { expiresInDays: 30 })
-      // Backend returns { token, expiresAt, publicUrl }
       const url = `${window.location.origin}/public/form/${data.token}`
       setGeneratedUrl(url)
       setItems((prev) => prev.map((r) =>
@@ -218,14 +244,6 @@ export default function ClientRequestsTab({ company }) {
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
-
-  const STATUS_FILTERS = [
-    { key: '', label: 'Tất cả' },
-    { key: 'pending', label: STATUS_LABEL.pending },
-    { key: 'overdue', label: STATUS_LABEL.overdue },
-    { key: 'received', label: STATUS_LABEL.received },
-    { key: 'not_required', label: STATUS_LABEL.not_required },
-  ]
 
   return (
     <div>
@@ -256,17 +274,68 @@ export default function ClientRequestsTab({ company }) {
         </div>
       </div>
 
-      {/* Status filter chips */}
-      <div className={s.cTaskStatusRow} style={{ marginBottom: 12 }}>
-        {STATUS_FILTERS.map(({ key, label }) => (
+      {/* ── Filter panel ── */}
+      <div className={s.cTaskFilterPanel}>
+        <div className={s.cTaskFilterHead}>
+          <div className={s.cTaskFilterTitle}>
+            <Filter size={12} />
+            Bộ lọc
+            {(searchQuery || statusFilter || sortFilter !== 'created_at:desc') && (
+              <span className={s.cTaskFilterBadge}>
+                {[searchQuery, statusFilter, sortFilter !== 'created_at:desc' ? '1' : ''].filter(Boolean).length} đang bật
+              </span>
+            )}
+          </div>
           <button
-            key={key}
-            className={`${s.cTaskStatusChip} ${statusFilter === key ? s.cTaskStatusChipActive : ''}`}
-            onClick={() => setStatusFilter(key)}
+            className={s.cTaskFilterReset}
+            onClick={() => { setSearchQuery(''); setStatusFilter(''); setSortFilter('created_at:desc') }}
           >
-            <span>{label}</span>
+            <RotateCcw size={11} /> Đặt lại
           </button>
-        ))}
+        </div>
+
+        <div className={s.cTaskFilterGrid}>
+          {/* Sắp xếp */}
+          <div className={s.cTaskFilterGroup}>
+            <label className={s.cTaskFilterLabel}>Sắp xếp</label>
+            <select
+              className={s.cTaskFilterSelect}
+              value={sortFilter}
+              onChange={(e) => setSortFilter(e.target.value)}
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Từ khoá */}
+          <div className={`${s.cTaskFilterGroup} ${s.cTaskFilterGroupGrow}`}>
+            <label className={s.cTaskFilterLabel}>Từ khoá</label>
+            <div className={s.searchWrap}>
+              <Search size={12} className={s.searchIcon} />
+              <input
+                className={`${s.cTaskFilterInput} ${s.cTaskFilterInputWithIcon}`}
+                placeholder="Tìm tên tài liệu, email khách hàng..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Status chips row */}
+        <div className={s.cTaskStatusRow} style={{ padding: '0 14px 10px', marginBottom: 0 }}>
+          {STATUS_FILTERS.map(({ key, label }) => (
+            <button
+              key={key}
+              className={`${s.cTaskStatusChip} ${statusFilter === key ? s.cTaskStatusChipActive : ''}`}
+              onClick={() => setStatusFilter(key)}
+            >
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Table */}
@@ -277,18 +346,19 @@ export default function ClientRequestsTab({ company }) {
               <tr>
                 <th style={{ minWidth: 200 }}>Tài liệu yêu cầu</th>
                 <th style={{ width: 110 }}>Trạng thái</th>
+                <th style={{ width: 80, textAlign: 'center' }}>Dữ liệu KH</th>
                 <th style={{ width: 120 }}>Kỳ</th>
                 <th style={{ width: 100 }}>Hạn nộp</th>
                 <th style={{ width: 160 }}>Email KH</th>
-                <th style={{ width: 80, textAlign: 'center' }}>Link</th>
-                <th style={{ width: 120 }} />
+                <th style={{ width: 60, textAlign: 'center' }}>Link</th>
+                <th style={{ width: 130 }} />
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {[200, 100, 100, 90, 150, 60, 100].map((w, j) => (
+                    {[200, 100, 60, 100, 90, 150, 50, 110].map((w, j) => (
                       <td key={j}>
                         <div style={{ height: 12, width: w, background: '#f1f5f9', borderRadius: 4 }} />
                       </td>
@@ -297,11 +367,13 @@ export default function ClientRequestsTab({ company }) {
                 ))
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 16px', gap: 8, color: '#94a3b8' }}>
                       <ClipboardList size={32} />
                       <span style={{ fontSize: 13 }}>
-                        {statusFilter ? 'Không có yêu cầu nào ở trạng thái này' : 'Chưa có yêu cầu tài liệu nào'}
+                        {statusFilter || debouncedSearch
+                          ? 'Không tìm thấy yêu cầu nào phù hợp'
+                          : 'Chưa có yêu cầu tài liệu nào'}
                       </span>
                     </div>
                   </td>
@@ -322,17 +394,33 @@ export default function ClientRequestsTab({ company }) {
                         </div>
                       )}
                     </td>
+
+                    {/* Trạng thái */}
                     <td>
                       <StatusBadge status={item.status} />
-                      {hasSubmitted && (
+                    </td>
+
+                    {/* Dữ liệu KH */}
+                    <td style={{ textAlign: 'center' }}>
+                      {hasSubmitted ? (
                         <button
-                          style={{ display: 'block', marginTop: 3, fontSize: 10, color: '#2563eb', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
                           onClick={() => setViewSubmitted(item)}
+                          title="Xem dữ liệu khách hàng đã gửi"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '3px 9px', borderRadius: 12, border: 'none',
+                            background: '#eff6ff', color: '#2563eb',
+                            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
                         >
-                          Xem dữ liệu KH
+                          <Eye size={11} /> Xem
                         </button>
+                      ) : (
+                        <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>
                       )}
                     </td>
+
                     <td style={{ fontSize: 12, color: '#64748b' }}>
                       {item.periodLabel || '—'}
                     </td>
@@ -342,6 +430,8 @@ export default function ClientRequestsTab({ company }) {
                     <td style={{ fontSize: 12, color: '#64748b' }}>
                       {item.contactEmail || '—'}
                     </td>
+
+                    {/* Link */}
                     <td style={{ textAlign: 'center' }}>
                       {hasToken ? (
                         <button
@@ -363,9 +453,10 @@ export default function ClientRequestsTab({ company }) {
                         </button>
                       )}
                     </td>
+
+                    {/* Actions */}
                     <td>
                       <div style={{ display: 'flex', gap: 3, justifyContent: 'flex-end' }}>
-                        {/* Edit */}
                         <button
                           className={s.rowActionBtn}
                           title="Chỉnh sửa"
@@ -375,7 +466,6 @@ export default function ClientRequestsTab({ company }) {
                           <Eye size={13} />
                         </button>
 
-                        {/* Receive */}
                         {(item.status === 'pending' || item.status === 'overdue') && (
                           <button
                             className={s.rowActionBtn}
@@ -388,7 +478,6 @@ export default function ClientRequestsTab({ company }) {
                           </button>
                         )}
 
-                        {/* Unreceive */}
                         {item.status === 'received' && (
                           <button
                             className={s.rowActionBtn}
@@ -400,7 +489,6 @@ export default function ClientRequestsTab({ company }) {
                           </button>
                         )}
 
-                        {/* Dismiss */}
                         {(item.status === 'pending' || item.status === 'overdue') && (
                           <button
                             className={s.rowActionBtn}
@@ -412,7 +500,6 @@ export default function ClientRequestsTab({ company }) {
                           </button>
                         )}
 
-                        {/* Revoke link */}
                         {hasToken && (item.status === 'pending' || item.status === 'overdue') && (
                           <button
                             className={s.rowActionBtn}
@@ -425,7 +512,6 @@ export default function ClientRequestsTab({ company }) {
                           </button>
                         )}
 
-                        {/* Remind */}
                         {item.contactEmail && (item.status === 'pending' || item.status === 'overdue') && (
                           <button
                             className={s.rowActionBtn}
@@ -437,7 +523,6 @@ export default function ClientRequestsTab({ company }) {
                           </button>
                         )}
 
-                        {/* Delete */}
                         {isAdmin && (
                           <button
                             className={`${s.rowActionBtn} ${s.rowActionDanger}`}
@@ -457,15 +542,20 @@ export default function ClientRequestsTab({ company }) {
           </table>
         </div>
 
-        {/* Pagination */}
-        {pagination.totalPages > 1 && (
+        {/* Pagination — always show when items exist */}
+        {!loading && pagination.total > 0 && (
           <div className={s.paginationBar} style={{ marginTop: 8 }}>
-            <span className={s.paginationInfo}>{pagination.total} yêu cầu</span>
-            <div className={s.paginationBtns}>
-              <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
-              <span style={{ fontSize: 12, padding: '0 8px', color: 'var(--color-muted)' }}>{page} / {pagination.totalPages}</span>
-              <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
-            </div>
+            <span className={s.paginationInfo}>
+              {pagination.total} yêu cầu
+              {pagination.totalPages > 1 && ` · Trang ${page}/${pagination.totalPages}`}
+            </span>
+            {pagination.totalPages > 1 && (
+              <div className={s.paginationBtns}>
+                <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
+                <span style={{ fontSize: 12, padding: '0 8px', color: 'var(--color-muted)' }}>{page} / {pagination.totalPages}</span>
+                <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -581,7 +671,7 @@ function CdrFormModal({ company, initial, onClose, onSaved }) {
           description:  form.description.trim() || null,
           deadlineDate: form.deadlineDate || null,
           periodLabel:  form.periodLabel.trim() || null,
-          contactEmail: form.contactEmail.trim() || null,
+          remindedEmail: form.contactEmail.trim() || null,
         })
       }
       onSaved(saved)
@@ -732,17 +822,46 @@ function LinkModal({ item, generatedUrl, generating, copied, onGenerate, onCopy,
 
 // ── SubmittedDataModal ────────────────────────────────────────────────────────
 
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      /* silent */
+    }
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copy"
+      style={{
+        flexShrink: 0, padding: '3px 8px', borderRadius: 5,
+        border: '1px solid #e2e8f0', background: copied ? '#f0fdf4' : '#f8fafc',
+        color: copied ? '#16a34a' : '#64748b', cursor: 'pointer', fontSize: 11,
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        transition: 'all 0.15s',
+      }}
+    >
+      {copied ? <Check size={11} /> : <Copy size={11} />}
+      {copied ? 'Đã copy' : 'Copy'}
+    </button>
+  )
+}
+
 function SubmittedDataModal({ item, onClose }) {
-  // DB stores JSONB with snake_case keys: contact_name, phone, description, shared_link, notes
   const data = item.tokenSubmittedData ?? {}
 
-  const fields = [
-    { label: 'Tên liên hệ',    value: data.contact_name ?? data.contactName, icon: '👤' },
-    { label: 'Số điện thoại',  value: data.phone,                            icon: '📞' },
-    { label: 'Mô tả tài liệu', value: data.description,                      icon: '📄', multiline: true },
-    { label: 'Link chia sẻ',   value: data.shared_link ?? data.sharedLink,   icon: '🔗', isLink: true },
-    { label: 'Ghi chú thêm',   value: data.notes,                            icon: '💬', multiline: true },
-  ]
+  // Support both new format (shared_links: []) and old format (shared_link: string)
+  const sharedLinks = Array.isArray(data.shared_links)
+    ? data.shared_links.filter(Boolean)
+    : data.shared_link
+      ? [data.shared_link]
+      : []
 
   const submittedAt = item.tokenSubmittedAt
     ? new Date(item.tokenSubmittedAt).toLocaleString('vi-VN', {
@@ -752,7 +871,7 @@ function SubmittedDataModal({ item, onClose }) {
     : null
 
   return (
-    <Modal title="Dữ liệu khách hàng đã gửi" onClose={onClose}>
+    <Modal title="Dữ liệu khách hàng đã gửi" onClose={onClose} maxWidth={660}>
       <div className={s.modalStack}>
 
         {/* Meta header */}
@@ -773,57 +892,89 @@ function SubmittedDataModal({ item, onClose }) {
           </div>
         </div>
 
-        {/* Fields */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {fields.map((f) => {
-            const isEmpty = !f.value
-            return (
-              <div key={f.label} style={{
-                padding: '11px 0',
-                borderBottom: '1px solid #f1f5f9',
-                display: 'grid',
-                gridTemplateColumns: '140px 1fr',
-                gap: '8px 12px',
-                alignItems: 'start',
-              }}>
-                {/* Label */}
+        {/* Simple text fields */}
+        {[
+          { label: 'Tên liên hệ',    value: data.contact_name ?? data.contactName, icon: '👤' },
+          { label: 'Số điện thoại',  value: data.phone,                            icon: '📞' },
+          { label: 'Mô tả tài liệu', value: data.description,                      icon: '📄', multiline: true },
+          { label: 'Ghi chú thêm',   value: data.notes,                            icon: '💬', multiline: true },
+        ].map((f) => (
+          <div key={f.label} style={{
+            padding: '10px 0',
+            borderBottom: '1px solid #f1f5f9',
+            display: 'grid',
+            gridTemplateColumns: '140px 1fr',
+            gap: '8px 12px',
+            alignItems: 'start',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, paddingTop: 1 }}>
+              <span style={{ fontSize: 13 }}>{f.icon}</span>
+              {f.label}
+            </div>
+            {!f.value ? (
+              <span style={{ fontSize: 13, color: '#cbd5e1', fontStyle: 'italic' }}>Không có</span>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{
-                  fontSize: 12, fontWeight: 600, color: '#64748b',
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  paddingTop: 1,
+                  fontSize: 13, color: '#1e293b', flex: 1,
+                  whiteSpace: f.multiline ? 'pre-wrap' : 'normal',
+                  wordBreak: 'break-word', lineHeight: 1.6,
                 }}>
-                  <span style={{ fontSize: 13 }}>{f.icon}</span>
-                  {f.label}
+                  {f.value}
                 </div>
+                <CopyButton text={f.value} />
+              </div>
+            )}
+          </div>
+        ))}
 
-                {/* Value */}
-                {isEmpty ? (
-                  <span style={{ fontSize: 13, color: '#cbd5e1', fontStyle: 'italic' }}>Không có</span>
-                ) : f.isLink ? (
+        {/* Links — support multiple */}
+        <div style={{
+          padding: '10px 0',
+          display: 'grid',
+          gridTemplateColumns: '140px 1fr',
+          gap: '8px 12px',
+          alignItems: 'start',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, paddingTop: 1 }}>
+            <span style={{ fontSize: 13 }}>🔗</span>
+            Link chia sẻ
+            {sharedLinks.length > 1 && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, background: '#dbeafe',
+                color: '#1d4ed8', padding: '1px 6px', borderRadius: 10,
+              }}>
+                {sharedLinks.length}
+              </span>
+            )}
+          </div>
+          {sharedLinks.length === 0 ? (
+            <span style={{ fontSize: 13, color: '#cbd5e1', fontStyle: 'italic' }}>Không có</span>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sharedLinks.map((link, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {sharedLinks.length > 1 && (
+                    <span style={{ fontSize: 11, color: '#94a3b8', minWidth: 18 }}>#{idx + 1}</span>
+                  )}
                   <a
-                    href={f.value}
+                    href={link}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                      fontSize: 13, color: '#2563eb',
+                      fontSize: 12, color: '#2563eb', flex: 1,
                       wordBreak: 'break-all', lineHeight: 1.5,
-                      textDecoration: 'underline',
+                      textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: 4,
                     }}
                   >
-                    {f.value}
+                    {link}
+                    <ExternalLink size={10} style={{ flexShrink: 0 }} />
                   </a>
-                ) : (
-                  <div style={{
-                    fontSize: 13, color: '#1e293b',
-                    whiteSpace: f.multiline ? 'pre-wrap' : 'normal',
-                    wordBreak: 'break-word', lineHeight: 1.6,
-                  }}>
-                    {f.value}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+                  <CopyButton text={link} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className={s.modalActions}>
