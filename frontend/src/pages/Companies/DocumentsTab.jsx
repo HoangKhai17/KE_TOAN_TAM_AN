@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
-  FileText, Upload, Trash2, ExternalLink, Loader2,
-  Filter, RotateCcw, File, FileSpreadsheet, Image,
-  AlertTriangle, FolderOpen,
+  Link2, Plus, Trash2, ExternalLink, Loader2,
+  Filter, RotateCcw, FolderOpen, AlertTriangle,
+  Pencil, Check, X,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -18,45 +18,176 @@ const CATEGORIES = [
   { key: 'giay_phep',   label: 'Giấy phép' },
   { key: 'khac',        label: 'Khác' },
 ]
-
 const CAT_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]))
-
-const MIME_ICONS = {
-  'application/pdf': FileText,
-  'application/msword': FileText,
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': FileText,
-  'application/vnd.ms-excel': FileSpreadsheet,
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': FileSpreadsheet,
-  'image/jpeg': Image,
-  'image/png': Image,
-}
-
-const MIME_COLORS = {
-  'application/pdf': '#dc2626',
-  'application/msword': '#2563eb',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '#2563eb',
-  'application/vnd.ms-excel': '#16a34a',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '#16a34a',
-  'image/jpeg': '#d97706',
-  'image/png': '#d97706',
-}
-
-function fmtSize(bytes) {
-  if (!bytes) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 function fmtDate(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-function FileIcon({ mimeType, size = 16 }) {
-  const Icon  = MIME_ICONS[mimeType]  ?? File
-  const color = MIME_COLORS[mimeType] ?? '#6b7280'
-  return <Icon size={size} color={color} style={{ flexShrink: 0 }} />
+function isValidUrl(str) {
+  try { return /^https?:\/\//i.test(str) && Boolean(new URL(str)) }
+  catch { return false }
+}
+
+// ── AddLinkForm ────────────────────────────────────────────────────────────────
+
+function AddLinkForm({ onSave, onCancel, saving }) {
+  const [name, setName]           = useState('')
+  const [url, setUrl]             = useState('')
+  const [category, setCategory]   = useState('khac')
+  const [description, setDesc]    = useState('')
+  const [errors, setErrors]       = useState({})
+
+  function validate() {
+    const e = {}
+    if (!name.trim()) e.name = 'Tên tài liệu không được để trống'
+    if (!url.trim()) e.url = 'URL không được để trống'
+    else if (!isValidUrl(url.trim())) e.url = 'URL không hợp lệ — phải bắt đầu bằng http:// hoặc https://'
+    return e
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const e2 = validate()
+    if (Object.keys(e2).length) { setErrors(e2); return }
+    onSave({ name: name.trim(), url: url.trim(), category, description: description.trim() || undefined })
+  }
+
+  return (
+    <div className={s.addLinkForm}>
+      <p className={s.addLinkFormTitle}>Thêm link tài liệu</p>
+      <form onSubmit={handleSubmit}>
+        <div className={s.addLinkFormGrid}>
+          <div>
+            <label className={s.addLinkFormLabel}>Tên tài liệu <span>*</span></label>
+            <input
+              className={`${s.addLinkFormInput} ${errors.name ? s.addLinkFormInputError : ''}`}
+              placeholder="VD: Hợp đồng dịch vụ 2024"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setErrors((prev) => ({ ...prev, name: '' })) }}
+            />
+            {errors.name && <p className={s.addLinkFormError}>{errors.name}</p>}
+          </div>
+          <div>
+            <label className={s.addLinkFormLabel}>Danh mục</label>
+            <select
+              className={s.addLinkFormInput}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className={s.addLinkFormFull}>
+            <label className={s.addLinkFormLabel}>URL <span>*</span></label>
+            <input
+              className={`${s.addLinkFormInput} ${errors.url ? s.addLinkFormInputError : ''}`}
+              placeholder="https://docs.google.com/... hoặc OneDrive share link"
+              value={url}
+              onChange={(e) => { setUrl(e.target.value); setErrors((prev) => ({ ...prev, url: '' })) }}
+            />
+            {errors.url && <p className={s.addLinkFormError}>{errors.url}</p>}
+          </div>
+          <div className={s.addLinkFormFull}>
+            <label className={s.addLinkFormLabel}>Mô tả <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>(tùy chọn)</span></label>
+            <textarea
+              className={`${s.addLinkFormInput} ${s.addLinkFormTextarea}`}
+              placeholder="Ghi chú về tài liệu này..."
+              value={description}
+              onChange={(e) => setDesc(e.target.value)}
+              rows={2}
+            />
+          </div>
+        </div>
+        <div className={s.addLinkFormActions}>
+          <button type="button" className={s.btnOutline} onClick={onCancel} disabled={saving}>Huỷ</button>
+          <button type="submit" className={s.btnPrimary} disabled={saving}>
+            {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />}
+            {saving ? 'Đang lưu...' : 'Lưu link'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// ── EditLinkForm ───────────────────────────────────────────────────────────────
+
+function EditLinkForm({ doc, onSave, onCancel, saving }) {
+  const [name, setName]         = useState(doc.name)
+  const [url, setUrl]           = useState(doc.url)
+  const [category, setCategory] = useState(doc.category)
+  const [description, setDesc]  = useState(doc.description ?? '')
+  const [errors, setErrors]     = useState({})
+
+  function validate() {
+    const e = {}
+    if (!name.trim()) e.name = 'Tên không được để trống'
+    if (!url.trim()) e.url = 'URL không được để trống'
+    else if (!isValidUrl(url.trim())) e.url = 'URL không hợp lệ'
+    return e
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const e2 = validate()
+    if (Object.keys(e2).length) { setErrors(e2); return }
+    onSave({ name: name.trim(), url: url.trim(), category, description: description.trim() || null })
+  }
+
+  return (
+    <div className={s.docEditRow}>
+      <form onSubmit={handleSubmit}>
+        <div className={s.addLinkFormGrid}>
+          <div>
+            <label className={s.addLinkFormLabel}>Tên tài liệu <span>*</span></label>
+            <input
+              className={`${s.addLinkFormInput} ${errors.name ? s.addLinkFormInputError : ''}`}
+              value={name}
+              onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })) }}
+            />
+            {errors.name && <p className={s.addLinkFormError}>{errors.name}</p>}
+          </div>
+          <div>
+            <label className={s.addLinkFormLabel}>Danh mục</label>
+            <select
+              className={s.addLinkFormInput}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className={s.addLinkFormFull}>
+            <label className={s.addLinkFormLabel}>URL <span>*</span></label>
+            <input
+              className={`${s.addLinkFormInput} ${errors.url ? s.addLinkFormInputError : ''}`}
+              value={url}
+              onChange={(e) => { setUrl(e.target.value); setErrors((p) => ({ ...p, url: '' })) }}
+            />
+            {errors.url && <p className={s.addLinkFormError}>{errors.url}</p>}
+          </div>
+          <div className={s.addLinkFormFull}>
+            <label className={s.addLinkFormLabel}>Mô tả</label>
+            <textarea
+              className={`${s.addLinkFormInput} ${s.addLinkFormTextarea}`}
+              value={description}
+              onChange={(e) => setDesc(e.target.value)}
+              rows={2}
+            />
+          </div>
+        </div>
+        <div className={s.addLinkFormActions}>
+          <button type="button" className={s.btnOutline} onClick={onCancel} disabled={saving}>Huỷ</button>
+          <button type="submit" className={s.btnPrimary} disabled={saving}>
+            {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />}
+            {saving ? 'Đang lưu...' : 'Cập nhật'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
 }
 
 // ── DocumentsTab ───────────────────────────────────────────────────────────────
@@ -64,19 +195,18 @@ function FileIcon({ mimeType, size = 16 }) {
 export default function DocumentsTab({ company }) {
   const isAdmin  = useAuthStore((st) => st.user?.role === 'admin')
   const addToast = useToastStore((st) => st.toast)
-  const fileRef  = useRef(null)
 
-  const [docs, setDocs]           = useState([])
+  const [docs, setDocs]             = useState([])
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
-  const [loading, setLoading]     = useState(true)
-  const [page, setPage]           = useState(1)
-  const [category, setCategory]   = useState('')
-  const [uploading, setUploading] = useState(false)
-  const [uploadCat, setUploadCat] = useState('khac')
-  const [dragOver, setDragOver]   = useState(false)
+  const [loading, setLoading]       = useState(true)
+  const [page, setPage]             = useState(1)
+  const [category, setCategory]     = useState('')
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [editingId, setEditingId]   = useState(null)
+  const [editSaving, setEditSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const [deleting, setDeleting]   = useState(false)
-  const [openingId, setOpeningId] = useState(null)
+  const [deleting, setDeleting]     = useState(false)
 
   const load = useCallback(() => {
     let cancelled = false
@@ -95,21 +225,32 @@ export default function DocumentsTab({ company }) {
     return cancel
   }, [load])
 
-  async function handleUpload(files) {
-    if (!files?.length) return
-    const file = files[0]
-    setUploading(true)
+  async function handleAdd(data) {
+    setSaving(true)
     try {
-      const doc = await documentsApi.uploadDocument(company.id, file, { category: uploadCat })
-      addToast(`Đã upload "${doc.fileName}"`, 'success')
+      await documentsApi.addDocumentLink(company.id, data)
+      addToast(`Đã thêm link "${data.name}"`, 'success')
+      setShowAddForm(false)
       setPage(1)
       load()
     } catch (err) {
-      const msg = err.response?.data?.error?.message ?? err.message ?? 'Upload thất bại'
-      addToast(msg, 'error')
+      addToast(err.response?.data?.error?.message ?? 'Không thể thêm link', 'error')
     } finally {
-      setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
+      setSaving(false)
+    }
+  }
+
+  async function handleEdit(doc, data) {
+    setEditSaving(true)
+    try {
+      await documentsApi.updateDocumentLink(company.id, doc.id, data)
+      addToast('Đã cập nhật tài liệu', 'success')
+      setEditingId(null)
+      load()
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -118,7 +259,7 @@ export default function DocumentsTab({ company }) {
     setDeleting(true)
     try {
       await documentsApi.deleteDocument(company.id, deleteTarget.id)
-      addToast(`Đã xoá "${deleteTarget.fileName}"`, 'success')
+      addToast(`Đã xoá "${deleteTarget.name}"`, 'success')
       setDeleteTarget(null)
       if (docs.length === 1 && page > 1) setPage((p) => p - 1)
       else load()
@@ -129,72 +270,23 @@ export default function DocumentsTab({ company }) {
     }
   }
 
-  async function handleOpen(doc) {
-    setOpeningId(doc.id)
-    try {
-      const url = await documentsApi.getLinkUrl(company.id, doc.id)
-      window.open(url, '_blank', 'noopener,noreferrer')
-    } catch {
-      addToast('Không thể lấy link tài liệu', 'error')
-    } finally {
-      setOpeningId(null)
-    }
-  }
-
-  function onDrop(e) {
-    e.preventDefault()
-    setDragOver(false)
-    handleUpload(e.dataTransfer.files)
-  }
-
   return (
     <div>
-      {/* Upload zone */}
-      <div
-        className={`${s.dropZone} ${dragOver ? s.dropZoneActive : ''}`}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        onClick={() => !uploading && fileRef.current?.click()}
-      >
-        <input
-          ref={fileRef}
-          type="file"
-          style={{ display: 'none' }}
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.txt"
-          onChange={(e) => handleUpload(e.target.files)}
+      {/* Add link button / form */}
+      {!showAddForm ? (
+        <button className={s.addLinkBtn} onClick={() => setShowAddForm(true)}>
+          <Plus size={14} />
+          Thêm link tài liệu
+        </button>
+      ) : (
+        <AddLinkForm
+          onSave={handleAdd}
+          onCancel={() => setShowAddForm(false)}
+          saving={saving}
         />
-        {uploading ? (
-          <div className={s.dropZoneContent}>
-            <Loader2 size={28} className={s.spin} color="#2563eb" />
-            <p className={s.dropZoneText}>Đang upload lên OneDrive...</p>
-          </div>
-        ) : (
-          <div className={s.dropZoneContent}>
-            <Upload size={28} color="#2563eb" style={{ opacity: 0.7 }} />
-            <p className={s.dropZoneText}>
-              Kéo thả file vào đây hoặc <span className={s.dropZoneLink}>chọn file</span>
-            </p>
-            <p className={s.dropZoneHint}>PDF, Word, Excel, JPG, PNG — tối đa 20MB</p>
-          </div>
-        )}
-      </div>
+      )}
 
-      {/* Upload category select */}
-      <div className={s.uploadMeta}>
-        <span className={s.uploadMetaLabel}>Danh mục khi upload:</span>
-        <select
-          value={uploadCat}
-          onChange={(e) => setUploadCat(e.target.value)}
-          className={s.uploadCatSelect}
-        >
-          {CATEGORIES.map((c) => (
-            <option key={c.key} value={c.key}>{c.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Filter bar */}
+      {/* Category filter */}
       <div className={s.docFilterBar}>
         <Filter size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
         <span className={s.docFilterLabel}>Danh mục:</span>
@@ -234,42 +326,55 @@ export default function DocumentsTab({ company }) {
             <p>{category ? 'Không có tài liệu trong danh mục này' : 'Chưa có tài liệu nào'}</p>
           </div>
         ) : docs.map((doc) => (
-          <div key={doc.id} className={s.docRow}>
-            <div className={s.docFileIcon}>
-              <FileIcon mimeType={doc.mimeType} size={18} />
-            </div>
-            <div className={s.docInfo}>
-              <div className={s.docFileName}>{doc.fileName}</div>
-              <div className={s.docMeta}>
-                <span className={s.docCatPill}>{CAT_LABEL[doc.category] ?? doc.category}</span>
-                {doc.sizeBytes && <span>{fmtSize(doc.sizeBytes)}</span>}
-                <span>{fmtDate(doc.createdAt)}</span>
-                {doc.uploaderName && <span>bởi {doc.uploaderName}</span>}
+          editingId === doc.id ? (
+            <EditLinkForm
+              key={doc.id}
+              doc={doc}
+              onSave={(data) => handleEdit(doc, data)}
+              onCancel={() => setEditingId(null)}
+              saving={editSaving}
+            />
+          ) : (
+            <div key={doc.id} className={s.docRow}>
+              <div className={s.docLinkIcon}>
+                <Link2 size={15} color="#2563eb" />
+              </div>
+              <div className={s.docInfo}>
+                <div className={s.docFileName}>{doc.name}</div>
+                <div className={s.docMeta}>
+                  <span className={s.docCatPill}>{CAT_LABEL[doc.category] ?? doc.category}</span>
+                  <span>{fmtDate(doc.createdAt)}</span>
+                  {doc.addedByName && <span>bởi {doc.addedByName}</span>}
+                </div>
+                {doc.description && <div className={s.docDescription}>{doc.description}</div>}
+              </div>
+              <div className={s.docActions}>
+                <button
+                  className={s.docActionBtn}
+                  title="Mở link"
+                  onClick={() => window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                >
+                  <ExternalLink size={13} />
+                </button>
+                <button
+                  className={s.docActionBtn}
+                  title="Chỉnh sửa"
+                  onClick={() => setEditingId(doc.id)}
+                >
+                  <Pencil size={13} />
+                </button>
+                {isAdmin && (
+                  <button
+                    className={`${s.docActionBtn} ${s.docActionDanger}`}
+                    title="Xoá tài liệu"
+                    onClick={() => setDeleteTarget(doc)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             </div>
-            <div className={s.docActions}>
-              <button
-                className={s.docActionBtn}
-                title="Mở trên OneDrive"
-                onClick={() => handleOpen(doc)}
-                disabled={openingId === doc.id}
-              >
-                {openingId === doc.id
-                  ? <Loader2 size={13} className={s.spin} />
-                  : <ExternalLink size={13} />
-                }
-              </button>
-              {isAdmin && (
-                <button
-                  className={`${s.docActionBtn} ${s.docActionDanger}`}
-                  title="Xoá tài liệu"
-                  onClick={() => setDeleteTarget(doc)}
-                >
-                  <Trash2 size={13} />
-                </button>
-              )}
-            </div>
-          </div>
+          )
         ))}
       </div>
 
@@ -296,7 +401,7 @@ export default function DocumentsTab({ company }) {
             <div className={s.terminateWarn} style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
               <AlertTriangle size={16} style={{ flexShrink: 0, color: '#dc2626' }} />
               <span style={{ fontSize: 13 }}>
-                Xoá <strong>"{deleteTarget.fileName}"</strong> khỏi OneDrive và hệ thống?
+                Xoá link tài liệu <strong>"{deleteTarget.name}"</strong>?
                 Hành động này không thể hoàn tác.
               </span>
             </div>
@@ -304,7 +409,7 @@ export default function DocumentsTab({ company }) {
               <button onClick={() => setDeleteTarget(null)} className={s.btnOutline}>Huỷ</button>
               <button onClick={handleDelete} disabled={deleting} className={s.btnDanger}>
                 {deleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
-                {deleting ? 'Đang xoá...' : 'Xoá tài liệu'}
+                {deleting ? 'Đang xoá...' : 'Xoá'}
               </button>
             </div>
           </div>

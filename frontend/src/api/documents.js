@@ -5,24 +5,22 @@ export async function listDocuments(companyId, params = {}) {
   return data.data  // { documents, pagination }
 }
 
-export async function uploadDocument(companyId, file, { category = 'khac', taskId } = {}) {
-  const form = new FormData()
-  form.append('file', file)
-  form.append('category', category)
-  if (taskId) form.append('taskId', taskId)
-  const { data } = await api.post(`/companies/${companyId}/documents`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+export async function addDocumentLink(companyId, { name, url, category = 'khac', description, taskId } = {}) {
+  const { data } = await api.post(`/companies/${companyId}/documents`, {
+    name, url, category,
+    description: description || undefined,
+    taskId:      taskId      || undefined,
   })
+  return data.data.document
+}
+
+export async function updateDocumentLink(companyId, documentId, updates) {
+  const { data } = await api.patch(`/companies/${companyId}/documents/${documentId}`, updates)
   return data.data.document
 }
 
 export async function deleteDocument(companyId, documentId) {
   await api.delete(`/companies/${companyId}/documents/${documentId}`)
-}
-
-export async function getLinkUrl(companyId, documentId) {
-  const { data } = await api.get(`/companies/${companyId}/documents/${documentId}/link`)
-  return data.data.url
 }
 
 export async function attachToTask(companyId, documentId, taskId) {

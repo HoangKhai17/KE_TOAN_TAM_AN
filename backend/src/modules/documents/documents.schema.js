@@ -3,30 +3,23 @@ const { z } = require('zod')
 // Values must match the document_category PostgreSQL enum in 001_create_enums.sql
 const ALLOWED_CATEGORIES = ['hop_dong', 'bao_cao_thue', 'so_sach', 'giay_phep', 'khac']
 
-const ALLOWED_MIME_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'image/jpeg', 'image/png',
-  'text/plain',
-]
+const addLinkSchema = z.object({
+  name:        z.string().min(1, 'Tên tài liệu không được để trống').max(300),
+  url:         z.string().url('URL không hợp lệ — phải bắt đầu bằng http:// hoặc https://'),
+  category:    z.enum(ALLOWED_CATEGORIES).default('khac'),
+  description: z.string().max(1000).optional().nullable(),
+  taskId:      z.string().uuid().optional().nullable(),
+})
 
-const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.txt']
-
-const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
-
-const uploadDocumentSchema = z.object({
-  category: z.enum(ALLOWED_CATEGORIES).default('khac'),
-  taskId:   z.string().uuid().optional().nullable(),
+const updateLinkSchema = z.object({
+  name:        z.string().min(1).max(300).optional(),
+  url:         z.string().url('URL không hợp lệ').optional(),
+  category:    z.enum(ALLOWED_CATEGORIES).optional(),
+  description: z.string().max(1000).optional().nullable(),
 })
 
 const attachDocumentSchema = z.object({
   taskId: z.string().uuid('Invalid task ID'),
 })
 
-module.exports = {
-  uploadDocumentSchema, attachDocumentSchema,
-  ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE,
-}
+module.exports = { addLinkSchema, updateLinkSchema, attachDocumentSchema, ALLOWED_CATEGORIES }

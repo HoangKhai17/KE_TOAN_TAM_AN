@@ -785,52 +785,58 @@ src/jobs/taskGenerator.job.js
 
 ---
 
-## PHASE 11 — Document Management (OneDrive)
+## PHASE 11 — Document Link Storage ✅
 
-**Mục tiêu:** Upload/download tài liệu KH qua Microsoft Graph API. File lưu trên OneDrive, DB chỉ lưu metadata.
+> **Revised (2026-05-24):** Sau khi trao đổi với khách hàng, yêu cầu thực tế là lưu **link tài liệu** từ bất kỳ dịch vụ cloud nào (OneDrive share link, Google Docs, Google Sheets, Dropbox,...). Không cần upload file lên server hay Azure — đơn giản hơn, không phụ thuộc một nhà cung cấp cụ thể.
 
-### 11.1 Microsoft Graph API Setup
+**Mục tiêu:** Lưu trữ và quản lý link tài liệu của khách hàng. DB lưu metadata (tên, URL, danh mục, mô tả).
 
-- [ ] Đăng ký Azure App Registration:
-  - Tenant: Microsoft 365 của Tâm An
-  - Permissions: `Files.ReadWrite.All` (application permission — không cần user login)
-  - Client credentials flow (client_id + client_secret)
-- [ ] `src/config/graph.js` — khởi tạo `@microsoft/microsoft-graph-client`, auto-refresh token
-- [ ] Test: `GET /v1.0/me/drive` → kết nối thành công
-- [ ] Cấu hình thư mục gốc: `/TamAn_Documents/` trong OneDrive của service account
+### 11.0 DB Migration ✅
 
-### 11.2 Backend ✅
+- [x] `051_alter_documents_to_link_storage.sql`
+  - Rename `file_name` → `name` (tên hiển thị)
+  - Rename `web_url` → `url` (link cloud thực tế)
+  - DROP: `onedrive_item_id`, `size_bytes`, `mime_type`
+  - ADD: `description TEXT` (ghi chú tùy chọn)
+  - Recreate FTS index trên cột `name`
 
-**Upload Flow:**
-- [x] `POST /api/companies/:companyId/documents/upload` — validate file type + size, upload OneDrive, insert DB
-- [x] Validate file type (PDF, XLSX, DOC, DOCX, PNG, JPG, JPEG) + size (<= 50MB)
+### 11.1 Backend ✅
 
-**Other Endpoints:**
-- [x] `GET /api/companies/:companyId/documents` — danh sách, filter category, task_id, search tên file
-- [x] `GET /api/documents/:id/link` — generate download link / webUrl
-- [x] `DELETE /api/documents/:id` — xóa file + record DB
-- [x] `POST /api/tasks/:taskId/documents/:docId/attach` — gắn document vào task
+**Endpoints:**
+- [x] `GET  /api/companies/:companyId/documents` — danh sách, filter category/taskId/search, pagination
+- [x] `POST /api/companies/:companyId/documents` — thêm link (body: `name`, `url`, `category`, `description?`, `taskId?`)
+- [x] `PATCH /api/companies/:companyId/documents/:id` — sửa link
+- [x] `POST /api/companies/:companyId/documents/:id/attach` — gắn document vào task
+- [x] `DELETE /api/companies/:companyId/documents/:id` — xóa record DB (admin only)
+- Xóa: `POST .../upload` (multer), `GET .../:id/link` (Graph API refresh)
+- Xóa: dependency `multer` khỏi `package.json`
+- Giữ: `src/config/graph.js` và module `onedrive` (dùng cho Phase 16 backup)
 
-### 11.3 Frontend ⏳
+### 11.2 Frontend ✅
 
-**Tab Tài Liệu trong Company Detail:**
-- [ ] Upload zone: drag-and-drop hoặc click-to-browse
-- [ ] Chọn category khi upload
-- [ ] Danh sách files: icon theo loại file, tên, category, ngày upload, người upload
-- [ ] Click file → mở link OneDrive trên tab mới
-- [ ] Xóa file (confirm dialog)
-- [ ] Filter theo category
+**Tab Tài Liệu trong Company Detail (`DocumentsTab.jsx`):**
+- [x] Nút "Thêm link tài liệu" → mở inline form
+- [x] Form: Tên tài liệu (required), URL (required, validate http/https), Danh mục (select), Mô tả (optional)
+- [x] Danh sách: icon link, tên, category pill, mô tả, ngày thêm, người thêm
+- [x] Click "Mở" → mở URL trực tiếp trong tab mới (không cần API call)
+- [x] Inline edit form (sửa tên/URL/danh mục/mô tả)
+- [x] Xóa link (confirm dialog, admin only)
+- [x] Filter theo category
+- [x] Pagination
 
-**Đính kèm vào Task:**
-- [ ] Trong trang chi tiết task → tab "Tài liệu": chọn từ file đã có của KH, hoặc upload mới
+**API (`src/api/documents.js`):**
+- [x] `addDocumentLink(companyId, { name, url, category, description, taskId })` thay `uploadDocument`
+- [x] `updateDocumentLink(companyId, docId, data)` — mới
+- [x] Xóa `getLinkUrl` (không cần nữa)
 
 **Acceptance Criteria Phase 11:**
 ```
-□ Upload file PDF → xuất hiện trong OneDrive đúng path /TamAn_Documents/KH_ABC/2026/hop_dong/
-□ Click link → mở file trên trình duyệt trực tiếp từ OneDrive
-□ Xóa document → file xóa khỏi OneDrive, record xóa khỏi DB
-□ Upload file .exe → 400 invalid file type
-□ Upload file > 50MB → 400 file too large
+✅ Thêm Google Docs link → xuất hiện ngay trong danh sách với tên + category
+✅ Click "Mở" → mở link trong tab mới không cần API call
+✅ Nhập URL không hợp lệ → validation lỗi ngay tại form
+✅ Click edit → inline form điền sẵn, lưu cập nhật thành công
+✅ Admin xóa link → link biến mất, DB record xóa
+✅ Filter theo category hoạt động
 ```
 
 ---
