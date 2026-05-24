@@ -6,7 +6,7 @@ import {
 } from 'recharts'
 import {
   Building2, ClipboardList, AlertTriangle, CheckCircle2,
-  TrendingUp, Clock, ArrowRight, Loader2,
+  TrendingUp, ArrowRight, Loader2,
   Maximize2, Minimize2, User, Calendar as CalendarIcon,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
@@ -14,7 +14,6 @@ import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
 import { getDashboardSummary, getDashboardCharts } from '../../api/dashboard'
-import { getAdminOverview as getCdrOverview } from '../../api/clientRequests'
 import { useDataSync } from '../../hooks/useDataSync'
 import s from './Dashboard.module.css'
 
@@ -154,7 +153,6 @@ export default function Dashboard() {
 
   const [summary, setSummary]       = useState(null)
   const [charts,  setCharts]        = useState(null)
-  const [cdrStats, setCdrStats]     = useState(null)
   const [loading, setLoading]       = useState(true)
   const [error,   setError]         = useState(null)
   const [range,   setRange]         = useState('28d')
@@ -182,12 +180,11 @@ export default function Dashboard() {
       setError(null)
       const params = getRangeDates(range)
       try {
-        const [sum, chrt, cdr] = await Promise.all([
+        const [sum, chrt] = await Promise.all([
           getDashboardSummary(params),
           getDashboardCharts(params),
-          getCdrOverview().catch(() => null),
         ])
-        if (!cancelled) { setSummary(sum); setCharts(chrt); if (cdr) setCdrStats(cdr.stats) }
+        if (!cancelled) { setSummary(sum); setCharts(chrt) }
       } catch (err) {
         if (!cancelled) setError(err?.response?.data?.message ?? err?.message ?? 'Lỗi tải dashboard')
       } finally {
@@ -207,23 +204,25 @@ export default function Dashboard() {
   const greetHour = new Date().getHours()
   const greetWord = greetHour < 12 ? 'Chào buổi sáng' : greetHour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối'
 
+  const isStaff = user?.role === 'staff'
+
   const kpiCards = [
     {
-      label: 'Khách hàng hoạt động',
+      label: isStaff ? 'KH tôi phụ trách' : 'Khách hàng hoạt động',
       value: loading ? null : (summary?.activeCompanies ?? '—'),
-      sub:   'công ty đang hợp tác',
+      sub:   isStaff ? 'công ty tôi có việc chưa xong' : 'công ty đang hợp tác',
       icon:  Building2,
       tone:  s.kpiBlue,
     },
     {
-      label: 'Công việc đang mở',
+      label: isStaff ? 'Việc của tôi' : 'Công việc đang mở',
       value: loading ? null : (summary?.openTasks ?? '—'),
       sub:   'cần xử lý',
       icon:  ClipboardList,
       tone:  s.kpiGreen,
     },
     {
-      label: 'Quá hạn',
+      label: isStaff ? 'Quá hạn của tôi' : 'Quá hạn',
       value: loading ? null : (summary?.overdueTasks ?? '—'),
       sub:   'cần ưu tiên xử lý ngay',
       icon:  AlertTriangle,
@@ -232,15 +231,15 @@ export default function Dashboard() {
     },
     {
       label: 'Chờ KH cung cấp',
-      value: loading ? null : ((cdrStats?.pending ?? 0) + (cdrStats?.overdue ?? 0) || 0),
-      sub:   `${cdrStats?.overdue ?? 0} quá hạn`,
+      value: loading ? null : ((summary?.cdrStats?.pending ?? 0) + (summary?.cdrStats?.overdue ?? 0) || 0),
+      sub:   `${summary?.cdrStats?.overdue ?? 0} quá hạn`,
       icon:  ClipboardList,
       tone:  s.kpiAmber,
-      urgent: (cdrStats?.overdue ?? 0) > 0,
+      urgent: (summary?.cdrStats?.overdue ?? 0) > 0,
       onClick: () => navigate('/tasks?audience=client_request'),
     },
     {
-      label: 'Hoàn thành',
+      label: isStaff ? 'Hoàn thành của tôi' : 'Hoàn thành',
       value: loading ? null : (summary?.completedThisMonth ?? '—'),
       sub:   RANGE_SUB[range],
       icon:  CheckCircle2,
@@ -249,21 +248,11 @@ export default function Dashboard() {
     {
       label: 'Tuân thủ SLA',
       value: loading ? null : (summary ? `${summary.slaComplianceRate}%` : '—'),
-      sub:   'hoàn thành đúng / trước hạn',
+      sub:   isStaff ? 'đúng / trước hạn của tôi' : 'hoàn thành đúng / trước hạn',
       icon:  TrendingUp,
       tone:  s.kpiCyan,
     },
   ]
-
-  if (user?.role === 'staff') {
-    kpiCards.push({
-      label: 'Của tôi — đến hạn hôm nay',
-      value: loading ? null : (summary?.myTasksToday ?? '—'),
-      sub:   'việc cần hoàn thành hôm nay',
-      icon:  Clock,
-      tone:  s.kpiCyan,
-    })
-  }
 
   return (
     <AppLayout title="Dashboard">
@@ -354,7 +343,7 @@ export default function Dashboard() {
         <div className={s.chartPanel}>
           <div className={s.chartHeader}>
             <div>
-              <span className={s.chartTitle}>Tải công việc nhân viên</span>
+              <span className={s.chartTitle}>{isStaff ? 'Tải công việc của tôi' : 'Tải công việc nhân viên'}</span>
               <span className={s.chartSub}>{RANGE_SUB[range]}</span>
             </div>
           </div>

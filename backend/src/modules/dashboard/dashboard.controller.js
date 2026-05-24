@@ -22,7 +22,7 @@ async function getSummary(req, res, next) {
 async function getCharts(req, res, next) {
   try {
     const { from, to } = defaultDates(req.query.from, req.query.to)
-    const data = await svc.getCharts(from, to)
+    const data = await svc.getCharts(req.user.id, req.user.role, from, to)
     res.json(data)
   } catch (err) { next(err) }
 }
