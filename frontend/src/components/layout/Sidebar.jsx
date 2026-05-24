@@ -12,16 +12,16 @@ const NAV_GROUPS = [
   {
     label: 'ĐIỀU HƯỚNG',
     items: [
-      { to: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
-      { to: '/companies',  label: 'Công ty',    icon: Building2 },
-      { to: '/tasks',      label: 'Công việc',  icon: CheckSquare },
-      { to: '/reports',    label: 'Báo cáo',    icon: BarChart3 },
+      { to: '/dashboard',             label: 'Dashboard',       icon: LayoutDashboard },
+      { to: '/companies',             label: 'Công ty',         icon: Building2 },
+      { to: '/tasks',                 label: 'Công việc',       icon: CheckSquare },
+      { to: '/admin/client-requests', label: 'Yêu cầu KH',     icon: ClipboardList },
+      { to: '/reports',               label: 'Báo cáo',         icon: BarChart3 },
     ],
   },
   {
     label: 'QUẢN TRỊ HỆ THỐNG',
     items: [
-      { to: '/admin/client-requests', label: 'Yêu cầu tài liệu KH', icon: ClipboardList, adminOnly: true },
       { to: '/staff',             label: 'Nhân viên',         icon: Users,         adminOnly: true },
       { to: '/attendance',        label: 'Chấm công',         icon: CalendarCheck, staffOnly: true, end: true },
       { to: '/attendance/admin',  label: 'Quản lý chấm công', icon: CalendarCheck, adminOnly: true },

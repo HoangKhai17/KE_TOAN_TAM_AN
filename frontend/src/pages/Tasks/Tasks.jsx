@@ -118,28 +118,6 @@ function ListDateField({ value, onChange, isOverdue }) {
   )
 }
 
-// ── CDR status badge (read-only, for client_request rows in list view) ────────
-
-const CDR_STATUS_CFG = {
-  pending:      { bg: '#fffbeb', color: '#92400e', border: '#fcd34d', label: 'Chờ KH' },
-  received:     { bg: '#f0fdf4', color: '#15803d', border: '#86efac', label: 'Đã nhận' },
-  not_required: { bg: '#f8fafc', color: '#64748b', border: '#cbd5e1', label: 'Không cần' },
-  overdue:      { bg: '#fef2f2', color: '#b91c1c', border: '#fca5a5', label: 'Quá hạn' },
-}
-
-function CdrStatusBadge({ status }) {
-  const cfg = CDR_STATUS_CFG[status] ?? CDR_STATUS_CFG.pending
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', padding: '2px 9px',
-      borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
-    }}>
-      {cfg.label}
-    </span>
-  )
-}
-
 // ── Shared badges ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
@@ -1052,45 +1030,37 @@ function ListView({
 
                   {/* Quick edit: status */}
                   <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                    {t._type === 'client_request' ? (
-                      <CdrStatusBadge status={t.status} />
-                    ) : (
-                      <select
-                        value={t.status}
-                        onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
-                        className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[t.status] ?? ''}`}
-                        title="Đổi trạng thái"
-                      >
-                        <option value={t.status}>
-                          {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
+                    <select
+                      value={t.status}
+                      onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
+                      className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[t.status] ?? ''}`}
+                      title="Đổi trạng thái"
+                    >
+                      <option value={t.status}>
+                        {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
+                      </option>
+                      {(STATUS_TRANSITIONS[t.status] ?? []).map((st) => (
+                        <option key={st} value={st}>
+                          {getLabel('task_status', st, STATUS_LABELS[st])}
                         </option>
-                        {(STATUS_TRANSITIONS[t.status] ?? []).map((st) => (
-                          <option key={st} value={st}>
-                            {getLabel('task_status', st, STATUS_LABELS[st])}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                      ))}
+                    </select>
                   </td>
 
                   {/* Quick edit: priority */}
                   <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                    {t._type === 'client_request' ? (
-                      <span className={s.mutedDash}>—</span>
-                    ) : (
-                      <select
-                        value={t.priority ?? ''}
-                        onChange={(e) => onPriorityChange(t, e.target.value)}
-                        className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[t.priority] ?? ''}`}
-                        title="Đổi ưu tiên"
-                      >
-                        {['urgent', 'high', 'medium', 'low'].map((p) => (
-                          <option key={p} value={p}>
-                            {getLabel('task_priority', p, PRIORITY_LABELS[p])}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                    <select
+                      value={t.priority ?? ''}
+                      onChange={(e) => onPriorityChange(t, e.target.value)}
+                      className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[t.priority] ?? ''}`}
+                      title="Đổi ưu tiên"
+                    >
+                      {['urgent', 'high', 'medium', 'low'].map((p) => (
+                        <option key={p} value={p}>
+                          {getLabel('task_priority', p, PRIORITY_LABELS[p])}
+                        </option>
+                      ))}
+                    </select>
                   </td>
 
                   {/* Quick edit: due date */}
@@ -1231,15 +1201,13 @@ export default function Tasks() {
   const isAdmin = currentUser?.role === 'admin'
 
   // Handle URL params from header shortcuts (?new=1, ?search=...)
-  const _urlNew      = searchParams.get('new')
-  const _urlSearch   = searchParams.get('search')
-  const _urlAudience = searchParams.get('audience')
+  const _urlNew    = searchParams.get('new')
+  const _urlSearch = searchParams.get('search')
 
   // Restore saved filters from sessionStorage (once on mount)
   const [initF] = useState(() => {
     const saved = loadSavedFilters()
-    if (_urlSearch)   saved.searchInput   = _urlSearch
-    if (_urlAudience) saved.audienceFilter = _urlAudience
+    if (_urlSearch) saved.searchInput = _urlSearch
     return saved
   })
 
@@ -1276,7 +1244,6 @@ export default function Tasks() {
   const [priorityFilter, setPriorityFilter] = useState(initF.priorityFilter ?? [])
   const [sourceFilter, setSourceFilter]     = useState(initF.sourceFilter   ?? [])
   const [isOverdue, setIsOverdue]           = useState(initF.isOverdue      ?? false)
-  const [audienceFilter, setAudienceFilter] = useState(initF.audienceFilter ?? 'internal')
 
   const effectiveAssignedTo = isAdmin ? staffFilter : currentUser?.id
 
@@ -1320,11 +1287,10 @@ export default function Tasks() {
   // On first mount: handle URL params from header shortcuts
   useEffect(() => {
     if (_urlNew === '1') setShowCreate(true)
-    if (_urlNew || _urlSearch || _urlAudience) {
+    if (_urlNew || _urlSearch) {
       setSearchParams((prev) => {
         prev.delete('new')
         prev.delete('search')
-        prev.delete('audience')
         return prev
       }, { replace: true })
     }
@@ -1339,7 +1305,7 @@ export default function Tasks() {
   // Reset page on filter changes
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter, sortValue, audienceFilter])
+  }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter, sortValue])
 
   // Load reference data + enums + years
   useEffect(() => {
@@ -1388,9 +1354,9 @@ export default function Tasks() {
     saveFilters({
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
       sortValue, searchInput, companyFilter, staffFilter,
-      statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize, audienceFilter,
+      statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize, audienceFilter])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1432,7 +1398,7 @@ export default function Tasks() {
       isOverdue:   isOverdue      ? true : undefined,
       dueDateFrom: dueDateFrom    || undefined,
       dueDateTo:   dueDateTo      || undefined,
-      audience:    audienceFilter || 'internal',
+      audience:    'internal',
       limit:       view === 'list' ? pageSize : 500,
       page:        view === 'list' ? page : 1,
       sortBy,
@@ -1449,7 +1415,7 @@ export default function Tasks() {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view, sortValue, refreshKey, audienceFilter])
+  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view, sortValue, refreshKey])
 
   // ── Date filter handlers ──────────────────────────────────────────────────────
 
@@ -1550,7 +1516,6 @@ export default function Tasks() {
     setDueDateTo(INIT_DATES.to)
     setSortValue('created_at:desc')
     setView('list'); setPageSize(20)
-    setAudienceFilter('internal')
     setPage(1)
     try { sessionStorage.removeItem(FILTER_KEY) } catch (_) { /* ignore storage errors */ }
   }
@@ -1633,29 +1598,6 @@ export default function Tasks() {
             {pagination.total > 0 && !loading && (
               <span className={s.totalBadge}>{pagination.total}</span>
             )}
-            <div className={s.viewSwitch} style={{ marginLeft: 8 }}>
-              <button
-                className={`${s.viewBtn} ${audienceFilter === 'internal' ? s.viewBtnActive : ''}`}
-                onClick={() => setAudienceFilter('internal')}
-                title="Chỉ hiển thị công việc nội bộ"
-              >
-                Nội bộ
-              </button>
-              <button
-                className={`${s.viewBtn} ${audienceFilter === 'client_request' ? s.viewBtnActive : ''}`}
-                onClick={() => setAudienceFilter('client_request')}
-                title="Chỉ hiển thị yêu cầu tài liệu khách hàng"
-              >
-                <ClipboardList size={12} /> Yêu cầu KH
-              </button>
-              <button
-                className={`${s.viewBtn} ${audienceFilter === 'all' ? s.viewBtnActive : ''}`}
-                onClick={() => setAudienceFilter('all')}
-                title="Hiển thị tất cả"
-              >
-                Tất cả
-              </button>
-            </div>
           </div>
 
           <div className={s.toolbarRight}>
