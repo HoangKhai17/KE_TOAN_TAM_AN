@@ -266,18 +266,19 @@ export default function AssignmentDetailPanel({
     return () => { cancelled = true }
   }, [assignmentId])
 
-  // Load reference data (admin)
+  // Load reference data
   useEffect(() => {
-    if (!isAdmin) return
     listUserOptions({ status: 'active' }).then(({ users }) => setStaffList(users)).catch(() => {})
     listCompanies({ limit: 300, status: 'active' }).then(({ companies: c }) => setCompanies(c)).catch(() => {})
-  }, [isAdmin])
+  }, [])
 
   const filteredStaff = staffSearch.trim()
     ? staffList.filter((u) => u.name.toLowerCase().includes(staffSearch.toLowerCase()))
     : staffList
 
-  const canEdit = isAdmin && item && ['draft', 'active'].includes(item.status)
+  const myAssigneeEarly = item?.assignees?.find((a) => a.userId === currentUser?.id) ?? null
+  const canEdit     = !!(item && ['draft', 'active'].includes(item.status))
+  const canEditDesc = !!(item && ['draft', 'active'].includes(item.status))
   const isOverdueField = item?.deadlineDate && item?.status === 'active' && new Date(item.deadlineDate) < new Date()
 
   // ── Field save handlers ───────────────────────────────────────────────────
@@ -355,7 +356,16 @@ export default function AssignmentDetailPanel({
       if (newStatus === 'active')         updated = await api.sendAssignment(assignmentId)
       else if (newStatus === 'done')      updated = await api.closeAssignment(assignmentId)
       else if (newStatus === 'cancelled') updated = await api.cancelAssignment(assignmentId)
-      if (updated) setItem(updated)
+      if (updated) {
+        setItem(updated)
+        setTitleDraft(updated.title ?? '')
+        setDescDraft(updated.description ?? '')
+      } else {
+        const reloaded = await api.getAssignment(assignmentId)
+        setItem(reloaded)
+        setTitleDraft(reloaded.title ?? '')
+        setDescDraft(reloaded.description ?? '')
+      }
       addToast(`Đã chuyển sang "${STATUS_LABELS[newStatus]}"`, 'success')
       onUpdate?.()
     } catch (err) {
@@ -422,7 +432,7 @@ export default function AssignmentDetailPanel({
     }
   }
 
-  const myAssignee  = item ? item.assignees?.find((a) => a.userId === currentUser?.id) : null
+  const myAssignee  = myAssigneeEarly
   const canAccept   = myAssignee?.status === 'pending'
   const canProgress = myAssignee?.status === 'accepted'
   const canComplete = ['accepted', 'in_progress'].includes(myAssignee?.status)
@@ -482,8 +492,8 @@ export default function AssignmentDetailPanel({
             </div>
           </div>
 
-          {/* ── Status transition bar (admin only) ── */}
-          {item && !loading && isAdmin && transitions.length > 0 && (
+          {/* ── Status transition bar ── */}
+          {item && !loading && transitions.length > 0 && (
             <div className={s.iaStatusBar}>
               <span className={s.iaStatusBarLabel}>Chuyển sang:</span>
               {transitions.map((st) => (
@@ -591,7 +601,7 @@ export default function AssignmentDetailPanel({
                     <span className={s.iaQvLabel}><Calendar size={11} /> Hết hạn</span>
                     {canEdit ? (
                       <IaDateField
-                        value={item.deadlineDate ?? ''}
+                        value={item.deadlineDate ? item.deadlineDate.slice(0, 10) : ''}
                         onChange={(e) => handleSaveDeadline(e.target.value)}
                         isError={isOverdueField}
                       />
@@ -715,7 +725,7 @@ export default function AssignmentDetailPanel({
                         </button>
                       )}
                     </div>
-                    {canEdit ? (
+                    {canEditDesc ? (
                       <textarea
                         className={s.iaQvDescTextarea}
                         value={descDraft}
@@ -756,7 +766,7 @@ export default function AssignmentDetailPanel({
                             </div>
                             <p className={s.commentText}>{c.content}</p>
                           </div>
-                          {(isAdmin || c.user?.id === currentUser?.id) && (
+                          {c.user?.id === currentUser?.id && (
                             <button
                               className={s.commentDelete}
                               onClick={() => handleDeleteComment(c.id)}
@@ -799,8 +809,8 @@ export default function AssignmentDetailPanel({
             )}
           </div>
 
-          {/* ── Footer — staff actions only ── */}
-          {item && !loading && !isAdmin && item.status === 'active' && myAssignee && (
+          {/* ── Footer — assignee actions ── */}
+          {item && !loading && item.status === 'active' && myAssignee && (
             <div className={s.panelFooter}>
               <div className={s.panelActions}>
                 {canAccept && (

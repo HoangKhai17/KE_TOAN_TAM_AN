@@ -20,15 +20,15 @@ router.get('/meta/years', ...auth, ctrl.getYears)
 router.get('/',           ...auth, ctrl.listAssignments)
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
-router.post('/',     ...adminOnly, validate(createSchema), ctrl.createAssignment)
-router.get('/:id',   ...auth,      ctrl.getAssignment)
-router.patch('/:id', ...adminOnly, validate(updateSchema), ctrl.updateAssignment)
-router.delete('/:id', ...adminOnly, ctrl.deleteAssignment)
+router.post('/',     ...auth, validate(createSchema), ctrl.createAssignment)
+router.get('/:id',   ...auth, ctrl.getAssignment)
+router.patch('/:id', ...auth, validate(updateSchema), ctrl.updateAssignment)
+router.delete('/:id', ...auth, ctrl.deleteAssignment)
 
-// ─── Admin lifecycle actions ──────────────────────────────────────────────────
-router.post('/:id/send',   ...adminOnly, ctrl.sendAssignment)
-router.post('/:id/cancel', ...adminOnly, ctrl.cancelAssignment)
-router.post('/:id/close',  ...adminOnly, ctrl.closeAssignment)
+// ─── Lifecycle actions (open to all) ─────────────────────────────────────────
+router.post('/:id/send',   ...auth, ctrl.sendAssignment)
+router.post('/:id/cancel', ...auth, ctrl.cancelAssignment)
+router.post('/:id/close',  ...auth, ctrl.closeAssignment)
 
 // ─── Staff actions ────────────────────────────────────────────────────────────
 router.post('/:id/accept',   ...auth, ctrl.acceptAssignment)

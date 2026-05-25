@@ -120,7 +120,6 @@ async function listAssignments(actorId, actorRole, {
   search, deadlineFrom, deadlineTo,
   page = 1, limit = 20, sortBy = 'created_at', sortDir = 'desc',
 } = {}) {
-  const isAdmin = actorRole === 'admin'
   const params  = []
   const conds   = []
 
@@ -129,25 +128,22 @@ async function listAssignments(actorId, actorRole, {
     ? (Array.isArray(assigneeIds) ? assigneeIds : String(assigneeIds).split(',').map((s) => s.trim()).filter(Boolean))
     : (assigneeId ? [assigneeId] : [])
 
-  if (isAdmin) {
-    if (resolvedAssigneeIds.length > 0) {
-      params.push(resolvedAssigneeIds)
-      conds.push(`EXISTS (
-        SELECT 1 FROM internal_assignment_assignees iaa2
-        WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = ANY($${params.length}::uuid[])
-      )`)
-    }
-  } else {
-    // Staff: can see ALL assignments; myStatus filters to their personal assignee status
-    if (myStatus) {
-      params.push(actorId)
-      const actorIdx = params.length
-      params.push(myStatus)
-      conds.push(`EXISTS (
-        SELECT 1 FROM internal_assignment_assignees iaa2
-        WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = $${actorIdx} AND iaa2.status = $${params.length}
-      )`)
-    }
+  if (resolvedAssigneeIds.length > 0) {
+    params.push(resolvedAssigneeIds)
+    conds.push(`EXISTS (
+      SELECT 1 FROM internal_assignment_assignees iaa2
+      WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = ANY($${params.length}::uuid[])
+    )`)
+  }
+
+  if (myStatus) {
+    params.push(actorId)
+    const actorIdx = params.length
+    params.push(myStatus)
+    conds.push(`EXISTS (
+      SELECT 1 FROM internal_assignment_assignees iaa2
+      WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = $${actorIdx} AND iaa2.status = $${params.length}
+    )`)
   }
 
   if (status) {
@@ -223,51 +219,22 @@ async function listAssignments(actorId, actorRole, {
 // ─── Stats (for dashboard / sidebar badge) ────────────────────────────────────
 
 async function getStats(actorId, actorRole, { deadlineFrom, deadlineTo } = {}) {
-  const isAdmin = actorRole === 'admin'
-
-  // Build date condition (same logic as listAssignments so stats match list)
   const dateParams = []
   const dateConds  = []
   if (deadlineFrom) { dateParams.push(deadlineFrom); dateConds.push(`ia.deadline_date >= $${dateParams.length}`) }
   if (deadlineTo)   { dateParams.push(deadlineTo);   dateConds.push(`ia.deadline_date <= $${dateParams.length}`) }
   const dateWhere = dateConds.length ? `WHERE ${dateConds.join(' AND ')}` : ''
 
-  if (isAdmin) {
-    const { rows } = await query(
-      `SELECT status, COUNT(*) AS cnt FROM internal_assignments ia ${dateWhere} GROUP BY status`,
-      dateParams
-    )
-    const m = Object.fromEntries(rows.map((r) => [r.status, parseInt(r.cnt, 10)]))
-    return {
-      draft:     m.draft     ?? 0,
-      active:    m.active    ?? 0,
-      done:      m.done      ?? 0,
-      cancelled: m.cancelled ?? 0,
-    }
-  } else {
-    // Staff stats: their personal assignee-status counts (active assignments)
-    const params = [...dateParams]
-    params.push(actorId)
-    const userParam = params.length
-    const extraWhere = dateConds.length
-      ? `${dateConds.join(' AND ')} AND ia.status = 'active' AND iaa.user_id = $${userParam}`
-      : `ia.status = 'active' AND iaa.user_id = $${userParam}`
-
-    const { rows } = await query(`
-      SELECT iaa.status, COUNT(*) AS cnt
-      FROM internal_assignment_assignees iaa
-      JOIN internal_assignments ia ON ia.id = iaa.assignment_id
-      WHERE ${extraWhere}
-      GROUP BY iaa.status
-    `, params)
-    const m = Object.fromEntries(rows.map((r) => [r.status, parseInt(r.cnt, 10)]))
-    return {
-      pending:    m.pending     ?? 0,
-      accepted:   m.accepted    ?? 0,
-      inProgress: m.in_progress ?? 0,
-      done:       m.done        ?? 0,
-      rejected:   m.rejected    ?? 0,
-    }
+  const { rows } = await query(
+    `SELECT status, COUNT(*) AS cnt FROM internal_assignments ia ${dateWhere} GROUP BY status`,
+    dateParams
+  )
+  const m = Object.fromEntries(rows.map((r) => [r.status, parseInt(r.cnt, 10)]))
+  return {
+    draft:     m.draft     ?? 0,
+    active:    m.active    ?? 0,
+    done:      m.done      ?? 0,
+    cancelled: m.cancelled ?? 0,
   }
 }
 
@@ -516,6 +483,7 @@ async function cancelAssignment(id, actorId) {
     userId: actorId, action: 'internal_assignment.cancelled',
     targetType: 'internal_assignments', targetId: id,
   })
+  return getById(id, actorId, 'admin')
 }
 
 // ─── Close ────────────────────────────────────────────────────────────────────
@@ -535,6 +503,7 @@ async function closeAssignment(id, actorId) {
     userId: actorId, action: 'internal_assignment.closed',
     targetType: 'internal_assignments', targetId: id,
   })
+  return getById(id, actorId, 'admin')
 }
 
 // ─── Staff actions ────────────────────────────────────────────────────────────
@@ -663,7 +632,6 @@ async function rejectAssignment(id, actorId, note) {
 
 async function addComment(id, actorId, actorRole, content) {
   await assertExists(id)
-  if (actorRole !== 'admin') await assertAssignee(id, actorId)
 
   const { rows: [comment] } = await query(
     `INSERT INTO internal_assignment_comments (assignment_id, user_id, content)
@@ -685,7 +653,7 @@ async function deleteComment(assignmentId, commentId, actorId, actorRole) {
     [commentId, assignmentId]
   )
   if (!comment) throw Object.assign(new Error('Comment không tồn tại'), { status: 404 })
-  if (actorRole !== 'admin' && comment.user_id !== actorId) {
+  if (comment.user_id !== actorId) {
     throw Object.assign(new Error('Bạn chỉ có thể xóa comment của mình'), { status: 403 })
   }
   await query('DELETE FROM internal_assignment_comments WHERE id = $1', [commentId])

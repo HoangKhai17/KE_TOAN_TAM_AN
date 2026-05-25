@@ -89,10 +89,11 @@ const PRIORITY_SELECT_CLASS = {
 }
 
 function progressPct(item) {
-  const assignees = item.assignees ?? []
+  const assignees = (item.assignees ?? []).filter((a) => a.status !== 'rejected')
   if (assignees.length === 0) return null
-  const done = assignees.filter((a) => a.status === 'done').length
-  return Math.round((done / assignees.length) * 100)
+  const WEIGHT = { pending: 0, accepted: 0.2, in_progress: 0.5, done: 1 }
+  const total = assignees.reduce((sum, a) => sum + (WEIGHT[a.status] ?? 0), 0)
+  return Math.round((total / assignees.length) * 100)
 }
 
 // ── MultiSelect component ─────────────────────────────────────────────────────
@@ -674,7 +675,7 @@ function saveFilters(obj) {
 export default function InternalAssignments() {
   const currentUser = useAuthStore((st) => st.user)
   const addToast    = useToastStore((st) => st.toast)
-  const isAdmin     = currentUser?.role === 'admin'
+  const isAdmin     = true
   const getOptions  = useEnumsStore((st) => st.getOptions)
   const loadEnums   = useEnumsStore((st) => st.load)
 
@@ -731,12 +732,10 @@ export default function InternalAssignments() {
     setPage(1)
   }, [filterStatus, filterPriority, filterAssignees, filterMyStatus, deadlineFrom, deadlineTo, pageSize, sortValue])
 
-  // Load staff list (admin only) + years + enums
+  // Load staff list + years + enums
   useEffect(() => {
     loadEnums()
-    if (isAdmin) {
-      listUserOptions({ status: 'active' }).then(({ users: u }) => setStaffList(u)).catch(() => {})
-    }
+    listUserOptions({ status: 'active' }).then(({ users: u }) => setStaffList(u)).catch(() => {})
     api.getYears()
       .then((years) => {
         setAvailableYears(years)
@@ -752,7 +751,7 @@ export default function InternalAssignments() {
         const y = parseInt(CUR_YEAR, 10)
         setAvailableYears([y + 1, y, y - 1])
       })
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist filters
   useEffect(() => {

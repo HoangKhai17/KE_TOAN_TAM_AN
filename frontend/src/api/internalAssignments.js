@@ -40,11 +40,13 @@ export async function sendAssignment(id) {
 }
 
 export async function cancelAssignment(id) {
-  await api.post(`/internal-assignments/${id}/cancel`)
+  const { data } = await api.post(`/internal-assignments/${id}/cancel`)
+  return data.data?.item
 }
 
 export async function closeAssignment(id) {
-  await api.post(`/internal-assignments/${id}/close`)
+  const { data } = await api.post(`/internal-assignments/${id}/close`)
+  return data.data?.item
 }
 
 export async function acceptAssignment(id) {
