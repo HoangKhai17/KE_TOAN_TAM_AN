@@ -710,7 +710,7 @@ function CdrFormModal({ company, initial, onClose, onSaved }) {
   }
 
   return (
-    <Modal title={initial ? 'Chỉnh sửa yêu cầu' : 'Tạo yêu cầu tài liệu'} onClose={onClose}>
+    <Modal title={initial ? 'Chỉnh sửa yêu cầu' : 'Tạo yêu cầu tài liệu'} onClose={onClose} maxWidth={720}>
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {err && <div className={s.errorBox}>{err}</div>}
 
@@ -787,7 +787,7 @@ function LinkModal({ item, generatedUrl, generating, copied, onGenerate, onCopy,
   const hasToken = !!item.publicToken
 
   return (
-    <Modal title="Link chia sẻ cho khách hàng" onClose={onClose}>
+    <Modal title="Link chia sẻ cho khách hàng" onClose={onClose} maxWidth={600}>
       <div className={s.modalStack}>
         <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6 }}>
           <strong>{item.documentName}</strong>
@@ -1082,7 +1082,7 @@ function ManualSubmitModal({ item, onClose, onSaved }) {
     <Modal
       title={isUpdate ? 'Cập nhật dữ liệu KH' : 'Nhập dữ liệu KH thủ công'}
       onClose={onClose}
-      maxWidth={600}
+      maxWidth={700}
     >
       <form onSubmit={handleSubmit} className={s.modalStack}>
         {/* Context banner */}
@@ -1257,7 +1257,7 @@ function ReminderModal({ item, onClose, onSent }) {
   }
 
   return (
-    <Modal title="Gửi nhắc nhở khách hàng" onClose={onClose}>
+    <Modal title="Gửi nhắc nhở khách hàng" onClose={onClose} maxWidth={560}>
       <form onSubmit={handleSend} className={s.modalStack}>
         {err && <div className={s.errorBox}>{err}</div>}
         <div style={{ fontSize: 13, color: '#475569' }}>

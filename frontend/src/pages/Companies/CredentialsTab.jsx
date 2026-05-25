@@ -61,7 +61,7 @@ function CredentialForm({ initial, onSubmit, onClose, title }) {
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={onClose} maxWidth={720}>
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}
 
@@ -194,7 +194,7 @@ function RevealModal({ companyId, credential, onClose }) {
   }
 
   return (
-    <Modal title={`Mật khẩu: ${credential.systemName}`} onClose={onClose}>
+    <Modal title={`Mật khẩu: ${credential.systemName}`} onClose={onClose} maxWidth={500}>
       <div style={{ padding: '8px 0' }}>
         <div className={s.securityBanner} style={{ marginBottom: 16 }}>
           <Shield size={14} style={{ flexShrink: 0 }} />
