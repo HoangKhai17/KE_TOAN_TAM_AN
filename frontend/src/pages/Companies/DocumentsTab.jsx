@@ -83,7 +83,7 @@ function AddLinkForm({ onSave, onCancel, saving }) {
             <label className={s.addLinkFormLabel}>URL <span>*</span></label>
             <input
               className={`${s.addLinkFormInput} ${errors.url ? s.addLinkFormInputError : ''}`}
-              placeholder="https://docs.google.com/... hoặc OneDrive share link"
+              placeholder="https://docs.google.com/... hoặc link chia sẻ cloud khác"
               value={url}
               onChange={(e) => { setUrl(e.target.value); setErrors((prev) => ({ ...prev, url: '' })) }}
             />

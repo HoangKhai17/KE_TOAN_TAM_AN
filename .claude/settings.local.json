@@ -169,13 +169,17 @@
       "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\companies\" -File)",
       "PowerShell(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\modules\\\\companies\" -File | ForEach-Object { $_.FullName })",
       "PowerShell(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Companies\" -File | ForEach-Object { $_.FullName })",
-      "Bash(node -e \"console.log\\('node ok'\\)\")"
+      "Bash(node -e \"console.log\\('node ok'\\)\")",
+      "Bash(Remove-Item \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\api\\\\onedrive.js\" -Force)",
+      "Bash(Remove-Item \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Settings\\\\OneDriveSection.jsx\" -Force)",
+      "Bash(Write-Host \"Deleted both files\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\backend\\src\\modules",
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN",
-      "C:\\Users\\ACER\\.claude\\projects\\d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM_AN\\memory"
+      "C:\\Users\\ACER\\.claude\\projects\\d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM_AN\\memory",
+      "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\frontend\\src\\api"
     ]
   }
 }
