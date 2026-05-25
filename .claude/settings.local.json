@@ -172,7 +172,9 @@
       "Bash(node -e \"console.log\\('node ok'\\)\")",
       "Bash(Remove-Item \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\api\\\\onedrive.js\" -Force)",
       "Bash(Remove-Item \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Settings\\\\OneDriveSection.jsx\" -Force)",
-      "Bash(Write-Host \"Deleted both files\")"
+      "Bash(Write-Host \"Deleted both files\")",
+      "Bash(find /mnt/d/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN -maxdepth 2 -name \"docker-compose*\" 2>/dev/null)",
+      "Read(//mnt/d/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/**)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

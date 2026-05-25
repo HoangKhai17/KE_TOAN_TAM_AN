@@ -16,6 +16,7 @@ import {
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
+import TaskLinksSection from './TaskLinksSection'
 import s from './tasks.module.css'
 
 // ── Status action CSS map ─────────────────────────────────────────────────────
@@ -145,6 +146,7 @@ function DescriptionTab({ taskId, initialDesc, onSaved }) {
             <Edit2 size={12} /> Chỉnh sửa
           </button>
         </div>
+        <TaskLinksSection taskId={taskId} />
       </div>
     )
   }
@@ -164,6 +166,7 @@ function DescriptionTab({ taskId, initialDesc, onSaved }) {
           {saving ? 'Đang lưu...' : <><Check size={12} /> Lưu</>}
         </button>
       </div>
+      <TaskLinksSection taskId={taskId} />
     </div>
   )
 }

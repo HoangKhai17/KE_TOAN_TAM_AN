@@ -9,6 +9,7 @@ const {
   addCommentSchema, updateCommentSchema,
   addTimeLogSchema,
   upsertCustomFieldsSchema,
+  addTaskLinkSchema,
 } = require('./tasks.schema')
 const ctrl = require('./tasks.controller')
 
@@ -676,5 +677,11 @@ router.delete('/:id/time-logs/:logId', ...auth, ctrl.deleteTimeLog)
  */
 router.get('/:id/custom-fields', ...auth, ctrl.getCustomFields)
 router.put('/:id/custom-fields', ...auth, validate(upsertCustomFieldsSchema), ctrl.upsertCustomFields)
+
+// ─── Links ────────────────────────────────────────────────────────────────────
+
+router.get('/:id/links', ...auth, ctrl.listLinks)
+router.post('/:id/links', ...auth, validate(addTaskLinkSchema), ctrl.addLink)
+router.delete('/:id/links/:linkId', ...auth, ctrl.deleteLink)
 
 module.exports = router

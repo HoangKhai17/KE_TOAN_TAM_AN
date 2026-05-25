@@ -13,6 +13,7 @@ import {
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
+import TaskLinksSection from './TaskLinksSection'
 import s from './tasks.module.css'
 
 // Convert any ISO string to local yyyy-MM-dd.
@@ -476,7 +477,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                 </div>
 
                 {/* Description */}
-                <div className={s.qvSection} style={{ borderBottom: 'none', marginBottom: 0 }}>
+                <div className={s.qvSection}>
                   <div className={s.qvSectionTitle} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span><FileText size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />Mô tả</span>
                     {descDirty && (
@@ -500,6 +501,11 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                     className={s.qvDescTextarea}
                     placeholder="Nhập mô tả công việc..."
                   />
+                </div>
+
+                {/* Links */}
+                <div className={s.qvSection} style={{ borderBottom: 'none', marginBottom: 0 }}>
+                  <TaskLinksSection taskId={taskId} compact />
                 </div>
 
               </div>

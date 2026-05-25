@@ -126,3 +126,19 @@ export async function upsertTaskCustomFields(id, body) {
   const { data } = await api.put(`/tasks/${id}/custom-fields`, body)
   return data.data.fields
 }
+
+// ─── Links ────────────────────────────────────────────────────────────────────
+
+export async function getTaskLinks(id) {
+  const { data } = await api.get(`/tasks/${id}/links`)
+  return data.data.links
+}
+
+export async function addTaskLink(id, body) {
+  const { data } = await api.post(`/tasks/${id}/links`, body)
+  return data.data.link
+}
+
+export async function deleteTaskLink(id, linkId) {
+  await api.delete(`/tasks/${id}/links/${linkId}`)
+}

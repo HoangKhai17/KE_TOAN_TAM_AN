@@ -70,6 +70,13 @@ const upsertCustomFieldsSchema = z.object({
   })).min(1),
 })
 
+// --- Task links ---
+const addTaskLinkSchema = z.object({
+  name:        z.string().min(1).max(200),
+  url:         z.string().url('URL không hợp lệ'),
+  description: z.string().max(500).optional().nullable(),
+})
+
 module.exports = {
   createTaskSchema, updateTaskSchema, changeStatusSchema,
   addChecklistItemSchema, updateChecklistItemSchema,
@@ -77,4 +84,5 @@ module.exports = {
   addCommentSchema, updateCommentSchema,
   addTimeLogSchema,
   upsertCustomFieldsSchema,
+  addTaskLinkSchema,
 }

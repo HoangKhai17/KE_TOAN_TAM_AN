@@ -4,6 +4,7 @@ const depsSvc      = require('./dependencies.service')
 const commentsSvc  = require('./comments.service')
 const timeLogsSvc  = require('./timeLogs.service')
 const cfSvc        = require('./customFields.service')
+const linksSvc     = require('./taskLinks.service')
 
 async function listTasks(req, res, next) {
   try {
@@ -211,6 +212,31 @@ async function getAvailableYears(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// --- Task Links ---
+async function listLinks(req, res, next) {
+  try {
+    const links = await linksSvc.listLinks(req.params.id)
+    res.json({ success: true, data: { links } })
+  } catch (err) { next(err) }
+}
+
+async function addLink(req, res, next) {
+  try {
+    await svc.assertTaskAccess(req.params.id, req.user)
+    const link = await linksSvc.addLink(req.params.id, req.body, req.user.id)
+    res.status(201).json({ success: true, data: { link } })
+  } catch (err) { next(err) }
+}
+
+async function deleteLink(req, res, next) {
+  try {
+    await svc.assertTaskAccess(req.params.id, req.user)
+    const isAdmin = req.user.role === 'admin'
+    await linksSvc.deleteLink(req.params.id, req.params.linkId, req.user.id, isAdmin)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listTasks, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog,
   getAvailableYears,
@@ -219,4 +245,5 @@ module.exports = {
   listComments, addComment, updateComment, deleteComment,
   listTimeLogs, addTimeLog, deleteTimeLog,
   getCustomFields, upsertCustomFields,
+  listLinks, addLink, deleteLink,
 }
