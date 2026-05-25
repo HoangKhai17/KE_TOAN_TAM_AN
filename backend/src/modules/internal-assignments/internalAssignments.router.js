@@ -6,6 +6,7 @@ const { validate }      = require('../../middleware/validate')
 const {
   createSchema, updateSchema,
   noteSchema, optionalNoteSchema, commentSchema,
+  addChecklistItemSchema, updateChecklistItemSchema, addLinkSchema,
 } = require('./internalAssignments.schema')
 const ctrl = require('./internalAssignments.controller')
 
@@ -13,13 +14,14 @@ const router    = Router()
 const auth      = [authenticate]
 const adminOnly = [authenticate, requireRole('admin')]
 
-// ─── List & Stats ─────────────────────────────────────────────────────────────
+// ─── Meta ─────────────────────────────────────────────────────────────────────
 router.get('/meta/stats', ...auth, ctrl.getStats)
+router.get('/meta/years', ...auth, ctrl.getYears)
 router.get('/',           ...auth, ctrl.listAssignments)
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
-router.post('/',    ...adminOnly, validate(createSchema), ctrl.createAssignment)
-router.get('/:id',  ...auth,      ctrl.getAssignment)
+router.post('/',     ...adminOnly, validate(createSchema), ctrl.createAssignment)
+router.get('/:id',   ...auth,      ctrl.getAssignment)
 router.patch('/:id', ...adminOnly, validate(updateSchema), ctrl.updateAssignment)
 router.delete('/:id', ...adminOnly, ctrl.deleteAssignment)
 
@@ -37,5 +39,16 @@ router.post('/:id/reject',   ...auth, validate(noteSchema),         ctrl.rejectA
 // ─── Comments ─────────────────────────────────────────────────────────────────
 router.post('/:id/comments',          ...auth, validate(commentSchema), ctrl.addComment)
 router.delete('/:id/comments/:cid',   ...auth, ctrl.deleteComment)
+
+// ─── Checklist ────────────────────────────────────────────────────────────────
+router.get('/:id/checklist',               ...auth, ctrl.listChecklist)
+router.post('/:id/checklist',              ...auth, validate(addChecklistItemSchema), ctrl.addChecklistItem)
+router.patch('/:id/checklist/:itemId',     ...auth, validate(updateChecklistItemSchema), ctrl.updateChecklistItem)
+router.delete('/:id/checklist/:itemId',    ...auth, ctrl.deleteChecklistItem)
+
+// ─── Links ────────────────────────────────────────────────────────────────────
+router.get('/:id/links',          ...auth, ctrl.listLinks)
+router.post('/:id/links',         ...auth, validate(addLinkSchema), ctrl.addLink)
+router.delete('/:id/links/:linkId', ...auth, ctrl.deleteLink)
 
 module.exports = router

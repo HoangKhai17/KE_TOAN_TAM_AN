@@ -12,7 +12,11 @@ function toAssignmentDto(row) {
     description:  row.description ?? null,
     company:      row.company_id ? { id: row.company_id, name: row.company_name ?? null } : null,
     priority:     row.priority,
-    deadlineDate: row.deadline_date ? row.deadline_date.toISOString().slice(0, 10) : null,
+    deadlineDate: row.deadline_date
+      ? (typeof row.deadline_date === 'string'
+          ? row.deadline_date.slice(0, 10)
+          : row.deadline_date.toISOString().slice(0, 10))
+      : null,
     status:       row.status,
     createdBy:    { id: row.created_by, name: row.creator_name ?? null },
     sentAt:       row.sent_at ?? null,
@@ -99,8 +103,20 @@ function buildAssigneeStats(assignees) {
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
+async function getYears() {
+  const { rows } = await query(`
+    SELECT DISTINCT EXTRACT(YEAR FROM deadline_date)::int AS year
+    FROM internal_assignments WHERE deadline_date IS NOT NULL
+    UNION
+    SELECT DISTINCT EXTRACT(YEAR FROM created_at)::int AS year
+    FROM internal_assignments
+    ORDER BY year DESC
+  `)
+  return rows.map((r) => r.year)
+}
+
 async function listAssignments(actorId, actorRole, {
-  status, priority, companyId, assigneeId, myStatus,
+  status, priority, companyId, assigneeId, assigneeIds, myStatus,
   search, deadlineFrom, deadlineTo,
   page = 1, limit = 20, sortBy = 'created_at', sortDir = 'desc',
 } = {}) {
@@ -108,28 +124,29 @@ async function listAssignments(actorId, actorRole, {
   const params  = []
   const conds   = []
 
+  // Resolve multi-assignee: assigneeIds takes precedence, fallback to assigneeId
+  const resolvedAssigneeIds = assigneeIds
+    ? (Array.isArray(assigneeIds) ? assigneeIds : String(assigneeIds).split(',').map((s) => s.trim()).filter(Boolean))
+    : (assigneeId ? [assigneeId] : [])
+
   if (isAdmin) {
-    if (assigneeId) {
-      params.push(assigneeId)
+    if (resolvedAssigneeIds.length > 0) {
+      params.push(resolvedAssigneeIds)
       conds.push(`EXISTS (
         SELECT 1 FROM internal_assignment_assignees iaa2
-        WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = $${params.length}
+        WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = ANY($${params.length}::uuid[])
       )`)
     }
   } else {
-    // Staff: must be an assignee
-    params.push(actorId)
-    conds.push(`EXISTS (
-      SELECT 1 FROM internal_assignment_assignees iaa2
-      WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = $${params.length}
-    )`)
+    // Staff: can see ALL assignments; myStatus filters to their personal assignee status
     if (myStatus) {
+      params.push(actorId)
+      const actorIdx = params.length
       params.push(myStatus)
-      conds.push(`(
-        SELECT iaa3.status FROM internal_assignment_assignees iaa3
-        WHERE iaa3.assignment_id = ia.id AND iaa3.user_id = $${params.length - 1}
-        LIMIT 1
-      ) = $${params.length}`)
+      conds.push(`EXISTS (
+        SELECT 1 FROM internal_assignment_assignees iaa2
+        WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = $${actorIdx} AND iaa2.status = $${params.length}
+      )`)
     }
   }
 
@@ -205,50 +222,51 @@ async function listAssignments(actorId, actorRole, {
 
 // ─── Stats (for dashboard / sidebar badge) ────────────────────────────────────
 
-async function getStats(actorId, actorRole) {
+async function getStats(actorId, actorRole, { deadlineFrom, deadlineTo } = {}) {
   const isAdmin = actorRole === 'admin'
 
+  // Build date condition (same logic as listAssignments so stats match list)
+  const dateParams = []
+  const dateConds  = []
+  if (deadlineFrom) { dateParams.push(deadlineFrom); dateConds.push(`ia.deadline_date >= $${dateParams.length}`) }
+  if (deadlineTo)   { dateParams.push(deadlineTo);   dateConds.push(`ia.deadline_date <= $${dateParams.length}`) }
+  const dateWhere = dateConds.length ? `WHERE ${dateConds.join(' AND ')}` : ''
+
   if (isAdmin) {
-    const { rows } = await query(`
-      SELECT status, COUNT(*) AS cnt FROM internal_assignments GROUP BY status
-    `)
+    const { rows } = await query(
+      `SELECT status, COUNT(*) AS cnt FROM internal_assignments ia ${dateWhere} GROUP BY status`,
+      dateParams
+    )
     const m = Object.fromEntries(rows.map((r) => [r.status, parseInt(r.cnt, 10)]))
-    // Count assignments where ALL assignees are rejected
-    const { rows: [{ all_rejected }] } = await query(`
-      SELECT COUNT(*) AS all_rejected
-      FROM internal_assignments ia
-      WHERE ia.status = 'active'
-        AND NOT EXISTS (
-          SELECT 1 FROM internal_assignment_assignees iaa
-          WHERE iaa.assignment_id = ia.id AND iaa.status != 'rejected'
-        )
-        AND EXISTS (
-          SELECT 1 FROM internal_assignment_assignees iaa2
-          WHERE iaa2.assignment_id = ia.id
-        )
-    `)
     return {
-      draft: m.draft ?? 0,
-      active: m.active ?? 0,
-      done: m.done ?? 0,
+      draft:     m.draft     ?? 0,
+      active:    m.active    ?? 0,
+      done:      m.done      ?? 0,
       cancelled: m.cancelled ?? 0,
-      allRejected: parseInt(all_rejected, 10),
     }
   } else {
+    // Staff stats: their personal assignee-status counts (active assignments)
+    const params = [...dateParams]
+    params.push(actorId)
+    const userParam = params.length
+    const extraWhere = dateConds.length
+      ? `${dateConds.join(' AND ')} AND ia.status = 'active' AND iaa.user_id = $${userParam}`
+      : `ia.status = 'active' AND iaa.user_id = $${userParam}`
+
     const { rows } = await query(`
       SELECT iaa.status, COUNT(*) AS cnt
       FROM internal_assignment_assignees iaa
       JOIN internal_assignments ia ON ia.id = iaa.assignment_id
-      WHERE iaa.user_id = $1 AND ia.status = 'active'
+      WHERE ${extraWhere}
       GROUP BY iaa.status
-    `, [actorId])
+    `, params)
     const m = Object.fromEntries(rows.map((r) => [r.status, parseInt(r.cnt, 10)]))
     return {
-      pending:    m.pending    ?? 0,
-      accepted:   m.accepted   ?? 0,
+      pending:    m.pending     ?? 0,
+      accepted:   m.accepted    ?? 0,
       inProgress: m.in_progress ?? 0,
-      done:       m.done       ?? 0,
-      rejected:   m.rejected   ?? 0,
+      done:       m.done        ?? 0,
+      rejected:   m.rejected    ?? 0,
     }
   }
 }
@@ -256,11 +274,8 @@ async function getStats(actorId, actorRole) {
 // ─── Get by ID ────────────────────────────────────────────────────────────────
 
 async function getById(id, actorId, actorRole) {
-  const row = await assertExists(id)
-
-  if (actorRole !== 'admin') {
-    await assertAssignee(id, actorId)
-  }
+  await assertExists(id)
+  // All roles can view internal assignments
 
   const { rows: [full] } = await query(
     `SELECT ia.*, u.name AS creator_name, c.name AS company_name
@@ -677,7 +692,7 @@ async function deleteComment(assignmentId, commentId, actorId, actorRole) {
 }
 
 module.exports = {
-  listAssignments, getStats, getById,
+  listAssignments, getStats, getYears, getById,
   createAssignment, updateAssignment, deleteAssignment,
   sendAssignment, cancelAssignment, closeAssignment,
   acceptAssignment, progressAssignment, completeAssignment, rejectAssignment,

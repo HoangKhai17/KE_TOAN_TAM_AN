@@ -1,5 +1,7 @@
 'use strict'
-const svc = require('./internalAssignments.service')
+const svc         = require('./internalAssignments.service')
+const checklistSvc = require('./iaChecklist.service')
+const linksSvc    = require('./iaLinks.service')
 
 async function listAssignments(req, res, next) {
   try {
@@ -7,7 +9,7 @@ async function listAssignments(req, res, next) {
     const result = await svc.listAssignments(req.user.id, req.user.role, {
       ...filters,
       page:  Math.max(1, parseInt(page, 10)),
-      limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
+      limit: Math.min(500, Math.max(1, parseInt(limit, 10))),
       sortBy, sortDir,
     })
     res.json({ success: true, data: result })
@@ -16,8 +18,16 @@ async function listAssignments(req, res, next) {
 
 async function getStats(req, res, next) {
   try {
-    const stats = await svc.getStats(req.user.id, req.user.role)
+    const { deadlineFrom, deadlineTo } = req.query
+    const stats = await svc.getStats(req.user.id, req.user.role, { deadlineFrom, deadlineTo })
     res.json({ success: true, data: stats })
+  } catch (err) { next(err) }
+}
+
+async function getYears(req, res, next) {
+  try {
+    const years = await svc.getYears()
+    res.json({ success: true, data: { years } })
   } catch (err) { next(err) }
 }
 
@@ -112,10 +122,66 @@ async function deleteComment(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// ── Checklist ─────────────────────────────────────────────────────────────────
+
+async function listChecklist(req, res, next) {
+  try {
+    const items = await checklistSvc.listItems(req.params.id)
+    res.json({ success: true, data: { items } })
+  } catch (err) { next(err) }
+}
+
+async function addChecklistItem(req, res, next) {
+  try {
+    const item = await checklistSvc.addItem(req.params.id, req.body.text, req.user.id)
+    res.status(201).json({ success: true, data: { item } })
+  } catch (err) { next(err) }
+}
+
+async function updateChecklistItem(req, res, next) {
+  try {
+    const item = await checklistSvc.updateItem(req.params.id, req.params.itemId, req.body)
+    res.json({ success: true, data: { item } })
+  } catch (err) { next(err) }
+}
+
+async function deleteChecklistItem(req, res, next) {
+  try {
+    await checklistSvc.deleteItem(req.params.id, req.params.itemId)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+// ── Links ─────────────────────────────────────────────────────────────────────
+
+async function listLinks(req, res, next) {
+  try {
+    const links = await linksSvc.listLinks(req.params.id)
+    res.json({ success: true, data: { links } })
+  } catch (err) { next(err) }
+}
+
+async function addLink(req, res, next) {
+  try {
+    const link = await linksSvc.addLink(req.params.id, req.body, req.user.id)
+    res.status(201).json({ success: true, data: { link } })
+  } catch (err) { next(err) }
+}
+
+async function deleteLink(req, res, next) {
+  try {
+    const isAdmin = req.user.role === 'admin'
+    await linksSvc.deleteLink(req.params.id, req.params.linkId, req.user.id, isAdmin)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
 module.exports = {
-  listAssignments, getStats, getAssignment,
+  listAssignments, getStats, getYears, getAssignment,
   createAssignment, updateAssignment, deleteAssignment,
   sendAssignment, cancelAssignment, closeAssignment,
   acceptAssignment, progressAssignment, completeAssignment, rejectAssignment,
   addComment, deleteComment,
+  listChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem,
+  listLinks, addLink, deleteLink,
 }

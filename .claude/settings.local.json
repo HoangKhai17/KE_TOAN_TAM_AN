@@ -174,7 +174,12 @@
       "Bash(Remove-Item \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Settings\\\\OneDriveSection.jsx\" -Force)",
       "Bash(Write-Host \"Deleted both files\")",
       "Bash(find /mnt/d/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN -maxdepth 2 -name \"docker-compose*\" 2>/dev/null)",
-      "Read(//mnt/d/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/**)"
+      "Read(//mnt/d/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/**)",
+      "PowerShell(docker exec ke_toan_tam_an-postgres-1 ls /tmp/ 2>&1)",
+      "PowerShell(docker exec ke_toan_tam_an-postgres-1 psql -U ktta_user -d ktta_db -f /tmp/seed_ia.sql 2>&1)",
+      "PowerShell(docker exec ke_toan_tam_an-postgres-1 psql -U ktta_user -d ktta_db -c \"\\\\d internal_assignments\" 2>&1)",
+      "PowerShell(tail -5)",
+      "PowerShell(docker exec ke_toan_tam_an-postgres-1 psql -U ktta_user -d ktta_db -c \"INSERT INTO schema_migrations \\(filename, applied_at\\) VALUES \\('seed_internal_assignments.sql', NOW\\(\\)\\) ON CONFLICT DO NOTHING;\" 2>&1)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

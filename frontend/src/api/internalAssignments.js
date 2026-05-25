@@ -5,9 +5,14 @@ export async function listAssignments(params = {}) {
   return data.data  // { items, pagination }
 }
 
-export async function getStats() {
-  const { data } = await api.get('/internal-assignments/meta/stats')
+export async function getStats(params = {}) {
+  const { data } = await api.get('/internal-assignments/meta/stats', { params })
   return data.data
+}
+
+export async function getYears() {
+  const { data } = await api.get('/internal-assignments/meta/years')
+  return data.data.years
 }
 
 export async function getAssignment(id) {
@@ -69,4 +74,41 @@ export async function addComment(id, content) {
 
 export async function deleteComment(id, commentId) {
   await api.delete(`/internal-assignments/${id}/comments/${commentId}`)
+}
+
+// ── Checklist ─────────────────────────────────────────────────────────────────
+
+export async function getChecklist(id) {
+  const { data } = await api.get(`/internal-assignments/${id}/checklist`)
+  return data.data.items
+}
+
+export async function addChecklistItem(id, text) {
+  const { data } = await api.post(`/internal-assignments/${id}/checklist`, { text })
+  return data.data.item
+}
+
+export async function updateChecklistItem(id, itemId, body) {
+  const { data } = await api.patch(`/internal-assignments/${id}/checklist/${itemId}`, body)
+  return data.data.item
+}
+
+export async function deleteChecklistItem(id, itemId) {
+  await api.delete(`/internal-assignments/${id}/checklist/${itemId}`)
+}
+
+// ── Links ─────────────────────────────────────────────────────────────────────
+
+export async function getLinks(id) {
+  const { data } = await api.get(`/internal-assignments/${id}/links`)
+  return data.data.links
+}
+
+export async function addLink(id, body) {
+  const { data } = await api.post(`/internal-assignments/${id}/links`, body)
+  return data.data.link
+}
+
+export async function deleteLink(id, linkId) {
+  await api.delete(`/internal-assignments/${id}/links/${linkId}`)
 }

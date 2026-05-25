@@ -4,7 +4,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-7);
-  padding: var(--space-10) 40px;
   min-height: 100%;
 }
 
@@ -23,8 +22,8 @@
 }
 
 .pageTitle {
-  font-size: 20px;
-  font-weight: 800;
+  font-size: var(--fs-2xl, 20px);
+  font-weight: var(--fw-extrabold, 800);
   color: var(--color-text);
   letter-spacing: -0.3px;
   margin: 0;
@@ -475,8 +474,9 @@
 }
 
 .panel {
-  width: 520px;
-  max-width: 95vw;
+  width: 50vw;
+  min-width: 640px;
+  max-width: 96vw;
   height: 100%;
   background: var(--color-surface);
   border-left: 1px solid var(--color-border);
@@ -1197,3 +1197,1406 @@
 .myStatusInProgress { background: #fff7ed; color: #ea580c; }
 .myStatusDone       { background: #f0fdf4; color: var(--color-success); }
 .myStatusRejected   { background: #fef2f2; color: var(--color-danger); }
+
+/* ── View switch ────────────────────────────────────────────────── */
+
+.viewSwitch {
+  display: flex;
+  align-items: center;
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.viewBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.13s, color 0.13s;
+  white-space: nowrap;
+}
+
+.viewBtn:hover { background: var(--color-border-soft); color: var(--color-text); }
+
+.viewBtnActive {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.viewBtnActive:hover { background: var(--color-primary); filter: brightness(1.06); }
+
+/* ── Filter bar head ────────────────────────────────────────────── */
+
+.filterBarHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filterBarTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.filterActiveBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.filterReset {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.filterReset:hover { background: var(--color-bg); color: var(--color-text); }
+
+/* ── Filter chips ───────────────────────────────────────────────── */
+
+.filterChipsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  border: 1px solid #bfdbfe;
+}
+
+.filterChipRemove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-primary);
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.filterChipDanger {
+  background: #fef2f2;
+  color: var(--color-danger);
+  border-color: #fecaca;
+}
+
+/* ── Filter date field ──────────────────────────────────────────── */
+
+.filterDateField {
+  position: relative;
+  height: 34px;
+  padding: 0 10px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: border-color 0.15s;
+}
+
+.filterDateField:hover { border-color: var(--color-primary); }
+
+.filterDateFieldText {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.filterDateFieldPlaceholder { color: #94a3b8; }
+
+.filterDateFieldInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  cursor: pointer;
+}
+
+/* ── Table ──────────────────────────────────────────────────────── */
+
+.tableWrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.tableScrollX { overflow-x: auto; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.thead {
+  background: #f8fafc;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.th {
+  padding: 10px 14px;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.thAction { width: 90px; }
+
+.tr {
+  border-bottom: 1px solid var(--color-border-soft);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.tr:last-child { border-bottom: none; }
+.tr:hover { background: #f8faff; }
+.trOverdue { background: #fff7f7; }
+
+.td {
+  padding: 11px 14px;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.tdAction { padding: 8px 12px; }
+
+.tableSkeletonBar {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+.taskTitle {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.3;
+}
+
+.taskTitleOverdue { color: var(--color-danger); }
+
+.taskMeta {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  margin-top: 2px;
+}
+
+.actionBtns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btnActionView {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.btnActionView:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border-color: #bfdbfe;
+}
+
+.btnActionDelete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.btnActionDelete:hover {
+  background: #fef2f2;
+  color: var(--color-danger);
+  border-color: #fecaca;
+}
+
+.mutedDash { color: var(--color-muted); }
+
+.dueDateNormal {
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+}
+
+.dueDateOverdue {
+  font-size: var(--fs-sm);
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.assigneesCell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  max-width: 240px;
+}
+
+/* ── Pagination extras ──────────────────────────────────────────── */
+
+.paginationLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.pageSizeBtns {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.pageSizeBtn {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.pageSizeBtn:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-color: var(--color-primary);
+}
+
+.pageSizeBtnActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.pageSizeBtnActive:hover { filter: brightness(1.08); }
+
+.paginationGap {
+  padding: 0 4px;
+  color: var(--color-muted);
+  font-size: var(--fs-xs);
+}
+
+/* ── Board view ─────────────────────────────────────────────────── */
+
+.boardWrap {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+  align-items: flex-start;
+}
+
+.boardCol {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.boardColHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  border-bottom: 2px solid var(--color-border-soft);
+}
+
+.boardColDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotDraft     { background: #94a3b8; }
+.dotActive    { background: var(--color-primary); }
+.dotDone      { background: var(--color-success); }
+.dotCancelled { background: var(--color-danger); }
+
+.boardColTitle {
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  color: var(--color-text);
+  flex: 1;
+}
+
+.boardColCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.boardCards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+  min-height: 120px;
+}
+
+.boardCard {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.boardCard:hover {
+  box-shadow: 0 4px 14px -4px rgba(15, 52, 94, 0.14);
+  border-color: #bfdbfe;
+}
+
+.boardCardTitle {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.boardCardCompany {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  margin-bottom: 6px;
+}
+
+.boardCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.boardCardDeadline {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+}
+
+.boardCardDeadlineOver {
+  font-size: var(--fs-xs);
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.boardCardAssignees {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.boardEmptyText {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  text-align: center;
+  padding: 20px 0;
+}
+
+/* ── Mini dialog ────────────────────────────────────────────────── */
+
+.miniOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.miniDialog {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow-floating);
+}
+
+.miniTitle {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text);
+  margin: 0 0 10px;
+}
+
+.miniBody {
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+
+.miniActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+}
+
+/* ── Loading box ────────────────────────────────────────────────── */
+
+.loadingBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px;
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── Internal badge ─────────────────────────────────────────────── */
+
+.internalBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #f0fdf4;
+  color: #16a34a;
+  font-size: 10.5px;
+  font-weight: 700;
+  border: 1px solid #bbf7d0;
+}
+
+/* ── MultiSelect ────────────────────────────────────────────────── */
+
+.multiSelect {
+  position: relative;
+  min-width: 160px;
+}
+
+.multiSelectTrigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  width: 100%;
+  padding: 0 10px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+
+.multiSelectTrigger:hover { border-color: var(--color-primary); }
+
+.multiSelectActive {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.multiSelectLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+}
+
+.multiSelectActive .multiSelectLabel { color: var(--color-primary); }
+
+.multiSelectBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.chevronRotate {
+  flex-shrink: 0;
+  color: var(--color-muted);
+  transition: transform 0.18s;
+}
+
+.chevronOpen { transform: rotate(180deg); }
+
+.multiSelectDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px -4px rgba(15, 52, 94, 0.14);
+  z-index: 100;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.multiSelectItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+
+.multiSelectItem:hover { background: var(--color-bg); }
+
+.multiSelectItem input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.multiSelectItemChecked { color: var(--color-primary); font-weight: 700; }
+
+.multiSelectDivider {
+  height: 1px;
+  background: var(--color-border-soft);
+  margin: 3px 0;
+}
+
+/* ── Checklist section ──────────────────────────────────────────── */
+
+.checkSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.checkHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.checkTitle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.checkCount {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.checkAddBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.checkAddBtn:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border-color: #bfdbfe;
+}
+
+.checkProgressBar {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-border-soft);
+  overflow: hidden;
+}
+
+.checkProgressFill {
+  height: 100%;
+  background: var(--color-success);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.checkList {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  transition: background 0.1s;
+}
+
+.checkItem:hover { background: var(--color-bg); }
+.checkItemDone .checkItemText { text-decoration: line-through; color: var(--color-muted); }
+
+.checkBox {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s;
+  color: transparent;
+}
+
+.checkBox:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.checkBoxDone {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #fff;
+}
+
+.checkBoxDone:hover:not(:disabled) {
+  background: #15803d;
+  border-color: #15803d;
+}
+
+.checkItemText {
+  flex: 1;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+.checkDelBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+
+.checkItem:hover .checkDelBtn { display: flex; }
+
+.checkDelBtn:hover {
+  background: #fef2f2;
+  color: var(--color-danger);
+}
+
+.checkEmpty {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+.checkAddForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.checkAddInput {
+  height: 34px;
+  padding: 0 var(--space-5);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.checkAddInput:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.checkAddInput::placeholder { color: #94a3b8; }
+
+.checkAddActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* ── Links section ──────────────────────────────────────────────── */
+
+.iaLinkSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.iaLinkHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.iaLinkTitle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.iaLinkCount {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.iaLinkList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.iaLinkItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-soft);
+  transition: border-color 0.12s;
+}
+
+.iaLinkItem:hover { border-color: #bfdbfe; }
+
+.iaLinkIcon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.iaLinkBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.iaLinkName {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-primary);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iaLinkName:hover { text-decoration: underline; }
+
+.iaLinkUrl {
+  font-size: 11px;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iaLinkDesc {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.iaLinkDelBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+
+.iaLinkItem:hover .iaLinkDelBtn { display: flex; }
+
+.iaLinkDelBtn:hover {
+  background: #fef2f2;
+  color: var(--color-danger);
+}
+
+.iaLinkAddForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.iaLinkErr {
+  font-size: var(--fs-xs);
+  color: var(--color-danger);
+  font-weight: 600;
+  padding: 4px 6px;
+  background: #fef2f2;
+  border-radius: var(--radius-sm);
+}
+
+.iaLinkInput {
+  height: 34px;
+  padding: 0 var(--space-5);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.iaLinkInput:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.iaLinkInput::placeholder { color: #94a3b8; }
+
+.iaLinkAddActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* ── Modal variants ─────────────────────────────────────────────── */
+
+.modalLg {
+  max-width: 900px;
+}
+
+.modalTwoCol {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--space-9);
+  align-items: flex-start;
+}
+
+.modalColLeft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  min-width: 0;
+}
+
+.modalColRight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* ── Checklist input in create modal ────────────────────────────── */
+
+.checklistInputList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checklistInputRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checklistBullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+.checklistInputField {
+  flex: 1;
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.checklistInputField:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.checklistInputField::placeholder { color: #94a3b8; }
+
+.checklistRemoveBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+
+.checklistRemoveBtn:hover {
+  background: #fef2f2;
+  color: var(--color-danger);
+}
+
+.checklistAddRowBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.checklistAddRowBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.assigneeCountBadge {
+  margin-left: 6px;
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: var(--fs-xs);
+}
+
+/* ── Staff picker item disabled state ───────────────────────────── */
+
+.staffPickerItemDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.staffPickerCheck {
+  margin-left: auto;
+  color: var(--color-primary);
+}
+
+/* ── Board drag and drop ────────────────────────────────────────── */
+
+.boardCardsOver {
+  background: var(--color-primary-bg);
+  border-radius: var(--radius-md);
+}
+
+.boardCardDragging {
+  opacity: 0.35;
+}
+
+.boardCardOverlay {
+  box-shadow: 0 8px 24px -4px rgba(15, 52, 94, 0.22);
+  cursor: grabbing;
+  opacity: 0.95;
+}
+
+.dragTransform {
+  transform: translate(var(--drag-x, 0), var(--drag-y, 0));
+  z-index: 999;
+}
+
+/* ── Panel head improvements ────────────────────────────────────── */
+
+.panelHeadContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.panelHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.panelHeadBadges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.panelTitleInput {
+  width: 100%;
+  padding: 6px var(--space-4);
+  border: 1.5px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.panelSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panelSectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editMetaGrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.editRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+
+.panelEmptyText {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}
+
+.metaValueDanger {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.sectionTitleIcon {
+  display: inline;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+
+.confirmBody {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+.commentSendBtn {
+  height: 60px;
+  padding: 0 14px;
+  align-self: flex-start;
+}
+
+/* ── Responsive board on smaller screens ────────────────────────── */
+
+@media (max-width: 900px) {
+  .modalTwoCol {
+    grid-template-columns: 1fr;
+  }
+  .modalLg {
+    max-width: 98vw;
+  }
+}
+
+/* ── Bulk select (checkbox columns) ────────────────────────────── */
+
+.thCheck {
+  width: 38px;
+  padding: 10px 0 10px 14px;
+}
+
+.tdCheck {
+  width: 38px;
+  padding: 10px 0 10px 14px;
+}
+
+.trSelected { background: rgba(37, 99, 235, 0.04); }
+
+/* ── Bulk action bar ────────────────────────────────────────────── */
+
+.bulkBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--color-primary-bg, #eff6ff);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.bulkCount {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.bulkDivider {
+  width: 1px;
+  height: 18px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+.btnDangerText { color: var(--color-danger); }
+
+/* ── Progress bar ───────────────────────────────────────────────── */
+
+.progressWrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 80px;
+}
+
+.progressBar {
+  flex: 1;
+  height: 5px;
+  min-width: 36px;
+  background: var(--color-border-soft, #e2e8f0);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+
+.progressFillDynamic { width: var(--progress-width, 0%); }
+.progressFillDone    { background: var(--color-success); }
+
+.progressText {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+/* ── Quick-edit inline selects ──────────────────────────────────── */
+
+.qeSelect {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color 0.13s;
+  max-width: 140px;
+}
+
+.qeSelect:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
+}
+
+.qeSelectStyled { font-weight: 700; }
+
+.qeStatusDraft     { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+.qeStatusActive    { background: #eff6ff; color: var(--color-primary); border-color: #bfdbfe; }
+.qeStatusDone      { background: #f0fdf4; color: var(--color-success); border-color: #bbf7d0; }
+.qeStatusCancelled { background: #fef2f2; color: var(--color-danger);  border-color: #fecaca; }
+
+.qePriorityLow    { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+.qePriorityNormal { background: #eff6ff; color: #3b82f6; border-color: #bfdbfe; }
+.qePriorityHigh   { background: #fff7ed; color: #ea580c; border-color: #fed7aa; }
+.qePriorityUrgent { background: #fef2f2; color: #dc2626; border-color: #fecaca; }

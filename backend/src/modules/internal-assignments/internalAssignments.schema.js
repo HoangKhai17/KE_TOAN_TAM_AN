@@ -34,4 +34,22 @@ const commentSchema = z.object({
   content: z.string().min(1, 'Nội dung không được để trống').max(3000),
 })
 
-module.exports = { createSchema, updateSchema, noteSchema, optionalNoteSchema, commentSchema }
+const addChecklistItemSchema = z.object({
+  text: z.string().min(1, 'Nội dung không được để trống').max(500),
+})
+
+const updateChecklistItemSchema = z.object({
+  text:   z.string().min(1).max(500).optional(),
+  isDone: z.boolean().optional(),
+})
+
+const addLinkSchema = z.object({
+  name:        z.string().min(1).max(200),
+  url:         z.string().url('URL không hợp lệ'),
+  description: z.string().max(500).optional().nullable(),
+})
+
+module.exports = {
+  createSchema, updateSchema, noteSchema, optionalNoteSchema, commentSchema,
+  addChecklistItemSchema, updateChecklistItemSchema, addLinkSchema,
+}

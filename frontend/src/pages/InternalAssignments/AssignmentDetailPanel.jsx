@@ -2,10 +2,16 @@ import { useState, useEffect } from 'react'
 import {
   X, Send, Ban, CheckCircle, ThumbsUp, Play, Check,
   XCircle, Pencil, Trash2, Loader2, MessageSquare, Plus,
+  Save, Search,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useToastStore } from '../../stores/toastStore'
+import { useEnumsStore } from '../../hooks/useEnums'
+import { listUserOptions } from '../../api/users'
+import { listCompanies } from '../../api/companies'
 import * as api from '../../api/internalAssignments'
+import IaChecklistSection from './IaChecklistSection'
+import IaLinksSection from './IaLinksSection'
 import s from './internalAssignments.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -166,7 +172,7 @@ function ConfirmModal({ title, body, confirmLabel, confirmClass, onConfirm, onCl
           <button className={s.panelClose} onClick={onClose}><X size={15} /></button>
         </div>
         <div className={s.modalBody}>
-          <p style={{ margin: 0, fontSize: 'var(--fs-sm)', color: 'var(--color-text)', lineHeight: 1.6 }}>{body}</p>
+          <p className={s.confirmBody}>{body}</p>
         </div>
         <div className={s.modalFooter}>
           <button className={s.btnSecondary} onClick={onClose} disabled={saving}>Huỷ</button>
@@ -182,19 +188,30 @@ function ConfirmModal({ title, body, confirmLabel, confirmClass, onConfirm, onCl
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export default function AssignmentDetailPanel({
-  assignmentId, currentUser, isAdmin, onClose, onEdit, onUpdate,
+  assignmentId, currentUser, isAdmin, onClose, onUpdate,
 }) {
-  const addToast = useToastStore((s) => s.toast)
+  const addToast  = useToastStore((st) => st.toast)
+  const getOptions = useEnumsStore((st) => st.getOptions)
 
   const [item,    setItem]    = useState(null)
   const [loading, setLoading] = useState(true)
+
+  // Edit mode
+  const [editing,      setEditing]      = useState(false)
+  const [editForm,     setEditForm]     = useState({})
+  const [staffList,    setStaffList]    = useState([])
+  const [companies,    setCompanies]    = useState([])
+  const [staffSearch,  setStaffSearch]  = useState('')
+  const [addIds,       setAddIds]       = useState([])
+  const [removeIds,    setRemoveIds]    = useState([])
+  const [savingEdit,   setSavingEdit]   = useState(false)
 
   // Comment state
   const [commentText, setCommentText] = useState('')
   const [submitting,  setSubmitting]  = useState(false)
 
   // Modal state
-  const [modal, setModal] = useState(null) // 'reject' | 'complete' | 'send' | 'cancel' | 'close' | 'delete'
+  const [modal, setModal] = useState(null)
   const [acting, setActing] = useState(false)
 
   useEffect(() => {
@@ -205,6 +222,82 @@ export default function AssignmentDetailPanel({
       .catch(() => { if (!cancelled) { setLoading(false) } })
     return () => { cancelled = true }
   }, [assignmentId])
+
+  // Load reference data for edit mode (lazy)
+  function openEdit() {
+    setEditForm({
+      title:        item.title,
+      description:  item.description ?? '',
+      priority:     item.priority,
+      deadlineDate: item.deadlineDate ?? '',
+      companyId:    item.company?.id ?? '',
+    })
+    setAddIds([])
+    setRemoveIds([])
+    setStaffSearch('')
+    setEditing(true)
+    if (staffList.length === 0) {
+      listUserOptions({ status: 'active' }).then(({ users }) => setStaffList(users)).catch(() => {})
+    }
+    if (companies.length === 0) {
+      listCompanies({ limit: 300, status: 'active' }).then(({ companies: c }) => setCompanies(c)).catch(() => {})
+    }
+  }
+
+  function cancelEdit() {
+    setEditing(false)
+    setAddIds([])
+    setRemoveIds([])
+  }
+
+  function setEF(k, v) { setEditForm((p) => ({ ...p, [k]: v })) }
+
+  function isAssigneeChecked(userId) {
+    const existing = item?.assignees?.find((a) => a.userId === userId)
+    if (existing) return !removeIds.includes(userId)
+    return addIds.includes(userId)
+  }
+
+  function toggleEditAssignee(userId) {
+    const existing = item?.assignees?.find((a) => a.userId === userId)
+    const isActive = existing && !['pending', 'rejected'].includes(existing.status)
+    if (isActive) return
+    if (existing) {
+      setRemoveIds((p) => p.includes(userId) ? p.filter((id) => id !== userId) : [...p, userId])
+    } else {
+      setAddIds((p) => p.includes(userId) ? p.filter((id) => id !== userId) : [...p, userId])
+    }
+  }
+
+  async function handleSaveEdit() {
+    if (!editForm.title?.trim()) {
+      addToast('Tiêu đề không được để trống', 'error')
+      return
+    }
+    setSavingEdit(true)
+    try {
+      const body = {}
+      if (editForm.title.trim()       !== item.title)              body.title        = editForm.title.trim()
+      if (editForm.description.trim() !== (item.description ?? '')) body.description  = editForm.description.trim() || null
+      if (editForm.priority           !== item.priority)            body.priority     = editForm.priority
+      if (editForm.deadlineDate       !== (item.deadlineDate ?? '')) body.deadlineDate = editForm.deadlineDate || null
+      if (editForm.companyId          !== (item.company?.id ?? '')) body.companyId    = editForm.companyId || null
+      if (addIds.length)    body.addAssigneeIds    = addIds
+      if (removeIds.length) body.removeAssigneeIds = removeIds
+
+      const updated = await api.updateAssignment(assignmentId, body)
+      setItem(updated)
+      setEditing(false)
+      setAddIds([])
+      setRemoveIds([])
+      addToast('Đã cập nhật phiếu', 'success')
+      onUpdate?.()
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật phiếu', 'error')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
 
   async function doAction(fn, successMsg, closeAfter = false) {
     setActing(true)
@@ -222,41 +315,14 @@ export default function AssignmentDetailPanel({
     }
   }
 
-  async function handleSend() {
-    await doAction(() => api.sendAssignment(assignmentId), 'Đã gửi phiếu')
-  }
-
-  async function handleCancel() {
-    await doAction(() => api.cancelAssignment(assignmentId), 'Đã hủy phiếu')
-  }
-
-  async function handleClose() {
-    await doAction(() => api.closeAssignment(assignmentId), 'Đã đóng phiếu')
-  }
-
-  async function handleDelete() {
-    await doAction(
-      () => api.deleteAssignment(assignmentId),
-      'Đã xóa phiếu',
-      true
-    )
-  }
-
-  async function handleAccept() {
-    await doAction(() => api.acceptAssignment(assignmentId), 'Đã tiếp nhận phiếu')
-  }
-
-  async function handleProgress() {
-    await doAction(() => api.progressAssignment(assignmentId), 'Đã bắt đầu thực hiện')
-  }
-
-  async function handleComplete(note) {
-    await doAction(() => api.completeAssignment(assignmentId, note), 'Đã báo hoàn thành')
-  }
-
-  async function handleReject(note) {
-    await doAction(() => api.rejectAssignment(assignmentId, note), 'Đã từ chối phiếu')
-  }
+  async function handleSend()    { await doAction(() => api.sendAssignment(assignmentId),     'Đã gửi phiếu') }
+  async function handleCancel()  { await doAction(() => api.cancelAssignment(assignmentId),   'Đã hủy phiếu') }
+  async function handleClose()   { await doAction(() => api.closeAssignment(assignmentId),    'Đã đóng phiếu') }
+  async function handleDelete()  { await doAction(() => api.deleteAssignment(assignmentId),   'Đã xóa phiếu', true) }
+  async function handleAccept()  { await doAction(() => api.acceptAssignment(assignmentId),   'Đã tiếp nhận phiếu') }
+  async function handleProgress(){ await doAction(() => api.progressAssignment(assignmentId), 'Đã bắt đầu thực hiện') }
+  async function handleComplete(note) { await doAction(() => api.completeAssignment(assignmentId, note), 'Đã báo hoàn thành') }
+  async function handleReject(note)   { await doAction(() => api.rejectAssignment(assignmentId, note),  'Đã từ chối phiếu') }
 
   async function handleAddComment() {
     if (!commentText.trim()) return
@@ -284,16 +350,21 @@ export default function AssignmentDetailPanel({
     }
   }
 
-  // Determine my assignee record
-  const myAssignee = !isAdmin && item
-    ? item.assignees?.find((a) => a.userId === currentUser?.id)
-    : null
-
-  // What staff actions are available
+  const myAssignee = item ? item.assignees?.find((a) => a.userId === currentUser?.id) : null
   const canAccept   = myAssignee?.status === 'pending'
   const canProgress = myAssignee?.status === 'accepted'
   const canComplete = ['accepted', 'in_progress'].includes(myAssignee?.status)
   const canReject   = ['pending', 'accepted'].includes(myAssignee?.status)
+
+  const canEdit = isAdmin && item && ['draft', 'active'].includes(item.status)
+
+  const filteredStaff = staffSearch.trim()
+    ? staffList.filter((u) => u.name.toLowerCase().includes(staffSearch.toLowerCase()))
+    : staffList
+
+  const priorityOptions = getOptions('assignment_priority').length > 0
+    ? getOptions('assignment_priority')
+    : [{ key: 'low', label: 'Thấp' }, { key: 'normal', label: 'Bình thường' }, { key: 'high', label: 'Cao' }, { key: 'urgent', label: 'Khẩn cấp' }]
 
   return (
     <>
@@ -302,98 +373,182 @@ export default function AssignmentDetailPanel({
 
           {/* ── Head ── */}
           <div className={s.panelHead}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div className={s.panelHeadContent}>
               {loading ? (
                 <div className={s.skeletonBar} style={{ width: '70%', height: 18 }} />
               ) : (
                 <>
-                  <p className={s.panelTitle}>{item?.title}</p>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                    {item && (
-                      <>
-                        <span className={`${s.badge} ${STATUS_CSS[item.status]}`}>
-                          {STATUS_LABELS[item.status]}
-                        </span>
-                        <span className={`${s.badge} ${PRIORITY_CSS[item.priority]}`}>
-                          {PRIORITY_LABELS[item.priority]}
-                        </span>
-                      </>
-                    )}
-                  </div>
+                  {editing ? (
+                    <input
+                      type="text"
+                      className={s.panelTitleInput}
+                      value={editForm.title}
+                      onChange={(e) => setEF('title', e.target.value)}
+                      placeholder="Tiêu đề phiếu..."
+                    />
+                  ) : (
+                    <p className={s.panelTitle}>{item?.title}</p>
+                  )}
+                  {item && !editing && (
+                    <div className={s.panelHeadBadges}>
+                      <span className={`${s.badge} ${STATUS_CSS[item.status]}`}>
+                        {STATUS_LABELS[item.status]}
+                      </span>
+                      <span className={`${s.badge} ${PRIORITY_CSS[item.priority]}`}>
+                        {PRIORITY_LABELS[item.priority]}
+                      </span>
+                    </div>
+                  )}
                 </>
               )}
             </div>
-            <button className={s.panelClose} onClick={onClose}><X size={15} /></button>
+            <div className={s.panelHeadActions}>
+              {canEdit && !editing && (
+                <button className={s.btnIcon} onClick={openEdit} title="Chỉnh sửa">
+                  <Pencil size={13} />
+                </button>
+              )}
+              <button className={s.panelClose} onClick={onClose}><X size={15} /></button>
+            </div>
           </div>
 
           {/* ── Body ── */}
           <div className={s.panelBody}>
             {loading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className={s.panelSkeleton}>
                 {[80, 50, 65, 40].map((w, i) => (
                   <div key={i} className={s.skeletonBar} style={{ width: `${w}%` }} />
                 ))}
               </div>
             ) : item ? (
               <>
-                {/* Meta */}
+                {/* ── Thông tin chung ── */}
                 <div className={s.panelSection}>
-                  <p className={s.panelSectionTitle}>Thông tin chung</p>
-                  <div className={s.metaGrid}>
-                    <div className={s.metaItem}>
-                      <span className={s.metaLabel}>Người tạo</span>
-                      <span className={s.metaValue}>{item.createdBy?.name ?? '—'}</span>
-                    </div>
-                    <div className={s.metaItem}>
-                      <span className={s.metaLabel}>Khách hàng</span>
-                      <span className={s.metaValue}>{item.company?.name ?? '—'}</span>
-                    </div>
-                    <div className={s.metaItem}>
-                      <span className={s.metaLabel}>Ngày tạo</span>
-                      <span className={s.metaValue}>{fmtDate(item.createdAt)}</span>
-                    </div>
-                    <div className={s.metaItem}>
-                      <span className={s.metaLabel}>Hạn hoàn thành</span>
-                      <span className={s.metaValue} style={
-                        item.deadlineDate && item.status === 'active' && new Date(item.deadlineDate) < new Date()
-                          ? { color: 'var(--color-danger)' } : {}
-                      }>
-                        {fmtDate(item.deadlineDate)}
-                      </span>
-                    </div>
-                    {item.sentAt && (
-                      <div className={s.metaItem}>
-                        <span className={s.metaLabel}>Ngày gửi</span>
-                        <span className={s.metaValue}>{fmtDateTime(item.sentAt)}</span>
-                      </div>
-                    )}
-                    {item.closedAt && (
-                      <div className={s.metaItem}>
-                        <span className={s.metaLabel}>Ngày đóng</span>
-                        <span className={s.metaValue}>{fmtDateTime(item.closedAt)}</span>
-                      </div>
-                    )}
+                  <div className={s.panelSectionHead}>
+                    <p className={s.panelSectionTitle}>Thông tin chung</p>
                   </div>
+
+                  {editing ? (
+                    <div className={s.editMetaGrid}>
+                      {/* Priority + Deadline */}
+                      <div className={s.editRow}>
+                        <div className={s.formGroup}>
+                          <label className={s.formLabel}>Ưu tiên</label>
+                          <select
+                            className={s.formSelect}
+                            value={editForm.priority}
+                            onChange={(e) => setEF('priority', e.target.value)}
+                          >
+                            {priorityOptions.map((o) => (
+                              <option key={o.key} value={o.key}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className={s.formGroup}>
+                          <label className={s.formLabel}>Hạn hoàn thành</label>
+                          <input
+                            type="date"
+                            className={s.formInput}
+                            value={editForm.deadlineDate}
+                            onChange={(e) => setEF('deadlineDate', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      {/* Company */}
+                      <div className={s.formGroup}>
+                        <label className={s.formLabel}>Khách hàng</label>
+                        <select
+                          className={s.formSelect}
+                          value={editForm.companyId}
+                          onChange={(e) => setEF('companyId', e.target.value)}
+                        >
+                          <option value="">Không gắn khách hàng</option>
+                          {companies.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* Description */}
+                      <div className={s.formGroup}>
+                        <label className={s.formLabel}>Mô tả</label>
+                        <textarea
+                          className={s.formTextarea}
+                          value={editForm.description}
+                          onChange={(e) => setEF('description', e.target.value)}
+                          rows={4}
+                          placeholder="Mô tả chi tiết..."
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={s.metaGrid}>
+                      <div className={s.metaItem}>
+                        <span className={s.metaLabel}>Người tạo</span>
+                        <span className={s.metaValue}>{item.createdBy?.name ?? '—'}</span>
+                      </div>
+                      <div className={s.metaItem}>
+                        <span className={s.metaLabel}>Khách hàng</span>
+                        <span className={s.metaValue}>
+                          {item.company?.name
+                            ? item.company.name
+                            : <span className={s.internalBadge}>Công việc nội bộ</span>}
+                        </span>
+                      </div>
+                      <div className={s.metaItem}>
+                        <span className={s.metaLabel}>Ngày tạo</span>
+                        <span className={s.metaValue}>{fmtDate(item.createdAt)}</span>
+                      </div>
+                      <div className={s.metaItem}>
+                        <span className={s.metaLabel}>Hạn hoàn thành</span>
+                        <span className={`${s.metaValue} ${item.deadlineDate && item.status === 'active' && new Date(item.deadlineDate) < new Date() ? s.metaValueDanger : ''}`}>
+                          {fmtDate(item.deadlineDate)}
+                        </span>
+                      </div>
+                      {item.sentAt && (
+                        <div className={s.metaItem}>
+                          <span className={s.metaLabel}>Ngày gửi</span>
+                          <span className={s.metaValue}>{fmtDateTime(item.sentAt)}</span>
+                        </div>
+                      )}
+                      {item.closedAt && (
+                        <div className={s.metaItem}>
+                          <span className={s.metaLabel}>Ngày đóng</span>
+                          <span className={s.metaValue}>{fmtDateTime(item.closedAt)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Description */}
-                {item.description && (
+                {/* ── Mô tả (read-only view) ── */}
+                {!editing && item.description && (
                   <div className={s.panelSection}>
                     <p className={s.panelSectionTitle}>Mô tả</p>
                     <p className={s.descriptionText}>{item.description}</p>
                   </div>
                 )}
 
-                {/* Assignees */}
+                {/* ── Checklist ── */}
+                <div className={s.panelSection}>
+                  <IaChecklistSection
+                    assignmentId={assignmentId}
+                    readOnly={item.status === 'cancelled' || item.status === 'done'}
+                  />
+                </div>
+
+                {/* ── Links ── */}
+                <div className={s.panelSection}>
+                  <IaLinksSection assignmentId={assignmentId} />
+                </div>
+
+                {/* ── Nhân sự thực hiện ── */}
                 <div className={s.panelSection}>
                   <p className={s.panelSectionTitle}>
                     Nhân sự thực hiện ({item.assignees?.length ?? 0})
                   </p>
                   <div className={s.assigneeList}>
                     {(item.assignees ?? []).length === 0 ? (
-                      <p style={{ margin: 0, fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>
-                        Chưa có nhân sự
-                      </p>
+                      <p className={s.panelEmptyText}>Chưa có nhân sự</p>
                     ) : (
                       item.assignees.map((a) => (
                         <div key={a.userId} className={s.assigneeRow}>
@@ -401,9 +556,7 @@ export default function AssignmentDetailPanel({
                             <div className={s.avatarSm}>{initials(a.name)}</div>
                             <div>
                               <div className={s.assigneeName}>{a.name}</div>
-                              {a.note && (
-                                <div className={s.assigneeNote}>"{a.note}"</div>
-                              )}
+                              {a.note && <div className={s.assigneeNote}>"{a.note}"</div>}
                             </div>
                           </div>
                           <span className={`${s.assigneeChip} ${ASSIGNEE_STATUS_CSS[a.status]}`}>
@@ -413,12 +566,53 @@ export default function AssignmentDetailPanel({
                       ))
                     )}
                   </div>
+
+                  {/* Assignee picker (edit mode) */}
+                  {editing && (
+                    <div className={s.staffPickerWrap} style={{ marginTop: 10 }}>
+                      <div className={s.staffPickerSearch}>
+                        <Search size={13} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+                        <input
+                          type="text"
+                          className={s.staffPickerSearchInput}
+                          placeholder="Tìm nhân viên..."
+                          value={staffSearch}
+                          onChange={(e) => setStaffSearch(e.target.value)}
+                        />
+                      </div>
+                      <div className={s.staffPickerList}>
+                        {filteredStaff.length === 0 ? (
+                          <div className={s.staffPickerEmpty}>Không tìm thấy nhân viên</div>
+                        ) : filteredStaff.map((u) => {
+                          const checked  = isAssigneeChecked(u.id)
+                          const existing = item?.assignees?.find((a) => a.userId === u.id)
+                          const isActive = existing && !['pending', 'rejected'].includes(existing.status)
+                          return (
+                            <label
+                              key={u.id}
+                              className={`${s.staffPickerItem} ${isActive ? s.staffPickerItemDisabled : ''}`}
+                              title={isActive ? 'Không thể xóa nhân sự đang thực hiện' : ''}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={isActive}
+                                onChange={() => !isActive && toggleEditAssignee(u.id)}
+                              />
+                              <span className={s.staffPickerName}>{u.name}</span>
+                              {checked && <Check size={12} className={s.staffPickerCheck} />}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Comments */}
+                {/* ── Comments ── */}
                 <div className={s.panelSection}>
                   <p className={s.panelSectionTitle}>
-                    <MessageSquare size={12} style={{ display: 'inline', marginRight: 4 }} />
+                    <MessageSquare size={12} className={s.sectionTitleIcon} />
                     Bình luận ({item.comments?.length ?? 0})
                   </p>
                   <div className={s.commentList}>
@@ -445,7 +639,6 @@ export default function AssignmentDetailPanel({
                     ))}
                   </div>
 
-                  {/* Comment input */}
                   {item.status !== 'cancelled' && (
                     <div className={s.commentForm}>
                       <textarea
@@ -459,10 +652,9 @@ export default function AssignmentDetailPanel({
                         rows={2}
                       />
                       <button
-                        className={s.btnPrimary}
+                        className={`${s.btnPrimary} ${s.commentSendBtn}`}
                         onClick={handleAddComment}
                         disabled={submitting || !commentText.trim()}
-                        style={{ height: 60, padding: '0 14px', alignSelf: 'flex-start' }}
                       >
                         {submitting ? <Loader2 size={13} className={s.spinIcon} /> : <Plus size={14} />}
                       </button>
@@ -471,40 +663,40 @@ export default function AssignmentDetailPanel({
                 </div>
               </>
             ) : (
-              <p style={{ color: 'var(--color-muted)', fontSize: 'var(--fs-sm)' }}>
-                Không thể tải phiếu
-              </p>
+              <p className={s.panelEmptyText}>Không thể tải phiếu</p>
             )}
           </div>
 
-          {/* ── Footer actions ── */}
+          {/* ── Footer ── */}
           {item && !loading && (
             <div className={s.panelFooter}>
-              {/* Admin actions */}
-              {isAdmin && (
+              {/* Edit mode actions */}
+              {editing && (
+                <div className={s.panelActionsAdmin}>
+                  <button className={s.btnSecondary} onClick={cancelEdit} disabled={savingEdit}>
+                    Huỷ
+                  </button>
+                  <button className={s.btnPrimary} onClick={handleSaveEdit} disabled={savingEdit}>
+                    {savingEdit ? <><Loader2 size={13} className={s.spinIcon} /> Đang lưu...</> : <><Save size={13} /> Lưu thay đổi</>}
+                  </button>
+                </div>
+              )}
+
+              {/* Admin lifecycle actions */}
+              {isAdmin && !editing && (
                 <div className={s.panelActionsAdmin}>
                   {item.status === 'draft' && (
                     <>
-                      <button className={s.btnGhost} onClick={() => onEdit?.(item)}>
-                        <Pencil size={13} /> Sửa
-                      </button>
                       <button className={s.btnPrimary} onClick={() => setModal('send')}>
                         <Send size={13} /> Gửi phiếu
                       </button>
-                      <button
-                        className={`${s.btnIcon} ${s.btnIconDanger}`}
-                        onClick={() => setModal('delete')}
-                        title="Xóa phiếu"
-                      >
+                      <button className={`${s.btnIcon} ${s.btnIconDanger}`} onClick={() => setModal('delete')} title="Xóa phiếu">
                         <Trash2 size={13} />
                       </button>
                     </>
                   )}
                   {item.status === 'active' && (
                     <>
-                      <button className={s.btnGhost} onClick={() => onEdit?.(item)}>
-                        <Pencil size={13} /> Sửa
-                      </button>
                       <button className={s.btnSuccess} onClick={() => setModal('close')}>
                         <CheckCircle size={13} /> Đóng phiếu
                       </button>
@@ -517,7 +709,7 @@ export default function AssignmentDetailPanel({
               )}
 
               {/* Staff actions */}
-              {!isAdmin && item.status === 'active' && myAssignee && (
+              {!isAdmin && item.status === 'active' && myAssignee && !editing && (
                 <div className={s.panelActions}>
                   {canAccept && (
                     <button className={s.btnPrimary} onClick={handleAccept} disabled={acting}>
@@ -550,21 +742,11 @@ export default function AssignmentDetailPanel({
 
       {/* ── Modals ── */}
       {modal === 'reject' && (
-        <RejectModal
-          saving={acting}
-          onConfirm={handleReject}
-          onClose={() => setModal(null)}
-        />
+        <RejectModal saving={acting} onConfirm={handleReject} onClose={() => setModal(null)} />
       )}
-
       {modal === 'complete' && (
-        <CompleteModal
-          saving={acting}
-          onConfirm={handleComplete}
-          onClose={() => setModal(null)}
-        />
+        <CompleteModal saving={acting} onConfirm={handleComplete} onClose={() => setModal(null)} />
       )}
-
       {modal === 'send' && (
         <ConfirmModal
           title="Gửi phiếu giao việc"
@@ -576,7 +758,6 @@ export default function AssignmentDetailPanel({
           onClose={() => setModal(null)}
         />
       )}
-
       {modal === 'cancel' && (
         <ConfirmModal
           title="Hủy phiếu giao việc"
@@ -588,7 +769,6 @@ export default function AssignmentDetailPanel({
           onClose={() => setModal(null)}
         />
       )}
-
       {modal === 'close' && (
         <ConfirmModal
           title="Đóng phiếu giao việc"
@@ -600,7 +780,6 @@ export default function AssignmentDetailPanel({
           onClose={() => setModal(null)}
         />
       )}
-
       {modal === 'delete' && (
         <ConfirmModal
           title="Xóa phiếu"

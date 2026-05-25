@@ -9,20 +9,21 @@ import CheckInWidget from './CheckInWidget'
 import s from './layout.module.css'
 
 const ROUTE_LABELS = {
-  dashboard:   'Trang chủ',
-  companies:   'Công ty',
-  tasks:       'Công việc',
-  'task-types':'Loại công việc',
-  schedules:   'Lịch định kỳ',
-  staff:       'Nhân viên',
-  reports:     'Báo cáo',
-  credentials: 'Thông tin đăng nhập',
-  settings:    'Cài đặt',
-  profile:     'Hồ sơ',
-  notifications: 'Thông báo',
-  attendance:  'Chấm công',
-  admin:       'Quản lý',
-  payroll:     'Bảng lương',
+  dashboard:              'Trang chủ',
+  companies:              'Công ty',
+  tasks:                  'Công việc',
+  'task-types':           'Loại công việc',
+  schedules:              'Lịch định kỳ',
+  staff:                  'Nhân viên',
+  reports:                'Báo cáo',
+  credentials:            'Thông tin đăng nhập',
+  settings:               'Cài đặt',
+  profile:                'Hồ sơ',
+  notifications:          'Thông báo',
+  attendance:             'Chấm công',
+  admin:                  'Quản lý',
+  payroll:                'Bảng lương',
+  'internal-assignments': 'Công việc nội bộ',
 }
 
 function useBreadcrumb() {
