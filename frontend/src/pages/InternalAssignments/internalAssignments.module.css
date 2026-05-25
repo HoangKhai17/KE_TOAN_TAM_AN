@@ -1554,26 +1554,32 @@
 /* ── Board view ─────────────────────────────────────────────────── */
 
 .boardWrap {
-  display: flex;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(260px, 1fr));
+  gap: 10px;
   overflow-x: auto;
-  padding-bottom: 16px;
-  align-items: flex-start;
+  padding-bottom: 12px;
+  min-height: 0;
 }
 
 .boardCol {
-  flex: 0 0 280px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  border-radius: var(--radius-lg);
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  overflow: hidden;
+  min-width: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
 .boardColHead {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 4px;
-  border-bottom: 2px solid var(--color-border-soft);
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1.5px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
 }
 
 .boardColDot {
@@ -1610,11 +1616,14 @@
 }
 
 .boardCards {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 0;
+  gap: 6px;
   min-height: 120px;
+  max-height: calc(100vh - 360px);
 }
 
 .boardCard {
@@ -1623,12 +1632,13 @@
   border-radius: var(--radius-md);
   padding: 12px 14px;
   cursor: pointer;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
 }
 
 .boardCard:hover {
-  box-shadow: 0 4px 14px -4px rgba(15, 52, 94, 0.14);
-  border-color: #bfdbfe;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.13), 0 1px 4px rgba(0,0,0,0.06);
+  border-color: #93c5fd;
 }
 
 .boardCardTitle {
@@ -2378,9 +2388,10 @@
 }
 
 .boardCardOverlay {
+  transform: rotate(1.5deg);
+  opacity: 0.96;
   box-shadow: 0 8px 24px -4px rgba(15, 52, 94, 0.22);
   cursor: grabbing;
-  opacity: 0.95;
 }
 
 .dragTransform {
@@ -2600,3 +2611,343 @@
 .qePriorityNormal { background: #eff6ff; color: #3b82f6; border-color: #bfdbfe; }
 .qePriorityHigh   { background: #fff7ed; color: #ea580c; border-color: #fed7aa; }
 .qePriorityUrgent { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+
+/* ── Panel inline-edit fields ───────────────────────────────────── */
+
+.panelTitleEditable {
+  width: 100%;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.panelTitleEditable:hover {
+  border-color: var(--color-border);
+  background: var(--color-bg);
+}
+
+.panelTitleEditable:focus {
+  border-color: var(--color-primary);
+  background: var(--color-bg);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.panelTitleEditable:disabled { opacity: 0.6; }
+
+.metaFieldSelect {
+  height: 32px;
+  font-size: var(--fs-xs);
+  padding: 0 var(--space-4);
+}
+
+.metaFieldInput {
+  height: 32px;
+  font-size: var(--fs-xs);
+  padding: 0 var(--space-4);
+}
+
+.descEditWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.savingHint {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+/* ── QuickView two-column layout ────────────────────────────────── */
+
+.iaStatusBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border-soft);
+  flex-shrink: 0;
+}
+
+.iaStatusBarLabel {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-muted);
+  white-space: nowrap;
+  margin-right: 2px;
+}
+
+.statusActionBtn {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  border: 1.5px solid;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.13s;
+}
+
+.iaStatusBtnActive {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+.iaStatusBtnActive:hover:not(:disabled) {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.iaStatusBtnDone {
+  background: #f0fdf4;
+  color: #059669;
+  border-color: #bbf7d0;
+}
+.iaStatusBtnDone:hover:not(:disabled) {
+  background: #059669;
+  color: #fff;
+  border-color: #059669;
+}
+
+.iaStatusBtnCancelled {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+.iaStatusBtnCancelled:hover:not(:disabled) {
+  background: #475569;
+  color: #fff;
+  border-color: #475569;
+}
+
+.statusActionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.iaQvGrid {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.iaQvLeft {
+  border-right: 1px solid var(--color-border-soft);
+  padding-right: 16px;
+}
+
+.iaQvRight {
+  min-width: 0;
+}
+
+.iaQvSection {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.iaQvSection:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.iaQvSectionTitle {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.iaQvSectionTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.iaQvRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-height: 30px;
+}
+
+.iaQvLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-muted);
+  width: 88px;
+  flex-shrink: 0;
+}
+
+.iaQvValue {
+  font-size: var(--fs-xs);
+  color: var(--color-text);
+  flex: 1;
+  min-width: 0;
+}
+
+.iaQvValueDanger {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.iaQvFieldSelect {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.13s;
+}
+
+.iaQvFieldSelect:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* ── Date field in QuickView ────────────────────────────────────── */
+
+.iaQvDateField {
+  position: relative;
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: border-color 0.13s;
+}
+
+.iaQvDateField:hover {
+  border-color: var(--color-primary);
+}
+
+.iaQvDateFieldError {
+  border-color: var(--color-danger);
+}
+
+.iaQvDateValue {
+  font-size: var(--fs-xs);
+  color: var(--color-text);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.iaQvDateFieldError .iaQvDateValue {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.iaQvDateHidden {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+}
+
+/* ── Description textarea in QV ─────────────────────────────────── */
+
+.iaQvDescTextarea {
+  width: 100%;
+  min-height: 100px;
+  padding: var(--space-4) var(--space-5);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.iaQvDescTextarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.iaQvDescTextarea::placeholder { color: #94a3b8; }
+
+/* ── Overdue tag in panel header ────────────────────────────────── */
+
+.iaOverdueTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #fef2f2;
+  color: var(--color-danger);
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #fecaca;
+  white-space: nowrap;
+}
+
+/* ── Save button in QV description ─────────────────────────────── */
+
+.btnQvSave {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-sm);
+  background: #f0fdf4;
+  color: #059669;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.13s;
+}
+
+.btnQvSave:hover:not(:disabled) {
+  background: #059669;
+  color: #fff;
+  border-color: #059669;
+}
+
+.btnQvSave:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

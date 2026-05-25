@@ -559,8 +559,8 @@ function ListView({
                       <div className={s.progressWrap}>
                         <div className={s.progressBar}>
                           <div
-                            className={`${s.progressFill} ${s.progressFillDynamic} ${pct === 100 ? s.progressFillDone : ''}`}
-                            style={{ '--progress-width': `${pct}%` }}
+                            className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`}
+                            style={{ width: `${pct}%` }}
                           />
                         </div>
                         <span className={s.progressText}>{pct}%</span>
@@ -1001,11 +1001,9 @@ export default function InternalAssignments() {
                 <Columns size={13} /> Board
               </button>
             </div>
-            {isAdmin && (
-              <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
-                <Plus size={14} /> Tạo phiếu
-              </button>
-            )}
+            <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
+              <Plus size={14} /> Tạo phiếu
+            </button>
           </div>
         </div>
 
