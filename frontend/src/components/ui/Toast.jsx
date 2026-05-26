@@ -12,12 +12,14 @@ const TYPE_CONFIG = {
 }
 
 const NOTIF_ICON = {
-  task_assigned:       { emoji: '📋', color: '#2563eb' },
-  task_overdue:        { emoji: '⚠️', color: '#dc2626' },
-  deadline_reminder:   { emoji: '🔔', color: '#d97706' },
-  escalation:          { emoji: '🚨', color: '#dc2626' },
-  morning_summary:     { emoji: '☀️', color: '#059669' },
-  task_status_changed: { emoji: '🔄', color: '#7c3aed' },
+  task_assigned:        { emoji: '📋', color: '#2563eb' },
+  task_overdue:         { emoji: '⚠️', color: '#dc2626' },
+  deadline_reminder:    { emoji: '🔔', color: '#d97706' },
+  escalation:           { emoji: '🚨', color: '#dc2626' },
+  morning_summary:      { emoji: '☀️', color: '#059669' },
+  task_status_changed:  { emoji: '🔄', color: '#7c3aed' },
+  client_doc_submitted: { emoji: '📩', color: '#0891b2' },
+  client_doc_overdue:   { emoji: '📂', color: '#dc2626' },
 }
 
 function ToastItem({ toast, onRemove }) {

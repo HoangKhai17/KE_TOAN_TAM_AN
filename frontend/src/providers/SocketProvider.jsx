@@ -62,10 +62,16 @@ export default function SocketProvider({ children }) {
       })
     }
 
+    function onCdrData(payload) {
+      if (DEV) console.log('[Socket] data:cdr', payload)
+      window.dispatchEvent(new CustomEvent('cdr:refresh', { detail: payload }))
+    }
+
     sock.on('connect',       onConnect)
     sock.on('connect_error', onConnectError)
     sock.on('disconnect',    onDisconnect)
     sock.on('notification',  onNotification)
+    sock.on('data:cdr',      onCdrData)
 
     // Socket may have already been connected before this effect ran (e.g. StrictMode re-run)
     if (sock.connected) {
@@ -78,6 +84,7 @@ export default function SocketProvider({ children }) {
       sock.off('connect_error', onConnectError)
       sock.off('disconnect',    onDisconnect)
       sock.off('notification',  onNotification)
+      sock.off('data:cdr',      onCdrData)
     }
   }, [accessToken, addNew, setRecent, setUnreadCount, toastFn])
 

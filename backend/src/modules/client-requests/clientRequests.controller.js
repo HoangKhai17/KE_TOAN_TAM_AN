@@ -37,8 +37,15 @@ async function updateClientRequest(req, res, next) {
 
 async function deleteClientRequest(req, res, next) {
   try {
-    await svc.deleteClientRequest(req.params.id)
+    await svc.deleteClientRequest(req.params.id, req.user.id, req.user.role === 'admin')
     res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+async function getStats(req, res, next) {
+  try {
+    const stats = await svc.getStats(req.query)
+    res.json({ success: true, data: stats })
   } catch (err) { next(err) }
 }
 
@@ -133,6 +140,7 @@ module.exports = {
   revokeLink,
   manualSubmit,
   getAdminOverview,
+  getStats,
   getPublicForm,
   submitPublicForm,
   getAvailableYears,

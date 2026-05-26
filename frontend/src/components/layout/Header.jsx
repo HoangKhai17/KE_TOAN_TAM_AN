@@ -24,6 +24,7 @@ const ROUTE_LABELS = {
   admin:                  'Quản lý',
   payroll:                'Bảng lương',
   'internal-assignments': 'Công việc nội bộ',
+  'client-requests':      'Yêu cầu KH',
 }
 
 function useBreadcrumb() {
@@ -61,6 +62,8 @@ const TYPE_ICON = {
   escalation:           { emoji: '🚨', color: '#dc2626' },
   morning_summary:      { emoji: '☀️', color: '#059669' },
   task_status_changed:  { emoji: '🔄', color: '#7c3aed' },
+  client_doc_submitted: { emoji: '📩', color: '#0891b2' },
+  client_doc_overdue:   { emoji: '📂', color: '#dc2626' },
 }
 
 export default function Header({ onMenuToggle }) {

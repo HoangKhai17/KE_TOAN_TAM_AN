@@ -42,6 +42,9 @@ export const manualSubmit = (id, data) =>
 export const getCdrYears = () =>
   api.get('/client-requests/meta/years').then((r) => r.data.data.years)
 
+export const getCdrStats = (params) =>
+  api.get('/client-requests/stats', { params }).then((r) => r.data.data)
+
 export const getAdminOverview = (params) =>
   api.get('/admin/client-requests/overview', { params }).then((r) => r.data.data)
 

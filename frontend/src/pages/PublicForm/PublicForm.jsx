@@ -52,20 +52,14 @@ export default function PublicForm() {
 
   function validate() {
     const errs = {}
-    if (!fields.contactName.trim())  errs.contactName  = 'Vui lòng nhập tên liên hệ'
-    if (!fields.phone.trim())        errs.phone        = 'Vui lòng nhập số điện thoại'
-    if (!fields.description.trim())  errs.description  = 'Vui lòng mô tả tài liệu'
+    if (!fields.contactName.trim()) errs.contactName = 'Vui lòng nhập tên liên hệ'
 
-    const validLinks = sharedLinks.filter((l) => l.trim())
-    if (validLinks.length === 0) {
-      errs.link_0 = 'Vui lòng dán ít nhất 1 link chia sẻ'
-    } else {
-      sharedLinks.forEach((link, idx) => {
-        if (!link.trim()) return
-        try { new URL(link.trim()) }
-        catch { errs[`link_${idx}`] = 'Link không hợp lệ (phải bắt đầu bằng https://)' }
-      })
-    }
+    // Validate link format only if any link was entered
+    sharedLinks.forEach((link, idx) => {
+      if (!link.trim()) return
+      try { new URL(link.trim()) }
+      catch { errs[`link_${idx}`] = 'Link không hợp lệ (phải bắt đầu bằng https://)' }
+    })
     return errs
   }
 
@@ -215,7 +209,7 @@ export default function PublicForm() {
             </div>
 
             <div className={s.field}>
-              <label className={s.label}>Số điện thoại <span className={s.required}>*</span></label>
+              <label className={s.label}>Số điện thoại</label>
               <input
                 className={`${s.input} ${fieldErrors.phone ? s.inputError : ''}`}
                 name="phone"
@@ -228,7 +222,7 @@ export default function PublicForm() {
             </div>
 
             <div className={s.field}>
-              <label className={s.label}>Mô tả tài liệu <span className={s.required}>*</span></label>
+              <label className={s.label}>Mô tả tài liệu</label>
               <textarea
                 className={`${s.textarea} ${fieldErrors.description ? s.inputError : ''}`}
                 name="description"
@@ -243,7 +237,7 @@ export default function PublicForm() {
             {/* ── Multiple shared links ── */}
             <div className={s.field}>
               <label className={s.label}>
-                Link chia sẻ tài liệu <span className={s.required}>*</span>
+                Link chia sẻ tài liệu
                 <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>
                   (có thể thêm nhiều link)
                 </span>

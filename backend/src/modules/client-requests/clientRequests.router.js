@@ -20,16 +20,17 @@ const admin = [authenticate, requireRole('admin')]
 
 router.get('/',             ...auth, ctrl.listClientRequests)
 router.get('/meta/years',   ...auth, ctrl.getAvailableYears)
+router.get('/stats',        ...auth, ctrl.getStats)
 router.post('/',            ...auth, validate(createClientRequestSchema), ctrl.createClientRequest)
 router.get('/:id',          ...auth, ctrl.getClientRequest)
 router.patch('/:id', ...auth, validate(updateClientRequestSchema), ctrl.updateClientRequest)
-router.delete('/:id', ...admin, ctrl.deleteClientRequest)
+router.delete('/:id', ...auth, ctrl.deleteClientRequest)
 
 // ─── Status actions ───────────────────────────────────────────────────────────
 
-router.post('/:id/receive',       ...auth,  ctrl.receiveClientRequest)
-router.post('/:id/unreceive',     ...auth,  ctrl.unreceiveClientRequest)
-router.post('/:id/dismiss',       ...admin, ctrl.dismissClientRequest)
+router.post('/:id/receive',       ...auth, ctrl.receiveClientRequest)
+router.post('/:id/unreceive',     ...auth, ctrl.unreceiveClientRequest)
+router.post('/:id/dismiss',       ...auth, ctrl.dismissClientRequest)
 router.post('/:id/remind',        ...auth,  validate(remindSchema), ctrl.sendReminder)
 router.post('/:id/generate-link',  ...auth,  validate(generateLinkSchema),  ctrl.generateLink)
 router.post('/:id/revoke-link',    ...auth,  ctrl.revokeLink)

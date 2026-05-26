@@ -164,17 +164,21 @@ function CdrFormModal({ companies, initial, onClose, onSaved }) {
   }
 
   return (
-    <Modal title={initial ? 'Chỉnh sửa yêu cầu' : 'Tạo yêu cầu tài liệu'} onClose={onClose}>
+    <Modal title={initial ? 'Chỉnh sửa yêu cầu' : 'Tạo yêu cầu tài liệu'} onClose={onClose} maxWidth={900}>
       <form onSubmit={handleSubmit} className={s.formBody}>
         {err && <div className={s.formError}>{err}</div>}
 
         {!initial && (
           <div className={s.formGroup}>
             <label className={s.formLabelReq}>Công ty *</label>
-            <select value={form.companyId} onChange={(e) => set('companyId', e.target.value)} className={s.formSelect} required>
-              <option value="">-- Chọn công ty --</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <FilterCompanyPicker
+              companies={companies}
+              value={form.companyId}
+              onChange={(id) => set('companyId', id)}
+              placeholder="-- Chọn công ty --"
+              showAll={false}
+              compact={false}
+            />
           </div>
         )}
 
@@ -190,15 +194,17 @@ function CdrFormModal({ companies, initial, onClose, onSaved }) {
             className={s.formInput} placeholder="VD: Bảng lương tháng 5/2025" autoFocus={!!initial} />
         </div>
 
-        <div className={s.formGroup}>
-          <label className={s.formLabel}>Kỳ kế toán</label>
-          <input type="text" value={form.periodLabel} onChange={(e) => set('periodLabel', e.target.value)}
-            className={s.formInput} placeholder="VD: Tháng 5/2025 hoặc Q2-2025" />
-        </div>
+        <div className={s.formRow2}>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Kỳ kế toán</label>
+            <input type="text" value={form.periodLabel} onChange={(e) => set('periodLabel', e.target.value)}
+              className={s.formInput} placeholder="VD: Tháng 5/2025 hoặc Q2-2025" />
+          </div>
 
-        <div className={s.formGroup}>
-          <label className={s.formLabel}>Hạn nộp</label>
-          <input type="date" value={form.deadlineDate} onChange={(e) => set('deadlineDate', e.target.value)} className={s.formInput} />
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Hạn nộp</label>
+            <input type="date" value={form.deadlineDate} onChange={(e) => set('deadlineDate', e.target.value)} className={s.formInput} />
+          </div>
         </div>
 
         <div className={s.formGroup}>
@@ -230,7 +236,7 @@ function CdrFormModal({ companies, initial, onClose, onSaved }) {
 function LinkModal({ item, generatedUrl, generating, copied, onGenerate, onCopy, onClose }) {
   const hasToken = !!item.publicToken
   return (
-    <Modal title="Link chia sẻ cho khách hàng" onClose={onClose}>
+    <Modal title="Link chia sẻ cho khách hàng" onClose={onClose} maxWidth={800}>
       <div className={s.formBody}>
         <div className={s.linkInfo}>
           <strong>{item.documentName}</strong><br />
@@ -277,7 +283,7 @@ function SubmittedDataModal({ item, onClose }) {
     : null
 
   return (
-    <Modal title="Dữ liệu khách hàng đã gửi" onClose={onClose} maxWidth={660}>
+    <Modal title="Dữ liệu khách hàng đã gửi" onClose={onClose} maxWidth={900}>
       <div className={s.formBody}>
         <div className={s.receivedBanner}>
           <span style={{ fontSize: 16 }}>{data.submitted_via === 'manual' ? '📋' : '✅'}</span>
@@ -385,7 +391,7 @@ function ManualSubmitModal({ item, onClose, onSaved }) {
   }
 
   return (
-    <Modal title={isUpdate ? 'Cập nhật dữ liệu KH' : 'Nhập dữ liệu KH thủ công'} onClose={onClose} maxWidth={600}>
+    <Modal title={isUpdate ? 'Cập nhật dữ liệu KH' : 'Nhập dữ liệu KH thủ công'} onClose={onClose} maxWidth={900}>
       <form onSubmit={handleSubmit} className={s.formBody}>
         <div className={s.manualBanner}>
           <strong>📋 {item.documentName}</strong><br />
@@ -393,15 +399,16 @@ function ManualSubmitModal({ item, onClose, onSaved }) {
         </div>
         {err && <div className={s.formError}>{err}</div>}
 
-        {[
-          { label: 'Tên liên hệ', key: 'contactName', placeholder: 'Họ tên người liên hệ bên khách hàng', type: 'text' },
-          { label: 'Số điện thoại', key: 'phone', placeholder: '0901 234 567', type: 'tel' },
-        ].map((f) => (
-          <div key={f.key} className={s.formGroup}>
-            <label className={s.formLabel}>{f.label}</label>
-            <input type={f.type} value={form[f.key]} onChange={(e) => setF(f.key, e.target.value)} className={s.formInput} placeholder={f.placeholder} />
+        <div className={s.formRow2}>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Tên liên hệ</label>
+            <input type="text" value={form.contactName} onChange={(e) => setF('contactName', e.target.value)} className={s.formInput} placeholder="Họ tên người liên hệ bên khách hàng" />
           </div>
-        ))}
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Số điện thoại</label>
+            <input type="tel" value={form.phone} onChange={(e) => setF('phone', e.target.value)} className={s.formInput} placeholder="0901 234 567" />
+          </div>
+        </div>
 
         <div className={s.formGroup}>
           <label className={s.formLabel}>Mô tả tài liệu</label>
@@ -477,7 +484,7 @@ function ReminderModal({ item, onClose, onSent }) {
   }
 
   return (
-    <Modal title="Gửi nhắc nhở khách hàng" onClose={onClose}>
+    <Modal title="Gửi nhắc nhở khách hàng" onClose={onClose} maxWidth={700}>
       <form onSubmit={handleSend} className={s.formBody}>
         {err && <div className={s.formError}>{err}</div>}
         <div className={s.reminderNote}>
@@ -503,7 +510,7 @@ function ReminderModal({ item, onClose, onSent }) {
 
 // ── FilterCompanyPicker ───────────────────────────────────────────────────────
 
-function FilterCompanyPicker({ companies, value, onChange }) {
+function FilterCompanyPicker({ companies, value, onChange, placeholder = 'Tất cả', showAll = true, compact = true }) {
   const [search,   setSearch] = useState('')
   const [open,     setOpen]   = useState(false)
   const wrapRef   = useRef(null)
@@ -528,9 +535,9 @@ function FilterCompanyPicker({ companies, value, onChange }) {
 
   return (
     <div ref={wrapRef} className={s.companyPickerWrap}>
-      <div className={`${s.cpTrigger} ${s.companyPickerTriggerCompact}`} onClick={() => setOpen((o) => !o)}>
+      <div className={`${s.cpTrigger} ${compact ? s.companyPickerTriggerCompact : s.companyPickerTriggerForm}`} onClick={() => setOpen((o) => !o)}>
         <span className={`${s.cpTriggerText} ${selected ? s.companyPickerSelected : s.companyPickerPlaceholder}`}>
-          {selected?.name ?? 'Tất cả'}
+          {selected?.name ?? placeholder}
         </span>
         <ChevronDown size={11} className={`${s.iconMuted} ${s.chevronRotate} ${open ? s.chevronOpen : ''}`} />
       </div>
@@ -548,9 +555,11 @@ function FilterCompanyPicker({ companies, value, onChange }) {
             )}
           </div>
           <div className={s.cpList}>
-            <div className={`${s.cpItem} ${!value ? s.cpItemActive : ''}`} onClick={() => select('')}>
-              Tất cả khách hàng
-            </div>
+            {showAll && (
+              <div className={`${s.cpItem} ${!value ? s.cpItemActive : ''}`} onClick={() => select('')}>
+                Tất cả khách hàng
+              </div>
+            )}
             {filtered.map((c) => (
               <div key={c.id} className={`${s.cpItem} ${value === c.id ? s.cpItemActive : ''}`} onClick={() => select(c.id)}>
                 {c.name}
@@ -640,11 +649,9 @@ function BoardView({ items, isAdmin, navigate, actionLoading, onEdit, onReceive,
                         <XCircle size={12} />
                       </button>
                     )}
-                    {isAdmin && (
-                      <button className={`${s.boardCardBtn} ${s.boardCardBtnDanger}`} onClick={() => onDelete(item)} title="Xoá" disabled={!!busy}>
-                        <Trash2 size={12} />
-                      </button>
-                    )}
+                    <button className={`${s.boardCardBtn} ${s.boardCardBtnDanger}`} onClick={() => onDelete(item)} title="Xoá" disabled={!!busy}>
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 </div>
               )
@@ -679,6 +686,7 @@ export default function AdminClientRequests() {
   const [stats, setStats]               = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsKey, setStatsKey]         = useState(0)
+  const [listKey, setListKey]           = useState(0)
 
   // List data
   const [items, setItems]           = useState([])
@@ -714,6 +722,7 @@ export default function AdminClientRequests() {
   const [reminderTarget, setReminderTarget]         = useState(null)
   const [manualSubmitTarget, setManualSubmitTarget] = useState(null)
   const [actionLoading, setActionLoading]           = useState({})
+  const [dismissTarget, setDismissTarget]           = useState(null)
 
   // Load reference data on mount
   useEffect(() => {
@@ -739,27 +748,25 @@ export default function AdminClientRequests() {
       })
   }, [])
 
-  // Load stats via parallel calls — works for both admin and staff roles
+  // Load stats — single /stats endpoint replaces 5 parallel calls
   useEffect(() => {
     let cancelled = false
     setStatsLoading(true)
-    const base = {
+    cdrApi.getCdrStats({
       companyId:        companyFilter   || undefined,
       requestedBy:      !isAdmin ? currentUser?.id : (staffFilter || undefined),
       search:           debouncedSearch || undefined,
       deadlineDateFrom: deadlineFrom    || undefined,
       deadlineDateTo:   deadlineTo      || undefined,
-      limit: 1, page: 1,
-    }
-    const statusKeys = ['pending', 'overdue', 'received', 'not_required']
-    Promise.all([
-      cdrApi.getClientRequests(base),
-      ...statusKeys.map((st) => cdrApi.getClientRequests({ ...base, status: st })),
-    ]).then(([all, ...bySt]) => {
+    }).then((data) => {
       if (!cancelled) {
-        const counts = { total: all.pagination.total }
-        statusKeys.forEach((st, i) => { counts[st] = bySt[i].pagination.total })
-        setStats(counts)
+        setStats({
+          total:        data.total,
+          pending:      data.pending,
+          received:     data.received,
+          overdue:      data.overdue,
+          not_required: data.notRequired,
+        })
         setStatsLoading(false)
       }
     }).catch(() => {
@@ -776,6 +783,16 @@ export default function AdminClientRequests() {
 
   // Reset page on filter change
   useEffect(() => { setPage(1) }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, deadlineFrom, deadlineTo, pageSize])
+
+  // Refresh when another user makes a CDR change (broadcast via socket)
+  useEffect(() => {
+    function handleCdrRefresh() {
+      setStatsKey((k) => k + 1)
+      setListKey((k) => k + 1)
+    }
+    window.addEventListener('cdr:refresh', handleCdrRefresh)
+    return () => window.removeEventListener('cdr:refresh', handleCdrRefresh)
+  }, [])
 
   // Persist filters to sessionStorage
   useEffect(() => {
@@ -811,7 +828,7 @@ export default function AdminClientRequests() {
       .catch(() => { if (!cancelled) setItems([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, page, pageSize, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, view])
+  }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, page, pageSize, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, view, listKey])
 
   useEffect(() => {
     const cancel = loadList()
@@ -826,7 +843,7 @@ export default function AdminClientRequests() {
       const updated = await cdrApi.receiveClientRequest(item.id)
       setItems((prev) => prev.map((r) => r.id === item.id ? updated : r))
       setStatsKey((k) => k + 1)
-      addToast('Đã đánh dấu đã nhận', 'success')
+      addToast(`Đã nhận tài liệu "${item.documentName}"`, 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
     } finally { setActionLoading((p) => ({ ...p, [item.id]: null })) }
@@ -838,19 +855,20 @@ export default function AdminClientRequests() {
       const updated = await cdrApi.unreceiveClientRequest(item.id)
       setItems((prev) => prev.map((r) => r.id === item.id ? updated : r))
       setStatsKey((k) => k + 1)
-      addToast('Đã hoàn tác trạng thái nhận', 'success')
+      addToast(`Đã hoàn tác trạng thái nhận cho "${item.documentName}"`, 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
     } finally { setActionLoading((p) => ({ ...p, [item.id]: null })) }
   }
 
-  async function handleDismiss(item) {
+  async function confirmDismiss(item) {
+    setDismissTarget(null)
     setActionLoading((p) => ({ ...p, [item.id]: 'dismiss' }))
     try {
       const updated = await cdrApi.dismissClientRequest(item.id)
       setItems((prev) => prev.map((r) => r.id === item.id ? updated : r))
       setStatsKey((k) => k + 1)
-      addToast('Đã đánh dấu không cần', 'success')
+      addToast(`Đã đánh dấu "${item.documentName}" không cần nộp`, 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
     } finally { setActionLoading((p) => ({ ...p, [item.id]: null })) }
@@ -1146,7 +1164,7 @@ export default function AdminClientRequests() {
             onEdit={setEditTarget}
             onReceive={handleReceive}
             onUnreceive={handleUnreceive}
-            onDismiss={handleDismiss}
+            onDismiss={setDismissTarget}
             onManualSubmit={setManualSubmitTarget}
             onViewSubmitted={setViewSubmitted}
             onOpenLink={openLinkModal}
@@ -1280,7 +1298,7 @@ export default function AdminClientRequests() {
                             )}
 
                             {(item.status === 'pending' || item.status === 'overdue') && (
-                              <RowBtn title="Đánh dấu không cần" onClick={() => handleDismiss(item)} disabled={!!busy}>
+                              <RowBtn title="Đánh dấu không cần" onClick={() => setDismissTarget(item)} disabled={!!busy}>
                                 <XCircle size={13} />
                               </RowBtn>
                             )}
@@ -1297,11 +1315,9 @@ export default function AdminClientRequests() {
                               </RowBtn>
                             )}
 
-                            {isAdmin && (
-                              <RowBtn title="Xoá yêu cầu" onClick={() => setDeleteTarget(item)} disabled={!!busy} className={s.rowBtnDanger}>
-                                <Trash2 size={13} />
-                              </RowBtn>
-                            )}
+                            <RowBtn title="Xoá yêu cầu" onClick={() => setDeleteTarget(item)} disabled={!!busy} className={s.rowBtnDanger}>
+                              <Trash2 size={13} />
+                            </RowBtn>
                           </div>
                         </td>
                       </tr>
@@ -1369,7 +1385,7 @@ export default function AdminClientRequests() {
       )}
 
       {deleteTarget && (
-        <Modal title="Xoá yêu cầu tài liệu" onClose={() => setDeleteTarget(null)}>
+        <Modal title="Xoá yêu cầu tài liệu" onClose={() => setDeleteTarget(null)} maxWidth={480}>
           <div className={s.formBody}>
             <div className={s.deleteBanner}>
               <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -1415,6 +1431,25 @@ export default function AdminClientRequests() {
             addToast('Đã lưu dữ liệu khách hàng', 'success')
           }}
         />
+      )}
+
+      {dismissTarget && (
+        <Modal title="Đánh dấu không cần nộp" onClose={() => setDismissTarget(null)} maxWidth={480}>
+          <div className={s.formBody}>
+            <div className={s.deleteBanner}>
+              <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>
+                Đánh dấu <strong>"{dismissTarget.documentName}"</strong> là không cần nộp? Trạng thái sẽ chuyển sang <strong>Không cần</strong>.
+              </span>
+            </div>
+            <div className={s.formActions}>
+              <button onClick={() => setDismissTarget(null)} className={s.btnSecondary}>Huỷ</button>
+              <button onClick={() => confirmDismiss(dismissTarget)} className={s.btnDangerSolid}>
+                <XCircle size={13} /> Xác nhận
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </AppLayout>
   )

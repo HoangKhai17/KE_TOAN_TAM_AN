@@ -1,9 +1,17 @@
 'use strict'
 const crypto = require('crypto')
 const { query } = require('../../config/db')
-const { createAndEmit } = require('../../lib/notify')
+const { createAndEmit, emitData } = require('../../lib/notify')
 const { sendMail } = require('../../utils/mailer')
 const logger = require('../../config/logger')
+
+// ── Status enum constants ──────────────────────────────────────────────────────
+const STATUS = Object.freeze({
+  PENDING:      'pending',
+  RECEIVED:     'received',
+  OVERDUE:      'overdue',
+  NOT_REQUIRED: 'not_required',
+})
 
 function toDto(row) {
   return {
@@ -37,17 +45,21 @@ function toDto(row) {
   }
 }
 
-const CDR_SELECT = `
-  SELECT cdr.*,
-         t.title  AS task_title,
-         c.name   AS company_name,
-         rb.name  AS requested_by_name,
-         rcv.name AS received_by_name
+const CDR_COLS = `
+  cdr.*,
+  t.title  AS task_title,
+  c.name   AS company_name,
+  rb.name  AS requested_by_name,
+  rcv.name AS received_by_name`
+
+const CDR_FROM = `
   FROM client_document_requests cdr
   LEFT JOIN tasks     t   ON t.id   = cdr.task_id
   LEFT JOIN companies c   ON c.id   = cdr.company_id
   LEFT JOIN users     rb  ON rb.id  = cdr.requested_by
   LEFT JOIN users     rcv ON rcv.id = cdr.received_by`
+
+const CDR_SELECT = `SELECT ${CDR_COLS} ${CDR_FROM}`
 
 async function listClientRequests(filters = {}) {
   const {
@@ -97,15 +109,16 @@ async function listClientRequests(filters = {}) {
   }
   const orderBy = `${SORT_COLS[sortBy] || 'cdr.created_at'} ${sortDir === 'asc' ? 'ASC' : 'DESC'}`
 
-  const [{ rows }, { rows: countRows }] = await Promise.all([
-    query(
-      `${CDR_SELECT} WHERE ${where} ORDER BY ${orderBy} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, limit, offset]
-    ),
-    query(`SELECT COUNT(*) FROM client_document_requests cdr WHERE ${where}`, params),
-  ])
+  const { rows } = await query(
+    `SELECT ${CDR_COLS}, COUNT(*) OVER() AS _total
+     ${CDR_FROM}
+     WHERE ${where}
+     ORDER BY ${orderBy}
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
+  )
 
-  const total = parseInt(countRows[0].count, 10)
+  const total = parseInt(rows[0]?._total ?? 0, 10)
   return {
     items: rows.map(toDto),
     pagination: {
@@ -147,7 +160,9 @@ async function createClientRequest(data, requestedBy) {
      periodLabel ?? null, deadlineDate ?? null, remindedEmail ?? null, notes ?? null]
   )
 
-  return getById(row.id)
+  const item = await getById(row.id)
+  emitData('data:cdr', { action: 'created', id: item.id })
+  return item
 }
 
 async function updateClientRequest(id, data) {
@@ -184,12 +199,21 @@ async function updateClientRequest(id, data) {
   )
   if (!rowCount) throw Object.assign(new Error('Client request not found'), { status: 404 })
 
-  return getById(id)
+  const item = await getById(id)
+  emitData('data:cdr', { action: 'updated', id })
+  return item
 }
 
-async function deleteClientRequest(id) {
-  const { rowCount } = await query('DELETE FROM client_document_requests WHERE id = $1', [id])
-  if (!rowCount) throw Object.assign(new Error('Client request not found'), { status: 404 })
+async function deleteClientRequest(id, userId, isAdmin = false) {
+  const { rows: [row] } = await query(
+    'SELECT id, requested_by FROM client_document_requests WHERE id = $1', [id]
+  )
+  if (!row) throw Object.assign(new Error('Client request not found'), { status: 404 })
+  if (!isAdmin && row.requested_by !== userId) {
+    throw Object.assign(new Error('Bạn không có quyền xóa yêu cầu này'), { status: 403 })
+  }
+  await query('DELETE FROM client_document_requests WHERE id = $1', [id])
+  emitData('data:cdr', { action: 'deleted', id })
 }
 
 async function receiveClientRequest(id, receivedBy) {
@@ -203,12 +227,14 @@ async function receiveClientRequest(id, receivedBy) {
 
   await query(
     `UPDATE client_document_requests
-     SET status = 'received', received_at = NOW(), received_by = $1, updated_at = NOW()
-     WHERE id = $2`,
-    [receivedBy, id]
+     SET status = $1, received_at = NOW(), received_by = $2, updated_at = NOW()
+     WHERE id = $3`,
+    [STATUS.RECEIVED, receivedBy, id]
   )
 
-  return getById(id)
+  const item = await getById(id)
+  emitData('data:cdr', { action: 'updated', id })
+  return item
 }
 
 async function unreceiveClientRequest(id) {
@@ -216,18 +242,20 @@ async function unreceiveClientRequest(id) {
     'SELECT id, status FROM client_document_requests WHERE id = $1', [id]
   )
   if (!existing) throw Object.assign(new Error('Client request not found'), { status: 404 })
-  if (existing.status !== 'received') {
+  if (existing.status !== STATUS.RECEIVED) {
     throw Object.assign(new Error('Chỉ có thể hoàn tác trạng thái "đã nhận"'), { status: 409 })
   }
 
   await query(
     `UPDATE client_document_requests
-     SET status = 'pending', received_at = NULL, received_by = NULL, updated_at = NOW()
-     WHERE id = $1`,
-    [id]
+     SET status = $1, received_at = NULL, received_by = NULL, updated_at = NOW()
+     WHERE id = $2`,
+    [STATUS.PENDING, id]
   )
 
-  return getById(id)
+  const item = await getById(id)
+  emitData('data:cdr', { action: 'updated', id })
+  return item
 }
 
 async function dismissClientRequest(id) {
@@ -238,12 +266,14 @@ async function dismissClientRequest(id) {
 
   await query(
     `UPDATE client_document_requests
-     SET status = 'not_required', updated_at = NOW()
-     WHERE id = $1`,
-    [id]
+     SET status = $1, updated_at = NOW()
+     WHERE id = $2`,
+    [STATUS.NOT_REQUIRED, id]
   )
 
-  return getById(id)
+  const item = await getById(id)
+  emitData('data:cdr', { action: 'updated', id })
+  return item
 }
 
 async function sendReminder(id, { email, message } = {}) {
@@ -513,6 +543,46 @@ async function countPendingByTask(taskId) {
   return parseInt(r.cnt, 10)
 }
 
+async function getStats(filters = {}) {
+  const { companyId, requestedBy, search, deadlineDateFrom, deadlineDateTo } = filters
+  const conditions = ['1=1']
+  const params = []
+
+  if (companyId)   { params.push(companyId);  conditions.push(`company_id = $${params.length}`) }
+  if (requestedBy) { params.push(requestedBy); conditions.push(`requested_by = $${params.length}`) }
+  if (search) {
+    params.push(`%${search}%`)
+    conditions.push(`(document_name ILIKE $${params.length} OR reminded_email ILIKE $${params.length})`)
+  }
+  if (deadlineDateFrom && deadlineDateTo) {
+    params.push(deadlineDateTo);   conditions.push(`created_at::date <= $${params.length}`)
+    params.push(deadlineDateFrom); conditions.push(`(deadline_date IS NULL OR deadline_date >= $${params.length})`)
+  } else if (deadlineDateFrom) {
+    params.push(deadlineDateFrom); conditions.push(`(deadline_date IS NULL OR deadline_date >= $${params.length})`)
+  } else if (deadlineDateTo) {
+    params.push(deadlineDateTo);   conditions.push(`created_at::date <= $${params.length}`)
+  }
+
+  const { rows: [r] } = await query(
+    `SELECT
+       COUNT(*)                                              AS total,
+       COUNT(*) FILTER (WHERE status = 'pending')           AS pending,
+       COUNT(*) FILTER (WHERE status = 'received')          AS received,
+       COUNT(*) FILTER (WHERE status = 'overdue')           AS overdue,
+       COUNT(*) FILTER (WHERE status = 'not_required')      AS not_required
+     FROM client_document_requests
+     WHERE ${conditions.join(' AND ')}`,
+    params
+  )
+  return {
+    total:       parseInt(r.total, 10),
+    pending:     parseInt(r.pending, 10),
+    received:    parseInt(r.received, 10),
+    overdue:     parseInt(r.overdue, 10),
+    notRequired: parseInt(r.not_required, 10),
+  }
+}
+
 async function getAvailableYears() {
   const { rows } = await query(
     `SELECT DISTINCT EXTRACT(YEAR FROM deadline_date)::int AS year
@@ -539,6 +609,7 @@ module.exports = {
   getPublicForm,
   submitPublicForm,
   getAdminOverview,
+  getStats,
   countPendingByTask,
   getAvailableYears,
 }

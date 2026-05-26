@@ -1378,15 +1378,15 @@
 }
 
 .thead {
-  background: #f8fafc;
+  background: var(--gradient-table-head);
   border-bottom: 2px solid var(--color-border);
 }
 
 .th {
-  padding: 10px 14px;
-  font-size: var(--fs-xs);
+  padding: var(--table-head-py) var(--table-cell-px);
+  font-size: var(--fs-2xs);
   font-weight: 800;
-  color: var(--color-muted);
+  color: #1e3a8a;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   text-align: left;

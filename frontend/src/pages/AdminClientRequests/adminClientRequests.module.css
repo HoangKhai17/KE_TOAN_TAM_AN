@@ -497,12 +497,12 @@
   text-align: left;
   padding: var(--table-head-py) var(--table-cell-px);
   font-size: var(--fs-2xs);
-  font-weight: var(--fw-semibold);
-  color: var(--color-muted);
+  font-weight: 800;
+  color: #1e3a8a;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.5px;
   background: var(--gradient-table-head);
-  border-bottom: 1px solid var(--color-border-muted);
+  border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
 }
 
@@ -545,10 +545,7 @@
   color: var(--color-primary);
   cursor: pointer;
   text-decoration: underline;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--fs-sm);
 }
 
 .periodText  { font-size: var(--fs-xs); color: var(--color-muted); }
@@ -916,6 +913,7 @@
 
 .formBody    { display: flex; flex-direction: column; gap: var(--space-6); }
 .formGroup   { display: flex; flex-direction: column; gap: var(--space-2); }
+.formRow2    { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
 
 .formLabel    { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--color-text-soft); }
 .formLabelReq { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--color-danger); }
@@ -1242,6 +1240,7 @@
 .cpTrigger:hover { border-color: var(--color-primary-soft); }
 
 .companyPickerTriggerCompact { min-width: 150px; }
+.companyPickerTriggerForm    { width: 100%; height: var(--control-h-md); min-width: unset; }
 
 .cpTriggerText {
   flex: 1;
