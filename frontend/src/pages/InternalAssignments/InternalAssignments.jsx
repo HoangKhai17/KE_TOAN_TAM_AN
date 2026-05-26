@@ -89,11 +89,10 @@ const PRIORITY_SELECT_CLASS = {
 }
 
 function progressPct(item) {
-  const assignees = (item.assignees ?? []).filter((a) => a.status !== 'rejected')
-  if (assignees.length === 0) return null
-  const WEIGHT = { pending: 0, accepted: 0.2, in_progress: 0.5, done: 1 }
-  const total = assignees.reduce((sum, a) => sum + (WEIGHT[a.status] ?? 0), 0)
-  return Math.round((total / assignees.length) * 100)
+  if ((item.checklistTotal ?? 0) > 0) {
+    return Math.round((item.checklistDone / item.checklistTotal) * 100)
+  }
+  return null
 }
 
 // ── MultiSelect component ─────────────────────────────────────────────────────
@@ -447,6 +446,7 @@ function ListView({
               <th className={s.th}>Tiêu đề / Khách hàng</th>
               <th className={s.th}>Người thực hiện</th>
               <th className={s.th}>Ưu tiên</th>
+              <th className={s.th}>Ngày bắt đầu</th>
               <th className={s.th}>Hạn chót</th>
               <th className={s.th}>Tiến độ</th>
               <th className={s.th}>Trạng thái</th>
@@ -458,7 +458,7 @@ function ListView({
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className={s.tr}>
                   <td className={s.tdCheck} />
-                  {[280, 180, 90, 100, 90, 110, 70].map((w, j) => (
+                  {[280, 180, 90, 90, 100, 90, 110, 70].map((w, j) => (
                     <td key={j} className={s.td}>
                       <div className={s.tableSkeletonBar} style={{ '--skeleton-w': `${w}px`, width: `${w}px` }} />
                     </td>
@@ -467,7 +467,7 @@ function ListView({
               ))
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   <div className={s.emptyBox}>
                     <div className={s.emptyIcon}><ClipboardCheck size={28} /></div>
                     <p className={s.emptyTitle}>Không có phiếu giao việc</p>
@@ -504,7 +504,7 @@ function ListView({
                   </td>
 
                   {/* Người thực hiện */}
-                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                  <td className={s.td}>
                     <div className={s.assigneesCell}>
                       {item.assignees?.slice(0, 3).map((a) => (
                         <span
@@ -525,11 +525,12 @@ function ListView({
                   </td>
 
                   {/* Ưu tiên — quick edit (admin) */}
-                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                  <td className={s.td}>
                     {isAdmin ? (
                       <select
                         value={item.priority}
                         onChange={(e) => { if (e.target.value !== item.priority) onPriorityChange(item, e.target.value) }}
+                        onClick={(e) => e.stopPropagation()}
                         className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[item.priority] ?? ''}`}
                         title="Đổi ưu tiên"
                       >
@@ -542,6 +543,13 @@ function ListView({
                         {PRIORITY_LABELS[item.priority]}
                       </span>
                     )}
+                  </td>
+
+                  {/* Ngày bắt đầu */}
+                  <td className={s.td}>
+                    {item.startDate
+                      ? <span className={s.dueDateNormal}>{fmtDate(item.startDate)}</span>
+                      : <span className={s.mutedDash}>—</span>}
                   </td>
 
                   {/* Hạn chót */}
@@ -570,11 +578,12 @@ function ListView({
                   </td>
 
                   {/* Trạng thái — quick edit (admin) */}
-                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                  <td className={s.td}>
                     {isAdmin ? (
                       <select
                         value={item.status}
                         onChange={(e) => { if (e.target.value !== item.status) onStatusChange(item, e.target.value) }}
+                        onClick={(e) => e.stopPropagation()}
                         className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[item.status] ?? ''}`}
                         title="Đổi trạng thái"
                       >
@@ -1137,7 +1146,10 @@ export default function InternalAssignments() {
                 onChange={(e) => { setFilterPriority(e.target.value); setPage(1) }}
               >
                 <option value="">Tất cả</option>
-                {getOptions('assignment_priority').map((o) => (
+                {(getOptions('assignment_priority').length > 0
+                  ? getOptions('assignment_priority')
+                  : ['low', 'normal', 'high', 'urgent'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
+                ).map((o) => (
                   <option key={o.key} value={o.key}>{o.label}</option>
                 ))}
               </select>

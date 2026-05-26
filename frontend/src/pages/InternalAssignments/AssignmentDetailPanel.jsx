@@ -292,6 +292,7 @@ export default function AssignmentDetailPanel({
       const updated = await api.updateAssignment(assignmentId, { title: trimmed })
       setItem(updated)
       setTitleDirty(false)
+      addToast('Đã cập nhật tiêu đề', 'success')
       onUpdate?.()
     } catch (err) {
       addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật tiêu đề', 'error')
@@ -307,6 +308,7 @@ export default function AssignmentDetailPanel({
       const updated = await api.updateAssignment(assignmentId, { description: descDraft.trim() || null })
       setItem(updated)
       setDescDirty(false)
+      addToast('Đã cập nhật mô tả', 'success')
       onUpdate?.()
     } catch (err) {
       addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật mô tả', 'error')
@@ -318,6 +320,7 @@ export default function AssignmentDetailPanel({
     try {
       const updated = await api.updateAssignment(assignmentId, { priority: newPriority })
       setItem(updated)
+      addToast('Đã cập nhật ưu tiên', 'success')
       onUpdate?.()
     } catch (err) {
       addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật ưu tiên', 'error')
@@ -330,9 +333,23 @@ export default function AssignmentDetailPanel({
     try {
       const updated = await api.updateAssignment(assignmentId, { deadlineDate: newDeadline })
       setItem(updated)
+      addToast('Đã cập nhật hạn hoàn thành', 'success')
       onUpdate?.()
     } catch (err) {
       addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật hạn', 'error')
+    }
+  }
+
+  async function handleSaveStartDate(val) {
+    const newStart = val || null
+    if (newStart === (item.startDate ?? null)) return
+    try {
+      const updated = await api.updateAssignment(assignmentId, { startDate: newStart })
+      setItem(updated)
+      addToast('Đã cập nhật ngày bắt đầu', 'success')
+      onUpdate?.()
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật ngày bắt đầu', 'error')
     }
   }
 
@@ -342,6 +359,7 @@ export default function AssignmentDetailPanel({
     try {
       const updated = await api.updateAssignment(assignmentId, { companyId: newId })
       setItem(updated)
+      addToast('Đã cập nhật khách hàng', 'success')
       onUpdate?.()
     } catch (err) {
       addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật khách hàng', 'error')
@@ -383,6 +401,7 @@ export default function AssignmentDetailPanel({
         : { addAssigneeIds: [userId] }
       const updated = await api.updateAssignment(assignmentId, body)
       if (updated) setItem(updated)
+      addToast(existing ? 'Đã xóa nhân sự' : 'Đã thêm nhân sự', 'success')
       onUpdate?.()
     } catch (err) {
       addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật nhân sự', 'error')
@@ -596,6 +615,19 @@ export default function AssignmentDetailPanel({
                     <span className={s.iaQvValue}>{fmtDate(item.createdAt)}</span>
                   </div>
 
+                  {/* Ngày bắt đầu */}
+                  <div className={s.iaQvRow}>
+                    <span className={s.iaQvLabel}><Calendar size={11} /> Bắt đầu</span>
+                    {canEdit ? (
+                      <IaDateField
+                        value={item.startDate ? item.startDate.slice(0, 10) : ''}
+                        onChange={(e) => handleSaveStartDate(e.target.value)}
+                      />
+                    ) : (
+                      <span className={s.iaQvValue}>{fmtDate(item.startDate)}</span>
+                    )}
+                  </div>
+
                   {/* Hạn hoàn thành */}
                   <div className={s.iaQvRow}>
                     <span className={s.iaQvLabel}><Calendar size={11} /> Hết hạn</span>
@@ -734,7 +766,13 @@ export default function AssignmentDetailPanel({
                           setDescDirty(e.target.value !== (item.description ?? ''))
                         }}
                         onBlur={handleSaveDesc}
-                        placeholder="Nhập mô tả công việc..."
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                            e.preventDefault()
+                            handleSaveDesc()
+                          }
+                        }}
+                        placeholder="Nhập mô tả công việc... (Ctrl+Enter để lưu)"
                       />
                     ) : item.description ? (
                       <p className={s.descriptionText}>{item.description}</p>

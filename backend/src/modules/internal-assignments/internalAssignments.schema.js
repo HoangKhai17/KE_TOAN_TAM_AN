@@ -8,6 +8,7 @@ const createSchema = z.object({
   description:  z.string().max(5000).optional().nullable(),
   companyId:    z.string().uuid().optional().nullable(),
   priority:     z.enum(PRIORITIES).default('normal'),
+  startDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày không hợp lệ').optional().nullable(),
   deadlineDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Định dạng ngày không hợp lệ (YYYY-MM-DD)').optional().nullable(),
   assigneeIds:  z.array(z.string().uuid()).min(0).default([]),
 })
@@ -17,6 +18,7 @@ const updateSchema = z.object({
   description:  z.string().max(5000).optional().nullable(),
   companyId:    z.string().uuid().optional().nullable(),
   priority:     z.enum(PRIORITIES).optional(),
+  startDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   deadlineDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   addAssigneeIds:    z.array(z.string().uuid()).optional(),
   removeAssigneeIds: z.array(z.string().uuid()).optional(),

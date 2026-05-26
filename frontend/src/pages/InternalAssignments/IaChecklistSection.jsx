@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react'
-import { Plus, CheckSquare, Trash2, Loader2, Check } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { CheckSquare, Trash2, Loader2, Check } from 'lucide-react'
 import * as api from '../../api/internalAssignments'
 import { useToastStore } from '../../stores/toastStore'
 import s from './internalAssignments.module.css'
 
 export default function IaChecklistSection({ assignmentId, readOnly = false }) {
-  const addToast = useToastStore((st) => st.toast)
-  const [items,     setItems]     = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [newText,   setNewText]   = useState('')
-  const [adding,    setAdding]    = useState(false)
-  const [showInput, setShowInput] = useState(false)
+  const addToast  = useToastStore((st) => st.toast)
+  const inputRef  = useRef(null)
+  const [items,      setItems]      = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [newText,    setNewText]    = useState('')
+  const [adding,     setAdding]     = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const [togglingId, setTogglingId] = useState(null)
 
@@ -36,15 +36,14 @@ export default function IaChecklistSection({ assignmentId, readOnly = false }) {
     }
   }
 
-  async function handleAdd(e) {
-    e.preventDefault()
+  async function handleAdd() {
     if (!newText.trim()) return
     setAdding(true)
     try {
       const item = await api.addChecklistItem(assignmentId, newText.trim())
       setItems((prev) => [...prev, item])
       setNewText('')
-      setShowInput(false)
+      inputRef.current?.focus()
     } catch {
       addToast('Không thể thêm mục', 'error')
     } finally {
@@ -76,18 +75,13 @@ export default function IaChecklistSection({ assignmentId, readOnly = false }) {
             <span className={s.checkCount}>{doneCount}/{totalCount}</span>
           )}
         </span>
-        {!readOnly && !showInput && (
-          <button className={s.checkAddBtn} onClick={() => setShowInput(true)}>
-            <Plus size={12} /> Thêm
-          </button>
-        )}
       </div>
 
       {totalCount > 0 && (
         <div className={s.checkProgressBar}>
           <div
             className={s.checkProgressFill}
-            style={{ width: `${totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0}%` }}
+            style={{ width: `${Math.round((doneCount / totalCount) * 100)}%` }}
           />
         </div>
       )}
@@ -124,41 +118,23 @@ export default function IaChecklistSection({ assignmentId, readOnly = false }) {
         </div>
       )}
 
-      {items.length === 0 && !showInput && (
+      {items.length === 0 && readOnly && (
         <p className={s.checkEmpty}>Chưa có mục nào trong checklist.</p>
       )}
 
-      {showInput && (
-        <form onSubmit={handleAdd} className={s.checkAddForm}>
+      {!readOnly && (
+        <div className={s.checkInlineAdd}>
           <input
+            ref={inputRef}
             type="text"
             value={newText}
             onChange={(e) => setNewText(e.target.value)}
-            className={s.checkAddInput}
-            placeholder="Nhập nội dung công việc..."
-            autoFocus
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd() } }}
+            className={s.checkInlineInput}
+            placeholder="Thêm công việc… (Enter để lưu)"
+            disabled={adding}
           />
-          <div className={s.checkAddActions}>
-            <button
-              type="button"
-              className={s.btnSecondary}
-              style={{ height: 32, padding: '0 12px', fontSize: 12 }}
-              onClick={() => { setShowInput(false); setNewText('') }}
-              disabled={adding}
-            >
-              Huỷ
-            </button>
-            <button
-              type="submit"
-              className={s.btnPrimary}
-              style={{ height: 32, padding: '0 12px', fontSize: 12 }}
-              disabled={adding || !newText.trim()}
-            >
-              {adding ? <Loader2 size={12} className={s.spinIcon} /> : <Check size={12} />}
-              Thêm
-            </button>
-          </div>
-        </form>
+        </div>
       )}
     </div>
   )

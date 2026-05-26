@@ -12,6 +12,11 @@ function toAssignmentDto(row) {
     description:  row.description ?? null,
     company:      row.company_id ? { id: row.company_id, name: row.company_name ?? null } : null,
     priority:     row.priority,
+    startDate:    row.start_date
+      ? (typeof row.start_date === 'string'
+          ? row.start_date.slice(0, 10)
+          : row.start_date.toISOString().slice(0, 10))
+      : null,
     deadlineDate: row.deadline_date
       ? (typeof row.deadline_date === 'string'
           ? row.deadline_date.slice(0, 10)
@@ -195,7 +200,9 @@ async function listAssignments(actorId, actorRole, {
              FROM internal_assignment_assignees iaa
              JOIN users us ON us.id = iaa.user_id
              WHERE iaa.assignment_id = ia.id
-            ) AS assignees_json
+            ) AS assignees_json,
+            (SELECT COUNT(*) FROM ia_checklist_items WHERE assignment_id = ia.id) AS checklist_total,
+            (SELECT COUNT(*) FILTER (WHERE is_done = TRUE) FROM ia_checklist_items WHERE assignment_id = ia.id) AS checklist_done
      FROM internal_assignments ia
      JOIN users u ON u.id = ia.created_by
      LEFT JOIN companies c ON c.id = ia.company_id
@@ -211,7 +218,11 @@ async function listAssignments(actorId, actorRole, {
       acceptedAt: a.acceptedAt ?? null, completedAt: a.completedAt ?? null,
       rejectedAt: a.rejectedAt ?? null, note: a.note ?? null,
     }))
-    return { ...toAssignmentDto(row), assignees, assigneeStats: buildAssigneeStats(assignees) }
+    return {
+      ...toAssignmentDto(row), assignees, assigneeStats: buildAssigneeStats(assignees),
+      checklistTotal: parseInt(row.checklist_total ?? 0, 10),
+      checklistDone:  parseInt(row.checklist_done  ?? 0, 10),
+    }
   })
 
   return {
@@ -283,13 +294,13 @@ async function getById(id, actorId, actorRole) {
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 async function createAssignment(data, actorId) {
-  const { title, description, companyId, priority, deadlineDate, assigneeIds = [] } = data
+  const { title, description, companyId, priority, startDate, deadlineDate, assigneeIds = [] } = data
 
   const { rows: [row] } = await query(
     `INSERT INTO internal_assignments
-       (title, description, company_id, priority, deadline_date, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [title, description ?? null, companyId ?? null, priority, deadlineDate ?? null, actorId]
+       (title, description, company_id, priority, start_date, deadline_date, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [title, description ?? null, companyId ?? null, priority, startDate ?? null, deadlineDate ?? null, actorId]
   )
 
   // Pre-populate assignees as pending if provided (still draft — will be activated on send)
@@ -332,6 +343,10 @@ async function updateAssignment(id, data, actorId) {
   if (data.deadlineDate !== undefined) {
     params.push(data.deadlineDate ?? null)
     fields.push(`deadline_date = $${params.length}`)
+  }
+  if (data.startDate !== undefined) {
+    params.push(data.startDate ?? null)
+    fields.push(`start_date = $${params.length}`)
   }
 
   if (fields.length > 0) {
@@ -512,6 +527,17 @@ async function closeAssignment(id, actorId) {
     `UPDATE internal_assignments SET status = 'done', closed_at = NOW(), updated_at = NOW() WHERE id = $1`,
     [id]
   )
+
+  const { rows: closedAssignees } = await query(
+    'SELECT user_id FROM internal_assignment_assignees WHERE assignment_id = $1', [id]
+  )
+  for (const { user_id } of closedAssignees) {
+    createAndEmit(user_id, 'task_status_changed',
+      'Phiếu giao việc đã đóng',
+      `Phiếu "${row.title}" đã được hoàn thành`,
+      null
+    )
+  }
 
   await audit.log({
     userId: actorId, action: 'internal_assignment.closed',
