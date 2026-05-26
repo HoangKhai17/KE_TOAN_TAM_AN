@@ -20,8 +20,8 @@ const companyBaseSchema = z.object({
   notes:            z.string().optional().nullable(),
   assignedStaffId:  z.string().uuid().optional().nullable(),
   avatarUrl:        z.union([
-    z.string().url(),
-    z.string().regex(/^data:image\//),
+    z.string().url().max(2048),
+    z.string().regex(/^data:image\//).max(300000),
   ]).optional().nullable(),
 })
 

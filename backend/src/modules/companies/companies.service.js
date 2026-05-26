@@ -89,15 +89,11 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
 
   const where = conditions.join(' AND ')
 
-  const countRes = await query(
-    `SELECT COUNT(*) FROM companies c WHERE ${where}`,
-    filterParams
-  )
-  const total = parseInt(countRes.rows[0].count, 10)
-
+  // P1: single query with COUNT(*) OVER() — eliminates the separate COUNT query
   const dataParams = [...filterParams, limit, offset]
   const { rows } = await query(
     `SELECT c.*,
+            COUNT(*) OVER() AS _total,
             u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
             tc.task_open_count,
             tc.task_overdue_count,
@@ -118,6 +114,7 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
     dataParams
   )
 
+  const total = parseInt(rows[0]?._total ?? 0, 10)
   return {
     companies: rows.map(toDto),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
@@ -209,7 +206,7 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
   }
 
   emitData('data:company', { action: 'created', id: rows[0].id, actorId })
-  return toDto({ ...rows[0], task_open_count: 0, task_overdue_count: 0 })
+  return getCompanyById(rows[0].id)
 }
 
 async function updateCompany(id, data, actorId, ipAddress, userAgent, user = null) {
@@ -297,7 +294,7 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent, user = nul
   }
 
   emitData('data:company', { action: 'updated', id, actorId })
-  return toDto({ ...rows[0], task_open_count: 0, task_overdue_count: 0 })
+  return getCompanyById(id)
 }
 
 async function terminateCompany(id, actorId, ipAddress, userAgent) {
@@ -316,10 +313,8 @@ async function terminateCompany(id, actorId, ipAddress, userAgent) {
   emitData('data:company', { action: 'updated', id, actorId })
 }
 
-async function getAssignments(companyId) {
-  const { rows: company } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
-  if (!company[0]) throw Object.assign(new Error('Company not found'), { status: 404 })
-
+async function getAssignments(companyId, user) {
+  await assertCompanyAccess(companyId, user)
   const { rows } = await query(
     `SELECT sca.id, sca.company_id, sca.staff_id, sca.start_date, sca.end_date, sca.notes, sca.created_at,
             u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
@@ -476,17 +471,13 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
   }
 }
 
-async function getActivityLog(companyId, { page = 1, limit = 10 } = {}) {
+async function getActivityLog(companyId, { page = 1, limit = 10 } = {}, user) {
+  await assertCompanyAccess(companyId, user)
   const offset = (page - 1) * limit
-  const countRes = await query(
-    `SELECT COUNT(*) FROM task_activity_logs tal
-     JOIN tasks t ON t.id = tal.task_id
-     WHERE t.company_id = $1`,
-    [companyId]
-  )
-  const total = parseInt(countRes.rows[0].count, 10)
+  // P2: single query with COUNT(*) OVER() — eliminates the separate COUNT query
   const { rows } = await query(
     `SELECT tal.id, tal.action, tal.old_value, tal.new_value, tal.meta, tal.created_at,
+            COUNT(*) OVER() AS _total,
             u.name AS actor_name,
             t.id   AS task_id, t.title AS task_title
      FROM task_activity_logs tal
@@ -497,6 +488,7 @@ async function getActivityLog(companyId, { page = 1, limit = 10 } = {}) {
      LIMIT $2 OFFSET $3`,
     [companyId, limit, offset]
   )
+  const total = parseInt(rows[0]?._total ?? 0, 10)
   const activities = rows.map((r) => ({
     id:         r.id,
     action:     r.action,
@@ -511,9 +503,24 @@ async function getActivityLog(companyId, { page = 1, limit = 10 } = {}) {
   return { activities, total }
 }
 
+// ── Shared access guard ────────────────────────────────────────────────────────
+// S1/S2: staff may only access companies they are assigned to
+
+async function assertCompanyAccess(companyId, user) {
+  if (!user || user.role === 'admin') return
+  const { rows: [row] } = await query(
+    'SELECT assigned_staff_id FROM companies WHERE id = $1', [companyId]
+  )
+  if (!row) throw Object.assign(new Error('Company not found'), { status: 404 })
+  if (row.assigned_staff_id !== user.id) {
+    throw Object.assign(new Error('Bạn không có quyền truy cập công ty này'), { status: 403 })
+  }
+}
+
 // ── Company Notes ──────────────────────────────────────────────────────────────
 
-async function listNotes(companyId) {
+async function listNotes(companyId, user) {
+  await assertCompanyAccess(companyId, user)
   const { rows } = await query(
     `SELECT cn.id, cn.content, cn.is_pinned, cn.created_at, cn.updated_at,
             u.name AS author_name, cn.created_by
@@ -534,29 +541,32 @@ async function listNotes(companyId) {
   }))
 }
 
-async function createNote(companyId, { content, isPinned = false }, userId) {
+async function createNote(companyId, { content, isPinned = false }, user) {
+  await assertCompanyAccess(companyId, user)
+  // S4: cap note length
+  const trimmed = content.trim().slice(0, 10000)
   const { rows: [row] } = await query(
     `INSERT INTO company_notes (company_id, content, is_pinned, created_by)
      VALUES ($1, $2, $3, $4)
      RETURNING id, content, is_pinned, created_at, updated_at, created_by`,
-    [companyId, content.trim(), isPinned, userId]
+    [companyId, trimmed, isPinned, user.id]
   )
-  const { rows: [user] } = await query('SELECT name FROM users WHERE id = $1', [userId])
   return {
     id:         row.id,
     content:    row.content,
     isPinned:   row.is_pinned,
-    authorName: user?.name ?? 'Hệ thống',
+    authorName: user.name ?? 'Hệ thống',  // P3: use caller's name — no extra DB query
     createdBy:  row.created_by,
     createdAt:  row.created_at,
     updatedAt:  row.updated_at,
   }
 }
 
-async function updateNote(companyId, noteId, { content, isPinned }) {
+async function updateNote(companyId, noteId, { content, isPinned }, user) {
+  await assertCompanyAccess(companyId, user)
   const sets = []
   const vals = []
-  if (content  !== undefined) { sets.push(`content = $${sets.length + 1}`);   vals.push(content.trim()) }
+  if (content  !== undefined) { sets.push(`content = $${sets.length + 1}`);   vals.push(content.trim().slice(0, 10000)) }
   if (isPinned !== undefined) { sets.push(`is_pinned = $${sets.length + 1}`); vals.push(isPinned) }
   if (!sets.length) throw new Error('Nothing to update')
   sets.push('updated_at = NOW()')
@@ -578,7 +588,8 @@ async function updateNote(companyId, noteId, { content, isPinned }) {
   }
 }
 
-async function deleteNote(companyId, noteId) {
+async function deleteNote(companyId, noteId, user) {
+  await assertCompanyAccess(companyId, user)
   const { rowCount } = await query(
     'DELETE FROM company_notes WHERE company_id = $1 AND id = $2',
     [companyId, noteId]

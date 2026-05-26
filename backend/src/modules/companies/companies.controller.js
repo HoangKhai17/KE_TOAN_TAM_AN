@@ -50,7 +50,7 @@ async function deleteCompany(req, res, next) {
 
 async function getAssignments(req, res, next) {
   try {
-    const assignments = await svc.getAssignments(req.params.id)
+    const assignments = await svc.getAssignments(req.params.id, req.user)
     res.json({ success: true, data: { assignments } })
   } catch (err) { next(err) }
 }
@@ -69,14 +69,14 @@ async function getActivityLog(req, res, next) {
   try {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit ?? '10', 10)))
     const page  = Math.max(1, parseInt(req.query.page  ?? '1',  10))
-    const { activities, total } = await svc.getActivityLog(req.params.id, { page, limit })
+    const { activities, total } = await svc.getActivityLog(req.params.id, { page, limit }, req.user)
     res.json({ success: true, data: { activities, total } })
   } catch (err) { next(err) }
 }
 
 async function listNotes(req, res, next) {
   try {
-    const notes = await svc.listNotes(req.params.id)
+    const notes = await svc.listNotes(req.params.id, req.user)
     res.json({ success: true, data: { notes } })
   } catch (err) { next(err) }
 }
@@ -85,21 +85,21 @@ async function createNote(req, res, next) {
   try {
     const { content, isPinned } = req.body
     if (!content?.trim()) return res.status(400).json({ success: false, error: { message: 'Nội dung không được trống' } })
-    const note = await svc.createNote(req.params.id, { content, isPinned }, req.user.id)
+    const note = await svc.createNote(req.params.id, { content, isPinned }, req.user)
     res.status(201).json({ success: true, data: { note } })
   } catch (err) { next(err) }
 }
 
 async function updateNote(req, res, next) {
   try {
-    const note = await svc.updateNote(req.params.id, req.params.noteId, req.body)
+    const note = await svc.updateNote(req.params.id, req.params.noteId, req.body, req.user)
     res.json({ success: true, data: { note } })
   } catch (err) { next(err) }
 }
 
 async function deleteNote(req, res, next) {
   try {
-    await svc.deleteNote(req.params.id, req.params.noteId)
+    await svc.deleteNote(req.params.id, req.params.noteId, req.user)
     res.json({ success: true })
   } catch (err) { next(err) }
 }
