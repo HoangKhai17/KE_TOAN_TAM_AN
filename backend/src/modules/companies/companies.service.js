@@ -155,7 +155,7 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
   const {
     name, taxCode, address, businessType = 'TNHH', industry,
     legalRepName, legalRepPhone, contactName, contactPhone, contactEmail,
-    bankAccount, bankName, serviceStartDate, notes, assignedStaffId,
+    bankAccount, bankName, serviceStartDate, notes, assignedStaffId, avatarUrl,
   } = data
 
   if (taxCode) {
@@ -167,14 +167,14 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
     `INSERT INTO companies
        (name, tax_code, address, business_type, industry, legal_rep_name, legal_rep_phone,
         contact_name, contact_phone, contact_email, bank_account, bank_name,
-        service_start_date, notes, assigned_staff_id, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        service_start_date, notes, assigned_staff_id, avatar_url, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
      RETURNING *`,
     [
       name, taxCode ?? null, address ?? null, businessType, industry ?? null,
       legalRepName ?? null, legalRepPhone ?? null, contactName ?? null, contactPhone ?? null,
       contactEmail ?? null, bankAccount ?? null, bankName ?? null,
-      serviceStartDate ?? null, notes ?? null, assignedStaffId ?? null, actorId,
+      serviceStartDate ?? null, notes ?? null, assignedStaffId ?? null, avatarUrl ?? null, actorId,
     ]
   )
 
