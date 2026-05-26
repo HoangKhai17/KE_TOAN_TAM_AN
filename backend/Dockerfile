@@ -1,6 +1,6 @@
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl python3 make g++
 
 # Development stage
 FROM base AS development
