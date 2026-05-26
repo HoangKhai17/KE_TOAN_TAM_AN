@@ -178,8 +178,19 @@ async function listTasks(filters = {}) {
   if (companyId)           { baseParams.push(companyId);           baseConditions.push(`t.company_id = $${baseParams.length}`) }
   if (effectiveAssignedTo) { baseParams.push(effectiveAssignedTo); baseConditions.push(`t.assigned_to = $${baseParams.length}`) }
   if (source)      { baseParams.push(source);      baseConditions.push(`t.source = $${baseParams.length}::task_source`) }
-  if (dueDateFrom) { baseParams.push(dueDateFrom); baseConditions.push(`t.due_date >= $${baseParams.length}`) }
-  if (dueDateTo)   { baseParams.push(dueDateTo);   baseConditions.push(`t.due_date <= $${baseParams.length}`) }
+  if (dueDateFrom && dueDateTo) {
+    // Overlap: show task if its date range [start_date, due_date] intersects filter period [from, to]
+    baseParams.push(dueDateTo)
+    baseConditions.push(`(t.start_date IS NULL OR t.start_date <= $${baseParams.length})`)
+    baseParams.push(dueDateFrom)
+    baseConditions.push(`(t.due_date IS NULL OR t.due_date >= $${baseParams.length})`)
+  } else if (dueDateFrom) {
+    baseParams.push(dueDateFrom)
+    baseConditions.push(`(t.due_date IS NULL OR t.due_date >= $${baseParams.length})`)
+  } else if (dueDateTo) {
+    baseParams.push(dueDateTo)
+    baseConditions.push(`(t.start_date IS NULL OR t.start_date <= $${baseParams.length})`)
+  }
   if (periodLabel) { baseParams.push(periodLabel); baseConditions.push(`t.period_label = $${baseParams.length}`) }
   if (isOverdue === 'true' || isOverdue === true) {
     baseConditions.push(`t.due_date < CURRENT_DATE AND t.status != 'completed'`)

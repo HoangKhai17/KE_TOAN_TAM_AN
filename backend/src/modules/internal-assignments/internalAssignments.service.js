@@ -162,13 +162,17 @@ async function listAssignments(actorId, actorRole, {
     params.push(`%${search}%`)
     conds.push(`ia.title ILIKE $${params.length}`)
   }
-  if (deadlineFrom) {
-    params.push(deadlineFrom)
-    conds.push(`ia.deadline_date >= $${params.length}`)
-  }
-  if (deadlineTo) {
+  if (deadlineFrom && deadlineTo) {
     params.push(deadlineTo)
-    conds.push(`ia.deadline_date <= $${params.length}`)
+    conds.push(`ia.created_at::date <= $${params.length}`)
+    params.push(deadlineFrom)
+    conds.push(`(ia.deadline_date IS NULL OR ia.deadline_date >= $${params.length})`)
+  } else if (deadlineFrom) {
+    params.push(deadlineFrom)
+    conds.push(`(ia.deadline_date IS NULL OR ia.deadline_date >= $${params.length})`)
+  } else if (deadlineTo) {
+    params.push(deadlineTo)
+    conds.push(`ia.created_at::date <= $${params.length}`)
   }
 
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
@@ -221,8 +225,18 @@ async function listAssignments(actorId, actorRole, {
 async function getStats(actorId, actorRole, { deadlineFrom, deadlineTo } = {}) {
   const dateParams = []
   const dateConds  = []
-  if (deadlineFrom) { dateParams.push(deadlineFrom); dateConds.push(`ia.deadline_date >= $${dateParams.length}`) }
-  if (deadlineTo)   { dateParams.push(deadlineTo);   dateConds.push(`ia.deadline_date <= $${dateParams.length}`) }
+  if (deadlineFrom && deadlineTo) {
+    dateParams.push(deadlineTo)
+    dateConds.push(`ia.created_at::date <= $${dateParams.length}`)
+    dateParams.push(deadlineFrom)
+    dateConds.push(`(ia.deadline_date IS NULL OR ia.deadline_date >= $${dateParams.length})`)
+  } else if (deadlineFrom) {
+    dateParams.push(deadlineFrom)
+    dateConds.push(`(ia.deadline_date IS NULL OR ia.deadline_date >= $${dateParams.length})`)
+  } else if (deadlineTo) {
+    dateParams.push(deadlineTo)
+    dateConds.push(`ia.created_at::date <= $${dateParams.length}`)
+  }
   const dateWhere = dateConds.length ? `WHERE ${dateConds.join(' AND ')}` : ''
 
   const { rows } = await query(

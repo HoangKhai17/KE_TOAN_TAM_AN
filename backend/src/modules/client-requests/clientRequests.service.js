@@ -69,8 +69,18 @@ async function listClientRequests(filters = {}) {
     params.push(arr)
     conditions.push(`cdr.status = ANY($${params.length}::client_doc_status[])`)
   }
-  if (deadlineDateFrom) { params.push(deadlineDateFrom); conditions.push(`cdr.deadline_date >= $${params.length}`) }
-  if (deadlineDateTo)   { params.push(deadlineDateTo);   conditions.push(`cdr.deadline_date <= $${params.length}`) }
+  if (deadlineDateFrom && deadlineDateTo) {
+    params.push(deadlineDateTo)
+    conditions.push(`cdr.created_at::date <= $${params.length}`)
+    params.push(deadlineDateFrom)
+    conditions.push(`(cdr.deadline_date IS NULL OR cdr.deadline_date >= $${params.length})`)
+  } else if (deadlineDateFrom) {
+    params.push(deadlineDateFrom)
+    conditions.push(`(cdr.deadline_date IS NULL OR cdr.deadline_date >= $${params.length})`)
+  } else if (deadlineDateTo) {
+    params.push(deadlineDateTo)
+    conditions.push(`cdr.created_at::date <= $${params.length}`)
+  }
   if (search) {
     const idx = params.length + 1
     params.push(`%${search}%`)
@@ -394,8 +404,18 @@ async function getAdminOverview(filters = {}) {
 
   if (companyId)        { params.push(companyId);        conditions.push(`cdr.company_id = $${params.length}`) }
   if (periodLabel)      { params.push(periodLabel);      conditions.push(`cdr.period_label = $${params.length}`) }
-  if (deadlineDateFrom) { params.push(deadlineDateFrom); conditions.push(`cdr.deadline_date >= $${params.length}`) }
-  if (deadlineDateTo)   { params.push(deadlineDateTo);   conditions.push(`cdr.deadline_date <= $${params.length}`) }
+  if (deadlineDateFrom && deadlineDateTo) {
+    params.push(deadlineDateTo)
+    conditions.push(`cdr.created_at::date <= $${params.length}`)
+    params.push(deadlineDateFrom)
+    conditions.push(`(cdr.deadline_date IS NULL OR cdr.deadline_date >= $${params.length})`)
+  } else if (deadlineDateFrom) {
+    params.push(deadlineDateFrom)
+    conditions.push(`(cdr.deadline_date IS NULL OR cdr.deadline_date >= $${params.length})`)
+  } else if (deadlineDateTo) {
+    params.push(deadlineDateTo)
+    conditions.push(`cdr.created_at::date <= $${params.length}`)
+  }
 
   const where = conditions.join(' AND ')
 
