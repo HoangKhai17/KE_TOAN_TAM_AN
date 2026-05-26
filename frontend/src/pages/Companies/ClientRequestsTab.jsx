@@ -6,19 +6,14 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
+import { useEnumsStore } from '../../hooks/useEnums'
 import Modal from '../../components/ui/Modal'
 import * as cdrApi from '../../api/clientRequests'
 import s from './companies.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const STATUS_LABEL = {
-  pending:      'Chờ KH',
-  received:     'Đã nhận',
-  not_required: 'Không cần',
-  overdue:      'Quá hạn',
-}
-
+// UI-only colour map — not stored in DB enum metadata
 const STATUS_COLOR = {
   pending:      { bg: '#fffbeb', color: '#92400e', border: '#fcd34d' },
   received:     { bg: '#f0fdf4', color: '#15803d', border: '#86efac' },
@@ -34,20 +29,15 @@ const SORT_OPTIONS = [
   { value: 'document_name:asc',  label: 'Tên A → Z' },
 ]
 
-const STATUS_FILTERS = [
-  { key: '', label: 'Tất cả' },
-  { key: 'pending',      label: STATUS_LABEL.pending },
-  { key: 'overdue',      label: STATUS_LABEL.overdue },
-  { key: 'received',     label: STATUS_LABEL.received },
-  { key: 'not_required', label: STATUS_LABEL.not_required },
-]
-
 function fmtDate(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function StatusBadge({ status }) {
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const opts = getOptions('client_doc_status')
+  const label = opts.find((o) => o.key === status)?.label ?? status
   const cfg = STATUS_COLOR[status] ?? STATUS_COLOR.pending
   return (
     <span style={{
@@ -56,7 +46,7 @@ function StatusBadge({ status }) {
       background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
       whiteSpace: 'nowrap',
     }}>
-      {STATUS_LABEL[status] ?? status}
+      {label}
     </span>
   )
 }
@@ -64,8 +54,14 @@ function StatusBadge({ status }) {
 // ── ClientRequestsTab ──────────────────────────────────────────────────────────
 
 export default function ClientRequestsTab({ company }) {
-  const isAdmin  = useAuthStore((st) => st.user?.role === 'admin')
-  const addToast = useToastStore((st) => st.toast)
+  const isAdmin    = useAuthStore((st) => st.user?.role === 'admin')
+  const addToast   = useToastStore((st) => st.toast)
+  const getOptions = useEnumsStore((st) => st.getOptions)
+
+  const statusFilters = [
+    { key: '', label: 'Tất cả' },
+    ...getOptions('client_doc_status').map((o) => ({ key: o.key, label: o.label })),
+  ]
 
   const [items, setItems]           = useState([])
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
@@ -327,7 +323,7 @@ export default function ClientRequestsTab({ company }) {
 
         {/* Status chips row */}
         <div className={s.cTaskStatusRow} style={{ padding: '0 14px 10px', marginBottom: 0 }}>
-          {STATUS_FILTERS.map(({ key, label }) => (
+          {statusFilters.map(({ key, label }) => (
             <button
               key={key}
               className={`${s.cTaskStatusChip} ${statusFilter === key ? s.cTaskStatusChipActive : ''}`}
