@@ -192,14 +192,13 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
 
   // Notify assigned staff when company is created with an assignee
   if (assignedStaffId && assignedStaffId !== actorId) {
-    createAndEmit(
+    const { rows: [actor] } = await query('SELECT name FROM users WHERE id = $1', [actorId])
+    await createAndEmit(
       assignedStaffId, 'task_assigned',
       'Bạn được phân công phụ trách công ty',
       `Công ty "${name}" vừa được giao cho bạn`,
       null,
-    ).catch(() => {})
-
-    const { rows: [actor] } = await query('SELECT name FROM users WHERE id = $1', [actorId])
+    )
     sendCompanyAssignmentEmail({
       staffId: assignedStaffId,
       companyName: name,
@@ -267,38 +266,34 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent, user = nul
     const oldStaff    = current.assigned_staff_id
     const { rows: [actor] } = await query('SELECT name FROM users WHERE id = $1', [actorId])
 
+    const notifyPromises = []
+
     // Notify new assignee
     if (newStaff && newStaff !== actorId) {
-      createAndEmit(
-        newStaff, 'task_assigned',
-        'Bạn được phân công phụ trách công ty',
-        `Công ty "${companyName}" vừa được giao cho bạn`,
-        null,
-      ).catch(() => {})
-      sendCompanyAssignmentEmail({
-        staffId: newStaff,
-        companyName,
-        assignerName: actor?.name,
-        startDate: new Date(),
-        type: 'assigned',
-      })
+      notifyPromises.push(
+        createAndEmit(
+          newStaff, 'task_assigned',
+          'Bạn được phân công phụ trách công ty',
+          `Công ty "${companyName}" vừa được giao cho bạn`,
+          null,
+        )
+      )
+      sendCompanyAssignmentEmail({ staffId: newStaff, companyName, assignerName: actor?.name, startDate: new Date(), type: 'assigned' })
     }
     // Notify previous assignee they are no longer responsible
     if (oldStaff && oldStaff !== actorId && oldStaff !== newStaff) {
-      createAndEmit(
-        oldStaff, 'task_status_changed',
-        'Thay đổi phân công công ty',
-        `Bạn không còn phụ trách công ty "${companyName}" nữa`,
-        null,
-      ).catch(() => {})
-      sendCompanyAssignmentEmail({
-        staffId: oldStaff,
-        companyName,
-        assignerName: actor?.name,
-        startDate: new Date(),
-        type: 'unassigned',
-      })
+      notifyPromises.push(
+        createAndEmit(
+          oldStaff, 'task_status_changed',
+          'Thay đổi phân công công ty',
+          `Bạn không còn phụ trách công ty "${companyName}" nữa`,
+          null,
+        )
+      )
+      sendCompanyAssignmentEmail({ staffId: oldStaff, companyName, assignerName: actor?.name, startDate: new Date(), type: 'unassigned' })
     }
+
+    await Promise.all(notifyPromises)
   }
 
   emitData('data:company', { action: 'updated', id, actorId })
@@ -443,39 +438,34 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
 
     const { rows: [actor] } = await query('SELECT name FROM users WHERE id = $1', [actorId])
 
+    const notifyPromises = []
+
     // Notify new assignee
     if (staffId !== actorId) {
-      createAndEmit(
-        staffId, 'task_assigned',
-        'Bạn được phân công phụ trách công ty',
-        `Công ty "${company.name}" vừa được giao cho bạn`,
-        null,
-      ).catch(() => {})
-      sendCompanyAssignmentEmail({
-        staffId,
-        companyName: company.name,
-        assignerName: actor?.name,
-        startDate: assignDate,
-        type: 'assigned',
-      })
+      notifyPromises.push(
+        createAndEmit(
+          staffId, 'task_assigned',
+          'Bạn được phân công phụ trách công ty',
+          `Công ty "${company.name}" vừa được giao cho bạn`,
+          null,
+        )
+      )
+      sendCompanyAssignmentEmail({ staffId, companyName: company.name, assignerName: actor?.name, startDate: assignDate, type: 'assigned' })
     }
     // Notify previous assignee they are no longer responsible
     if (previousStaffId && previousStaffId !== actorId && previousStaffId !== staffId) {
-      createAndEmit(
-        previousStaffId, 'task_status_changed',
-        'Thay đổi phân công công ty',
-        `Bạn không còn phụ trách công ty "${company.name}" nữa`,
-        null,
-      ).catch(() => {})
-      sendCompanyAssignmentEmail({
-        staffId: previousStaffId,
-        companyName: company.name,
-        assignerName: actor?.name,
-        startDate: assignDate,
-        type: 'unassigned',
-      })
+      notifyPromises.push(
+        createAndEmit(
+          previousStaffId, 'task_status_changed',
+          'Thay đổi phân công công ty',
+          `Bạn không còn phụ trách công ty "${company.name}" nữa`,
+          null,
+        )
+      )
+      sendCompanyAssignmentEmail({ staffId: previousStaffId, companyName: company.name, assignerName: actor?.name, startDate: assignDate, type: 'unassigned' })
     }
 
+    await Promise.all(notifyPromises)
     emitData('data:company', { action: 'updated', id: companyId, actorId })
     return { assignmentId: newAssignment.id, staffId, startDate: assignDate }
   } catch (err) {
