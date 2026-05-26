@@ -296,12 +296,12 @@ async function createTask(data, actorId, ipAddress, userAgent) {
 
   // Notify assignee if set and different from actor
   if (assignedTo && assignedTo !== actorId) {
-    createAndEmit(
+    await createAndEmit(
       assignedTo, 'task_assigned',
       'Bạn được giao công việc mới',
       `"${result.title}" — ${result.companyName || ''}`,
       task.id,
-    ).catch(() => {})
+    )
   }
 
   emitData('data:task', { action: 'created', id: task.id, companyId, actorId })
@@ -365,24 +365,26 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
 
   const result = await getTaskById(id)
 
+  const notifyPromises = []
   // Notify new assignee when task is re-assigned
   if (newAssignee && newAssignee !== actorId) {
-    createAndEmit(
+    notifyPromises.push(createAndEmit(
       newAssignee, 'task_assigned',
       'Bạn được giao công việc',
       `"${result.title}" — ${result.companyName || ''}`,
       id,
-    ).catch(() => {})
+    ))
   }
   // Notify previous assignee they were unassigned
   if (prevAssignee && prevAssignee !== actorId && prevAssignee !== newAssignee) {
-    createAndEmit(
+    notifyPromises.push(createAndEmit(
       prevAssignee, 'task_status_changed',
       'Công việc đã được giao cho người khác',
       `"${result.title}" không còn được giao cho bạn nữa`,
       id,
-    ).catch(() => {})
+    ))
   }
+  await Promise.all(notifyPromises)
 
   emitData('data:task', { action: 'updated', id, companyId: result.companyId, actorId })
   return result
@@ -489,42 +491,66 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
   const fromLabel = STATUS_LABEL[currentStatus] || currentStatus
   const toLabel   = STATUS_LABEL[newStatus]     || newStatus
 
+  const notifyPromises = []
+
   // Notify assignee about status change (if not the one making the change)
   if (result.assignedTo && result.assignedTo !== actorId) {
-    createAndEmit(
+    notifyPromises.push(createAndEmit(
       result.assignedTo, 'task_status_changed',
       `Công việc cập nhật: ${toLabel}`,
       `"${result.title}" chuyển từ ${fromLabel} → ${toLabel}`,
       id,
-    ).catch(() => {})
+    ))
   }
 
-  // When completed — notify creator if different from assignee and actor
+  // When completed — notify all relevant parties
   if (newStatus === 'completed') {
     const notified = new Set([actorId, result.assignedTo].filter(Boolean))
+
+    // Notify creator if set and not already notified (manual task case)
     if (result.createdBy && !notified.has(result.createdBy)) {
-      createAndEmit(
+      notifyPromises.push(createAndEmit(
         result.createdBy, 'task_status_changed',
         'Công việc đã hoàn thành',
         `"${result.title}" — ${result.companyName || ''} đã được đánh dấu hoàn thành`,
         id,
-      ).catch(() => {})
+      ))
+      notified.add(result.createdBy)
+    }
+
+    // When staff completes: notify all active admins not yet notified
+    // Covers auto-generated tasks (createdBy may be null) and ensures all admins are informed
+    if (user?.role === 'staff') {
+      const { rows: admins } = await query(
+        `SELECT id FROM users WHERE role = 'admin' AND status = 'active'`
+      )
+      for (const adm of admins) {
+        if (!notified.has(adm.id)) {
+          notifyPromises.push(createAndEmit(
+            adm.id, 'task_status_changed',
+            'Công việc đã hoàn thành',
+            `"${result.title}" — ${result.companyName || ''} đã được đánh dấu hoàn thành`,
+            id,
+          ))
+          notified.add(adm.id)
+        }
+      }
     }
   }
 
-  // When needs_revision — notify assignee explicitly (escalation case)
+  // When needs_revision — actor is assignee, notify creator
   if (newStatus === 'needs_revision' && result.assignedTo && result.assignedTo === actorId) {
-    // Actor is the assignee marking their own task — notify creator
     if (result.createdBy && result.createdBy !== actorId) {
-      createAndEmit(
+      notifyPromises.push(createAndEmit(
         result.createdBy, 'task_status_changed',
         `Công việc cần xem lại`,
         `"${result.title}" đã chuyển sang "Cần xem lại"`,
         id,
-      ).catch(() => {})
+      ))
     }
   }
 
+  await Promise.all(notifyPromises)
   emitData('data:task', { action: 'updated', id, companyId: result.companyId, actorId })
   return result
 }
