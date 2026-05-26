@@ -54,6 +54,7 @@ Bộ tài liệu này bao gồm:
 - Phương án hosting & chi phí vận hành
 - Thiết kế cơ sở dữ liệu (Database Design)
 
+| 17 | [017_DEPLOYMENT.md](./017_DEPLOYMENT.md) | Hướng dẫn triển khai lên VPS — build, backup DB, upload, deploy, rollback | ✅ Hoàn thành |
+
 **Chưa bao gồm** (sẽ bổ sung giai đoạn sau):
 - UI/UX Wireframe chi tiết
-- Kế hoạch triển khai (Deployment Plan)
