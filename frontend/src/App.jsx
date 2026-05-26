@@ -23,6 +23,7 @@ import Notifications from './pages/Notifications/Notifications'
 import PublicForm from './pages/PublicForm/PublicForm'
 import AdminClientRequests from './pages/AdminClientRequests/AdminClientRequests'
 import InternalAssignments from './pages/InternalAssignments/InternalAssignments'
+import InternalDocLinks from './pages/InternalAssignments/InternalDocLinks'
 import s from './App.module.css'
 
 // ── Route guards ──────────────────────────────────────────────────────
@@ -187,6 +188,10 @@ function AppRoutes() {
       <Route
         path="/internal-assignments"
         element={<ProtectedRoute><InternalAssignments /></ProtectedRoute>}
+      />
+      <Route
+        path="/internal-assignments/documents"
+        element={<ProtectedRoute><InternalDocLinks /></ProtectedRoute>}
       />
 
       {/* Phase 17 — Public form (no auth required) */}

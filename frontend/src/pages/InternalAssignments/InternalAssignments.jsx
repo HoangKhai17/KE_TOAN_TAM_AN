@@ -18,6 +18,7 @@ import * as api from '../../api/internalAssignments'
 import { listUserOptions } from '../../api/users'
 import AssignmentDetailPanel from './AssignmentDetailPanel'
 import CreateEditAssignmentModal from './CreateEditAssignmentModal'
+import InternalNavTabs from './InternalNavTabs'
 import s from './internalAssignments.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -986,14 +987,15 @@ export default function InternalAssignments() {
     <AppLayout>
       <div className={s.page}>
 
+        {/* ── Page title + tabs ── */}
+        <div>
+          <h1 className={s.pageTitle}>Công việc nội bộ</h1>
+          <InternalNavTabs />
+        </div>
+
         {/* ── Toolbar ── */}
         <div className={s.toolbar}>
-          <div className={s.toolbarLeft}>
-            <h1 className={s.pageTitle}>Công việc nội bộ</h1>
-            {!loading && pagination.total > 0 && (
-              <span className={s.totalBadge}>{pagination.total}</span>
-            )}
-          </div>
+          <div className={s.toolbarLeft} />
           <div className={s.toolbarRight}>
             <div className={s.viewSwitch}>
               <button
