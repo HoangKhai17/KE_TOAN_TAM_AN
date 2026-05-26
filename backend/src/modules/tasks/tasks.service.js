@@ -401,9 +401,19 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
   return result
 }
 
-async function deleteTask(id, actorId, ipAddress, userAgent) {
+async function deleteTask(id, user, ipAddress, userAgent) {
+  const actorId = user.id
   const { rows: [task] } = await query('SELECT id, title, company_id FROM tasks WHERE id = $1', [id])
   if (!task) throw Object.assign(new Error('Task not found'), { status: 404 })
+
+  if (user.role === 'staff') {
+    const { rows: [company] } = await query(
+      'SELECT assigned_staff_id FROM companies WHERE id = $1',
+      [task.company_id],
+    )
+    if (!company || company.assigned_staff_id !== actorId)
+      throw Object.assign(new Error('Forbidden'), { status: 403 })
+  }
 
   await query('DELETE FROM tasks WHERE id = $1', [id])
 

@@ -44,7 +44,7 @@ async function updateTask(req, res, next) {
 
 async function deleteTask(req, res, next) {
   try {
-    await svc.deleteTask(req.params.id, req.user.id, req.ip, req.headers['user-agent'])
+    await svc.deleteTask(req.params.id, req.user, req.ip, req.headers['user-agent'])
     res.status(204).end()
   } catch (err) { next(err) }
 }

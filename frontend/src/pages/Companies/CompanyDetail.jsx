@@ -1269,7 +1269,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                 <th>Hết hạn</th>
                 <th>Phụ trách</th>
                 <th>Tiến độ</th>
-                <th className={isAdmin ? s.taskActionHeadAdmin : s.taskActionHeadUser} />
+                <th className={s.taskActionHeadAdmin} />
               </tr>
             </thead>
             <tbody>
@@ -1281,7 +1281,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                         <div className={s.taskSkeletonBar} style={{ '--skeleton-w': `${w}px` }} />
                       </td>
                     ))}
-                    {isAdmin && <td />}
+                    <td />
                   </tr>
                 ))
               ) : tasks.length === 0 ? (
@@ -1345,15 +1345,13 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                         >
                           <Eye size={13} />
                         </button>
-                        {isAdmin && (
-                          <button
-                            className={`${s.rowActionBtn} ${s.rowActionDanger}`}
-                            title="Xoá công việc"
-                            onClick={() => setDeleteTarget(task)}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
+                        <button
+                          className={`${s.rowActionBtn} ${s.rowActionDanger}`}
+                          title="Xoá công việc"
+                          onClick={() => setDeleteTarget(task)}
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </td>
                   </tr>

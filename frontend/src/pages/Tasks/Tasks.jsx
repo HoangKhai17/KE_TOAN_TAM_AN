@@ -266,7 +266,7 @@ function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
           <span className={s.boardCardProgressText}>{pct}%</span>
         </div>
       )}
-      {(onQuickView || (isAdmin && onDelete)) && (
+      {(onQuickView || onDelete) && (
         <div className={s.boardCardActions}>
           {onQuickView && (
             <button
@@ -277,7 +277,7 @@ function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
               <Eye size={11} />
             </button>
           )}
-          {isAdmin && onDelete && (
+          {onDelete && (
             <button
               className={s.boardCardDeleteBtn}
               onClick={(e) => { e.stopPropagation(); onDelete(task) }}
@@ -425,12 +425,12 @@ const CAL_PRIORITY_CLASS = {
 
 // Month view constants
 const CAL_DAY_H  = 36   // px: day-number header height inside each week row
-const CAL_SLOT_H = 26   // px: task bar slot height in month view
-const CAL_MAX_SL = 5    // max visible task bars before "+N more"
+const CAL_SLOT_H = 80   // px: task bar slot height in month view
+const CAL_MAX_SL = 3    // max visible task bars before "+N more"
 
 // Week view constants
 const WEEK_TOP_H  = 10  // px: top offset for bars in week view row
-const WEEK_SLOT_H = 32  // px: task bar slot height in week view
+const WEEK_SLOT_H = 80  // px: task bar slot height in week view
 
 // Greedy slot-assignment for one week row
 function computeBarLayout(week, allTasks, maxSlots) {
@@ -565,6 +565,8 @@ function CalendarView({ tasks, onOpen }) {
   function renderBar({ task, si, ei, slot, continuesLeft, continuesRight }, topH, slotH) {
     const lm = continuesLeft  ? 0 : 3
     const rm = continuesRight ? 0 : 3
+    const startShort = task.startDate ? fmtDate(task.startDate).slice(0, 5) : null
+    const endShort   = task.dueDate   ? fmtDate(task.dueDate).slice(0, 5)   : null
     return (
       <div
         key={task.id}
@@ -578,8 +580,19 @@ function CalendarView({ tasks, onOpen }) {
         onClick={() => onOpen(task.id)}
         title={task.title}
       >
-        {!continuesLeft  && <span className={s.calBarStartMark}>▶</span>}
-        <span className={s.calBarTitle}>{task.title}</span>
+        {!continuesLeft && <span className={s.calBarStartMark}>▶</span>}
+        <div className={s.calBarBody}>
+          <span className={s.calBarTitle}>{task.title}</span>
+          {task.companyName && (
+            <span className={s.calBarCompany}>{task.companyName}</span>
+          )}
+          <div className={s.calBarFooter}>
+            <span className={s.calBarStatusPill}>{STATUS_LABELS[task.status]}</span>
+            {(startShort || endShort) && (
+              <span className={s.calBarDue}>{startShort ?? '—'} → {endShort ?? '—'}</span>
+            )}
+          </div>
+        </div>
         {!continuesRight && <span className={s.calBarEndMark}>→</span>}
       </div>
     )
@@ -1000,7 +1013,7 @@ function ListView({
                 <tr
                   key={t.id}
                   className={`${s.tr} ${selectedIds.has(t.id) ? s.trSelected : ''} ${overdue ? s.trOverdue : ''}`}
-                  onClick={() => onOpen(t.id)}
+                  onClick={() => onQuickView(t.id)}
                 >
                   <td className={s.tdCheck} onClick={(e) => e.stopPropagation()}>
                     <input
@@ -1102,27 +1115,18 @@ function ListView({
                     <div className={s.actionBtns}>
                       <button
                         className={s.btnActionView}
-                        onClick={() => onQuickView(t.id)}
-                        title="Xem nhanh"
-                      >
-                        <Eye size={13} />
-                      </button>
-                      <button
-                        className={s.btnActionView}
                         onClick={() => onOpen(t.id)}
                         title="Mở chi tiết"
                       >
                         <ArrowUpRight size={13} />
                       </button>
-                      {isAdmin && (
-                        <button
-                          className={s.btnActionDelete}
-                          onClick={() => onDelete(t)}
-                          title="Xóa công việc"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
+                      <button
+                        className={s.btnActionDelete}
+                        onClick={() => onDelete(t)}
+                        title="Xóa công việc"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -1889,14 +1893,12 @@ export default function Tasks() {
             <button className={s.btnGhost} onClick={bulkComplete}>
               <Check size={13} /> Hoàn thành tất cả
             </button>
-            {isAdmin && (
-              <button
-                className={`${s.btnGhost} ${s.btnDangerText}`}
-                onClick={() => setShowBulkDelete(true)}
-              >
-                <Trash2 size={13} /> Xóa đã chọn
-              </button>
-            )}
+            <button
+              className={`${s.btnGhost} ${s.btnDangerText}`}
+              onClick={() => setShowBulkDelete(true)}
+            >
+              <Trash2 size={13} /> Xóa đã chọn
+            </button>
             <button className={s.btnGhost} onClick={() => setSelectedIds(new Set())}>
               Bỏ chọn
             </button>

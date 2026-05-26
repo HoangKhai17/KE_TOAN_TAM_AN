@@ -184,7 +184,7 @@ router.patch('/:id', ...auth, validate(updateTaskSchema), ctrl.updateTask)
  *       204: { description: Deleted }
  *       404: { description: Not found }
  */
-router.delete('/:id', ...admin, ctrl.deleteTask)
+router.delete('/:id', ...auth, ctrl.deleteTask)
 
 /**
  * @openapi
