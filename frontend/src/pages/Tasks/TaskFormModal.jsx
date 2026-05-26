@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Info, Search, ChevronDown, X, Plus } from 'lucide-react'
+import { Info, Search, ChevronDown, X, Plus, Link2, Trash2 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
-import { createTask, addTaskChecklistItem } from '../../api/tasks'
+import { createTask, addTaskChecklistItem, addTaskLink } from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
 import { listUserOptions } from '../../api/users'
 import { listTaskTypes } from '../../api/taskTypes'
@@ -127,6 +127,12 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   const [newItemText,    setNewItemText]    = useState('')
   const newItemRef = useRef(null)
 
+  // Links
+  const [linkItems,    setLinkItems]    = useState([])
+  const [showLinkForm, setShowLinkForm] = useState(false)
+  const [linkForm,     setLinkForm]     = useState({ name: '', url: '' })
+  const [linkErr,      setLinkErr]      = useState('')
+
   const getOptions = useEnumsStore((st) => st.getOptions)
   const loadEnums  = useEnumsStore((st) => st.load)
 
@@ -154,6 +160,22 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
     setChecklistItems((prev) => prev.filter((item) => item.id !== id))
   }
 
+  function addLink() {
+    if (!linkForm.name.trim()) { setLinkErr('Vui lòng nhập tên tài liệu'); return }
+    if (!linkForm.url.trim())  { setLinkErr('Vui lòng nhập URL'); return }
+    try { new URL(linkForm.url.trim()) } catch {
+      setLinkErr('URL không hợp lệ (cần bắt đầu bằng https://)'); return
+    }
+    setLinkItems((prev) => [...prev, { id: Date.now(), name: linkForm.name.trim(), url: linkForm.url.trim() }])
+    setLinkForm({ name: '', url: '' })
+    setLinkErr('')
+    setShowLinkForm(false)
+  }
+
+  function removeLink(id) {
+    setLinkItems((prev) => prev.filter((l) => l.id !== id))
+  }
+
   async function submit(openAfter) {
     const errs = {}
     if (!form.title.trim()) errs.title = 'Tiêu đề không được để trống'
@@ -175,6 +197,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       for (const item of checklistItems) {
         await addTaskChecklistItem(task.id, { stepText: item.text })
       }
+      await Promise.all(linkItems.map((l) => addTaskLink(task.id, { name: l.name, url: l.url })))
       if (openAfter) onSavedAndOpen(task)
       else           onSaved(task)
     } catch (err) {
@@ -358,6 +381,80 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
               </button>
             )}
           </div>
+        </div>
+
+        {/* Links */}
+        <div className={`${s.formGroup} ${s.span2}`}>
+          <label className={s.formLabel}>
+            <Link2 size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+            Link đính kèm
+            {linkItems.length > 0 && (
+              <span style={{ fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>
+                ({linkItems.length} link)
+              </span>
+            )}
+          </label>
+
+          {linkItems.length > 0 && (
+            <div className={s.fmClList}>
+              {linkItems.map((link) => (
+                <div key={link.id} className={s.fmClItem}>
+                  <Link2 size={11} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+                  <div className={s.fmLinkBody}>
+                    <span className={s.fmLinkName}>{link.name}</span>
+                    <span className={s.fmLinkUrl}>{link.url}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={s.fmClDel}
+                    onClick={() => removeLink(link.id)}
+                    title="Xóa link"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showLinkForm ? (
+            <div className={s.fmLinkForm}>
+              {linkErr && <p className={s.formError} style={{ margin: 0 }}>{linkErr}</p>}
+              <input
+                type="text"
+                value={linkForm.name}
+                onChange={(e) => { setLinkForm((p) => ({ ...p, name: e.target.value })); setLinkErr('') }}
+                className={s.tlAddInput}
+                placeholder="Tên tài liệu *"
+                autoFocus
+              />
+              <input
+                type="url"
+                value={linkForm.url}
+                onChange={(e) => { setLinkForm((p) => ({ ...p, url: e.target.value })); setLinkErr('') }}
+                className={s.tlAddInput}
+                placeholder="https://drive.google.com/... *"
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink() } }}
+              />
+              <div className={s.tlAddActions}>
+                <button
+                  type="button"
+                  className={`${s.btnSecondary} ${s.btnCompact}`}
+                  onClick={() => { setShowLinkForm(false); setLinkErr(''); setLinkForm({ name: '', url: '' }) }}
+                >
+                  Huỷ
+                </button>
+                <button type="button" className={`${s.btnPrimary} ${s.btnCompact}`} onClick={addLink}>
+                  Thêm link
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className={s.fmClAdd} style={{ cursor: 'pointer' }} onClick={() => setShowLinkForm(true)}>
+              <Plus size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>Thêm link đính kèm...</span>
+            </div>
+          )}
         </div>
 
       </div>
