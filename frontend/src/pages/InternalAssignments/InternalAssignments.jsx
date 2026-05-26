@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Plus, Search, ClipboardCheck, Loader2, Check,
   List, Columns, Filter, RotateCcw,
@@ -771,44 +771,44 @@ export default function InternalAssignments() {
     })
   }, [view, yearFilter, monthFilter, deadlineFrom, deadlineTo, sortValue, searchInput, filterStatus, filterPriority, filterAssignees, filterMyStatus, pageSize])
 
-  const loadStats = useCallback(async () => {
-    try {
-      setStats(await api.getStats({
-        deadlineFrom: deadlineFrom || undefined,
-        deadlineTo:   deadlineTo   || undefined,
-      }))
-    } catch { /* ignore */ }
-  }, [deadlineFrom, deadlineTo])
+  useEffect(() => {
+    let cancelled = false
+    api.getStats({
+      deadlineFrom: deadlineFrom || undefined,
+      deadlineTo:   deadlineTo   || undefined,
+    })
+      .then((data) => { if (!cancelled) setStats(data) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [deadlineFrom, deadlineTo, refreshKey])
 
-  const loadItems = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false
     setLoading(true)
-    try {
-      const [sortBy, sortDir] = sortValue.split(':')
-      const params = {
-        page,
-        limit: view === 'list' ? pageSize : 200,
-        search: search || undefined,
-        deadlineFrom: deadlineFrom || undefined,
-        deadlineTo:   deadlineTo   || undefined,
-        sortBy,
-        sortDir,
-      }
-      if (filterStatus)    params.status   = filterStatus
-      if (filterPriority)  params.priority = filterPriority
-      if (isAdmin && filterAssignees.length) params.assigneeIds = filterAssignees.join(',')
-      if (!isAdmin && filterMyStatus)        params.myStatus    = filterMyStatus
-      const result = await api.listAssignments(params)
-      setItems(result.items)
-      setPagination(result.pagination)
-    } catch {
-      setItems([])
-    } finally {
-      setLoading(false)
+    const [sortBy, sortDir] = sortValue.split(':')
+    const params = {
+      page,
+      limit: view === 'list' ? pageSize : 200,
+      search: search || undefined,
+      deadlineFrom: deadlineFrom || undefined,
+      deadlineTo:   deadlineTo   || undefined,
+      sortBy,
+      sortDir,
     }
-  }, [page, search, view, pageSize, sortValue, deadlineFrom, deadlineTo, filterStatus, filterPriority, filterAssignees, filterMyStatus, isAdmin])
-
-  useEffect(() => { loadStats() }, [loadStats, refreshKey])
-  useEffect(() => { loadItems() }, [loadItems, refreshKey])
+    if (filterStatus)    params.status   = filterStatus
+    if (filterPriority)  params.priority = filterPriority
+    if (isAdmin && filterAssignees.length) params.assigneeIds = filterAssignees.join(',')
+    if (!isAdmin && filterMyStatus)        params.myStatus    = filterMyStatus
+    api.listAssignments(params)
+      .then((result) => {
+        if (cancelled) return
+        setItems(result.items)
+        setPagination(result.pagination)
+      })
+      .catch(() => { if (!cancelled) setItems([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [page, search, view, pageSize, sortValue, deadlineFrom, deadlineTo, filterStatus, filterPriority, filterAssignees, filterMyStatus, isAdmin, refreshKey])
 
   function refresh() { setRefreshKey((k) => k + 1) }
 

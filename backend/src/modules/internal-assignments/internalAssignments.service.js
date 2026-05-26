@@ -120,6 +120,8 @@ async function getYears() {
   return rows.map((r) => r.year)
 }
 
+const VALID_SORT_COLS = ['created_at', 'deadline_date', 'priority', 'title', 'status', 'updated_at']
+
 async function listAssignments(actorId, actorRole, {
   status, priority, companyId, assigneeId, assigneeIds, myStatus,
   search, deadlineFrom, deadlineTo,
@@ -127,6 +129,11 @@ async function listAssignments(actorId, actorRole, {
 } = {}) {
   const params  = []
   const conds   = []
+
+  const safeSortBy  = VALID_SORT_COLS.includes(sortBy) ? sortBy : 'created_at'
+  const safeSortDir = sortDir?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+  const safeLimit   = Math.min(200, Math.max(1, parseInt(limit, 10) || 20))
+  const offset      = (Math.max(1, parseInt(page, 10) || 1) - 1) * safeLimit
 
   // Resolve multi-assignee: assigneeIds takes precedence, fallback to assigneeId
   const resolvedAssigneeIds = assigneeIds
@@ -181,12 +188,7 @@ async function listAssignments(actorId, actorRole, {
   }
 
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
-  const order = `ORDER BY ia.${sortBy} ${sortDir.toUpperCase()}`
-  const offset = (page - 1) * limit
-
-  const { rows: [{ count }] } = await query(
-    `SELECT COUNT(*) FROM internal_assignments ia ${where}`, params
-  )
+  const order = `ORDER BY ia.${safeSortBy} ${safeSortDir}`
 
   const { rows } = await query(
     `SELECT ia.*,
@@ -202,15 +204,19 @@ async function listAssignments(actorId, actorRole, {
              WHERE iaa.assignment_id = ia.id
             ) AS assignees_json,
             (SELECT COUNT(*) FROM ia_checklist_items WHERE assignment_id = ia.id) AS checklist_total,
-            (SELECT COUNT(*) FILTER (WHERE is_done = TRUE) FROM ia_checklist_items WHERE assignment_id = ia.id) AS checklist_done
+            (SELECT COUNT(*) FILTER (WHERE is_done = TRUE) FROM ia_checklist_items WHERE assignment_id = ia.id) AS checklist_done,
+            COUNT(*) OVER() AS _total
      FROM internal_assignments ia
      JOIN users u ON u.id = ia.created_by
      LEFT JOIN companies c ON c.id = ia.company_id
      ${where}
      ${order}
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, limit, offset]
+    [...params, safeLimit, offset]
   )
+
+  const total = parseInt(rows[0]?._total ?? 0, 10)
+  const safePage = Math.max(1, parseInt(page, 10) || 1)
 
   const items = rows.map((row) => {
     const assignees = (row.assignees_json ?? []).map((a) => ({
@@ -227,7 +233,7 @@ async function listAssignments(actorId, actorRole, {
 
   return {
     items,
-    pagination: { page, limit, total: parseInt(count, 10), totalPages: Math.ceil(count / limit) },
+    pagination: { page: safePage, limit: safeLimit, total, totalPages: Math.ceil(total / safeLimit) || 1 },
   }
 }
 
@@ -432,9 +438,6 @@ async function _upsertAssignees(assignmentId, userIds) {
 
 async function deleteAssignment(id, actorId) {
   const row = await assertExists(id)
-  if (row.status !== 'draft') {
-    throw Object.assign(new Error('Chỉ xóa được phiếu ở trạng thái nháp'), { status: 422 })
-  }
   await query('DELETE FROM internal_assignments WHERE id = $1', [id])
   await audit.log({
     userId: actorId, action: 'internal_assignment.deleted',
