@@ -8,6 +8,7 @@ import {
   Building2, ClipboardList, AlertTriangle, CheckCircle2,
   TrendingUp, ArrowRight, Loader2,
   Maximize2, Minimize2, User, Calendar as CalendarIcon,
+  FileText, Users, SendHorizonal,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { vi } from 'date-fns/locale'
@@ -43,7 +44,6 @@ const DASHBOARD_COLORS = {
   limeSoft: '#a3e635',
 }
 
-// ── Gradient palette for PieChart ─────────────────────────────────────────────
 const PIE_GRADIENTS = [
   [DASHBOARD_COLORS.indigo, DASHBOARD_COLORS.indigoSoft],
   [DASHBOARD_COLORS.emerald, DASHBOARD_COLORS.emeraldSoft],
@@ -56,39 +56,45 @@ const PIE_GRADIENTS = [
 ]
 
 const CHART_MARGIN = {
-  trend: { top: 12, right: 16, left: -10, bottom: 0 },
+  trend:    { top: 12, right: 16, left: -10, bottom: 0 },
   workload: { top: 12, right: 16, left: -10, bottom: 10 },
 }
 const CHART_TICK = {
-  axis: { fontSize: 11, fill: DASHBOARD_COLORS.axis },
+  axis:      { fontSize: 11, fill: DASHBOARD_COLORS.axis },
   staffName: { fontSize: 10, fill: DASHBOARD_COLORS.axisStrong, fontWeight: 500 },
 }
 const CHART_LEGEND = {
-  trend: { fontSize: 12, paddingTop: 8 },
+  trend:    { fontSize: 12, paddingTop: 8 },
   workload: { fontSize: 12, paddingTop: 4 },
 }
-const BAR_RADIUS = [4, 4, 0, 0]
-const AREA_DOT = { r: 5, fill: DASHBOARD_COLORS.primary, strokeWidth: 2, stroke: DASHBOARD_COLORS.white }
+const BAR_RADIUS    = [4, 4, 0, 0]
+const AREA_DOT      = { r: 5, fill: DASHBOARD_COLORS.primary, strokeWidth: 2, stroke: DASHBOARD_COLORS.white }
 const AREA_ACTIVE_DOT = { r: 7 }
 
 const PRIORITY_CLASS = {
   urgent: s.priUrgent,
-  high: s.priHigh,
+  high:   s.priHigh,
   medium: s.priMedium,
-  low: s.priLow,
+  normal: s.priMedium,
+  low:    s.priLow,
 }
-const PRIORITY_LABEL = { urgent: 'Khẩn', high: 'Cao', medium: 'TB', low: 'Thấp' }
+const PRIORITY_LABEL = { urgent: 'Khẩn', high: 'Cao', medium: 'TB', normal: 'Thường', low: 'Thấp' }
 
 const STATUS_CLASS = {
-  pending: s.statusPending,
-  in_progress: s.statusInProgress,
-  on_hold: s.statusOnHold,
-  pending_review: s.statusPendingReview,
-  needs_revision: s.statusNeedsRevision,
+  pending:         s.statusPending,
+  in_progress:     s.statusInProgress,
+  on_hold:         s.statusOnHold,
+  pending_review:  s.statusPendingReview,
+  needs_revision:  s.statusNeedsRevision,
+  overdue:         s.statusOverdue,
 }
 const STATUS_LABEL = {
-  pending: 'Chờ xử lý', in_progress: 'Đang làm', on_hold: 'Tạm dừng',
-  pending_review: 'Chờ duyệt', needs_revision: 'Cần sửa',
+  pending:        'Chờ xử lý',
+  in_progress:    'Đang làm',
+  on_hold:        'Tạm dừng',
+  pending_review: 'Chờ duyệt',
+  needs_revision: 'Cần sửa',
+  overdue:        'Quá hạn',
 }
 
 const RANGE_OPTIONS = [
@@ -98,15 +104,19 @@ const RANGE_OPTIONS = [
 ]
 const RANGE_SUB = { today: 'Hôm nay', '7d': '7 ngày gần nhất', '28d': '4 tuần gần nhất' }
 
+const TASK_TYPE_TABS = [
+  { key: 'traditional', label: 'Truyền thống', icon: ClipboardList },
+  { key: 'cdr',         label: 'Yêu cầu KH',  icon: FileText      },
+  { key: 'ia',          label: 'Nội bộ',       icon: Users         },
+]
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getRangeDates(range) {
   const to   = new Date()
   const from = new Date()
-  if (range === 'today') {
-    // from = to = today (no adjustment)
-  } else if (range === '7d') {
+  if (range === '7d') {
     from.setDate(from.getDate() - 6)
-  } else {
+  } else if (range === '28d') {
     from.setDate(from.getDate() - 27)
   }
   return {
@@ -146,21 +156,163 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
+// ── KPI card definitions per task type ───────────────────────────────────────
+function buildKpiCards({ activeTaskType, summary, isStaff, loading, range, navigate }) {
+  const val = (v) => loading ? null : (v ?? '—')
+
+  if (activeTaskType === 'cdr') {
+    return [
+      {
+        label: 'Tổng yêu cầu',
+        value: val(summary?.totalItems),
+        sub:   'hồ sơ được tạo',
+        icon:  FileText,
+        tone:  s.kpiBlue,
+      },
+      {
+        label:  'Chờ cung cấp',
+        value:  val(summary?.openTasks),
+        sub:    'khách chưa nộp hồ sơ',
+        icon:   ClipboardList,
+        tone:   s.kpiAmber,
+        urgent: (summary?.openTasks ?? 0) > 0,
+      },
+      {
+        label:  'Quá hạn',
+        value:  val(summary?.overdueTasks),
+        sub:    'cần đôn đốc ngay',
+        icon:   AlertTriangle,
+        tone:   s.kpiRed,
+        urgent: (summary?.overdueTasks ?? 0) > 0,
+      },
+      {
+        label: 'Đã nhận',
+        value: val(summary?.completedThisMonth),
+        sub:   RANGE_SUB[range],
+        icon:  CheckCircle2,
+        tone:  s.kpiGreen,
+      },
+    ]
+  }
+
+  if (activeTaskType === 'ia') {
+    const cards = [
+      {
+        label:  'Đang hoạt động',
+        value:  val(summary?.openTasks),
+        sub:    'phiếu đang thực hiện',
+        icon:   SendHorizonal,
+        tone:   s.kpiBlue,
+      },
+      {
+        label:  'Quá hạn',
+        value:  val(summary?.overdueTasks),
+        sub:    'cần xử lý ngay',
+        icon:   AlertTriangle,
+        tone:   s.kpiRed,
+        urgent: (summary?.overdueTasks ?? 0) > 0,
+      },
+      {
+        label: 'Đã hoàn thành',
+        value: val(summary?.completedThisMonth),
+        sub:   'phiếu đã đóng',
+        icon:  CheckCircle2,
+        tone:  s.kpiPurple,
+      },
+    ]
+    if (!isStaff) {
+      cards.push({
+        label: 'Bản nháp',
+        value: val(summary?.draftCount),
+        sub:   'chưa gửi đi',
+        icon:  FileText,
+        tone:  s.kpiGray,
+      })
+    }
+    return cards
+  }
+
+  // traditional
+  return [
+    {
+      label: isStaff ? 'KH tôi phụ trách' : 'Khách hàng hoạt động',
+      value: val(summary?.activeCompanies),
+      sub:   isStaff ? 'công ty tôi có việc chưa xong' : 'công ty đang hợp tác',
+      icon:  Building2,
+      tone:  s.kpiBlue,
+    },
+    {
+      label: isStaff ? 'Việc của tôi' : 'Công việc đang mở',
+      value: val(summary?.openTasks),
+      sub:   'cần xử lý',
+      icon:  ClipboardList,
+      tone:  s.kpiGreen,
+    },
+    {
+      label:  isStaff ? 'Quá hạn của tôi' : 'Quá hạn',
+      value:  val(summary?.overdueTasks),
+      sub:    'cần ưu tiên xử lý ngay',
+      icon:   AlertTriangle,
+      tone:   s.kpiRed,
+      urgent: (summary?.overdueTasks ?? 0) > 0,
+    },
+    {
+      label: isStaff ? 'Hoàn thành của tôi' : 'Hoàn thành',
+      value: val(summary?.completedThisMonth),
+      sub:   RANGE_SUB[range],
+      icon:  CheckCircle2,
+      tone:  s.kpiPurple,
+    },
+    {
+      label: 'Tuân thủ SLA',
+      value: loading ? null : (summary ? `${summary.slaComplianceRate}%` : '—'),
+      sub:   isStaff ? 'đúng / trước hạn của tôi' : 'hoàn thành đúng / trước hạn',
+      icon:  TrendingUp,
+      tone:  s.kpiCyan,
+    },
+  ]
+}
+
+// ── Chart meta per task type ──────────────────────────────────────────────────
+const CHART_META = {
+  traditional: {
+    trend:    { title: 'Xu hướng hoàn thành',         dataKey: 'completed', label: 'Đã hoàn thành', color: DASHBOARD_COLORS.primary,  gradId: 'areaGrad' },
+    workload: { title: 'Tải công việc nhân viên',      openLabel: 'Cần thực hiện', completedLabel: 'Đã hoàn thành' },
+    distrib:  { title: 'Phân loại công việc',          sub: 'theo nhóm' },
+    overdue:  { link: '/tasks?filter=overdue',         itemLink: (t) => `/tasks/${t.id}` },
+    dueToday: { link: '/tasks?filter=due_today' },
+  },
+  cdr: {
+    trend:    { title: 'Xu hướng nhận hồ sơ',         dataKey: 'completed', label: 'Đã nhận', color: DASHBOARD_COLORS.amber,   gradId: 'areaGrad' },
+    workload: { title: 'Hồ sơ theo công ty',           openLabel: 'Chờ cung cấp', completedLabel: 'Đã nhận' },
+    distrib:  { title: 'Hồ sơ theo kỳ',                sub: 'theo kỳ báo cáo' },
+    overdue:  { link: '/tasks?audience=client_request&filter=overdue', itemLink: () => null },
+    dueToday: { link: '/tasks?audience=client_request' },
+  },
+  ia: {
+    trend:    { title: 'Xu hướng hoàn thành phiếu',   dataKey: 'completed', label: 'Phiếu hoàn thành', color: DASHBOARD_COLORS.violet,  gradId: 'areaGrad' },
+    workload: { title: 'Phiếu nội bộ theo nhân viên',  openLabel: 'Đang thực hiện', completedLabel: 'Đã hoàn thành' },
+    distrib:  { title: 'Phiếu theo công ty',            sub: 'theo khách hàng' },
+    overdue:  { link: '/internal-assignments',          itemLink: (t) => `/internal-assignments/${t.id}` },
+    dueToday: { link: '/internal-assignments' },
+  },
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const user     = useAuthStore((s) => s.user)
   const navigate = useNavigate()
 
-  const [summary, setSummary]       = useState(null)
-  const [charts,  setCharts]        = useState(null)
-  const [loading, setLoading]       = useState(true)
-  const [error,   setError]         = useState(null)
-  const [range,   setRange]         = useState('28d')
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [syncKey, setSyncKey]       = useState(0)
+  const [summary,        setSummary]        = useState(null)
+  const [charts,         setCharts]         = useState(null)
+  const [loading,        setLoading]        = useState(true)
+  const [error,          setError]          = useState(null)
+  const [range,          setRange]          = useState('28d')
+  const [isFullscreen,   setIsFullscreen]   = useState(false)
+  const [activeTaskType, setActiveTaskType] = useState('traditional')
+  const [syncKey,        setSyncKey]        = useState(0)
   const syncTimer = useRef(null)
 
-  // Fullscreen listener
   useEffect(() => {
     function onFsChange() { setIsFullscreen(!!document.fullscreenElement) }
     document.addEventListener('fullscreenchange', onFsChange)
@@ -172,13 +324,12 @@ export default function Dashboard() {
     else document.exitFullscreen().catch(() => {})
   }
 
-  // Fetch when range changes
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
       setError(null)
-      const params = getRangeDates(range)
+      const params = { ...getRangeDates(range), taskType: activeTaskType }
       try {
         const [sum, chrt] = await Promise.all([
           getDashboardSummary(params),
@@ -193,9 +344,8 @@ export default function Dashboard() {
     }
     load()
     return () => { cancelled = true }
-  }, [range, syncKey])
+  }, [range, syncKey, activeTaskType])
 
-  // Live sync: debounced reload when tasks or companies change
   useDataSync(['data:task', 'data:company'], () => {
     clearTimeout(syncTimer.current)
     syncTimer.current = setTimeout(() => setSyncKey((k) => k + 1), 1500)
@@ -203,61 +353,16 @@ export default function Dashboard() {
 
   const greetHour = new Date().getHours()
   const greetWord = greetHour < 12 ? 'Chào buổi sáng' : greetHour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối'
+  const isStaff   = user?.role === 'staff'
 
-  const isStaff = user?.role === 'staff'
-
-  const kpiCards = [
-    {
-      label: isStaff ? 'KH tôi phụ trách' : 'Khách hàng hoạt động',
-      value: loading ? null : (summary?.activeCompanies ?? '—'),
-      sub:   isStaff ? 'công ty tôi có việc chưa xong' : 'công ty đang hợp tác',
-      icon:  Building2,
-      tone:  s.kpiBlue,
-    },
-    {
-      label: isStaff ? 'Việc của tôi' : 'Công việc đang mở',
-      value: loading ? null : (summary?.openTasks ?? '—'),
-      sub:   'cần xử lý',
-      icon:  ClipboardList,
-      tone:  s.kpiGreen,
-    },
-    {
-      label: isStaff ? 'Quá hạn của tôi' : 'Quá hạn',
-      value: loading ? null : (summary?.overdueTasks ?? '—'),
-      sub:   'cần ưu tiên xử lý ngay',
-      icon:  AlertTriangle,
-      tone:  s.kpiRed,
-      urgent: (summary?.overdueTasks ?? 0) > 0,
-    },
-    {
-      label: 'Chờ KH cung cấp',
-      value: loading ? null : ((summary?.cdrStats?.pending ?? 0) + (summary?.cdrStats?.overdue ?? 0) || 0),
-      sub:   `${summary?.cdrStats?.overdue ?? 0} quá hạn`,
-      icon:  ClipboardList,
-      tone:  s.kpiAmber,
-      urgent: (summary?.cdrStats?.overdue ?? 0) > 0,
-      onClick: () => navigate('/tasks?audience=client_request'),
-    },
-    {
-      label: isStaff ? 'Hoàn thành của tôi' : 'Hoàn thành',
-      value: loading ? null : (summary?.completedThisMonth ?? '—'),
-      sub:   RANGE_SUB[range],
-      icon:  CheckCircle2,
-      tone:  s.kpiPurple,
-    },
-    {
-      label: 'Tuân thủ SLA',
-      value: loading ? null : (summary ? `${summary.slaComplianceRate}%` : '—'),
-      sub:   isStaff ? 'đúng / trước hạn của tôi' : 'hoàn thành đúng / trước hạn',
-      icon:  TrendingUp,
-      tone:  s.kpiCyan,
-    },
-  ]
+  const kpiCards = buildKpiCards({ activeTaskType, summary, isStaff, loading, range, navigate })
+  const meta     = CHART_META[activeTaskType]
+  const trendColor = meta.trend.color
 
   return (
     <AppLayout title="Dashboard">
 
-      {/* ── Top bar: greeting + range buttons + fullscreen ── */}
+      {/* ── Top bar ── */}
       <div className={s.topBar}>
         <div className={s.greeting}>
           <h2 className={s.greetingTitle}>
@@ -296,6 +401,20 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ── Task type tab bar — điều khiển toàn bộ dashboard ── */}
+      <div className={s.taskTypeBar}>
+        {TASK_TYPE_TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            className={`${s.taskTypeTab} ${activeTaskType === key ? s.taskTypeTabActive : ''}`}
+            onClick={() => setActiveTaskType(key)}
+          >
+            <Icon size={14} />
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* ── KPI Cards ── */}
       <div className={s.kpiGrid}>
         {kpiCards.map((card) => (
@@ -303,12 +422,12 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* ── Charts row 1: Xu hướng + Nhân viên ── */}
+      {/* ── Charts row 1: Xu hướng + Tải công việc ── */}
       <div className={s.chartsRow}>
         <div className={s.chartPanel}>
           <div className={s.chartHeader}>
             <div>
-              <span className={s.chartTitle}>Xu hướng hoàn thành</span>
+              <span className={s.chartTitle}>{meta.trend.title}</span>
               <span className={s.chartSub}>{RANGE_SUB[range]}</span>
             </div>
           </div>
@@ -318,9 +437,9 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={charts?.weeklyTrend ?? []} margin={CHART_MARGIN.trend}>
                 <defs>
-                  <linearGradient id="areaGradBlue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"  stopColor={DASHBOARD_COLORS.primary} stopOpacity={0.55} />
-                    <stop offset="90%" stopColor={DASHBOARD_COLORS.primary} stopOpacity={0.03} />
+                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"  stopColor={trendColor} stopOpacity={0.55} />
+                    <stop offset="90%" stopColor={trendColor} stopOpacity={0.03} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={DASHBOARD_COLORS.grid} />
@@ -329,10 +448,13 @@ export default function Dashboard() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={CHART_LEGEND.trend} />
                 <Area
-                  type="monotone" dataKey="completed" name="Đã hoàn thành"
-                  stroke={DASHBOARD_COLORS.primary} strokeWidth={2.5}
-                  fill="url(#areaGradBlue)"
-                  dot={AREA_DOT}
+                  type="monotone"
+                  dataKey={meta.trend.dataKey}
+                  name={meta.trend.label}
+                  stroke={trendColor}
+                  strokeWidth={2.5}
+                  fill="url(#areaGrad)"
+                  dot={{ ...AREA_DOT, fill: trendColor }}
                   activeDot={AREA_ACTIVE_DOT}
                 />
               </AreaChart>
@@ -343,7 +465,11 @@ export default function Dashboard() {
         <div className={s.chartPanel}>
           <div className={s.chartHeader}>
             <div>
-              <span className={s.chartTitle}>{isStaff ? 'Tải công việc của tôi' : 'Tải công việc nhân viên'}</span>
+              <span className={s.chartTitle}>
+                {isStaff && activeTaskType === 'traditional'
+                  ? 'Tải công việc của tôi'
+                  : meta.workload.title}
+              </span>
               <span className={s.chartSub}>{RANGE_SUB[range]}</span>
             </div>
           </div>
@@ -353,19 +479,12 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={charts?.staffWorkload ?? []} margin={CHART_MARGIN.workload}>
                 <CartesianGrid strokeDasharray="3 3" stroke={DASHBOARD_COLORS.grid} />
-                <XAxis
-                  dataKey="name"
-                  tick={CHART_TICK.staffName}
-                  interval={0}
-                  angle={-20}
-                  textAnchor="end"
-                  height={58}
-                />
+                <XAxis dataKey="name" tick={CHART_TICK.staffName} interval={0} angle={-20} textAnchor="end" height={58} />
                 <YAxis tick={CHART_TICK.axis} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={CHART_LEGEND.workload} />
-                <Bar dataKey="open"      name="Cần thực hiện" fill={DASHBOARD_COLORS.orange} radius={BAR_RADIUS} />
-                <Bar dataKey="completed" name="Đã hoàn thành"  fill={DASHBOARD_COLORS.emerald} radius={BAR_RADIUS} />
+                <Bar dataKey="open"      name={meta.workload.openLabel}      fill={DASHBOARD_COLORS.orange}  radius={BAR_RADIUS} />
+                <Bar dataKey="completed" name={meta.workload.completedLabel} fill={DASHBOARD_COLORS.emerald} radius={BAR_RADIUS} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -375,12 +494,11 @@ export default function Dashboard() {
       {/* ── Charts row 2: Phân loại + Quá hạn ── */}
       <div className={s.chartsRow}>
 
-        {/* Phân loại công việc: Pie (trái) + Legend list (phải) */}
         <div className={s.chartPanel}>
           <div className={s.chartHeader}>
             <div>
-              <span className={s.chartTitle}>Phân loại công việc</span>
-              <span className={s.chartSub}>{RANGE_SUB[range]} theo nhóm</span>
+              <span className={s.chartTitle}>{meta.distrib.title}</span>
+              <span className={s.chartSub}>{RANGE_SUB[range]} {meta.distrib.sub}</span>
             </div>
           </div>
           {loading ? (
@@ -401,13 +519,10 @@ export default function Dashboard() {
                   </defs>
                   <Pie
                     data={charts.taskTypeDistrib}
-                    dataKey="value"
-                    nameKey="name"
+                    dataKey="value" nameKey="name"
                     cx="50%" cy="50%"
-                    outerRadius={118}
-                    innerRadius={62}
-                    paddingAngle={3}
-                    labelLine={false}
+                    outerRadius={118} innerRadius={62}
+                    paddingAngle={3} labelLine={false}
                   >
                     {charts.taskTypeDistrib.map((_, i) => (
                       <Cell key={i} fill={`url(#dashPieGrad${i % PIE_GRADIENTS.length})`} />
@@ -418,13 +533,11 @@ export default function Dashboard() {
               </div>
               <div className={s.pieLegend}>
                 {charts.taskTypeDistrib.map((item, i) => {
-                  const total = charts.taskTypeDistrib.reduce((s, r) => s + r.value, 0)
+                  const total = charts.taskTypeDistrib.reduce((acc, r) => acc + r.value, 0)
                   const pct   = total ? ((item.value / total) * 100).toFixed(0) : 0
                   return (
                     <div key={i} className={s.pieLegendItem}>
-                      <span
-                        className={`${s.pieLegendDot} ${s[`pieTone${i % PIE_GRADIENTS.length}`]}`}
-                      />
+                      <span className={`${s.pieLegendDot} ${s[`pieTone${i % PIE_GRADIENTS.length}`]}`} />
                       <span className={s.pieLegendName}>{item.name}</span>
                       <span className={s.pieLegendCount}>{item.value}</span>
                       <span className={s.pieLegendPct}>{pct}%</span>
@@ -432,23 +545,23 @@ export default function Dashboard() {
                   )
                 })}
                 <div className={s.pieLegendTotal}>
-                  Tổng: <strong>{charts.taskTypeDistrib.reduce((s, r) => s + r.value, 0)}</strong> CV
+                  Tổng: <strong>{charts.taskTypeDistrib.reduce((acc, r) => acc + r.value, 0)}</strong>
+                  {activeTaskType === 'cdr' ? ' hồ sơ' : activeTaskType === 'ia' ? ' phiếu' : ' CV'}
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Quá hạn */}
         <div className={s.chartPanel}>
           <div className={s.chartHeader}>
             <div>
               <span className={s.chartTitle}>Quá hạn — cần ưu tiên</span>
               {!loading && charts?.overdueList?.length > 0 && (
-                <span className={s.chartSub}>{charts.overdueList.length} công việc</span>
+                <span className={s.chartSub}>{charts.overdueList.length} mục</span>
               )}
             </div>
-            <button className={s.chartHeaderLink} onClick={() => navigate('/tasks?filter=overdue')}>
+            <button className={s.chartHeaderLink} onClick={() => navigate(meta.overdue.link)}>
               Xem tất cả <ArrowRight size={12} />
             </button>
           </div>
@@ -457,13 +570,20 @@ export default function Dashboard() {
           ) : !charts?.overdueList?.length ? (
             <div className={s.chartEmpty}>
               <CheckCircle2 size={28} className={s.emptySuccessIcon} />
-              Không có công việc quá hạn 🎉
+              Không có mục quá hạn 🎉
             </div>
           ) : (
             <div className={s.overdueList}>
-              {charts.overdueList.map((t) => (
-                <OverdueCard key={t.id} task={t} onClick={() => navigate(`/tasks/${t.id}`)} />
-              ))}
+              {charts.overdueList.map((t) => {
+                const dest = meta.overdue.itemLink(t)
+                return (
+                  <OverdueCard
+                    key={t.id}
+                    task={t}
+                    onClick={dest ? () => navigate(dest) : undefined}
+                  />
+                )
+              })}
             </div>
           )}
         </div>
@@ -475,15 +595,15 @@ export default function Dashboard() {
           <div className={s.chartHeader}>
             <div>
               <span className={s.chartTitle}>Đến hạn hôm nay</span>
-              <span className={s.chartSub}>{charts.dueTodayList.length} công việc</span>
+              <span className={s.chartSub}>{charts.dueTodayList.length} mục</span>
             </div>
-            <button className={s.chartHeaderLink} onClick={() => navigate('/tasks?filter=due_today')}>
+            <button className={s.chartHeaderLink} onClick={() => navigate(meta.dueToday.link)}>
               Xem tất cả <ArrowRight size={12} />
             </button>
           </div>
           <div className={s.dueTodayGrid}>
             {charts.dueTodayList.map((t) => (
-              <DueTodayCard key={t.id} task={t} onClick={() => navigate(`/tasks/${t.id}`)} />
+              <DueTodayCard key={t.id} task={t} onClick={() => navigate(meta.dueToday.link)} />
             ))}
           </div>
         </div>
@@ -502,16 +622,10 @@ function KpiCard({ label, value, sub, icon: Icon, tone, urgent, loading, onClick
       style={onClick ? { cursor: 'pointer' } : undefined}
     >
       <div className={s.kpiCardInner}>
-        <div className={s.kpiIcon}>
-          <Icon size={20} />
-        </div>
+        <div className={s.kpiIcon}><Icon size={20} /></div>
         <div className={s.kpiText}>
           <p className={s.kpiLabel}>{label}</p>
-          {loading ? (
-            <div className={s.kpiSkeleton} />
-          ) : (
-            <p className={s.kpiValue}>{value}</p>
-          )}
+          {loading ? <div className={s.kpiSkeleton} /> : <p className={s.kpiValue}>{value}</p>}
           <p className={s.kpiSub}>{sub}</p>
         </div>
       </div>
@@ -522,31 +636,40 @@ function KpiCard({ label, value, sub, icon: Icon, tone, urgent, loading, onClick
 // ── OverdueCard ───────────────────────────────────────────────────────────────
 function OverdueCard({ task, onClick }) {
   return (
-    <div className={s.overdueCard} onClick={onClick}>
+    <div className={s.overdueCard} onClick={onClick} style={onClick ? { cursor: 'pointer' } : { cursor: 'default' }}>
       <div className={s.taskCardTop}>
         <div className={s.taskCardBadges}>
-          <span className={`${s.priorityBadge} ${PRIORITY_CLASS[task.priority] ?? s.priLow}`}>
-            {PRIORITY_LABEL[task.priority] ?? task.priority}
-          </span>
-          <span className={`${s.statusBadge} ${STATUS_CLASS[task.status] ?? s.statusPending}`}>
-            {STATUS_LABEL[task.status] ?? task.status}
-          </span>
+          {task.priority && (
+            <span className={`${s.priorityBadge} ${PRIORITY_CLASS[task.priority] ?? s.priLow}`}>
+              {PRIORITY_LABEL[task.priority] ?? task.priority}
+            </span>
+          )}
+          {task.status && (
+            <span className={`${s.statusBadge} ${STATUS_CLASS[task.status] ?? s.statusPending}`}>
+              {STATUS_LABEL[task.status] ?? task.status}
+            </span>
+          )}
         </div>
         <span className={s.overdueDaysBadge}>+{task.daysOverdue}d quá hạn</span>
       </div>
       <p className={s.taskCardTitle}>{task.title}</p>
       <div className={s.taskCardMeta}>
-        <span className={s.taskCardMetaItem}>
-          <Building2 size={11} />
-          <span>{task.companyName ?? '—'}</span>
-        </span>
-        <span className={s.taskCardMetaItem}>
-          <User size={11} />
-          <span>{task.assignedToName ?? 'Chưa giao'}</span>
-        </span>
+        {task.companyName && (
+          <span className={s.taskCardMetaItem}>
+            <Building2 size={11} /><span>{task.companyName}</span>
+          </span>
+        )}
+        {task.assignedToName && (
+          <span className={s.taskCardMetaItem}>
+            <User size={11} /><span>{task.assignedToName}</span>
+          </span>
+        )}
         <span className={s.taskCardMetaItem}>
           <CalendarIcon size={11} />
-          <span>{fmtDateShort(task.createdAt)} → {fmtDateShort(task.dueDate)}</span>
+          <span>
+            {task.createdAt ? `${fmtDateShort(task.createdAt)} → ` : ''}
+            {fmtDateShort(task.dueDate)}
+          </span>
         </span>
       </div>
     </div>
@@ -559,28 +682,37 @@ function DueTodayCard({ task, onClick }) {
     <div className={s.dueTodayCard} onClick={onClick}>
       <div className={s.taskCardTop}>
         <div className={s.taskCardBadges}>
-          <span className={`${s.priorityBadge} ${PRIORITY_CLASS[task.priority] ?? s.priLow}`}>
-            {PRIORITY_LABEL[task.priority] ?? task.priority}
-          </span>
-          <span className={`${s.statusBadge} ${STATUS_CLASS[task.status] ?? s.statusPending}`}>
-            {STATUS_LABEL[task.status] ?? task.status}
-          </span>
+          {task.priority && (
+            <span className={`${s.priorityBadge} ${PRIORITY_CLASS[task.priority] ?? s.priLow}`}>
+              {PRIORITY_LABEL[task.priority] ?? task.priority}
+            </span>
+          )}
+          {task.status && (
+            <span className={`${s.statusBadge} ${STATUS_CLASS[task.status] ?? s.statusPending}`}>
+              {STATUS_LABEL[task.status] ?? task.status}
+            </span>
+          )}
         </div>
         <span className={s.dueTodayBadge}>Hôm nay</span>
       </div>
       <p className={s.taskCardTitle}>{task.title}</p>
       <div className={s.taskCardMeta}>
-        <span className={s.taskCardMetaItem}>
-          <Building2 size={11} />
-          <span>{task.companyName ?? '—'}</span>
-        </span>
-        <span className={s.taskCardMetaItem}>
-          <User size={11} />
-          <span>{task.assignedToName ?? 'Chưa giao'}</span>
-        </span>
+        {task.companyName && (
+          <span className={s.taskCardMetaItem}>
+            <Building2 size={11} /><span>{task.companyName}</span>
+          </span>
+        )}
+        {task.assignedToName && (
+          <span className={s.taskCardMetaItem}>
+            <User size={11} /><span>{task.assignedToName}</span>
+          </span>
+        )}
         <span className={s.taskCardMetaItem}>
           <CalendarIcon size={11} />
-          <span>{fmtDateShort(task.createdAt)} → {fmtDateShort(task.dueDate)}</span>
+          <span>
+            {task.createdAt ? `${fmtDateShort(task.createdAt)} → ` : ''}
+            {fmtDateShort(task.dueDate)}
+          </span>
         </span>
       </div>
     </div>

@@ -668,3 +668,55 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* ── Task type tab bar — cấp dashboard ───────────────────────────────────── */
+.taskTypeBar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 4px;
+  background: var(--color-surface-muted);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: 12px;
+  width: fit-content;
+}
+
+.taskTypeTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  transition: background var(--duration-fast), color var(--duration-fast), box-shadow var(--duration-fast);
+  white-space: nowrap;
+}
+
+.taskTypeTab:hover {
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+}
+
+.taskTypeTabActive {
+  background: var(--color-surface) !important;
+  color: var(--color-info) !important;
+  box-shadow: var(--shadow-sm);
+  font-weight: var(--fw-bold);
+}
+
+/* ── KPI tone: gray (bản nháp IA) ────────────────────────────────────────── */
+.kpiGray {
+  --kpi-accent: var(--color-muted);
+  --kpi-value: var(--color-text-soft);
+  --kpi-bg: var(--color-surface-muted);
+  --kpi-border: var(--color-border-muted);
+  --kpi-icon-bg: rgba(100, 116, 139, 0.1);
+}
+
+/* ── Status badge: overdue ───────────────────────────────────────────────── */
+.statusOverdue { background: var(--color-danger-bg); color: var(--color-danger); }

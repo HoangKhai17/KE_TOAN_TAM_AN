@@ -185,7 +185,9 @@
       "PowerShell(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\lib\" -Recurse -File 2>$null | ForEach-Object { if \\($_.Name -match 'internal|assignment'\\) { $_.FullName } })",
       "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\\\\migrations\\\\\" -File | Select-Object -ExpandProperty Name)",
       "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts, null, 2\\)\\)\")",
-      "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\" -Recurse -File -Filter \"*.js\")"
+      "Bash(Get-ChildItem -Path \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\backend\\\\src\" -Recurse -File -Filter \"*.js\")",
+      "PowerShell(head -20)",
+      "Read(//c/Users/ACER/.claude/projects/d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE_TOAN_TAM-AN/memory/**)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",
