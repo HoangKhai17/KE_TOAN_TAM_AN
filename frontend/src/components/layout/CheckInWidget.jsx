@@ -3,6 +3,7 @@ import { Clock, LogIn, LogOut } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { getToday, checkIn, checkOut } from '../../api/attendance'
+import { collectDeviceInfo, detectMethod } from '../../utils/deviceInfo'
 import s from './layout.module.css'
 
 export default function CheckInWidget() {
@@ -28,7 +29,9 @@ export default function CheckInWidget() {
   async function handleCheckIn() {
     setBusy(true)
     try {
-      await checkIn({ method: 'web' })
+      const deviceInfo = await collectDeviceInfo()
+      const method     = detectMethod(deviceInfo.type)
+      await checkIn({ method, deviceInfo })
       const fresh = await getToday()
       setState(fresh)
       addToast('Chấm công vào thành công!', 'success')
@@ -42,7 +45,9 @@ export default function CheckInWidget() {
   async function handleCheckOut() {
     setBusy(true)
     try {
-      await checkOut({ method: 'web' })
+      const deviceInfo = await collectDeviceInfo()
+      const method     = detectMethod(deviceInfo.type)
+      await checkOut({ method, deviceInfo })
       const fresh = await getToday()
       setState(fresh)
       addToast('Chấm công ra thành công!', 'success')

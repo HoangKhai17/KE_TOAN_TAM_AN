@@ -641,6 +641,19 @@ async function sendAttendanceConfirmation({ month, year }) {
   return { sent, failed, skipped, total: users.length }
 }
 
+// ── Attendance Logs (per user per date) ──────────────────────────────────────
+
+async function getAttendanceLogs(userId, date) {
+  const { rows } = await query(
+    `SELECT id, log_type, logged_at, method, device_info, ip_address, notes
+     FROM attendance_logs
+     WHERE user_id = $1 AND logged_at::date = $2
+     ORDER BY logged_at ASC`,
+    [userId, date]
+  )
+  return rows.map(toLogDto)
+}
+
 module.exports = {
   calculateAttendanceRecord,
   checkIn,
@@ -649,4 +662,5 @@ module.exports = {
   listAttendanceRecords,
   getAttendanceSummary,
   sendAttendanceConfirmation,
+  getAttendanceLogs,
 }

@@ -3,11 +3,34 @@ const adjSvc     = require('./adjustments.service')
 const reportSvc  = require('./report.service')
 const settingsSvc = require('./settings.service')
 
+// Extract real client IP, handling Docker/Nginx proxy headers correctly.
+// X-Forwarded-For can be a comma-separated list; the first entry is the origin client.
+function resolveClientIp(req) {
+  const xfwd = req.headers['x-forwarded-for']
+  if (xfwd) return xfwd.split(',')[0].trim()
+  return req.headers['x-real-ip'] || req.socket?.remoteAddress || req.ip || null
+}
+
+// Build device_info string to store in attendance_logs.device_info (VARCHAR 200).
+// Prefer structured JSON sent from frontend; fall back to raw User-Agent header.
+function resolveDeviceInfo(bodyDeviceInfo, ua) {
+  if (bodyDeviceInfo && typeof bodyDeviceInfo === 'object') {
+    const compact = {
+      type:    bodyDeviceInfo.type    ?? 'unknown',
+      os:      bodyDeviceInfo.os      ?? 'Unknown',
+      browser: bodyDeviceInfo.browser ?? 'Unknown',
+      isPWA:   bodyDeviceInfo.isPWA   ?? false,
+    }
+    return JSON.stringify(compact).slice(0, 200)
+  }
+  return ua?.slice(0, 200) ?? null
+}
+
 async function checkIn(req, res, next) {
   try {
-    const { method, notes } = req.body
-    const ip         = req.ip
-    const deviceInfo = req.headers['user-agent']?.slice(0, 200)
+    const { method, notes, deviceInfo: bodyDeviceInfo } = req.body
+    const ip         = resolveClientIp(req)
+    const deviceInfo = resolveDeviceInfo(bodyDeviceInfo, req.headers['user-agent'])
     const result = await svc.checkIn({ userId: req.user.id, method, notes, ip, deviceInfo })
     res.status(201).json(result)
   } catch (err) { next(err) }
@@ -15,9 +38,9 @@ async function checkIn(req, res, next) {
 
 async function checkOut(req, res, next) {
   try {
-    const { method, notes } = req.body
-    const ip         = req.ip
-    const deviceInfo = req.headers['user-agent']?.slice(0, 200)
+    const { method, notes, deviceInfo: bodyDeviceInfo } = req.body
+    const ip         = resolveClientIp(req)
+    const deviceInfo = resolveDeviceInfo(bodyDeviceInfo, req.headers['user-agent'])
     const result = await svc.checkOut({ userId: req.user.id, method, notes, ip, deviceInfo })
     res.json(result)
   } catch (err) { next(err) }
@@ -185,6 +208,19 @@ async function deleteHoliday(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Attendance Logs — raw check-in/out entries for a user+date (admin audit view)
+
+async function getLogs(req, res, next) {
+  try {
+    const { userId, date } = req.query
+    if (!userId || !date) {
+      return res.status(400).json({ error: { message: 'userId và date là bắt buộc' } })
+    }
+    const logs = await svc.getAttendanceLogs(userId, date)
+    res.json({ logs })
+  } catch (err) { next(err) }
+}
+
 // ── Attendance Settings ───────────────────────────────────────────────────────
 
 async function getSettings(req, res, next) {
@@ -225,4 +261,5 @@ module.exports = {
   listHolidays, createHoliday, updateHoliday, deleteHoliday,
   getSettings, updateSettings,
   sendConfirmation,
+  getLogs,
 }

@@ -9,6 +9,7 @@ import {
   ChevronLeft, ChevronRight, Loader2, Check, X, RefreshCw,
   Download, BarChart3, Settings, Terminal, Pencil, LayoutGrid,
   Mail, SendHorizonal, CheckCircle2,
+  Smartphone, Laptop, Monitor, Globe,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -1011,6 +1012,31 @@ function AttendanceConfirmModal({ month, year, staffList, onClose }) {
   )
 }
 
+// ── Device info helpers ───────────────────────────────────────────────────────
+
+function parseDeviceInfo(raw) {
+  if (!raw) return null
+  try { return JSON.parse(raw) } catch { return { type: 'unknown', os: raw } }
+}
+
+const DEVICE_TYPE_CFG = {
+  mobile:  { label: 'Di động',         Icon: Smartphone },
+  tablet:  { label: 'Máy tính bảng',   Icon: Monitor },
+  laptop:  { label: 'Laptop',          Icon: Laptop },
+  desktop: { label: 'Máy tính',        Icon: Monitor },
+  unknown: { label: 'Không xác định',  Icon: Monitor },
+}
+
+const METHOD_LABEL = { web: 'Web', mobile: 'Mobile', manual: 'Thủ công (Admin)' }
+
+function formatIp(ip) {
+  if (!ip) return null
+  // Strip IPv6-mapped IPv4 prefix added by Node.js behind Docker
+  return ip.replace(/^::ffff:/, '')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
   const addToast        = useToastStore((st) => st.toast)
   const [y, m, d]       = dateStr.split('-')
@@ -1025,6 +1051,18 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
   const [history,    setHistory]    = useState([])
   const [loadingHist, setLoadingHist] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [logs,       setLogs]       = useState([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
+
+  // Fetch raw attendance_logs (device_info + ip) when modal opens
+  useEffect(() => {
+    if (!userId || !dateStr) return
+    setLoadingLogs(true)
+    attendanceApi.listAttendanceLogs(userId, dateStr)
+      .then((data) => setLogs(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoadingLogs(false))
+  }, [userId, dateStr]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function loadHistory() {
     if (!hasRecord || !record.id) return
@@ -1114,6 +1152,60 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
             {record?.notes && (
               <div className={s.mutedNote}>{record.notes}</div>
             )}
+
+            {/* Device / IP section */}
+            <div className={sa.deviceSection}>
+              <div className={sa.deviceSectionTitle}>
+                <Globe size={12} /> Thông tin thiết bị chấm công
+              </div>
+              {loadingLogs ? (
+                <div className={sa.deviceLoading}>
+                  <Loader2 size={12} className={s.spin} /> Đang tải...
+                </div>
+              ) : logs.length === 0 ? (
+                <div className={sa.deviceEmpty}>Không có dữ liệu thiết bị</div>
+              ) : (
+                <div className={sa.deviceLogList}>
+                  {logs.map((log) => {
+                    const info = parseDeviceInfo(log.deviceInfo)
+                    const devCfg = DEVICE_TYPE_CFG[info?.type ?? 'unknown'] ?? DEVICE_TYPE_CFG.unknown
+                    const { Icon } = devCfg
+                    const ip = formatIp(log.ipAddress)
+                    const isPWA = info?.isPWA === true
+                    return (
+                      <div key={log.id} className={sa.deviceLogItem}>
+                        <div className={sa.deviceLogHeader}>
+                          <span className={sa.deviceLogType}>
+                            {log.logType === 'check_in' ? '▶ Vào' : '◀ Ra'}
+                          </span>
+                          <span className={sa.deviceLogTime}>
+                            {log.loggedAt
+                              ? new Date(log.loggedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                              : '—'}
+                          </span>
+                          <span className={sa.deviceMethodBadge}>
+                            {METHOD_LABEL[log.method] ?? log.method}
+                          </span>
+                        </div>
+                        <div className={sa.deviceInfoRow}>
+                          <Icon size={13} className={sa.deviceIcon} />
+                          <span className={sa.deviceTypeLabel}>{devCfg.label}</span>
+                          {info?.os && <span className={sa.deviceMeta}>{info.os}</span>}
+                          {info?.browser && <span className={sa.deviceMeta}>{info.browser}</span>}
+                          {isPWA && <span className={sa.pwaBadge}>PWA</span>}
+                        </div>
+                        {ip && (
+                          <div className={sa.deviceIpRow}>
+                            <span className={sa.deviceIpLabel}>IP:</span>
+                            <code className={sa.deviceIp}>{ip}</code>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* History toggle */}
             {hasRecord && (

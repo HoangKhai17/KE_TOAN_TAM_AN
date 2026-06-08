@@ -28,6 +28,9 @@ export const createManualRecord = (body) =>
 export const listRecordAdjustments = (id) =>
   api.get(`/attendance/records/${id}/adjustments`).then(r => r.data)
 
+export const listAttendanceLogs = (userId, date) =>
+  api.get('/attendance/logs', { params: { userId, date } }).then(r => r.data.logs ?? [])
+
 // ── Monthly Report & Payroll Sync ─────────────────────────────────────────────
 
 export const getMonthlyReport = (params) =>
