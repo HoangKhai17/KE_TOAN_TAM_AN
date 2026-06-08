@@ -225,8 +225,9 @@ router.get('/logs/device-summary', ...admin, ctrl.getDeviceSummary)
  *                       status:   { type: string }
  *       409: { description: Payroll period already paid — cannot update }
  */
-router.get('/report',              ...admin, ctrl.getReport)
-router.get('/report/export',       ...admin, ctrl.exportReport)
+router.get('/report',               ...admin, ctrl.getReport)
+router.get('/report/export',        ...admin, ctrl.exportReport)
+router.get('/report/export-custom', ...admin, ctrl.exportCustom)
 router.post('/sync-payroll',        ...admin, ctrl.syncPayroll)
 router.post('/send-confirmation',   ...admin, ctrl.sendConfirmation)
 

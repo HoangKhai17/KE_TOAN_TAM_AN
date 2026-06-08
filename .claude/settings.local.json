@@ -192,7 +192,10 @@
       "Bash(python3 -c \"import zipfile; z=zipfile.ZipFile\\('backup_20260527_093536.zip'\\); print\\(z.namelist\\(\\)\\)\")",
       "PowerShell(docker exec -t ke_toan_tam_an-postgres-1 pg_dump -U ktta_user -d ktta_db --encoding=UTF8 --no-owner --no-acl --clean --if-exists -f /tmp/backup_fresh.sql; echo \"exit: $LASTEXITCODE\")",
       "PowerShell(docker cp ke_toan_tam_an-postgres-1:/tmp/backup_fresh.sql \"$PSScriptRoot\\\\backup_fresh.sql\"; echo \"exit: $LASTEXITCODE\")",
-      "Bash(xargs grep -l \"attendance\\\\|leave\\\\|overtime\\\\|shift\\\\|checkin\" -i)"
+      "Bash(xargs grep -l \"attendance\\\\|leave\\\\|overtime\\\\|shift\\\\|checkin\" -i)",
+      "Bash(docker-compose ps *)",
+      "Bash(docker-compose restart *)",
+      "Bash(docker-compose logs *)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

@@ -22,7 +22,7 @@ function toRecordDto(r) {
     isAdjusted:      r.is_adjusted,
     isHoliday:       r.is_holiday,
     leaveRequestId:  r.leave_request_id,
-    otHours:         r.ot_hours != null ? parseFloat(r.ot_hours) : 0,
+    otHours:         parseFloat(r.effective_ot_hours ?? r.ot_hours ?? 0),
     notes:           r.notes,
     createdAt:       r.created_at,
     updatedAt:       r.updated_at,
@@ -399,11 +399,20 @@ async function listAttendanceRecords({ userId, month, year, from: fromOverride, 
   const offset = (page - 1) * limit
 
   // Single query with window COUNT — eliminates the separate COUNT(*) round-trip
+  // LEFT JOIN overtime_requests to surface approved OT per day (ar.ot_hours may be 0)
   const { rows } = await query(
-    `SELECT ar.*, u.name AS user_name, s.name AS shift_name, COUNT(*) OVER() AS _total
+    `SELECT ar.*, u.name AS user_name, s.name AS shift_name,
+            COALESCE(ot_day.approved_ot, ar.ot_hours, 0) AS effective_ot_hours,
+            COUNT(*) OVER() AS _total
      FROM attendance_records ar
      JOIN  users u ON ar.user_id  = u.id
      LEFT JOIN shifts s ON ar.shift_id = s.id
+     LEFT JOIN (
+       SELECT user_id, ot_date, SUM(ot_hours) AS approved_ot
+       FROM overtime_requests
+       WHERE status = 'approved' AND ot_date BETWEEN $1 AND $2
+       GROUP BY user_id, ot_date
+     ) ot_day ON ot_day.user_id = ar.user_id AND ot_day.ot_date = ar.work_date
      WHERE ${where}
      ORDER BY ar.work_date DESC, u.name
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,

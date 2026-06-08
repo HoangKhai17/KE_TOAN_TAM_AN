@@ -438,6 +438,373 @@ function TodayTab({ staffList }) {
   )
 }
 
+// ── ExportExcelModal — field-selectable xlsx export ──────────────────────────
+
+const SUMMARY_FIELDS = [
+  { key: 'userName',        label: 'Họ tên',              required: true, group: 'Nhân viên' },
+  { key: 'jobTitle',        label: 'Chức danh',                           group: 'Nhân viên' },
+  { key: 'actualWorkDays',  label: 'Ngày công thực tế',                   group: 'Ngày công' },
+  { key: 'leavePaidDays',   label: 'Nghỉ có lương',                       group: 'Ngày công' },
+  { key: 'totalWork',       label: 'Tổng công',                           group: 'Ngày công' },
+  { key: 'absentDays',      label: 'Ngày vắng',                           group: 'Ngày công' },
+  { key: 'lateCount',       label: 'Số lần đi muộn',                      group: 'Kỷ luật & OT' },
+  { key: 'earlyCount',      label: 'Số lần về sớm',                       group: 'Kỷ luật & OT' },
+  { key: 'approvedOtHours', label: 'Giờ OT đã duyệt',                     group: 'Kỷ luật & OT' },
+]
+
+const DETAIL_FIELDS = [
+  { key: 'userName',     label: 'Họ tên',            required: true,  group: 'Nhân viên' },
+  { key: 'jobTitle',     label: 'Chức danh',                           group: 'Nhân viên' },
+  { key: 'workDate',     label: 'Ngày',              required: true,   group: 'Thời gian' },
+  { key: 'dayOfWeek',    label: 'Thứ trong tuần',                      group: 'Thời gian' },
+  { key: 'checkInTime',  label: 'Giờ vào',                             group: 'Thời gian' },
+  { key: 'checkOutTime', label: 'Giờ ra',                              group: 'Thời gian' },
+  { key: 'actualHours',  label: 'Số giờ làm',                          group: 'Thời gian' },
+  { key: 'statusLabel',  label: 'Trạng thái',                          group: 'Trạng thái' },
+  { key: 'lateMinutes',  label: 'Muộn (phút)',                         group: 'Trạng thái' },
+  { key: 'earlyMinutes', label: 'Về sớm (phút)',                       group: 'Trạng thái' },
+  { key: 'otHours',      label: 'OT (giờ)',                            group: 'Trạng thái' },
+  { key: 'notes',        label: 'Ghi chú',                             group: 'Trạng thái' },
+]
+
+const SUMMARY_DEFAULT = SUMMARY_FIELDS.map((f) => f.key)
+const DETAIL_DEFAULT  = ['userName', 'workDate', 'dayOfWeek', 'statusLabel', 'checkInTime', 'checkOutTime', 'actualHours', 'lateMinutes', 'earlyMinutes']
+
+const _DOW_VI     = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
+const _STATUS_VI  = {
+  present: 'Có mặt', late: 'Đi muộn', early_leave: 'Về sớm',
+  late_and_early: 'Muộn & Sớm', absent: 'Vắng mặt', on_leave: 'Nghỉ phép',
+  business_trip: 'Công tác', wfh: 'WFH', holiday: 'Nghỉ lễ', unscheduled: 'Ngoài lịch',
+}
+
+function getSummaryCell(row, key) {
+  if (key === 'totalWork')                            return ((row.actualWorkDays ?? 0) + (row.leavePaidDays ?? 0)).toFixed(1)
+  if (['actualWorkDays', 'leavePaidDays'].includes(key)) return Number(row[key] ?? 0).toFixed(1)
+  if (key === 'approvedOtHours')                      return Number(row[key] ?? 0).toFixed(1)
+  return row[key] ?? '—'
+}
+
+function getDetailCell(row, key) {
+  if (key === 'workDate')     return fmtDateVI(row.workDate)
+  if (key === 'dayOfWeek')    return _DOW_VI[new Date(String(row.workDate).slice(0, 10) + 'T00:00:00').getDay()]
+  if (key === 'statusLabel')  return _STATUS_VI[row.status] ?? row.status
+  if (key === 'checkInTime')  return fmtTime(row.checkInTime) ?? '—'
+  if (key === 'checkOutTime') return fmtTime(row.checkOutTime) ?? '—'
+  if (key === 'actualHours')  return row.actualHours != null ? Number(row.actualHours).toFixed(1) : '—'
+  if (key === 'lateMinutes')  return row.lateMinutes ?? 0
+  if (key === 'earlyMinutes') return row.earlyMinutes ?? 0
+  if (key === 'otHours')      return row.otHours ? Number(row.otHours).toFixed(1) : '0'
+  return row[key] ?? '—'
+}
+
+const SUMMARY_PREVIEW_LIMIT = 50 // summary mode: max 50 employees to preview
+
+function ExportExcelModal({ year, month, onClose }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [exportType,     setExportType]     = useState('summary')
+  const [selectedFields, setSelectedFields] = useState(SUMMARY_DEFAULT)
+  const [rawData,        setRawData]        = useState([])
+  const [loadingPreview, setLoadingPreview] = useState(true)
+  const [exporting,      setExporting]      = useState(false)
+
+  const fields = exportType === 'summary' ? SUMMARY_FIELDS : DETAIL_FIELDS
+
+  // Escape key to close
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [onClose])
+
+  // Fetch preview data whenever type or month/year changes
+  useEffect(() => {
+    let cancelled = false
+    setLoadingPreview(true)
+    const req = exportType === 'summary'
+      ? attendanceApi.getMonthlyReport({ month, year }).then((d) => (Array.isArray(d) ? d : []))
+      : attendanceApi.listAttendanceRecords({ month, year, limit: 9999 }).then((r) => r.records ?? [])
+
+    req
+      .then((data) => { if (!cancelled) setRawData(data) })
+      .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu xem trước', 'error') })
+      .finally(() => { if (!cancelled) setLoadingPreview(false) })
+    return () => { cancelled = true }
+  }, [exportType, month, year]) // eslint-disable-line
+
+  const handleTypeChange = (type) => {
+    setExportType(type)
+    setSelectedFields(type === 'summary' ? SUMMARY_DEFAULT : DETAIL_DEFAULT)
+  }
+
+  const toggleField = (key, required) => {
+    if (required) return
+    setSelectedFields((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])
+  }
+
+  const selectAll   = () => setSelectedFields(fields.map((f) => f.key))
+  const deselectAll = () => setSelectedFields(fields.filter((f) => f.required).map((f) => f.key))
+
+  // Field groups for sidebar rendering
+  const fieldGroups = useMemo(() => {
+    const map = {}
+    fields.forEach((f) => { if (!map[f.group]) map[f.group] = []; map[f.group].push(f) })
+    return Object.entries(map)
+  }, [fields])
+
+  // Columns shown in preview — in field definition order
+  const previewCols = useMemo(
+    () => fields.filter((f) => selectedFields.includes(f.key)),
+    [fields, selectedFields]
+  )
+
+  // Detail mode: group by employee and inject per-employee summary rows
+  const displayRows = useMemo(() => {
+    if (exportType !== 'detail' || rawData.length === 0) {
+      return rawData.slice(0, SUMMARY_PREVIEW_LIMIT) // summary: preview limit
+    }
+    // Build ordered groups (Map preserves insertion order)
+    const groups = new Map()
+    rawData.forEach((r) => {
+      const name = r.userName ?? '—'
+      if (!groups.has(name)) groups.set(name, [])
+      groups.get(name).push(r)
+    })
+    const result = []
+    groups.forEach((recs, name) => {
+      result.push(...recs)
+      result.push({
+        _isSummary:   true,
+        _name:        name,
+        _totalHours:  recs.reduce((s, r) => s + (r.actualHours  ?? 0), 0),
+        _totalLate:   recs.reduce((s, r) => s + (r.lateMinutes  ?? 0), 0),
+        _totalEarly:  recs.reduce((s, r) => s + (r.earlyMinutes ?? 0), 0),
+        _totalOt:     recs.reduce((s, r) => s + (r.otHours      ?? 0), 0),
+      })
+    })
+    return result
+  }, [exportType, rawData])
+
+  // Unique employee count (for detail mode footer info)
+  const employeeCount = useMemo(() => {
+    if (exportType !== 'detail') return rawData.length
+    return new Set(rawData.map((r) => r.userName)).size
+  }, [exportType, rawData])
+
+  const pad = (n) => String(n).padStart(2, '0')
+
+  const handleExport = async () => {
+    const nonReq = selectedFields.filter((k) => !fields.find((f) => f.key === k)?.required)
+    if (selectedFields.length === 0) {
+      addToast('Chọn ít nhất một trường dữ liệu để xuất', 'warning')
+      return
+    }
+    try {
+      setExporting(true)
+      const resp = await attendanceApi.exportCustomReport({
+        month, year, type: exportType,
+        fields: nonReq.join(','),
+      })
+      const blob = new Blob([resp.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = URL.createObjectURL(blob)
+      const a   = document.createElement('a')
+      a.href     = url
+      a.download = exportType === 'summary'
+        ? `TongHop_ChamCong_T${pad(month)}_${year}.xlsx`
+        : `ChiTiet_ChamCong_T${pad(month)}_${year}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      addToast('Xuất Excel thành công!', 'success')
+      onClose()
+    } catch {
+      addToast('Xuất Excel thất bại — kiểm tra kết nối server', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const selectedCnt = selectedFields.length
+  const totalCnt    = rawData.length
+
+  return (
+    <div className={sa.exportOverlay}>
+      <div className={sa.exportBackdrop} onClick={onClose} />
+      <div className={sa.exportDialog}>
+
+        {/* ── Header ── */}
+        <div className={sa.exportHeader}>
+          <Download size={18} className={sa.exportHeaderIcon} />
+          <div className={sa.exportHeaderText}>
+            <div className={sa.exportHeaderTitle}>
+              Xuất dữ liệu chấm công — Tháng {pad(month)}/{year}
+            </div>
+            <div className={sa.exportHeaderSub}>
+              Chọn loại báo cáo và các trường cần xuất, sau đó nhấn Xuất Excel
+            </div>
+          </div>
+          <div className={sa.exportTypeToggle}>
+            <button
+              className={`${sa.exportTypeBtn} ${exportType === 'summary' ? sa.exportTypeBtnActive : ''}`}
+              onClick={() => handleTypeChange('summary')}
+            >
+              Tổng hợp tháng
+            </button>
+            <button
+              className={`${sa.exportTypeBtn} ${exportType === 'detail' ? sa.exportTypeBtnActive : ''}`}
+              onClick={() => handleTypeChange('detail')}
+            >
+              Chi tiết theo ngày
+            </button>
+          </div>
+          <button className={sa.exportCloseBtn} onClick={onClose} title="Đóng">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* ── Body ── */}
+        <div className={sa.exportBody}>
+
+          {/* Left sidebar — field selection */}
+          <div className={sa.exportSidebar}>
+            <div className={sa.exportSidebarTitle}>Chọn trường dữ liệu xuất</div>
+
+            {fieldGroups.map(([groupName, groupFields]) => (
+              <div key={groupName} className={sa.exportFieldGroup}>
+                <div className={sa.exportFieldGroupLabel}>{groupName}</div>
+                {groupFields.map((f) => (
+                  <label key={f.key} className={sa.exportFieldItem}>
+                    <input
+                      type="checkbox"
+                      checked={selectedFields.includes(f.key)}
+                      onChange={() => toggleField(f.key, f.required)}
+                      disabled={f.required}
+                      className={sa.exportFieldCheckbox}
+                    />
+                    <span className={sa.exportFieldLabel}>{f.label}</span>
+                    {f.required && <span className={sa.exportFieldRequired}>bắt buộc</span>}
+                  </label>
+                ))}
+              </div>
+            ))}
+
+            <div className={sa.exportSelectAllRow}>
+              <button className={sa.exportSelectAllBtn} onClick={selectAll}>Chọn tất cả</button>
+              <button className={sa.exportSelectAllBtn} onClick={deselectAll}>Bỏ chọn</button>
+            </div>
+          </div>
+
+          {/* Right panel — data preview */}
+          <div className={sa.exportPreview}>
+            <div className={sa.exportPreviewHeader}>
+              <span className={sa.exportPreviewTitle}>Xem trước dữ liệu</span>
+              {!loadingPreview && (
+                <span className={sa.exportPreviewCount}>
+                  {exportType === 'summary'
+                    ? `${Math.min(totalCnt, SUMMARY_PREVIEW_LIMIT)} / ${totalCnt} nhân viên`
+                    : `${totalCnt} bản ghi · ${employeeCount} nhân viên`}
+                </span>
+              )}
+            </div>
+
+            {loadingPreview ? (
+              <div className={sa.exportPreviewLoading}>
+                <Loader2 size={18} className={s.spin} /> Đang tải dữ liệu...
+              </div>
+            ) : (
+              <div className={sa.exportPreviewWrap}>
+                <table className={sa.exportPreviewTable}>
+                  <thead>
+                    <tr>
+                      <th>STT</th>
+                      {previewCols.map((f) => <th key={f.key}>{f.label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={previewCols.length + 1} className={sa.exportPreviewEmpty}>
+                          Không có dữ liệu trong tháng này
+                        </td>
+                      </tr>
+                    ) : (() => {
+                      let recIdx = 0
+                      return displayRows.map((row, idx) => {
+                        if (row._isSummary) {
+                          return (
+                            <tr key={`sum-${idx}`} className={sa.exportPreviewSummaryRow}>
+                              <td className={sa.exportPreviewSummaryLabel}>∑</td>
+                              {previewCols.map((f) => {
+                                let val = ''
+                                if      (f.key === 'userName')     val = `Tổng — ${row._name}`
+                                else if (f.key === 'actualHours')  val = `${Number(row._totalHours).toFixed(1)}h`
+                                else if (f.key === 'lateMinutes')  val = `${row._totalLate} ph`
+                                else if (f.key === 'earlyMinutes') val = `${row._totalEarly} ph`
+                                else if (f.key === 'otHours')      val = `${Number(row._totalOt).toFixed(1)}h`
+                                return <td key={f.key} className={val ? sa.exportPreviewSummaryValue : ''}>{val}</td>
+                              })}
+                            </tr>
+                          )
+                        }
+                        recIdx++
+                        return (
+                          <tr key={idx}>
+                            <td>{recIdx}</td>
+                            {previewCols.map((f) => (
+                              <td key={f.key}>
+                                {exportType === 'summary'
+                                  ? getSummaryCell(row, f.key)
+                                  : getDetailCell(row, f.key)}
+                              </td>
+                            ))}
+                          </tr>
+                        )
+                      })
+                    })()}
+                  </tbody>
+                </table>
+                {exportType === 'summary' && totalCnt > SUMMARY_PREVIEW_LIMIT && (
+                  <div className={sa.exportPreviewMore}>
+                    ... và {totalCnt - SUMMARY_PREVIEW_LIMIT} nhân viên khác (sẽ được xuất đầy đủ)
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Footer ── */}
+        <div className={sa.exportFooter}>
+          <span className={sa.exportFooterInfo}>
+            <span className={sa.exportFooterBold}>{selectedCnt}</span> trường đã chọn
+            {!loadingPreview && exportType === 'summary' && (
+              <> · <span className={sa.exportFooterBold}>{totalCnt}</span> nhân viên sẽ được xuất</>
+            )}
+            {!loadingPreview && exportType === 'detail' && (
+              <> · <span className={sa.exportFooterBold}>{totalCnt}</span> bản ghi
+              {' '}(<span className={sa.exportFooterBold}>{employeeCount}</span> nhân viên) sẽ được xuất</>
+            )}
+          </span>
+          <button className={`${s.btnSecondary} ${s.btnShort}`} onClick={onClose} disabled={exporting}>
+            <X size={13} /> Huỷ
+          </button>
+          <button
+            className={`${s.btnPrimary} ${s.btnShort}`}
+            onClick={handleExport}
+            disabled={exporting || loadingPreview || selectedFields.length === 0}
+          >
+            {exporting
+              ? <><Loader2 size={13} className={s.spin} /> Đang xuất...</>
+              : <><Download size={13} /> Xuất Excel</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── AdminCalendarTab ──────────────────────────────────────────────────────────
 
 function AdminCalendarTab({ year, month, staffList, adminUserId }) {
@@ -461,6 +828,9 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
 
   // Confirmation email modal
   const [confirmOpen, setConfirmOpen] = useState(false)
+
+  // Export Excel modal
+  const [exportOpen,  setExportOpen]  = useState(false)
 
   const now      = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -655,6 +1025,14 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
             </button>
           </>
         )}
+
+        {/* Export Excel — always visible in calendar tab */}
+        <button
+          className={`${s.btnSecondary} ${s.btnShort}`}
+          onClick={() => setExportOpen(true)}
+        >
+          <Download size={13} /> Xuất Excel
+        </button>
 
         {/* Send confirmation button — always visible in calendar tab */}
         <button
@@ -887,6 +1265,14 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
           year={year}
           staffList={staffList}
           onClose={() => setConfirmOpen(false)}
+        />
+      )}
+
+      {exportOpen && (
+        <ExportExcelModal
+          month={month}
+          year={year}
+          onClose={() => setExportOpen(false)}
         />
       )}
     </>

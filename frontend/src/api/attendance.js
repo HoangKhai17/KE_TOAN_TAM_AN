@@ -44,6 +44,9 @@ export const getMonthlyReport = (params) =>
 export const exportAttendanceReport = (params) =>
   api.get('/attendance/report/export', { params, responseType: 'blob' })
 
+export const exportCustomReport = (params) =>
+  api.get('/attendance/report/export-custom', { params, responseType: 'blob' })
+
 export const syncPayroll = (payrollPeriodId) =>
   api.post('/attendance/sync-payroll', { payrollPeriodId }).then(r => r.data)
 

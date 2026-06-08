@@ -235,6 +235,23 @@ async function getLogs(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Custom export — field-selectable xlsx (summary or per-day detail)
+async function exportCustom(req, res, next) {
+  try {
+    const { month, year, type = 'summary', fields = '' } = req.query
+    const now        = new Date()
+    const m          = month ? parseInt(month, 10) : now.getMonth() + 1
+    const y          = year  ? parseInt(year,  10) : now.getFullYear()
+    const fieldList  = fields ? fields.split(',').filter(Boolean) : []
+
+    if (type === 'detail') {
+      await reportSvc.exportDetailRecords({ month: m, year: y, fields: fieldList, res })
+    } else {
+      await reportSvc.exportCustomSummary({ month: m, year: y, fields: fieldList, res })
+    }
+  } catch (err) { next(err) }
+}
+
 // ── Attendance Settings ───────────────────────────────────────────────────────
 
 async function getSettings(req, res, next) {
@@ -271,7 +288,7 @@ async function updateSettings(req, res, next) {
 module.exports = {
   checkIn, checkOut, getToday, listRecords, getSummary,
   adjustRecord, manualAdjustRecord, createManualAttendanceRecord, listAdjustments,
-  getReport, exportReport, syncPayroll,
+  getReport, exportReport, exportCustom, syncPayroll,
   listHolidays, createHoliday, updateHoliday, deleteHoliday,
   getSettings, updateSettings,
   sendConfirmation,

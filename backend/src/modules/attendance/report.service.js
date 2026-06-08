@@ -293,4 +293,219 @@ async function exportMonthlyReportExcel(month, year, res) {
   await workbook.xlsx.write(res)
 }
 
-module.exports = { listHolidays, createHoliday, updateHoliday, deleteHoliday, getMonthlyReport, syncAttendanceToPayroll, exportMonthlyReportExcel }
+// ── Custom Export (field-selectable) ─────────────────────────────────────────
+
+// Summary export: 1 row per employee, selected columns only.
+async function exportCustomSummary({ month, year, fields, res }) {
+  const ExcelJS = require('exceljs')
+  const y = parseInt(year, 10)
+  const m = parseInt(month, 10)
+  const rows = await getMonthlyReport({ month: m, year: y })
+  const pad  = (n) => String(n).padStart(2, '0')
+
+  const ALL_COLS = [
+    { key: 'userName',        header: 'Họ tên',              width: 24, required: true },
+    { key: 'jobTitle',        header: 'Chức danh',           width: 20 },
+    { key: 'actualWorkDays',  header: 'Ngày công TT',        width: 14 },
+    { key: 'leavePaidDays',   header: 'Nghỉ có lương',       width: 16 },
+    { key: 'totalWork',       header: 'Tổng công',           width: 12 },
+    { key: 'absentDays',      header: 'Vắng',                width: 8  },
+    { key: 'lateCount',       header: 'Đi muộn (lần)',       width: 14 },
+    { key: 'earlyCount',      header: 'Về sớm (lần)',        width: 14 },
+    { key: 'approvedOtHours', header: 'OT đã duyệt (h)',     width: 15 },
+  ]
+
+  const fieldSet      = new Set(fields)
+  const selectedCols  = ALL_COLS.filter((c) => c.required || fieldSet.has(c.key))
+  const allCols       = [{ key: 'stt', header: 'STT', width: 5 }, ...selectedCols]
+
+  const workbook = new ExcelJS.Workbook()
+  const sheet    = workbook.addWorksheet(`TH_T${pad(m)}_${y}`)
+  sheet.columns  = allCols.map((c) => ({ header: c.header, key: c.key, width: c.width }))
+
+  const hRow = sheet.getRow(1)
+  hRow.font      = { bold: true, color: { argb: 'FFFFFFFF' } }
+  hRow.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } }
+  hRow.alignment = { horizontal: 'center', vertical: 'middle' }
+  hRow.height    = 22
+
+  rows.forEach((r, idx) => {
+    const row = { stt: idx + 1 }
+    selectedCols.forEach((c) => {
+      if (c.key === 'totalWork') row.totalWork = (r.actualWorkDays ?? 0) + (r.leavePaidDays ?? 0)
+      else row[c.key] = r[c.key] ?? (c.key === 'jobTitle' ? '—' : 0)
+    })
+    sheet.addRow(row)
+  })
+
+  sheet.eachRow((row, rowNum) => {
+    if (rowNum === 1) return
+    const fgColor = rowNum % 2 === 0 ? 'FFF0F4FF' : 'FFFFFFFF'
+    row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fgColor } } })
+  })
+
+  const filename = `TongHop_ChamCong_T${pad(m)}_${y}.xlsx`
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+  await workbook.xlsx.write(res)
+}
+
+// Detail export: 1 row per attendance record (employee × day), selected columns only.
+async function exportDetailRecords({ month, year, fields, res }) {
+  const ExcelJS = require('exceljs')
+  const y   = parseInt(year, 10)
+  const m   = parseInt(month, 10)
+  const pad = (n) => String(n).padStart(2, '0')
+  const from = `${y}-${pad(m)}-01`
+  const to   = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`
+
+  const { rows } = await query(
+    `SELECT
+       u.name          AS user_name,
+       u.job_title,
+       ar.work_date,
+       ar.status,
+       ar.check_in_time,
+       ar.check_out_time,
+       ar.actual_hours,
+       ar.late_minutes,
+       ar.early_minutes,
+       COALESCE(ot_day.approved_ot, ar.ot_hours, 0) AS ot_hours,
+       ar.notes
+     FROM attendance_records ar
+     JOIN users u ON ar.user_id = u.id
+     LEFT JOIN (
+       SELECT user_id, ot_date, SUM(ot_hours) AS approved_ot
+       FROM overtime_requests
+       WHERE status = 'approved' AND ot_date BETWEEN $1 AND $2
+       GROUP BY user_id, ot_date
+     ) ot_day ON ot_day.user_id = ar.user_id AND ot_day.ot_date = ar.work_date
+     WHERE ar.work_date BETWEEN $1 AND $2
+       AND u.status IN ('active', 'on_leave')
+     ORDER BY u.name, ar.work_date`,
+    [from, to]
+  )
+
+  const STATUS_VI = {
+    present: 'Có mặt', late: 'Đi muộn', early_leave: 'Về sớm',
+    late_and_early: 'Muộn & Sớm', absent: 'Vắng mặt', on_leave: 'Nghỉ phép',
+    business_trip: 'Công tác', wfh: 'WFH', holiday: 'Nghỉ lễ', unscheduled: 'Ngoài lịch',
+  }
+  const DOW = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
+
+  const ALL_COLS = [
+    { key: 'userName',     header: 'Họ tên',        width: 24, required: true },
+    { key: 'jobTitle',     header: 'Chức danh',      width: 20 },
+    { key: 'workDate',     header: 'Ngày',           width: 12, required: true },
+    { key: 'dayOfWeek',    header: 'Thứ',            width: 6  },
+    { key: 'statusLabel',  header: 'Trạng thái',     width: 16 },
+    { key: 'checkInTime',  header: 'Giờ vào',        width: 10 },
+    { key: 'checkOutTime', header: 'Giờ ra',         width: 10 },
+    { key: 'actualHours',  header: 'Số giờ làm',     width: 12 },
+    { key: 'lateMinutes',  header: 'Muộn (phút)',    width: 12 },
+    { key: 'earlyMinutes', header: 'Về sớm (phút)',  width: 14 },
+    { key: 'otHours',      header: 'OT (giờ)',       width: 10 },
+    { key: 'notes',        header: 'Ghi chú',        width: 24 },
+  ]
+
+  const fieldSet     = new Set(fields)
+  const selectedCols = ALL_COLS.filter((c) => c.required || fieldSet.has(c.key))
+  const allCols      = [{ key: 'stt', header: 'STT', width: 5 }, ...selectedCols]
+
+  const workbook = new ExcelJS.Workbook()
+  const sheet    = workbook.addWorksheet(`CT_T${pad(m)}_${y}`)
+  sheet.columns  = allCols.map((c) => ({ header: c.header, key: c.key, width: c.width }))
+
+  const hRow = sheet.getRow(1)
+  hRow.font      = { bold: true, color: { argb: 'FFFFFFFF' } }
+  hRow.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } }
+  hRow.alignment = { horizontal: 'center', vertical: 'middle' }
+  hRow.height    = 22
+
+  const fmtTs = (ts) => {
+    if (!ts) return null
+    const d = new Date(ts)
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  // Build helper to fill a data row object from a DB record
+  function buildDataRow(r) {
+    const dateObj = new Date(String(r.work_date).slice(0, 10) + 'T00:00:00')
+    const row = { stt: '' }
+    selectedCols.forEach((c) => {
+      switch (c.key) {
+        case 'userName':     row.userName     = r.user_name; break
+        case 'jobTitle':     row.jobTitle     = r.job_title ?? '—'; break
+        case 'workDate':     row.workDate     = `${pad(dateObj.getDate())}/${pad(dateObj.getMonth() + 1)}/${dateObj.getFullYear()}`; break
+        case 'dayOfWeek':    row.dayOfWeek    = DOW[dateObj.getDay()]; break
+        case 'statusLabel':  row.statusLabel  = STATUS_VI[r.status] ?? r.status; break
+        case 'checkInTime':  row.checkInTime  = fmtTs(r.check_in_time) ?? '—'; break
+        case 'checkOutTime': row.checkOutTime = fmtTs(r.check_out_time) ?? '—'; break
+        case 'actualHours':  row.actualHours  = r.actual_hours != null ? parseFloat(r.actual_hours) : null; break
+        case 'lateMinutes':  row.lateMinutes  = r.late_minutes ?? 0; break
+        case 'earlyMinutes': row.earlyMinutes = r.early_minutes ?? 0; break
+        case 'otHours':      row.otHours      = r.ot_hours != null ? parseFloat(r.ot_hours) : 0; break
+        case 'notes':        row.notes        = r.notes ?? ''; break
+      }
+    })
+    return row
+  }
+
+  // Group records by employee name (ORDER BY u.name guarantees same-user rows are contiguous)
+  const userGroups = new Map()
+  rows.forEach((r) => {
+    const name = r.user_name
+    if (!userGroups.has(name)) userGroups.set(name, [])
+    userGroups.get(name).push(r)
+  })
+
+  let sttIdx = 1
+  let sheetRowNum = 2 // tracks actual row number for zebra striping
+
+  userGroups.forEach((userRows, userName) => {
+    // ── Regular rows (with zebra striping applied inline) ──
+    userRows.forEach((r) => {
+      const rowData   = buildDataRow(r)
+      rowData.stt     = sttIdx++
+      const addedRow  = sheet.addRow(rowData)
+      const fgColor   = sheetRowNum % 2 === 0 ? 'FFF0F4FF' : 'FFFFFFFF'
+      addedRow.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fgColor } }
+      })
+      sheetRowNum++
+    })
+
+    // ── Per-employee summary row ──
+    const totalHours = userRows.reduce((s, r) => s + (r.actual_hours  != null ? parseFloat(r.actual_hours)  : 0), 0)
+    const totalLate  = userRows.reduce((s, r) => s + (r.late_minutes  ?? 0), 0)
+    const totalEarly = userRows.reduce((s, r) => s + (r.early_minutes ?? 0), 0)
+    const totalOt    = userRows.reduce((s, r) => s + (r.ot_hours      != null ? parseFloat(r.ot_hours)      : 0), 0)
+
+    const sumData = { stt: '' }
+    selectedCols.forEach((c) => {
+      switch (c.key) {
+        case 'userName':     sumData.userName     = `∑ Tổng — ${userName}`; break
+        case 'actualHours':  sumData.actualHours  = totalHours;  break
+        case 'lateMinutes':  sumData.lateMinutes  = totalLate;   break
+        case 'earlyMinutes': sumData.earlyMinutes = totalEarly;  break
+        case 'otHours':      sumData.otHours      = totalOt;     break
+        default:             sumData[c.key]       = ''; break
+      }
+    })
+
+    const sumRow = sheet.addRow(sumData)
+    sumRow.font  = { bold: true }
+    sumRow.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBDE0F7' } } // light blue
+    sumRow.eachCell((cell) => {
+      cell.border = { top: { style: 'thin', color: { argb: 'FF4B8EC8' } } }
+    })
+    sheetRowNum++
+  })
+
+  const filename = `ChiTiet_ChamCong_T${pad(m)}_${y}.xlsx`
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+  await workbook.xlsx.write(res)
+}
+
+module.exports = { listHolidays, createHoliday, updateHoliday, deleteHoliday, getMonthlyReport, syncAttendanceToPayroll, exportMonthlyReportExcel, exportCustomSummary, exportDetailRecords }
