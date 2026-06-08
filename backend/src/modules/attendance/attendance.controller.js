@@ -208,6 +208,20 @@ async function deleteHoliday(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Device summary — first check-in device info per user per day for a month (admin)
+async function getDeviceSummary(req, res, next) {
+  try {
+    const { userId, month, year } = req.query
+    const now = new Date()
+    const summary = await svc.getDeviceSummary({
+      userId: userId || null,
+      month:  month ? parseInt(month, 10) : now.getMonth() + 1,
+      year:   year  ? parseInt(year,  10) : now.getFullYear(),
+    })
+    res.json({ summary })
+  } catch (err) { next(err) }
+}
+
 // Attendance Logs — raw check-in/out entries for a user+date (admin audit view)
 
 async function getLogs(req, res, next) {
@@ -262,4 +276,5 @@ module.exports = {
   getSettings, updateSettings,
   sendConfirmation,
   getLogs,
+  getDeviceSummary,
 }

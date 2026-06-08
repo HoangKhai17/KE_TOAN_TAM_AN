@@ -170,6 +170,9 @@ router.post('/manual-record',             ...admin, ctrl.createManualAttendanceR
 // Raw check-in/out logs for a user on a specific date — used by admin detail popup
 router.get('/logs', ...admin, ctrl.getLogs)
 
+// Device summary — first check-in device per user per day (month batch) — admin calendar/table
+router.get('/logs/device-summary', ...admin, ctrl.getDeviceSummary)
+
 /**
  * @openapi
  * /attendance/report:

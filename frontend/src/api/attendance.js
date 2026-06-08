@@ -31,6 +31,11 @@ export const listRecordAdjustments = (id) =>
 export const listAttendanceLogs = (userId, date) =>
   api.get('/attendance/logs', { params: { userId, date } }).then(r => r.data.logs ?? [])
 
+// Returns first check-in device info per user per day for a whole month (batch).
+// userId is optional — omit to fetch all staff.
+export const getDeviceSummary = (params) =>
+  api.get('/attendance/logs/device-summary', { params }).then(r => r.data.summary ?? [])
+
 // ── Monthly Report & Payroll Sync ─────────────────────────────────────────────
 
 export const getMonthlyReport = (params) =>

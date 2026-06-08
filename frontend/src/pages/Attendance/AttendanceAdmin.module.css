@@ -793,11 +793,13 @@
 .allStaffSection {
   border-color: var(--color-primary-ring);
   background: var(--color-surface);
+  min-height: 400px;
 }
 
 .allStaffTableWrap {
   overflow-x: auto;
   overflow-y: auto;
+  max-height: 72vh;
   background: var(--color-surface);
 }
 
@@ -1229,4 +1231,120 @@
   border: 1px solid var(--color-border-muted);
   border-radius: var(--radius-sm);
   padding: 1px 6px;
+}
+
+/* ── Device chip — calendar cell ────────────────────────────────────────────── */
+
+.calendarDeviceChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+  line-height: 1.2;
+}
+
+/* ── Device chip — all-staff table cell ─────────────────────────────────────── */
+
+.tableDeviceChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  padding: 1px 3px;
+  line-height: 1.2;
+}
+
+/* ── Week / Month toggle (table view filterbar) ─────────────────────────────── */
+
+.weekRangeToggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.weekRangeBtn {
+  padding: 4px 10px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  background: transparent;
+  color: var(--color-muted);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.weekRangeBtn:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.weekRangeBtnActive {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.weekRangeBtnActive:hover {
+  background: var(--color-primary-dark, var(--color-primary));
+  color: #fff;
+}
+
+/* ── Week selector (prev/next week navigation) ──────────────────────────────── */
+
+.weekSelector {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 2px 4px;
+  background: var(--color-surface);
+}
+
+.weekNavBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  padding: 0;
+}
+
+.weekNavBtn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.weekNavBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.weekLabel {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-soft);
+  min-width: 110px;
+  text-align: center;
+  white-space: nowrap;
 }

@@ -98,6 +98,38 @@ const STATUS_SHORT = {
 
 const WEEK_NAMES = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
 
+// Device source config — used in calendar cells + all-staff cells
+const DEVICE_SOURCE = {
+  mobile:  { Icon: Smartphone, label: 'Điện thoại', shortLabel: 'ĐT' },
+  tablet:  { Icon: Smartphone, label: 'Máy tính bảng', shortLabel: 'MB' },
+  laptop:  { Icon: Laptop,     label: 'Laptop',      shortLabel: 'LT' },
+  desktop: { Icon: Monitor,    label: 'Máy tính',    shortLabel: 'MT' },
+  manual:  { Icon: Pencil,     label: 'Thủ công',    shortLabel: 'TC' },
+  unknown: { Icon: Globe,      label: 'Khác',        shortLabel: '?' },
+}
+
+// Parse raw device_info string → { type }
+function deviceType(deviceInfo, method) {
+  if (method === 'manual') return 'manual'
+  if (!deviceInfo) return 'unknown'
+  try {
+    const parsed = JSON.parse(deviceInfo)
+    return parsed.type ?? 'unknown'
+  } catch { return 'unknown' }
+}
+
+// Transform flat device summary list → { [userId]: { [dateStr]: { type, method } } }
+function buildDeviceMap(summaryList) {
+  const map = {}
+  summaryList.forEach(({ userId, workDate, method, deviceInfo }) => {
+    const date = String(workDate).slice(0, 10)
+    const type = deviceType(deviceInfo, method)
+    if (!map[userId]) map[userId] = {}
+    map[userId][date] = { type, method }
+  })
+  return map
+}
+
 const LEAVE_TYPE = {
   annual:        'Nghỉ phép năm',
   sick:          'Nghỉ ốm',
@@ -418,11 +450,14 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
   const [holidays,    setHolidays]    = useState([])
   const [loading,     setLoading]     = useState(true)
   const [selectedDay, setSelectedDay] = useState(null)
+  const [deviceMap,   setDeviceMap]   = useState({}) // { [userId]: { [dateStr]: {type,method} } }
 
   // Table view state
-  const [allRecords, setAllRecords]   = useState([])
-  const [allLoading, setAllLoading]   = useState(false)
-  const [tableDay,   setTableDay]     = useState(null)
+  const [allRecords,      setAllRecords]      = useState([])
+  const [allLoading,      setAllLoading]      = useState(false)
+  const [tableDay,        setTableDay]        = useState(null)
+  const [tableViewRange,  setTableViewRange]  = useState('month') // 'month' | 'week'
+  const [tableWeekIdx,    setTableWeekIdx]    = useState(0)
 
   // Confirmation email modal
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -437,11 +472,13 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
     Promise.all([
       attendanceApi.listAttendanceRecords({ userId: selectedId, month, year, limit: 31 }),
       attendanceApi.listHolidays(year),
+      attendanceApi.getDeviceSummary({ userId: selectedId, month, year }),
     ])
-      .then(([res, hols]) => {
+      .then(([res, hols, devList]) => {
         if (cancelled) return
         setRecords(res.records ?? [])
         setHolidays(Array.isArray(hols) ? hols : [])
+        setDeviceMap(buildDeviceMap(Array.isArray(devList) ? devList : []))
       })
       .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu chấm công', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -454,11 +491,13 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
     Promise.all([
       attendanceApi.listAttendanceRecords({ month, year, limit: 9999 }),
       attendanceApi.listHolidays(year),
+      attendanceApi.getDeviceSummary({ month, year }),
     ])
-      .then(([res, hols]) => {
+      .then(([res, hols, devList]) => {
         if (cancelled) return
         setAllRecords(res.records ?? [])
         setHolidays(Array.isArray(hols) ? hols : [])
+        setDeviceMap(buildDeviceMap(Array.isArray(devList) ? devList : []))
       })
       .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu chấm công', 'error') })
       .finally(() => { if (!cancelled) setAllLoading(false) })
@@ -502,6 +541,34 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
 
   const daysInMonth = new Date(year, month, 0).getDate()
 
+  // Week chunks for "Tất cả nhân viên" week view.
+  // Splits the month into calendar weeks (Mon–Sun). The first chunk may be a
+  // partial week (e.g. if the 1st falls on Friday, chunk 1 = days 1–3 Fri–Sun).
+  // Every subsequent chunk is a full Mon–Sun week (or a partial last chunk).
+  const weekChunks = useMemo(() => {
+    const chunks = []
+    const firstDow = (new Date(year, month - 1, 1).getDay() + 6) % 7 // 0=Mon…6=Sun
+    // Day number of the first Sunday of the month (= last day of week 1)
+    const firstSunday = 1 + (6 - firstDow) // if firstDow=0(Mon) → 7, if firstDow=4(Fri) → 3
+    let start = 1
+    let end = Math.min(firstSunday, daysInMonth)
+    while (start <= daysInMonth) {
+      chunks.push({ label: `Tuần ${chunks.length + 1} (${start}–${end})`, start, end })
+      start = end + 1
+      end = Math.min(start + 6, daysInMonth)
+    }
+    return chunks
+  }, [daysInMonth, year, month])
+
+  const visibleDays = useMemo(() => {
+    if (tableViewRange === 'month') {
+      return Array.from({ length: daysInMonth }, (_, i) => i + 1)
+    }
+    const chunk = weekChunks[tableWeekIdx] ?? weekChunks[0]
+    if (!chunk) return []
+    return Array.from({ length: chunk.end - chunk.start + 1 }, (_, i) => chunk.start + i)
+  }, [tableViewRange, tableWeekIdx, weekChunks, daysInMonth])
+
   return (
     <>
       {/* Filter bar: view toggle + per-mode controls */}
@@ -542,13 +609,51 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
           </>
         )}
         {viewMode === 'table' && (
-          <button
-            className={`${s.btnSecondary} ${s.btnShort}`}
-            onClick={loadTable}
-            disabled={allLoading}
-          >
-            <RefreshCw size={13} /> Làm mới
-          </button>
+          <>
+            {/* Week / Month toggle */}
+            <div className={sa.weekRangeToggle}>
+              <button
+                className={`${sa.weekRangeBtn} ${tableViewRange === 'month' ? sa.weekRangeBtnActive : ''}`}
+                onClick={() => setTableViewRange('month')}
+              >
+                Cả tháng
+              </button>
+              <button
+                className={`${sa.weekRangeBtn} ${tableViewRange === 'week' ? sa.weekRangeBtnActive : ''}`}
+                onClick={() => { setTableViewRange('week'); setTableWeekIdx(0) }}
+              >
+                Theo tuần
+              </button>
+            </div>
+            {tableViewRange === 'week' && (
+              <div className={sa.weekSelector}>
+                <button
+                  className={sa.weekNavBtn}
+                  onClick={() => setTableWeekIdx((i) => Math.max(0, i - 1))}
+                  disabled={tableWeekIdx === 0}
+                >
+                  <ChevronLeft size={13} />
+                </button>
+                <span className={sa.weekLabel}>
+                  {weekChunks[tableWeekIdx]?.label ?? ''}
+                </span>
+                <button
+                  className={sa.weekNavBtn}
+                  onClick={() => setTableWeekIdx((i) => Math.min(weekChunks.length - 1, i + 1))}
+                  disabled={tableWeekIdx >= weekChunks.length - 1}
+                >
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+            )}
+            <button
+              className={`${s.btnSecondary} ${s.btnShort}`}
+              onClick={loadTable}
+              disabled={allLoading}
+            >
+              <RefreshCw size={13} /> Làm mới
+            </button>
+          </>
         )}
 
         {/* Send confirmation button — always visible in calendar tab */}
@@ -620,6 +725,18 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                           {fmtTime(record.checkOutTime)}
                         </span>
                       )}
+                      {(() => {
+                        const dev = deviceMap[selectedId]?.[dateStr]
+                        if (!dev || record?.isHoliday) return null
+                        const cfg = DEVICE_SOURCE[dev.type] ?? DEVICE_SOURCE.unknown
+                        const { Icon } = cfg
+                        return (
+                          <span className={sa.calendarDeviceChip} title={cfg.label}>
+                            <Icon size={10} />
+                            {cfg.label}
+                          </span>
+                        )
+                      })()}
                     </div>
                   )
                 })}
@@ -646,7 +763,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                 <thead>
                   <tr>
                     <th className={sa.allStaffNameHeader}>Nhân viên</th>
-                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+                    {visibleDays.map((d) => {
                       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
                       const jsDay = new Date(dateStr + 'T00:00:00').getDay()
                       const isWeekend = jsDay === 0 || jsDay === 6
@@ -671,7 +788,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                   {staffList.map((user) => (
                     <tr key={user.id}>
                       <td className={sa.allStaffNameCell}>{user.name}</td>
-                      {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+                      {visibleDays.map((d) => {
                         const dateStr  = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
                         const jsDay    = new Date(dateStr + 'T00:00:00').getDay()
                         const isWeekend = jsDay === 0 || jsDay === 6
@@ -682,6 +799,8 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                         const cfg = record ? (STATUS_CFG[record.status] ?? STATUS_CFG.unscheduled) : null
                         const tableStatusClass = record?.status ? sa[`allStaffStatus_${record.status}`] : ''
                         const isClickable = record && !record.isHoliday && !isFuture
+                        const dev = !isHoliday ? (deviceMap[user.id]?.[dateStr] ?? null) : null
+                        const devCfg = dev ? (DEVICE_SOURCE[dev.type] ?? DEVICE_SOURCE.unknown) : null
                         return (
                           <td
                             key={d}
@@ -718,6 +837,12 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                                     {fmtTime(record.checkOutTime)}
                                   </span>
                                 )}
+                                {devCfg && (
+                                  <span className={sa.tableDeviceChip} title={devCfg.label}>
+                                    <devCfg.Icon size={9} />
+                                    {devCfg.label}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </td>
@@ -727,7 +852,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                   ))}
                   {staffList.length === 0 && (
                     <tr>
-                      <td colSpan={daysInMonth + 1} className={s.centered}>Không có nhân viên</td>
+                      <td colSpan={visibleDays.length + 1} className={s.centered}>Không có nhân viên</td>
                     </tr>
                   )}
                 </tbody>

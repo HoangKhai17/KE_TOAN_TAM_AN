@@ -641,6 +641,45 @@ async function sendAttendanceConfirmation({ month, year }) {
   return { sent, failed, skipped, total: users.length }
 }
 
+// ── Device Summary (first check-in per user per day for a month) ─────────────
+// Returns the FIRST check_in log per user per day, carrying device_info + method + ip.
+// Used by admin calendar/table views to show which device was used to check in.
+
+async function getDeviceSummary({ userId, month, year }) {
+  const y  = parseInt(year,  10)
+  const m  = parseInt(month, 10)
+  const from = `${y}-${String(m).padStart(2, '0')}-01`
+  const to   = `${y}-${String(m + 1).padStart(2, '0')}-01`  // exclusive upper bound
+
+  const params = [from, to]
+  const userCond = userId ? `AND user_id = $3` : ''
+  if (userId) params.push(userId)
+
+  const { rows } = await query(
+    `SELECT DISTINCT ON (user_id, logged_at::date)
+       user_id,
+       logged_at::date AS work_date,
+       method,
+       device_info,
+       ip_address
+     FROM attendance_logs
+     WHERE log_type = 'check_in'
+       AND logged_at >= $1::date
+       AND logged_at <  $2::date
+       ${userCond}
+     ORDER BY user_id, logged_at::date, logged_at ASC`,
+    params
+  )
+
+  return rows.map((r) => ({
+    userId:     r.user_id,
+    workDate:   String(r.work_date).slice(0, 10),
+    method:     r.method,
+    deviceInfo: r.device_info,
+    ipAddress:  r.ip_address,
+  }))
+}
+
 // ── Attendance Logs (per user per date) ──────────────────────────────────────
 
 async function getAttendanceLogs(userId, date) {
@@ -663,4 +702,5 @@ module.exports = {
   getAttendanceSummary,
   sendAttendanceConfirmation,
   getAttendanceLogs,
+  getDeviceSummary,
 }
