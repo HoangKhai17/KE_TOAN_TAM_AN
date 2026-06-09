@@ -20,6 +20,7 @@ function periodToDto(row) {
 }
 
 function recordToDto(row) {
+  const comp = row.components ?? {}
   return {
     id:              row.id,
     periodId:        row.payroll_period_id,
@@ -38,6 +39,8 @@ function recordToDto(row) {
     pitDeduction:    Number(row.pit_deduction),
     otherDeductions: Number(row.other_deductions),
     netSalary:       Number(row.net_salary),
+    allowanceItems:  comp.allowanceItems ?? [],
+    bonusItems:      comp.bonusItems     ?? [],
     components:      row.components ?? null,
     notes:           row.notes ?? null,
     createdBy:       row.created_by,
@@ -193,12 +196,26 @@ async function upsertRecord(periodId, data, actorId) {
   }
 
   const {
-    userId, baseSalary = 0, allowances = 0, bonus = 0,
+    userId, baseSalary = 0,
+    allowanceItems = [], bonusItems = [],
+    allowances: allowancesLegacy = 0, bonus: bonusLegacy = 0,
     bhxhEmployee = 0, bhytEmployee = 0, bhtnEmployee = 0,
     bhxhEmployer = 0, bhytEmployer = 0, bhtnEmployer = 0,
     pitDeduction = 0, otherDeductions = 0,
-    components = null, notes = null,
+    notes = null,
   } = data
+
+  // Sum from items; fall back to legacy flat value if no items provided
+  const allowances = allowanceItems.length > 0
+    ? allowanceItems.reduce((s, i) => s + (i.amount ?? 0), 0)
+    : allowancesLegacy
+  const bonus = bonusItems.length > 0
+    ? bonusItems.reduce((s, i) => s + (i.amount ?? 0), 0)
+    : bonusLegacy
+
+  const components = (allowanceItems.length > 0 || bonusItems.length > 0)
+    ? { allowanceItems, bonusItems }
+    : null
 
   const { rows: [record] } = await query(
     `INSERT INTO payroll_records

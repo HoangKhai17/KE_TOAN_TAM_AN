@@ -34,6 +34,81 @@ function calcNet(rec) {
   return earn - deduct
 }
 
+// ── AllowanceItemsEditor ──────────────────────────────────────────────────────
+
+function AllowanceItemsEditor({ label, items, onChange }) {
+  function addItem() {
+    onChange([...items, { name: '', project: '', amount: '', note: '' }])
+  }
+  function removeItem(idx) {
+    onChange(items.filter((_, i) => i !== idx))
+  }
+  function updateItem(idx, field, value) {
+    onChange(items.map((item, i) => i === idx ? { ...item, [field]: value } : item))
+  }
+  const total = items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0)
+
+  return (
+    <div className={s.itemsEditor}>
+      <div className={s.itemsEditorHeader}>
+        <span className={s.itemsEditorLabel}>{label}</span>
+        <button type="button" className={s.btnAddItem} onClick={addItem}>
+          <Plus size={11} /> Thêm khoản
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p className={s.itemsEmpty}>Chưa có khoản nào — nhấn "Thêm khoản" để bắt đầu.</p>
+      ) : (
+        <div className={s.itemsList}>
+          {items.map((item, idx) => (
+            <div key={idx} className={s.itemRow}>
+              <div className={s.itemFields}>
+                <input
+                  type="text" placeholder="Tên khoản *"
+                  value={item.name}
+                  onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                  className={s.formInput}
+                />
+                <input
+                  type="text" placeholder="Dự án / Nguồn"
+                  value={item.project}
+                  onChange={(e) => updateItem(idx, 'project', e.target.value)}
+                  className={s.formInput}
+                />
+                <input
+                  type="number" min={0} step={1000} placeholder="0"
+                  value={item.amount}
+                  onChange={(e) => updateItem(idx, 'amount', e.target.value)}
+                  className={s.formInput}
+                />
+                <input
+                  type="text" placeholder="Ghi chú"
+                  value={item.note}
+                  onChange={(e) => updateItem(idx, 'note', e.target.value)}
+                  className={s.formInput}
+                />
+              </div>
+              <button
+                type="button"
+                className={`${s.iconBtn} ${s.iconBtnDanger}`}
+                onClick={() => removeItem(idx)}
+                title="Xoá khoản này"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {items.length > 0 && (
+        <div className={s.itemsTotal}>
+          Tổng {label.toLowerCase()}: <strong>{fmtVND(total)}</strong>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── UpsertRecordModal ─────────────────────────────────────────────────────────
 
 function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) {
@@ -41,10 +116,14 @@ function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) 
   const emptyNum = (v) => (v != null && v !== 0 ? String(v) : '')
 
   const [form, setForm] = useState({
-    userId:          existing?.userId ?? '',
-    baseSalary:      emptyNum(existing?.baseSalary),
-    allowances:      emptyNum(existing?.allowances),
-    bonus:           emptyNum(existing?.bonus),
+    userId:         existing?.userId ?? '',
+    baseSalary:     emptyNum(existing?.baseSalary),
+    allowanceItems: existing?.allowanceItems?.length
+      ? existing.allowanceItems.map((i) => ({ ...i, amount: String(i.amount) }))
+      : (existing?.allowances > 0 ? [{ name: 'Phụ cấp', project: '', amount: String(existing.allowances), note: '' }] : []),
+    bonusItems:     existing?.bonusItems?.length
+      ? existing.bonusItems.map((i) => ({ ...i, amount: String(i.amount) }))
+      : (existing?.bonus > 0 ? [{ name: 'Thưởng', project: '', amount: String(existing.bonus), note: '' }] : []),
     bhxhEmployee:    emptyNum(existing?.bhxhEmployee),
     bhytEmployee:    emptyNum(existing?.bhytEmployee),
     bhtnEmployee:    emptyNum(existing?.bhtnEmployee),
@@ -73,11 +152,19 @@ function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) 
     setError(null)
     setSaving(true)
     try {
+      const processItems = (items) => items
+        .filter((i) => i.name.trim())
+        .map((i) => ({
+          name:    i.name.trim(),
+          project: (i.project ?? '').trim(),
+          amount:  numVal(i.amount),
+          note:    (i.note ?? '').trim(),
+        }))
       const body = {
-        userId:          form.userId,
-        baseSalary:      numVal(form.baseSalary),
-        allowances:      numVal(form.allowances),
-        bonus:           numVal(form.bonus),
+        userId:         form.userId,
+        baseSalary:     numVal(form.baseSalary),
+        allowanceItems: processItems(form.allowanceItems),
+        bonusItems:     processItems(form.bonusItems),
         bhxhEmployee:    numVal(form.bhxhEmployee),
         bhytEmployee:    numVal(form.bhytEmployee),
         bhtnEmployee:    numVal(form.bhtnEmployee),
@@ -137,9 +224,21 @@ function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) 
 
         <div className={s.recordFormGrid}>
           <div className={s.recordFormSection}>Thu nhập</div>
-          {numInput('baseSalary',   'Lương cơ bản (VND)')}
-          {numInput('allowances',   'Phụ cấp (VND)')}
-          {numInput('bonus',        'Thưởng (VND)')}
+          {numInput('baseSalary', 'Lương cơ bản (VND)')}
+          <div className={s.itemsEditorWrap}>
+            <AllowanceItemsEditor
+              label="Phụ cấp"
+              items={form.allowanceItems}
+              onChange={(items) => setForm((p) => ({ ...p, allowanceItems: items }))}
+            />
+          </div>
+          <div className={s.itemsEditorWrap}>
+            <AllowanceItemsEditor
+              label="Thưởng"
+              items={form.bonusItems}
+              onChange={(items) => setForm((p) => ({ ...p, bonusItems: items }))}
+            />
+          </div>
 
           <div className={s.recordFormSection}>Khấu trừ NV</div>
           {numInput('bhxhEmployee', 'BHXH nhân viên')}
@@ -162,7 +261,7 @@ function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) 
             value={form.notes}
             onChange={set('notes')}
             className={s.formTextarea}
-            rows={2}
+            rows={5}
             placeholder="Ghi chú về lương kỳ này..."
           />
         </div>
