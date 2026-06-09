@@ -176,4 +176,142 @@ async function rejectOvertimeRequest(id, { rejectionNote, reviewedBy }) {
   return toDto(rows[0])
 }
 
-module.exports = { listOvertimeRequests, createOvertimeRequest, approveOvertimeRequest, rejectOvertimeRequest }
+async function exportOvertimeRecords({ from, to, status, userId, fields, res }) {
+  const ExcelJS = require('exceljs')
+
+  const conditions = ['1=1']
+  const params = []
+  if (userId) { params.push(userId); conditions.push(`o.user_id  = $${params.length}`) }
+  if (status) { params.push(status); conditions.push(`o.status   = $${params.length}`) }
+  if (from)   { params.push(from);   conditions.push(`o.ot_date >= $${params.length}`) }
+  if (to)     { params.push(to);     conditions.push(`o.ot_date <= $${params.length}`) }
+  const where = conditions.join(' AND ')
+
+  const { rows } = await query(
+    `SELECT o.*, u.name AS user_name,
+            a.name AS approver_name,
+            c.name AS client_company_name
+     FROM overtime_requests o
+     JOIN  users    u ON o.user_id          = u.id
+     LEFT JOIN users    a ON o.approved_by      = a.id
+     LEFT JOIN companies c ON o.client_company_id = c.id
+     WHERE ${where}
+     ORDER BY u.name, o.ot_date`,
+    params
+  )
+
+  const STATUS_VI = { pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', cancelled: 'Đã huỷ' }
+  const DOW_VI    = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
+
+  const ALL_COLS = [
+    { key: 'userName',          header: 'Họ tên',         width: 24, required: true },
+    { key: 'otDate',            header: 'Ngày tăng ca',   width: 14, required: true },
+    { key: 'dayOfWeek',         header: 'Thứ',            width: 6  },
+    { key: 'startTime',         header: 'Giờ bắt đầu',   width: 12 },
+    { key: 'endTime',           header: 'Giờ kết thúc',  width: 12 },
+    { key: 'otHours',           header: 'Số giờ OT',     width: 10 },
+    { key: 'otRate',            header: 'Hệ số',         width: 8  },
+    { key: 'statusLabel',       header: 'Trạng thái',    width: 14 },
+    { key: 'clientCompanyName', header: 'Khách hàng',    width: 24 },
+    { key: 'reason',            header: 'Lý do',         width: 28 },
+    { key: 'approvalNote',      header: 'Ghi chú duyệt', width: 24 },
+    { key: 'approverName',      header: 'Người duyệt',   width: 20 },
+  ]
+
+  const fieldSet     = new Set(fields)
+  const selectedCols = ALL_COLS.filter((c) => c.required || fieldSet.has(c.key))
+
+  const fmtDate = (d) => {
+    if (!d) return '—'
+    const [y, m, dy] = String(d).slice(0, 10).split('-')
+    return `${dy}/${m}/${y}`
+  }
+
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'KeToanTamAn'
+  const sheet = workbook.addWorksheet('Tăng ca')
+
+  sheet.columns = [
+    { key: 'stt', header: 'STT', width: 5 },
+    ...selectedCols.map((c) => ({ key: c.key, header: c.header, width: c.width })),
+  ]
+
+  const headerRow = sheet.getRow(1)
+  headerRow.eachCell((cell) => {
+    cell.font      = { bold: true, color: { argb: 'FFFFFFFF' } }
+    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    cell.border    = { bottom: { style: 'medium', color: { argb: 'FF4B8EC8' } } }
+  })
+  headerRow.height = 22
+  sheet.views = [{ state: 'frozen', ySplit: 1 }]
+
+  // Group by employee
+  const userGroups = new Map()
+  rows.forEach((r) => {
+    const name = r.user_name
+    if (!userGroups.has(name)) userGroups.set(name, [])
+    userGroups.get(name).push(r)
+  })
+
+  let sttIdx = 1
+  let rowNum  = 2
+
+  userGroups.forEach((userRows, userName) => {
+    userRows.forEach((r) => {
+      const dateObj = r.ot_date ? new Date(String(r.ot_date).slice(0, 10) + 'T00:00:00') : null
+      const rowData = { stt: sttIdx++ }
+      selectedCols.forEach((c) => {
+        switch (c.key) {
+          case 'userName':          rowData[c.key] = r.user_name;                                          break
+          case 'otDate':            rowData[c.key] = fmtDate(r.ot_date);                                   break
+          case 'dayOfWeek':         rowData[c.key] = dateObj ? DOW_VI[dateObj.getDay()] : '—';             break
+          case 'startTime':         rowData[c.key] = r.start_time         ?? '—';                         break
+          case 'endTime':           rowData[c.key] = r.end_time           ?? '—';                         break
+          case 'otHours':           rowData[c.key] = r.ot_hours  != null ? parseFloat(r.ot_hours)  : 0;   break
+          case 'otRate':            rowData[c.key] = r.ot_rate   != null ? `${r.ot_rate}x`         : '—'; break
+          case 'statusLabel':       rowData[c.key] = STATUS_VI[r.status]  ?? r.status;                    break
+          case 'clientCompanyName': rowData[c.key] = r.client_company_name ?? '—';                        break
+          case 'reason':            rowData[c.key] = r.reason              ?? '—';                        break
+          case 'approvalNote':      rowData[c.key] = r.approval_note       ?? '—';                        break
+          case 'approverName':      rowData[c.key] = r.approver_name       ?? '—';                        break
+        }
+      })
+      const addedRow = sheet.addRow(rowData)
+      const fgColor  = rowNum % 2 === 0 ? 'FFF0F4FF' : 'FFFFFFFF'
+      addedRow.eachCell((cell) => {
+        cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: fgColor } }
+        cell.alignment = { vertical: 'middle' }
+      })
+      rowNum++
+    })
+
+    // Per-employee summary row — total approved OT hours
+    const approvedOt = userRows
+      .filter((r) => r.status === 'approved')
+      .reduce((s, r) => s + (r.ot_hours != null ? parseFloat(r.ot_hours) : 0), 0)
+
+    const sumData = { stt: '' }
+    selectedCols.forEach((c) => {
+      if      (c.key === 'userName') sumData[c.key] = `∑ Tổng — ${userName}`
+      else if (c.key === 'otHours')  sumData[c.key] = parseFloat(approvedOt.toFixed(2))
+      else                           sumData[c.key] = ''
+    })
+
+    const sumRow = sheet.addRow(sumData)
+    sumRow.font = { bold: true }
+    sumRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBDE0F7' } }
+    sumRow.eachCell((cell) => {
+      cell.border    = { top: { style: 'thin', color: { argb: 'FF4B8EC8' } } }
+      cell.alignment = { vertical: 'middle' }
+    })
+    rowNum++
+  })
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', 'attachment; filename="overtime_export.xlsx"')
+  await workbook.xlsx.write(res)
+  res.end()
+}
+
+module.exports = { listOvertimeRequests, createOvertimeRequest, approveOvertimeRequest, rejectOvertimeRequest, exportOvertimeRecords }

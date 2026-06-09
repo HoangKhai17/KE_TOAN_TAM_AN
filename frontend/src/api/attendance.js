@@ -120,6 +120,9 @@ export const approveOvertimeRequest = (id, body = {}) =>
 export const rejectOvertimeRequest = (id, body = {}) =>
   api.put(`/overtime-requests/${id}/reject`, body).then(r => r.data)
 
+export const exportOvertimeReport = (params) =>
+  api.get('/overtime-requests/export-custom', { params, responseType: 'blob' })
+
 // ── Attendance Settings ───────────────────────────────────────────────────────
 
 export const getAttendanceSettings = () =>

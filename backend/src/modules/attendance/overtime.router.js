@@ -108,6 +108,14 @@ router.post('/', ...auth, async (req, res, next) => {
  *       200: { description: Rejected }
  *       404: { description: Not found or already reviewed }
  */
+router.get('/export-custom', ...admin, async (req, res, next) => {
+  try {
+    const { from, to, status, userId, fields = '' } = req.query
+    const fieldList = fields ? fields.split(',').filter(Boolean) : []
+    await svc.exportOvertimeRecords({ from, to, status, userId, fields: fieldList, res })
+  } catch (err) { next(err) }
+})
+
 router.put('/:id/approve', ...admin, async (req, res, next) => {
   try {
     const { approvalNote } = req.body ?? {}

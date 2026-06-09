@@ -805,6 +805,284 @@ function ExportExcelModal({ year, month, onClose }) {
   )
 }
 
+// ── OvertimeExportModal — field-selectable OT xlsx export ────────────────────
+
+const OT_EXPORT_FIELDS = [
+  { key: 'userName',          label: 'Họ tên',         required: true, group: 'Nhân viên' },
+  { key: 'otDate',            label: 'Ngày tăng ca',   required: true, group: 'Thời gian' },
+  { key: 'dayOfWeek',         label: 'Thứ',                            group: 'Thời gian' },
+  { key: 'startTime',         label: 'Giờ bắt đầu',                   group: 'Thời gian' },
+  { key: 'endTime',           label: 'Giờ kết thúc',                  group: 'Thời gian' },
+  { key: 'otHours',           label: 'Số giờ OT',                     group: 'Tăng ca' },
+  { key: 'otRate',            label: 'Hệ số OT',                      group: 'Tăng ca' },
+  { key: 'statusLabel',       label: 'Trạng thái',                    group: 'Tăng ca' },
+  { key: 'clientCompanyName', label: 'Khách hàng',                    group: 'Tăng ca' },
+  { key: 'reason',            label: 'Lý do',                         group: 'Thông tin thêm' },
+  { key: 'approvalNote',      label: 'Ghi chú duyệt',                 group: 'Thông tin thêm' },
+  { key: 'approverName',      label: 'Người duyệt',                   group: 'Thông tin thêm' },
+]
+
+const OT_EXPORT_DEFAULT   = ['userName', 'otDate', 'dayOfWeek', 'startTime', 'endTime', 'otHours', 'otRate', 'statusLabel', 'clientCompanyName']
+const _OT_STATUS_VI       = { pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', cancelled: 'Đã huỷ' }
+
+function getOtCell(row, key) {
+  switch (key) {
+    case 'otDate':            return fmtDateVI(row.otDate)
+    case 'dayOfWeek':         return row.otDate ? _DOW_VI[new Date(String(row.otDate).slice(0, 10) + 'T00:00:00').getDay()] : '—'
+    case 'startTime':         return row.startTime         ?? '—'
+    case 'endTime':           return row.endTime           ?? '—'
+    case 'otHours':           return row.otHours  != null ? `${Number(row.otHours).toFixed(1)}h`  : '—'
+    case 'otRate':            return row.otRate   != null ? `${row.otRate}x`                      : '—'
+    case 'statusLabel':       return _OT_STATUS_VI[row.status] ?? row.status
+    case 'clientCompanyName': return row.clientCompanyName ?? '—'
+    case 'reason':            return row.reason            ?? '—'
+    case 'approvalNote':      return row.approvalNote      ?? '—'
+    case 'approverName':      return row.approverName      ?? '—'
+    default:                  return row[key]              ?? '—'
+  }
+}
+
+function OvertimeExportModal({ year, month, statusFilter, employeeFilter, staffList, onClose }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [selectedFields, setSelectedFields] = useState(OT_EXPORT_DEFAULT)
+  const [rawData,        setRawData]        = useState([])
+  const [loadingPreview, setLoadingPreview] = useState(true)
+  const [exporting,      setExporting]      = useState(false)
+
+  const { from, to } = useMemo(() => ymToDates(year, month), [year, month])
+
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [onClose])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadingPreview(true)
+    attendanceApi.listOvertimeRequests({
+      from, to,
+      status: statusFilter  || undefined,
+      userId: employeeFilter || undefined,
+      limit: 9999,
+    })
+      .then((res) => { if (!cancelled) setRawData(res.requests ?? []) })
+      .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu xem trước', 'error') })
+      .finally(() => { if (!cancelled) setLoadingPreview(false) })
+    return () => { cancelled = true }
+  }, [from, to, statusFilter, employeeFilter]) // eslint-disable-line
+
+  const toggleField   = (key, required) => {
+    if (required) return
+    setSelectedFields((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])
+  }
+  const selectAll     = () => setSelectedFields(OT_EXPORT_FIELDS.map((f) => f.key))
+  const deselectAll   = () => setSelectedFields(OT_EXPORT_FIELDS.filter((f) => f.required).map((f) => f.key))
+
+  const fieldGroups = useMemo(() => {
+    const map = {}
+    OT_EXPORT_FIELDS.forEach((f) => { if (!map[f.group]) map[f.group] = []; map[f.group].push(f) })
+    return Object.entries(map)
+  }, [])
+
+  const previewCols = useMemo(
+    () => OT_EXPORT_FIELDS.filter((f) => selectedFields.includes(f.key)),
+    [selectedFields]
+  )
+
+  const displayRows = useMemo(() => {
+    if (rawData.length === 0) return []
+    const groups = new Map()
+    rawData.forEach((r) => {
+      const name = r.userName ?? '—'
+      if (!groups.has(name)) groups.set(name, [])
+      groups.get(name).push(r)
+    })
+    const result = []
+    groups.forEach((recs, name) => {
+      result.push(...recs)
+      const approvedOt = recs
+        .filter((r) => r.status === 'approved')
+        .reduce((s, r) => s + (r.otHours ?? 0), 0)
+      result.push({ _isSummary: true, _name: name, _approvedOt: approvedOt })
+    })
+    return result
+  }, [rawData])
+
+  const employeeCount = useMemo(() => new Set(rawData.map((r) => r.userName)).size, [rawData])
+
+  const periodLabel = !year
+    ? 'Tất cả'
+    : !month
+      ? `Năm ${year}`
+      : `Tháng ${String(month).padStart(2, '0')}/${year}`
+
+  const handleExport = async () => {
+    if (selectedFields.length === 0) {
+      addToast('Chọn ít nhất một trường dữ liệu để xuất', 'warning')
+      return
+    }
+    try {
+      setExporting(true)
+      const nonReq = selectedFields.filter((k) => !OT_EXPORT_FIELDS.find((f) => f.key === k)?.required)
+      const resp = await attendanceApi.exportOvertimeReport({
+        from, to,
+        status: statusFilter  || undefined,
+        userId: employeeFilter || undefined,
+        fields: nonReq.join(','),
+      })
+      const blob = new Blob([resp.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      const pad  = (n) => String(n).padStart(2, '0')
+      a.href     = url
+      a.download = year && month
+        ? `TangCa_T${pad(month)}_${year}.xlsx`
+        : year ? `TangCa_${year}.xlsx` : 'TangCa_TatCa.xlsx'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      addToast('Xuất Excel thành công!', 'success')
+      onClose()
+    } catch {
+      addToast('Xuất Excel thất bại — kiểm tra kết nối server', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const empName = employeeFilter ? (staffList.find((u) => u.id === employeeFilter)?.name ?? null) : null
+
+  return (
+    <div className={sa.exportOverlay}>
+      <div className={sa.exportBackdrop} onClick={onClose} />
+      <div className={sa.exportDialog}>
+
+        <div className={sa.exportHeader}>
+          <Download size={18} className={sa.exportHeaderIcon} />
+          <div className={sa.exportHeaderText}>
+            <div className={sa.exportHeaderTitle}>Xuất dữ liệu tăng ca — {periodLabel}</div>
+            <div className={sa.exportHeaderSub}>
+              {statusFilter ? (_OT_STATUS_VI[statusFilter] ?? statusFilter) : 'Tất cả trạng thái'}
+              {empName ? ` · ${empName}` : ' · Tất cả nhân viên'}
+            </div>
+          </div>
+          <button className={sa.exportCloseBtn} onClick={onClose} title="Đóng"><X size={16} /></button>
+        </div>
+
+        <div className={sa.exportBody}>
+          <div className={sa.exportSidebar}>
+            <div className={sa.exportSidebarTitle}>Chọn trường dữ liệu xuất</div>
+            {fieldGroups.map(([groupName, groupFields]) => (
+              <div key={groupName} className={sa.exportFieldGroup}>
+                <div className={sa.exportFieldGroupLabel}>{groupName}</div>
+                {groupFields.map((f) => (
+                  <label key={f.key} className={sa.exportFieldItem}>
+                    <input
+                      type="checkbox"
+                      checked={selectedFields.includes(f.key)}
+                      onChange={() => toggleField(f.key, f.required)}
+                      disabled={f.required}
+                      className={sa.exportFieldCheckbox}
+                    />
+                    <span className={sa.exportFieldLabel}>{f.label}</span>
+                    {f.required && <span className={sa.exportFieldRequired}>bắt buộc</span>}
+                  </label>
+                ))}
+              </div>
+            ))}
+            <div className={sa.exportSelectAllRow}>
+              <button className={sa.exportSelectAllBtn} onClick={selectAll}>Chọn tất cả</button>
+              <button className={sa.exportSelectAllBtn} onClick={deselectAll}>Bỏ chọn</button>
+            </div>
+          </div>
+
+          <div className={sa.exportPreview}>
+            <div className={sa.exportPreviewHeader}>
+              <span className={sa.exportPreviewTitle}>Xem trước dữ liệu</span>
+              {!loadingPreview && (
+                <span className={sa.exportPreviewCount}>
+                  {rawData.length} bản ghi · {employeeCount} nhân viên
+                </span>
+              )}
+            </div>
+            {loadingPreview ? (
+              <div className={sa.exportPreviewLoading}>
+                <Loader2 size={18} className={s.spin} /> Đang tải dữ liệu...
+              </div>
+            ) : (
+              <div className={sa.exportPreviewWrap}>
+                <table className={sa.exportPreviewTable}>
+                  <thead>
+                    <tr>
+                      <th>STT</th>
+                      {previewCols.map((f) => <th key={f.key}>{f.label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={previewCols.length + 1} className={sa.exportPreviewEmpty}>
+                          Không có dữ liệu
+                        </td>
+                      </tr>
+                    ) : (() => {
+                      let recIdx = 0
+                      return displayRows.map((row, idx) => {
+                        if (row._isSummary) {
+                          return (
+                            <tr key={`sum-${idx}`} className={sa.exportPreviewSummaryRow}>
+                              <td className={sa.exportPreviewSummaryLabel}>∑</td>
+                              {previewCols.map((f) => {
+                                let val = ''
+                                if      (f.key === 'userName') val = `Tổng — ${row._name}`
+                                else if (f.key === 'otHours')  val = `${Number(row._approvedOt).toFixed(1)}h`
+                                return <td key={f.key} className={val ? sa.exportPreviewSummaryValue : ''}>{val}</td>
+                              })}
+                            </tr>
+                          )
+                        }
+                        recIdx++
+                        return (
+                          <tr key={idx}>
+                            <td>{recIdx}</td>
+                            {previewCols.map((f) => <td key={f.key}>{getOtCell(row, f.key)}</td>)}
+                          </tr>
+                        )
+                      })
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className={sa.exportFooter}>
+          <span className={sa.exportFooterInfo}>
+            <span className={sa.exportFooterBold}>{selectedFields.length}</span> trường đã chọn
+            {!loadingPreview && (
+              <> · <span className={sa.exportFooterBold}>{rawData.length}</span> bản ghi
+              {' '}(<span className={sa.exportFooterBold}>{employeeCount}</span> nhân viên) sẽ được xuất</>
+            )}
+          </span>
+          <button className={`${s.btnSecondary} ${s.btnShort}`} onClick={onClose} disabled={exporting}>
+            <X size={13} /> Huỷ
+          </button>
+          <button
+            className={`${s.btnPrimary} ${s.btnShort}`}
+            onClick={handleExport}
+            disabled={exporting || loadingPreview || selectedFields.length === 0}
+          >
+            {exporting
+              ? <><Loader2 size={13} className={s.spin} /> Đang xuất...</>
+              : <><Download size={13} /> Xuất Excel</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── AdminCalendarTab ──────────────────────────────────────────────────────────
 
 function AdminCalendarTab({ year, month, staffList, adminUserId }) {
@@ -2090,6 +2368,7 @@ function AdminOvertimeTab({ staffList }) {
   const [filterMonth,    setFilterMonth]    = useState(_CM)
   const [statusFilter,   setStatusFilter]   = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('')
+  const [exportOpen,     setExportOpen]     = useState(false)
 
   // Derive available years from actual data in the system
   useEffect(() => {
@@ -2164,6 +2443,9 @@ function AdminOvertimeTab({ staffList }) {
           <option value="">Tất cả nhân viên</option>
           {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
+        <button className={`${s.btnPrimary} ${s.btnShort}`} onClick={() => setExportOpen(true)}>
+          <Download size={13} /> Xuất Excel
+        </button>
       </div>
 
       <div className={s.section}>
@@ -2266,6 +2548,17 @@ function AdminOvertimeTab({ staffList }) {
           request={reviewTarget}
           onClose={() => setReviewTarget(null)}
           onSaved={() => { setReviewTarget(null); load() }}
+        />
+      )}
+
+      {exportOpen && (
+        <OvertimeExportModal
+          year={filterYear}
+          month={filterMonth}
+          statusFilter={statusFilter}
+          employeeFilter={employeeFilter}
+          staffList={staffList}
+          onClose={() => setExportOpen(false)}
         />
       )}
     </>
