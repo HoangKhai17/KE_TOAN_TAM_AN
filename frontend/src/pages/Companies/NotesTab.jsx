@@ -1,12 +1,34 @@
 import { useState, useEffect, useRef } from 'react'
+import ReactQuill from 'react-quill-new'
+import 'react-quill-new/dist/quill.snow.css'
 import {
   StickyNote, Plus, Pencil, Trash2, Pin, PinOff,
   Loader2, Check, X,
 } from 'lucide-react'
+import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import s from './companies.module.css'
+
+// ── Quill config ───────────────────────────────────────────────────────────────
+
+const QUILL_MODULES = {
+  toolbar: [
+    [{ header: [1, 2, false] }],
+    ['bold', 'italic', 'underline'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['link', 'clean'],
+  ],
+}
+const QUILL_FORMATS = ['header', 'bold', 'italic', 'underline', 'list', 'bullet', 'link']
+
+const CLAMP_PX = 130
+
+function isHtmlEmpty(html) {
+  if (!html) return true
+  return !html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
+}
 
 function fmtDateTime(iso) {
   if (!iso) return '—'
@@ -22,11 +44,80 @@ function getInitials(name) {
   return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase()
 }
 
-// ── NoteCard ──────────────────────────────────────────────────────────────────
+// ── NoteEditorModal ────────────────────────────────────────────────────────────
+
+function NoteEditorModal({ initialNote, onSave, onClose }) {
+  const isEdit = !!initialNote
+  const [html, setHtml]     = useState(initialNote?.content ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    if (isHtmlEmpty(html)) return
+    setSaving(true)
+    try {
+      await onSave(html)
+    } catch {
+      // error already toasted by caller
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      title={isEdit ? 'Chỉnh sửa ghi chú' : 'Thêm ghi chú nội bộ'}
+      onClose={onClose}
+      wide
+    >
+      <div className={s.noteEditorModalBody}>
+        <div className={s.noteEditorWrap}>
+          <ReactQuill
+            value={html}
+            onChange={setHtml}
+            modules={QUILL_MODULES}
+            formats={QUILL_FORMATS}
+            placeholder="Nhập nội dung ghi chú..."
+            theme="snow"
+          />
+        </div>
+        <div className={s.noteEditorModalFooter}>
+          <button className={s.btnOutline} onClick={onClose} disabled={saving}>
+            Huỷ
+          </button>
+          <button
+            className={s.btnNavy}
+            onClick={handleSave}
+            disabled={saving || isHtmlEmpty(html)}
+          >
+            {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />}
+            {isEdit ? 'Cập nhật' : 'Lưu ghi chú'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ── NoteCard ───────────────────────────────────────────────────────────────────
 
 function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [expanded, setExpanded]           = useState(false)
+  const [overflows, setOverflows]         = useState(false)
+  const contentRef = useRef(null)
   const canEdit = note.createdBy === currentUserId || isAdmin
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+    setOverflows(el.scrollHeight > CLAMP_PX + 4)
+  }, [note.content])
+
+  // Backward compat: old records are plain text (no HTML tags)
+  const isHtml = /<[a-z][\s\S]*>/i.test(note.content)
+  const displayHtml = isHtml
+    ? note.content
+    : `<p>${note.content.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`
 
   return (
     <div className={`${s.noteCard} ${note.isPinned ? s.noteCardPinned : ''}`}>
@@ -37,14 +128,25 @@ function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin 
       )}
 
       <div className={s.noteCardBody}>
-        <p className={s.noteContent}>{note.content}</p>
+        <div
+          ref={contentRef}
+          className={`${s.noteHtmlContent} ${!expanded ? s.noteContentClamped : ''}`}
+          dangerouslySetInnerHTML={{ __html: displayHtml }}
+        />
+        {(overflows || expanded) && (
+          <button className={s.noteExpandBtn} onClick={() => setExpanded((v) => !v)}>
+            {expanded ? 'Thu gọn ▴' : 'Xem thêm ▾'}
+          </button>
+        )}
       </div>
 
       <div className={s.noteCardFooter}>
         <div className={s.noteAuthorRow}>
           <div className={s.noteAvatar}>{getInitials(note.authorName)}</div>
           <span className={s.noteAuthorName}>{note.authorName}</span>
-          <span className={s.noteTime}>{fmtDateTime(note.updatedAt !== note.createdAt ? note.updatedAt : note.createdAt)}</span>
+          <span className={s.noteTime}>
+            {fmtDateTime(note.updatedAt !== note.createdAt ? note.updatedAt : note.createdAt)}
+          </span>
           {note.updatedAt !== note.createdAt && <span className={s.noteEdited}>(đã sửa)</span>}
         </div>
 
@@ -53,7 +155,11 @@ function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin 
             {confirmDelete ? (
               <>
                 <span className={s.noteConfirmText}>Xoá?</span>
-                <button className={`${s.noteActionBtn} ${s.noteActionBtnDanger}`} onClick={() => onDelete(note.id)} title="Xác nhận xoá">
+                <button
+                  className={`${s.noteActionBtn} ${s.noteActionBtnDanger}`}
+                  onClick={() => onDelete(note.id)}
+                  title="Xác nhận xoá"
+                >
                   <Check size={11} />
                 </button>
                 <button className={s.noteActionBtn} onClick={() => setConfirmDelete(false)} title="Huỷ">
@@ -69,7 +175,11 @@ function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin 
                 >
                   {note.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
                 </button>
-                <button className={`${s.noteActionBtn} ${s.noteActionBtnEdit}`} onClick={() => onEdit(note)} title="Chỉnh sửa">
+                <button
+                  className={`${s.noteActionBtn} ${s.noteActionBtnEdit}`}
+                  onClick={() => onEdit(note)}
+                  title="Chỉnh sửa"
+                >
                   <Pencil size={12} />
                 </button>
                 <button
@@ -88,48 +198,7 @@ function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin 
   )
 }
 
-// ── EditForm (inline) ─────────────────────────────────────────────────────────
-
-function EditForm({ initial, onSave, onCancel }) {
-  const [text, setText]       = useState(initial.content)
-  const [saving, setSaving]   = useState(false)
-  const textareaRef           = useRef(null)
-
-  useEffect(() => {
-    textareaRef.current?.focus()
-    textareaRef.current?.setSelectionRange(text.length, text.length)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function handleSave() {
-    if (!text.trim()) return
-    setSaving(true)
-    try { await onSave(initial.id, text) } finally { setSaving(false) }
-  }
-
-  return (
-    <div className={s.noteEditForm}>
-      <textarea
-        ref={textareaRef}
-        className={s.noteTextarea}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={4}
-        onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
-      />
-      <div className={s.noteEditActions}>
-        <button className={s.btnNavy} style={{ height: 30, fontSize: 12, padding: '0 12px' }} onClick={handleSave} disabled={saving || !text.trim()}>
-          {saving ? <Loader2 size={12} className={s.spin} /> : <Check size={12} />}
-          Lưu
-        </button>
-        <button className={s.btnOutline} style={{ height: 30, fontSize: 12 }} onClick={onCancel} disabled={saving}>
-          Huỷ
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── Main NotesTab ─────────────────────────────────────────────────────────────
+// ── Main NotesTab ──────────────────────────────────────────────────────────────
 
 export default function NotesTab({ company, onNoteCountChange }) {
   const companyId   = company.id
@@ -137,13 +206,10 @@ export default function NotesTab({ company, onNoteCountChange }) {
   const isAdmin     = currentUser?.role === 'admin'
   const addToast    = useToastStore((st) => st.toast)
 
-  const [notes,     setNotes]     = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [newText,   setNewText]   = useState('')
-  const [adding,    setAdding]    = useState(false)
-  const [showAdd,   setShowAdd]   = useState(false)
-  const [editNote,  setEditNote]  = useState(null)  // note object being edited
-  const newTextareaRef            = useRef(null)
+  const [notes,       setNotes]       = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [showAdd,     setShowAdd]     = useState(false)
+  const [editTarget,  setEditTarget]  = useState(null)  // note object being edited
 
   useEffect(() => { onNoteCountChange?.(notes.length) }, [notes.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -161,34 +227,27 @@ export default function NotesTab({ company, onNoteCountChange }) {
 
   useEffect(() => { load() }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (showAdd) newTextareaRef.current?.focus()
-  }, [showAdd])
-
-  async function handleAdd() {
-    if (!newText.trim()) return
-    setAdding(true)
+  async function handleAdd(html) {
     try {
-      const note = await companiesApi.createNote(companyId, { content: newText.trim() })
+      const note = await companiesApi.createNote(companyId, { content: html })
       setNotes((prev) => [note, ...prev])
-      setNewText('')
       setShowAdd(false)
       addToast('Đã thêm ghi chú', 'success')
     } catch {
       addToast('Không thể thêm ghi chú', 'error')
-    } finally {
-      setAdding(false)
+      throw new Error('failed')
     }
   }
 
-  async function handleEdit(noteId, content) {
+  async function handleEdit(html) {
     try {
-      const updated = await companiesApi.updateNote(companyId, noteId, { content })
-      setNotes((prev) => prev.map((n) => n.id === noteId ? { ...n, ...updated } : n))
-      setEditNote(null)
+      const updated = await companiesApi.updateNote(companyId, editTarget.id, { content: html })
+      setNotes((prev) => prev.map((n) => n.id === editTarget.id ? { ...n, ...updated } : n))
+      setEditTarget(null)
       addToast('Đã cập nhật ghi chú', 'success')
     } catch {
       addToast('Không thể cập nhật ghi chú', 'error')
+      throw new Error('failed')
     }
   }
 
@@ -216,7 +275,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
 
   return (
     <div>
-      {/* Header row */}
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <StickyNote size={16} style={{ color: '#d97706' }} />
@@ -232,35 +291,11 @@ export default function NotesTab({ company, onNoteCountChange }) {
         <button
           className={s.btnNavy}
           style={{ height: 32, fontSize: 13, padding: '0 14px' }}
-          onClick={() => { setShowAdd((v) => !v); setNewText('') }}
+          onClick={() => setShowAdd(true)}
         >
           <Plus size={13} /> Thêm ghi chú
         </button>
       </div>
-
-      {/* Add note form */}
-      {showAdd && (
-        <div className={s.noteAddPanel}>
-          <textarea
-            ref={newTextareaRef}
-            className={s.noteTextarea}
-            value={newText}
-            onChange={(e) => setNewText(e.target.value)}
-            placeholder="Nhập nội dung ghi chú..."
-            rows={4}
-            onKeyDown={(e) => { if (e.key === 'Escape') { setShowAdd(false); setNewText('') } }}
-          />
-          <div className={s.noteEditActions}>
-            <button className={s.btnNavy} style={{ height: 30, fontSize: 12, padding: '0 14px' }} onClick={handleAdd} disabled={adding || !newText.trim()}>
-              {adding ? <Loader2 size={12} className={s.spin} /> : <Check size={12} />}
-              Lưu ghi chú
-            </button>
-            <button className={s.btnOutline} style={{ height: 30, fontSize: 12 }} onClick={() => { setShowAdd(false); setNewText('') }} disabled={adding}>
-              Huỷ
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Notes list */}
       {loading ? (
@@ -271,31 +306,41 @@ export default function NotesTab({ company, onNoteCountChange }) {
         <div className={s.emptyState} style={{ paddingTop: 40 }}>
           <StickyNote size={32} style={{ color: '#fcd34d', marginBottom: 8 }} />
           <p style={{ fontSize: 13, color: 'var(--color-muted)', margin: 0 }}>Chưa có ghi chú nào.</p>
-          <p style={{ fontSize: 12, color: 'var(--color-muted)', margin: '4px 0 0' }}>Nhấn "Thêm ghi chú" để tạo ghi chú đầu tiên.</p>
+          <p style={{ fontSize: 12, color: 'var(--color-muted)', margin: '4px 0 0' }}>
+            Nhấn "Thêm ghi chú" để tạo ghi chú đầu tiên.
+          </p>
         </div>
       ) : (
         <div className={s.noteList}>
           {notes.map((note) => (
-            editNote?.id === note.id ? (
-              <EditForm
-                key={note.id}
-                initial={note}
-                onSave={handleEdit}
-                onCancel={() => setEditNote(null)}
-              />
-            ) : (
-              <NoteCard
-                key={note.id}
-                note={note}
-                currentUserId={currentUser?.id}
-                isAdmin={isAdmin}
-                onEdit={setEditNote}
-                onDelete={handleDelete}
-                onTogglePin={handleTogglePin}
-              />
-            )
+            <NoteCard
+              key={note.id}
+              note={note}
+              currentUserId={currentUser?.id}
+              isAdmin={isAdmin}
+              onEdit={setEditTarget}
+              onDelete={handleDelete}
+              onTogglePin={handleTogglePin}
+            />
           ))}
         </div>
+      )}
+
+      {/* Add modal */}
+      {showAdd && (
+        <NoteEditorModal
+          onSave={handleAdd}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+
+      {/* Edit modal */}
+      {editTarget && (
+        <NoteEditorModal
+          initialNote={editTarget}
+          onSave={handleEdit}
+          onClose={() => setEditTarget(null)}
+        />
       )}
     </div>
   )

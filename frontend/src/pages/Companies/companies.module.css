@@ -3103,6 +3103,108 @@
   margin-bottom: 10px;
 }
 
+/* HTML content rendered from Quill (replaces old plain-text .noteContent) */
+.noteHtmlContent {
+  font-size: 13.5px;
+  color: #1e293b;
+  line-height: 1.65;
+  word-break: break-word;
+  overflow: hidden;
+}
+
+.noteHtmlContent p   { margin: 0 0 6px; }
+.noteHtmlContent p:last-child { margin-bottom: 0; }
+.noteHtmlContent ul,
+.noteHtmlContent ol  { margin: 4px 0 6px; padding-left: 22px; }
+.noteHtmlContent li  { margin-bottom: 2px; }
+.noteHtmlContent h1  { font-size: 16px; font-weight: 700; margin: 0 0 6px; }
+.noteHtmlContent h2  { font-size: 14.5px; font-weight: 700; margin: 0 0 6px; }
+.noteHtmlContent a   { color: var(--color-primary); text-decoration: underline; }
+.noteHtmlContent strong { font-weight: 700; }
+
+.noteContentClamped {
+  max-height: 130px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+}
+
+.noteExpandBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  padding: 0;
+}
+.noteExpandBtn:hover { text-decoration: underline; }
+
+/* Note editor modal layout */
+.noteEditorModalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.noteEditorModalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.noteEditorWrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.noteEditorWrap :global(.ql-toolbar) {
+  border-radius: 8px 8px 0 0;
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  padding: 6px 10px;
+}
+
+.noteEditorWrap :global(.ql-container) {
+  border-radius: 0 0 8px 8px;
+  border-color: #e2e8f0;
+  font-family: inherit;
+  font-size: 13.5px;
+  height: calc(88vh - 260px);
+  overflow-y: auto;
+}
+
+.noteEditorWrap :global(.ql-editor) {
+  color: #1e293b;
+  line-height: 1.65;
+  min-height: 100%;
+}
+
+.noteEditorWrap :global(.ql-editor.ql-blank::before) {
+  color: #94a3b8;
+  font-style: normal;
+  font-size: 13.5px;
+}
+
+.noteEditorWrap :global(.ql-toolbar button:hover),
+.noteEditorWrap :global(.ql-toolbar button.ql-active) {
+  color: #d97706;
+}
+
+.noteEditorWrap :global(.ql-toolbar .ql-stroke) { stroke: currentColor; }
+.noteEditorWrap :global(.ql-toolbar button:hover .ql-stroke),
+.noteEditorWrap :global(.ql-toolbar button.ql-active .ql-stroke) { stroke: #d97706; }
+.noteEditorWrap :global(.ql-toolbar button:hover .ql-fill),
+.noteEditorWrap :global(.ql-toolbar button.ql-active .ql-fill) { fill: #d97706; }
+
+/* Keep old .noteContent for any other usages */
 .noteContent {
   font-size: 13.5px;
   color: #1e293b;
