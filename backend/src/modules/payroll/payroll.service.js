@@ -272,7 +272,136 @@ async function deleteRecord(periodId, recordId, actorId) {
   await query('DELETE FROM payroll_records WHERE id = $1', [recordId])
 }
 
-// --- Excel Export ---
+// --- Excel Export (custom fields) ---
+
+async function exportExcelCustom(periodId, { fields = [], includeDetailSheet = false, splitItemCols = false }, res) {
+  const { rows: [period] } = await query('SELECT * FROM payroll_periods WHERE id = $1', [periodId])
+  if (!period) throw Object.assign(new Error('Payroll period not found'), { status: 404 })
+
+  const { rows: records } = await query(
+    `SELECT pr.*, u.name AS user_name
+     FROM payroll_records pr
+     JOIN users u ON u.id = pr.user_id
+     WHERE pr.payroll_period_id = $1
+     ORDER BY u.name`,
+    [periodId]
+  )
+
+  const ALL_COLS = {
+    stt:             { header: 'STT',            width: 6,  isIndex: true },
+    user_name:       { header: 'Họ tên',         width: 25 },
+    base_salary:     { header: 'Lương cơ bản',   width: 16, currency: true },
+    allowances:      { header: 'Tổng phụ cấp',   width: 16, currency: true },
+    bonus:           { header: 'Tổng thưởng',    width: 16, currency: true },
+    gross_income:    { header: 'Tổng thu nhập',  width: 16, currency: true },
+    bhxh_employee:   { header: 'BHXH NV',        width: 14, currency: true },
+    bhyt_employee:   { header: 'BHYT NV',        width: 14, currency: true },
+    bhtn_employee:   { header: 'BHTN NV',        width: 14, currency: true },
+    bhxh_employer:   { header: 'BHXH CT',        width: 14, currency: true },
+    bhyt_employer:   { header: 'BHYT CT',        width: 14, currency: true },
+    bhtn_employer:   { header: 'BHTN CT',        width: 14, currency: true },
+    pit_deduction:   { header: 'Thuế TNCN',      width: 14, currency: true },
+    other_deductions:{ header: 'Khấu trừ khác',  width: 15, currency: true },
+    net_salary:      { header: 'Thực nhận',      width: 16, currency: true },
+    notes:           { header: 'Ghi chú',        width: 30 },
+  }
+
+  const ORDERED_KEYS = Object.keys(ALL_COLS)
+  const selected = (fields.length > 0 ? fields.filter((k) => ALL_COLS[k]) : ORDERED_KEYS)
+    .map((k) => ({ key: k, ...ALL_COLS[k] }))
+
+  // Build dynamic item columns when splitItemCols is requested
+  const dynCols = []
+  if (splitItemCols) {
+    const seenA = new Set(), seenB = new Set()
+    records.forEach((r) => {
+      const comp = r.components ?? {}
+      ;(comp.allowanceItems ?? []).forEach((i) => {
+        if (i.name && !seenA.has(i.name)) { seenA.add(i.name) }
+      })
+      ;(comp.bonusItems ?? []).forEach((i) => {
+        if (i.name && !seenB.has(i.name)) { seenB.add(i.name) }
+      })
+    })
+    seenA.forEach((name) => dynCols.push({ key: `__pc__${name}`, header: `PC: ${name}`, width: 16, currency: true, dynType: 'allowance', dynName: name }))
+    seenB.forEach((name) => dynCols.push({ key: `__th__${name}`, header: `TH: ${name}`, width: 16, currency: true, dynType: 'bonus',     dynName: name }))
+  }
+
+  const allCols = [...selected, ...dynCols]
+
+  const workbook = new ExcelJS.Workbook()
+  const sheet    = workbook.addWorksheet(`Lương T${period.period_month} ${period.period_year}`)
+  sheet.columns  = allCols.map((c) => ({ header: c.header, key: c.key, width: c.width }))
+
+  const hRow = sheet.getRow(1)
+  hRow.font      = { bold: true, color: { argb: 'FFFFFFFF' } }
+  hRow.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } }
+  hRow.alignment = { vertical: 'middle' }
+  hRow.height    = 22
+
+  records.forEach((r, idx) => {
+    const comp = r.components ?? {}
+    const rowData = {}
+    allCols.forEach((col) => {
+      if (col.isIndex) {
+        rowData[col.key] = idx + 1
+      } else if (col.dynType) {
+        const items = col.dynType === 'allowance' ? (comp.allowanceItems ?? []) : (comp.bonusItems ?? [])
+        const found = items.find((i) => i.name === col.dynName)
+        rowData[col.key] = found ? Number(found.amount ?? 0) : 0
+      } else {
+        rowData[col.key] = col.currency ? Number(r[col.key] ?? 0) : (r[col.key] ?? '')
+      }
+    })
+    const row = sheet.addRow(rowData)
+    row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: idx % 2 === 0 ? 'FFF0F4FF' : 'FFFFFFFF' } }
+    allCols.forEach((col, ci) => { if (col.currency) row.getCell(ci + 1).numFmt = '#,##0' })
+  })
+
+  if (includeDetailSheet) {
+    const dSheet = workbook.addWorksheet('Chi tiết phụ cấp & thưởng')
+    dSheet.columns = [
+      { header: 'STT',            key: 'stt',      width: 6  },
+      { header: 'Nhân viên',      key: 'name',     width: 25 },
+      { header: 'Loại',           key: 'category', width: 12 },
+      { header: 'Tên khoản',      key: 'item_name',width: 25 },
+      { header: 'Dự án / Nguồn',  key: 'project',  width: 22 },
+      { header: 'Số tiền (VND)',   key: 'amount',   width: 16 },
+      { header: 'Ghi chú',        key: 'note',     width: 25 },
+    ]
+    const dhRow = dSheet.getRow(1)
+    dhRow.font      = { bold: true, color: { argb: 'FFFFFFFF' } }
+    dhRow.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } }
+    dhRow.alignment = { vertical: 'middle' }
+    dhRow.height    = 22
+
+    let stt = 0
+    records.forEach((r) => {
+      const comp = r.components ?? {}
+      const items = [
+        ...(comp.allowanceItems ?? []).map((i) => ({ ...i, category: 'Phụ cấp' })),
+        ...(comp.bonusItems     ?? []).map((i) => ({ ...i, category: 'Thưởng'  })),
+      ]
+      items.forEach((item) => {
+        stt++
+        const row = dSheet.addRow({
+          stt, name: r.user_name, category: item.category,
+          item_name: item.name, project: item.project ?? '',
+          amount: Number(item.amount ?? 0), note: item.note ?? '',
+        })
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: stt % 2 === 0 ? 'FFF0F4FF' : 'FFFFFFFF' } }
+        row.getCell('amount').numFmt = '#,##0'
+      })
+    })
+  }
+
+  const filename = `BangLuong_T${String(period.period_month).padStart(2, '0')}_${period.period_year}.xlsx`
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  await workbook.xlsx.write(res)
+}
+
+// --- Excel Export (legacy, all columns) ---
 
 async function exportExcel(periodId, res) {
   const { rows: [period] } = await query('SELECT * FROM payroll_periods WHERE id = $1', [periodId])
@@ -403,5 +532,5 @@ module.exports = {
   listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod,
   confirmPeriod, markPaid,
   listRecords, upsertRecord, deleteRecord,
-  exportExcel, sendPayrollEmails,
+  exportExcel, exportExcelCustom, sendPayrollEmails,
 }

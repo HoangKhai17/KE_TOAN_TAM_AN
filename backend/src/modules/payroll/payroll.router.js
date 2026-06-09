@@ -159,8 +159,9 @@ router.post('/:id/mark-paid', ...admin, ctrl.markPaid)
  *               format: binary
  *       404: { description: Period not found }
  */
-router.get('/:id/export',       ...admin, ctrl.exportExcel)
-router.post('/:id/send-emails', ...admin, ctrl.sendPayrollEmails)
+router.get('/:id/export',        ...admin, ctrl.exportExcel)
+router.get('/:id/export-custom', ...admin, ctrl.exportExcelCustom)
+router.post('/:id/send-emails',  ...admin, ctrl.sendPayrollEmails)
 
 /**
  * @openapi

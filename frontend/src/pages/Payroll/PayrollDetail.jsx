@@ -34,6 +34,186 @@ function calcNet(rec) {
   return earn - deduct
 }
 
+// ── PayrollExportModal ────────────────────────────────────────────────────────
+
+const _ORDERED_FIELDS = [
+  'stt','user_name','base_salary','allowances','bonus','gross_income',
+  'bhxh_employee','bhyt_employee','bhtn_employee',
+  'bhxh_employer','bhyt_employer','bhtn_employer',
+  'pit_deduction','other_deductions','net_salary','notes',
+]
+const _DEFAULT_EXPORT_FIELDS = new Set([
+  'stt','user_name','base_salary','allowances','bonus','gross_income',
+  'bhxh_employee','pit_deduction','other_deductions','net_salary',
+])
+const _EXPORT_GROUPS = [
+  { label: 'Thông tin',           fields: [{ key:'stt',label:'STT' },{ key:'user_name',label:'Họ tên' }] },
+  { label: 'Thu nhập',            fields: [{ key:'base_salary',label:'Lương cơ bản' },{ key:'allowances',label:'Tổng phụ cấp' },{ key:'bonus',label:'Tổng thưởng' },{ key:'gross_income',label:'Tổng thu nhập' }] },
+  { label: 'Khấu trừ nhân viên',  fields: [{ key:'bhxh_employee',label:'BHXH nhân viên' },{ key:'bhyt_employee',label:'BHYT nhân viên' },{ key:'bhtn_employee',label:'BHTN nhân viên' }] },
+  { label: 'Đóng góp công ty',    fields: [{ key:'bhxh_employer',label:'BHXH công ty' },{ key:'bhyt_employer',label:'BHYT công ty' },{ key:'bhtn_employer',label:'BHTN công ty' }] },
+  { label: 'Thanh toán',          fields: [{ key:'pit_deduction',label:'Thuế TNCN' },{ key:'other_deductions',label:'Khấu trừ khác' },{ key:'net_salary',label:'Thực nhận' },{ key:'notes',label:'Ghi chú' }] },
+]
+const _EXPORT_HDR = {
+  stt:'STT', user_name:'Họ tên', base_salary:'Lương CB', allowances:'Tổng phụ cấp',
+  bonus:'Tổng thưởng', gross_income:'Tổng TN', bhxh_employee:'BHXH NV', bhyt_employee:'BHYT NV',
+  bhtn_employee:'BHTN NV', bhxh_employer:'BHXH CT', bhyt_employer:'BHYT CT', bhtn_employer:'BHTN CT',
+  pit_deduction:'TNCN', other_deductions:'KT khác', net_salary:'Thực nhận', notes:'Ghi chú',
+}
+const _EXPORT_DTO = {
+  user_name:'userName', base_salary:'baseSalary', allowances:'allowances', bonus:'bonus',
+  gross_income:'grossIncome', bhxh_employee:'bhxhEmployee', bhyt_employee:'bhytEmployee',
+  bhtn_employee:'bhtnEmployee', bhxh_employer:'bhxhEmployer', bhyt_employer:'bhytEmployer',
+  bhtn_employer:'bhtnEmployer', pit_deduction:'pitDeduction', other_deductions:'otherDeductions',
+  net_salary:'netSalary', notes:'notes',
+}
+const _EXPORT_CURRENCY = new Set([
+  'base_salary','allowances','bonus','gross_income','bhxh_employee','bhyt_employee','bhtn_employee',
+  'bhxh_employer','bhyt_employer','bhtn_employer','pit_deduction','other_deductions','net_salary',
+])
+function _exportCell(rec, key, idx) {
+  if (key === 'stt') return idx + 1
+  const v = _EXPORT_DTO[key] ? rec[_EXPORT_DTO[key]] : null
+  return _EXPORT_CURRENCY.has(key) ? fmtVND(v) : (v ?? '—')
+}
+
+function PayrollExportModal({ period, records, onClose }) {
+  const addToast   = useToastStore((st) => st.toast)
+  const [sel, setSel]               = useState(new Set(_DEFAULT_EXPORT_FIELDS))
+  const [includeDetail, setDetail]  = useState(true)
+  const [splitCols, setSplitCols]   = useState(true)
+  const [exporting, setExporting]   = useState(false)
+
+  function toggle(key) {
+    setSel((p) => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+  function toggleGroup(fields) {
+    const allOn = fields.every((f) => sel.has(f.key))
+    setSel((p) => {
+      const n = new Set(p)
+      fields.forEach((f) => allOn ? n.delete(f.key) : n.add(f.key))
+      return n
+    })
+  }
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const fields = _ORDERED_FIELDS.filter((k) => sel.has(k)).join(',')
+      const res = await payrollApi.exportExcelCustom(period.id, {
+        fields,
+        detail_items:    includeDetail ? 'true' : 'false',
+        split_item_cols: splitCols     ? 'true' : 'false',
+      })
+      const url  = window.URL.createObjectURL(new Blob([res.data]))
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `BangLuong_T${String(period.periodMonth).padStart(2,'0')}_${period.periodYear}.xlsx`
+      document.body.appendChild(a); a.click(); a.remove()
+      window.URL.revokeObjectURL(url)
+      onClose()
+    } catch {
+      addToast('Không thể xuất Excel', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const orderedSel   = _ORDERED_FIELDS.filter((k) => sel.has(k))
+  const previewRecs  = records.slice(0, 8)
+
+  return (
+    <Modal
+      title={`Xuất Excel — Bảng lương tháng ${period.periodMonth}/${period.periodYear}`}
+      onClose={onClose}
+      wide
+    >
+      <div className={s.modalForm}>
+        <div className={s.exportModalBody}>
+          {/* Sidebar: field selection */}
+          <div className={s.exportSidebar}>
+            <p className={s.exportSidebarTitle}>Chọn cột xuất</p>
+            {_EXPORT_GROUPS.map((group) => (
+              <div key={group.label} className={s.exportGroup}>
+                <label className={s.exportGroupLabel}>
+                  <input
+                    type="checkbox"
+                    checked={group.fields.every((f) => sel.has(f.key))}
+                    onChange={() => toggleGroup(group.fields)}
+                  />
+                  {group.label}
+                </label>
+                {group.fields.map((f) => (
+                  <label key={f.key} className={s.exportFieldItem}>
+                    <input type="checkbox" checked={sel.has(f.key)} onChange={() => toggle(f.key)} />
+                    {f.label}
+                  </label>
+                ))}
+              </div>
+            ))}
+            <div className={s.exportDetailOption}>
+              <label className={s.exportFieldItem}>
+                <input type="checkbox" checked={splitCols} onChange={(e) => setSplitCols(e.target.checked)} />
+                Tách phụ cấp/thưởng thành cột riêng
+              </label>
+              <label className={s.exportFieldItem}>
+                <input type="checkbox" checked={includeDetail} onChange={(e) => setDetail(e.target.checked)} />
+                Sheet chi tiết phụ cấp / thưởng
+              </label>
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div className={s.exportPreviewPane}>
+            <p className={s.exportPreviewTitle}>Xem trước ({records.length} nhân viên)</p>
+            <div className={s.exportPreviewWrap}>
+              {orderedSel.length === 0 ? (
+                <p className={s.exportPreviewEmpty}>Chưa chọn cột nào.</p>
+              ) : (
+                <table className={`${s.table} ${s.exportPreviewTable}`}>
+                  <thead>
+                    <tr>{orderedSel.map((k) => <th key={k}>{_EXPORT_HDR[k]}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {previewRecs.map((rec, idx) => (
+                      <tr key={rec.id}>
+                        {orderedSel.map((k) => (
+                          <td key={k} className={_EXPORT_CURRENCY.has(k) ? s.moneyCol : ''}>
+                            {_exportCell(rec, k, idx)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className={s.exportFooter}>
+          <span className={s.exportCount}>
+            {sel.size} cột · {records.length} nhân viên
+            {splitCols    && ' · +cột PC/TH'}
+            {includeDetail && ' · +sheet chi tiết'}
+          </span>
+          <div className={s.modalActions}>
+            <button type="button" onClick={onClose} className={s.btnSecondary} disabled={exporting}>Huỷ</button>
+            <button
+              type="button" className={s.btnPrimary}
+              onClick={handleExport}
+              disabled={exporting || sel.size === 0}
+            >
+              {exporting
+                ? <><Loader2 size={13} className={s.spin} /> Đang xuất...</>
+                : <><Download size={13} /> Xuất Excel</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ── AllowanceItemsEditor ──────────────────────────────────────────────────────
 
 function AllowanceItemsEditor({ label, items, onChange }) {
@@ -323,10 +503,10 @@ export default function PayrollDetail() {
   const [showUpsert, setShowUpsert] = useState(false)
   const [editRecord, setEditRecord] = useState(null)
   const [deleteRecord, setDeleteRecord] = useState(null)
-  const [confirming, setConfirming] = useState(false)
-  const [markingPaid, setMarkingPaid] = useState(false)
-  const [exporting, setExporting]   = useState(false)
-  const [sendingMail, setSendingMail] = useState(false)
+  const [confirming, setConfirming]     = useState(false)
+  const [markingPaid, setMarkingPaid]   = useState(false)
+  const [showExport, setShowExport]     = useState(false)
+  const [sendingMail, setSendingMail]   = useState(false)
   const [mailResult, setMailResult]   = useState(null)
 
   useEffect(() => {
@@ -385,25 +565,6 @@ export default function PayrollDetail() {
       addToast('Gửi email thất bại — kiểm tra cấu hình SMTP', 'error')
     } finally {
       setSendingMail(false)
-    }
-  }
-
-  async function handleExport() {
-    setExporting(true)
-    try {
-      const response = await payrollApi.exportExcel(id)
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `bang-luong-${period.periodMonth}-${period.periodYear}.xlsx`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
-    } catch {
-      addToast('Không thể xuất Excel', 'error')
-    } finally {
-      setExporting(false)
     }
   }
 
@@ -508,9 +669,8 @@ export default function PayrollDetail() {
                   {markingPaid ? 'Đang cập nhật...' : 'Đánh dấu đã thanh toán'}
                 </button>
               )}
-              <button className={s.btnSecondary} onClick={handleExport} disabled={exporting}>
-                {exporting ? <Loader2 size={13} className={s.spin} /> : <Download size={13} />}
-                {exporting ? 'Đang xuất...' : 'Xuất Excel'}
+              <button className={s.btnSecondary} onClick={() => setShowExport(true)} disabled={records.length === 0}>
+                <Download size={13} /> Xuất Excel
               </button>
               <button
                 className={s.btnPrimary}
@@ -599,6 +759,13 @@ export default function PayrollDetail() {
         </div>
 
         {/* Modals */}
+        {showExport && period && (
+          <PayrollExportModal
+            period={period}
+            records={records}
+            onClose={() => setShowExport(false)}
+          />
+        )}
         {showUpsert && (
           <UpsertRecordModal
             periodId={id}

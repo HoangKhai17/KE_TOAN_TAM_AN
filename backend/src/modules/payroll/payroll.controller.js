@@ -87,6 +87,16 @@ async function exportExcel(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function exportExcelCustom(req, res, next) {
+  try {
+    const { fields = '', detail_items = 'false', split_item_cols = 'false' } = req.query
+    const fieldList          = fields ? fields.split(',').filter(Boolean) : []
+    const includeDetailSheet = detail_items    === 'true'
+    const splitItemCols      = split_item_cols === 'true'
+    await svc.exportExcelCustom(req.params.id, { fields: fieldList, includeDetailSheet, splitItemCols }, res)
+  } catch (err) { next(err) }
+}
+
 async function sendPayrollEmails(req, res, next) {
   try {
     const result = await svc.sendPayrollEmails(req.params.id)
@@ -96,5 +106,5 @@ async function sendPayrollEmails(req, res, next) {
 
 module.exports = {
   listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod, confirmPeriod, markPaid,
-  listRecords, upsertRecord, deleteRecord, exportExcel, sendPayrollEmails,
+  listRecords, upsertRecord, deleteRecord, exportExcel, exportExcelCustom, sendPayrollEmails,
 }

@@ -40,6 +40,10 @@ export async function exportExcel(id) {
   return response
 }
 
+export async function exportExcelCustom(id, params) {
+  return api.get(`/payroll/${id}/export-custom`, { params, responseType: 'blob' })
+}
+
 export async function listRecords(id) {
   const { data } = await api.get(`/payroll/${id}/records`)
   return data.data.records
