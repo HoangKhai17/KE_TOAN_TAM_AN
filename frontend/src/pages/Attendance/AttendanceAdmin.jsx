@@ -2103,6 +2103,281 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
 
 // ── MonthlyTab ────────────────────────────────────────────────────────────────
 
+// ── LeaveExportModal — field-selectable leave xlsx export ────────────────────
+
+const LEAVE_EXPORT_FIELDS = [
+  { key: 'userName',      label: 'Họ tên',          required: true, group: 'Nhân viên' },
+  { key: 'leaveType',     label: 'Loại nghỉ',       required: true, group: 'Nghỉ phép' },
+  { key: 'startDate',     label: 'Ngày bắt đầu',                   group: 'Thời gian' },
+  { key: 'endDate',       label: 'Ngày kết thúc',                  group: 'Thời gian' },
+  { key: 'totalDays',     label: 'Số ngày',                        group: 'Thời gian' },
+  { key: 'statusLabel',   label: 'Trạng thái',                     group: 'Trạng thái' },
+  { key: 'reason',        label: 'Lý do',                          group: 'Thông tin thêm' },
+  { key: 'approvalNote',  label: 'Ghi chú duyệt',                  group: 'Thông tin thêm' },
+  { key: 'rejectionNote', label: 'Lý do từ chối',                  group: 'Thông tin thêm' },
+  { key: 'approverName',  label: 'Người duyệt',                    group: 'Thông tin thêm' },
+]
+
+const LEAVE_EXPORT_DEFAULT = ['userName', 'leaveType', 'startDate', 'endDate', 'totalDays', 'statusLabel', 'reason', 'approvalNote', 'approverName']
+
+function getLeaveCell(row, key) {
+  switch (key) {
+    case 'leaveType':     return LEAVE_TYPE[row.leaveType]           ?? row.leaveType
+    case 'startDate':     return fmtDateVI(row.startDate)
+    case 'endDate':       return fmtDateVI(row.endDate)
+    case 'totalDays':     return row.totalDays > 0
+                            ? `${row.totalDays} ngày`
+                            : `${countWeekdays(row.startDate, row.endDate)} ngày`
+    case 'statusLabel':   return LEAVE_STATUS_CFG[row.status]?.label ?? row.status
+    case 'reason':        return row.reason         ?? '—'
+    case 'approvalNote':  return row.approvalNote   ?? '—'
+    case 'rejectionNote': return row.rejectionNote  ?? '—'
+    case 'approverName':  return row.approverName   ?? '—'
+    default:              return row[key]            ?? '—'
+  }
+}
+
+function LeaveExportModal({ year, month, statusFilter, employeeFilter, staffList, onClose }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [selectedFields, setSelectedFields] = useState(LEAVE_EXPORT_DEFAULT)
+  const [rawData,        setRawData]        = useState([])
+  const [loadingPreview, setLoadingPreview] = useState(true)
+  const [exporting,      setExporting]      = useState(false)
+
+  const { from, to } = useMemo(() => ymToDates(year, month), [year, month])
+
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [onClose])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadingPreview(true)
+    attendanceApi.listLeaveRequests({
+      from, to,
+      status: statusFilter  || undefined,
+      userId: employeeFilter || undefined,
+      limit: 9999,
+    })
+      .then((res) => { if (!cancelled) setRawData(res.requests ?? []) })
+      .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu xem trước', 'error') })
+      .finally(() => { if (!cancelled) setLoadingPreview(false) })
+    return () => { cancelled = true }
+  }, [from, to, statusFilter, employeeFilter]) // eslint-disable-line
+
+  const toggleField = (key, required) => {
+    if (required) return
+    setSelectedFields((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])
+  }
+  const selectAll   = () => setSelectedFields(LEAVE_EXPORT_FIELDS.map((f) => f.key))
+  const deselectAll = () => setSelectedFields(LEAVE_EXPORT_FIELDS.filter((f) => f.required).map((f) => f.key))
+
+  const fieldGroups = useMemo(() => {
+    const map = {}
+    LEAVE_EXPORT_FIELDS.forEach((f) => { if (!map[f.group]) map[f.group] = []; map[f.group].push(f) })
+    return Object.entries(map)
+  }, [])
+
+  const previewCols = useMemo(
+    () => LEAVE_EXPORT_FIELDS.filter((f) => selectedFields.includes(f.key)),
+    [selectedFields]
+  )
+
+  const displayRows = useMemo(() => {
+    if (rawData.length === 0) return []
+    const groups = new Map()
+    rawData.forEach((r) => {
+      const name = r.userName ?? '—'
+      if (!groups.has(name)) groups.set(name, [])
+      groups.get(name).push(r)
+    })
+    const result = []
+    groups.forEach((recs, name) => {
+      result.push(...recs)
+      const approvedDays = recs
+        .filter((r) => r.status === 'approved')
+        .reduce((s, r) => s + (r.totalDays ?? 0), 0)
+      result.push({ _isSummary: true, _name: name, _approvedDays: approvedDays })
+    })
+    return result
+  }, [rawData])
+
+  const employeeCount = useMemo(() => new Set(rawData.map((r) => r.userName)).size, [rawData])
+
+  const periodLabel = !year
+    ? 'Tất cả'
+    : !month
+      ? `Năm ${year}`
+      : `Tháng ${String(month).padStart(2, '0')}/${year}`
+
+  const handleExport = async () => {
+    if (selectedFields.length === 0) {
+      addToast('Chọn ít nhất một trường dữ liệu để xuất', 'warning')
+      return
+    }
+    try {
+      setExporting(true)
+      const nonReq = selectedFields.filter((k) => !LEAVE_EXPORT_FIELDS.find((f) => f.key === k)?.required)
+      const resp = await attendanceApi.exportLeaveReport({
+        from, to,
+        status: statusFilter  || undefined,
+        userId: employeeFilter || undefined,
+        fields: nonReq.join(','),
+      })
+      const blob = new Blob([resp.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      const pad  = (n) => String(n).padStart(2, '0')
+      a.href     = url
+      a.download = year && month
+        ? `NghiPhep_T${pad(month)}_${year}.xlsx`
+        : year ? `NghiPhep_${year}.xlsx` : 'NghiPhep_TatCa.xlsx'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      addToast('Xuất Excel thành công!', 'success')
+      onClose()
+    } catch {
+      addToast('Xuất Excel thất bại — kiểm tra kết nối server', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const empName = employeeFilter ? (staffList.find((u) => u.id === employeeFilter)?.name ?? null) : null
+
+  return (
+    <div className={sa.exportOverlay}>
+      <div className={sa.exportBackdrop} onClick={onClose} />
+      <div className={sa.exportDialog}>
+
+        <div className={sa.exportHeader}>
+          <Download size={18} className={sa.exportHeaderIcon} />
+          <div className={sa.exportHeaderText}>
+            <div className={sa.exportHeaderTitle}>Xuất dữ liệu nghỉ phép — {periodLabel}</div>
+            <div className={sa.exportHeaderSub}>
+              {statusFilter ? (LEAVE_STATUS_CFG[statusFilter]?.label ?? statusFilter) : 'Tất cả trạng thái'}
+              {empName ? ` · ${empName}` : ' · Tất cả nhân viên'}
+            </div>
+          </div>
+          <button className={sa.exportCloseBtn} onClick={onClose} title="Đóng"><X size={16} /></button>
+        </div>
+
+        <div className={sa.exportBody}>
+          <div className={sa.exportSidebar}>
+            <div className={sa.exportSidebarTitle}>Chọn trường dữ liệu xuất</div>
+            {fieldGroups.map(([groupName, groupFields]) => (
+              <div key={groupName} className={sa.exportFieldGroup}>
+                <div className={sa.exportFieldGroupLabel}>{groupName}</div>
+                {groupFields.map((f) => (
+                  <label key={f.key} className={sa.exportFieldItem}>
+                    <input
+                      type="checkbox"
+                      checked={selectedFields.includes(f.key)}
+                      onChange={() => toggleField(f.key, f.required)}
+                      disabled={f.required}
+                      className={sa.exportFieldCheckbox}
+                    />
+                    <span className={sa.exportFieldLabel}>{f.label}</span>
+                    {f.required && <span className={sa.exportFieldRequired}>bắt buộc</span>}
+                  </label>
+                ))}
+              </div>
+            ))}
+            <div className={sa.exportSelectAllRow}>
+              <button className={sa.exportSelectAllBtn} onClick={selectAll}>Chọn tất cả</button>
+              <button className={sa.exportSelectAllBtn} onClick={deselectAll}>Bỏ chọn</button>
+            </div>
+          </div>
+
+          <div className={sa.exportPreview}>
+            <div className={sa.exportPreviewHeader}>
+              <span className={sa.exportPreviewTitle}>Xem trước dữ liệu</span>
+              {!loadingPreview && (
+                <span className={sa.exportPreviewCount}>
+                  {rawData.length} bản ghi · {employeeCount} nhân viên
+                </span>
+              )}
+            </div>
+            {loadingPreview ? (
+              <div className={sa.exportPreviewLoading}>
+                <Loader2 size={18} className={s.spin} /> Đang tải dữ liệu...
+              </div>
+            ) : (
+              <div className={sa.exportPreviewWrap}>
+                <table className={sa.exportPreviewTable}>
+                  <thead>
+                    <tr>
+                      <th>STT</th>
+                      {previewCols.map((f) => <th key={f.key}>{f.label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={previewCols.length + 1} className={sa.exportPreviewEmpty}>
+                          Không có dữ liệu
+                        </td>
+                      </tr>
+                    ) : (() => {
+                      let recIdx = 0
+                      return displayRows.map((row, idx) => {
+                        if (row._isSummary) {
+                          return (
+                            <tr key={`sum-${idx}`} className={sa.exportPreviewSummaryRow}>
+                              <td className={sa.exportPreviewSummaryLabel}>∑</td>
+                              {previewCols.map((f) => {
+                                let val = ''
+                                if      (f.key === 'userName')  val = `Tổng — ${row._name}`
+                                else if (f.key === 'totalDays') val = `${Number(row._approvedDays).toFixed(1)} ngày`
+                                return <td key={f.key} className={val ? sa.exportPreviewSummaryValue : ''}>{val}</td>
+                              })}
+                            </tr>
+                          )
+                        }
+                        recIdx++
+                        return (
+                          <tr key={idx}>
+                            <td>{recIdx}</td>
+                            {previewCols.map((f) => <td key={f.key}>{getLeaveCell(row, f.key)}</td>)}
+                          </tr>
+                        )
+                      })
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className={sa.exportFooter}>
+          <span className={sa.exportFooterInfo}>
+            <span className={sa.exportFooterBold}>{selectedFields.length}</span> trường đã chọn
+            {!loadingPreview && (
+              <> · <span className={sa.exportFooterBold}>{rawData.length}</span> bản ghi
+              {' '}(<span className={sa.exportFooterBold}>{employeeCount}</span> nhân viên) sẽ được xuất</>
+            )}
+          </span>
+          <button className={`${s.btnSecondary} ${s.btnShort}`} onClick={onClose} disabled={exporting}>
+            <X size={13} /> Huỷ
+          </button>
+          <button
+            className={`${s.btnPrimary} ${s.btnShort}`}
+            onClick={handleExport}
+            disabled={exporting || loadingPreview || selectedFields.length === 0}
+          >
+            {exporting
+              ? <><Loader2 size={13} className={s.spin} /> Đang xuất...</>
+              : <><Download size={13} /> Xuất Excel</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── AdminLeaveTab ─────────────────────────────────────────────────────────────
 
 function AdminLeaveTab({ staffList }) {
@@ -2117,6 +2392,7 @@ function AdminLeaveTab({ staffList }) {
   const [filterMonth,    setFilterMonth]    = useState(_CM)
   const [statusFilter,   setStatusFilter]   = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('')
+  const [exportOpen,     setExportOpen]     = useState(false)
 
   // Derive available years from actual data in the system
   useEffect(() => {
@@ -2192,6 +2468,9 @@ function AdminLeaveTab({ staffList }) {
           <option value="">Tất cả nhân viên</option>
           {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
+        <button className={`${s.btnPrimary} ${s.btnShort}`} onClick={() => setExportOpen(true)}>
+          <Download size={13} /> Xuất Excel
+        </button>
       </div>
 
       <div className={s.section}>
@@ -2290,6 +2569,17 @@ function AdminLeaveTab({ staffList }) {
           request={reviewTarget}
           onClose={() => setReviewTarget(null)}
           onSaved={() => { setReviewTarget(null); load() }}
+        />
+      )}
+
+      {exportOpen && (
+        <LeaveExportModal
+          year={filterYear}
+          month={filterMonth}
+          statusFilter={statusFilter}
+          employeeFilter={employeeFilter}
+          staffList={staffList}
+          onClose={() => setExportOpen(false)}
         />
       )}
     </>

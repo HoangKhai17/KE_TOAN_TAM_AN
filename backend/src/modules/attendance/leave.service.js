@@ -184,4 +184,137 @@ async function cancelLeaveRequest(id, userId) {
   return toDto(rows[0])
 }
 
-module.exports = { listLeaveRequests, createLeaveRequest, approveLeaveRequest, rejectLeaveRequest, cancelLeaveRequest }
+async function exportLeaveRecords({ from, to, status, userId, fields, res }) {
+  const ExcelJS = require('exceljs')
+
+  const conditions = ['1=1']
+  const params = []
+  if (userId) { params.push(userId); conditions.push(`l.user_id    = $${params.length}`) }
+  if (status) { params.push(status); conditions.push(`l.status     = $${params.length}`) }
+  if (from)   { params.push(from);   conditions.push(`l.start_date >= $${params.length}`) }
+  if (to)     { params.push(to);     conditions.push(`l.end_date   <= $${params.length}`) }
+  const where = conditions.join(' AND ')
+
+  const { rows } = await query(
+    `SELECT l.*, u.name AS user_name, a.name AS approver_name
+     FROM leave_requests l
+     JOIN  users u ON l.user_id    = u.id
+     LEFT JOIN users a ON l.approved_by = a.id
+     WHERE ${where}
+     ORDER BY u.name, l.start_date`,
+    params
+  )
+
+  const STATUS_VI    = { pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', cancelled: 'Đã huỷ' }
+  const LEAVE_TYPE_VI = {
+    annual: 'Nghỉ phép năm', sick: 'Nghỉ ốm', compensatory: 'Nghỉ bù',
+    unpaid: 'Nghỉ không lương', business_trip: 'Công tác', wfh: 'Làm từ xa',
+  }
+
+  const ALL_COLS = [
+    { key: 'userName',      header: 'Họ tên',          width: 24, required: true },
+    { key: 'leaveType',     header: 'Loại nghỉ',       width: 18, required: true },
+    { key: 'startDate',     header: 'Ngày bắt đầu',    width: 14 },
+    { key: 'endDate',       header: 'Ngày kết thúc',   width: 14 },
+    { key: 'totalDays',     header: 'Số ngày',         width: 8  },
+    { key: 'statusLabel',   header: 'Trạng thái',      width: 14 },
+    { key: 'reason',        header: 'Lý do',           width: 28 },
+    { key: 'approvalNote',  header: 'Ghi chú duyệt',   width: 24 },
+    { key: 'rejectionNote', header: 'Lý do từ chối',   width: 24 },
+    { key: 'approverName',  header: 'Người duyệt',     width: 20 },
+  ]
+
+  const fieldSet     = new Set(fields)
+  const selectedCols = ALL_COLS.filter((c) => c.required || fieldSet.has(c.key))
+
+  const fmtDate = (d) => {
+    if (!d) return '—'
+    const [y, m, dy] = String(d).slice(0, 10).split('-')
+    return `${dy}/${m}/${y}`
+  }
+
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'KeToanTamAn'
+  const sheet = workbook.addWorksheet('Nghỉ phép')
+
+  sheet.columns = [
+    { key: 'stt', header: 'STT', width: 5 },
+    ...selectedCols.map((c) => ({ key: c.key, header: c.header, width: c.width })),
+  ]
+
+  const headerRow = sheet.getRow(1)
+  headerRow.eachCell((cell) => {
+    cell.font      = { bold: true, color: { argb: 'FFFFFFFF' } }
+    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    cell.border    = { bottom: { style: 'medium', color: { argb: 'FF4B8EC8' } } }
+  })
+  headerRow.height = 22
+  sheet.views = [{ state: 'frozen', ySplit: 1 }]
+
+  // Group by employee
+  const userGroups = new Map()
+  rows.forEach((r) => {
+    const name = r.user_name
+    if (!userGroups.has(name)) userGroups.set(name, [])
+    userGroups.get(name).push(r)
+  })
+
+  let sttIdx = 1
+  let rowNum  = 2
+
+  userGroups.forEach((userRows, userName) => {
+    userRows.forEach((r) => {
+      const rowData = { stt: sttIdx++ }
+      selectedCols.forEach((c) => {
+        switch (c.key) {
+          case 'userName':      rowData[c.key] = r.user_name;                                    break
+          case 'leaveType':     rowData[c.key] = LEAVE_TYPE_VI[r.leave_type] ?? r.leave_type;   break
+          case 'startDate':     rowData[c.key] = fmtDate(r.start_date);                          break
+          case 'endDate':       rowData[c.key] = fmtDate(r.end_date);                            break
+          case 'totalDays':     rowData[c.key] = r.total_days != null ? parseFloat(r.total_days) : 0; break
+          case 'statusLabel':   rowData[c.key] = STATUS_VI[r.status]   ?? r.status;             break
+          case 'reason':        rowData[c.key] = r.reason               ?? '—';                 break
+          case 'approvalNote':  rowData[c.key] = r.approval_note        ?? '—';                 break
+          case 'rejectionNote': rowData[c.key] = r.rejection_note       ?? '—';                 break
+          case 'approverName':  rowData[c.key] = r.approver_name        ?? '—';                 break
+        }
+      })
+      const addedRow = sheet.addRow(rowData)
+      const fgColor  = rowNum % 2 === 0 ? 'FFF0F4FF' : 'FFFFFFFF'
+      addedRow.eachCell((cell) => {
+        cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: fgColor } }
+        cell.alignment = { vertical: 'middle' }
+      })
+      rowNum++
+    })
+
+    // Per-employee summary row — total approved leave days
+    const approvedDays = userRows
+      .filter((r) => r.status === 'approved')
+      .reduce((s, r) => s + (r.total_days != null ? parseFloat(r.total_days) : 0), 0)
+
+    const sumData = { stt: '' }
+    selectedCols.forEach((c) => {
+      if      (c.key === 'userName')  sumData[c.key] = `∑ Tổng — ${userName}`
+      else if (c.key === 'totalDays') sumData[c.key] = parseFloat(approvedDays.toFixed(2))
+      else                            sumData[c.key] = ''
+    })
+
+    const sumRow = sheet.addRow(sumData)
+    sumRow.font = { bold: true }
+    sumRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBDE0F7' } }
+    sumRow.eachCell((cell) => {
+      cell.border    = { top: { style: 'thin', color: { argb: 'FF4B8EC8' } } }
+      cell.alignment = { vertical: 'middle' }
+    })
+    rowNum++
+  })
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', 'attachment; filename="leave_export.xlsx"')
+  await workbook.xlsx.write(res)
+  res.end()
+}
+
+module.exports = { listLeaveRequests, createLeaveRequest, approveLeaveRequest, rejectLeaveRequest, cancelLeaveRequest, exportLeaveRecords }

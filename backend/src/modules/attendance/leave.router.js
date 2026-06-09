@@ -114,6 +114,14 @@ router.post('/', ...auth, async (req, res, next) => {
  *       200: { description: Cancelled }
  *       404: { description: Not found or not cancellable }
  */
+router.get('/export-custom', ...admin, async (req, res, next) => {
+  try {
+    const { from, to, status, userId, fields = '' } = req.query
+    const fieldList = fields ? fields.split(',').filter(Boolean) : []
+    await svc.exportLeaveRecords({ from, to, status, userId, fields: fieldList, res })
+  } catch (err) { next(err) }
+})
+
 router.put('/:id/approve', ...admin, async (req, res, next) => {
   try {
     const { approvalNote } = req.body ?? {}
