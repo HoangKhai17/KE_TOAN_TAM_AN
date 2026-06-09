@@ -55,6 +55,7 @@ function toDto(row) {
     taskOverdueCount:   parseInt(row.task_overdue_count ?? 0, 10),
     taskCompletedCount: parseInt(row.task_completed_count ?? 0, 10),
     taskOnTimeCount:    parseInt(row.task_on_time_count ?? 0, 10),
+    customFields:     Array.isArray(row.custom_fields) ? row.custom_fields : [],
     createdBy:        row.created_by,
     createdAt:        row.created_at,
     updatedAt:        row.updated_at,
@@ -162,6 +163,7 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
     name, taxCode, address, businessType = 'TNHH', industry,
     legalRepName, legalRepPhone, contactName, contactPhone, contactEmail,
     bankAccount, bankName, serviceStartDate, notes, assignedStaffId, avatarUrl,
+    customFields = [],
   } = data
 
   if (taxCode) {
@@ -173,14 +175,15 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
     `INSERT INTO companies
        (name, tax_code, address, business_type, industry, legal_rep_name, legal_rep_phone,
         contact_name, contact_phone, contact_email, bank_account, bank_name,
-        service_start_date, notes, assigned_staff_id, avatar_url, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        service_start_date, notes, assigned_staff_id, avatar_url, created_by, custom_fields)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
      RETURNING *`,
     [
       name, taxCode ?? null, address ?? null, businessType, industry ?? null,
       legalRepName ?? null, legalRepPhone ?? null, contactName ?? null, contactPhone ?? null,
       contactEmail ?? null, bankAccount ?? null, bankName ?? null,
       serviceStartDate ?? null, notes ?? null, assignedStaffId ?? null, avatarUrl ?? null, actorId,
+      JSON.stringify(Array.isArray(customFields) ? customFields : []),
     ]
   )
 
@@ -249,6 +252,10 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent, user = nul
       params.push(data[key])
       updates.push(`${col} = $${params.length}`)
     }
+  }
+  if (data.customFields !== undefined) {
+    params.push(JSON.stringify(Array.isArray(data.customFields) ? data.customFields : []))
+    updates.push(`custom_fields = $${params.length}`)
   }
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
 

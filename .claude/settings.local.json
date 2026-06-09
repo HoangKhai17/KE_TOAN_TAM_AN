@@ -196,7 +196,11 @@
       "Bash(docker-compose ps *)",
       "Bash(docker-compose restart *)",
       "Bash(docker-compose logs *)",
-      "Bash(xargs grep -l \"overtime\\\\|Overtime\")"
+      "Bash(xargs grep -l \"overtime\\\\|Overtime\")",
+      "PowerShell($lines = \\(Get-Content \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Companies\\\\companies.module.css\" | Measure-Object -Line\\).Lines; Write-Output \"Total lines: $lines\")",
+      "Bash(node_modules/.bin/vite build *)",
+      "Bash(curl -s \"http://localhost:5173/\")",
+      "Bash(curl -s \"http://localhost:5173/src/pages/Companies/Companies.jsx\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

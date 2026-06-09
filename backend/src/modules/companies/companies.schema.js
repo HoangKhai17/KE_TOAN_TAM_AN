@@ -23,6 +23,12 @@ const companyBaseSchema = z.object({
     z.string().url().max(2048),
     z.string().regex(/^data:image\//).max(300000),
   ]).optional().nullable(),
+  customFields:     z.array(
+    z.object({
+      name:  z.string().max(200),
+      value: z.string().max(2000).optional().default(''),
+    })
+  ).optional().default([]),
 })
 
 const createCompanySchema = companyBaseSchema

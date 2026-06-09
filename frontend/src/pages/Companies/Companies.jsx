@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2,
-  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera,
+  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -780,6 +780,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     serviceStartDate: company?.serviceStartDate ? company.serviceStartDate.slice(0, 10) : '',
     notes:            company?.notes            ?? '',
     avatarUrl:        company?.avatarUrl        ?? '',
+    customFields:     Array.isArray(company?.customFields) ? company.customFields : [],
   })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
@@ -826,6 +827,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
         serviceStartDate: form.serviceStartDate        || null,
         notes:            form.notes.trim()            || null,
         avatarUrl:        form.avatarUrl                || null,
+        customFields:     form.customFields.filter((f) => f.name.trim()),
       }
       const saved = isEdit
         ? await companiesApi.updateCompany(company.id, body)
@@ -966,6 +968,54 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
             placeholder="Ghi chú đặc thù nghiệp vụ, yêu cầu đặc biệt..."
             rows={3}
           />
+        </div>
+
+        {/* Thông tin bổ sung */}
+        <div>
+          <div className={s.formGroupLabel}>Thông tin bổ sung</div>
+          <div className={s.customFieldsList}>
+            {form.customFields.map((field, i) => (
+              <div key={i} className={s.customFieldRow}>
+                <input
+                  type="text"
+                  className={s.formInput}
+                  placeholder="Tên trường"
+                  value={field.name}
+                  onChange={(e) => {
+                    const next = [...form.customFields]
+                    next[i] = { ...next[i], name: e.target.value }
+                    setForm((p) => ({ ...p, customFields: next }))
+                  }}
+                />
+                <input
+                  type="text"
+                  className={s.formInput}
+                  placeholder="Nội dung"
+                  value={field.value}
+                  onChange={(e) => {
+                    const next = [...form.customFields]
+                    next[i] = { ...next[i], value: e.target.value }
+                    setForm((p) => ({ ...p, customFields: next }))
+                  }}
+                />
+                <button
+                  type="button"
+                  className={s.customFieldRemoveBtn}
+                  onClick={() => setForm((p) => ({ ...p, customFields: p.customFields.filter((_, j) => j !== i) }))}
+                  title="Xoá trường"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className={s.customFieldAddBtn}
+              onClick={() => setForm((p) => ({ ...p, customFields: [...p.customFields, { name: '', value: '' }] }))}
+            >
+              <Plus size={12} /> Thêm trường
+            </button>
+          </div>
         </div>
 
         <div className={s.modalActions}>

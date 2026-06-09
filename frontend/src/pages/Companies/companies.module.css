@@ -4444,3 +4444,81 @@
   background: #f8fafc;
   flex-shrink: 0;
 }
+
+/* ── Custom Fields view (CompanyDetail overview) ──────────────────── */
+
+.customFieldsViewList {
+  display: flex;
+  flex-direction: column;
+}
+
+.customFieldsViewRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.customFieldsViewRow:last-child { border-bottom: none; }
+
+.customFieldsViewLabel {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-soft);
+  min-width: 130px;
+  flex-shrink: 0;
+}
+
+.customFieldsViewValue {
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+/* ── Custom Fields editor (CompanyFormModal) ──────────────────────── */
+
+.customFieldsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.customFieldRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.customFieldRemoveBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fef2f2;
+  color: var(--color-danger);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.customFieldRemoveBtn:hover { background: #fee2e2; border-color: #fca5a5; }
+
+.customFieldAddBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 14px;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px dashed #93c5fd;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background 0.15s, border-color 0.15s;
+}
+.customFieldAddBtn:hover { background: #dbeafe; border-color: #60a5fa; }

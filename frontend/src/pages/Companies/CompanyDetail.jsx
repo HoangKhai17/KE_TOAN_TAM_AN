@@ -5,7 +5,7 @@ import {
   Hash, Calendar, Briefcase,
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
-  Plus, Search, RotateCcw, Filter, Eye, ClipboardList,
+  Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -423,6 +423,7 @@ function OverviewTab({ company, isAdmin, onAssigned, refreshTick }) {
       <div className={s.overviewLeft}>
         <BusinessInfoCard company={company} />
         <ContactCard company={company} />
+        <CustomFieldsCard company={company} />
         <ActivityCard companyId={company.id} refreshTick={refreshTick} />
       </div>
 
@@ -510,6 +511,40 @@ function ContactCard({ company }) {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── CustomFieldsCard ───────────────────────────────────────────────────────────
+
+function CustomFieldsCard({ company }) {
+  const fields = (company.customFields ?? []).filter((f) => f.name?.trim())
+  return (
+    <div className={s.infoCard}>
+      <div className={s.infoCardHeader}>
+        <div className={s.infoCardTitle}>
+          <div className={`${s.infoCardTitleIcon} ${s.infoCardIconPurple}`}>
+            <SlidersHorizontal size={14} />
+          </div>
+          Thông tin bổ sung
+        </div>
+      </div>
+      <div className={s.infoCardBody}>
+        {fields.length === 0 ? (
+          <div className={s.infoValueEmpty} style={{ fontSize: 'var(--fs-sm)', padding: '4px 0' }}>
+            Chưa có trường tùy chỉnh. Nhấn <strong>Chỉnh sửa</strong> để thêm.
+          </div>
+        ) : (
+          <div className={s.customFieldsViewList}>
+            {fields.map((field, i) => (
+              <div key={i} className={s.customFieldsViewRow}>
+                <span className={s.customFieldsViewLabel}>{field.name}</span>
+                <span className={s.customFieldsViewValue}>{field.value || '—'}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
