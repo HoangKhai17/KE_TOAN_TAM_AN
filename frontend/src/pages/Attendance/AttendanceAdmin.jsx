@@ -2417,9 +2417,10 @@ function AttendanceBarChart({ rows }) {
 
 function ReportTab({ year, month }) {
   const addToast = useToastStore((st) => st.toast)
-  const [rows,    setRows]    = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showSync, setShowSync] = useState(false)
+  const [rows,       setRows]       = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [showSync,   setShowSync]   = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -2435,23 +2436,6 @@ function ReportTab({ year, month }) {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [month, year]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function handleExportExcel() {
-    if (rows.length === 0) return
-    try {
-      const response = await attendanceApi.exportAttendanceReport({ month, year })
-      const url  = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href     = url
-      link.download = `BaoCao_ChamCong_T${String(month).padStart(2,'0')}_${year}.xlsx`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
-    } catch {
-      addToast('Không thể xuất Excel', 'error')
-    }
-  }
 
   // Aggregated totals + derived metrics
   const totals = useMemo(() => {
@@ -2481,8 +2465,7 @@ function ReportTab({ year, month }) {
         <div className={sa.reportActions}>
           <button
             className={`${s.btnSecondary} ${s.btnShort}`}
-            onClick={handleExportExcel}
-            disabled={rows.length === 0}
+            onClick={() => setExportOpen(true)}
           >
             <Download size={13} /> Xuất Excel
           </button>
@@ -2620,6 +2603,14 @@ function ReportTab({ year, month }) {
           year={year}
           month={month}
           onClose={() => setShowSync(false)}
+        />
+      )}
+
+      {exportOpen && (
+        <ExportExcelModal
+          year={year}
+          month={month}
+          onClose={() => setExportOpen(false)}
         />
       )}
     </>
