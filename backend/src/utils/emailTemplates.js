@@ -177,10 +177,12 @@ DEFAULTS.email_tpl_payroll_slip = WRAPPER(`
       <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">Phụ cấp</td>
       <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600">{{allowances}}</td>
     </tr>
+    {{allowance_items_html}}
     <tr>
       <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#475569;padding-left:24px">Thưởng</td>
       <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600">{{bonus}}</td>
     </tr>
+    {{bonus_items_html}}
     <tr style="background:#fff7ed">
       <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#c2410c;font-weight:600">Khấu trừ</td>
       <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right"></td>
@@ -211,6 +213,8 @@ DEFAULTS.email_tpl_payroll_slip = WRAPPER(`
     </tr>
   </tbody>
 </table>
+
+{{notes_section}}
 
 <div style="margin-top:24px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px">
   <p style="margin:0;font-size:13px;color:#1e40af;line-height:1.6">

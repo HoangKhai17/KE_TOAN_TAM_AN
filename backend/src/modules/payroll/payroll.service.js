@@ -499,23 +499,40 @@ async function sendPayrollEmails(periodId) {
   const fmt = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(Number(n ?? 0))) + ' ₫'
   const tpl = await getTemplate('email_tpl_payroll_slip')
 
+  const buildItemRows = (items) => items.map((item, idx) => {
+    const bg          = idx % 2 !== 0 ? 'background:#f8fafc;' : ''
+    const projectPart = item.project ? ` <span style="color:#94a3b8;font-size:11.5px">(${item.project})</span>` : ''
+    const notePart    = item.note    ? ` <em style="color:#94a3b8;font-size:11.5px">— ${item.note}</em>` : ''
+    return `<tr style="${bg}"><td style="padding:7px 14px 7px 36px;border:1px solid #e2e8f0;color:#64748b;font-size:12.5px">↳ ${item.name}${projectPart}${notePart}</td><td style="padding:7px 14px;border:1px solid #e2e8f0;text-align:right;font-size:12.5px;color:#475569;font-weight:600">${fmt(item.amount)}</td></tr>`
+  }).join('')
+
   let sent = 0, failed = 0
   await Promise.all(records.map(async (r) => {
-    const net = Number(r.net_salary ?? 0)
+    const net  = Number(r.net_salary ?? 0)
+    const comp = r.components ?? {}
+    const allowance_items_html = buildItemRows(comp.allowanceItems ?? [])
+    const bonus_items_html     = buildItemRows(comp.bonusItems     ?? [])
+    const notes_section        = r.notes
+      ? `<div style="margin-top:16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px"><p style="margin:0;font-size:13px;color:#0369a1;line-height:1.6"><strong>Ghi chú từ kế toán:</strong> ${r.notes}</p></div>`
+      : ''
+
     const html = renderTemplate(tpl, {
-      user_name:        r.user_name,
-      month_year:       monthYear,
-      base_salary:      fmt(r.base_salary),
-      allowances:       fmt(r.allowances),
-      bonus:            fmt(r.bonus),
-      gross_income:     fmt(r.gross_income),
-      bhxh_employee:    fmt(r.bhxh_employee),
-      bhyt_employee:    fmt(r.bhyt_employee),
-      bhtn_employee:    fmt(r.bhtn_employee),
-      pit_deduction:    fmt(r.pit_deduction),
-      other_deductions: fmt(r.other_deductions),
-      net_salary:       fmt(net),
-      notes:            r.notes ?? '',
+      user_name:             r.user_name,
+      month_year:            monthYear,
+      base_salary:           fmt(r.base_salary),
+      allowances:            fmt(r.allowances),
+      bonus:                 fmt(r.bonus),
+      gross_income:          fmt(r.gross_income),
+      bhxh_employee:         fmt(r.bhxh_employee),
+      bhyt_employee:         fmt(r.bhyt_employee),
+      bhtn_employee:         fmt(r.bhtn_employee),
+      pit_deduction:         fmt(r.pit_deduction),
+      other_deductions:      fmt(r.other_deductions),
+      net_salary:            fmt(net),
+      notes:                 r.notes ?? '',
+      allowance_items_html,
+      bonus_items_html,
+      notes_section,
     })
     const ok = await sendMail({
       to:      r.email,
