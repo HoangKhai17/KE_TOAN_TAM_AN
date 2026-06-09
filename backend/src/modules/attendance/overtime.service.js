@@ -5,23 +5,25 @@ const { createAndEmit } = require('../../lib/notify')
 
 function toDto(r) {
   return {
-    id:            r.id,
-    userId:        r.user_id,
-    userName:      r.user_name     ?? undefined,
-    otDate:        r.ot_date,
-    startTime:     r.start_time,
-    endTime:       r.end_time,
-    otHours:       parseFloat(r.ot_hours),
-    otRate:        parseFloat(r.ot_rate),
-    reason:        r.reason,
-    status:        r.status,
-    approvedBy:    r.approved_by,
-    approverName:  r.approver_name ?? undefined,
-    approvedAt:    r.approved_at,
-    approvalNote:  r.approval_note  ?? undefined,
-    rejectionNote: r.rejection_note ?? undefined,
-    createdAt:     r.created_at,
-    updatedAt:     r.updated_at,
+    id:                r.id,
+    userId:            r.user_id,
+    userName:          r.user_name          ?? undefined,
+    otDate:            r.ot_date,
+    startTime:         r.start_time,
+    endTime:           r.end_time,
+    otHours:           parseFloat(r.ot_hours),
+    otRate:            parseFloat(r.ot_rate),
+    reason:            r.reason,
+    status:            r.status,
+    approvedBy:        r.approved_by,
+    approverName:      r.approver_name      ?? undefined,
+    approvedAt:        r.approved_at,
+    approvalNote:      r.approval_note      ?? undefined,
+    rejectionNote:     r.rejection_note     ?? undefined,
+    clientCompanyId:   r.client_company_id  ?? undefined,
+    clientCompanyName: r.client_company_name ?? undefined,
+    createdAt:         r.created_at,
+    updatedAt:         r.updated_at,
   }
 }
 
@@ -81,10 +83,12 @@ async function listOvertimeRequests({ userId, status, from, to, page = 1, limit 
 
   // Single query with window COUNT — eliminates the separate COUNT(*) round-trip
   const { rows } = await query(
-    `SELECT o.*, u.name AS user_name, a.name AS approver_name, COUNT(*) OVER() AS _total
+    `SELECT o.*, u.name AS user_name, a.name AS approver_name,
+            c.name AS client_company_name, COUNT(*) OVER() AS _total
      FROM overtime_requests o
-     JOIN  users u ON o.user_id    = u.id
-     LEFT JOIN users a ON o.approved_by = a.id
+     JOIN  users    u ON o.user_id          = u.id
+     LEFT JOIN users    a ON o.approved_by      = a.id
+     LEFT JOIN companies c ON o.client_company_id = c.id
      WHERE ${where}
      ORDER BY o.created_at DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -94,14 +98,14 @@ async function listOvertimeRequests({ userId, status, from, to, page = 1, limit 
   return { requests: rows.map(toDto), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } }
 }
 
-async function createOvertimeRequest({ userId, otDate, startTime, endTime, reason }) {
+async function createOvertimeRequest({ userId, otDate, startTime, endTime, reason, clientCompanyId }) {
   const otHours = calcOtHours(startTime, endTime)
   const otRate  = await calcOtRate(otDate)
 
   const { rows } = await query(
-    `INSERT INTO overtime_requests (user_id, ot_date, start_time, end_time, ot_hours, ot_rate, reason)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [userId, otDate, startTime, endTime, parseFloat(otHours.toFixed(2)), otRate, reason ?? null]
+    `INSERT INTO overtime_requests (user_id, ot_date, start_time, end_time, ot_hours, ot_rate, reason, client_company_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [userId, otDate, startTime, endTime, parseFloat(otHours.toFixed(2)), otRate, reason ?? null, clientCompanyId ?? null]
   )
 
   const userRes  = await query('SELECT name FROM users WHERE id = $1', [userId])

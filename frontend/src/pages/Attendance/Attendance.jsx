@@ -8,6 +8,7 @@ import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
+import { listCompanies } from '../../api/companies'
 import s from './Attendance.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -898,6 +899,7 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
                   <th>Bắt đầu</th>
                   <th>Kết thúc</th>
                   <th>Số giờ</th>
+                  <th>Khách hàng</th>
                   <th>Lý do</th>
                   <th>Trạng thái</th>
                   <th>Ghi chú Admin</th>
@@ -916,6 +918,7 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
                       <td className={s.tablePurple}>
                         {req.otHours != null ? `${Number(req.otHours).toFixed(1)}h` : '—'}
                       </td>
+                      <td className={s.tableMuted}>{req.clientCompanyName ?? '—'}</td>
                       <td className={s.tableReason}>{req.reason ?? '—'}</td>
                       <td>
                         <span className={`${s.statusPill} ${getRequestStatusClass(req.status)}`}>
@@ -988,9 +991,16 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
 function OvertimeFormModal({ onClose, onSaved }) {
   const addToast = useToastStore((st) => st.toast)
   const today    = new Date().toISOString().slice(0, 10)
-  const [form,   setForm]   = useState({ otDate: today, startTime: '18:00', endTime: '20:00', reason: '' })
-  const [saving, setSaving] = useState(false)
-  const [error,  setError]  = useState(null)
+  const [form,      setForm]      = useState({ otDate: today, startTime: '18:00', endTime: '20:00', reason: '', clientCompanyId: '' })
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState(null)
+  const [companies, setCompanies] = useState([])
+
+  useEffect(() => {
+    listCompanies({ status: 'active', limit: 500 })
+      .then((res) => setCompanies(res?.companies ?? res ?? []))
+      .catch(() => {})
+  }, [])
 
   function set(field) { return (e) => setForm((p) => ({ ...p, [field]: e.target.value })) }
 
@@ -1009,7 +1019,13 @@ function OvertimeFormModal({ onClose, onSaved }) {
     if (form.endTime <= form.startTime) { setError('Giờ kết thúc phải sau giờ bắt đầu'); return }
     setError(null); setSaving(true)
     try {
-      await attendanceApi.createOvertimeRequest(form)
+      await attendanceApi.createOvertimeRequest({
+        otDate:          form.otDate,
+        startTime:       form.startTime,
+        endTime:         form.endTime,
+        reason:          form.reason || undefined,
+        clientCompanyId: form.clientCompanyId || undefined,
+      })
       addToast('Đã tạo đơn tăng ca', 'success')
       onSaved()
     } catch (err) {
@@ -1018,12 +1034,23 @@ function OvertimeFormModal({ onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Tạo đơn tăng ca" onClose={onClose}>
+    <Modal title="Tạo đơn tăng ca" onClose={onClose} maxWidth="640px">
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}
-        <div className={s.formGroup}>
-          <label className={`${s.formLabel} ${s.req}`}>Ngày tăng ca</label>
-          <input type="date" value={form.otDate} onChange={set('otDate')} className={s.formInput} />
+        <div className={s.formGrid}>
+          <div className={s.formGroup}>
+            <label className={`${s.formLabel} ${s.req}`}>Ngày tăng ca</label>
+            <input type="date" value={form.otDate} onChange={set('otDate')} className={s.formInput} />
+          </div>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Khách hàng</label>
+            <select value={form.clientCompanyId} onChange={set('clientCompanyId')} className={s.formInput}>
+              <option value="">— Không chọn —</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className={s.formGrid}>
           <div className={s.formGroup}>

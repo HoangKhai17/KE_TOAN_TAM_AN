@@ -69,12 +69,12 @@ router.get('/',  ...auth, async (req, res, next) => {
 
 router.post('/', ...auth, async (req, res, next) => {
   try {
-    const { otDate, startTime, endTime, reason } = req.body
+    const { otDate, startTime, endTime, reason, clientCompanyId } = req.body
     if (!otDate || !startTime || !endTime) {
       return res.status(400).json({ error: { message: 'otDate, startTime và endTime là bắt buộc' } })
     }
     const request = await svc.createOvertimeRequest({
-      userId: req.user.id, otDate, startTime, endTime, reason,
+      userId: req.user.id, otDate, startTime, endTime, reason, clientCompanyId: clientCompanyId || null,
     })
     res.status(201).json(request)
   } catch (err) { next(err) }

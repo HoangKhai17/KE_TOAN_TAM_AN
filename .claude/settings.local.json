@@ -195,7 +195,8 @@
       "Bash(xargs grep -l \"attendance\\\\|leave\\\\|overtime\\\\|shift\\\\|checkin\" -i)",
       "Bash(docker-compose ps *)",
       "Bash(docker-compose restart *)",
-      "Bash(docker-compose logs *)"
+      "Bash(docker-compose logs *)",
+      "Bash(xargs grep -l \"overtime\\\\|Overtime\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

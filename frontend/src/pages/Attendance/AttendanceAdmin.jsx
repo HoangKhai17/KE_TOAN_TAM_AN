@@ -2195,6 +2195,7 @@ function AdminOvertimeTab({ staffList }) {
                   <th>Bắt đầu</th>
                   <th>Kết thúc</th>
                   <th>Số giờ</th>
+                  <th>Khách hàng</th>
                   <th>Trạng thái</th>
                   <th>Lý do</th>
                   <th>Ghi chú Admin</th>
@@ -2213,6 +2214,7 @@ function AdminOvertimeTab({ staffList }) {
                     <td className={s.tablePurple}>
                       {req.otHours != null ? `${Number(req.otHours).toFixed(1)}h` : '—'}
                     </td>
+                    <td className={s.tableMuted}>{req.clientCompanyName ?? '—'}</td>
                     <td>
                       <span className={`${s.statusPill} ${getRequestStatusClass(req.status)}`}>
                         {st.label}
