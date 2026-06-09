@@ -233,4 +233,132 @@ async function resetUserPassword(id, newPassword, actorId, ipAddress, userAgent)
   return toDto(rows[0])
 }
 
-module.exports = { listUsers, listUserOptions, getUserById, createUser, updateUser, updateStatus, deleteUser, resetUserPassword }
+async function exportStaffExcel({ fields = [], role, status, search } = {}) {
+  const ExcelJS = require('exceljs')
+  const conditions = ['1=1']
+  const params = []
+
+  if (role) {
+    params.push(role)
+    conditions.push(`role = $${params.length}`)
+  }
+  if (status) {
+    params.push(status)
+    conditions.push(`status = $${params.length}`)
+  }
+  if (search) {
+    params.push(search.trim())
+    conditions.push(
+      `to_tsvector('simple', name || ' ' || email) @@ plainto_tsquery('simple', $${params.length})`
+    )
+  }
+
+  const where = conditions.join(' AND ')
+  const { rows } = await query(
+    `SELECT id, name, email, role, status, phone, job_title, avatar_url,
+            dob, hire_date, id_card, address, education, experience,
+            must_change_pw, login_attempts, locked_until, last_login_at, created_at, updated_at
+     FROM users WHERE ${where} ORDER BY created_at DESC`,
+    params
+  )
+
+  const FIELD_LABELS = {
+    name:        'Họ và tên',
+    email:       'Email',
+    role:        'Vai trò',
+    status:      'Trạng thái',
+    phone:       'Số điện thoại',
+    jobTitle:    'Chức danh',
+    dob:         'Ngày sinh',
+    hireDate:    'Ngày vào làm',
+    idCard:      'CMND/CCCD',
+    address:     'Địa chỉ',
+    education:   'Bằng cấp/Chứng chỉ',
+    experience:  'Kinh nghiệm',
+    lastLoginAt: 'Đăng nhập gần nhất',
+    createdAt:   'Ngày tạo',
+  }
+
+  const ALL_FIELDS = Object.keys(FIELD_LABELS)
+  const activeFields = fields.length > 0 ? fields.filter((f) => FIELD_LABELS[f]) : ALL_FIELDS
+
+  const formatRole   = (v) => v === 'admin' ? 'Quản trị viên' : 'Nhân viên'
+  const formatStatus = (v) => {
+    if (v === 'active')   return 'Đang làm việc'
+    if (v === 'resigned') return 'Đã nghỉ việc'
+    if (v === 'on_leave') return 'Nghỉ phép'
+    return v ?? ''
+  }
+  const formatDate     = (v) => v ? new Date(v).toLocaleDateString('vi-VN') : ''
+  const formatDateTime = (v) => v ? new Date(v).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : ''
+
+  const getCellValue = (row, field) => {
+    const dto = toDto(row)
+    switch (field) {
+      case 'name':        return dto.name        ?? ''
+      case 'email':       return dto.email       ?? ''
+      case 'role':        return formatRole(dto.role)
+      case 'status':      return formatStatus(dto.status)
+      case 'phone':       return dto.phone       ?? ''
+      case 'jobTitle':    return dto.jobTitle    ?? ''
+      case 'dob':         return formatDate(dto.dob)
+      case 'hireDate':    return formatDate(dto.hireDate)
+      case 'idCard':      return dto.idCard      ?? ''
+      case 'address':     return dto.address     ?? ''
+      case 'education':   return dto.education   ?? ''
+      case 'experience':  return dto.experience  ?? ''
+      case 'lastLoginAt': return formatDateTime(dto.lastLoginAt)
+      case 'createdAt':   return formatDateTime(dto.createdAt)
+      default:            return ''
+    }
+  }
+
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('Nhân viên')
+
+  const headerRow = ws.addRow(activeFields.map((f) => FIELD_LABELS[f] ?? f))
+  headerRow.eachCell((cell) => {
+    cell.font      = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }
+    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+    cell.border    = {
+      top:    { style: 'thin', color: { argb: 'FFBFDBFE' } },
+      bottom: { style: 'thin', color: { argb: 'FFBFDBFE' } },
+      left:   { style: 'thin', color: { argb: 'FFBFDBFE' } },
+      right:  { style: 'thin', color: { argb: 'FFBFDBFE' } },
+    }
+  })
+  ws.getRow(1).height = 32
+
+  rows.forEach((row, idx) => {
+    const dataRow = ws.addRow(activeFields.map((f) => getCellValue(row, f)))
+    const isEven  = idx % 2 === 0
+    dataRow.eachCell((cell) => {
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF8FAFC' } }
+      cell.alignment = { vertical: 'middle', wrapText: true }
+      cell.border    = {
+        top:    { style: 'hair', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } },
+        left:   { style: 'hair', color: { argb: 'FFE2E8F0' } },
+        right:  { style: 'hair', color: { argb: 'FFE2E8F0' } },
+      }
+    })
+    dataRow.height = 22
+  })
+
+  activeFields.forEach((f, i) => {
+    const col    = ws.getColumn(i + 1)
+    const header = FIELD_LABELS[f] ?? f
+    const maxLen = Math.max(
+      header.length + 4,
+      ...rows.map((row) => String(getCellValue(row, f)).length)
+    )
+    col.width = Math.min(Math.max(maxLen + 2, 12), 50)
+  })
+
+  ws.views = [{ state: 'frozen', ySplit: 1 }]
+
+  return wb.xlsx.writeBuffer()
+}
+
+module.exports = { listUsers, listUserOptions, getUserById, createUser, updateUser, updateStatus, deleteUser, resetUserPassword, exportStaffExcel }

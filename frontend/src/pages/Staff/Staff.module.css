@@ -607,3 +607,135 @@
 
 @media (min-width: 768px) { .hideMd { display: table-cell; } }
 @media (min-width: 1024px) { .hideLg { display: table-cell; } }
+
+/* ── Export modal ────────────────────────────────────────────────────────── */
+
+.exportModalBody {
+  display: flex;
+  gap: var(--space-6);
+  min-height: 560px;
+  max-height: 68vh;
+}
+
+.exportSidebar {
+  width: 210px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border-muted);
+  padding-right: var(--space-5);
+}
+
+.exportSidebarTitle {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.exportGroup {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-muted);
+}
+
+.exportGroupLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-extrabold);
+  color: var(--color-text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.exportGroupLabel:hover { background: var(--color-primary-bg); }
+
+.exportFieldItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-8);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--color-text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.exportFieldItem:hover { background: var(--color-primary-bg); }
+
+.exportPreviewPane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow: hidden;
+}
+
+.exportPreviewTitle {
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+  font-weight: var(--fw-semibold);
+  flex-shrink: 0;
+}
+
+.exportPreviewWrap {
+  flex: 1;
+  overflow: auto;
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+}
+
+.exportPreviewEmpty {
+  padding: var(--space-9);
+  text-align: center;
+  color: var(--color-muted-subtle);
+  font-size: var(--fs-sm);
+}
+
+.exportPreviewTable {
+  font-size: var(--fs-xs);
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.exportPreviewTable th,
+.exportPreviewTable td {
+  padding: var(--space-3) var(--space-4);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.exportPreviewTable th {
+  background: var(--gradient-table-head);
+  font-weight: var(--fw-bold);
+  color: var(--color-primary-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.exportPreviewTable tr:last-child td { border-bottom: none; }
+.exportPreviewTable tbody tr:nth-child(even) td { background: var(--color-bg-soft); }
+
+.exportFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-5);
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.exportCount {
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}

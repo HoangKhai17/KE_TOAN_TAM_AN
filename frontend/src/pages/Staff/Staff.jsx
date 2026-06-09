@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, ChevronLeft, ChevronRight, Users, Loader2,
-  Edit2, Trash2, UserCheck, UserMinus, UserX,
+  Edit2, Trash2, UserCheck, UserMinus, UserX, FileDown,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -53,6 +53,7 @@ export default function Staff() {
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editUser, setEditUser]               = useState(null)
+  const [showExport, setShowExport]           = useState(false)
 
   // Debounce search
   useEffect(() => {
@@ -119,9 +120,14 @@ export default function Staff() {
             </p>
           </div>
           {isAdmin && (
-            <button className={s.btnPrimary} onClick={() => setShowCreateModal(true)}>
-              <Plus size={14} /> Thêm nhân viên
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className={s.btnSecondary} onClick={() => setShowExport(true)}>
+                <FileDown size={14} /> Xuất Excel
+              </button>
+              <button className={s.btnPrimary} onClick={() => setShowCreateModal(true)}>
+                <Plus size={14} /> Thêm nhân viên
+              </button>
+            </div>
           )}
         </div>
 
@@ -241,6 +247,15 @@ export default function Staff() {
             </div>
           )}
         </div>
+
+        {/* Export modal */}
+        {showExport && (
+          <StaffExportModal
+            filters={{ role: roleFilter || undefined, status: statusFilter || undefined, search: search || undefined }}
+            total={pagination.total}
+            onClose={() => setShowExport(false)}
+          />
+        )}
 
         {/* Modals */}
         {showCreateModal && (
@@ -379,6 +394,193 @@ function SkeletonRow({ hasActions }) {
       {hasActions && <td className={s.actionCell}><div className={`${s.skeleton} ${s.skeletonAction}`} /></td>}
     </tr>
   )
+}
+
+// ── StaffExportModal ───────────────────────────────────────────────────────────
+
+const EXPORT_GROUPS = [
+  {
+    key: 'basic',
+    label: 'Thông tin cơ bản',
+    fields: [
+      { key: 'name',     label: 'Họ và tên' },
+      { key: 'email',    label: 'Email' },
+      { key: 'role',     label: 'Vai trò' },
+      { key: 'status',   label: 'Trạng thái' },
+      { key: 'phone',    label: 'Số điện thoại' },
+      { key: 'jobTitle', label: 'Chức danh' },
+    ],
+  },
+  {
+    key: 'personal',
+    label: 'Thông tin cá nhân',
+    fields: [
+      { key: 'dob',      label: 'Ngày sinh' },
+      { key: 'hireDate', label: 'Ngày vào làm' },
+      { key: 'idCard',   label: 'CMND/CCCD' },
+      { key: 'address',  label: 'Địa chỉ' },
+    ],
+  },
+  {
+    key: 'profile',
+    label: 'Hồ sơ & Kinh nghiệm',
+    fields: [
+      { key: 'education',  label: 'Bằng cấp/Chứng chỉ' },
+      { key: 'experience', label: 'Kinh nghiệm' },
+    ],
+  },
+  {
+    key: 'system',
+    label: 'Hệ thống',
+    fields: [
+      { key: 'lastLoginAt', label: 'Đăng nhập gần nhất' },
+      { key: 'createdAt',   label: 'Ngày tạo' },
+    ],
+  },
+]
+
+const ALL_FIELD_KEYS = EXPORT_GROUPS.flatMap((g) => g.fields.map((f) => f.key))
+
+function StaffExportModal({ filters, total, onClose }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [selected, setSelected] = useState(new Set(ALL_FIELD_KEYS))
+  const [preview, setPreview]   = useState([])
+  const [exporting, setExporting] = useState(false)
+
+  useEffect(() => {
+    usersApi
+      .listUsers({ ...filters, page: 1, limit: 8 })
+      .then(({ users }) => setPreview(users))
+      .catch(() => {})
+  }, [])
+
+  function isGroupAll(group) {
+    return group.fields.every((f) => selected.has(f.key))
+  }
+  function toggleGroup(group) {
+    const allOn = isGroupAll(group)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      group.fields.forEach((f) => (allOn ? next.delete(f.key) : next.add(f.key)))
+      return next
+    })
+  }
+  function toggleField(key) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  async function handleExport() {
+    if (selected.size === 0) { addToast('Vui lòng chọn ít nhất một trường', 'error'); return }
+    setExporting(true)
+    try {
+      const blob = await usersApi.exportStaffExcel({
+        ...filters,
+        fields: [...selected].join(','),
+      })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `nhan-vien-${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      onClose()
+    } catch {
+      addToast('Xuất Excel thất bại', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const previewFields = EXPORT_GROUPS.flatMap((g) => g.fields).filter((f) => selected.has(f.key))
+
+  return (
+    <Modal title="Xuất Excel — Nhân viên" onClose={onClose} wide>
+      <div className={s.exportModalBody}>
+        {/* Sidebar: field selection */}
+        <div className={s.exportSidebar}>
+          <div className={s.exportSidebarTitle}>Chọn trường xuất</div>
+          {EXPORT_GROUPS.map((group) => (
+            <div key={group.key} className={s.exportGroup}>
+              <label className={s.exportGroupLabel}>
+                <input
+                  type="checkbox"
+                  checked={isGroupAll(group)}
+                  onChange={() => toggleGroup(group)}
+                />
+                <span>{group.label}</span>
+              </label>
+              {group.fields.map((f) => (
+                <label key={f.key} className={s.exportFieldItem}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(f.key)}
+                    onChange={() => toggleField(f.key)}
+                  />
+                  <span>{f.label}</span>
+                </label>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Preview pane */}
+        <div className={s.exportPreviewPane}>
+          <div className={s.exportPreviewTitle}>Xem trước ({Math.min(8, total)} / {total} nhân viên)</div>
+          <div className={s.exportPreviewWrap}>
+            {previewFields.length === 0 ? (
+              <div className={s.exportPreviewEmpty}>Chưa chọn trường nào</div>
+            ) : (
+              <table className={s.exportPreviewTable}>
+                <thead>
+                  <tr>
+                    {previewFields.map((f) => <th key={f.key}>{f.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((user) => (
+                    <tr key={user.id}>
+                      {previewFields.map((f) => (
+                        <td key={f.key}>{formatPreviewCell(user, f.key)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className={s.exportFooter}>
+        <span className={s.exportCount}>
+          {selected.size} trường · {total} nhân viên
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className={s.btnSecondary} onClick={onClose} disabled={exporting}>Hủy</button>
+          <button className={s.btnPrimary} onClick={handleExport} disabled={exporting || selected.size === 0}>
+            {exporting ? <><Loader2 size={13} className={s.spin} /> Đang xuất...</> : <><FileDown size={13} /> Xuất Excel</>}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function formatPreviewCell(user, key) {
+  switch (key) {
+    case 'role':        return user.role === 'admin' ? 'Quản trị viên' : 'Nhân viên'
+    case 'status':      return user.status === 'active' ? 'Đang làm việc' : user.status === 'resigned' ? 'Đã nghỉ việc' : user.status
+    case 'dob':
+    case 'hireDate':    return user[key] ? new Date(user[key]).toLocaleDateString('vi-VN') : '—'
+    case 'lastLoginAt':
+    case 'createdAt':   return user[key] ? new Date(user[key]).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+    default:            return user[key] ?? '—'
+  }
 }
 
 // ── UserFormModal ──────────────────────────────────────────────────────────────

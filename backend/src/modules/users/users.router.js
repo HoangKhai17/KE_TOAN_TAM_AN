@@ -54,6 +54,9 @@ router.get('/', ...adminOnly, ctrl.listUsers)
 // Lightweight options list for dropdowns — accessible to all authenticated users
 router.get('/options', authenticate, ctrl.listUserOptions)
 
+// Export all staff to Excel (admin only)
+router.get('/export', ...adminOnly, ctrl.exportStaffExcel)
+
 /**
  * @openapi
  * /users:

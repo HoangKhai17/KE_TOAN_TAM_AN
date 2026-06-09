@@ -39,3 +39,8 @@ export async function resetUserPassword(id, newPassword) {
   const { data } = await api.patch(`/users/${id}/reset-password`, { newPassword })
   return data.data.user
 }
+
+export async function exportStaffExcel(params = {}) {
+  const { data } = await api.get('/users/export', { params, responseType: 'blob' })
+  return data
+}

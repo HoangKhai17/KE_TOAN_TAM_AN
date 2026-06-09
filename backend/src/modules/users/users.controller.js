@@ -100,4 +100,18 @@ async function resetPassword(req, res, next) {
   }
 }
 
-module.exports = { listUsers, listUserOptions, getUser, createUser, updateUser, updateStatus, deleteUser, resetPassword }
+async function exportStaffExcel(req, res, next) {
+  try {
+    const { fields = '', role, status, search } = req.query
+    const fieldList = fields ? fields.split(',').map((f) => f.trim()).filter(Boolean) : []
+    const buffer = await usersService.exportStaffExcel({ fields: fieldList, role, status, search })
+    const filename = `nhan-vien-${new Date().toISOString().slice(0, 10)}.xlsx`
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(buffer)
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { listUsers, listUserOptions, getUser, createUser, updateUser, updateStatus, deleteUser, resetPassword, exportStaffExcel }
