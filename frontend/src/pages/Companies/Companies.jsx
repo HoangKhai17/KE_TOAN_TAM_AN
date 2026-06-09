@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2,
@@ -130,6 +130,58 @@ export function StatusPill({ status }) {
   )
 }
 
+// ── MultiSelectFilter ──────────────────────────────────────────────────────────
+
+function MultiSelectFilter({ options, value, onChange, placeholder = 'Tất cả' }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    function handler(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selected = new Set(value)
+
+  function toggle(v) {
+    const next = new Set(selected)
+    next.has(v) ? next.delete(v) : next.add(v)
+    onChange([...next])
+  }
+
+  const displayText = value.length === 0
+    ? placeholder
+    : value.length === 1
+      ? (options.find((o) => o.value === value[0])?.label ?? value[0])
+      : `${value.length} đã chọn`
+
+  return (
+    <div className={s.msWrap} ref={wrapRef}>
+      <button
+        type="button"
+        className={`${s.msBtn} ${value.length > 0 ? s.msBtnActive : ''}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className={s.msBtnText}>{displayText}</span>
+        <span className={s.msBtnChevron}>{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className={s.msDropdown}>
+          {options.map(({ value: v, label }) => (
+            <label key={v} className={`${s.msOption} ${selected.has(v) ? s.msOptionChecked : ''}`}>
+              <input type="checkbox" checked={selected.has(v)} onChange={() => toggle(v)} />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function Companies() {
@@ -149,9 +201,10 @@ export default function Companies() {
 
   const [searchInput, setSearchInput]   = useState(() => readSaved().search ?? '')
   const [search, setSearch]             = useState(() => readSaved().search ?? '')
-  const [statusFilter, setStatusFilter] = useState(() => readSaved().statusFilter ?? '')
-  const [btFilter, setBtFilter]         = useState(() => readSaved().btFilter ?? '')
-  const [staffFilter, setStaffFilter]   = useState(() => readSaved().staffFilter ?? '')
+  const ensureArr = (v) => Array.isArray(v) ? v : []
+  const [statusFilter, setStatusFilter] = useState(() => ensureArr(readSaved().statusFilter))
+  const [btFilter, setBtFilter]         = useState(() => ensureArr(readSaved().btFilter))
+  const [staffFilter, setStaffFilter]   = useState(() => ensureArr(readSaved().staffFilter))
   const [page, setPage]                 = useState(() => readSaved().page ?? 1)
   const [limit, setLimit]               = useState(() => readSaved().limit ?? 20)
 
@@ -160,8 +213,8 @@ export default function Companies() {
   const [deleteTarget, setDeleteTarget] = useState(null)  // company to delete
   const [deleting, setDeleting]       = useState(false)
 
-  const hasActiveFilters = search || statusFilter || btFilter || staffFilter
-  const activeFilterCount = [search, statusFilter, btFilter, staffFilter].filter(Boolean).length
+  const hasActiveFilters = search || statusFilter.length > 0 || btFilter.length > 0 || staffFilter.length > 0
+  const activeFilterCount = [search, statusFilter.length > 0, btFilter.length > 0, staffFilter.length > 0].filter(Boolean).length
   const pageOpenTotal      = companies.reduce((sum, c) => sum + (Number(c.taskOpenCount) || 0), 0)
   const pageOverdueTotal   = companies.reduce((sum, c) => sum + (Number(c.taskOverdueCount) || 0), 0)
   const pageActiveTotal    = companies.filter((c) => c.status === 'active').length
@@ -206,11 +259,11 @@ export default function Companies() {
       .listCompanies({
         page,
         limit,
-        status:          statusFilter || undefined,
-        businessType:    btFilter     || undefined,
-        search:          search       || undefined,
+        status:          statusFilter.length > 0 ? statusFilter.join(',') : undefined,
+        businessType:    btFilter.length     > 0 ? btFilter.join(',')     : undefined,
+        search:          search || undefined,
         // Staff always scoped to their own companies; admin can filter by any staff
-        assignedStaffId: isAdmin ? (staffFilter || undefined) : currentUser?.id,
+        assignedStaffId: isAdmin ? (staffFilter.length > 0 ? staffFilter.join(',') : undefined) : currentUser?.id,
       })
       .then(({ companies: c, pagination: p }) => {
         if (!cancelled) { setCompanies(c); setPagination(p) }
@@ -223,9 +276,9 @@ export default function Companies() {
   function resetFilters() {
     setSearchInput('')
     setSearch('')
-    setStatusFilter('')
-    setBtFilter('')
-    setStaffFilter('')
+    setStatusFilter([])
+    setBtFilter([])
+    setStaffFilter([])
     setPage(1)
     sessionStorage.removeItem(FILTER_KEY)
   }
@@ -296,39 +349,37 @@ export default function Companies() {
             {isAdmin && staffList.length > 0 && (
               <div className={s.filterField}>
                 <label className={s.filterFieldLabel}>Phụ trách</label>
-                <select value={staffFilter} onChange={(e) => setStaffFilter(e.target.value)} className={s.filterSelect}>
-                  <option value="">Tất cả</option>
-                  {staffList.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
+                <MultiSelectFilter
+                  options={staffList.map((u) => ({ value: u.id, label: u.name }))}
+                  value={staffFilter}
+                  onChange={setStaffFilter}
+                  placeholder="Tất cả"
+                />
               </div>
             )}
 
             <div className={s.filterField}>
               <label className={s.filterFieldLabel}>Trạng thái HĐ</label>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={s.filterSelect}>
-                <option value="">Tất cả</option>
-                {(getOptions('company_status').length > 0
+              <MultiSelectFilter
+                options={getOptions('company_status').length > 0
                   ? getOptions('company_status').map((o) => ({ value: o.key, label: o.label }))
-                  : COMPANY_STATUS_OPTIONS
-                ).map(({ value, label }) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
+                  : COMPANY_STATUS_OPTIONS}
+                value={statusFilter}
+                onChange={setStatusFilter}
+                placeholder="Tất cả"
+              />
             </div>
 
             <div className={s.filterField}>
               <label className={s.filterFieldLabel}>Loại hình</label>
-              <select value={btFilter} onChange={(e) => setBtFilter(e.target.value)} className={s.filterSelect}>
-                <option value="">Tất cả</option>
-                {(getOptions('business_type').length > 0
+              <MultiSelectFilter
+                options={getOptions('business_type').length > 0
                   ? getOptions('business_type').map((o) => ({ value: o.key, label: o.label }))
-                  : BUSINESS_TYPE_OPTIONS
-                ).map(({ value, label }) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
+                  : BUSINESS_TYPE_OPTIONS}
+                value={btFilter}
+                onChange={setBtFilter}
+                placeholder="Tất cả"
+              />
             </div>
 
             <div className={`${s.filterField} ${s.filterFieldSearch}`}>
@@ -356,24 +407,24 @@ export default function Companies() {
                 <RotateCcw size={13} /> Đặt lại
               </button>
               <div className={s.filterChips}>
-                {statusFilter && (
-                  <span className={s.filterChip}>
-                    Trạng thái: {getLabel('company_status', statusFilter, STATUS_LABELS[statusFilter])}
-                    <button className={s.filterChipRemove} onClick={() => setStatusFilter('')}>×</button>
+                {statusFilter.map((v) => (
+                  <span key={v} className={s.filterChip}>
+                    {getLabel('company_status', v, STATUS_LABELS[v])}
+                    <button className={s.filterChipRemove} onClick={() => setStatusFilter((p) => p.filter((x) => x !== v))}>×</button>
                   </span>
-                )}
-                {btFilter && (
-                  <span className={s.filterChip}>
-                    Loại hình: {getLabel('business_type', btFilter, BUSINESS_TYPE_LABELS[btFilter])}
-                    <button className={s.filterChipRemove} onClick={() => setBtFilter('')}>×</button>
+                ))}
+                {btFilter.map((v) => (
+                  <span key={v} className={s.filterChip}>
+                    {getLabel('business_type', v, BUSINESS_TYPE_LABELS[v])}
+                    <button className={s.filterChipRemove} onClick={() => setBtFilter((p) => p.filter((x) => x !== v))}>×</button>
                   </span>
-                )}
-                {isAdmin && staffFilter && (
-                  <span className={s.filterChip}>
-                    Phụ trách: {staffList.find((u) => u.id === staffFilter)?.name ?? '?'}
-                    <button className={s.filterChipRemove} onClick={() => setStaffFilter('')}>×</button>
+                ))}
+                {isAdmin && staffFilter.map((id) => (
+                  <span key={id} className={s.filterChip}>
+                    {staffList.find((u) => u.id === id)?.name ?? '?'}
+                    <button className={s.filterChipRemove} onClick={() => setStaffFilter((p) => p.filter((x) => x !== id))}>×</button>
                   </span>
-                )}
+                ))}
                 {search && (
                   <span className={s.filterChip}>
                     &ldquo;{search}&rdquo;

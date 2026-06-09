@@ -66,19 +66,28 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
   const conditions = ['1=1']
   const filterParams = []
 
-  if (status) {
-    filterParams.push(status)
-    conditions.push(`c.status = $${filterParams.length}`)
+  const toArr = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? [v] : [])
+
+  const statusArr = toArr(status)
+  if (statusArr.length > 0) {
+    const start = filterParams.length + 1
+    statusArr.forEach((s) => filterParams.push(s))
+    conditions.push(`c.status IN (${statusArr.map((_, i) => `$${start + i}`).join(', ')})`)
   }
-  if (businessType) {
-    filterParams.push(businessType)
-    conditions.push(`c.business_type = $${filterParams.length}`)
+
+  const btArr = toArr(businessType)
+  if (btArr.length > 0) {
+    const start = filterParams.length + 1
+    btArr.forEach((b) => filterParams.push(b))
+    conditions.push(`c.business_type IN (${btArr.map((_, i) => `$${start + i}`).join(', ')})`)
   }
-  // forceStaffId (staff role) overrides any assignedStaffId from query string
-  const effectiveStaffId = forceStaffId ?? assignedStaffId
-  if (effectiveStaffId) {
-    filterParams.push(effectiveStaffId)
-    conditions.push(`c.assigned_staff_id = $${filterParams.length}`)
+
+  // forceStaffId (staff role) overrides assignedStaffId from query string
+  const effectiveStaff = forceStaffId ? [forceStaffId] : toArr(assignedStaffId)
+  if (effectiveStaff.length > 0) {
+    const start = filterParams.length + 1
+    effectiveStaff.forEach((id) => filterParams.push(id))
+    conditions.push(`c.assigned_staff_id IN (${effectiveStaff.map((_, i) => `$${start + i}`).join(', ')})`)
   }
   if (search && search.trim()) {
     filterParams.push(search.trim())
