@@ -177,14 +177,6 @@ export default function StaffDetail() {
                   Kích hoạt lại
                 </button>
               )}
-              {isAdmin && user.status === 'active' && !isSelf && (
-                <button
-                  className={`${s.btnSecondary} ${s.btnWarning}`}
-                  onClick={() => handleStatusChange('on_leave')}
-                >
-                  Đặt nghỉ phép
-                </button>
-              )}
             </div>
           )}
         </div>

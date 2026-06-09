@@ -153,7 +153,6 @@ export default function Staff() {
           >
             <option value="">Tất cả trạng thái</option>
             <option value="active">Đang làm việc</option>
-            <option value="on_leave">Nghỉ phép</option>
             <option value="resigned">Đã nghỉ việc</option>
           </select>
         </div>
@@ -330,16 +329,6 @@ function UserRow({ user, isAdmin, isSelf, onRowClick, onEdit, onStatusChange, on
               </button>
             )}
 
-            {/* Đặt nghỉ phép – chỉ khi đang active */}
-            {user.status === 'active' && (
-              <button
-                className={`${s.actionBtn} ${s.actionBtnWarning}`}
-                title="Đặt trạng thái nghỉ phép"
-                onClick={() => onStatusChange(user.id, 'on_leave')}
-              >
-                <UserMinus size={14} />
-              </button>
-            )}
 
             {/* Đánh dấu nghỉ việc – khi chưa resigned */}
             {user.status !== 'resigned' && (
