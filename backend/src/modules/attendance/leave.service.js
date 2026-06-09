@@ -73,8 +73,19 @@ async function listLeaveRequests({ userId, status, leaveType, from, to, page = 1
   const conditions = ['1=1']
   const params = []
 
-  if (userId)    { params.push(userId);    conditions.push(`l.user_id    = $${params.length}`) }
-  if (status)    { params.push(status);    conditions.push(`l.status     = $${params.length}`) }
+  const userIds  = Array.isArray(userId) ? userId : (userId ? [userId] : [])
+  const statuses = Array.isArray(status) ? status : (status ? [status] : [])
+
+  if (userIds.length > 0) {
+    const start = params.length + 1
+    userIds.forEach((id) => params.push(id))
+    conditions.push(`l.user_id IN (${userIds.map((_, i) => `$${start + i}`).join(', ')})`)
+  }
+  if (statuses.length > 0) {
+    const start = params.length + 1
+    statuses.forEach((s) => params.push(s))
+    conditions.push(`l.status::text IN (${statuses.map((_, i) => `$${start + i}`).join(', ')})`)
+  }
   if (leaveType) { params.push(leaveType); conditions.push(`l.leave_type = $${params.length}`) }
   if (from)      { params.push(from);      conditions.push(`l.start_date >= $${params.length}`) }
   if (to)        { params.push(to);        conditions.push(`l.end_date   <= $${params.length}`) }
@@ -187,10 +198,21 @@ async function cancelLeaveRequest(id, userId) {
 async function exportLeaveRecords({ from, to, status, userId, fields, res }) {
   const ExcelJS = require('exceljs')
 
+  const userIds  = Array.isArray(userId) ? userId : (userId ? [userId] : [])
+  const statuses = Array.isArray(status) ? status : (status ? [status] : [])
+
   const conditions = ['1=1']
   const params = []
-  if (userId) { params.push(userId); conditions.push(`l.user_id    = $${params.length}`) }
-  if (status) { params.push(status); conditions.push(`l.status     = $${params.length}`) }
+  if (userIds.length > 0) {
+    const start = params.length + 1
+    userIds.forEach((id) => params.push(id))
+    conditions.push(`l.user_id IN (${userIds.map((_, i) => `$${start + i}`).join(', ')})`)
+  }
+  if (statuses.length > 0) {
+    const start = params.length + 1
+    statuses.forEach((s) => params.push(s))
+    conditions.push(`l.status::text IN (${statuses.map((_, i) => `$${start + i}`).join(', ')})`)
+  }
   if (from)   { params.push(from);   conditions.push(`l.start_date >= $${params.length}`) }
   if (to)     { params.push(to);     conditions.push(`l.end_date   <= $${params.length}`) }
   const where = conditions.join(' AND ')

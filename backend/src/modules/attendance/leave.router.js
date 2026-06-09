@@ -54,9 +54,12 @@ router.get('/',  ...auth, async (req, res, next) => {
   try {
     const { userId, status, leaveType, from, to, page, limit } = req.query
     const isAdmin = req.user.role === 'admin'
-    const effectiveUserId = isAdmin ? (userId || undefined) : req.user.id
+    const statusArr        = status ? status.split(',').filter(Boolean) : undefined
+    const effectiveUserIds = isAdmin
+      ? (userId ? userId.split(',').filter(Boolean) : undefined)
+      : [req.user.id]
     const result = await svc.listLeaveRequests({
-      userId: effectiveUserId, status, leaveType, from, to,
+      userId: effectiveUserIds, status: statusArr, leaveType, from, to,
       page:  page  ? parseInt(page,  10) : 1,
       limit: limit ? parseInt(limit, 10) : 20,
     })
@@ -117,8 +120,10 @@ router.post('/', ...auth, async (req, res, next) => {
 router.get('/export-custom', ...admin, async (req, res, next) => {
   try {
     const { from, to, status, userId, fields = '' } = req.query
-    const fieldList = fields ? fields.split(',').filter(Boolean) : []
-    await svc.exportLeaveRecords({ from, to, status, userId, fields: fieldList, res })
+    const fieldList  = fields ? fields.split(',').filter(Boolean) : []
+    const statusArr  = status ? status.split(',').filter(Boolean) : undefined
+    const userIdArr  = userId ? userId.split(',').filter(Boolean) : undefined
+    await svc.exportLeaveRecords({ from, to, status: statusArr, userId: userIdArr, fields: fieldList, res })
   } catch (err) { next(err) }
 })
 

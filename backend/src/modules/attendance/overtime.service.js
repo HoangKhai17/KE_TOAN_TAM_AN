@@ -74,8 +74,19 @@ async function listOvertimeRequests({ userId, status, from, to, page = 1, limit 
   const conditions = ['1=1']
   const params = []
 
-  if (userId) { params.push(userId); conditions.push(`o.user_id  = $${params.length}`) }
-  if (status) { params.push(status); conditions.push(`o.status   = $${params.length}`) }
+  const userIds  = Array.isArray(userId) ? userId : (userId ? [userId] : [])
+  const statuses = Array.isArray(status) ? status : (status ? [status] : [])
+
+  if (userIds.length > 0) {
+    const start = params.length + 1
+    userIds.forEach((id) => params.push(id))
+    conditions.push(`o.user_id IN (${userIds.map((_, i) => `$${start + i}`).join(', ')})`)
+  }
+  if (statuses.length > 0) {
+    const start = params.length + 1
+    statuses.forEach((s) => params.push(s))
+    conditions.push(`o.status::text IN (${statuses.map((_, i) => `$${start + i}`).join(', ')})`)
+  }
   if (from)   { params.push(from);   conditions.push(`o.ot_date >= $${params.length}`) }
   if (to)     { params.push(to);     conditions.push(`o.ot_date <= $${params.length}`) }
 
@@ -179,10 +190,21 @@ async function rejectOvertimeRequest(id, { rejectionNote, reviewedBy }) {
 async function exportOvertimeRecords({ from, to, status, userId, fields, res }) {
   const ExcelJS = require('exceljs')
 
+  const userIds  = Array.isArray(userId) ? userId : (userId ? [userId] : [])
+  const statuses = Array.isArray(status) ? status : (status ? [status] : [])
+
   const conditions = ['1=1']
   const params = []
-  if (userId) { params.push(userId); conditions.push(`o.user_id  = $${params.length}`) }
-  if (status) { params.push(status); conditions.push(`o.status   = $${params.length}`) }
+  if (userIds.length > 0) {
+    const start = params.length + 1
+    userIds.forEach((id) => params.push(id))
+    conditions.push(`o.user_id IN (${userIds.map((_, i) => `$${start + i}`).join(', ')})`)
+  }
+  if (statuses.length > 0) {
+    const start = params.length + 1
+    statuses.forEach((s) => params.push(s))
+    conditions.push(`o.status::text IN (${statuses.map((_, i) => `$${start + i}`).join(', ')})`)
+  }
   if (from)   { params.push(from);   conditions.push(`o.ot_date >= $${params.length}`) }
   if (to)     { params.push(to);     conditions.push(`o.ot_date <= $${params.length}`) }
   const where = conditions.join(' AND ')

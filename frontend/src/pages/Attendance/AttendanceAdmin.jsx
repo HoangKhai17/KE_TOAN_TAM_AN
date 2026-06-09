@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -6,7 +6,7 @@ import {
 } from 'recharts'
 import {
   Users, CalendarDays, ClipboardList, Clock, CalendarCheck,
-  ChevronLeft, ChevronRight, Loader2, Check, X, RefreshCw,
+  ChevronLeft, ChevronRight, ChevronDown, Loader2, Check, X, RefreshCw,
   Download, BarChart3, Settings, Terminal, Pencil, LayoutGrid,
   Mail, SendHorizonal, CheckCircle2,
   Smartphone, Laptop, Monitor, Globe,
@@ -499,6 +499,60 @@ function getDetailCell(row, key) {
 
 const SUMMARY_PREVIEW_LIMIT = 50 // summary mode: max 50 employees to preview
 
+// ── MultiSelect — reusable multi-checkbox dropdown filter ─────────────────────
+
+function MultiSelect({ options, selected, onChange, placeholder, noun }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  const allSelected = selected.length === options.length
+  const label = selected.length === 0
+    ? placeholder
+    : selected.length === 1
+      ? (options.find((o) => o.value === selected[0])?.label ?? selected[0])
+      : `${selected.length} ${noun}`
+
+  const toggle = (value) =>
+    onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value])
+
+  const toggleAll = () => onChange(allSelected ? [] : options.map((o) => o.value))
+
+  return (
+    <div className={sa.multiSelect} ref={ref}>
+      <button
+        type="button"
+        className={`${sa.multiSelectTrigger} ${open ? sa.multiSelectTriggerOpen : ''}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className={sa.multiSelectLabel}>{label}</span>
+        {selected.length > 0 && <span className={sa.multiSelectBadge}>{selected.length}</span>}
+        <ChevronDown size={12} style={{ flexShrink: 0, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : undefined }} />
+      </button>
+      {open && (
+        <div className={sa.multiSelectDropdown}>
+          <label className={sa.multiSelectItem} onClick={toggleAll}>
+            <input type="checkbox" checked={allSelected} onChange={() => {}} className={sa.multiSelectCheckbox} />
+            <span>Tất cả</span>
+          </label>
+          <div className={sa.multiSelectDivider} />
+          {options.map((opt) => (
+            <label key={opt.value} className={sa.multiSelectItem} onClick={() => toggle(opt.value)}>
+              <input type="checkbox" checked={selected.includes(opt.value)} onChange={() => {}} className={sa.multiSelectCheckbox} />
+              <span>{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ExportExcelModal({ year, month, onClose }) {
   const addToast = useToastStore((st) => st.toast)
   const [exportType,     setExportType]     = useState('summary')
@@ -842,7 +896,7 @@ function getOtCell(row, key) {
   }
 }
 
-function OvertimeExportModal({ year, month, statusFilter, employeeFilter, staffList, onClose }) {
+function OvertimeExportModal({ year, month, statusFilters = [], employeeFilters = [], staffList, onClose }) {
   const addToast = useToastStore((st) => st.toast)
   const [selectedFields, setSelectedFields] = useState(OT_EXPORT_DEFAULT)
   const [rawData,        setRawData]        = useState([])
@@ -862,15 +916,15 @@ function OvertimeExportModal({ year, month, statusFilter, employeeFilter, staffL
     setLoadingPreview(true)
     attendanceApi.listOvertimeRequests({
       from, to,
-      status: statusFilter  || undefined,
-      userId: employeeFilter || undefined,
+      status: statusFilters.length   > 0 ? statusFilters.join(',')   : undefined,
+      userId: employeeFilters.length > 0 ? employeeFilters.join(',') : undefined,
       limit: 9999,
     })
       .then((res) => { if (!cancelled) setRawData(res.requests ?? []) })
       .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu xem trước', 'error') })
       .finally(() => { if (!cancelled) setLoadingPreview(false) })
     return () => { cancelled = true }
-  }, [from, to, statusFilter, employeeFilter]) // eslint-disable-line
+  }, [from, to, statusFilters, employeeFilters]) // eslint-disable-line
 
   const toggleField   = (key, required) => {
     if (required) return
@@ -927,8 +981,8 @@ function OvertimeExportModal({ year, month, statusFilter, employeeFilter, staffL
       const nonReq = selectedFields.filter((k) => !OT_EXPORT_FIELDS.find((f) => f.key === k)?.required)
       const resp = await attendanceApi.exportOvertimeReport({
         from, to,
-        status: statusFilter  || undefined,
-        userId: employeeFilter || undefined,
+        status: statusFilters.length   > 0 ? statusFilters.join(',')   : undefined,
+        userId: employeeFilters.length > 0 ? employeeFilters.join(',') : undefined,
         fields: nonReq.join(','),
       })
       const blob = new Blob([resp.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
@@ -950,7 +1004,14 @@ function OvertimeExportModal({ year, month, statusFilter, employeeFilter, staffL
     }
   }
 
-  const empName = employeeFilter ? (staffList.find((u) => u.id === employeeFilter)?.name ?? null) : null
+  const statusSubLabel = statusFilters.length === 0
+    ? 'Tất cả trạng thái'
+    : statusFilters.map((s) => _OT_STATUS_VI[s] ?? s).join(', ')
+  const empSubLabel = employeeFilters.length === 0
+    ? 'Tất cả nhân viên'
+    : employeeFilters.length === 1
+      ? (staffList.find((u) => u.id === employeeFilters[0])?.name ?? '1 nhân viên')
+      : `${employeeFilters.length} nhân viên`
 
   return (
     <div className={sa.exportOverlay}>
@@ -962,8 +1023,7 @@ function OvertimeExportModal({ year, month, statusFilter, employeeFilter, staffL
           <div className={sa.exportHeaderText}>
             <div className={sa.exportHeaderTitle}>Xuất dữ liệu tăng ca — {periodLabel}</div>
             <div className={sa.exportHeaderSub}>
-              {statusFilter ? (_OT_STATUS_VI[statusFilter] ?? statusFilter) : 'Tất cả trạng thái'}
-              {empName ? ` · ${empName}` : ' · Tất cả nhân viên'}
+              {statusSubLabel} · {empSubLabel}
             </div>
           </div>
           <button className={sa.exportCloseBtn} onClick={onClose} title="Đóng"><X size={16} /></button>
@@ -2137,7 +2197,7 @@ function getLeaveCell(row, key) {
   }
 }
 
-function LeaveExportModal({ year, month, statusFilter, employeeFilter, staffList, onClose }) {
+function LeaveExportModal({ year, month, statusFilters = [], employeeFilters = [], staffList, onClose }) {
   const addToast = useToastStore((st) => st.toast)
   const [selectedFields, setSelectedFields] = useState(LEAVE_EXPORT_DEFAULT)
   const [rawData,        setRawData]        = useState([])
@@ -2157,15 +2217,15 @@ function LeaveExportModal({ year, month, statusFilter, employeeFilter, staffList
     setLoadingPreview(true)
     attendanceApi.listLeaveRequests({
       from, to,
-      status: statusFilter  || undefined,
-      userId: employeeFilter || undefined,
+      status: statusFilters.length   > 0 ? statusFilters.join(',')   : undefined,
+      userId: employeeFilters.length > 0 ? employeeFilters.join(',') : undefined,
       limit: 9999,
     })
       .then((res) => { if (!cancelled) setRawData(res.requests ?? []) })
       .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu xem trước', 'error') })
       .finally(() => { if (!cancelled) setLoadingPreview(false) })
     return () => { cancelled = true }
-  }, [from, to, statusFilter, employeeFilter]) // eslint-disable-line
+  }, [from, to, statusFilters, employeeFilters]) // eslint-disable-line
 
   const toggleField = (key, required) => {
     if (required) return
@@ -2222,8 +2282,8 @@ function LeaveExportModal({ year, month, statusFilter, employeeFilter, staffList
       const nonReq = selectedFields.filter((k) => !LEAVE_EXPORT_FIELDS.find((f) => f.key === k)?.required)
       const resp = await attendanceApi.exportLeaveReport({
         from, to,
-        status: statusFilter  || undefined,
-        userId: employeeFilter || undefined,
+        status: statusFilters.length   > 0 ? statusFilters.join(',')   : undefined,
+        userId: employeeFilters.length > 0 ? employeeFilters.join(',') : undefined,
         fields: nonReq.join(','),
       })
       const blob = new Blob([resp.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
@@ -2245,7 +2305,14 @@ function LeaveExportModal({ year, month, statusFilter, employeeFilter, staffList
     }
   }
 
-  const empName = employeeFilter ? (staffList.find((u) => u.id === employeeFilter)?.name ?? null) : null
+  const statusSubLabel = statusFilters.length === 0
+    ? 'Tất cả trạng thái'
+    : statusFilters.map((s) => LEAVE_STATUS_CFG[s]?.label ?? s).join(', ')
+  const empSubLabel = employeeFilters.length === 0
+    ? 'Tất cả nhân viên'
+    : employeeFilters.length === 1
+      ? (staffList.find((u) => u.id === employeeFilters[0])?.name ?? '1 nhân viên')
+      : `${employeeFilters.length} nhân viên`
 
   return (
     <div className={sa.exportOverlay}>
@@ -2257,8 +2324,7 @@ function LeaveExportModal({ year, month, statusFilter, employeeFilter, staffList
           <div className={sa.exportHeaderText}>
             <div className={sa.exportHeaderTitle}>Xuất dữ liệu nghỉ phép — {periodLabel}</div>
             <div className={sa.exportHeaderSub}>
-              {statusFilter ? (LEAVE_STATUS_CFG[statusFilter]?.label ?? statusFilter) : 'Tất cả trạng thái'}
-              {empName ? ` · ${empName}` : ' · Tất cả nhân viên'}
+              {statusSubLabel} · {empSubLabel}
             </div>
           </div>
           <button className={sa.exportCloseBtn} onClick={onClose} title="Đóng"><X size={16} /></button>
@@ -2390,9 +2456,9 @@ function AdminLeaveTab({ staffList }) {
   const [availableYears, setAvailableYears] = useState([_CY])
   const [filterYear,     setFilterYear]     = useState(_CY)
   const [filterMonth,    setFilterMonth]    = useState(_CM)
-  const [statusFilter,   setStatusFilter]   = useState('')
-  const [employeeFilter, setEmployeeFilter] = useState('')
-  const [exportOpen,     setExportOpen]     = useState(false)
+  const [statusFilters,   setStatusFilters]   = useState([])
+  const [employeeFilters, setEmployeeFilters] = useState([])
+  const [exportOpen,      setExportOpen]      = useState(false)
 
   // Derive available years from actual data in the system
   useEffect(() => {
@@ -2410,8 +2476,8 @@ function AdminLeaveTab({ staffList }) {
     let cancelled = false
     setLoading(true)
     attendanceApi.listLeaveRequests({
-      status: statusFilter  || undefined,
-      userId: employeeFilter || undefined,
+      status: statusFilters.length   > 0 ? statusFilters.join(',')   : undefined,
+      userId: employeeFilters.length > 0 ? employeeFilters.join(',') : undefined,
       from, to, page, limit: 20,
     })
       .then((res) => {
@@ -2423,9 +2489,9 @@ function AdminLeaveTab({ staffList }) {
       .catch(() => { if (!cancelled) addToast('Không thể tải đơn nghỉ phép', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [statusFilter, employeeFilter, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilters, employeeFilters, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setPage(1) }, [statusFilter, employeeFilter, filterYear, filterMonth])
+  useEffect(() => { setPage(1) }, [statusFilters, employeeFilters, filterYear, filterMonth]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { return load() }, [load])
 
   const titlePeriod = !filterYear
@@ -2433,6 +2499,14 @@ function AdminLeaveTab({ staffList }) {
     : !filterMonth
       ? `Năm ${filterYear}`
       : monthName(parseInt(filterYear), parseInt(filterMonth))
+
+  const LEAVE_STATUS_OPTIONS = [
+    { value: 'pending',   label: 'Chờ duyệt' },
+    { value: 'approved',  label: 'Đã duyệt'  },
+    { value: 'rejected',  label: 'Từ chối'   },
+    { value: 'cancelled', label: 'Đã huỷ'    },
+  ]
+  const staffOptions = staffList.map((u) => ({ value: u.id, label: u.name }))
 
   return (
     <>
@@ -2457,17 +2531,20 @@ function AdminLeaveTab({ staffList }) {
             <option key={m} value={String(m)}>Tháng {m}</option>
           ))}
         </select>
-        <select className={s.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">Tất cả trạng thái</option>
-          <option value="pending">Chờ duyệt</option>
-          <option value="approved">Đã duyệt</option>
-          <option value="rejected">Từ chối</option>
-          <option value="cancelled">Đã huỷ</option>
-        </select>
-        <select className={s.filterSelect} value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}>
-          <option value="">Tất cả nhân viên</option>
-          {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </select>
+        <MultiSelect
+          options={LEAVE_STATUS_OPTIONS}
+          selected={statusFilters}
+          onChange={setStatusFilters}
+          placeholder="Tất cả trạng thái"
+          noun="trạng thái"
+        />
+        <MultiSelect
+          options={staffOptions}
+          selected={employeeFilters}
+          onChange={setEmployeeFilters}
+          placeholder="Tất cả nhân viên"
+          noun="nhân viên"
+        />
         <button className={`${s.btnPrimary} ${s.btnShort}`} onClick={() => setExportOpen(true)}>
           <Download size={13} /> Xuất Excel
         </button>
@@ -2576,8 +2653,8 @@ function AdminLeaveTab({ staffList }) {
         <LeaveExportModal
           year={filterYear}
           month={filterMonth}
-          statusFilter={statusFilter}
-          employeeFilter={employeeFilter}
+          statusFilters={statusFilters}
+          employeeFilters={employeeFilters}
           staffList={staffList}
           onClose={() => setExportOpen(false)}
         />
@@ -2656,9 +2733,9 @@ function AdminOvertimeTab({ staffList }) {
   const [availableYears, setAvailableYears] = useState([_CY])
   const [filterYear,     setFilterYear]     = useState(_CY)
   const [filterMonth,    setFilterMonth]    = useState(_CM)
-  const [statusFilter,   setStatusFilter]   = useState('')
-  const [employeeFilter, setEmployeeFilter] = useState('')
-  const [exportOpen,     setExportOpen]     = useState(false)
+  const [statusFilters,   setStatusFilters]   = useState([])
+  const [employeeFilters, setEmployeeFilters] = useState([])
+  const [exportOpen,      setExportOpen]      = useState(false)
 
   // Derive available years from actual data in the system
   useEffect(() => {
@@ -2676,8 +2753,8 @@ function AdminOvertimeTab({ staffList }) {
     let cancelled = false
     setLoading(true)
     attendanceApi.listOvertimeRequests({
-      status: statusFilter  || undefined,
-      userId: employeeFilter || undefined,
+      status: statusFilters.length   > 0 ? statusFilters.join(',')   : undefined,
+      userId: employeeFilters.length > 0 ? employeeFilters.join(',') : undefined,
       from, to, page, limit: 20,
     })
       .then((res) => {
@@ -2689,9 +2766,9 @@ function AdminOvertimeTab({ staffList }) {
       .catch(() => { if (!cancelled) addToast('Không thể tải đơn tăng ca', 'error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [statusFilter, employeeFilter, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilters, employeeFilters, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setPage(1) }, [statusFilter, employeeFilter, filterYear, filterMonth])
+  useEffect(() => { setPage(1) }, [statusFilters, employeeFilters, filterYear, filterMonth]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { return load() }, [load])
 
   const titlePeriod = !filterYear
@@ -2699,6 +2776,13 @@ function AdminOvertimeTab({ staffList }) {
     : !filterMonth
       ? `Năm ${filterYear}`
       : monthName(parseInt(filterYear), parseInt(filterMonth))
+
+  const OT_STATUS_OPTIONS = [
+    { value: 'pending',  label: 'Chờ duyệt' },
+    { value: 'approved', label: 'Đã duyệt'  },
+    { value: 'rejected', label: 'Từ chối'   },
+  ]
+  const staffOptions = staffList.map((u) => ({ value: u.id, label: u.name }))
 
   return (
     <>
@@ -2723,16 +2807,20 @@ function AdminOvertimeTab({ staffList }) {
             <option key={m} value={String(m)}>Tháng {m}</option>
           ))}
         </select>
-        <select className={s.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">Tất cả trạng thái</option>
-          <option value="pending">Chờ duyệt</option>
-          <option value="approved">Đã duyệt</option>
-          <option value="rejected">Từ chối</option>
-        </select>
-        <select className={s.filterSelect} value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}>
-          <option value="">Tất cả nhân viên</option>
-          {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </select>
+        <MultiSelect
+          options={OT_STATUS_OPTIONS}
+          selected={statusFilters}
+          onChange={setStatusFilters}
+          placeholder="Tất cả trạng thái"
+          noun="trạng thái"
+        />
+        <MultiSelect
+          options={staffOptions}
+          selected={employeeFilters}
+          onChange={setEmployeeFilters}
+          placeholder="Tất cả nhân viên"
+          noun="nhân viên"
+        />
         <button className={`${s.btnPrimary} ${s.btnShort}`} onClick={() => setExportOpen(true)}>
           <Download size={13} /> Xuất Excel
         </button>
@@ -2845,8 +2933,8 @@ function AdminOvertimeTab({ staffList }) {
         <OvertimeExportModal
           year={filterYear}
           month={filterMonth}
-          statusFilter={statusFilter}
-          employeeFilter={employeeFilter}
+          statusFilters={statusFilters}
+          employeeFilters={employeeFilters}
           staffList={staffList}
           onClose={() => setExportOpen(false)}
         />
