@@ -63,6 +63,14 @@
 ┌───────────────────────────────────┐       │  attendance_adjustments       │
 │   public_holidays  (Ngày lễ QG)  │       │  (Audit trail — immutable)    │
 └───────────────────────────────────┘       └──────────────────────────────┘
+
+── Module 1 (bổ sung): HS Lưu Trữ Khi QT ───────────────────────────────────
+┌──────────────────────────────────────┐    ┌──────────────────────────────────────┐
+│        company_archive_years          │─1:N│        company_archive_docs           │
+│  UNIQUE (company_id, year)            │    │  months JSONB {"1":""…"12":""}        │
+│  notes (ghi chú cấp năm)             │    │  position INT  (kéo thả reorder)      │
+│  ON DELETE CASCADE ← companies       │    │  ON DELETE CASCADE ← archive_years    │
+└──────────────────────────────────────┘    └──────────────────────────────────────┘
 ```
 
 ---
@@ -1100,6 +1108,82 @@ CREATE INDEX idx_cdr_token     ON client_document_requests(public_token) WHERE p
 
 ---
 
+## TABLE: company_archive_years (Năm Lưu Trữ Hồ Sơ)
+
+> Migration: `migrations/064_archive_years.sql`
+> Mỗi năm lưu trữ là một record độc lập — xóa năm = cascade toàn bộ dòng chứng từ của năm đó.
+
+```sql
+CREATE TABLE company_archive_years (
+  id         UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID    NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  year       INT     NOT NULL CHECK (year >= 2000 AND year <= 2100),
+  notes      TEXT,              -- Ghi chú cấp năm (VD: HĐ nguyên tắc, thông tin chung)
+  created_by UUID    REFERENCES users(id),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_archive_year UNIQUE (company_id, year)
+);
+
+CREATE INDEX idx_cay_company ON company_archive_years(company_id);
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `company_id` | Công ty KH — ON DELETE CASCADE: xóa công ty = xóa toàn bộ năm lưu trữ |
+| `year` | Năm lưu trữ — CHECK (2000–2100); UNIQUE per company ngăn trùng năm |
+| `notes` | Ghi chú cấp năm, ví dụ: "HĐ nguyên tắc 22/05/2026 — Bản giấy, hai bên ký + đóng dấu" |
+
+---
+
+## TABLE: company_archive_docs (Dòng Chứng Từ Lưu Trữ)
+
+> Migration: `migrations/065_archive_docs.sql`
+
+```sql
+CREATE TABLE company_archive_docs (
+  id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  year_id         UUID         NOT NULL REFERENCES company_archive_years(id) ON DELETE CASCADE,
+  document_type   VARCHAR(300) NOT NULL,     -- Loại chứng từ: "Bảng chấm công + Bảng lương"
+  detail          VARCHAR(500),              -- Chi tiết / mô tả bổ sung
+  months          JSONB        NOT NULL DEFAULT
+    '{"1":"","2":"","3":"","4":"","5":"","6":"","7":"","8":"","9":"","10":"","11":"","12":""}',
+  notes           TEXT,                      -- Ghi chú nội bộ
+  characteristics VARCHAR(300),              -- Đặc điểm: "Song ngữ", "Bản giấy", "Bản scan"...
+  position        INT          NOT NULL DEFAULT 0,   -- Thứ tự hiển thị (kéo thả reorder)
+  created_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_cad_year     ON company_archive_docs(year_id);
+CREATE INDEX idx_cad_position ON company_archive_docs(year_id, position);
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `year_id` | Năm lưu trữ — ON DELETE CASCADE: xóa năm = xóa toàn bộ dòng chứng từ |
+| `document_type` | Tên loại hồ sơ (nhập tự do), ví dụ: "Bảng chấm công + Bảng lương" |
+| `detail` | Mô tả chi tiết hoặc tên đối tác liên quan |
+| `months` | JSONB 12 key cố định `"1"` – `"12"`, giá trị free text (`x`, `kps`, rỗng...) |
+| `notes` | Ghi chú nội bộ của nhân viên phụ trách |
+| `characteristics` | Đặc điểm ngắn: "Song ngữ", "Bản giấy + bản scan", "Bản giấy" |
+| `position` | Thứ tự hiển thị trong bảng — hỗ trợ kéo thả reorder |
+
+**Cột "Năm" hiển thị trên UI — không lưu DB (computed tại frontend):**
+```js
+const yearCount = Object.values(doc.months).filter(v => v.trim() !== '').length
+```
+
+**Pattern PATCH một ô tháng — JSONB merge operator:**
+```sql
+UPDATE company_archive_docs
+SET months = months || '{"3": "x"}'::jsonb,
+    updated_at = NOW()
+WHERE id = $1;
+```
+Operator `||` chỉ ghi đè đúng key được chỉ định, 11 key còn lại giữ nguyên.
+
+---
+
 ## Tóm Tắt Các Bảng
 
 | # | Bảng | Mô tả | Quan hệ chính |
@@ -1140,6 +1224,8 @@ CREATE INDEX idx_cdr_token     ON client_document_requests(public_token) WHERE p
 | 32 | `client_document_requests` | Yêu cầu tài liệu từ KH (entity độc lập) | N:1 companies, users; N:0..1 tasks (nullable) |
 | **—** | **— Module 1: Công Ty (bổ sung) —** | | |
 | 33 | `company_labor_contracts` | Theo dõi HĐLĐ nhân viên KH | N:1 companies, users (created_by) |
+| 34 | `company_archive_years` | Năm lưu trữ hồ sơ theo công ty KH | N:1 companies |
+| 35 | `company_archive_docs` | Dòng chứng từ lưu trữ theo năm | N:1 company_archive_years (cascade) |
 
 ---
 

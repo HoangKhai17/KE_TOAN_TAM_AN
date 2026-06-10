@@ -100,6 +100,34 @@
 
 ---
 
+### 1.6 Hồ Sơ Lưu Trữ Khi Quyết Toán
+
+> Theo dõi trạng thái hồ sơ / chứng từ mà từng khách hàng đã giao nộp cho kế toán, tổ chức theo năm. Giúp nhân viên biết ngay tháng nào còn thiếu chứng từ khi chuẩn bị quyết toán cuối năm.
+
+**Tính năng:**
+- Tổ chức dữ liệu theo năm — mỗi năm là một tập hồ sơ độc lập, có thể xóa toàn bộ khi không còn cần thiết
+- Thêm / sửa / xóa từng dòng chứng từ
+- **12 ô tháng per dòng** — click-to-edit inline, nhập giá trị tự do (`x`, `kps`, tên file, hoặc để trống)
+- **Cột "Năm"** — hiển thị số tháng có data của dòng đó (computed từ 12 ô tháng, không lưu DB)
+- Kéo thả để sắp xếp thứ tự các dòng chứng từ trong bảng
+- Ghi chú cấp năm — lưu thông tin hợp đồng nguyên tắc hoặc ghi chú chung của cả năm
+
+**Cột dữ liệu mỗi dòng:**
+
+| Cột | Mô tả | Lưu DB |
+|-----|-------|--------|
+| Loại chứng từ | Tên loại hồ sơ (VD: "Bảng chấm công + Bảng lương") | ✓ |
+| Chi tiết | Mô tả bổ sung hoặc tên đối tác liên quan | ✓ |
+| Tháng 1–12 | Giá trị tự do — `x`, `kps`, tên file, hoặc rỗng | ✓ (JSONB) |
+| Năm | Tổng số tháng trong dòng đó có giá trị (≠ rỗng) | ✗ (computed) |
+| Ghi chú | Ghi chú nội bộ của nhân viên phụ trách | ✓ |
+| Đặc điểm | Đặc điểm ngắn: "Song ngữ", "Bản giấy", "Bản scan"... | ✓ |
+
+**Nơi hiển thị:**
+- Tab **"HS lưu trữ khi QT"** trên trang `/companies/:id`
+
+---
+
 ## Module 2: Quản Lý Nhân Sự
 
 > Quản lý thông tin nhân viên kế toán nội bộ của Tâm An.
@@ -639,6 +667,7 @@ Khi staff / admin tạo task, họ chọn **Loại task**:
 | M1 | Hồ sơ doanh nghiệp | 🔴 P1 | Nền tảng của toàn hệ thống |
 | M1 | Tài khoản hệ thống KH (Credentials) | 🔴 P1 | Nhu cầu hàng ngày của nhân viên kế toán |
 | M1 | Theo dõi HĐLĐ nhân viên KH | 🟠 P2 | Tab trong company detail; staff toàn quyền; dynamic fields (text/number/date); xuất Excel |
+| M1 | Hồ Sơ Lưu Trữ Khi Quyết Toán | 🟠 P2 | Tab trong company detail; tổ chức theo năm; 12 ô tháng click-to-edit inline; xóa theo năm cascade |
 | M2 | Hồ sơ nhân viên + phân công | 🔴 P1 | |
 | M2 | Quản lý lương & thưởng | 🟠 P2 | Lập bảng lương hàng tháng, tính net salary |
 | M3 | Tạo & giao công việc (thủ công + template) | 🔴 P1 | |
