@@ -61,6 +61,43 @@
 
 > **Bảo mật:** Mật khẩu được mã hóa AES-256-GCM tại application layer — không bao giờ lưu plain text. Xem chi tiết tại [06_SECURITY.md](./06_SECURITY.md).
 
+### 1.5 Theo Dõi Hợp Đồng Lao Động (HĐLĐ)
+
+> Quản lý danh sách hợp đồng lao động của nhân viên tại từng doanh nghiệp khách hàng — cho phép nhân viên kế toán phụ trách theo dõi hạn hợp đồng và nhắc nhở gia hạn kịp thời.
+
+**Tính năng:**
+- Xem danh sách toàn bộ HĐLĐ của nhân viên thuộc công ty KH
+- Thêm / sửa / xóa từng hợp đồng — **staff toàn quyền trên công ty mình phụ trách**, admin toàn quyền
+- Tự động tính **số ngày còn lại** tại thời điểm truy vấn từ `end_date − ngày hôm nay`
+- Tự động phân **tình trạng** theo ngưỡng:
+
+  | Tình trạng | Điều kiện | Màu hiển thị |
+  |-----------|-----------|-------------|
+  | Còn hiệu lực | > 30 ngày còn lại | Xanh lá |
+  | Sắp hết hạn | 1–30 ngày còn lại | Vàng / cam |
+  | Đã hết hạn | Ngày kết thúc đã qua | Đỏ |
+  | Không xác định | `end_date` NULL | Xám |
+
+- **Trường tùy chỉnh (dynamic fields):** mỗi hợp đồng có thể thêm trường bổ sung tùy ý — hỗ trợ kiểu `text`, `number`, `date`
+- **Xuất Excel:** toàn bộ danh sách HĐLĐ của công ty bao gồm dynamic fields
+
+**Các trường dữ liệu cố định:**
+
+| Trường | Mô tả | Bắt buộc |
+|--------|-------|---------|
+| Tên nhân viên | Tên NV của doanh nghiệp KH (nhập tự do, không FK vào `users`) | ✓ |
+| Loại hợp đồng | Nhập tự do — VD: "Xác định thời hạn", "Thử việc", "Không xác định thời hạn" | |
+| Số hợp đồng | Mã số / số hiệu hợp đồng | |
+| Ngày hợp đồng | Ngày ký / ngày có hiệu lực | |
+| Ngày kết thúc | NULL = không xác định thời hạn (hợp đồng vô thời hạn) | |
+| Số ngày còn lại | **Tính tại query time** — không lưu DB | — |
+| Tình trạng | **Tính tại query time** từ số ngày còn lại | — |
+| Ghi chú | Ghi chú nội bộ của nhân viên phụ trách | |
+| Trường tùy chỉnh | Danh sách `[{name, value, type}]` — thêm/xóa tùy ý | |
+
+**Nơi hiển thị:**
+- Tab **"Theo dõi HĐLĐ"** trên trang `/companies/:id`
+
 ---
 
 ## Module 2: Quản Lý Nhân Sự
@@ -601,6 +638,7 @@ Khi staff / admin tạo task, họ chọn **Loại task**:
 |--------|-----------|---------|---------|
 | M1 | Hồ sơ doanh nghiệp | 🔴 P1 | Nền tảng của toàn hệ thống |
 | M1 | Tài khoản hệ thống KH (Credentials) | 🔴 P1 | Nhu cầu hàng ngày của nhân viên kế toán |
+| M1 | Theo dõi HĐLĐ nhân viên KH | 🟠 P2 | Tab trong company detail; staff toàn quyền; dynamic fields (text/number/date); xuất Excel |
 | M2 | Hồ sơ nhân viên + phân công | 🔴 P1 | |
 | M2 | Quản lý lương & thưởng | 🟠 P2 | Lập bảng lương hàng tháng, tính net salary |
 | M3 | Tạo & giao công việc (thủ công + template) | 🔴 P1 | |

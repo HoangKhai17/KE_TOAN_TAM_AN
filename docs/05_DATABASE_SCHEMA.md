@@ -982,6 +982,65 @@ CREATE INDEX idx_cc_active     ON company_credentials(company_id, is_active) WHE
 
 ---
 
+## TABLE: company_labor_contracts (Theo Dõi HĐLĐ Nhân Viên KH)
+
+> Lưu trữ danh sách hợp đồng lao động của nhân viên tại từng doanh nghiệp khách hàng. Trường `days_remaining` và `contract_status` **không lưu DB** — tính tại query time để luôn phản ánh đúng thực tế.
+
+```sql
+CREATE TABLE company_labor_contracts (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id       UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+
+  -- Thông tin nhân viên và hợp đồng
+  employee_name    VARCHAR(200) NOT NULL,     -- Tên NV của KH (không FK vào users)
+  contract_type    VARCHAR(150),              -- Nhập tự do: 'Xác định thời hạn', 'Thử việc'...
+  contract_number  VARCHAR(100),              -- Số / mã hiệu hợp đồng
+  contract_date    DATE,                      -- Ngày ký / ngày có hiệu lực
+  end_date         DATE,                      -- NULL = không xác định thời hạn (vô thời hạn)
+
+  notes            TEXT,
+  custom_fields    JSONB NOT NULL DEFAULT '[]',  -- [{name, value, type: 'text'|'number'|'date'}]
+
+  created_by       UUID NOT NULL REFERENCES users(id),
+  created_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_clc_company  ON company_labor_contracts(company_id);
+CREATE INDEX idx_clc_end_date ON company_labor_contracts(end_date) WHERE end_date IS NOT NULL;
+```
+
+**Query pattern — tính `days_remaining` và `contract_status` tại thời điểm truy vấn:**
+
+```sql
+SELECT *,
+  CASE WHEN end_date IS NULL THEN NULL
+       ELSE (end_date - CURRENT_DATE)
+  END AS days_remaining,
+  CASE
+    WHEN end_date IS NULL              THEN 'permanent'      -- Không xác định thời hạn
+    WHEN end_date < CURRENT_DATE       THEN 'expired'        -- Đã hết hạn
+    WHEN end_date - CURRENT_DATE <= 30 THEN 'expiring_soon'  -- Sắp hết hạn (≤ 30 ngày)
+    ELSE                                    'active'          -- Còn hiệu lực
+  END AS contract_status
+FROM company_labor_contracts
+WHERE company_id = $1
+ORDER BY
+  CASE WHEN end_date IS NULL THEN 2 ELSE 1 END,
+  end_date ASC;
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `employee_name` | Tên nhân viên của doanh nghiệp KH — **không FK vào `users`** (đây là NV của KH, không phải NV Tâm An) |
+| `contract_type` | Loại hợp đồng — lưu VARCHAR tự do, không dùng ENUM để linh hoạt cho mọi KH |
+| `end_date` | NULL = hợp đồng không xác định thời hạn; có giá trị = hợp đồng xác định thời hạn |
+| `custom_fields` | JSONB `[{name, value, type}]` — `type` ∈ `'text' \| 'number' \| 'date'` — validate ở application layer |
+| `days_remaining` | **Không lưu DB** — computed tại query time: `end_date - CURRENT_DATE` |
+| `contract_status` | **Không lưu DB** — computed: `active \| expiring_soon \| expired \| permanent` |
+
+---
+
 ## TABLE: client_document_requests (Yêu Cầu Tài Liệu Từ Khách Hàng)
 
 > Theo dõi những tài liệu / chứng từ mà staff cần yêu cầu KH cung cấp. CDR là **entity độc lập** (không bắt buộc gắn vào task), hiển thị trong tab "Yêu cầu KH" trên trang công ty và trong danh sách `/tasks` (filter riêng). Hỗ trợ 2 kênh đôn đốc: email nhắc nhở và shareable public link (KH điền form + dán link chia sẻ, không cần upload file lên hệ thống).
@@ -1079,6 +1138,8 @@ CREATE INDEX idx_cdr_token     ON client_document_requests(public_token) WHERE p
 | 31 | `public_holidays` | Ngày lễ quốc gia | — |
 | **—** | **— Module 8: Client Document Requests —** | | |
 | 32 | `client_document_requests` | Yêu cầu tài liệu từ KH (entity độc lập) | N:1 companies, users; N:0..1 tasks (nullable) |
+| **—** | **— Module 1: Công Ty (bổ sung) —** | | |
+| 33 | `company_labor_contracts` | Theo dõi HĐLĐ nhân viên KH | N:1 companies, users (created_by) |
 
 ---
 
