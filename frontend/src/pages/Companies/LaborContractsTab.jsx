@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Download, Loader2, ScrollText, Columns, X, GripVertical } from 'lucide-react'
+import { Plus, Pencil, Trash2, Download, Loader2, ScrollText, Columns, GripVertical } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as lcApi from '../../api/laborContracts'
@@ -15,11 +15,11 @@ const STATUS_LABEL = {
   permanent:     'Không thời hạn',
 }
 
-const STATUS_STYLE = {
-  active:        { background: '#d1fae5', color: '#065f46' },
-  expiring_soon: { background: '#fef9c3', color: '#854d0e' },
-  expired:       { background: '#fee2e2', color: '#991b1b' },
-  permanent:     { background: '#f1f5f9', color: '#475569' },
+const STATUS_CSS = {
+  active:        s.hdldStatusActive,
+  expiring_soon: s.hdldStatusExpiringSoon,
+  expired:       s.hdldStatusExpired,
+  permanent:     s.hdldStatusPermanent,
 }
 
 const COL_TYPE_LABEL = { text: 'Văn bản', number: 'Số', date: 'Ngày' }
@@ -32,19 +32,8 @@ function fmtDate(iso) {
 }
 
 function StatusBadge({ status }) {
-  const style = STATUS_STYLE[status] ?? {}
   return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '2px 10px',
-        borderRadius: '999px',
-        fontSize: '11px',
-        fontWeight: 600,
-        whiteSpace: 'nowrap',
-        ...style,
-      }}
-    >
+    <span className={`${s.hdldStatusBadge} ${STATUS_CSS[status] ?? ''}`}>
       {STATUS_LABEL[status] ?? status}
     </span>
   )
@@ -53,11 +42,11 @@ function StatusBadge({ status }) {
 // ── ManageColumnsModal ────────────────────────────────────────────────────────
 
 function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
-  const addToast       = useToastStore((st) => st.toast)
-  const [newName, setNewName] = useState('')
-  const [newType, setNewType] = useState('text')
-  const [adding, setAdding]   = useState(false)
-  const [error, setError]     = useState(null)
+  const addToast             = useToastStore((st) => st.toast)
+  const [newName, setNewName]       = useState('')
+  const [newType, setNewType]       = useState('text')
+  const [adding, setAdding]         = useState(false)
+  const [error, setError]           = useState(null)
   const [deletingId, setDeletingId] = useState(null)
 
   async function handleAdd(e) {
@@ -98,63 +87,41 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
   return (
     <Modal title="Quản lý cột tuỳ chỉnh" onClose={onClose} maxWidth={520}>
       <div className={s.modalForm}>
-        <p style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 14 }}>
+        <p className={s.hdldModalDesc}>
           Các cột tuỳ chỉnh áp dụng cho tất cả hợp đồng trong công ty này.
           Xoá cột không làm mất dữ liệu đã nhập.
         </p>
 
-        {/* Existing columns */}
         {columns.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--color-muted)', textAlign: 'center', padding: '12px 0' }}>
-            Chưa có cột tuỳ chỉnh nào.
-          </p>
+          <p className={s.hdldModalEmpty}>Chưa có cột tuỳ chỉnh nào.</p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+          <div className={s.hdldColList}>
             {columns.map((col) => (
-              <div
-                key={col.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '7px 10px',
-                  background: 'var(--color-bg-soft)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border-soft)',
-                }}
-              >
-                <GripVertical size={13} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
-                <span style={{ flex: 1, fontWeight: 600, fontSize: 13 }}>{col.colName}</span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: 'var(--color-muted)',
-                    background: '#e5e7eb',
-                    padding: '1px 7px',
-                    borderRadius: 999,
-                  }}
-                >
+              <div key={col.id} className={s.hdldColRow}>
+                <GripVertical size={13} className={s.hdldColGrip} />
+                <span className={s.hdldColName}>{col.colName}</span>
+                <span className={s.hdldColTypeBadge}>
                   {COL_TYPE_LABEL[col.colType] ?? col.colType}
                 </span>
                 <button
-                  className={`${s.iconBtnSm} ${s.iconBtnDanger}`}
+                  className={`${s.iconBtnSm} ${s.iconBtnDanger} ${s.hdldColDeleteBtn}`}
                   onClick={() => handleDelete(col)}
                   disabled={deletingId === col.id}
                   title="Xoá cột"
-                  style={{ flexShrink: 0 }}
                 >
-                  {deletingId === col.id ? <Loader2 size={12} className={s.spin} /> : <Trash2 size={12} />}
+                  {deletingId === col.id
+                    ? <Loader2 size={12} className={s.spin} />
+                    : <Trash2 size={12} />}
                 </button>
               </div>
             ))}
           </div>
         )}
 
-        {/* Add new column */}
         <form onSubmit={handleAdd}>
-          {error && <div className={s.errorBox} style={{ marginBottom: 10 }}>{error}</div>}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
+          {error && <div className={`${s.errorBox} ${s.hdldInlineError}`}>{error}</div>}
+          <div className={s.hdldAddColForm}>
+            <div className={s.hdldAddColMain}>
               <label className={s.formLabel}>Tên cột mới</label>
               <input
                 type="text"
@@ -165,7 +132,7 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
                 autoFocus
               />
             </div>
-            <div style={{ width: 110 }}>
+            <div className={s.hdldAddColType}>
               <label className={s.formLabel}>Kiểu dữ liệu</label>
               <select
                 value={newType}
@@ -179,9 +146,8 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
             </div>
             <button
               type="submit"
-              className={s.btnNavy}
+              className={`${s.btnNavy} ${s.hdldAddColBtn}`}
               disabled={adding}
-              style={{ height: 36, padding: '0 14px', flexShrink: 0 }}
             >
               {adding ? <Loader2 size={13} className={s.spin} /> : <Plus size={13} />}
               Thêm
@@ -189,7 +155,7 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
           </div>
         </form>
 
-        <div className={s.modalActions} style={{ marginTop: 20 }}>
+        <div className={`${s.modalActions} ${s.hdldModalActions}`}>
           <button onClick={onClose} className={s.btnOutline}>Đóng</button>
         </div>
       </div>
@@ -223,7 +189,10 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
         contractDate:   initial.contractDate   ? String(initial.contractDate).substring(0, 10) : '',
         endDate:        initial.endDate        ? String(initial.endDate).substring(0, 10)       : '',
         notes:          initial.notes          ?? '',
-        customFields:   { ...Object.fromEntries(columns.map((c) => [c.colName, ''])), ...(initial.customFields ?? {}) },
+        customFields:   {
+          ...Object.fromEntries(columns.map((c) => [c.colName, ''])),
+          ...(initial.customFields ?? {}),
+        },
       }
     }
     return emptyForm(columns)
@@ -268,7 +237,7 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
         {error && <div className={s.errorBox}>{error}</div>}
 
         <div className={s.formGrid2}>
-          <div style={{ gridColumn: 'span 2' }}>
+          <div className={s.hdldFormSpan2}>
             <label className={`${s.formLabel} ${s.formLabelReq}`}>Tên nhân viên</label>
             <input
               type="text"
@@ -333,7 +302,7 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
             />
           </div>
 
-          <div style={{ gridColumn: 'span 2' }}>
+          <div className={s.hdldFormSpan2}>
             <label className={s.formLabel}>Ghi chú</label>
             <textarea
               value={form.notes}
@@ -344,14 +313,11 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
             />
           </div>
 
-          {/* Dynamic columns — one input per defined column */}
           {columns.map((col) => (
             <div key={col.id}>
               <label className={s.formLabel}>
                 {col.colName}
-                <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--color-muted)' }}>
-                  ({COL_TYPE_LABEL[col.colType]})
-                </span>
+                <span className={s.hdldColTypeHint}>({COL_TYPE_LABEL[col.colType]})</span>
               </label>
               <input
                 type={col.colType === 'number' ? 'number' : col.colType === 'date' ? 'date' : 'text'}
@@ -390,7 +356,7 @@ function DeleteConfirmModal({ contract, onConfirm, onClose }) {
   return (
     <Modal title="Xoá hợp đồng" onClose={onClose}>
       <div className={s.modalForm}>
-        <p style={{ fontSize: 14, color: 'var(--color-text-soft)', marginBottom: 16 }}>
+        <p className={s.hdldConfirmText}>
           Bạn có chắc muốn xoá hợp đồng của nhân viên{' '}
           <strong>{contract.employeeName}</strong>? Hành động này không thể hoàn tác.
         </p>
@@ -415,16 +381,16 @@ export default function LaborContractsTab({ company }) {
 
   const canEdit = user?.role === 'admin' || company.assignedStaffId === user?.id
 
-  const [contracts, setContracts]   = useState([])
-  const [columns, setColumns]       = useState([])
-  const [loading, setLoading]       = useState(true)
-  const [filterStatus, setFilterStatus] = useState('')
-  const [exporting, setExporting]   = useState(false)
+  const [contracts, setContracts]         = useState([])
+  const [columns, setColumns]             = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [filterStatus, setFilterStatus]   = useState('')
+  const [exporting, setExporting]         = useState(false)
 
-  const [showCreate, setShowCreate]       = useState(false)
-  const [editTarget, setEditTarget]       = useState(null)
-  const [deleteTarget, setDeleteTarget]   = useState(null)
-  const [showManageCols, setShowManageCols] = useState(false)
+  const [showCreate, setShowCreate]           = useState(false)
+  const [editTarget, setEditTarget]           = useState(null)
+  const [deleteTarget, setDeleteTarget]       = useState(null)
+  const [showManageCols, setShowManageCols]   = useState(false)
 
   async function load() {
     setLoading(true)
@@ -492,12 +458,11 @@ export default function LaborContractsTab({ company }) {
   return (
     <div>
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div className={s.hdldToolbar}>
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className={s.formSelect}
-          style={{ height: 32, fontSize: 13, width: 'auto', minWidth: 160 }}
+          className={`${s.formSelect} ${s.hdldFilterSelect}`}
         >
           <option value="">Tất cả tình trạng</option>
           <option value="active">Còn hiệu lực</option>
@@ -507,25 +472,23 @@ export default function LaborContractsTab({ company }) {
         </select>
 
         {!loading && (
-          <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+          <span className={s.hdldToolbarCount}>
             {displayed.length} hợp đồng
             {columns.length > 0 && ` · ${columns.length} cột tuỳ chỉnh`}
           </span>
         )}
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+        <div className={s.hdldToolbarRight}>
           {canEdit && (
             <button
-              className={s.btnOutline}
-              style={{ height: 32, padding: '0 14px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              className={`${s.btnOutline} ${s.hdldToolbarBtn}`}
               onClick={() => setShowManageCols(true)}
             >
               <Columns size={13} /> Quản lý cột
             </button>
           )}
           <button
-            className={s.btnOutline}
-            style={{ height: 32, padding: '0 14px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            className={`${s.btnOutline} ${s.hdldToolbarBtn}`}
             onClick={handleExport}
             disabled={exporting || loading}
           >
@@ -534,8 +497,7 @@ export default function LaborContractsTab({ company }) {
           </button>
           {canEdit && (
             <button
-              className={s.btnNavy}
-              style={{ height: 32, padding: '0 14px', fontSize: 13 }}
+              className={`${s.btnNavy} ${s.hdldToolbarBtn}`}
               onClick={() => setShowCreate(true)}
             >
               <Plus size={13} /> Thêm hợp đồng
@@ -547,12 +509,12 @@ export default function LaborContractsTab({ company }) {
       {/* Table */}
       {loading ? (
         <div className={s.loadingCenter}>
-          <Loader2 size={18} className={s.spin} style={{ marginRight: 8 }} /> Đang tải...
+          <Loader2 size={18} className={s.spin} /> Đang tải...
         </div>
       ) : displayed.length === 0 ? (
         <div className={s.emptyState}>
-          <ScrollText size={32} style={{ color: '#94a3b8', marginBottom: 8 }} />
-          <p style={{ fontSize: 13, color: 'var(--color-muted)' }}>
+          <ScrollText size={32} className={s.hdldEmptyIcon} />
+          <p className={s.hdldEmptyText}>
             {filterStatus
               ? 'Không có hợp đồng nào khớp bộ lọc.'
               : 'Chưa có hợp đồng lao động nào.'}
@@ -561,21 +523,21 @@ export default function LaborContractsTab({ company }) {
       ) : (
         <div className={s.tableWrap}>
           <div className={s.tableScroll}>
-            <table className={s.table}>
+            <table className={`${s.table} ${s.hdldTable}`}>
               <thead>
                 <tr>
-                  <th style={{ width: 44 }}>STT</th>
-                  <th style={{ minWidth: 160 }}>Tên nhân viên</th>
-                  <th style={{ minWidth: 120 }}>MST nhân viên</th>
-                  <th style={{ minWidth: 160 }}>Loại HĐ</th>
-                  <th style={{ minWidth: 120 }}>Số HĐ</th>
-                  <th style={{ minWidth: 100 }}>Ngày ký</th>
-                  <th style={{ minWidth: 110 }}>Ngày kết thúc</th>
-                  <th style={{ textAlign: 'center', minWidth: 90 }}>Ngày còn lại</th>
-                  <th style={{ minWidth: 120 }}>Tình trạng</th>
-                  <th style={{ minWidth: 160 }}>Ghi chú</th>
+                  <th className={s.hdldThStt}>STT</th>
+                  <th className={s.hdldThName}>Tên nhân viên</th>
+                  <th className={s.hdldThTaxCode}>MST nhân viên</th>
+                  <th className={s.hdldThType}>Loại HĐ</th>
+                  <th className={s.hdldThNumber}>Số HĐ</th>
+                  <th className={s.hdldThDateSm}>Ngày ký</th>
+                  <th className={s.hdldThDate}>Ngày kết thúc</th>
+                  <th className={s.hdldThDays}>Ngày còn lại</th>
+                  <th className={s.hdldThStatus}>Tình trạng</th>
+                  <th className={s.hdldThNotes}>Ghi chú</th>
                   {columns.map((col) => (
-                    <th key={col.id} style={{ minWidth: 130 }}>{col.colName}</th>
+                    <th key={col.id} className={s.hdldThCustom}>{col.colName}</th>
                   ))}
                   {canEdit && <th className={s.actionsHead}>Thao tác</th>}
                 </tr>
@@ -583,49 +545,28 @@ export default function LaborContractsTab({ company }) {
               <tbody>
                 {displayed.map((c, idx) => (
                   <tr key={c.id}>
-                    <td style={{ color: 'var(--color-muted)', fontSize: 12 }}>{idx + 1}</td>
-                    <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{c.employeeName}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {c.taxCode ?? '—'}
-                    </td>
-                    <td style={{ color: 'var(--color-text-soft)', whiteSpace: 'nowrap' }}>
-                      {c.contractType ?? '—'}
-                    </td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {c.contractNumber ?? '—'}
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(c.contractDate)}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(c.endDate)}</td>
-                    <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                    <td className={s.hdldCellStt}>{idx + 1}</td>
+                    <td className={s.hdldCellName}>{c.employeeName}</td>
+                    <td className={s.hdldCellMono}>{c.taxCode ?? '—'}</td>
+                    <td className={s.hdldCellSoft}>{c.contractType ?? '—'}</td>
+                    <td className={s.hdldCellMono}>{c.contractNumber ?? '—'}</td>
+                    <td className={s.hdldCellDate}>{fmtDate(c.contractDate)}</td>
+                    <td className={s.hdldCellDate}>{fmtDate(c.endDate)}</td>
+                    <td className={s.hdldCellDays}>
                       {c.daysRemaining !== null ? c.daysRemaining : '—'}
                     </td>
-                    <td>
-                      <StatusBadge status={c.contractStatus} />
-                    </td>
-                    <td
-                      style={{
-                        maxWidth: 200,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        color: 'var(--color-text-soft)',
-                        fontSize: 12,
-                      }}
-                      title={c.notes ?? ''}
-                    >
+                    <td><StatusBadge status={c.contractStatus} /></td>
+                    <td className={s.hdldCellNotes} title={c.notes ?? ''}>
                       {c.notes ?? '—'}
                     </td>
                     {columns.map((col) => (
-                      <td
-                        key={col.id}
-                        style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--color-text-soft)' }}
-                      >
+                      <td key={col.id} className={s.hdldCellCustom}>
                         {c.customFields[col.colName] ?? '—'}
                       </td>
                     ))}
                     {canEdit && (
                       <td>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
+                        <div className={s.hdldActionsRow}>
                           <button
                             className={s.iconBtnSm}
                             onClick={() => setEditTarget(c)}

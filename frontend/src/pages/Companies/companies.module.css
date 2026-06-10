@@ -4523,11 +4523,127 @@
 }
 .customFieldAddBtn:hover { background: #dbeafe; border-color: #60a5fa; }
 
-/* ── Labor Contracts dynamic field editor row ──────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════════
+   Labor Contracts Tab — Theo dõi HĐLĐ
+   ══════════════════════════════════════════════════════════════════════════════ */
 
-.hdldDynRow {
-  display: grid;
-  grid-template-columns: 1fr 100px 1fr auto;
-  gap: var(--space-3);
-  align-items: center;
+/* ── Status badges ────────────────────────────────────────────────────────── */
+
+.hdldStatusBadge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
 }
+.hdldStatusActive        { background: var(--color-success-bg);   color: #065f46; }
+.hdldStatusExpiringSoon  { background: #fef9c3;                    color: #854d0e; }
+.hdldStatusExpired       { background: var(--color-danger-bg);     color: var(--color-danger-dark); }
+.hdldStatusPermanent     { background: var(--color-surface-muted); color: #475569; }
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+
+.hdldToolbar      { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); flex-wrap: wrap; }
+.hdldToolbarRight { margin-left: auto; display: flex; gap: var(--space-3); }
+.hdldToolbarCount { font-size: var(--fs-xs); color: var(--color-muted); }
+
+.hdldFilterSelect {
+  height: var(--control-h-sm);
+  font-size: var(--fs-sm);
+  width: auto;
+  min-width: 160px;
+}
+
+.hdldToolbarBtn {
+  height: var(--control-h-sm);
+  padding: 0 var(--space-6);
+  font-size: var(--fs-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+
+/* Override width:100% so table expands beyond container → tableScroll shows scrollbar */
+.hdldTable { width: max-content; min-width: 100%; }
+
+/* Column header widths */
+.hdldThStt     { width: 44px; }
+.hdldThName    { min-width: 160px; }
+.hdldThTaxCode { min-width: 120px; }
+.hdldThType    { min-width: 160px; }
+.hdldThNumber  { min-width: 120px; }
+.hdldThDateSm  { min-width: 100px; }
+.hdldThDate    { min-width: 110px; }
+.hdldThDays    { text-align: center !important; min-width: 90px; }
+.hdldThStatus  { min-width: 120px; }
+.hdldThNotes   { min-width: 160px; }
+.hdldThCustom  { min-width: 130px; }
+
+/* Body cells */
+.hdldCellStt    { color: var(--color-muted); font-size: var(--fs-xs); }
+.hdldCellName   { font-weight: var(--fw-semibold); white-space: nowrap; }
+.hdldCellMono   { font-family: var(--font-mono); font-size: var(--fs-xs); white-space: nowrap; }
+.hdldCellSoft   { color: var(--color-text-soft); white-space: nowrap; }
+.hdldCellDate   { white-space: nowrap; }
+.hdldCellDays   { text-align: center; font-weight: var(--fw-semibold); }
+.hdldCellNotes  {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-soft);
+  font-size: var(--fs-xs);
+}
+.hdldCellCustom { white-space: nowrap; color: var(--color-text-soft); font-size: var(--fs-sm); }
+.hdldActionsRow { display: flex; justify-content: flex-end; gap: var(--space-1); }
+
+/* ── Column management modal ──────────────────────────────────────────────── */
+
+.hdldModalDesc  { font-size: var(--fs-xs); color: var(--color-muted); margin-bottom: var(--space-4); }
+.hdldModalEmpty { font-size: var(--fs-sm); color: var(--color-muted); text-align: center; padding: var(--space-3) 0; }
+
+.hdldColList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.hdldColRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 7px var(--space-3);
+  background: var(--color-bg-soft);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-soft);
+}
+.hdldColName      { flex: 1; font-weight: var(--fw-semibold); font-size: var(--fs-sm); }
+.hdldColTypeBadge { font-size: var(--fs-2xs); color: var(--color-muted); background: var(--color-border-muted); padding: 1px 7px; border-radius: var(--radius-pill); }
+.hdldColGrip      { color: var(--color-muted); flex-shrink: 0; }
+.hdldColDeleteBtn { flex-shrink: 0; }
+
+.hdldAddColForm { display: flex; gap: var(--space-2); align-items: flex-end; }
+.hdldAddColMain { flex: 1; }
+.hdldAddColType { width: 110px; }
+.hdldAddColBtn  { height: var(--control-h-md); padding: 0 var(--space-6); flex-shrink: 0; }
+
+.hdldInlineError  { margin-bottom: var(--space-4); }
+.hdldModalActions { margin-top: var(--space-9); }
+
+/* ── Contract form ────────────────────────────────────────────────────────── */
+
+.hdldFormSpan2   { grid-column: span 2; }
+.hdldColTypeHint { margin-left: var(--space-1); font-size: var(--fs-2xs); color: var(--color-muted); }
+
+/* ── Delete confirm ───────────────────────────────────────────────────────── */
+
+.hdldConfirmText { font-size: var(--fs-sm); color: var(--color-text-soft); margin-bottom: var(--space-5); }
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+
+.hdldEmptyIcon { color: var(--color-muted-soft); }
+.hdldEmptyText { font-size: var(--fs-sm); color: var(--color-muted); }
