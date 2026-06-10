@@ -200,7 +200,15 @@
       "PowerShell($lines = \\(Get-Content \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\frontend\\\\src\\\\pages\\\\Companies\\\\companies.module.css\" | Measure-Object -Line\\).Lines; Write-Output \"Total lines: $lines\")",
       "Bash(node_modules/.bin/vite build *)",
       "Bash(curl -s \"http://localhost:5173/\")",
-      "Bash(curl -s \"http://localhost:5173/src/pages/Companies/Companies.jsx\")"
+      "Bash(curl -s \"http://localhost:5173/src/pages/Companies/Companies.jsx\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('health:', d.get\\('status'\\), '| db:', d.get\\('db'\\)\\)\")",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"admin@tamankttam.vn\\\\\",\\\\\"password\\\\\":\\\\\"Admin123!\\\\\"}\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); t=d.get\\('data',{}\\).get\\('accessToken',''\\); print\\('token:', t[:40]+'...' if t else 'FAILED: '+str\\(d\\)\\)\")",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"nguyenhoangkhai.010103@gmail.com\\\\\",\\\\\"password\\\\\":\\\\\"Admin123!\\\\\"}\")",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"nguyenhoangkhai.010103@gmail.com\\\\\",\\\\\"password\\\\\":\\\\\"Khai@2024\\\\\"}\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); t=d.get\\('data',{}\\).get\\('accessToken',''\\); print\\(t[:50] if t else 'FAIL: '+str\\(d.get\\('error',{}\\).get\\('message',''\\)\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/api/companies/c0000000-0000-0000-0000-000000000002/labor-contracts)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/api/companies/c0000000-0000-0000-0000-000000000002/labor-contracts/export)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

@@ -195,6 +195,9 @@ function createApp() {
   app.use('/api/public/client-forms',    require('./modules/client-requests/clientRequestsPublic.router'))
   app.use('/api/admin/client-requests',  require('./modules/client-requests/clientRequestsAdmin.router'))
 
+  // Phase 19 — Labor Contracts (Theo dõi HĐLĐ)
+  app.use('/api/companies/:companyId/labor-contracts', require('./modules/labor-contracts/labor-contracts.router'))
+
   // Dev helper: send a test notification to the calling user
   app.post('/api/notifications/test', require('./middleware/auth').authenticate, async (req, res, next) => {
     try {
