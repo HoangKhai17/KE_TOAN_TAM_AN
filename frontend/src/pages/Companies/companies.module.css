@@ -4647,3 +4647,162 @@
 
 .hdldEmptyIcon { color: var(--color-muted-soft); }
 .hdldEmptyText { font-size: var(--fs-sm); color: var(--color-muted); }
+.hdldEmptyRow  { text-align: center; padding: var(--space-10); font-size: var(--fs-sm); color: var(--color-muted); }
+
+/* ── Column header filter ─────────────────────────────────────────────────── */
+
+/* th inner: label + filter button side by side */
+.hdldThInner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hdldThLabel { flex: 1; }
+
+/* Sort indicator appended to label via class */
+.hdldSortAsc::after  { content: ' ↑'; opacity: 0.9; }
+.hdldSortDesc::after { content: ' ↓'; opacity: 0.9; }
+
+/* Filter trigger button inside <th> */
+.hdldFilterBtn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: #1e3a8a;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.hdldFilterBtn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.hdldFilterBtnActive {
+  background: var(--color-accent);
+  color: #fff;
+  border-radius: var(--radius-xs);
+}
+
+/* Dropdown panel — positioned fixed via CSS variables */
+.hdldFilterDropdown {
+  position: fixed;
+  top: var(--hdld-dd-top);
+  left: var(--hdld-dd-left);
+  z-index: 1000;
+  min-width: 220px;
+  max-width: 290px;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+/* Sort section */
+.hdldDdSortSection {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.hdldDdSortBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-5);
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  color: var(--color-text-soft);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-fast);
+}
+.hdldDdSortBtn:hover       { background: var(--color-primary-bg); color: var(--color-primary); }
+.hdldDdSortBtnActive       { color: var(--color-primary); font-weight: var(--fw-semibold); }
+
+/* "Chọn tất cả" row */
+.hdldDdSelectAll {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--color-border-soft);
+  transition: background var(--duration-fast);
+}
+.hdldDdSelectAll:hover { background: var(--color-bg-soft); }
+.hdldDdSelectAll input[type='checkbox'] {
+  accent-color: var(--color-primary);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Scrollable value list */
+.hdldDdValueList {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: var(--space-1) 0;
+}
+
+.hdldDdValueItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration-fast);
+}
+.hdldDdValueItem:hover { background: var(--color-bg-soft); }
+.hdldDdValueItem input[type='checkbox'] {
+  accent-color: var(--color-primary);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.hdldDdValueText {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Footer */
+.hdldDdFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.hdldDdClearBtn {
+  font-size: var(--fs-xs);
+  color: var(--color-danger);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+}
+.hdldDdClearBtn:hover { text-decoration: underline; }

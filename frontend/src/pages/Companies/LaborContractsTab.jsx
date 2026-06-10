@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Download, Loader2, ScrollText, Columns, GripVertical } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { Plus, Pencil, Trash2, Download, Loader2, ScrollText, Columns, GripVertical, Filter } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as lcApi from '../../api/laborContracts'
@@ -24,18 +24,153 @@ const STATUS_CSS = {
 
 const COL_TYPE_LABEL = { text: 'Văn bản', number: 'Số', date: 'Ngày' }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Module-level helpers (stable, no dependencies) ────────────────────────────
 
 function fmtDate(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+/** Returns the display string used in filter checkboxes */
+function getDisplayLabel(row, colKey) {
+  if (colKey.startsWith('dyn__')) {
+    const v = row.customFields[colKey.slice(5)]
+    return v != null && v !== '' ? String(v) : '(Trống)'
+  }
+  switch (colKey) {
+    case 'contractStatus':
+      return STATUS_LABEL[row.contractStatus] ?? row.contractStatus
+    case 'contractDate':
+      return row.contractDate ? fmtDate(row.contractDate) : '(Trống)'
+    case 'endDate':
+      return row.endDate ? fmtDate(row.endDate) : '(Trống)'
+    case 'daysRemaining':
+      return row.daysRemaining !== null ? String(row.daysRemaining) : '(Không xác định)'
+    default: {
+      const v = row[colKey]
+      return v != null && v !== '' ? String(v) : '(Trống)'
+    }
+  }
+}
+
+/** Returns a sortable primitive for the given column */
+function getSortKey(row, colKey) {
+  if (colKey.startsWith('dyn__')) return (row.customFields[colKey.slice(5)] ?? '').toLowerCase()
+  if (colKey === 'contractDate' || colKey === 'endDate') return row[colKey] ?? ''
+  if (colKey === 'daysRemaining') return row.daysRemaining ?? Number.MAX_SAFE_INTEGER
+  if (colKey === 'contractStatus') return STATUS_LABEL[row.contractStatus] ?? ''
+  const v = row[colKey]
+  return v != null ? String(v).toLowerCase() : ''
+}
+
+// ── StatusBadge ───────────────────────────────────────────────────────────────
+
 function StatusBadge({ status }) {
   return (
     <span className={`${s.hdldStatusBadge} ${STATUS_CSS[status] ?? ''}`}>
       {STATUS_LABEL[status] ?? status}
     </span>
+  )
+}
+
+// ── ColumnFilterDropdown ──────────────────────────────────────────────────────
+
+function ColumnFilterDropdown({ colKey, allRows, currentFilter, sortState, onSort, onFilterChange, onClose, style }) {
+  const dropRef = useRef(null)
+
+  const allValues = useMemo(() => {
+    const seen = new Set()
+    const vals = []
+    for (const row of allRows) {
+      const lbl = getDisplayLabel(row, colKey)
+      if (!seen.has(lbl)) { seen.add(lbl); vals.push(lbl) }
+    }
+    return vals.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
+  }, [allRows, colKey])
+
+  // currentFilter=null means "no filter" → treat as all selected
+  const selected = useMemo(() => {
+    if (!currentFilter) return new Set(allValues)
+    return currentFilter
+  }, [currentFilter, allValues])
+
+  useEffect(() => {
+    function handler(e) {
+      if (dropRef.current && !dropRef.current.contains(e.target)) {
+        if (!e.target.closest('[data-hdld-filter-btn]')) onClose()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  function toggleValue(val) {
+    const next = new Set(selected)
+    if (next.has(val)) next.delete(val)
+    else next.add(val)
+    if (next.size === allValues.length) onFilterChange(colKey, null)
+    else onFilterChange(colKey, next)
+  }
+
+  function toggleAll() {
+    if (selected.size === allValues.length) onFilterChange(colKey, new Set())
+    else onFilterChange(colKey, null)
+  }
+
+  const allChecked  = selected.size === allValues.length
+  const noneChecked = selected.size === 0
+  const activeAsc   = sortState.col === colKey && sortState.dir === 'asc'
+  const activeDesc  = sortState.col === colKey && sortState.dir === 'desc'
+
+  return (
+    <div ref={dropRef} className={s.hdldFilterDropdown} style={style}>
+      <div className={s.hdldDdSortSection}>
+        <button
+          className={`${s.hdldDdSortBtn} ${activeAsc ? s.hdldDdSortBtnActive : ''}`}
+          onClick={() => onSort(colKey, 'asc')}
+        >
+          ↑&nbsp; Sắp xếp A → Z
+        </button>
+        <button
+          className={`${s.hdldDdSortBtn} ${activeDesc ? s.hdldDdSortBtnActive : ''}`}
+          onClick={() => onSort(colKey, 'desc')}
+        >
+          ↓&nbsp; Sắp xếp Z → A
+        </button>
+      </div>
+
+      <label className={s.hdldDdSelectAll}>
+        <input
+          type="checkbox"
+          checked={allChecked}
+          ref={(el) => { if (el) el.indeterminate = !allChecked && !noneChecked }}
+          onChange={toggleAll}
+        />
+        Chọn tất cả ({allValues.length})
+      </label>
+
+      <div className={s.hdldDdValueList}>
+        {allValues.map((val) => (
+          <label key={val} className={s.hdldDdValueItem}>
+            <input
+              type="checkbox"
+              checked={selected.has(val)}
+              onChange={() => toggleValue(val)}
+            />
+            <span className={s.hdldDdValueText}>{val}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className={s.hdldDdFooter}>
+        <button
+          className={s.hdldDdClearBtn}
+          onClick={() => { onFilterChange(colKey, null); onSort(null, 'asc'); onClose() }}
+        >
+          Xoá bộ lọc & sắp xếp
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -381,11 +516,15 @@ export default function LaborContractsTab({ company }) {
 
   const canEdit = user?.role === 'admin' || company.assignedStaffId === user?.id
 
-  const [contracts, setContracts]         = useState([])
-  const [columns, setColumns]             = useState([])
-  const [loading, setLoading]             = useState(true)
-  const [filterStatus, setFilterStatus]   = useState('')
-  const [exporting, setExporting]         = useState(false)
+  const [contracts, setContracts]       = useState([])
+  const [columns, setColumns]           = useState([])
+  const [loading, setLoading]           = useState(true)
+  const [exporting, setExporting]       = useState(false)
+
+  // Column-header filter state
+  const [colFilters, setColFilters]     = useState({})   // { colKey: Set<string> | undefined }
+  const [sortState, setSortState]       = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup]   = useState(null) // { colKey, top, left }
 
   const [showCreate, setShowCreate]           = useState(false)
   const [editTarget, setEditTarget]           = useState(null)
@@ -451,31 +590,107 @@ export default function LaborContractsTab({ company }) {
     }
   }
 
-  const displayed = filterStatus
-    ? contracts.filter((c) => c.contractStatus === filterStatus)
-    : contracts
+  // Apply column filters + sort
+  const displayed = useMemo(() => {
+    let result = [...contracts]
+
+    for (const [colKey, selected] of Object.entries(colFilters)) {
+      if (selected && selected.size > 0) {
+        result = result.filter((row) => selected.has(getDisplayLabel(row, colKey)))
+      }
+    }
+
+    if (sortState.col) {
+      result.sort((a, b) => {
+        const ak = getSortKey(a, sortState.col)
+        const bk = getSortKey(b, sortState.col)
+        if (typeof ak === 'number' && typeof bk === 'number') {
+          return sortState.dir === 'asc' ? ak - bk : bk - ak
+        }
+        const cmp = String(ak).localeCompare(String(bk), 'vi', { numeric: true })
+        return sortState.dir === 'asc' ? cmp : -cmp
+      })
+    }
+
+    return result
+  }, [contracts, colFilters, sortState])
+
+  function openFilter(colKey, e) {
+    e.stopPropagation()
+    if (filterPopup?.colKey === colKey) {
+      setFilterPopup(null)
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect()
+      setFilterPopup({ colKey, top: rect.bottom + 4, left: rect.left })
+    }
+  }
+
+  function handleFilterChange(colKey, val) {
+    setColFilters((prev) => {
+      const next = { ...prev }
+      if (val === null) delete next[colKey]
+      else next[colKey] = val
+      return next
+    })
+  }
+
+  function handleSort(col, dir) {
+    setSortState({ col, dir })
+  }
+
+  function hasFilter(colKey) {
+    const f = colFilters[colKey]
+    return f != null && f.size > 0
+  }
+
+  function hasSort(colKey) {
+    return sortState.col === colKey
+  }
+
+  /** Renders a <th> with filter button. noFilter = skip filter button (e.g. STT, actions). */
+  function FilterTh({ colKey, className, children }) {
+    const active = hasFilter(colKey) || hasSort(colKey)
+    return (
+      <th className={className}>
+        <div className={s.hdldThInner}>
+          <span className={s.hdldThLabel}>{children}</span>
+          <button
+            data-hdld-filter-btn
+            className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`}
+            onClick={(e) => openFilter(colKey, e)}
+            title="Lọc / Sắp xếp"
+          >
+            <Filter size={10} />
+          </button>
+        </div>
+      </th>
+    )
+  }
+
+  const activeFilterCount = Object.values(colFilters).filter((v) => v && v.size > 0).length
+  const hasSortActive     = sortState.col !== null
 
   return (
     <div>
       {/* Toolbar */}
       <div className={s.hdldToolbar}>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className={`${s.formSelect} ${s.hdldFilterSelect}`}
-        >
-          <option value="">Tất cả tình trạng</option>
-          <option value="active">Còn hiệu lực</option>
-          <option value="expiring_soon">Sắp hết hạn</option>
-          <option value="expired">Đã hết hạn</option>
-          <option value="permanent">Không thời hạn</option>
-        </select>
-
         {!loading && (
           <span className={s.hdldToolbarCount}>
-            {displayed.length} hợp đồng
+            {displayed.length}
+            {displayed.length < contracts.length && `/${contracts.length}`} hợp đồng
+            {activeFilterCount > 0 && ` · ${activeFilterCount} bộ lọc`}
+            {hasSortActive && ' · đang sắp xếp'}
             {columns.length > 0 && ` · ${columns.length} cột tuỳ chỉnh`}
           </span>
+        )}
+
+        {(activeFilterCount > 0 || hasSortActive) && (
+          <button
+            className={`${s.btnOutline} ${s.hdldToolbarBtn}`}
+            onClick={() => { setColFilters({}); setSortState({ col: null, dir: 'asc' }) }}
+          >
+            Xoá tất cả bộ lọc
+          </button>
         )}
 
         <div className={s.hdldToolbarRight}>
@@ -511,14 +726,10 @@ export default function LaborContractsTab({ company }) {
         <div className={s.loadingCenter}>
           <Loader2 size={18} className={s.spin} /> Đang tải...
         </div>
-      ) : displayed.length === 0 ? (
+      ) : contracts.length === 0 ? (
         <div className={s.emptyState}>
           <ScrollText size={32} className={s.hdldEmptyIcon} />
-          <p className={s.hdldEmptyText}>
-            {filterStatus
-              ? 'Không có hợp đồng nào khớp bộ lọc.'
-              : 'Chưa có hợp đồng lao động nào.'}
-          </p>
+          <p className={s.hdldEmptyText}>Chưa có hợp đồng lao động nào.</p>
         </div>
       ) : (
         <div className={s.tableWrap}>
@@ -527,23 +738,31 @@ export default function LaborContractsTab({ company }) {
               <thead>
                 <tr>
                   <th className={s.hdldThStt}>STT</th>
-                  <th className={s.hdldThName}>Tên nhân viên</th>
-                  <th className={s.hdldThTaxCode}>MST nhân viên</th>
-                  <th className={s.hdldThType}>Loại HĐ</th>
-                  <th className={s.hdldThNumber}>Số HĐ</th>
-                  <th className={s.hdldThDateSm}>Ngày ký</th>
-                  <th className={s.hdldThDate}>Ngày kết thúc</th>
-                  <th className={s.hdldThDays}>Ngày còn lại</th>
-                  <th className={s.hdldThStatus}>Tình trạng</th>
-                  <th className={s.hdldThNotes}>Ghi chú</th>
+                  <FilterTh colKey="employeeName"   className={s.hdldThName}>Tên nhân viên</FilterTh>
+                  <FilterTh colKey="taxCode"        className={s.hdldThTaxCode}>MST nhân viên</FilterTh>
+                  <FilterTh colKey="contractType"   className={s.hdldThType}>Loại HĐ</FilterTh>
+                  <FilterTh colKey="contractNumber" className={s.hdldThNumber}>Số HĐ</FilterTh>
+                  <FilterTh colKey="contractDate"   className={s.hdldThDateSm}>Ngày ký</FilterTh>
+                  <FilterTh colKey="endDate"        className={s.hdldThDate}>Ngày kết thúc</FilterTh>
+                  <FilterTh colKey="daysRemaining"  className={s.hdldThDays}>Ngày còn lại</FilterTh>
+                  <FilterTh colKey="contractStatus" className={s.hdldThStatus}>Tình trạng</FilterTh>
+                  <FilterTh colKey="notes"          className={s.hdldThNotes}>Ghi chú</FilterTh>
                   {columns.map((col) => (
-                    <th key={col.id} className={s.hdldThCustom}>{col.colName}</th>
+                    <FilterTh key={col.id} colKey={`dyn__${col.colName}`} className={s.hdldThCustom}>
+                      {col.colName}
+                    </FilterTh>
                   ))}
                   {canEdit && <th className={s.actionsHead}>Thao tác</th>}
                 </tr>
               </thead>
               <tbody>
-                {displayed.map((c, idx) => (
+                {displayed.length === 0 ? (
+                  <tr>
+                    <td colSpan={10 + columns.length + (canEdit ? 1 : 0)} className={s.hdldEmptyRow}>
+                      Không có hợp đồng nào khớp bộ lọc.
+                    </td>
+                  </tr>
+                ) : displayed.map((c, idx) => (
                   <tr key={c.id}>
                     <td className={s.hdldCellStt}>{idx + 1}</td>
                     <td className={s.hdldCellName}>{c.employeeName}</td>
@@ -590,6 +809,23 @@ export default function LaborContractsTab({ company }) {
             </table>
           </div>
         </div>
+      )}
+
+      {/* Column filter dropdown — position:fixed, rendered outside table scroll */}
+      {filterPopup && (
+        <ColumnFilterDropdown
+          colKey={filterPopup.colKey}
+          allRows={contracts}
+          currentFilter={colFilters[filterPopup.colKey] ?? null}
+          sortState={sortState}
+          onSort={handleSort}
+          onFilterChange={handleFilterChange}
+          onClose={() => setFilterPopup(null)}
+          style={{
+            '--hdld-dd-top':  `${filterPopup.top}px`,
+            '--hdld-dd-left': `${filterPopup.left}px`,
+          }}
+        />
       )}
 
       {/* Modals */}

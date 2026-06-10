@@ -55,6 +55,7 @@ Bộ tài liệu này bao gồm:
 - Thiết kế cơ sở dữ liệu (Database Design)
 
 | 17 | [017_DEPLOYMENT.md](./017_DEPLOYMENT.md) | Hướng dẫn triển khai lên VPS — build, backup DB, upload, deploy, rollback | ✅ Hoàn thành |
+| 18 | [018_COLUMN_HEADER_FILTER.md](./018_COLUMN_HEADER_FILTER.md) | Cơ chế bộ lọc trên header cột kiểu Excel — state, helpers, dropdown, CSS | ✅ Hoàn thành |
 
 **Chưa bao gồm** (sẽ bổ sung giai đoạn sau):
 - UI/UX Wireframe chi tiết
