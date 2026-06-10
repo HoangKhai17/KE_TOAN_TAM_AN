@@ -34,7 +34,7 @@ async function remove(req, res, next) {
 
 async function exportExcel(req, res, next) {
   try {
-    const wb = await svc.exportContracts(req.params.companyId, req.user)
+    const wb = await svc.exportContracts(req.params.companyId, req.user, req.query.fields ?? '')
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename="hdld_${Date.now()}.xlsx"`)
     await wb.xlsx.write(res)

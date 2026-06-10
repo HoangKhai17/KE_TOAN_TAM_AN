@@ -31,6 +31,25 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+/**
+ * Xác định kiểu filter cho từng cột:
+ *   'enum'        → checkbox list   (contractStatus)
+ *   'dateRange'   → từ ngày / đến ngày
+ *   'numberRange' → tối thiểu / tối đa
+ *   'text'        → search box (mặc định)
+ */
+function getColumnFilterType(colKey, dynColumns = []) {
+  if (colKey === 'contractStatus')                    return 'enum'
+  if (colKey === 'contractDate' || colKey === 'endDate') return 'dateRange'
+  if (colKey === 'daysRemaining')                     return 'numberRange'
+  if (colKey.startsWith('dyn__')) {
+    const col = dynColumns.find((c) => c.colName === colKey.slice(5))
+    if (col?.colType === 'date')   return 'dateRange'
+    if (col?.colType === 'number') return 'numberRange'
+  }
+  return 'text'
+}
+
 /** Returns the display string used in filter checkboxes */
 function getDisplayLabel(row, colKey) {
   if (colKey.startsWith('dyn__')) {
@@ -73,11 +92,9 @@ function StatusBadge({ status }) {
   )
 }
 
-// ── ColumnFilterDropdown ──────────────────────────────────────────────────────
+// ── ColumnFilterDropdown — sub-sections theo kiểu cột ────────────────────────
 
-function ColumnFilterDropdown({ colKey, allRows, currentFilter, sortState, onSort, onFilterChange, onClose, style }) {
-  const dropRef = useRef(null)
-
+function EnumFilterSection({ colKey, allRows, currentFilter, onFilterChange, onClose }) {
   const allValues = useMemo(() => {
     const seen = new Set()
     const vals = []
@@ -88,11 +105,178 @@ function ColumnFilterDropdown({ colKey, allRows, currentFilter, sortState, onSor
     return vals.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
   }, [allRows, colKey])
 
-  // currentFilter=null means "no filter" → treat as all selected
-  const selected = useMemo(() => {
-    if (!currentFilter) return new Set(allValues)
-    return currentFilter
-  }, [currentFilter, allValues])
+  const selected = useMemo(
+    () => (!currentFilter ? new Set(allValues) : currentFilter),
+    [currentFilter, allValues]
+  )
+
+  function toggleValue(val) {
+    const next = new Set(selected)
+    next.has(val) ? next.delete(val) : next.add(val)
+    onFilterChange(colKey, next.size === allValues.length ? null : next)
+  }
+
+  function toggleAll() {
+    onFilterChange(colKey, selected.size === allValues.length ? new Set() : null)
+  }
+
+  const allChecked  = selected.size === allValues.length
+  const noneChecked = selected.size === 0
+
+  return (
+    <>
+      <label className={s.hdldDdSelectAll}>
+        <input
+          type="checkbox"
+          checked={allChecked}
+          ref={(el) => { if (el) el.indeterminate = !allChecked && !noneChecked }}
+          onChange={toggleAll}
+        />
+        Chọn tất cả ({allValues.length})
+      </label>
+      <div className={s.hdldDdValueList}>
+        {allValues.map((val) => (
+          <label key={val} className={s.hdldDdValueItem}>
+            <input type="checkbox" checked={selected.has(val)} onChange={() => toggleValue(val)} />
+            <span className={s.hdldDdValueText}>{val}</span>
+          </label>
+        ))}
+      </div>
+      <div className={s.hdldDdFooter}>
+        <button className={s.hdldDdClearBtn} onClick={() => { onFilterChange(colKey, null); onClose() }}>
+          Xoá bộ lọc
+        </button>
+      </div>
+    </>
+  )
+}
+
+function TextFilterSection({ colKey, currentFilter, onFilterChange }) {
+  const [query, setQuery] = useState(typeof currentFilter === 'string' ? currentFilter : '')
+  const inputRef = useRef(null)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  return (
+    <div className={s.hdldDdFilterSection}>
+      <input
+        ref={inputRef}
+        type="text"
+        className={s.hdldDdInput}
+        placeholder="Tìm kiếm..."
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          onFilterChange(colKey, e.target.value.trim() || null)
+        }}
+      />
+      {query && (
+        <div className={s.hdldDdFooter}>
+          <button
+            className={s.hdldDdClearBtn}
+            onClick={() => { setQuery(''); onFilterChange(colKey, null) }}
+          >
+            Xoá bộ lọc
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DateRangeFilterSection({ colKey, currentFilter, onFilterChange }) {
+  const [from, setFrom] = useState(currentFilter?.from ?? '')
+  const [to,   setTo  ] = useState(currentFilter?.to   ?? '')
+
+  function apply(f, t) {
+    onFilterChange(colKey, f || t ? { from: f, to: t } : null)
+  }
+
+  return (
+    <div className={s.hdldDdFilterSection}>
+      <div className={s.hdldDdRangeGroup}>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Từ ngày</span>
+          <input
+            type="date"
+            className={s.hdldDdInput}
+            value={from}
+            onChange={(e) => { setFrom(e.target.value); apply(e.target.value, to) }}
+          />
+        </div>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Đến ngày</span>
+          <input
+            type="date"
+            className={s.hdldDdInput}
+            value={to}
+            onChange={(e) => { setTo(e.target.value); apply(from, e.target.value) }}
+          />
+        </div>
+      </div>
+      {(from || to) && (
+        <div className={s.hdldDdFooter}>
+          <button
+            className={s.hdldDdClearBtn}
+            onClick={() => { setFrom(''); setTo(''); onFilterChange(colKey, null) }}
+          >
+            Xoá bộ lọc
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NumberRangeFilterSection({ colKey, currentFilter, onFilterChange }) {
+  const [minVal, setMinVal] = useState(currentFilter?.min ?? '')
+  const [maxVal, setMaxVal] = useState(currentFilter?.max ?? '')
+
+  function apply(mn, mx) {
+    onFilterChange(colKey, mn !== '' || mx !== '' ? { min: mn, max: mx } : null)
+  }
+
+  return (
+    <div className={s.hdldDdFilterSection}>
+      <div className={s.hdldDdRangeGroup}>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Tối thiểu</span>
+          <input
+            type="number"
+            className={s.hdldDdInput}
+            placeholder="0"
+            value={minVal}
+            onChange={(e) => { setMinVal(e.target.value); apply(e.target.value, maxVal) }}
+          />
+        </div>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Tối đa</span>
+          <input
+            type="number"
+            className={s.hdldDdInput}
+            placeholder="∞"
+            value={maxVal}
+            onChange={(e) => { setMaxVal(e.target.value); apply(minVal, e.target.value) }}
+          />
+        </div>
+      </div>
+      {(minVal !== '' || maxVal !== '') && (
+        <div className={s.hdldDdFooter}>
+          <button
+            className={s.hdldDdClearBtn}
+            onClick={() => { setMinVal(''); setMaxVal(''); onFilterChange(colKey, null) }}
+          >
+            Xoá bộ lọc
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ColumnFilterDropdown({ colKey, dynColumns, allRows, currentFilter, sortState, onSort, onFilterChange, onClose, style }) {
+  const dropRef    = useRef(null)
+  const filterType = getColumnFilterType(colKey, dynColumns)
 
   useEffect(() => {
     function handler(e) {
@@ -104,26 +288,12 @@ function ColumnFilterDropdown({ colKey, allRows, currentFilter, sortState, onSor
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
-  function toggleValue(val) {
-    const next = new Set(selected)
-    if (next.has(val)) next.delete(val)
-    else next.add(val)
-    if (next.size === allValues.length) onFilterChange(colKey, null)
-    else onFilterChange(colKey, next)
-  }
-
-  function toggleAll() {
-    if (selected.size === allValues.length) onFilterChange(colKey, new Set())
-    else onFilterChange(colKey, null)
-  }
-
-  const allChecked  = selected.size === allValues.length
-  const noneChecked = selected.size === 0
-  const activeAsc   = sortState.col === colKey && sortState.dir === 'asc'
-  const activeDesc  = sortState.col === colKey && sortState.dir === 'desc'
+  const activeAsc  = sortState.col === colKey && sortState.dir === 'asc'
+  const activeDesc = sortState.col === colKey && sortState.dir === 'desc'
 
   return (
     <div ref={dropRef} className={s.hdldFilterDropdown} style={style}>
+      {/* Sort — luôn hiển thị */}
       <div className={s.hdldDdSortSection}>
         <button
           className={`${s.hdldDdSortBtn} ${activeAsc ? s.hdldDdSortBtnActive : ''}`}
@@ -139,38 +309,234 @@ function ColumnFilterDropdown({ colKey, allRows, currentFilter, sortState, onSor
         </button>
       </div>
 
-      <label className={s.hdldDdSelectAll}>
-        <input
-          type="checkbox"
-          checked={allChecked}
-          ref={(el) => { if (el) el.indeterminate = !allChecked && !noneChecked }}
-          onChange={toggleAll}
+      {/* Filter section — khác nhau theo kiểu cột */}
+      {filterType === 'enum' && (
+        <EnumFilterSection
+          colKey={colKey} allRows={allRows}
+          currentFilter={currentFilter}
+          onFilterChange={onFilterChange} onClose={onClose}
         />
-        Chọn tất cả ({allValues.length})
-      </label>
-
-      <div className={s.hdldDdValueList}>
-        {allValues.map((val) => (
-          <label key={val} className={s.hdldDdValueItem}>
-            <input
-              type="checkbox"
-              checked={selected.has(val)}
-              onChange={() => toggleValue(val)}
-            />
-            <span className={s.hdldDdValueText}>{val}</span>
-          </label>
-        ))}
-      </div>
-
-      <div className={s.hdldDdFooter}>
-        <button
-          className={s.hdldDdClearBtn}
-          onClick={() => { onFilterChange(colKey, null); onSort(null, 'asc'); onClose() }}
-        >
-          Xoá bộ lọc & sắp xếp
-        </button>
-      </div>
+      )}
+      {filterType === 'text' && (
+        <TextFilterSection
+          colKey={colKey}
+          currentFilter={currentFilter}
+          onFilterChange={onFilterChange}
+        />
+      )}
+      {filterType === 'dateRange' && (
+        <DateRangeFilterSection
+          colKey={colKey}
+          currentFilter={currentFilter}
+          onFilterChange={onFilterChange}
+        />
+      )}
+      {filterType === 'numberRange' && (
+        <NumberRangeFilterSection
+          colKey={colKey}
+          currentFilter={currentFilter}
+          onFilterChange={onFilterChange}
+        />
+      )}
     </div>
+  )
+}
+
+// ── LaborContractExportModal ──────────────────────────────────────────────────
+
+function buildExportGroups(dynColumns) {
+  return [
+    {
+      key: 'company',
+      label: 'Công ty',
+      fields: [
+        { key: 'stt',         label: 'STT'        },
+        { key: 'companyName', label: 'Tên công ty' },
+      ],
+    },
+    {
+      key: 'employee',
+      label: 'Nhân viên',
+      fields: [
+        { key: 'employeeName', label: 'Tên nhân viên' },
+        { key: 'taxCode',      label: 'MST nhân viên' },
+      ],
+    },
+    {
+      key: 'contract',
+      label: 'Hợp đồng',
+      fields: [
+        { key: 'contractType',   label: 'Loại hợp đồng' },
+        { key: 'contractNumber', label: 'Số hợp đồng'   },
+        { key: 'contractDate',   label: 'Ngày ký'        },
+        { key: 'endDate',        label: 'Ngày kết thúc'  },
+        { key: 'daysRemaining',  label: 'Ngày còn lại'   },
+        { key: 'contractStatus', label: 'Tình trạng'     },
+        { key: 'notes',          label: 'Ghi chú'        },
+      ],
+    },
+    ...(dynColumns.length > 0 ? [{
+      key: 'custom',
+      label: 'Cột tuỳ chỉnh',
+      fields: dynColumns.map((col) => ({ key: `dyn__${col.colName}`, label: col.colName })),
+    }] : []),
+  ]
+}
+
+function formatExportPreviewCell(row, key, companyName, rowIdx = 0) {
+  if (key === 'stt')            return rowIdx + 1
+  if (key === 'companyName')    return companyName ?? '—'
+  if (key === 'contractStatus') return STATUS_LABEL[row.contractStatus] ?? row.contractStatus
+  if (key === 'contractDate')   return fmtDate(row.contractDate)
+  if (key === 'endDate')        return fmtDate(row.endDate)
+  if (key === 'daysRemaining')  return row.daysRemaining !== null ? row.daysRemaining : '—'
+  if (key.startsWith('dyn__')) return row.customFields[key.slice(5)] ?? '—'
+  return row[key] ?? '—'
+}
+
+function LaborContractExportModal({ companyId, company, contracts, columns, onClose }) {
+  const addToast   = useToastStore((st) => st.toast)
+  const groups     = useMemo(() => buildExportGroups(columns), [columns])
+  const allKeys    = useMemo(() => groups.flatMap((g) => g.fields.map((f) => f.key)), [groups])
+
+  const [selected, setSelected]   = useState(() => new Set(allKeys))
+  const [exporting, setExporting] = useState(false)
+
+  function isGroupAll(group) {
+    return group.fields.every((f) => selected.has(f.key))
+  }
+  function toggleGroup(group) {
+    const allOn = isGroupAll(group)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      group.fields.forEach((f) => (allOn ? next.delete(f.key) : next.add(f.key)))
+      return next
+    })
+  }
+  function toggleField(key) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  async function handleExport() {
+    if (selected.size === 0) { addToast('Vui lòng chọn ít nhất một cột', 'error'); return }
+    setExporting(true)
+    try {
+      // Giữ đúng thứ tự theo allKeys
+      const fields = allKeys.filter((k) => selected.has(k)).join(',')
+      const blob   = await lcApi.exportContracts(companyId, fields)
+      const url    = URL.createObjectURL(blob)
+      const a      = document.createElement('a')
+      a.href       = url
+      a.download   = `hdld_${(company.name ?? companyId).replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      addToast('Xuất Excel thành công', 'success')
+      onClose()
+    } catch {
+      addToast('Không thể xuất Excel', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Preview: 8 dòng đầu, chỉ hiển thị cột được chọn (theo thứ tự groups)
+  const previewFields  = groups.flatMap((g) => g.fields).filter((f) => selected.has(f.key))
+  const previewRows    = contracts.slice(0, 8)
+  const companyName    = company?.name ?? ''
+
+  return (
+    <Modal title="Xuất Excel — Theo dõi HĐLĐ" onClose={onClose} wide>
+      <div className={s.modalForm}>
+        <div className={s.hdldExportBody}>
+          {/* Sidebar chọn cột */}
+          <div className={s.hdldExportSidebar}>
+            <div className={s.hdldExportSidebarTitle}>Chọn cột xuất</div>
+            {groups.map((group) => (
+              <div key={group.key} className={s.hdldExportGroup}>
+                <label className={s.hdldExportGroupLabel}>
+                  <input
+                    type="checkbox"
+                    checked={isGroupAll(group)}
+                    ref={(el) => {
+                      if (el) {
+                        const some = group.fields.some((f) => selected.has(f.key))
+                        el.indeterminate = some && !isGroupAll(group)
+                      }
+                    }}
+                    onChange={() => toggleGroup(group)}
+                  />
+                  <span>{group.label}</span>
+                </label>
+                {group.fields.map((f) => (
+                  <label key={f.key} className={s.hdldExportFieldItem}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(f.key)}
+                      onChange={() => toggleField(f.key)}
+                    />
+                    <span>{f.label}</span>
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Preview */}
+          <div className={s.hdldExportPreviewPane}>
+            <div className={s.hdldExportPreviewTitle}>
+              Xem trước ({Math.min(8, contracts.length)} / {contracts.length} hợp đồng)
+            </div>
+            <div className={s.hdldExportPreviewWrap}>
+              {previewFields.length === 0 ? (
+                <div className={s.hdldExportPreviewEmpty}>Chưa chọn cột nào</div>
+              ) : (
+                <table className={s.hdldExportPreviewTable}>
+                  <thead>
+                    <tr>
+                      {previewFields.map((f) => <th key={f.key}>{f.label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewRows.map((row, rowIdx) => (
+                      <tr key={row.id}>
+                        {previewFields.map((f) => (
+                          <td key={f.key}>{formatExportPreviewCell(row, f.key, companyName, rowIdx)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className={s.hdldExportFooter}>
+          <span className={s.hdldExportCount}>
+            {selected.size} cột · {contracts.length} hợp đồng
+          </span>
+          <div className={s.modalActions}>
+            <button type="button" onClick={onClose} className={s.btnOutline} disabled={exporting}>
+              Huỷ
+            </button>
+            <button
+              type="button"
+              className={s.btnNavy}
+              onClick={handleExport}
+              disabled={exporting || selected.size === 0}
+            >
+              {exporting
+                ? <><Loader2 size={13} className={s.spin} /> Đang xuất...</>
+                : <><Download size={13} /> Xuất Excel</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -519,7 +885,7 @@ export default function LaborContractsTab({ company }) {
   const [contracts, setContracts]       = useState([])
   const [columns, setColumns]           = useState([])
   const [loading, setLoading]           = useState(true)
-  const [exporting, setExporting]       = useState(false)
+  const [showExport, setShowExport]     = useState(false)
 
   // Column-header filter state
   const [colFilters, setColFilters]     = useState({})   // { colKey: Set<string> | undefined }
@@ -570,33 +936,50 @@ export default function LaborContractsTab({ company }) {
     addToast('Đã xoá hợp đồng', 'success')
   }
 
-  async function handleExport() {
-    setExporting(true)
-    try {
-      const blob = await lcApi.exportContracts(companyId)
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `hdld_${(company.name ?? companyId).replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      addToast('Xuất Excel thành công', 'success')
-    } catch {
-      addToast('Không thể xuất Excel', 'error')
-    } finally {
-      setExporting(false)
-    }
-  }
 
   // Apply column filters + sort
   const displayed = useMemo(() => {
     let result = [...contracts]
 
-    for (const [colKey, selected] of Object.entries(colFilters)) {
-      if (selected && selected.size > 0) {
-        result = result.filter((row) => selected.has(getDisplayLabel(row, colKey)))
+    for (const [colKey, filterVal] of Object.entries(colFilters)) {
+      const filterType = getColumnFilterType(colKey, columns)
+
+      if (filterType === 'enum') {
+        if (filterVal instanceof Set && filterVal.size > 0) {
+          result = result.filter((row) => filterVal.has(getDisplayLabel(row, colKey)))
+        }
+      } else if (filterType === 'text') {
+        if (typeof filterVal === 'string' && filterVal.trim()) {
+          const q = filterVal.toLowerCase()
+          result = result.filter((row) => getDisplayLabel(row, colKey).toLowerCase().includes(q))
+        }
+      } else if (filterType === 'dateRange') {
+        if (filterVal && (filterVal.from || filterVal.to)) {
+          result = result.filter((row) => {
+            const raw = colKey.startsWith('dyn__')
+              ? row.customFields[colKey.slice(5)]
+              : row[colKey]
+            if (!raw) return false
+            const d = String(raw).substring(0, 10)
+            if (filterVal.from && d < filterVal.from) return false
+            if (filterVal.to   && d > filterVal.to)   return false
+            return true
+          })
+        }
+      } else if (filterType === 'numberRange') {
+        if (filterVal && (filterVal.min !== '' || filterVal.max !== '')) {
+          result = result.filter((row) => {
+            const num = colKey === 'daysRemaining'
+              ? row.daysRemaining
+              : parseFloat(colKey.startsWith('dyn__')
+                  ? row.customFields[colKey.slice(5)]
+                  : row[colKey])
+            if (num === null || num === undefined || isNaN(num)) return false
+            if (filterVal.min !== '' && num < parseFloat(filterVal.min)) return false
+            if (filterVal.max !== '' && num > parseFloat(filterVal.max)) return false
+            return true
+          })
+        }
       }
     }
 
@@ -613,7 +996,7 @@ export default function LaborContractsTab({ company }) {
     }
 
     return result
-  }, [contracts, colFilters, sortState])
+  }, [contracts, columns, colFilters, sortState])
 
   function openFilter(colKey, e) {
     e.stopPropagation()
@@ -640,7 +1023,13 @@ export default function LaborContractsTab({ company }) {
 
   function hasFilter(colKey) {
     const f = colFilters[colKey]
-    return f != null && f.size > 0
+    if (f == null) return false
+    const t = getColumnFilterType(colKey, columns)
+    if (t === 'enum')        return f instanceof Set && f.size > 0
+    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
+    if (t === 'dateRange')   return Boolean(f.from || f.to)
+    if (t === 'numberRange') return f.min !== '' || f.max !== ''
+    return false
   }
 
   function hasSort(colKey) {
@@ -704,11 +1093,10 @@ export default function LaborContractsTab({ company }) {
           )}
           <button
             className={`${s.btnOutline} ${s.hdldToolbarBtn}`}
-            onClick={handleExport}
-            disabled={exporting || loading}
+            onClick={() => setShowExport(true)}
+            disabled={loading}
           >
-            {exporting ? <Loader2 size={13} className={s.spin} /> : <Download size={13} />}
-            Xuất Excel
+            <Download size={13} /> Xuất Excel
           </button>
           {canEdit && (
             <button
@@ -815,6 +1203,7 @@ export default function LaborContractsTab({ company }) {
       {filterPopup && (
         <ColumnFilterDropdown
           colKey={filterPopup.colKey}
+          dynColumns={columns}
           allRows={contracts}
           currentFilter={colFilters[filterPopup.colKey] ?? null}
           sortState={sortState}
@@ -825,6 +1214,17 @@ export default function LaborContractsTab({ company }) {
             '--hdld-dd-top':  `${filterPopup.top}px`,
             '--hdld-dd-left': `${filterPopup.left}px`,
           }}
+        />
+      )}
+
+      {/* Export modal */}
+      {showExport && (
+        <LaborContractExportModal
+          companyId={companyId}
+          company={company}
+          contracts={contracts}
+          columns={columns}
+          onClose={() => setShowExport(false)}
         />
       )}
 

@@ -21,8 +21,9 @@ export async function deleteContract(companyId, id) {
   await api.delete(`/companies/${companyId}/labor-contracts/${id}`)
 }
 
-export async function exportContracts(companyId) {
+export async function exportContracts(companyId, fields = '') {
   const res = await api.get(`/companies/${companyId}/labor-contracts/export`, {
+    params: fields ? { fields } : undefined,
     responseType: 'blob',
   })
   return res.data

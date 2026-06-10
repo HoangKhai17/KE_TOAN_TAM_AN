@@ -4697,8 +4697,8 @@
   top: var(--hdld-dd-top);
   left: var(--hdld-dd-left);
   z-index: 1000;
-  min-width: 220px;
-  max-width: 290px;
+  min-width: 240px;
+  max-width: 310px;
   background: var(--color-surface);
   border: 1.5px solid var(--color-border-muted);
   border-radius: var(--radius-lg);
@@ -4806,3 +4806,192 @@
   font-weight: var(--fw-semibold);
 }
 .hdldDdClearBtn:hover { text-decoration: underline; }
+
+/* ── Dropdown — text / date / number filter sections ─────────────────────── */
+
+.hdldDdFilterSection {
+  padding: var(--space-3) var(--space-5) var(--space-4);
+}
+
+/* Input dùng chung cho text search, date, number */
+.hdldDdInput {
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-surface);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.hdldDdInput:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+.hdldDdInput::placeholder { color: var(--color-muted-soft); }
+
+/* Nhóm chứa 2 range input (date hoặc number) */
+.hdldDdRangeGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hdldDdRangeRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.hdldDdRangeLabel {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* ── HĐLĐ Export modal ────────────────────────────────────────────────────── */
+
+.hdldExportBody {
+  display: flex;
+  gap: var(--space-6);
+  min-height: 520px;
+  max-height: 66vh;
+}
+
+.hdldExportSidebar {
+  width: 220px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding-right: var(--space-4);
+  border-right: 1px solid var(--color-border-soft);
+}
+
+.hdldExportSidebarTitle {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.hdldExportGroup {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border-muted);
+}
+
+.hdldExportGroupLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-text-soft);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration-fast);
+}
+.hdldExportGroupLabel:hover { background: var(--color-primary-bg); }
+.hdldExportGroupLabel input[type='checkbox'] {
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.hdldExportFieldItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-6);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration-fast);
+}
+.hdldExportFieldItem:hover { background: var(--color-primary-bg); }
+.hdldExportFieldItem input[type='checkbox'] {
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.hdldExportPreviewPane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hdldExportPreviewTitle {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.hdldExportPreviewWrap {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+}
+
+.hdldExportPreviewEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}
+
+.hdldExportPreviewTable {
+  font-size: var(--fs-xs);
+  min-width: 100%;
+  border-collapse: collapse;
+}
+.hdldExportPreviewTable th,
+.hdldExportPreviewTable td {
+  padding: var(--space-2) var(--space-4);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.hdldExportPreviewTable th {
+  background: var(--color-primary-bg);
+  font-weight: var(--fw-bold);
+  color: var(--color-primary-deep);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.hdldExportPreviewTable tr:last-child td { border-bottom: none; }
+.hdldExportPreviewTable tbody tr:nth-child(even) td { background: var(--color-bg-soft); }
+
+.hdldExportFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-4);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.hdldExportCount {
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}

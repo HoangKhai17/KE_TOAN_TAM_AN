@@ -16,9 +16,10 @@
 
 .dialog {
   position: relative;
-  width: 100%;
-  max-width: 448px;
-  max-height: 90vh;
+  width: fit-content;
+  min-width: 380px;
+  max-width: calc(100vw - 56px);
+  max-height: calc(100vh - 56px);
   display: flex;
   flex-direction: column;
   background: var(--color-surface);

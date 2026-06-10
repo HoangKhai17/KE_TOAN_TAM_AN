@@ -208,29 +208,74 @@ async function deleteContract(companyId, id, user) {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-async function exportContracts(companyId, user) {
-  const [contracts, columns] = await Promise.all([
-    listContracts(companyId, user),
-    listColumns(companyId, user),
+// Thứ tự cột cố định — dùng để giữ đúng thứ tự trong Excel dù frontend chọn lộn xộn
+const FIXED_FIELD_ORDER = [
+  'stt', 'companyName', 'employeeName', 'taxCode',
+  'contractType', 'contractNumber', 'contractDate', 'endDate',
+  'daysRemaining', 'contractStatus', 'notes',
+]
+
+const FIXED_FIELD_DEF = {
+  stt:            { header: 'STT',           width: 5  },
+  companyName:    { header: 'Tên công ty',   width: 30 },
+  employeeName:   { header: 'Tên nhân viên', width: 28 },
+  taxCode:        { header: 'MST nhân viên', width: 16 },
+  contractType:   { header: 'Loại hợp đồng', width: 25 },
+  contractNumber: { header: 'Số hợp đồng',   width: 20 },
+  contractDate:   { header: 'Ngày ký',       width: 16 },
+  endDate:        { header: 'Ngày kết thúc', width: 16 },
+  daysRemaining:  { header: 'Ngày còn lại',  width: 15 },
+  contractStatus: { header: 'Tình trạng',    width: 18 },
+  notes:          { header: 'Ghi chú',       width: 35 },
+}
+
+const STATUS_FILL = {
+  active:        'FFE2EFDA',
+  expiring_soon: 'FFFFF2CC',
+  expired:       'FFFFC7CE',
+  permanent:     'FFF2F2F2',
+}
+
+async function exportContracts(companyId, user, fieldsParam = '') {
+  const [[contracts, columns], companyRes] = await Promise.all([
+    Promise.all([listContracts(companyId, user), listColumns(companyId, user)]),
+    query('SELECT name FROM companies WHERE id = $1', [companyId]),
   ])
+  const companyName = companyRes.rows[0]?.name ?? ''
+
+  // Parse requested fields — null means "xuất tất cả"
+  const requested = fieldsParam
+    ? new Set(fieldsParam.split(',').map((s) => s.trim()).filter(Boolean))
+    : null
+  const include = (key) => !requested || requested.has(key)
+
+  // Build ordered column list
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN') : '')
+
+  const wsCols = [
+    ...FIXED_FIELD_ORDER
+      .filter(include)
+      .map((key) => ({ key, ...FIXED_FIELD_DEF[key] })),
+    ...columns
+      .filter((col) => include(`dyn__${col.colName}`))
+      .map((col) => ({ header: col.colName, key: `dyn__${col.colName}`, width: 20 })),
+  ]
+
+  function getCellValue(c, key, idx) {
+    if (key === 'stt')            return idx + 1
+    if (key === 'companyName')    return companyName
+    if (key === 'contractDate')   return fmtDate(c.contractDate)
+    if (key === 'endDate')        return fmtDate(c.endDate)
+    if (key === 'daysRemaining')  return c.daysRemaining !== null ? c.daysRemaining : ''
+    if (key === 'contractStatus') return STATUS_LABEL[c.contractStatus] ?? c.contractStatus
+    if (key.startsWith('dyn__')) return c.customFields[key.slice(5)] ?? ''
+    return c[key] ?? ''
+  }
 
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Kế Toán Tâm An'
-
   const ws = wb.addWorksheet('Theo dõi HĐLĐ')
-  ws.columns = [
-    { header: 'STT',           key: 'stt',            width: 5  },
-    { header: 'Tên nhân viên', key: 'employeeName',   width: 28 },
-    { header: 'MST nhân viên', key: 'taxCode',        width: 16 },
-    { header: 'Loại hợp đồng', key: 'contractType',   width: 25 },
-    { header: 'Số hợp đồng',   key: 'contractNumber', width: 20 },
-    { header: 'Ngày hợp đồng', key: 'contractDate',   width: 16 },
-    { header: 'Ngày kết thúc', key: 'endDate',        width: 16 },
-    { header: 'Ngày còn lại',  key: 'daysRemaining',  width: 15 },
-    { header: 'Tình trạng',    key: 'status',         width: 18 },
-    { header: 'Ghi chú',       key: 'notes',          width: 35 },
-    ...columns.map((c) => ({ header: c.colName, key: `col__${c.colName}`, width: 20 })),
-  ]
+  ws.columns = wsCols
 
   const headerRow = ws.getRow(1)
   headerRow.font      = { bold: true }
@@ -238,35 +283,17 @@ async function exportContracts(companyId, user) {
   headerRow.alignment = { vertical: 'middle' }
   headerRow.height    = 20
 
-  const STATUS_FILL = {
-    active:        'FFE2EFDA',
-    expiring_soon: 'FFFFF2CC',
-    expired:       'FFFFC7CE',
-    permanent:     'FFF2F2F2',
-  }
-
-  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN') : '')
+  const statusColIdx = wsCols.findIndex((c) => c.key === 'contractStatus')
 
   contracts.forEach((c, idx) => {
-    const dataRow = ws.addRow({
-      stt:            idx + 1,
-      employeeName:   c.employeeName,
-      taxCode:        c.taxCode        ?? '',
-      contractType:   c.contractType   ?? '',
-      contractNumber: c.contractNumber ?? '',
-      contractDate:   fmtDate(c.contractDate),
-      endDate:        fmtDate(c.endDate),
-      daysRemaining:  c.daysRemaining !== null ? c.daysRemaining : '',
-      status:         STATUS_LABEL[c.contractStatus] ?? c.contractStatus,
-      notes:          c.notes ?? '',
-      ...Object.fromEntries(
-        columns.map((col) => [`col__${col.colName}`, c.customFields[col.colName] ?? ''])
-      ),
-    })
+    const rowData = Object.fromEntries(wsCols.map((col) => [col.key, getCellValue(c, col.key, idx)]))
+    const dataRow = ws.addRow(rowData)
 
-    const fillArgb = STATUS_FILL[c.contractStatus]
-    if (fillArgb) {
-      dataRow.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillArgb } }
+    if (statusColIdx >= 0) {
+      const fillArgb = STATUS_FILL[c.contractStatus]
+      if (fillArgb) {
+        dataRow.getCell(statusColIdx + 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillArgb } }
+      }
     }
   })
 
