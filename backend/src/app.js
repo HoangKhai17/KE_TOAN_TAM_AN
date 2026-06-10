@@ -198,6 +198,9 @@ function createApp() {
   // Phase 19 — Labor Contracts (Theo dõi HĐLĐ)
   app.use('/api/companies/:companyId/labor-contracts', require('./modules/labor-contracts/labor-contracts.router'))
 
+  // Phase 20 — Archive (HS Lưu Trữ Khi Quyết Toán)
+  app.use('/api/companies/:companyId/archive', require('./modules/archive/archive.router'))
+
   // Dev helper: send a test notification to the calling user
   app.post('/api/notifications/test', require('./middleware/auth').authenticate, async (req, res, next) => {
     try {

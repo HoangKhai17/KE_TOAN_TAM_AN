@@ -5,7 +5,7 @@ import {
   Hash, Calendar, Briefcase,
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
-  Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal, ScrollText,
+  Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal, ScrollText, Archive,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -21,6 +21,7 @@ import DocumentsTab from './DocumentsTab'
 import NotesTab from './NotesTab'
 import ClientRequestsTab from './ClientRequestsTab'
 import LaborContractsTab from './LaborContractsTab'
+import ArchiveTab from './ArchiveTab'
 import TaskFormModal from '../Tasks/TaskFormModal'
 import TaskQuickView from '../Tasks/TaskQuickView'
 import {
@@ -69,6 +70,7 @@ const TABS = [
   { id: 'labor-contracts',   label: 'Theo dõi HĐLĐ',      icon: ScrollText },
   { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
   { id: 'documents',         label: 'Tài liệu',           icon: FileText },
+  { id: 'archive',           label: 'HS lưu trữ khi QT',  icon: Archive },
   { id: 'notes',             label: 'Ghi chú',            icon: StickyNote },
 ]
 
@@ -346,6 +348,9 @@ export default function CompanyDetail() {
       )}
       {activeTab === 'labor-contracts' && (
         <LaborContractsTab company={company} />
+      )}
+      {activeTab === 'archive' && (
+        <ArchiveTab company={company} />
       )}
       {activeTab === 'credentials' && (
         <CredentialsTab company={company} />

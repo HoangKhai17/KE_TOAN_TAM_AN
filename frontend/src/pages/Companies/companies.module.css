@@ -4995,3 +4995,255 @@
   font-size: var(--fs-sm);
   color: var(--color-muted);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Archive Tab — HS Lưu Trữ Khi Quyết Toán
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.archToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.archYearPills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.archYearPill {
+  padding: 4px 14px;
+  border-radius: 9999px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.archYearPill:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.archYearPillActive {
+  background: var(--color-navy, #1e3a5f);
+  border-color: var(--color-navy, #1e3a5f);
+  color: #fff;
+}
+
+.archYearPillAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: var(--fs-sm);
+  border: 1px dashed var(--color-border);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.archYearPillAdd:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.archToolbarRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.archNotesBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-bottom: var(--space-4);
+  font-size: var(--fs-sm);
+  color: #1e40af;
+  line-height: 1.5;
+}
+
+.archNotesBannerIcon {
+  margin-top: 1px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ── Table wrapper ─────────────────────────────────────────────────────────── */
+
+.archTableScroll {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-soft);
+}
+
+.archTable {
+  min-width: 1400px;
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--fs-sm);
+}
+
+.archTable th {
+  background: var(--color-bg-subtle);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border-soft);
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.archThStt      { width: 40px;  text-align: center; }
+.archThDocType  { min-width: 200px; }
+.archThDetail   { min-width: 140px; }
+.archThMonth    { width: 42px;  text-align: center; }
+.archThYear     { width: 52px;  text-align: center; }
+.archThNotes    { min-width: 120px; }
+.archThChar     { min-width: 140px; }
+.archThActions  { width: 68px;  text-align: center; }
+
+/* ── Table rows ────────────────────────────────────────────────────────────── */
+
+.archDocRow td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: middle;
+}
+
+.archDocRow:last-child td {
+  border-bottom: none;
+}
+
+.archDocRow:hover {
+  background: var(--color-bg-hover, #f8fafc);
+}
+
+.archCellStt {
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.archCellDocType {
+  font-weight: 500;
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+.archCellDetail,
+.archCellNotes,
+.archCellChar {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-xs, 11px);
+  line-height: 1.4;
+}
+
+/* ── Month cells ───────────────────────────────────────────────────────────── */
+
+.archMonthCell {
+  text-align: center;
+  padding: 4px 3px !important;
+  max-width: 42px;
+  overflow: hidden;
+}
+
+.archMonthCellEditable {
+  cursor: pointer;
+}
+
+.archMonthCellEditable:hover {
+  background: #f0f9ff;
+}
+
+.archMonthInput {
+  width: 38px;
+  font-size: 11px;
+  text-align: center;
+  border: 1px solid var(--color-primary, #3b82f6);
+  border-radius: 4px;
+  padding: 2px 3px;
+  outline: none;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.archMonthValFilled {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1e3a5f;
+  line-height: 1.3;
+  word-break: break-all;
+}
+
+.archMonthValEmpty {
+  display: block;
+  width: 100%;
+  height: 16px;
+}
+
+/* ── Năm computed column ───────────────────────────────────────────────────── */
+
+.archCellYear {
+  text-align: center;
+}
+
+.archYearCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.archCellActions {
+  text-align: center;
+  padding: 4px 6px !important;
+}
+
+/* ── Empty & footer ────────────────────────────────────────────────────────── */
+
+.archEmptyRow {
+  text-align: center;
+  color: var(--color-muted);
+  padding: 32px !important;
+  font-size: var(--fs-sm);
+}
+
+.archTableFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.archTableCount {
+  font-size: var(--fs-xs, 11px);
+  color: var(--color-muted);
+}

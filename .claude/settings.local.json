@@ -208,7 +208,11 @@
       "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"nguyenhoangkhai.010103@gmail.com\\\\\",\\\\\"password\\\\\":\\\\\"Khai@2024\\\\\"}\")",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); t=d.get\\('data',{}\\).get\\('accessToken',''\\); print\\(t[:50] if t else 'FAIL: '+str\\(d.get\\('error',{}\\).get\\('message',''\\)\\)\\)\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/api/companies/c0000000-0000-0000-0000-000000000002/labor-contracts)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/api/companies/c0000000-0000-0000-0000-000000000002/labor-contracts/export)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/api/companies/c0000000-0000-0000-0000-000000000002/labor-contracts/export)",
+      "PowerShell(Get-ChildItem -Path \"./backend/src/modules/\" | Where-Object {$_.PSIsContainer} | Sort-Object Name)",
+      "PowerShell(\\(Get-ChildItem -Path \"./backend/src/db/migrations/\" -Force\\).Count)",
+      "PowerShell(Get-ChildItem -Path \"./\" -Directory | Where-Object {$_.Name -match \"migrat|seed|db\"})",
+      "PowerShell(ls -R)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",
