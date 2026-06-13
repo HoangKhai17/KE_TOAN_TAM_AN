@@ -224,7 +224,9 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(list\\(d.keys\\(\\)\\)\\)\")",
       "Bash(echo \"---exit:$?\")",
       "Read(//c/Users/ACER/AppData/Local/Temp/claude/d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM_AN/da432d2f-e202-463d-842d-2abf360ae367/tasks/**)",
-      "Bash(docker container *)"
+      "Bash(docker container *)",
+      "Skill(run)",
+      "Skill(run:*)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

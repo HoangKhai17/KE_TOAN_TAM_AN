@@ -1,11 +1,11 @@
-const db    = require('../../lib/db')
-const ExcelJS = require('exceljs')
+const { query } = require('../../config/db')
+const ExcelJS   = require('exceljs')
 
 // ── Access guard ───────────────────────────────────────────────────────────────
 
 async function assertAccess(companyId, user) {
   if (user.role === 'admin') return
-  const { rows } = await db.query(
+  const { rows } = await query(
     'SELECT id FROM companies WHERE id = $1 AND assigned_staff_id = $2',
     [companyId, user.id]
   )
@@ -64,7 +64,7 @@ const BASE_SELECT = `
 
 async function listDebts(companyId, user) {
   await assertAccess(companyId, user)
-  const { rows } = await db.query(
+  const { rows } = await query(
     `${BASE_SELECT} WHERE d.company_id = $1 ORDER BY d.created_at ASC`,
     [companyId]
   )
@@ -78,7 +78,7 @@ async function createDebt(companyId, user, body) {
     repeatCount, notes, customFields,
   } = body
 
-  const { rows } = await db.query(
+  const { rows } = await query(
     `INSERT INTO company_nsnn_debts
        (company_id, document_type, category, debt_amount, update_date,
         repeat_count, notes, custom_fields, created_by)
@@ -124,7 +124,7 @@ async function updateDebt(companyId, id, user, body) {
   push('updated_at', new Date())
   vals.push(id, companyId)
 
-  const { rows } = await db.query(
+  const { rows } = await query(
     `UPDATE company_nsnn_debts
      SET ${fields.join(', ')}
      WHERE id = $${i++} AND company_id = $${i++}
@@ -145,7 +145,7 @@ async function updateDebt(companyId, id, user, body) {
 
 async function deleteDebt(companyId, id, user) {
   await assertAccess(companyId, user)
-  const { rowCount } = await db.query(
+  const { rowCount } = await query(
     'DELETE FROM company_nsnn_debts WHERE id = $1 AND company_id = $2',
     [id, companyId]
   )
@@ -160,7 +160,7 @@ async function deleteDebt(companyId, id, user) {
 
 async function listColumns(companyId, user) {
   await assertAccess(companyId, user)
-  const { rows } = await db.query(
+  const { rows } = await query(
     'SELECT * FROM company_nsnn_columns WHERE company_id = $1 ORDER BY position, created_at',
     [companyId]
   )
@@ -171,7 +171,7 @@ async function createColumn(companyId, user, body) {
   await assertAccess(companyId, user)
   const { colName, colType = 'text' } = body
 
-  const exists = await db.query(
+  const exists = await query(
     'SELECT id FROM company_nsnn_columns WHERE company_id = $1 AND col_name = $2',
     [companyId, colName]
   )
@@ -181,13 +181,13 @@ async function createColumn(companyId, user, body) {
     throw err
   }
 
-  const { rows: posRows } = await db.query(
+  const { rows: posRows } = await query(
     'SELECT COALESCE(MAX(position),0)+1 AS next FROM company_nsnn_columns WHERE company_id = $1',
     [companyId]
   )
   const position = posRows[0].next
 
-  const { rows } = await db.query(
+  const { rows } = await query(
     `INSERT INTO company_nsnn_columns (company_id, col_name, col_type, position)
      VALUES ($1,$2,$3,$4) RETURNING *`,
     [companyId, colName, colType, position]
@@ -197,7 +197,7 @@ async function createColumn(companyId, user, body) {
 
 async function deleteColumn(companyId, colId, user) {
   await assertAccess(companyId, user)
-  await db.query(
+  await query(
     'DELETE FROM company_nsnn_columns WHERE id = $1 AND company_id = $2',
     [colId, companyId]
   )
@@ -229,9 +229,9 @@ async function exportDebts(companyId, user, fieldsParam) {
   await assertAccess(companyId, user)
 
   const [{ rows: debts }, { rows: cols }, { rows: companyRows }] = await Promise.all([
-    db.query(`${BASE_SELECT} WHERE d.company_id = $1 ORDER BY d.created_at ASC`, [companyId]),
-    db.query('SELECT * FROM company_nsnn_columns WHERE company_id = $1 ORDER BY position, created_at', [companyId]),
-    db.query('SELECT c.name, c.tax_code, u.name AS staff_name FROM companies c LEFT JOIN users u ON u.id = c.assigned_staff_id WHERE c.id = $1', [companyId]),
+    query(`${BASE_SELECT} WHERE d.company_id = $1 ORDER BY d.created_at ASC`, [companyId]),
+    query('SELECT * FROM company_nsnn_columns WHERE company_id = $1 ORDER BY position, created_at', [companyId]),
+    query('SELECT c.name, c.tax_code, u.name AS staff_name FROM companies c LEFT JOIN users u ON u.id = c.assigned_staff_id WHERE c.id = $1', [companyId]),
   ])
 
   const company = companyRows[0] ?? {}
