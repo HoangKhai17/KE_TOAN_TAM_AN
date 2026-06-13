@@ -1,4 +1,12 @@
 const { query } = require('../../config/db')
+const ExcelJS   = require('exceljs')
+
+const MONTHS_ARR = ['1','2','3','4','5','6','7','8','9','10','11','12']
+
+function countFilledMonths(months) {
+  if (!months) return 0
+  return MONTHS_ARR.filter((m) => (months[m] ?? '').trim() !== '').length
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -261,6 +269,106 @@ async function deleteColumn(companyId, colId, user) {
   if (!rowCount) throw Object.assign(new Error('Column not found'), { status: 404 })
 }
 
+// ── Export ────────────────────────────────────────────────────────────────────
+
+async function exportDocs(companyId, yearId, user, fieldsParam = '') {
+  await assertAccess(companyId, user)
+  await assertYearBelongs(yearId, companyId)
+
+  const [{ rows: docRows }, { rows: colRows }, companyRes, yearRes] = await Promise.all([
+    query(
+      'SELECT * FROM company_archive_docs WHERE year_id = $1 ORDER BY position, created_at',
+      [yearId]
+    ),
+    query(
+      'SELECT * FROM company_archive_columns WHERE company_id = $1 ORDER BY position, created_at',
+      [companyId]
+    ),
+    query(
+      `SELECT c.name, u.name AS staff_name
+       FROM companies c
+       LEFT JOIN users u ON u.id = c.assigned_staff_id
+       WHERE c.id = $1`,
+      [companyId]
+    ),
+    query('SELECT year FROM company_archive_years WHERE id = $1', [yearId]),
+  ])
+
+  const docs              = docRows.map(docToDto)
+  const dynCols           = colRows.map(colToDto)
+  const companyName       = companyRes.rows[0]?.name      ?? ''
+  const assignedStaffName = companyRes.rows[0]?.staff_name ?? ''
+  const yearValue         = yearRes.rows[0]?.year          ?? ''
+
+  const requested = fieldsParam
+    ? new Set(fieldsParam.split(',').map((s) => s.trim()).filter(Boolean))
+    : null
+  const include = (key) => !requested || requested.has(key)
+
+  const wsCols = [
+    include('stt')           && { header: 'STT',            key: 'stt',           width: 6  },
+    include('companyName')   && { header: 'Tên công ty',    key: 'companyName',   width: 30 },
+    include('assignedStaff') && { header: 'NV phụ trách',   key: 'assignedStaff', width: 22 },
+    include('documentType')  && { header: 'Loại chứng từ',  key: 'documentType',  width: 36 },
+    include('detail')        && { header: 'Chi tiết',       key: 'detail',        width: 24 },
+    ...MONTHS_ARR.filter((m) => include(`month__${m}`)).map((m) => ({
+      header: `T${m}`, key: `month__${m}`, width: 7,
+    })),
+    include('totalMonths')     && { header: 'Tổng tháng',  key: 'totalMonths',     width: 11 },
+    include('notes')           && { header: 'Ghi chú',     key: 'notes',           width: 30 },
+    include('characteristics') && { header: 'Đặc điểm',   key: 'characteristics', width: 24 },
+    ...dynCols
+      .filter((col) => include(`ext__${col.colName}`))
+      .map((col) => ({ header: col.colName, key: `ext__${col.colName}`, width: 20 })),
+  ].filter(Boolean)
+
+  function getCellValue(doc, key, idx) {
+    if (key === 'companyName')     return companyName
+    if (key === 'assignedStaff')   return assignedStaffName
+    if (key === 'stt')             return idx + 1
+    if (key === 'documentType')    return doc.documentType    ?? ''
+    if (key === 'detail')          return doc.detail          ?? ''
+    if (key === 'notes')           return doc.notes           ?? ''
+    if (key === 'characteristics') return doc.characteristics ?? ''
+    if (key === 'totalMonths')     return countFilledMonths(doc.months)
+    if (key.startsWith('month__')) return (doc.months?.[key.slice(7)] ?? '').trim()
+    if (key.startsWith('ext__'))   return doc.extraFields?.[key.slice(5)] ?? ''
+    return ''
+  }
+
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Kế Toán Tâm An'
+  const ws = wb.addWorksheet(`HS LT ${yearValue}`)
+  ws.columns = wsCols
+
+  const headerRow = ws.getRow(1)
+  headerRow.font      = { bold: true }
+  headerRow.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD966' } }
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+  headerRow.height    = 22
+
+  docs.forEach((doc, idx) => {
+    const rowData = Object.fromEntries(wsCols.map((col) => [col.key, getCellValue(doc, col.key, idx)]))
+    const row     = ws.addRow(rowData)
+    row.alignment = { vertical: 'top', wrapText: true }
+    row.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' },
+        bottom: { style: 'thin' }, right: { style: 'thin' },
+      }
+    })
+  })
+
+  headerRow.eachCell((cell) => {
+    cell.border = {
+      top: { style: 'thin' }, left: { style: 'thin' },
+      bottom: { style: 'thin' }, right: { style: 'thin' },
+    }
+  })
+
+  return { wb, companyName, yearValue }
+}
+
 module.exports = {
   listYears,
   createYear,
@@ -274,4 +382,5 @@ module.exports = {
   listColumns,
   createColumn,
   deleteColumn,
+  exportDocs,
 }

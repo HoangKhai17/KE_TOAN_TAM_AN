@@ -26,6 +26,9 @@ router.post('/years',           ...auth, validate(createYearSchema), ctrl.create
 router.patch('/years/:yearId',  ...auth, validate(updateYearSchema), ctrl.updateYear)
 router.delete('/years/:yearId', ...auth, ctrl.deleteYear)
 
+// ── Export (/export trước /:docId để tránh bị parse thành UUID) ──────────────
+router.get('/years/:yearId/export',         ...auth, ctrl.exportExcel)
+
 // ── Docs (/reorder trước /:docId để tránh bị parse thành UUID) ────────────────
 router.get('/years/:yearId/docs',           ...auth, ctrl.listDocs)
 router.post('/years/:yearId/docs',          ...auth, validate(createDocSchema), ctrl.createDoc)

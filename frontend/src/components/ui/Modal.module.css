@@ -28,8 +28,10 @@
 }
 
 .dialogWide {
-  max-width: min(1640px, 98vw);
-  max-height: 96vh;
+  width: calc(100vw - 48px);
+  max-width: none;
+  height: calc(100vh - 48px);
+  max-height: none;
 }
 
 .header {

@@ -212,7 +212,12 @@
       "PowerShell(Get-ChildItem -Path \"./backend/src/modules/\" | Where-Object {$_.PSIsContainer} | Sort-Object Name)",
       "PowerShell(\\(Get-ChildItem -Path \"./backend/src/db/migrations/\" -Force\\).Count)",
       "PowerShell(Get-ChildItem -Path \"./\" -Directory | Where-Object {$_.Name -match \"migrat|seed|db\"})",
-      "PowerShell(ls -R)"
+      "PowerShell(ls -R)",
+      "Bash(node -e \"require\\('./backend/src/modules/archive/archive.service.js'\\); console.log\\('OK'\\)\")",
+      "Bash(node -e \"require\\('./backend/src/modules/archive/archive.controller.js'\\); console.log\\('OK'\\)\")",
+      "Bash(node --check \"d:/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN/backend/src/modules/archive/archive.service.js\")",
+      "Bash(node --check \"d:/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN/backend/src/modules/archive/archive.controller.js\")",
+      "Bash(node --check \"d:/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN/backend/src/modules/archive/archive.router.js\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

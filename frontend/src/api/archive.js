@@ -51,6 +51,16 @@ export async function reorderDocs(companyId, yearId, items) {
   await api.patch(`/companies/${companyId}/archive/years/${yearId}/docs/reorder`, items)
 }
 
+// ── Export ────────────────────────────────────────────────────────────────────
+
+export async function exportDocs(companyId, yearId, fields = '') {
+  const res = await api.get(`/companies/${companyId}/archive/years/${yearId}/export`, {
+    params: fields ? { fields } : undefined,
+    responseType: 'blob',
+  })
+  return res.data
+}
+
 // ── Columns ───────────────────────────────────────────────────────────────────
 
 export async function listColumns(companyId) {

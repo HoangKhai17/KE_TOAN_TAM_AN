@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import {
-  Archive, Plus, Pencil, Trash2, Loader2, AlertTriangle, Check, Columns, GripVertical,
+  Archive, Plus, Pencil, Trash2, Loader2, AlertTriangle, Check, Columns, GripVertical, Download,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
@@ -506,6 +506,208 @@ function DocFormModal({ initialDoc, columns = [], onSave, onClose }) {
   )
 }
 
+// ── ArchiveExportModal ────────────────────────────────────────────────────────
+
+const MONTHS_LIST = ['1','2','3','4','5','6','7','8','9','10','11','12']
+
+function buildArchiveExportGroups(dynColumns) {
+  return [
+    {
+      key: 'basic',
+      label: 'Chứng từ',
+      fields: [
+        { key: 'stt',           label: 'STT' },
+        { key: 'companyName',   label: 'Tên công ty' },
+        { key: 'assignedStaff', label: 'NV phụ trách' },
+        { key: 'documentType',  label: 'Loại chứng từ' },
+        { key: 'detail',        label: 'Chi tiết' },
+      ],
+    },
+    {
+      key: 'months',
+      label: 'Tháng (T1–T12)',
+      fields: MONTHS_LIST.map((m) => ({ key: `month__${m}`, label: `T${m}` })),
+    },
+    {
+      key: 'summary',
+      label: 'Tổng kết',
+      fields: [{ key: 'totalMonths', label: 'Tổng tháng' }],
+    },
+    {
+      key: 'info',
+      label: 'Thông tin thêm',
+      fields: [
+        { key: 'notes',           label: 'Ghi chú' },
+        { key: 'characteristics', label: 'Đặc điểm' },
+      ],
+    },
+    ...(dynColumns.length > 0 ? [{
+      key: 'custom',
+      label: 'Cột tuỳ chỉnh',
+      fields: dynColumns.map((col) => ({ key: `ext__${col.colName}`, label: col.colName })),
+    }] : []),
+  ]
+}
+
+function fmtPreviewCell(doc, key, rowIdx, ctx = {}) {
+  if (key === 'companyName')     return ctx.companyName ?? '—'
+  if (key === 'assignedStaff')   return ctx.staffName   ?? '—'
+  if (key === 'stt')             return rowIdx + 1
+  if (key === 'documentType')    return doc.documentType    ?? '—'
+  if (key === 'detail')          return doc.detail          ?? '—'
+  if (key === 'notes')           return doc.notes           ?? '—'
+  if (key === 'characteristics') return doc.characteristics ?? '—'
+  if (key === 'totalMonths')     return MONTHS_LIST.filter((m) => (doc.months?.[m] ?? '').trim() !== '').length
+  if (key.startsWith('month__')) return (doc.months?.[key.slice(7)] ?? '').trim() || '—'
+  if (key.startsWith('ext__'))   return doc.extraFields?.[key.slice(5)] ?? '—'
+  return '—'
+}
+
+function ArchiveExportModal({ companyId, activeYear, docs, docsTotal, columns, company, onClose }) {
+  const addToast  = useToastStore((st) => st.toast)
+  const groups    = useMemo(() => buildArchiveExportGroups(columns), [columns])
+  const allKeys   = useMemo(() => groups.flatMap((g) => g.fields.map((f) => f.key)), [groups])
+
+  const [selected,  setSelected]  = useState(() => new Set(allKeys))
+  const [exporting, setExporting] = useState(false)
+
+  function isGroupAll(group) { return group.fields.every((f) => selected.has(f.key)) }
+
+  function toggleGroup(group) {
+    const allOn = isGroupAll(group)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      group.fields.forEach((f) => (allOn ? next.delete(f.key) : next.add(f.key)))
+      return next
+    })
+  }
+
+  function toggleField(key) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  async function handleExport() {
+    if (selected.size === 0) { addToast('Vui lòng chọn ít nhất một cột', 'error'); return }
+    setExporting(true)
+    try {
+      const fields   = allKeys.filter((k) => selected.has(k)).join(',')
+      const blob     = await archiveApi.exportDocs(companyId, activeYear.id, fields)
+      const url      = URL.createObjectURL(blob)
+      const a        = document.createElement('a')
+      a.href         = url
+      a.download     = `hs_luu_tru_${activeYear.year}_${(company.name ?? companyId).replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      addToast('Xuất Excel thành công', 'success')
+      onClose()
+    } catch {
+      addToast('Không thể xuất Excel', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const previewFields = groups.flatMap((g) => g.fields).filter((f) => selected.has(f.key))
+  const previewRows   = docs.slice(0, 8)
+  const previewCtx    = {
+    companyName: company?.name ?? '',
+    staffName:   company?.assignedStaff?.name ?? '',
+  }
+
+  return (
+    <Modal title={`Xuất Excel — HS Lưu Trữ ${activeYear.year}`} onClose={onClose} wide>
+      <div className={s.modalForm}>
+        <div className={s.hdldExportBody}>
+          {/* Sidebar chọn cột */}
+          <div className={s.hdldExportSidebar}>
+            <div className={s.hdldExportSidebarTitle}>Chọn cột xuất</div>
+            {groups.map((group) => (
+              <div key={group.key} className={s.hdldExportGroup}>
+                <label className={s.hdldExportGroupLabel}>
+                  <input
+                    type="checkbox"
+                    checked={isGroupAll(group)}
+                    ref={(el) => {
+                      if (el) {
+                        const some = group.fields.some((f) => selected.has(f.key))
+                        el.indeterminate = some && !isGroupAll(group)
+                      }
+                    }}
+                    onChange={() => toggleGroup(group)}
+                  />
+                  <span>{group.label}</span>
+                </label>
+                {group.fields.map((f) => (
+                  <label key={f.key} className={s.hdldExportFieldItem}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(f.key)}
+                      onChange={() => toggleField(f.key)}
+                    />
+                    <span>{f.label}</span>
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Preview */}
+          <div className={s.hdldExportPreviewPane}>
+            <div className={s.hdldExportPreviewTitle}>
+              Xem trước ({Math.min(8, docs.length)} / {docsTotal} chứng từ — năm {activeYear.year})
+            </div>
+            <div className={s.hdldExportPreviewWrap}>
+              {previewFields.length === 0 ? (
+                <div className={s.hdldExportPreviewEmpty}>Chưa chọn cột nào</div>
+              ) : (
+                <table className={s.hdldExportPreviewTable}>
+                  <thead>
+                    <tr>{previewFields.map((f) => <th key={f.key}>{f.label}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {previewRows.map((doc, rowIdx) => (
+                      <tr key={doc.id}>
+                        {previewFields.map((f) => (
+                          <td key={f.key}>{fmtPreviewCell(doc, f.key, rowIdx, previewCtx)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className={s.hdldExportFooter}>
+          <span className={s.hdldExportCount}>
+            {selected.size} cột · {docsTotal} chứng từ · năm {activeYear.year}
+          </span>
+          <div className={s.modalActions}>
+            <button type="button" onClick={onClose} className={s.btnOutline} disabled={exporting}>
+              Huỷ
+            </button>
+            <button
+              type="button"
+              className={s.btnNavy}
+              onClick={handleExport}
+              disabled={exporting || selected.size === 0}
+            >
+              {exporting
+                ? <><Loader2 size={13} className={s.spin} /> Đang xuất...</>
+                : <><Download size={13} /> Xuất Excel</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ── ArchiveTab ─────────────────────────────────────────────────────────────────
 
 export default function ArchiveTab({ company }) {
@@ -528,20 +730,31 @@ export default function ArchiveTab({ company }) {
   const [showAddYear,    setShowAddYear]    = useState(false)
   const [showAddDoc,     setShowAddDoc]     = useState(false)
   const [showManageCols, setShowManageCols] = useState(false)
+  const [showExport,     setShowExport]     = useState(false)
   const [editDoc,        setEditDoc]        = useState(null)
   const [deleteDocId,    setDeleteDocId]    = useState(null)
   const [showDeleteYear, setShowDeleteYear] = useState(false)
   const [deleting,       setDeleting]       = useState(false)
 
-  // ── Column resize widths ─────────────────────────────────────────────────────
+  // ── Column resize widths — persisted per company in localStorage ─────────────
 
-  const [colWidths, setColWidths] = useState({ ...DEFAULT_COL_WIDTHS })
+  const lsKey = `archColWidths_${companyId}`
+
+  const [colWidths, setColWidths] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`archColWidths_${companyId}`)
+      return saved ? { ...DEFAULT_COL_WIDTHS, ...JSON.parse(saved) } : { ...DEFAULT_COL_WIDTHS }
+    } catch {
+      return { ...DEFAULT_COL_WIDTHS }
+    }
+  })
 
   function resizeCol(key, dx) {
-    setColWidths((prev) => ({
-      ...prev,
-      [key]: Math.max(MIN_COL_W, (prev[key] ?? 160) + dx),
-    }))
+    setColWidths((prev) => {
+      const next = { ...prev, [key]: Math.max(MIN_COL_W, (prev[key] ?? 160) + dx) }
+      try { localStorage.setItem(lsKey, JSON.stringify(next)) } catch {}
+      return next
+    })
   }
 
   const tableWidth = useMemo(() => {
@@ -726,6 +939,11 @@ export default function ArchiveTab({ company }) {
         </div>
 
         <div className={s.archToolbarRight}>
+          {activeYear && (
+            <button className={s.btnOutline} onClick={() => setShowExport(true)}>
+              <Download size={13} /> Xuất Excel
+            </button>
+          )}
           {canEdit && (
             <button className={s.btnOutline} onClick={() => setShowManageCols(true)}>
               <Columns size={13} /> Quản lý cột
@@ -973,6 +1191,18 @@ export default function ArchiveTab({ company }) {
           columns={columns}
           onColumnsChange={setColumns}
           onClose={() => setShowManageCols(false)}
+        />
+      )}
+
+      {showExport && activeYear && (
+        <ArchiveExportModal
+          companyId={companyId}
+          activeYear={activeYear}
+          docs={docs}
+          docsTotal={docsTotal}
+          columns={columns}
+          company={company}
+          onClose={() => setShowExport(false)}
         />
       )}
 

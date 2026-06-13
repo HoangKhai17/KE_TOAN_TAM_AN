@@ -81,6 +81,24 @@ async function reorderDocs(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// ── Export ────────────────────────────────────────────────────────────────────
+
+async function exportExcel(req, res, next) {
+  try {
+    const { wb, companyName, yearValue } = await svc.exportDocs(
+      req.params.companyId,
+      req.params.yearId,
+      req.user,
+      req.query.fields ?? ''
+    )
+    const safeName = (companyName || req.params.companyId).replace(/[^\w\-]/g, '_')
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="hs_luu_tru_${yearValue}_${safeName}.xlsx"`)
+    await wb.xlsx.write(res)
+    res.end()
+  } catch (err) { next(err) }
+}
+
 // ── Columns ───────────────────────────────────────────────────────────────────
 
 async function listColumns(req, res, next) {
@@ -108,4 +126,5 @@ module.exports = {
   listYears, createYear, updateYear, deleteYear,
   listDocs, createDoc, updateDoc, deleteDoc, reorderDocs,
   listColumns, createColumn, deleteColumn,
+  exportExcel,
 }
