@@ -36,10 +36,12 @@ async function deleteYear(req, res, next) {
 
 async function listDocs(req, res, next) {
   try {
-    const docs = await svc.listDocs(
-      req.params.companyId, req.params.yearId, req.user
+    const page     = Math.max(1, parseInt(req.query.page,     10) || 1)
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 20))
+    const result = await svc.listDocs(
+      req.params.companyId, req.params.yearId, req.user, { page, pageSize }
     )
-    res.json({ success: true, data: { docs } })
+    res.json({ success: true, data: result })
   } catch (err) { next(err) }
 }
 
@@ -79,7 +81,31 @@ async function reorderDocs(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// ── Columns ───────────────────────────────────────────────────────────────────
+
+async function listColumns(req, res, next) {
+  try {
+    const columns = await svc.listColumns(req.params.companyId, req.user)
+    res.json({ success: true, data: { columns } })
+  } catch (err) { next(err) }
+}
+
+async function createColumn(req, res, next) {
+  try {
+    const column = await svc.createColumn(req.params.companyId, req.body, req.user)
+    res.status(201).json({ success: true, data: { column } })
+  } catch (err) { next(err) }
+}
+
+async function deleteColumn(req, res, next) {
+  try {
+    await svc.deleteColumn(req.params.companyId, req.params.colId, req.user)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listYears, createYear, updateYear, deleteYear,
   listDocs, createDoc, updateDoc, deleteDoc, reorderDocs,
+  listColumns, createColumn, deleteColumn,
 }

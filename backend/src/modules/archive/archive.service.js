@@ -44,11 +44,22 @@ function docToDto(row) {
     documentType:    row.document_type,
     detail:          row.detail          ?? null,
     months:          row.months          ?? { ...EMPTY_MONTHS },
+    extraFields:     row.extra_fields    ?? {},
     notes:           row.notes           ?? null,
     characteristics: row.characteristics ?? null,
     position:        row.position,
     createdAt:       row.created_at,
     updatedAt:       row.updated_at,
+  }
+}
+
+function colToDto(row) {
+  return {
+    id:        row.id,
+    companyId: row.company_id,
+    colName:   row.col_name,
+    position:  row.position,
+    createdAt: row.created_at,
   }
 }
 
@@ -98,27 +109,33 @@ async function deleteYear(companyId, yearId, user) {
 
 // ── Docs ──────────────────────────────────────────────────────────────────────
 
-async function listDocs(companyId, yearId, user) {
+async function listDocs(companyId, yearId, user, { page = 1, pageSize = 20 } = {}) {
   await assertAccess(companyId, user)
   await assertYearBelongs(yearId, companyId)
+  const offset = (page - 1) * pageSize
   const { rows } = await query(
-    'SELECT * FROM company_archive_docs WHERE year_id = $1 ORDER BY position, created_at',
-    [yearId]
+    `SELECT *, COUNT(*) OVER() AS _total
+     FROM company_archive_docs
+     WHERE year_id = $1
+     ORDER BY position, created_at
+     LIMIT $2 OFFSET $3`,
+    [yearId, pageSize, offset]
   )
-  return rows.map(docToDto)
+  const total = rows.length > 0 ? parseInt(rows[0]._total, 10) : 0
+  return { docs: rows.map(docToDto), total, page, pageSize }
 }
 
 async function createDoc(companyId, yearId, data, user) {
   await assertAccess(companyId, user)
   await assertYearBelongs(yearId, companyId)
 
-  const { documentType, detail, months, notes, characteristics } = data
+  const { documentType, detail, months, extraFields, notes, characteristics } = data
   const mergedMonths = { ...EMPTY_MONTHS, ...(months ?? {}) }
 
   const { rows: [row] } = await query(
     `INSERT INTO company_archive_docs
-       (year_id, document_type, detail, months, notes, characteristics, position)
-     SELECT $1, $2, $3, $4, $5, $6,
+       (year_id, document_type, detail, months, extra_fields, notes, characteristics, position)
+     SELECT $1, $2, $3, $4, $5, $6, $7,
        COALESCE((SELECT MAX(position) + 1 FROM company_archive_docs WHERE year_id = $1), 0)
      RETURNING *`,
     [
@@ -126,6 +143,7 @@ async function createDoc(companyId, yearId, data, user) {
       documentType,
       detail          ?? null,
       JSON.stringify(mergedMonths),
+      JSON.stringify(extraFields ?? {}),
       notes           ?? null,
       characteristics ?? null,
     ]
@@ -154,10 +172,16 @@ async function updateDoc(companyId, yearId, docId, data, user) {
     }
   }
 
-  // months: JSONB merge — chỉ ghi đè đúng key được gửi lên, giữ nguyên các key còn lại
+  // months: JSONB merge — chỉ ghi đè đúng key được gửi lên
   if (data.months !== undefined) {
     params.push(JSON.stringify(data.months))
     updates.push(`months = months || $${params.length}::jsonb`)
+  }
+
+  // extraFields: JSONB merge — cùng pattern với months
+  if (data.extraFields !== undefined) {
+    params.push(JSON.stringify(data.extraFields))
+    updates.push(`extra_fields = extra_fields || $${params.length}::jsonb`)
   }
 
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
@@ -205,6 +229,38 @@ async function reorderDocs(companyId, yearId, items, user) {
   )
 }
 
+// ── Columns ───────────────────────────────────────────────────────────────────
+
+async function listColumns(companyId, user) {
+  await assertAccess(companyId, user)
+  const { rows } = await query(
+    'SELECT * FROM company_archive_columns WHERE company_id = $1 ORDER BY position, created_at',
+    [companyId]
+  )
+  return rows.map(colToDto)
+}
+
+async function createColumn(companyId, { colName }, user) {
+  await assertAccess(companyId, user)
+  const { rows: [row] } = await query(
+    `INSERT INTO company_archive_columns (company_id, col_name, position)
+     SELECT $1, $2,
+       COALESCE((SELECT MAX(position) + 1 FROM company_archive_columns WHERE company_id = $1), 0)
+     RETURNING *`,
+    [companyId, colName]
+  )
+  return colToDto(row)
+}
+
+async function deleteColumn(companyId, colId, user) {
+  await assertAccess(companyId, user)
+  const { rowCount } = await query(
+    'DELETE FROM company_archive_columns WHERE id = $1 AND company_id = $2',
+    [colId, companyId]
+  )
+  if (!rowCount) throw Object.assign(new Error('Column not found'), { status: 404 })
+}
+
 module.exports = {
   listYears,
   createYear,
@@ -215,4 +271,7 @@ module.exports = {
   updateDoc,
   deleteDoc,
   reorderDocs,
+  listColumns,
+  createColumn,
+  deleteColumn,
 }

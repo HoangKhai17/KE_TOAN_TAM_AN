@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
-  Archive, Plus, Pencil, Trash2, Loader2, AlertTriangle, Check,
+  Archive, Plus, Pencil, Trash2, Loader2, AlertTriangle, Check, Columns, GripVertical,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
@@ -16,22 +16,18 @@ const MONTH_LABELS = {
   '7':'T7','8':'T8','9':'T9','10':'T10','11':'T11','12':'T12',
 }
 
-// Cột cố định + 12 tháng + Năm + Ghi chú + Đặc điểm + Actions
-const COL_COUNT_BASE = 18 // không có cột Actions
-
 function countFilledMonths(months) {
   if (!months) return 0
   return MONTHS.filter((m) => (months[m] ?? '').trim() !== '').length
 }
 
-// ── MonthCell — inline click-to-edit ──────────────────────────────────────────
+// ── MonthCell — inline click-to-edit (compact, dành cho cột tháng) ────────────
 
 function MonthCell({ value, canEdit, onSave }) {
   const [editing,  setEditing]  = useState(false)
   const [localVal, setLocalVal] = useState(value ?? '')
   const inputRef                = useRef(null)
 
-  // Sync local value when parent updates after API save
   useEffect(() => { setLocalVal(value ?? '') }, [value])
   useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
 
@@ -68,6 +64,258 @@ function MonthCell({ value, canEdit, onSave }) {
   )
 }
 
+// ── ExtraFieldCell — inline click-to-edit (wide, dành cho cột tuỳ chỉnh) ─────
+
+function ExtraFieldCell({ value, canEdit, onSave }) {
+  const [editing,  setEditing]  = useState(false)
+  const [localVal, setLocalVal] = useState(value ?? '')
+  const inputRef                = useRef(null)
+
+  useEffect(() => { setLocalVal(value ?? '') }, [value])
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+  function commit() {
+    setEditing(false)
+    const trimmed = localVal.trim()
+    if (trimmed !== (value ?? '').trim()) onSave(trimmed)
+  }
+
+  return (
+    <td
+      className={`${s.archExtraCell} ${canEdit ? s.archMonthCellEditable : ''}`}
+      onClick={() => canEdit && !editing && setEditing(true)}
+    >
+      {editing ? (
+        <textarea
+          ref={inputRef}
+          value={localVal}
+          className={s.archExtraInput}
+          rows={2}
+          onChange={(e) => setLocalVal(e.target.value)}
+          onBlur={commit}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit() }
+            if (e.key === 'Escape') { setLocalVal(value ?? ''); setEditing(false) }
+          }}
+        />
+      ) : (
+        <span className={s.archExtraVal}>
+          {(value ?? '').trim() || <span className={s.archMonthValEmpty} />}
+        </span>
+      )}
+    </td>
+  )
+}
+
+// ── InlineTdCell — click-to-edit cell (like MonthCell but for text fields) ────
+
+function InlineTdCell({ value, canEdit, onSave, multiline, tdClassName, required }) {
+  const [editing,  setEditing]  = useState(false)
+  const [localVal, setLocalVal] = useState(value ?? '')
+  const inputRef               = useRef(null)
+
+  useEffect(() => { setLocalVal(value ?? '') }, [value])
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+  function commit() {
+    setEditing(false)
+    const trimmed  = localVal.trim()
+    const original = (value ?? '').trim()
+    if (trimmed === original) return
+    if (required && !trimmed) { setLocalVal(value ?? ''); return }
+    onSave(trimmed || null)
+  }
+
+  return (
+    <td
+      className={`${tdClassName} ${canEdit ? s.archInlineTdEditable : ''}`}
+      onClick={() => canEdit && !editing && setEditing(true)}
+    >
+      {editing ? (
+        multiline ? (
+          <textarea
+            ref={inputRef}
+            value={localVal}
+            className={s.archInlineEditInput}
+            rows={2}
+            onChange={(e) => setLocalVal(e.target.value)}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit() }
+              if (e.key === 'Escape') { setLocalVal(value ?? ''); setEditing(false) }
+            }}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type="text"
+            value={localVal}
+            className={s.archInlineEditInput}
+            onChange={(e) => setLocalVal(e.target.value)}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commit() }
+              if (e.key === 'Escape') { setLocalVal(value ?? ''); setEditing(false) }
+            }}
+          />
+        )
+      ) : (
+        (value ?? '').trim()
+          ? value
+          : <span className={s.archInlineEmpty}>—</span>
+      )}
+    </td>
+  )
+}
+
+// ── ResizeHandle — drag handle for column resize ──────────────────────────────
+
+const PAGE_SIZE = 20
+const DEFAULT_COL_WIDTHS = { docType: 200, detail: 150, notes: 140, char: 150 }
+const MIN_COL_W = 80
+
+function ResizeHandle({ onResize }) {
+  const startX = useRef(null)
+
+  function handleMouseDown(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    startX.current = e.clientX
+    document.body.style.cursor     = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    function onMove(me) {
+      const dx = me.clientX - startX.current
+      startX.current = me.clientX
+      onResize(dx)
+    }
+
+    function onUp() {
+      document.body.style.cursor     = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup',   onUp)
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup',   onUp)
+  }
+
+  return <span className={s.archColResizeHandle} onMouseDown={handleMouseDown} />
+}
+
+// ── ManageColumnsModal ────────────────────────────────────────────────────────
+
+function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
+  const addToast              = useToastStore((st) => st.toast)
+  const [newName, setNewName] = useState('')
+  const [adding,  setAdding]  = useState(false)
+  const [error,   setError]   = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    if (!newName.trim()) { setError('Vui lòng nhập tên cột'); return }
+    if (columns.some((c) => c.colName === newName.trim())) {
+      setError('Tên cột đã tồn tại'); return
+    }
+    setError(null)
+    setAdding(true)
+    try {
+      const col = await archiveApi.createColumn(companyId, { colName: newName.trim() })
+      onColumnsChange([...columns, col])
+      setNewName('')
+      addToast(`Đã thêm cột "${col.colName}"`, 'success')
+    } catch (err) {
+      setError(err.response?.data?.error?.message ?? 'Không thể thêm cột')
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function handleDelete(col) {
+    setDeletingId(col.id)
+    try {
+      await archiveApi.deleteColumn(companyId, col.id)
+      onColumnsChange(columns.filter((c) => c.id !== col.id))
+      addToast(`Đã xoá cột "${col.colName}"`, 'success')
+    } catch {
+      addToast('Không thể xoá cột', 'error')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <Modal title="Quản lý cột tuỳ chỉnh" onClose={onClose} maxWidth={520}>
+      <div className={s.archFormWrapSm}>
+        <div className={s.modalForm}>
+          <p className={s.hdldModalDesc}>
+            Cột tuỳ chỉnh áp dụng cho tất cả năm trong công ty này.
+            Xoá cột không ảnh hưởng đến dữ liệu đã nhập ở các năm.
+          </p>
+
+          {columns.length === 0 ? (
+            <p className={s.hdldModalEmpty}>Chưa có cột tuỳ chỉnh nào.</p>
+          ) : (
+            <div className={s.hdldColList}>
+              {columns.map((col) => (
+                <div key={col.id} className={s.hdldColRow}>
+                  <GripVertical size={13} className={s.hdldColGrip} />
+                  <span className={s.hdldColName}>{col.colName}</span>
+                  <button
+                    className={`${s.iconBtnSm} ${s.iconBtnDanger} ${s.hdldColDeleteBtn}`}
+                    onClick={() => handleDelete(col)}
+                    disabled={deletingId === col.id}
+                    title="Xoá cột"
+                  >
+                    {deletingId === col.id
+                      ? <Loader2 size={12} className={s.spin} />
+                      : <Trash2 size={12} />}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleAdd}>
+            {error && <div className={`${s.errorBox} ${s.hdldInlineError}`}>{error}</div>}
+            <div className={s.hdldAddColForm}>
+              <div className={s.hdldAddColMain}>
+                <label className={s.formLabel}>Tên cột mới</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="VD: Kho lưu, Tình trạng, Số lượng..."
+                  className={s.formInput}
+                  maxLength={200}
+                  autoFocus
+                />
+              </div>
+              <button
+                type="submit"
+                className={`${s.btnNavy} ${s.hdldAddColBtn}`}
+                disabled={adding}
+              >
+                {adding ? <Loader2 size={13} className={s.spin} /> : <Plus size={13} />}
+                Thêm
+              </button>
+            </div>
+          </form>
+
+          <div className={`${s.modalActions} ${s.hdldModalActions}`}>
+            <button onClick={onClose} className={s.btnOutline}>Đóng</button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ── AddYearModal ──────────────────────────────────────────────────────────────
 
 function AddYearModal({ existingYears, onSave, onClose }) {
@@ -94,51 +342,63 @@ function AddYearModal({ existingYears, onSave, onClose }) {
 
   return (
     <Modal title="Thêm năm lưu trữ" onClose={onClose}>
-      <form onSubmit={handleSubmit} className={s.modalForm}>
-        {error && <div className={s.errorBox}>{error}</div>}
-        <div>
-          <label className={`${s.formLabel} ${s.formLabelReq}`}>Năm</label>
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            min="2000" max="2100"
-            className={s.formInput}
-            autoFocus
-          />
-        </div>
-        <div>
-          <label className={s.formLabel}>Ghi chú năm</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            className={s.formTextarea}
-            placeholder="VD: HĐ nguyên tắc 22/05/2026 — Bản giấy, hai bên ký + đóng dấu"
-          />
-        </div>
-        <div className={s.modalActions}>
-          <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
-          <button type="submit" disabled={saving} className={s.btnNavy}>
-            {saving ? <Loader2 size={13} className={s.spin} /> : <Plus size={13} />}
-            {saving ? 'Đang lưu...' : 'Tạo năm'}
-          </button>
-        </div>
-      </form>
+      <div className={s.archFormWrapSm}>
+        <form onSubmit={handleSubmit} className={s.modalForm}>
+          {error && <div className={s.errorBox}>{error}</div>}
+          <div>
+            <label className={`${s.formLabel} ${s.formLabelReq}`}>Năm</label>
+            <input
+              type="number"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              min="2000" max="2100"
+              className={s.formInput}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className={s.formLabel}>Ghi chú năm</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              className={s.formTextarea}
+              placeholder="VD: HĐ nguyên tắc 22/05/2026 — Bản giấy, hai bên ký + đóng dấu"
+            />
+          </div>
+          <div className={s.modalActions}>
+            <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
+            <button type="submit" disabled={saving} className={s.btnNavy}>
+              {saving ? <Loader2 size={13} className={s.spin} /> : <Plus size={13} />}
+              {saving ? 'Đang lưu...' : 'Tạo năm'}
+            </button>
+          </div>
+        </form>
+      </div>
     </Modal>
   )
 }
 
 // ── DocFormModal ──────────────────────────────────────────────────────────────
 
-function DocFormModal({ initialDoc, onSave, onClose }) {
+function DocFormModal({ initialDoc, columns = [], onSave, onClose }) {
   const isEdit = !!initialDoc
   const [documentType,    setDocumentType]    = useState(initialDoc?.documentType    ?? '')
   const [detail,          setDetail]          = useState(initialDoc?.detail          ?? '')
   const [notes,           setNotes]           = useState(initialDoc?.notes           ?? '')
   const [characteristics, setCharacteristics] = useState(initialDoc?.characteristics ?? '')
+  // Khởi tạo extraFields từ tất cả cột tuỳ chỉnh hiện có
+  const [extraFields, setExtraFields] = useState(
+    () => Object.fromEntries(
+      columns.map((c) => [c.colName, initialDoc?.extraFields?.[c.colName] ?? ''])
+    )
+  )
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState(null)
+
+  function setExtraField(colName, val) {
+    setExtraFields((prev) => ({ ...prev, [colName]: val }))
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -146,12 +406,18 @@ function DocFormModal({ initialDoc, onSave, onClose }) {
     setError(null)
     setSaving(true)
     try {
-      await onSave({
+      const payload = {
         documentType:    documentType.trim(),
         detail:          detail.trim()          || null,
         notes:           notes.trim()           || null,
         characteristics: characteristics.trim() || null,
-      })
+      }
+      if (columns.length > 0) {
+        payload.extraFields = Object.fromEntries(
+          Object.entries(extraFields).map(([k, v]) => [k, v.trim()])
+        )
+      }
+      await onSave(payload)
     } catch (err) {
       setError(err.response?.data?.error?.message ?? 'Không thể lưu')
       setSaving(false)
@@ -160,60 +426,82 @@ function DocFormModal({ initialDoc, onSave, onClose }) {
 
   return (
     <Modal title={isEdit ? 'Chỉnh sửa chứng từ' : 'Thêm loại chứng từ'} onClose={onClose}>
-      <form onSubmit={handleSubmit} className={s.modalForm}>
-        {error && <div className={s.errorBox}>{error}</div>}
-        <div>
-          <label className={`${s.formLabel} ${s.formLabelReq}`}>Loại chứng từ</label>
-          <input
-            type="text"
-            value={documentType}
-            onChange={(e) => setDocumentType(e.target.value)}
-            className={s.formInput}
-            placeholder="VD: Bảng chấm công + Bảng lương"
-            maxLength={300}
-            autoFocus
-          />
-        </div>
-        <div>
-          <label className={s.formLabel}>Chi tiết</label>
-          <input
-            type="text"
-            value={detail}
-            onChange={(e) => setDetail(e.target.value)}
-            className={s.formInput}
-            placeholder="Mô tả bổ sung (tùy chọn)"
-            maxLength={500}
-          />
-        </div>
-        <div>
-          <label className={s.formLabel}>Đặc điểm</label>
-          <input
-            type="text"
-            value={characteristics}
-            onChange={(e) => setCharacteristics(e.target.value)}
-            className={s.formInput}
-            placeholder="VD: Song ngữ, Bản giấy + bản scan"
-            maxLength={300}
-          />
-        </div>
-        <div>
-          <label className={s.formLabel}>Ghi chú</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            className={s.formTextarea}
-            placeholder="Ghi chú nội bộ (tùy chọn)"
-          />
-        </div>
-        <div className={s.modalActions}>
-          <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
-          <button type="submit" disabled={saving} className={s.btnNavy}>
-            {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />}
-            {saving ? 'Đang lưu...' : isEdit ? 'Cập nhật' : 'Thêm'}
-          </button>
-        </div>
-      </form>
+      <div className={s.archFormWrapLg}>
+        <form onSubmit={handleSubmit} className={s.modalForm}>
+          {error && <div className={s.errorBox}>{error}</div>}
+          <div>
+            <label className={`${s.formLabel} ${s.formLabelReq}`}>Loại chứng từ</label>
+            <input
+              type="text"
+              value={documentType}
+              onChange={(e) => setDocumentType(e.target.value)}
+              className={s.formInput}
+              placeholder="VD: Bảng chấm công + Bảng lương"
+              maxLength={300}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className={s.formLabel}>Chi tiết</label>
+            <input
+              type="text"
+              value={detail}
+              onChange={(e) => setDetail(e.target.value)}
+              className={s.formInput}
+              placeholder="Mô tả bổ sung (tùy chọn)"
+              maxLength={500}
+            />
+          </div>
+          <div>
+            <label className={s.formLabel}>Đặc điểm</label>
+            <input
+              type="text"
+              value={characteristics}
+              onChange={(e) => setCharacteristics(e.target.value)}
+              className={s.formInput}
+              placeholder="VD: Song ngữ, Bản giấy + bản scan"
+              maxLength={300}
+            />
+          </div>
+          <div>
+            <label className={s.formLabel}>Ghi chú</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              className={s.formTextarea}
+              placeholder="Ghi chú nội bộ (tùy chọn)"
+            />
+          </div>
+
+          {/* ── Cột tuỳ chỉnh ───────────────────────────────────────────────── */}
+          {columns.length > 0 && (
+            <>
+              <div className={s.archFormDynDivider}>Thông tin cột tuỳ chỉnh</div>
+              {columns.map((col) => (
+                <div key={col.id}>
+                  <label className={s.formLabel}>{col.colName}</label>
+                  <textarea
+                    value={extraFields[col.colName] ?? ''}
+                    onChange={(e) => setExtraField(col.colName, e.target.value)}
+                    rows={2}
+                    className={s.formTextarea}
+                    placeholder={`Nhập ${col.colName}...`}
+                  />
+                </div>
+              ))}
+            </>
+          )}
+
+          <div className={s.modalActions}>
+            <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
+            <button type="submit" disabled={saving} className={s.btnNavy}>
+              {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />}
+              {saving ? 'Đang lưu...' : isEdit ? 'Cập nhật' : 'Thêm'}
+            </button>
+          </div>
+        </form>
+      </div>
     </Modal>
   )
 }
@@ -230,50 +518,90 @@ export default function ArchiveTab({ company }) {
   const [years,       setYears]       = useState([])
   const [activeYear,  setActiveYear]  = useState(null)
   const [docs,        setDocs]        = useState([])
+  const [docsTotal,   setDocsTotal]   = useState(0)
+  const [page,        setPage]        = useState(1)
+  const [docsKey,     setDocsKey]     = useState(0)
+  const [columns,     setColumns]     = useState([])
   const [loading,     setLoading]     = useState(true)
   const [docsLoading, setDocsLoading] = useState(false)
 
   const [showAddYear,    setShowAddYear]    = useState(false)
   const [showAddDoc,     setShowAddDoc]     = useState(false)
+  const [showManageCols, setShowManageCols] = useState(false)
   const [editDoc,        setEditDoc]        = useState(null)
   const [deleteDocId,    setDeleteDocId]    = useState(null)
   const [showDeleteYear, setShowDeleteYear] = useState(false)
   const [deleting,       setDeleting]       = useState(false)
 
-  // ── Load years ───────────────────────────────────────────────────────────────
+  // ── Column resize widths ─────────────────────────────────────────────────────
+
+  const [colWidths, setColWidths] = useState({ ...DEFAULT_COL_WIDTHS })
+
+  function resizeCol(key, dx) {
+    setColWidths((prev) => ({
+      ...prev,
+      [key]: Math.max(MIN_COL_W, (prev[key] ?? 160) + dx),
+    }))
+  }
+
+  const tableWidth = useMemo(() => {
+    const customW = columns.reduce((sum, c) => sum + (colWidths[`col_${c.id}`] ?? 160), 0)
+    return (
+      44                           // STT (fixed)
+      + (colWidths.docType ?? 200) // DocType
+      + (colWidths.detail  ?? 150) // Detail
+      + 42 * 12                    // 12 month cols (fixed)
+      + 52                         // Năm (fixed)
+      + (colWidths.notes ?? 140)   // Notes
+      + (colWidths.char  ?? 150)   // Đặc điểm
+      + customW                    // Custom cols
+      + (canEdit ? 68 : 0)         // Actions (fixed)
+    )
+  }, [colWidths, columns, canEdit])
+
+  // ── Load years + columns khi mount ──────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    archiveApi.listYears(companyId)
-      .then((list) => {
+    Promise.all([
+      archiveApi.listYears(companyId),
+      archiveApi.listColumns(companyId),
+    ])
+      .then(([yearList, colList]) => {
         if (cancelled) return
-        setYears(list)
-        setActiveYear(list[0] ?? null)
+        setYears(yearList)
+        setActiveYear(yearList[0] ?? null)
+        setColumns(colList)
       })
-      .catch(() => addToast('Không thể tải danh sách năm', 'error'))
+      .catch(() => addToast('Không thể tải dữ liệu lưu trữ', 'error'))
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Load docs khi đổi năm ────────────────────────────────────────────────────
+  // ── Load docs khi đổi năm / page / docsKey ──────────────────────────────────
 
   useEffect(() => {
-    if (!activeYear) { setDocs([]); return }
+    if (!activeYear) { setDocs([]); setDocsTotal(0); return }
     let cancelled = false
     setDocsLoading(true)
-    archiveApi.listDocs(companyId, activeYear.id)
-      .then((list) => { if (!cancelled) setDocs(list) })
+    archiveApi.listDocs(companyId, activeYear.id, { page, pageSize: PAGE_SIZE })
+      .then(({ docs, total }) => {
+        if (!cancelled) { setDocs(docs); setDocsTotal(total) }
+      })
       .catch(() => addToast('Không thể tải danh sách chứng từ', 'error'))
       .finally(() => { if (!cancelled) setDocsLoading(false) })
     return () => { cancelled = true }
-  }, [companyId, activeYear?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [companyId, activeYear?.id, page, docsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function refetchDocs() { setDocsKey((k) => k + 1) }
 
   // ── Year handlers ────────────────────────────────────────────────────────────
 
   async function handleAddYear({ year, notes }) {
     const created = await archiveApi.createYear(companyId, { year, notes })
     setYears((prev) => [...prev, created].sort((a, b) => b.year - a.year))
+    setPage(1)
     setActiveYear(created)
     setShowAddYear(false)
     addToast(`Đã tạo năm ${created.year}`, 'success')
@@ -299,10 +627,11 @@ export default function ArchiveTab({ company }) {
   // ── Doc handlers ─────────────────────────────────────────────────────────────
 
   async function handleAddDoc(body) {
-    const doc = await archiveApi.createDoc(companyId, activeYear.id, body)
-    setDocs((prev) => [...prev, doc])
+    await archiveApi.createDoc(companyId, activeYear.id, body)
     setShowAddDoc(false)
     addToast('Đã thêm loại chứng từ', 'success')
+    if (page === 1) refetchDocs()
+    else setPage(1)
   }
 
   async function handleEditDoc(body) {
@@ -317,13 +646,23 @@ export default function ArchiveTab({ company }) {
     setDeleting(true)
     try {
       await archiveApi.deleteDoc(companyId, activeYear.id, deleteDocId)
-      setDocs((prev) => prev.filter((d) => d.id !== deleteDocId))
       setDeleteDocId(null)
       addToast('Đã xoá dòng chứng từ', 'success')
+      if (docs.length === 1 && page > 1) setPage((p) => p - 1)
+      else refetchDocs()
     } catch {
       addToast('Không thể xoá', 'error')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function handleFieldSave(docId, fieldData) {
+    try {
+      const updated = await archiveApi.updateDoc(companyId, activeYear.id, docId, fieldData)
+      setDocs((prev) => prev.map((d) => d.id === docId ? updated : d))
+    } catch {
+      addToast('Không thể lưu', 'error')
     }
   }
 
@@ -338,6 +677,22 @@ export default function ArchiveTab({ company }) {
     }
   }
 
+  async function handleExtraFieldSave(docId, colName, value) {
+    try {
+      const updated = await archiveApi.updateDoc(companyId, activeYear.id, docId, {
+        extraFields: { [colName]: value },
+      })
+      setDocs((prev) => prev.map((d) => d.id === docId ? updated : d))
+    } catch {
+      addToast('Không thể lưu ô dữ liệu', 'error')
+    }
+  }
+
+  // ── colSpan ──────────────────────────────────────────────────────────────────
+
+  // STT + DocType + Detail + 12 tháng + Năm + Notes + Char + extra cols + [Actions]
+  const colSpan = 3 + 12 + 1 + 2 + columns.length + (canEdit ? 1 : 0)
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -349,8 +704,6 @@ export default function ArchiveTab({ company }) {
     )
   }
 
-  const colSpan = COL_COUNT_BASE + (canEdit ? 1 : 0)
-
   return (
     <div>
       {/* ── Toolbar ───────────────────────────────────────────────────────────── */}
@@ -360,7 +713,7 @@ export default function ArchiveTab({ company }) {
             <button
               key={y.id}
               className={`${s.archYearPill} ${activeYear?.id === y.id ? s.archYearPillActive : ''}`}
-              onClick={() => setActiveYear(y)}
+              onClick={() => { setPage(1); setActiveYear(y) }}
             >
               {y.year}
             </button>
@@ -372,20 +725,27 @@ export default function ArchiveTab({ company }) {
           )}
         </div>
 
-        {activeYear && canEdit && (
-          <div className={s.archToolbarRight}>
-            <button className={s.btnNavy} onClick={() => setShowAddDoc(true)}>
-              <Plus size={13} /> Thêm dòng
+        <div className={s.archToolbarRight}>
+          {canEdit && (
+            <button className={s.btnOutline} onClick={() => setShowManageCols(true)}>
+              <Columns size={13} /> Quản lý cột
             </button>
-            <button
-              className={`${s.rowActionBtn} ${s.rowActionDanger}`}
-              title={`Xoá năm ${activeYear.year}`}
-              onClick={() => setShowDeleteYear(true)}
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        )}
+          )}
+          {activeYear && canEdit && (
+            <>
+              <button className={s.btnNavy} onClick={() => setShowAddDoc(true)}>
+                <Plus size={13} /> Thêm dòng
+              </button>
+              <button
+                className={`${s.rowActionBtn} ${s.rowActionDanger}`}
+                title={`Xoá năm ${activeYear.year}`}
+                onClick={() => setShowDeleteYear(true)}
+              >
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Year notes banner ─────────────────────────────────────────────────── */}
@@ -415,18 +775,40 @@ export default function ArchiveTab({ company }) {
       {activeYear && (
         <div className={s.tableWrap}>
           <div className={`${s.tableScroll} ${s.archTableScroll}`}>
-            <table className={`${s.table} ${s.archTable}`}>
+            <table className={`${s.table} ${s.archTable}`} style={{ width: tableWidth }}>
               <thead>
                 <tr>
                   <th className={s.archThStt}>#</th>
-                  <th className={s.archThDocType}>Loại chứng từ</th>
-                  <th className={s.archThDetail}>Chi tiết</th>
+                  <th className={s.archThDocType} style={{ width: colWidths.docType }}>
+                    <span className={s.archThLabel}>Loại chứng từ</span>
+                    <ResizeHandle onResize={(dx) => resizeCol('docType', dx)} />
+                  </th>
+                  <th className={s.archThDetail} style={{ width: colWidths.detail }}>
+                    <span className={s.archThLabel}>Chi tiết</span>
+                    <ResizeHandle onResize={(dx) => resizeCol('detail', dx)} />
+                  </th>
                   {MONTHS.map((m) => (
                     <th key={m} className={s.archThMonth}>{MONTH_LABELS[m]}</th>
                   ))}
                   <th className={s.archThYear}>Năm</th>
-                  <th className={s.archThNotes}>Ghi chú</th>
-                  <th className={s.archThChar}>Đặc điểm</th>
+                  <th className={s.archThNotes} style={{ width: colWidths.notes }}>
+                    <span className={s.archThLabel}>Ghi chú</span>
+                    <ResizeHandle onResize={(dx) => resizeCol('notes', dx)} />
+                  </th>
+                  <th className={s.archThChar} style={{ width: colWidths.char }}>
+                    <span className={s.archThLabel}>Đặc điểm</span>
+                    <ResizeHandle onResize={(dx) => resizeCol('char', dx)} />
+                  </th>
+                  {columns.map((col) => (
+                    <th
+                      key={col.id}
+                      className={s.archThCustom}
+                      style={{ width: colWidths[`col_${col.id}`] ?? 160 }}
+                    >
+                      <span className={s.archThLabel}>{col.colName}</span>
+                      <ResizeHandle onResize={(dx) => resizeCol(`col_${col.id}`, dx)} />
+                    </th>
+                  ))}
                   {canEdit && <th className={s.archThActions} />}
                 </tr>
               </thead>
@@ -452,9 +834,20 @@ export default function ArchiveTab({ company }) {
                   </tr>
                 ) : docs.map((doc, idx) => (
                   <tr key={doc.id} className={s.archDocRow}>
-                    <td className={s.archCellStt}>{idx + 1}</td>
-                    <td className={s.archCellDocType}>{doc.documentType}</td>
-                    <td className={s.archCellDetail}>{doc.detail ?? ''}</td>
+                    <td className={s.archCellStt}>{idx + 1 + (page - 1) * PAGE_SIZE}</td>
+                    <InlineTdCell
+                      value={doc.documentType}
+                      canEdit={canEdit}
+                      tdClassName={s.archCellDocType}
+                      required
+                      onSave={(val) => handleFieldSave(doc.id, { documentType: val })}
+                    />
+                    <InlineTdCell
+                      value={doc.detail}
+                      canEdit={canEdit}
+                      tdClassName={s.archCellDetail}
+                      onSave={(val) => handleFieldSave(doc.id, { detail: val })}
+                    />
                     {MONTHS.map((m) => (
                       <MonthCell
                         key={m}
@@ -468,8 +861,27 @@ export default function ArchiveTab({ company }) {
                         {countFilledMonths(doc.months)}
                       </span>
                     </td>
-                    <td className={s.archCellNotes}>{doc.notes ?? ''}</td>
-                    <td className={s.archCellChar}>{doc.characteristics ?? ''}</td>
+                    <InlineTdCell
+                      value={doc.notes}
+                      canEdit={canEdit}
+                      tdClassName={s.archCellNotes}
+                      multiline
+                      onSave={(val) => handleFieldSave(doc.id, { notes: val })}
+                    />
+                    <InlineTdCell
+                      value={doc.characteristics}
+                      canEdit={canEdit}
+                      tdClassName={s.archCellChar}
+                      onSave={(val) => handleFieldSave(doc.id, { characteristics: val })}
+                    />
+                    {columns.map((col) => (
+                      <ExtraFieldCell
+                        key={col.id}
+                        value={doc.extraFields?.[col.colName] ?? ''}
+                        canEdit={canEdit}
+                        onSave={(val) => handleExtraFieldSave(doc.id, col.colName, val)}
+                      />
+                    ))}
                     {canEdit && (
                       <td className={s.archCellActions}>
                         <div className={s.cTaskActionBtns}>
@@ -478,14 +890,14 @@ export default function ArchiveTab({ company }) {
                             title="Chỉnh sửa"
                             onClick={() => setEditDoc(doc)}
                           >
-                            <Pencil size={12} />
+                            <Pencil size={14} />
                           </button>
                           <button
                             className={`${s.rowActionBtn} ${s.rowActionDanger}`}
                             title="Xoá dòng"
                             onClick={() => setDeleteDocId(doc.id)}
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -496,11 +908,33 @@ export default function ArchiveTab({ company }) {
             </table>
           </div>
 
-          {!docsLoading && docs.length > 0 && (
+          {!docsLoading && (
             <div className={s.archTableFooter}>
               <span className={s.archTableCount}>
-                {docs.length} loại chứng từ · năm {activeYear.year}
+                {docsTotal} loại chứng từ · năm {activeYear.year}
+                {columns.length > 0 && ` · ${columns.length} cột tuỳ chỉnh`}
               </span>
+              {docsTotal > PAGE_SIZE && (
+                <div className={s.archPagination}>
+                  <button
+                    className={s.archPageBtn}
+                    disabled={page === 1}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    ‹ Trước
+                  </button>
+                  <span className={s.archPageInfo}>
+                    {page} / {Math.ceil(docsTotal / PAGE_SIZE)}
+                  </span>
+                  <button
+                    className={s.archPageBtn}
+                    disabled={page >= Math.ceil(docsTotal / PAGE_SIZE)}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Tiếp ›
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -518,6 +952,7 @@ export default function ArchiveTab({ company }) {
 
       {showAddDoc && (
         <DocFormModal
+          columns={columns}
           onSave={handleAddDoc}
           onClose={() => setShowAddDoc(false)}
         />
@@ -526,8 +961,18 @@ export default function ArchiveTab({ company }) {
       {editDoc && (
         <DocFormModal
           initialDoc={editDoc}
+          columns={columns}
           onSave={handleEditDoc}
           onClose={() => setEditDoc(null)}
+        />
+      )}
+
+      {showManageCols && (
+        <ManageColumnsModal
+          companyId={companyId}
+          columns={columns}
+          onColumnsChange={setColumns}
+          onClose={() => setShowManageCols(false)}
         />
       )}
 

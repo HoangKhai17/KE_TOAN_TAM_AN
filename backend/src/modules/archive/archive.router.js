@@ -7,12 +7,18 @@ const {
   createDocSchema,
   updateDocSchema,
   reorderSchema,
+  createColumnSchema,
 } = require('./archive.schema')
 const ctrl = require('./archive.controller')
 
 // Mounted at /api/companies/:companyId/archive
 const router = Router({ mergeParams: true })
 const auth = [authenticate]
+
+// ── Columns (company-level, không gắn với year) ───────────────────────────────
+router.get('/columns',            ...auth, ctrl.listColumns)
+router.post('/columns',           ...auth, validate(createColumnSchema), ctrl.createColumn)
+router.delete('/columns/:colId',  ...auth, ctrl.deleteColumn)
 
 // ── Years ─────────────────────────────────────────────────────────────────────
 router.get('/years',            ...auth, ctrl.listYears)

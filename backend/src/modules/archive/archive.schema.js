@@ -13,6 +13,7 @@ const createDocSchema = z.object({
   documentType:    z.string().min(1).max(300),
   detail:          z.string().max(500).optional().nullable(),
   months:          z.record(z.string(), z.string().max(200)).optional(),
+  extraFields:     z.record(z.string(), z.string().max(2000)).optional(),
   notes:           z.string().max(5000).optional().nullable(),
   characteristics: z.string().max(300).optional().nullable(),
 })
@@ -29,4 +30,15 @@ const reorderSchema = z.array(
   })
 ).min(1)
 
-module.exports = { createYearSchema, updateYearSchema, createDocSchema, updateDocSchema, reorderSchema }
+const createColumnSchema = z.object({
+  colName: z.string().min(1).max(200),
+})
+
+module.exports = {
+  createYearSchema,
+  updateYearSchema,
+  createDocSchema,
+  updateDocSchema,
+  reorderSchema,
+  createColumnSchema,
+}
