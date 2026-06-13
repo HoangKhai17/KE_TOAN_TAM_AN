@@ -5,7 +5,7 @@ import {
   Hash, Calendar, Briefcase,
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
-  Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal, ScrollText, Archive,
+  Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal, ScrollText, Archive, FileSignature,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -21,6 +21,7 @@ import DocumentsTab from './DocumentsTab'
 import NotesTab from './NotesTab'
 import ClientRequestsTab from './ClientRequestsTab'
 import LaborContractsTab from './LaborContractsTab'
+import ClientSupplierContractsTab from './ClientSupplierContractsTab'
 import ArchiveTab from './ArchiveTab'
 import TaskFormModal from '../Tasks/TaskFormModal'
 import TaskQuickView from '../Tasks/TaskQuickView'
@@ -68,6 +69,7 @@ const TABS = [
   { id: 'client-requests',   label: 'Yêu cầu KH',        icon: ClipboardList },
   { id: 'schedules',         label: 'Lịch định kỳ',       icon: CalendarDays },
   { id: 'labor-contracts',   label: 'Theo dõi HĐLĐ',      icon: ScrollText },
+  { id: 'csc',               label: 'Theo dõi HĐ KH.NCC', icon: FileSignature },
   { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
   { id: 'documents',         label: 'Tài liệu',           icon: FileText },
   { id: 'archive',           label: 'HS lưu trữ khi QT',  icon: Archive },
@@ -348,6 +350,9 @@ export default function CompanyDetail() {
       )}
       {activeTab === 'labor-contracts' && (
         <LaborContractsTab company={company} />
+      )}
+      {activeTab === 'csc' && (
+        <ClientSupplierContractsTab company={company} />
       )}
       {activeTab === 'archive' && (
         <ArchiveTab company={company} />

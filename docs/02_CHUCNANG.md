@@ -128,6 +128,48 @@
 
 ---
 
+### 1.7 Theo Dõi Hợp Đồng Khách Hàng / Nhà Cung Cấp (HĐ KH.NCC)
+
+> Theo dõi các hợp đồng mà khách hàng ký kết với đối tác bên ngoài (khách hàng hoặc nhà cung cấp). Giúp nhân viên kế toán nắm bắt tình trạng hiệu lực hợp đồng và cảnh báo hết hạn.
+
+**Tính năng:**
+- Thêm / sửa / xóa hợp đồng KH.NCC theo từng công ty
+- **Click-to-edit inline** — click thẳng vào ô trong bảng để chỉnh sửa (giống tab HĐLĐ)
+- **Tình trạng tự động:** hệ thống tính số ngày còn lại và phân loại tình trạng
+- **Quản lý cột tùy chỉnh** — thêm cột văn bản / số / ngày (giống tab HĐLĐ)
+- **Column header filter** — lọc dữ liệu trực tiếp từ tiêu đề cột
+- **Drag handle** `|` để resize cột
+- **Xuất Excel** — chọn cột cần xuất, preview trước khi tải
+
+**Cột dữ liệu cố định:**
+
+| Cột | Mô tả | Lưu DB |
+|-----|-------|--------|
+| STT | Số thứ tự | ✗ (computed) |
+| Khách hàng | Tên công ty KH (tên công ty đang xem) | ✗ (join) |
+| Mã số thuế | MST của công ty KH | ✗ (join) |
+| Quản lý | NV phụ trách công ty | ✗ (join) |
+| Đối tượng HĐ | Loại bên ký kết: "Nhà cung cấp", "Khách hàng"... | ✓ |
+| Tên đối tượng | Tên bên ký kết (bắt buộc) | ✓ |
+| Nội dung HĐ | Tóm tắt nội dung hợp đồng | ✓ |
+| Số HĐ | Số hợp đồng | ✓ |
+| Ngày HĐ | Ngày ký hợp đồng | ✓ |
+| Ngày kết thúc | Ngày hết hạn (NULL = vô thời hạn) | ✓ |
+| Ngày còn lại | Số ngày từ hôm nay đến ngày kết thúc | ✗ (computed) |
+| Tình trạng | Còn hiệu lực / Sắp hết hạn / Đã hết hạn / Không thời hạn | ✗ (computed) |
+| Ghi chú | Ghi chú nội bộ | ✓ |
+
+**Logic tính tình trạng:**
+- `Không thời hạn`: `end_date IS NULL`
+- `Còn hiệu lực`: > 30 ngày còn lại
+- `Sắp hết hạn`: 1–30 ngày còn lại
+- `Đã hết hạn`: `end_date < hôm nay`
+
+**Nơi hiển thị:**
+- Tab **"Theo dõi HĐ KH.NCC"** trên trang `/companies/:id`
+
+---
+
 ## Module 2: Quản Lý Nhân Sự
 
 > Quản lý thông tin nhân viên kế toán nội bộ của Tâm An.

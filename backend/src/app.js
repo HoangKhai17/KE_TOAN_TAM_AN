@@ -201,6 +201,9 @@ function createApp() {
   // Phase 20 — Archive (HS Lưu Trữ Khi Quyết Toán)
   app.use('/api/companies/:companyId/archive', require('./modules/archive/archive.router'))
 
+  // Phase 21 — Client/Supplier Contracts (Theo dõi HĐ KH.NCC)
+  app.use('/api/companies/:companyId/csc', require('./modules/csc/csc.router'))
+
   // Dev helper: send a test notification to the calling user
   app.post('/api/notifications/test', require('./middleware/auth').authenticate, async (req, res, next) => {
     try {

@@ -5444,3 +5444,8 @@
   height: 1px;
   background: var(--color-border-muted);
 }
+
+/* ── ClientSupplierContractsTab — column widths ──────────────────────────── */
+.cscThParty     { min-width: 130px; }
+.cscThPartyName { min-width: 180px; }
+.cscThContent   { min-width: 180px; }

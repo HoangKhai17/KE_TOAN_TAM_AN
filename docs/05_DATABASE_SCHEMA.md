@@ -1184,6 +1184,84 @@ Operator `||` chỉ ghi đè đúng key được chỉ định, 11 key còn lạ
 
 ---
 
+## TABLE: company_csc_contracts (HĐ Khách Hàng / Nhà Cung Cấp)
+
+> Migration: `migrations/068_csc_contracts.sql`
+
+```sql
+CREATE TABLE company_csc_contracts (
+  id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id       UUID         NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  contract_party   VARCHAR(100),
+  party_name       VARCHAR(300) NOT NULL,
+  contract_content VARCHAR(500),
+  contract_number  VARCHAR(100),
+  contract_date    DATE,
+  end_date         DATE,
+  notes            TEXT,
+  custom_fields    JSONB        NOT NULL DEFAULT '{}',
+  created_by       UUID         NOT NULL REFERENCES users(id),
+  created_at       TIMESTAMP    NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_csc_company  ON company_csc_contracts(company_id);
+CREATE INDEX idx_csc_end_date ON company_csc_contracts(end_date) WHERE end_date IS NOT NULL;
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `company_id` | Công ty KH đang xem — ON DELETE CASCADE |
+| `contract_party` | Đối tượng hợp đồng: "Nhà cung cấp", "Khách hàng"... (tự do nhập) |
+| `party_name` | Tên đối tượng ký kết (bắt buộc) |
+| `contract_content` | Nội dung / mục đích hợp đồng |
+| `contract_number` | Số hợp đồng |
+| `contract_date` | Ngày ký |
+| `end_date` | Ngày kết thúc — NULL nghĩa là vô thời hạn |
+| `custom_fields` | JSONB — cột tùy chỉnh do người dùng tự thêm |
+| `created_by` | Người tạo bản ghi |
+
+**Computed tại query time (không lưu DB):**
+```sql
+CASE WHEN end_date IS NULL THEN NULL
+     ELSE (end_date - CURRENT_DATE)::INTEGER
+END AS days_remaining,
+CASE
+  WHEN end_date IS NULL              THEN 'permanent'
+  WHEN end_date < CURRENT_DATE       THEN 'expired'
+  WHEN end_date - CURRENT_DATE <= 30 THEN 'expiring_soon'
+  ELSE                                    'active'
+END AS contract_status
+```
+
+---
+
+## TABLE: company_csc_columns (Cột Tùy Chỉnh HĐ KH.NCC)
+
+> Migration: `migrations/069_csc_columns.sql`
+
+```sql
+CREATE TABLE company_csc_columns (
+  id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID         NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  col_name   VARCHAR(200) NOT NULL,
+  col_type   VARCHAR(10)  NOT NULL DEFAULT 'text'
+             CHECK (col_type IN ('text', 'number', 'date')),
+  position   INT          NOT NULL DEFAULT 0,
+  created_at TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_csc_cols_company ON company_csc_columns(company_id);
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `col_name` | Tên cột do người dùng đặt |
+| `col_type` | Kiểu dữ liệu: `text` / `number` / `date` |
+| `position` | Thứ tự hiển thị |
+
+---
+
 ## Tóm Tắt Các Bảng
 
 | # | Bảng | Mô tả | Quan hệ chính |
@@ -1226,6 +1304,8 @@ Operator `||` chỉ ghi đè đúng key được chỉ định, 11 key còn lạ
 | 33 | `company_labor_contracts` | Theo dõi HĐLĐ nhân viên KH | N:1 companies, users (created_by) |
 | 34 | `company_archive_years` | Năm lưu trữ hồ sơ theo công ty KH | N:1 companies |
 | 35 | `company_archive_docs` | Dòng chứng từ lưu trữ theo năm | N:1 company_archive_years (cascade) |
+| 36 | `company_csc_contracts` | HĐ khách hàng / nhà cung cấp | N:1 companies, users (created_by) |
+| 37 | `company_csc_columns` | Cột tùy chỉnh tab HĐ KH.NCC | N:1 companies |
 
 ---
 
