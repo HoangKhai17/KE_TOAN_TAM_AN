@@ -5445,7 +5445,126 @@
   background: var(--color-border-muted);
 }
 
-/* ── ClientSupplierContractsTab — column widths ──────────────────────────── */
-.cscThParty     { min-width: 130px; }
-.cscThPartyName { min-width: 180px; }
-.cscThContent   { min-width: 180px; }
+/* ── ClientSupplierContractsTab ───────────────────────────────────────────── */
+
+/* Table — width driven by JS via CSS local var --csc-table-w (rule #3 style guide) */
+.cscTable {
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  width: var(--csc-table-w, max-content);
+}
+
+/* ── Header cells ──────────────────────────────────────────────────────────── */
+
+/* Resizable th: position:relative for drag handle; width from CSS local var --csc-col-w */
+.cscThResizable {
+  position: relative;
+  overflow: visible !important;
+  width: var(--csc-col-w);
+}
+
+/* STT — fixed width, always sticky at left:0 */
+.cscThSttFixed {
+  width: 42px;
+  text-align: center;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: inherit;
+}
+
+/* Đối tượng HĐ — sticky; left driven by --csc-col-left (= STT_W = 42px, fixed) */
+.cscThPartySticky {
+  position: sticky;
+  left: var(--csc-col-left, 42px);
+  z-index: 2;
+  background: inherit;
+  overflow: visible !important;
+}
+
+/* Tên đối tượng — sticky; left driven by --csc-col-left (= STT_W + contractParty width, dynamic) */
+.cscThPartyNameSticky {
+  position: sticky;
+  left: var(--csc-col-left);
+  z-index: 2;
+  background: inherit;
+  overflow: visible !important;
+}
+
+/* Actions column — fixed, centered header text */
+.cscThActionsFixed {
+  width: 100px;
+  text-align: center !important;
+  white-space: nowrap;
+}
+
+/* ── Body cells ────────────────────────────────────────────────────────────── */
+
+/* All data rows: compact vertical padding, middle-aligned, bottom divider */
+.cscDocRow td {
+  border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: middle;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+.cscDocRow:last-child td { border-bottom: none; }
+
+/* STT cell — always sticky at left:0 */
+.cscCellSttFixed {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-surface);
+  text-align: center;
+  color: var(--color-muted);
+  font-size: var(--fs-xs);
+}
+
+/* Đối tượng HĐ — sticky; left from --csc-cell-left */
+.cscCellPartySticky {
+  position: sticky;
+  left: var(--csc-cell-left, 42px);
+  z-index: 1;
+  background: var(--color-surface);
+}
+
+/* Tên đối tượng — sticky; left from --csc-cell-left */
+.cscCellPartyNameSticky {
+  position: sticky;
+  left: var(--csc-cell-left);
+  z-index: 1;
+  background: var(--color-surface);
+}
+
+/* Actions cell */
+.cscCellActions {
+  text-align: center;
+  vertical-align: middle;
+  padding: var(--space-2) !important;
+}
+
+/* Row hover — restore sticky cell backgrounds to match table hover */
+.cscDocRow:hover .cscCellSttFixed,
+.cscDocRow:hover .cscCellPartySticky,
+.cscDocRow:hover .cscCellPartyNameSticky {
+  background: var(--color-info-surface);
+}
+
+/* ── Resize handle — | divider appears on th hover ────────────────────────── */
+.cscTable th .archColResizeHandle {
+  background: transparent;
+  border-left: 2px solid transparent;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+}
+
+.cscTable th:hover .archColResizeHandle {
+  border-left: 2px solid var(--color-primary-ink);
+  background: var(--color-primary-ink-soft);
+}
+
+.cscTable th .archColResizeHandle:hover {
+  border-left: 2px solid var(--color-primary);
+  background: var(--color-primary-ink);
+  cursor: col-resize;
+}

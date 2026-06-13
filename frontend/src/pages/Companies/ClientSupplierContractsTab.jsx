@@ -8,6 +8,24 @@ import s from './companies.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 20
+const MIN_COL_W = 60
+
+const DEFAULT_COL_WIDTHS = {
+  contractParty:   130,
+  partyName:       180,
+  contractContent: 180,
+  contractNumber:  130,
+  contractDate:    110,
+  endDate:         110,
+  daysRemaining:    90,
+  contractStatus:  130,
+  notes:           200,
+}
+const DEFAULT_CUSTOM_COL_W = 160
+const STT_W = 42    // fixed — matches CSS .cscThSttFixed
+const ACTIONS_W = 100 // matches CSS .cscThActionsFixed width
+
 const STATUS_LABEL = {
   active:        'Còn hiệu lực',
   expiring_soon: 'Sắp hết hạn',
@@ -71,6 +89,38 @@ function getSortKey(row, colKey) {
   if (colKey === 'contractStatus') return STATUS_LABEL[row.contractStatus] ?? ''
   const v = row[colKey]
   return v != null ? String(v).toLowerCase() : ''
+}
+
+// ── ResizeHandle — drag to resize column ──────────────────────────────────────
+
+function ResizeHandle({ onResize }) {
+  const startX = useRef(null)
+
+  function handleMouseDown(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    startX.current = e.clientX
+    document.body.style.cursor     = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    function onMove(me) {
+      const dx = me.clientX - startX.current
+      startX.current = me.clientX
+      onResize(dx)
+    }
+
+    function onUp() {
+      document.body.style.cursor     = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup',   onUp)
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup',   onUp)
+  }
+
+  return <span className={s.archColResizeHandle} onMouseDown={handleMouseDown} />
 }
 
 // ── StatusBadge ───────────────────────────────────────────────────────────────
@@ -156,10 +206,7 @@ function TextFilterSection({ colKey, currentFilter, onFilterChange }) {
         className={s.hdldDdInput}
         placeholder="Tìm kiếm..."
         value={q}
-        onChange={(e) => {
-          setQ(e.target.value)
-          onFilterChange(colKey, e.target.value.trim() || null)
-        }}
+        onChange={(e) => { setQ(e.target.value); onFilterChange(colKey, e.target.value.trim() || null) }}
       />
       {q && (
         <div className={s.hdldDdFooter}>
@@ -176,9 +223,7 @@ function DateRangeFilterSection({ colKey, currentFilter, onFilterChange }) {
   const [from, setFrom] = useState(currentFilter?.from ?? '')
   const [to,   setTo  ] = useState(currentFilter?.to   ?? '')
 
-  function apply(f, t) {
-    onFilterChange(colKey, f || t ? { from: f, to: t } : null)
-  }
+  function apply(f, t) { onFilterChange(colKey, f || t ? { from: f, to: t } : null) }
 
   return (
     <div className={s.hdldDdFilterSection}>
@@ -260,26 +305,18 @@ function ColumnFilterDropdown({ colKey, dynColumns, allRows, currentFilter, sort
   return (
     <div ref={dropRef} className={s.hdldFilterDropdown} style={style}>
       <div className={s.hdldDdSortSection}>
-        <button
-          className={`${s.hdldDdSortBtn} ${activeAsc ? s.hdldDdSortBtnActive : ''}`}
-          onClick={() => onSort(colKey, 'asc')}
-        >
+        <button className={`${s.hdldDdSortBtn} ${activeAsc ? s.hdldDdSortBtnActive : ''}`}
+          onClick={() => onSort(colKey, 'asc')}>
           ↑&nbsp; Sắp xếp A → Z
         </button>
-        <button
-          className={`${s.hdldDdSortBtn} ${activeDesc ? s.hdldDdSortBtnActive : ''}`}
-          onClick={() => onSort(colKey, 'desc')}
-        >
+        <button className={`${s.hdldDdSortBtn} ${activeDesc ? s.hdldDdSortBtnActive : ''}`}
+          onClick={() => onSort(colKey, 'desc')}>
           ↓&nbsp; Sắp xếp Z → A
         </button>
       </div>
-
       {filterType === 'enum' && (
-        <EnumFilterSection
-          colKey={colKey} allRows={allRows}
-          currentFilter={currentFilter}
-          onFilterChange={onFilterChange} onClose={onClose}
-        />
+        <EnumFilterSection colKey={colKey} allRows={allRows} currentFilter={currentFilter}
+          onFilterChange={onFilterChange} onClose={onClose} />
       )}
       {filterType === 'text' && (
         <TextFilterSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
@@ -354,9 +391,7 @@ function CscExportModal({ companyId, company, contracts, columns, onClose }) {
   const [selected, setSelected]   = useState(() => new Set(allKeys))
   const [exporting, setExporting] = useState(false)
 
-  function isGroupAll(group) {
-    return group.fields.every((f) => selected.has(f.key))
-  }
+  function isGroupAll(group) { return group.fields.every((f) => selected.has(f.key)) }
   function toggleGroup(group) {
     const allOn = isGroupAll(group)
     setSelected((prev) => {
@@ -428,7 +463,6 @@ function CscExportModal({ companyId, company, contracts, columns, onClose }) {
               </div>
             ))}
           </div>
-
           <div className={s.hdldExportPreviewPane}>
             <div className={s.hdldExportPreviewTitle}>
               Xem trước ({Math.min(8, contracts.length)} / {contracts.length} hợp đồng)
@@ -439,9 +473,7 @@ function CscExportModal({ companyId, company, contracts, columns, onClose }) {
               ) : (
                 <table className={s.hdldExportPreviewTable}>
                   <thead>
-                    <tr>
-                      {previewFields.map((f) => <th key={f.key}>{f.label}</th>)}
-                    </tr>
+                    <tr>{previewFields.map((f) => <th key={f.key}>{f.label}</th>)}</tr>
                   </thead>
                   <tbody>
                     {previewRows.map((row, rowIdx) => (
@@ -457,11 +489,8 @@ function CscExportModal({ companyId, company, contracts, columns, onClose }) {
             </div>
           </div>
         </div>
-
         <div className={s.hdldExportFooter}>
-          <span className={s.hdldExportCount}>
-            {selected.size} cột · {contracts.length} hợp đồng
-          </span>
+          <span className={s.hdldExportCount}>{selected.size} cột · {contracts.length} hợp đồng</span>
           <div className={s.modalActions}>
             <button type="button" onClick={onClose} className={s.btnOutline} disabled={exporting}>Huỷ</button>
             <button type="button" className={s.btnNavy} onClick={handleExport}
@@ -479,7 +508,7 @@ function CscExportModal({ companyId, company, contracts, columns, onClose }) {
 
 // ── InlineTdCell — click-to-edit ──────────────────────────────────────────────
 
-function InlineTdCell({ value, canEdit, onSave, inputType = 'text', tdClassName, required }) {
+function InlineTdCell({ value, canEdit, onSave, inputType = 'text', tdClassName, tdStyle, required }) {
   const [editing,  setEditing]  = useState(false)
   const [localVal, setLocalVal] = useState(value ?? '')
   const inputRef               = useRef(null)
@@ -505,6 +534,7 @@ function InlineTdCell({ value, canEdit, onSave, inputType = 'text', tdClassName,
   return (
     <td
       className={`${tdClassName ?? ''} ${canEdit ? s.archInlineTdEditable : ''}`}
+      style={tdStyle}
       onClick={() => canEdit && !editing && setEditing(true)}
     >
       {editing ? (
@@ -591,7 +621,6 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
           Các cột tuỳ chỉnh áp dụng cho tất cả hợp đồng trong công ty này.
           Xoá cột không làm mất dữ liệu đã nhập.
         </p>
-
         {columns.length === 0 ? (
           <p className={s.hdldModalEmpty}>Chưa có cột tuỳ chỉnh nào.</p>
         ) : (
@@ -613,7 +642,6 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
             ))}
           </div>
         )}
-
         <form onSubmit={handleAdd}>
           {error && <div className={`${s.errorBox} ${s.hdldInlineError}`}>{error}</div>}
           <div className={s.hdldAddColForm}>
@@ -642,7 +670,6 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
             </button>
           </div>
         </form>
-
         <div className={`${s.modalActions} ${s.hdldModalActions}`}>
           <button onClick={onClose} className={s.btnOutline}>Đóng</button>
         </div>
@@ -674,8 +701,8 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
         partyName:       initial.partyName        ?? '',
         contractContent: initial.contractContent  ?? '',
         contractNumber:  initial.contractNumber   ?? '',
-        contractDate:    initial.contractDate   ? String(initial.contractDate).substring(0, 10)   : '',
-        endDate:         initial.endDate        ? String(initial.endDate).substring(0, 10)        : '',
+        contractDate:    initial.contractDate   ? String(initial.contractDate).substring(0, 10)  : '',
+        endDate:         initial.endDate        ? String(initial.endDate).substring(0, 10)       : '',
         notes:           initial.notes           ?? '',
         customFields:    {
           ...Object.fromEntries(columns.map((c) => [c.colName, ''])),
@@ -688,10 +715,7 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
 
-  function setField(field) {
-    return (e) => setForm((p) => ({ ...p, [field]: e.target.value }))
-  }
-
+  function setField(field) { return (e) => setForm((p) => ({ ...p, [field]: e.target.value })) }
   function setColValue(colName, val) {
     setForm((p) => ({ ...p, customFields: { ...p.customFields, [colName]: val } }))
   }
@@ -723,7 +747,6 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
     <Modal title={title} onClose={onClose} width="min(1400px, calc(100vw - 80px))">
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}
-
         <div className={s.formGrid2}>
           <div>
             <label className={s.formLabel}>Đối tượng hợp đồng</label>
@@ -736,7 +759,6 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
               autoFocus
             />
           </div>
-
           <div>
             <label className={`${s.formLabel} ${s.formLabelReq}`}>Tên đối tượng</label>
             <input
@@ -747,7 +769,6 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
               className={s.formInput}
             />
           </div>
-
           <div className={s.hdldFormSpan2}>
             <label className={s.formLabel}>Nội dung hợp đồng</label>
             <input
@@ -758,7 +779,6 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
               className={s.formInput}
             />
           </div>
-
           <div>
             <label className={s.formLabel}>Số hợp đồng</label>
             <input
@@ -769,27 +789,14 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
               className={s.formInput}
             />
           </div>
-
           <div>
             <label className={s.formLabel}>Ngày hợp đồng</label>
-            <input
-              type="date"
-              value={form.contractDate}
-              onChange={setField('contractDate')}
-              className={s.formInput}
-            />
+            <input type="date" value={form.contractDate} onChange={setField('contractDate')} className={s.formInput} />
           </div>
-
           <div>
             <label className={s.formLabel}>Ngày kết thúc</label>
-            <input
-              type="date"
-              value={form.endDate}
-              onChange={setField('endDate')}
-              className={s.formInput}
-            />
+            <input type="date" value={form.endDate} onChange={setField('endDate')} className={s.formInput} />
           </div>
-
           <div className={s.hdldFormSpan2}>
             <label className={s.formLabel}>Ghi chú</label>
             <textarea
@@ -800,7 +807,6 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
               rows={2}
             />
           </div>
-
           {columns.map((col) => (
             <div key={col.id}>
               <label className={s.formLabel}>
@@ -816,7 +822,6 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
             </div>
           ))}
         </div>
-
         <div className={s.modalActions}>
           <button type="button" onClick={onClose} className={s.btnOutline} disabled={saving}>Huỷ</button>
           <button type="submit" disabled={saving} className={s.btnNavy}>
@@ -867,20 +872,64 @@ export default function ClientSupplierContractsTab({ company }) {
 
   const canEdit = user?.role === 'admin' || company.assignedStaffId === user?.id
 
+  // ── Data ─────────────────────────────────────────────────────────────────────
   const [contracts, setContracts]     = useState([])
   const [columns, setColumns]         = useState([])
   const [loading, setLoading]         = useState(true)
   const [showExport, setShowExport]   = useState(false)
 
+  // ── Column resize — persisted in localStorage per company ─────────────────────
+  const lsKey = `cscColWidths_${companyId}`
+  const [colWidths, setColWidths] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`cscColWidths_${companyId}`)
+      return saved ? { ...DEFAULT_COL_WIDTHS, ...JSON.parse(saved) } : { ...DEFAULT_COL_WIDTHS }
+    } catch {
+      return { ...DEFAULT_COL_WIDTHS }
+    }
+  })
+
+  function resizeCol(key, dx) {
+    setColWidths((prev) => {
+      const next = { ...prev, [key]: Math.max(MIN_COL_W, (prev[key] ?? DEFAULT_CUSTOM_COL_W) + dx) }
+      try { localStorage.setItem(lsKey, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  const tableWidth = useMemo(() => {
+    const customW = columns.reduce((sum, c) => sum + (colWidths[`col_${c.id}`] ?? DEFAULT_CUSTOM_COL_W), 0)
+    return (
+      STT_W
+      + (colWidths.contractParty   ?? DEFAULT_COL_WIDTHS.contractParty)
+      + (colWidths.partyName       ?? DEFAULT_COL_WIDTHS.partyName)
+      + (colWidths.contractContent ?? DEFAULT_COL_WIDTHS.contractContent)
+      + (colWidths.contractNumber  ?? DEFAULT_COL_WIDTHS.contractNumber)
+      + (colWidths.contractDate    ?? DEFAULT_COL_WIDTHS.contractDate)
+      + (colWidths.endDate         ?? DEFAULT_COL_WIDTHS.endDate)
+      + (colWidths.daysRemaining   ?? DEFAULT_COL_WIDTHS.daysRemaining)
+      + (colWidths.contractStatus  ?? DEFAULT_COL_WIDTHS.contractStatus)
+      + (colWidths.notes           ?? DEFAULT_COL_WIDTHS.notes)
+      + customW
+      + (canEdit ? ACTIONS_W : 0)
+    )
+  }, [colWidths, columns, canEdit])
+
+  // ── Column-header filter state ────────────────────────────────────────────────
   const [colFilters, setColFilters]   = useState({})
   const [sortState, setSortState]     = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup] = useState(null)
 
+  // ── Pagination ────────────────────────────────────────────────────────────────
+  const [page, setPage] = useState(1)
+
+  // ── Modal state ───────────────────────────────────────────────────────────────
   const [showCreate, setShowCreate]         = useState(false)
   const [editTarget, setEditTarget]         = useState(null)
   const [deleteTarget, setDeleteTarget]     = useState(null)
   const [showManageCols, setShowManageCols] = useState(false)
 
+  // ── Load ──────────────────────────────────────────────────────────────────────
   async function load() {
     setLoading(true)
     try {
@@ -899,6 +948,7 @@ export default function ClientSupplierContractsTab({ company }) {
 
   useEffect(() => { load() }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── CRUD handlers ──────────────────────────────────────────────────────────────
   async function handleCreate(body) {
     await cscApi.createContract(companyId, body)
     await load()
@@ -942,7 +992,7 @@ export default function ClientSupplierContractsTab({ company }) {
     }
   }
 
-  // Apply column filters + sort
+  // ── Filter + sort + paginate ──────────────────────────────────────────────────
   const displayed = useMemo(() => {
     let result = [...contracts]
 
@@ -1003,6 +1053,13 @@ export default function ClientSupplierContractsTab({ company }) {
     return result
   }, [contracts, columns, colFilters, sortState])
 
+  // Reset to page 1 whenever filter/sort changes
+  useEffect(() => { setPage(1) }, [colFilters, sortState])
+
+  const totalPages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE))
+  const pageRows   = displayed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  // ── Filter UI helpers ─────────────────────────────────────────────────────────
   function openFilter(colKey, e) {
     e.stopPropagation()
     if (filterPopup?.colKey === colKey) {
@@ -1037,10 +1094,11 @@ export default function ClientSupplierContractsTab({ company }) {
 
   function hasSort(colKey) { return sortState.col === colKey }
 
-  function FilterTh({ colKey, className, children }) {
+  // FilterTh — column header with filter button + resize handle
+  function FilterTh({ colKey, thClassName, style, children, resizeKey }) {
     const active = hasFilter(colKey) || hasSort(colKey)
     return (
-      <th className={className}>
+      <th className={`${s.cscThResizable} ${thClassName ?? ''}`} style={style}>
         <div className={s.hdldThInner}>
           <span className={s.hdldThLabel}>{children}</span>
           <button
@@ -1052,12 +1110,22 @@ export default function ClientSupplierContractsTab({ company }) {
             <Filter size={10} />
           </button>
         </div>
+        <ResizeHandle onResize={(dx) => resizeCol(resizeKey ?? colKey, dx)} />
       </th>
     )
   }
 
-  const activeFilterCount = Object.values(colFilters).filter((v) => v && v.size > 0).length
-  const hasSortActive     = sortState.col !== null
+  const activeFilterCount = Object.values(colFilters).filter((v) => {
+    if (v == null) return false
+    if (v instanceof Set) return v.size > 0
+    if (typeof v === 'string') return v.trim().length > 0
+    if (typeof v === 'object') return Boolean(v.from || v.to || v.min !== '' || v.max !== '')
+    return false
+  }).length
+  const hasSortActive = sortState.col !== null
+
+  // Sticky left offset for partyName column
+  const partyNameLeft = STT_W + (colWidths.contractParty ?? DEFAULT_COL_WIDTHS.contractParty)
 
   return (
     <div>
@@ -1115,122 +1183,204 @@ export default function ClientSupplierContractsTab({ company }) {
         </div>
       ) : (
         <div className={s.tableWrap}>
-          <div className={s.tableScroll}>
-            <table className={`${s.table} ${s.hdldTable}`}>
+          <div className={`${s.tableScroll} ${s.archTableScroll}`}>
+            <table className={`${s.table} ${s.cscTable}`} style={{ '--csc-table-w': `${tableWidth}px` }}>
               <thead>
                 <tr>
-                  <th className={s.hdldThStt}>STT</th>
-                  <FilterTh colKey="contractParty"   className={s.cscThParty}>Đối tượng HĐ</FilterTh>
-                  <FilterTh colKey="partyName"       className={s.cscThPartyName}>Tên đối tượng</FilterTh>
-                  <FilterTh colKey="contractContent" className={s.cscThContent}>Nội dung HĐ</FilterTh>
-                  <FilterTh colKey="contractNumber"  className={s.hdldThNumber}>Số HĐ</FilterTh>
-                  <FilterTh colKey="contractDate"    className={s.hdldThDateSm}>Ngày HĐ</FilterTh>
-                  <FilterTh colKey="endDate"         className={s.hdldThDate}>Ngày kết thúc</FilterTh>
-                  <FilterTh colKey="daysRemaining"   className={s.hdldThDays}>Ngày còn lại</FilterTh>
-                  <FilterTh colKey="contractStatus"  className={s.hdldThStatus}>Tình trạng</FilterTh>
-                  <FilterTh colKey="notes"           className={s.hdldThNotes}>Ghi chú</FilterTh>
+                  {/* STT — sticky, fixed width, no resize */}
+                  <th className={s.cscThSttFixed}>#</th>
+
+                  {/* Đối tượng HĐ — sticky col 2; --csc-col-left = STT_W (fixed 42px) */}
+                  <FilterTh
+                    colKey="contractParty"
+                    thClassName={s.cscThPartySticky}
+                    style={{ '--csc-col-w': `${colWidths.contractParty ?? DEFAULT_COL_WIDTHS.contractParty}px`, '--csc-col-left': `${STT_W}px` }}
+                  >
+                    Đối tượng HĐ
+                  </FilterTh>
+
+                  {/* Tên đối tượng — sticky col 3; --csc-col-left = STT_W + contractParty width */}
+                  <FilterTh
+                    colKey="partyName"
+                    thClassName={s.cscThPartyNameSticky}
+                    style={{ '--csc-col-w': `${colWidths.partyName ?? DEFAULT_COL_WIDTHS.partyName}px`, '--csc-col-left': `${partyNameLeft}px` }}
+                  >
+                    Tên đối tượng
+                  </FilterTh>
+
+                  <FilterTh colKey="contractContent" style={{ '--csc-col-w': `${colWidths.contractContent ?? DEFAULT_COL_WIDTHS.contractContent}px` }}>
+                    Nội dung HĐ
+                  </FilterTh>
+                  <FilterTh colKey="contractNumber" style={{ '--csc-col-w': `${colWidths.contractNumber ?? DEFAULT_COL_WIDTHS.contractNumber}px` }}>
+                    Số HĐ
+                  </FilterTh>
+                  <FilterTh colKey="contractDate" style={{ '--csc-col-w': `${colWidths.contractDate ?? DEFAULT_COL_WIDTHS.contractDate}px` }}>
+                    Ngày HĐ
+                  </FilterTh>
+                  <FilterTh colKey="endDate" style={{ '--csc-col-w': `${colWidths.endDate ?? DEFAULT_COL_WIDTHS.endDate}px` }}>
+                    Ngày kết thúc
+                  </FilterTh>
+                  <FilterTh colKey="daysRemaining" style={{ '--csc-col-w': `${colWidths.daysRemaining ?? DEFAULT_COL_WIDTHS.daysRemaining}px` }}>
+                    Ngày còn lại
+                  </FilterTh>
+                  <FilterTh colKey="contractStatus" style={{ '--csc-col-w': `${colWidths.contractStatus ?? DEFAULT_COL_WIDTHS.contractStatus}px` }}>
+                    Tình trạng
+                  </FilterTh>
+                  <FilterTh colKey="notes" style={{ '--csc-col-w': `${colWidths.notes ?? DEFAULT_COL_WIDTHS.notes}px` }}>
+                    Ghi chú
+                  </FilterTh>
+
                   {columns.map((col) => (
-                    <FilterTh key={col.id} colKey={`dyn__${col.colName}`} className={s.hdldThCustom}>
+                    <FilterTh
+                      key={col.id}
+                      colKey={`dyn__${col.colName}`}
+                      resizeKey={`col_${col.id}`}
+                      style={{ '--csc-col-w': `${colWidths[`col_${col.id}`] ?? DEFAULT_CUSTOM_COL_W}px` }}
+                    >
                       {col.colName}
                     </FilterTh>
                   ))}
-                  {canEdit && <th className={s.actionsHead}>Thao tác</th>}
+
+                  {canEdit && <th className={s.cscThActionsFixed}>Thao tác</th>}
                 </tr>
               </thead>
               <tbody>
-                {displayed.length === 0 ? (
+                {pageRows.length === 0 ? (
                   <tr>
                     <td colSpan={10 + columns.length + (canEdit ? 1 : 0)} className={s.hdldEmptyRow}>
                       Không có hợp đồng nào khớp bộ lọc.
                     </td>
                   </tr>
-                ) : displayed.map((c, idx) => (
-                  <tr key={c.id}>
-                    <td className={s.hdldCellStt}>{idx + 1}</td>
-                    <InlineTdCell
-                      value={c.contractParty}
-                      canEdit={canEdit}
-                      tdClassName={s.hdldCellSoft}
-                      onSave={(val) => handleFieldSave(c.id, { contractParty: val })}
-                    />
-                    <InlineTdCell
-                      value={c.partyName}
-                      canEdit={canEdit}
-                      required
-                      tdClassName={s.hdldCellName}
-                      onSave={(val) => handleFieldSave(c.id, { partyName: val })}
-                    />
-                    <InlineTdCell
-                      value={c.contractContent}
-                      canEdit={canEdit}
-                      tdClassName={s.hdldCellNotes}
-                      onSave={(val) => handleFieldSave(c.id, { contractContent: val })}
-                    />
-                    <InlineTdCell
-                      value={c.contractNumber}
-                      canEdit={canEdit}
-                      tdClassName={s.hdldCellMono}
-                      onSave={(val) => handleFieldSave(c.id, { contractNumber: val })}
-                    />
-                    <InlineTdCell
-                      value={c.contractDate ? String(c.contractDate).substring(0, 10) : ''}
-                      canEdit={canEdit}
-                      inputType="date"
-                      tdClassName={s.hdldCellDate}
-                      onSave={(val) => handleFieldSave(c.id, { contractDate: val })}
-                    />
-                    <InlineTdCell
-                      value={c.endDate ? String(c.endDate).substring(0, 10) : ''}
-                      canEdit={canEdit}
-                      inputType="date"
-                      tdClassName={s.hdldCellDate}
-                      onSave={(val) => handleFieldSave(c.id, { endDate: val })}
-                    />
-                    <td className={s.hdldCellDays}>
-                      {c.daysRemaining !== null ? c.daysRemaining : '—'}
-                    </td>
-                    <td><StatusBadge status={c.contractStatus} /></td>
-                    <InlineTdCell
-                      value={c.notes}
-                      canEdit={canEdit}
-                      inputType="multiline"
-                      tdClassName={s.hdldCellNotes}
-                      onSave={(val) => handleFieldSave(c.id, { notes: val })}
-                    />
-                    {columns.map((col) => (
+                ) : pageRows.map((c, idx) => {
+                  const globalIdx = (page - 1) * PAGE_SIZE + idx
+                  return (
+                    <tr key={c.id} className={s.cscDocRow}>
+                      {/* STT — sticky */}
+                      <td className={s.cscCellSttFixed}>{globalIdx + 1}</td>
+
+                      {/* contractParty — sticky col 2; --csc-cell-left = STT_W */}
                       <InlineTdCell
-                        key={col.id}
-                        value={c.customFields[col.colName] ?? ''}
+                        value={c.contractParty}
                         canEdit={canEdit}
-                        inputType={col.colType === 'date' ? 'date' : col.colType === 'number' ? 'number' : 'text'}
-                        tdClassName={s.hdldCellCustom}
-                        onSave={(val) => handleCustomFieldSave(c.id, col.colName, val)}
+                        tdClassName={`${s.hdldCellSoft} ${s.cscCellPartySticky}`}
+                        tdStyle={{ '--csc-cell-left': `${STT_W}px` }}
+                        onSave={(val) => handleFieldSave(c.id, { contractParty: val })}
                       />
-                    ))}
-                    {canEdit && (
-                      <td>
-                        <div className={s.hdldActionsRow}>
-                          <button
-                            className={s.iconBtnSm}
-                            onClick={() => setEditTarget(c)}
-                            title="Chỉnh sửa"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            className={`${s.iconBtnSm} ${s.iconBtnDanger}`}
-                            onClick={() => setDeleteTarget(c)}
-                            title="Xoá"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
+
+                      {/* partyName — sticky col 3; --csc-cell-left = STT_W + contractParty width */}
+                      <InlineTdCell
+                        value={c.partyName}
+                        canEdit={canEdit}
+                        required
+                        tdClassName={`${s.hdldCellName} ${s.cscCellPartyNameSticky}`}
+                        tdStyle={{ '--csc-cell-left': `${partyNameLeft}px` }}
+                        onSave={(val) => handleFieldSave(c.id, { partyName: val })}
+                      />
+
+                      <InlineTdCell
+                        value={c.contractContent}
+                        canEdit={canEdit}
+                        tdClassName={s.hdldCellNotes}
+                        onSave={(val) => handleFieldSave(c.id, { contractContent: val })}
+                      />
+                      <InlineTdCell
+                        value={c.contractNumber}
+                        canEdit={canEdit}
+                        tdClassName={s.hdldCellMono}
+                        onSave={(val) => handleFieldSave(c.id, { contractNumber: val })}
+                      />
+                      <InlineTdCell
+                        value={c.contractDate ? String(c.contractDate).substring(0, 10) : ''}
+                        canEdit={canEdit}
+                        inputType="date"
+                        tdClassName={s.hdldCellDate}
+                        onSave={(val) => handleFieldSave(c.id, { contractDate: val })}
+                      />
+                      <InlineTdCell
+                        value={c.endDate ? String(c.endDate).substring(0, 10) : ''}
+                        canEdit={canEdit}
+                        inputType="date"
+                        tdClassName={s.hdldCellDate}
+                        onSave={(val) => handleFieldSave(c.id, { endDate: val })}
+                      />
+                      <td className={s.hdldCellDays}>
+                        {c.daysRemaining !== null ? c.daysRemaining : '—'}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td><StatusBadge status={c.contractStatus} /></td>
+                      <InlineTdCell
+                        value={c.notes}
+                        canEdit={canEdit}
+                        inputType="multiline"
+                        tdClassName={s.hdldCellNotes}
+                        onSave={(val) => handleFieldSave(c.id, { notes: val })}
+                      />
+
+                      {columns.map((col) => (
+                        <InlineTdCell
+                          key={col.id}
+                          value={c.customFields[col.colName] ?? ''}
+                          canEdit={canEdit}
+                          inputType={col.colType === 'date' ? 'date' : col.colType === 'number' ? 'number' : 'text'}
+                          tdClassName={s.hdldCellCustom}
+                          onSave={(val) => handleCustomFieldSave(c.id, col.colName, val)}
+                        />
+                      ))}
+
+                      {canEdit && (
+                        <td className={s.cscCellActions}>
+                          <div className={s.hdldActionsRow}>
+                            <button
+                              className={s.iconBtnSm}
+                              onClick={() => setEditTarget(c)}
+                              title="Chỉnh sửa"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              className={`${s.iconBtnSm} ${s.iconBtnDanger}`}
+                              onClick={() => setDeleteTarget(c)}
+                              title="Xoá"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
+          </div>
+
+          {/* Table footer: count + pagination */}
+          <div className={s.archTableFooter}>
+            <span className={s.archTableCount}>
+              {displayed.length} hợp đồng
+              {displayed.length < contracts.length && ` (lọc từ ${contracts.length})`}
+              {columns.length > 0 && ` · ${columns.length} cột tuỳ chỉnh`}
+            </span>
+            {totalPages > 1 && (
+              <div className={s.archPagination}>
+                <button
+                  className={s.archPageBtn}
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  ‹ Trước
+                </button>
+                <span className={s.archPageInfo}>
+                  {page} / {totalPages}
+                </span>
+                <button
+                  className={s.archPageBtn}
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Tiếp ›
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1253,55 +1403,26 @@ export default function ClientSupplierContractsTab({ company }) {
         />
       )}
 
-      {/* Export modal */}
+      {/* Modals */}
       {showExport && (
-        <CscExportModal
-          companyId={companyId}
-          company={company}
-          contracts={contracts}
-          columns={columns}
-          onClose={() => setShowExport(false)}
-        />
+        <CscExportModal companyId={companyId} company={company} contracts={contracts}
+          columns={columns} onClose={() => setShowExport(false)} />
       )}
-
-      {/* Manage columns modal */}
       {showManageCols && (
-        <ManageColumnsModal
-          companyId={companyId}
-          columns={columns}
-          onColumnsChange={setColumns}
-          onClose={() => setShowManageCols(false)}
-        />
+        <ManageColumnsModal companyId={companyId} columns={columns}
+          onColumnsChange={setColumns} onClose={() => setShowManageCols(false)} />
       )}
-
-      {/* Create modal */}
       {showCreate && (
-        <ContractFormModal
-          title="Thêm hợp đồng KH.NCC"
-          columns={columns}
-          onSubmit={handleCreate}
-          onClose={() => setShowCreate(false)}
-        />
+        <ContractFormModal title="Thêm hợp đồng KH.NCC" columns={columns}
+          onSubmit={handleCreate} onClose={() => setShowCreate(false)} />
       )}
-
-      {/* Edit modal */}
       {editTarget && (
-        <ContractFormModal
-          title="Sửa hợp đồng KH.NCC"
-          initial={editTarget}
-          columns={columns}
-          onSubmit={handleEdit}
-          onClose={() => setEditTarget(null)}
-        />
+        <ContractFormModal title="Sửa hợp đồng KH.NCC" initial={editTarget} columns={columns}
+          onSubmit={handleEdit} onClose={() => setEditTarget(null)} />
       )}
-
-      {/* Delete confirm */}
       {deleteTarget && (
-        <DeleteConfirmModal
-          contract={deleteTarget}
-          onConfirm={handleDelete}
-          onClose={() => setDeleteTarget(null)}
-        />
+        <DeleteConfirmModal contract={deleteTarget}
+          onConfirm={handleDelete} onClose={() => setDeleteTarget(null)} />
       )}
     </div>
   )
