@@ -32,6 +32,7 @@ const reorderSchema = z.array(
 
 const createColumnSchema = z.object({
   colName: z.string().min(1).max(200),
+  colType: z.enum(['text', 'number', 'date']).optional(),
 })
 
 module.exports = {

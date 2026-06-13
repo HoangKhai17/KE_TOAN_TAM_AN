@@ -10,10 +10,18 @@ import s from './companies.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+const COL_TYPE_LABEL = { text: 'Văn bản', number: 'Số', date: 'Ngày' }
+
 const MONTHS = ['1','2','3','4','5','6','7','8','9','10','11','12']
 const MONTH_LABELS = {
   '1':'T1','2':'T2','3':'T3','4':'T4','5':'T5','6':'T6',
   '7':'T7','8':'T8','9':'T9','10':'T10','11':'T11','12':'T12',
+}
+
+function fmtDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return isNaN(d) ? iso : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function countFilledMonths(months) {
@@ -66,7 +74,7 @@ function MonthCell({ value, canEdit, onSave }) {
 
 // ── ExtraFieldCell — inline click-to-edit (wide, dành cho cột tuỳ chỉnh) ─────
 
-function ExtraFieldCell({ value, canEdit, onSave }) {
+function ExtraFieldCell({ value, canEdit, onSave, colType = 'text' }) {
   const [editing,  setEditing]  = useState(false)
   const [localVal, setLocalVal] = useState(value ?? '')
   const inputRef                = useRef(null)
@@ -76,8 +84,16 @@ function ExtraFieldCell({ value, canEdit, onSave }) {
 
   function commit() {
     setEditing(false)
-    const trimmed = localVal.trim()
-    if (trimmed !== (value ?? '').trim()) onSave(trimmed)
+    const trimmed  = colType === 'date' ? localVal : localVal.trim()
+    const original = colType === 'date' ? (value ?? '') : (value ?? '').trim()
+    if (trimmed !== original) onSave(trimmed || null)
+  }
+
+  function displayContent() {
+    const v = (value ?? '').trim()
+    if (!v) return <span className={s.archMonthValEmpty} />
+    if (colType === 'date') return fmtDate(v)
+    return v
   }
 
   return (
@@ -86,23 +102,37 @@ function ExtraFieldCell({ value, canEdit, onSave }) {
       onClick={() => canEdit && !editing && setEditing(true)}
     >
       {editing ? (
-        <textarea
-          ref={inputRef}
-          value={localVal}
-          className={s.archExtraInput}
-          rows={2}
-          onChange={(e) => setLocalVal(e.target.value)}
-          onBlur={commit}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit() }
-            if (e.key === 'Escape') { setLocalVal(value ?? ''); setEditing(false) }
-          }}
-        />
+        colType === 'text' ? (
+          <textarea
+            ref={inputRef}
+            value={localVal}
+            className={s.archExtraInput}
+            rows={2}
+            onChange={(e) => setLocalVal(e.target.value)}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit() }
+              if (e.key === 'Escape') { setLocalVal(value ?? ''); setEditing(false) }
+            }}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type={colType === 'date' ? 'date' : 'number'}
+            value={localVal}
+            className={s.archExtraInput}
+            onChange={(e) => setLocalVal(e.target.value)}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commit() }
+              if (e.key === 'Escape') { setLocalVal(value ?? ''); setEditing(false) }
+            }}
+          />
+        )
       ) : (
-        <span className={s.archExtraVal}>
-          {(value ?? '').trim() || <span className={s.archMonthValEmpty} />}
-        </span>
+        <span className={s.archExtraVal}>{displayContent()}</span>
       )}
     </td>
   )
@@ -212,6 +242,7 @@ function ResizeHandle({ onResize }) {
 function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
   const addToast              = useToastStore((st) => st.toast)
   const [newName, setNewName] = useState('')
+  const [newType, setNewType] = useState('text')
   const [adding,  setAdding]  = useState(false)
   const [error,   setError]   = useState(null)
   const [deletingId, setDeletingId] = useState(null)
@@ -225,9 +256,10 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
     setError(null)
     setAdding(true)
     try {
-      const col = await archiveApi.createColumn(companyId, { colName: newName.trim() })
+      const col = await archiveApi.createColumn(companyId, { colName: newName.trim(), colType: newType })
       onColumnsChange([...columns, col])
       setNewName('')
+      setNewType('text')
       addToast(`Đã thêm cột "${col.colName}"`, 'success')
     } catch (err) {
       setError(err.response?.data?.error?.message ?? 'Không thể thêm cột')
@@ -266,6 +298,9 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
                 <div key={col.id} className={s.hdldColRow}>
                   <GripVertical size={13} className={s.hdldColGrip} />
                   <span className={s.hdldColName}>{col.colName}</span>
+                  <span className={s.hdldColTypeBadge}>
+                    {COL_TYPE_LABEL[col.colType] ?? col.colType}
+                  </span>
                   <button
                     className={`${s.iconBtnSm} ${s.iconBtnDanger} ${s.hdldColDeleteBtn}`}
                     onClick={() => handleDelete(col)}
@@ -295,6 +330,18 @@ function ManageColumnsModal({ companyId, columns, onColumnsChange, onClose }) {
                   maxLength={200}
                   autoFocus
                 />
+              </div>
+              <div className={s.hdldAddColType}>
+                <label className={s.formLabel}>Kiểu dữ liệu</label>
+                <select
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value)}
+                  className={s.formSelect}
+                >
+                  <option value="text">Văn bản</option>
+                  <option value="number">Số</option>
+                  <option value="date">Ngày</option>
+                </select>
               </div>
               <button
                 type="submit"
@@ -480,14 +527,26 @@ function DocFormModal({ initialDoc, columns = [], onSave, onClose }) {
               <div className={s.archFormDynDivider}>Thông tin cột tuỳ chỉnh</div>
               {columns.map((col) => (
                 <div key={col.id}>
-                  <label className={s.formLabel}>{col.colName}</label>
-                  <textarea
-                    value={extraFields[col.colName] ?? ''}
-                    onChange={(e) => setExtraField(col.colName, e.target.value)}
-                    rows={2}
-                    className={s.formTextarea}
-                    placeholder={`Nhập ${col.colName}...`}
-                  />
+                  <label className={s.formLabel}>
+                    {col.colName}
+                    <span className={s.hdldColTypeHint}>({COL_TYPE_LABEL[col.colType] ?? col.colType})</span>
+                  </label>
+                  {col.colType === 'text' ? (
+                    <textarea
+                      value={extraFields[col.colName] ?? ''}
+                      onChange={(e) => setExtraField(col.colName, e.target.value)}
+                      rows={2}
+                      className={s.formTextarea}
+                      placeholder={`Nhập ${col.colName}...`}
+                    />
+                  ) : (
+                    <input
+                      type={col.colType === 'date' ? 'date' : 'number'}
+                      value={extraFields[col.colName] ?? ''}
+                      onChange={(e) => setExtraField(col.colName, e.target.value)}
+                      className={s.formInput}
+                    />
+                  )}
                 </div>
               ))}
             </>
@@ -1097,6 +1156,7 @@ export default function ArchiveTab({ company }) {
                         key={col.id}
                         value={doc.extraFields?.[col.colName] ?? ''}
                         canEdit={canEdit}
+                        colType={col.colType ?? 'text'}
                         onSave={(val) => handleExtraFieldSave(doc.id, col.colName, val)}
                       />
                     ))}

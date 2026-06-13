@@ -350,8 +350,9 @@ function buildExportGroups(dynColumns) {
       key: 'company',
       label: 'Công ty',
       fields: [
-        { key: 'stt',         label: 'STT'        },
-        { key: 'companyName', label: 'Tên công ty' },
+        { key: 'stt',           label: 'STT'           },
+        { key: 'companyName',   label: 'Tên công ty'   },
+        { key: 'assignedStaff', label: 'NV phụ trách'  },
       ],
     },
     {
@@ -383,9 +384,10 @@ function buildExportGroups(dynColumns) {
   ]
 }
 
-function formatExportPreviewCell(row, key, companyName, rowIdx = 0) {
+function formatExportPreviewCell(row, key, company, rowIdx = 0) {
   if (key === 'stt')            return rowIdx + 1
-  if (key === 'companyName')    return companyName ?? '—'
+  if (key === 'companyName')    return company?.name ?? '—'
+  if (key === 'assignedStaff')  return company?.assignedStaff?.name ?? '—'
   if (key === 'contractStatus') return STATUS_LABEL[row.contractStatus] ?? row.contractStatus
   if (key === 'contractDate')   return fmtDate(row.contractDate)
   if (key === 'endDate')        return fmtDate(row.endDate)
@@ -444,9 +446,8 @@ function LaborContractExportModal({ companyId, company, contracts, columns, onCl
   }
 
   // Preview: 8 dòng đầu, chỉ hiển thị cột được chọn (theo thứ tự groups)
-  const previewFields  = groups.flatMap((g) => g.fields).filter((f) => selected.has(f.key))
-  const previewRows    = contracts.slice(0, 8)
-  const companyName    = company?.name ?? ''
+  const previewFields = groups.flatMap((g) => g.fields).filter((f) => selected.has(f.key))
+  const previewRows   = contracts.slice(0, 8)
 
   return (
     <Modal title="Xuất Excel — Theo dõi HĐLĐ" onClose={onClose} wide>
@@ -504,7 +505,7 @@ function LaborContractExportModal({ companyId, company, contracts, columns, onCl
                     {previewRows.map((row, rowIdx) => (
                       <tr key={row.id}>
                         {previewFields.map((f) => (
-                          <td key={f.key}>{formatExportPreviewCell(row, f.key, companyName, rowIdx)}</td>
+                          <td key={f.key}>{formatExportPreviewCell(row, f.key, company, rowIdx)}</td>
                         ))}
                       </tr>
                     ))}
@@ -537,6 +538,71 @@ function LaborContractExportModal({ companyId, company, contracts, columns, onCl
         </div>
       </div>
     </Modal>
+  )
+}
+
+// ── LcInlineTdCell — click-to-edit cell for LaborContracts table ──────────────
+
+function LcInlineTdCell({ value, canEdit, onSave, inputType = 'text', tdClassName, required }) {
+  const [editing,  setEditing]  = useState(false)
+  const [localVal, setLocalVal] = useState(value ?? '')
+  const inputRef               = useRef(null)
+
+  useEffect(() => { setLocalVal(value ?? '') }, [value])
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+  function commit() {
+    setEditing(false)
+    const newVal = inputType === 'date' ? localVal : localVal.trim()
+    const orig   = inputType === 'date' ? (value ?? '') : (value ?? '').trim()
+    if (newVal === orig) return
+    if (required && !newVal) { setLocalVal(value ?? ''); return }
+    onSave(newVal || null)
+  }
+
+  function renderDisplay() {
+    if (!value || value === '') return <span className={s.archInlineEmpty}>—</span>
+    if (inputType === 'date') return fmtDate(value)
+    return value
+  }
+
+  return (
+    <td
+      className={`${tdClassName ?? ''} ${canEdit ? s.archInlineTdEditable : ''}`}
+      onClick={() => canEdit && !editing && setEditing(true)}
+    >
+      {editing ? (
+        inputType === 'multiline' ? (
+          <textarea
+            ref={inputRef}
+            value={localVal}
+            className={s.archInlineEditInput}
+            rows={2}
+            onChange={(e) => setLocalVal(e.target.value)}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit() }
+              if (e.key === 'Escape') { setLocalVal(value ?? ''); setEditing(false) }
+            }}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type={inputType}
+            value={localVal}
+            className={s.archInlineEditInput}
+            onChange={(e) => setLocalVal(e.target.value)}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commit() }
+              if (e.key === 'Escape') { setLocalVal(value ?? ''); setEditing(false) }
+            }}
+          />
+        )
+      ) : renderDisplay()}
+    </td>
   )
 }
 
@@ -733,7 +799,7 @@ function ContractFormModal({ initial, columns, onSubmit, onClose, title }) {
   }
 
   return (
-    <Modal title={title} onClose={onClose} maxWidth={760}>
+    <Modal title={title} onClose={onClose} width="min(1400px, calc(100vw - 80px))">
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}
 
@@ -936,6 +1002,27 @@ export default function LaborContractsTab({ company }) {
     addToast('Đã xoá hợp đồng', 'success')
   }
 
+  async function handleFieldSave(contractId, fieldData) {
+    try {
+      const updated = await lcApi.updateContract(companyId, contractId, fieldData)
+      setContracts((prev) => prev.map((c) => c.id === contractId ? updated : c))
+    } catch {
+      addToast('Không thể lưu thông tin hợp đồng', 'error')
+    }
+  }
+
+  async function handleCustomFieldSave(contractId, colName, value) {
+    const contract = contracts.find((c) => c.id === contractId)
+    if (!contract) return
+    try {
+      const updated = await lcApi.updateContract(companyId, contractId, {
+        customFields: { ...(contract.customFields ?? {}), [colName]: value },
+      })
+      setContracts((prev) => prev.map((c) => c.id === contractId ? updated : c))
+    } catch {
+      addToast('Không thể lưu', 'error')
+    }
+  }
 
   // Apply column filters + sort
   const displayed = useMemo(() => {
@@ -1153,23 +1240,65 @@ export default function LaborContractsTab({ company }) {
                 ) : displayed.map((c, idx) => (
                   <tr key={c.id}>
                     <td className={s.hdldCellStt}>{idx + 1}</td>
-                    <td className={s.hdldCellName}>{c.employeeName}</td>
-                    <td className={s.hdldCellMono}>{c.taxCode ?? '—'}</td>
-                    <td className={s.hdldCellSoft}>{c.contractType ?? '—'}</td>
-                    <td className={s.hdldCellMono}>{c.contractNumber ?? '—'}</td>
-                    <td className={s.hdldCellDate}>{fmtDate(c.contractDate)}</td>
-                    <td className={s.hdldCellDate}>{fmtDate(c.endDate)}</td>
+                    <LcInlineTdCell
+                      value={c.employeeName}
+                      canEdit={canEdit}
+                      required
+                      tdClassName={s.hdldCellName}
+                      onSave={(val) => handleFieldSave(c.id, { employeeName: val })}
+                    />
+                    <LcInlineTdCell
+                      value={c.taxCode}
+                      canEdit={canEdit}
+                      tdClassName={s.hdldCellMono}
+                      onSave={(val) => handleFieldSave(c.id, { taxCode: val })}
+                    />
+                    <LcInlineTdCell
+                      value={c.contractType}
+                      canEdit={canEdit}
+                      tdClassName={s.hdldCellSoft}
+                      onSave={(val) => handleFieldSave(c.id, { contractType: val })}
+                    />
+                    <LcInlineTdCell
+                      value={c.contractNumber}
+                      canEdit={canEdit}
+                      tdClassName={s.hdldCellMono}
+                      onSave={(val) => handleFieldSave(c.id, { contractNumber: val })}
+                    />
+                    <LcInlineTdCell
+                      value={c.contractDate ? String(c.contractDate).substring(0, 10) : ''}
+                      canEdit={canEdit}
+                      inputType="date"
+                      tdClassName={s.hdldCellDate}
+                      onSave={(val) => handleFieldSave(c.id, { contractDate: val })}
+                    />
+                    <LcInlineTdCell
+                      value={c.endDate ? String(c.endDate).substring(0, 10) : ''}
+                      canEdit={canEdit}
+                      inputType="date"
+                      tdClassName={s.hdldCellDate}
+                      onSave={(val) => handleFieldSave(c.id, { endDate: val })}
+                    />
                     <td className={s.hdldCellDays}>
                       {c.daysRemaining !== null ? c.daysRemaining : '—'}
                     </td>
                     <td><StatusBadge status={c.contractStatus} /></td>
-                    <td className={s.hdldCellNotes} title={c.notes ?? ''}>
-                      {c.notes ?? '—'}
-                    </td>
+                    <LcInlineTdCell
+                      value={c.notes}
+                      canEdit={canEdit}
+                      inputType="multiline"
+                      tdClassName={s.hdldCellNotes}
+                      onSave={(val) => handleFieldSave(c.id, { notes: val })}
+                    />
                     {columns.map((col) => (
-                      <td key={col.id} className={s.hdldCellCustom}>
-                        {c.customFields[col.colName] ?? '—'}
-                      </td>
+                      <LcInlineTdCell
+                        key={col.id}
+                        value={c.customFields[col.colName] ?? ''}
+                        canEdit={canEdit}
+                        inputType={col.colType === 'date' ? 'date' : col.colType === 'number' ? 'number' : 'text'}
+                        tdClassName={s.hdldCellCustom}
+                        onSave={(val) => handleCustomFieldSave(c.id, col.colName, val)}
+                      />
                     ))}
                     {canEdit && (
                       <td>

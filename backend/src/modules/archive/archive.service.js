@@ -66,6 +66,7 @@ function colToDto(row) {
     id:        row.id,
     companyId: row.company_id,
     colName:   row.col_name,
+    colType:   row.col_type ?? 'text',
     position:  row.position,
     createdAt: row.created_at,
   }
@@ -248,14 +249,14 @@ async function listColumns(companyId, user) {
   return rows.map(colToDto)
 }
 
-async function createColumn(companyId, { colName }, user) {
+async function createColumn(companyId, { colName, colType = 'text' }, user) {
   await assertAccess(companyId, user)
   const { rows: [row] } = await query(
-    `INSERT INTO company_archive_columns (company_id, col_name, position)
-     SELECT $1, $2,
+    `INSERT INTO company_archive_columns (company_id, col_name, col_type, position)
+     SELECT $1, $2, $3,
        COALESCE((SELECT MAX(position) + 1 FROM company_archive_columns WHERE company_id = $1), 0)
      RETURNING *`,
-    [companyId, colName]
+    [companyId, colName, colType]
   )
   return colToDto(row)
 }

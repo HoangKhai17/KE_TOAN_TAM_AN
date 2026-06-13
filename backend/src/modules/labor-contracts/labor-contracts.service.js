@@ -210,7 +210,7 @@ async function deleteContract(companyId, id, user) {
 
 // Thứ tự cột cố định — dùng để giữ đúng thứ tự trong Excel dù frontend chọn lộn xộn
 const FIXED_FIELD_ORDER = [
-  'stt', 'companyName', 'employeeName', 'taxCode',
+  'stt', 'companyName', 'assignedStaff', 'employeeName', 'taxCode',
   'contractType', 'contractNumber', 'contractDate', 'endDate',
   'daysRemaining', 'contractStatus', 'notes',
 ]
@@ -218,6 +218,7 @@ const FIXED_FIELD_ORDER = [
 const FIXED_FIELD_DEF = {
   stt:            { header: 'STT',           width: 5  },
   companyName:    { header: 'Tên công ty',   width: 30 },
+  assignedStaff:  { header: 'NV phụ trách',  width: 22 },
   employeeName:   { header: 'Tên nhân viên', width: 28 },
   taxCode:        { header: 'MST nhân viên', width: 16 },
   contractType:   { header: 'Loại hợp đồng', width: 25 },
@@ -239,9 +240,16 @@ const STATUS_FILL = {
 async function exportContracts(companyId, user, fieldsParam = '') {
   const [[contracts, columns], companyRes] = await Promise.all([
     Promise.all([listContracts(companyId, user), listColumns(companyId, user)]),
-    query('SELECT name FROM companies WHERE id = $1', [companyId]),
+    query(
+      `SELECT c.name, u.name AS staff_name
+       FROM companies c
+       LEFT JOIN users u ON u.id = c.assigned_staff_id
+       WHERE c.id = $1`,
+      [companyId]
+    ),
   ])
-  const companyName = companyRes.rows[0]?.name ?? ''
+  const companyName       = companyRes.rows[0]?.name       ?? ''
+  const assignedStaffName = companyRes.rows[0]?.staff_name ?? ''
 
   // Parse requested fields — null means "xuất tất cả"
   const requested = fieldsParam
@@ -264,6 +272,7 @@ async function exportContracts(companyId, user, fieldsParam = '') {
   function getCellValue(c, key, idx) {
     if (key === 'stt')            return idx + 1
     if (key === 'companyName')    return companyName
+    if (key === 'assignedStaff')  return assignedStaffName
     if (key === 'contractDate')   return fmtDate(c.contractDate)
     if (key === 'endDate')        return fmtDate(c.endDate)
     if (key === 'daysRemaining')  return c.daysRemaining !== null ? c.daysRemaining : ''
