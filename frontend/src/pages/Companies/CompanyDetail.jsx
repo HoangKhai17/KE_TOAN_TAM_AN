@@ -72,9 +72,9 @@ const TABS = [
   { id: 'labor-contracts',   label: 'Theo dõi HĐLĐ',      icon: ScrollText },
   { id: 'csc',               label: 'Theo dõi HĐ KH.NCC', icon: FileSignature },
   { id: 'nsnn',              label: 'Nợ NSNN',             icon: TrendingDown },
+  { id: 'archive',           label: 'HS lưu trữ khi QT',  icon: Archive },
   { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
   { id: 'documents',         label: 'Tài liệu',           icon: FileText },
-  { id: 'archive',           label: 'HS lưu trữ khi QT',  icon: Archive },
   { id: 'notes',             label: 'Ghi chú',            icon: StickyNote },
 ]
 

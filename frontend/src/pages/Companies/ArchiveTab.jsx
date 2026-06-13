@@ -1,12 +1,34 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import {
-  Archive, Plus, Pencil, Trash2, Loader2, AlertTriangle, Check, Columns, GripVertical, Download,
+  Archive, Plus, Pencil, Trash2, Loader2, AlertTriangle, Check, Columns, GripVertical, Download, Upload,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as archiveApi from '../../api/archive'
+import ExcelImportModal from '../../components/ui/ExcelImportModal'
+import { extractCustomFields } from '../../utils/excelImport'
 import s from './companies.module.css'
+
+const ARCHIVE_IMPORT_COLS = [
+  { key: 'year',            label: 'Năm',             required: true,  type: 'integer', example: '2024' },
+  { key: 'documentType',   label: 'Loại chứng từ',   required: true,  type: 'text',    example: 'Sổ nhật ký chung' },
+  { key: 'detail',         label: 'Chi tiết',         required: false, type: 'text',    example: '' },
+  { key: 'month_1',        label: 'T1',               required: false, type: 'text',    example: '' },
+  { key: 'month_2',        label: 'T2',               required: false, type: 'text',    example: '' },
+  { key: 'month_3',        label: 'T3',               required: false, type: 'text',    example: '' },
+  { key: 'month_4',        label: 'T4',               required: false, type: 'text',    example: '' },
+  { key: 'month_5',        label: 'T5',               required: false, type: 'text',    example: '' },
+  { key: 'month_6',        label: 'T6',               required: false, type: 'text',    example: '' },
+  { key: 'month_7',        label: 'T7',               required: false, type: 'text',    example: '' },
+  { key: 'month_8',        label: 'T8',               required: false, type: 'text',    example: '' },
+  { key: 'month_9',        label: 'T9',               required: false, type: 'text',    example: '' },
+  { key: 'month_10',       label: 'T10',              required: false, type: 'text',    example: '' },
+  { key: 'month_11',       label: 'T11',              required: false, type: 'text',    example: '' },
+  { key: 'month_12',       label: 'T12',              required: false, type: 'text',    example: '' },
+  { key: 'characteristics',label: 'Đặc điểm',        required: false, type: 'text',    example: '' },
+  { key: 'notes',          label: 'Ghi chú',          required: false, type: 'text',    example: '' },
+]
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -790,6 +812,7 @@ export default function ArchiveTab({ company }) {
   const [showAddDoc,     setShowAddDoc]     = useState(false)
   const [showManageCols, setShowManageCols] = useState(false)
   const [showExport,     setShowExport]     = useState(false)
+  const [showImport,     setShowImport]     = useState(false)
   const [editDoc,        setEditDoc]        = useState(null)
   const [deleteDocId,    setDeleteDocId]    = useState(null)
   const [showDeleteYear, setShowDeleteYear] = useState(false)
@@ -1006,6 +1029,11 @@ export default function ArchiveTab({ company }) {
           {canEdit && (
             <button className={s.btnOutline} onClick={() => setShowManageCols(true)}>
               <Columns size={13} /> Quản lý cột
+            </button>
+          )}
+          {canEdit && (
+            <button className={s.btnOutline} onClick={() => setShowImport(true)}>
+              <Upload size={13} /> Nhập từ Excel
             </button>
           )}
           {activeYear && canEdit && (
@@ -1305,6 +1333,30 @@ export default function ArchiveTab({ company }) {
             </div>
           </div>
         </Modal>
+      )}
+      {showImport && (
+        <ExcelImportModal
+          title="Nhập HS Lưu Trữ từ Excel"
+          entityLabel="chứng từ"
+          fixedCols={ARCHIVE_IMPORT_COLS}
+          dynCols={columns}
+          templateName="mau_import_hs_luu_tru.xlsx"
+          sheetName="HS lưu trữ"
+          onImport={async (validRows) => {
+            const rows = validRows.map((r) => ({
+              ...r,
+              customFields: extractCustomFields(r, columns),
+            }))
+            const result = await archiveApi.batchImport(companyId, rows)
+            if (result.inserted > 0) {
+              const yearList = await archiveApi.listYears(companyId)
+              setYears(yearList)
+              if (yearList.length > 0 && !activeYear) setActiveYear(yearList[0])
+            }
+            return result
+          }}
+          onClose={() => setShowImport(false)}
+        />
       )}
     </div>
   )

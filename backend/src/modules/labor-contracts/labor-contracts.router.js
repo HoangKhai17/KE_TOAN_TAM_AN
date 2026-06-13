@@ -13,6 +13,7 @@ router.get('/',       ...auth, ctrl.list)
 router.post('/',      ...auth, validate(createContractSchema), ctrl.create)
 
 // Specific string-path routes BEFORE /:id to avoid 'export'/'columns' being parsed as ID
+router.post('/batch',             ...auth, ctrl.batchImport)
 router.get('/export',             ...auth, ctrl.exportExcel)
 router.get('/columns',            ...auth, ctrl.listColumns)
 router.post('/columns',           ...auth, validate(createColumnSchema), ctrl.createColumn)

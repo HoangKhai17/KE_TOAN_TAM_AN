@@ -21,6 +21,11 @@ export async function deleteContract(companyId, id) {
   await api.delete(`/companies/${companyId}/labor-contracts/${id}`)
 }
 
+export async function batchImport(companyId, rows) {
+  const { data } = await api.post(`/companies/${companyId}/labor-contracts/batch`, rows)
+  return data.data // { inserted, failed, errors }
+}
+
 export async function exportContracts(companyId, fields = '') {
   const res = await api.get(`/companies/${companyId}/labor-contracts/export`, {
     params: fields ? { fields } : undefined,

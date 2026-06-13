@@ -19,6 +19,11 @@ export async function deleteDebt(companyId, id) {
   await api.delete(`/companies/${companyId}/nsnn/${id}`)
 }
 
+export async function batchImport(companyId, rows) {
+  const { data } = await api.post(`/companies/${companyId}/nsnn/batch`, rows)
+  return data.data // { inserted, failed, errors }
+}
+
 export async function exportDebts(companyId, fields = '') {
   const res = await api.get(`/companies/${companyId}/nsnn/export`, {
     params: fields ? { fields } : undefined,

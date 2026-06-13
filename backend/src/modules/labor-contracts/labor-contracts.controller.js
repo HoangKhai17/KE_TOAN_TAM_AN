@@ -65,4 +65,11 @@ async function deleteColumn(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { list, create, update, remove, exportExcel, listColumns, createColumn, deleteColumn }
+async function batchImport(req, res, next) {
+  try {
+    const result = await svc.batchCreate(req.params.companyId, req.user, req.body)
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
+module.exports = { list, create, update, remove, exportExcel, batchImport, listColumns, createColumn, deleteColumn }

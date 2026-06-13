@@ -226,7 +226,9 @@
       "Read(//c/Users/ACER/AppData/Local/Temp/claude/d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM_AN/da432d2f-e202-463d-842d-2abf360ae367/tasks/**)",
       "Bash(docker container *)",
       "Skill(run)",
-      "Skill(run:*)"
+      "Skill(run:*)",
+      "PowerShell(docker compose -f \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\docker-compose.yml\" restart backend 2>&1)",
+      "PowerShell(docker compose -f \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\docker-compose.yml\" ps --format json 2>&1)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

@@ -12,6 +12,7 @@ router.post('/columns',          ...auth, ctrl.createColumn)
 router.delete('/columns/:colId', ...auth, ctrl.deleteColumn)
 
 router.get('/export', ...auth, ctrl.exportExcel)
+router.post('/batch', ...auth, ctrl.batchImport)
 
 router.get('/',      ...auth, ctrl.listDebts)
 router.post('/',     ...auth, validate(createDebtSchema), ctrl.createDebt)

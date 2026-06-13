@@ -1,10 +1,21 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Plus, Pencil, Trash2, Download, Loader2, TrendingDown, Columns, GripVertical, Filter } from 'lucide-react'
+import { Plus, Pencil, Trash2, Download, Loader2, TrendingDown, Columns, GripVertical, Filter, Upload } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as nsnnApi from '../../api/nsnnDebts'
 import Modal from '../../components/ui/Modal'
+import ExcelImportModal from '../../components/ui/ExcelImportModal'
+import { extractCustomFields } from '../../utils/excelImport'
 import s from './companies.module.css'
+
+const NSNN_IMPORT_COLS = [
+  { key: 'documentType', label: 'Loại chứng từ / công việc', required: true,  type: 'text',    example: 'Thuế GTGT tháng 1/2024' },
+  { key: 'category',     label: 'Phạm trù',                  required: false, type: 'text',    example: 'Thuế' },
+  { key: 'debtAmount',   label: 'Số tiền nợ NSNN',           required: false, type: 'number',  example: '5000000' },
+  { key: 'updateDate',   label: 'Thời điểm cập nhật',        required: false, type: 'date',    example: '2024-06-01' },
+  { key: 'repeatCount',  label: 'Số lần lặp lại',            required: false, type: 'integer', example: '1' },
+  { key: 'notes',        label: 'Ghi chú',                   required: false, type: 'text',    example: '' },
+]
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -819,6 +830,7 @@ export default function NsnnDebtsTab({ company }) {
   const [columns, setColumns] = useState([])
   const [loading, setLoading] = useState(true)
   const [showExport, setShowExport] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   // ── Column resize — persisted per company ─────────────────────────────────────
   const lsKey = `nsnnColWidths_${companyId}`
@@ -1086,6 +1098,11 @@ export default function NsnnDebtsTab({ company }) {
             <Download size={13} /> Xuất Excel
           </button>
           {canEdit && (
+            <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`} onClick={() => setShowImport(true)}>
+              <Upload size={13} /> Nhập từ Excel
+            </button>
+          )}
+          {canEdit && (
             <button className={`${s.btnNavy} ${s.hdldToolbarBtn}`} onClick={() => setShowCreate(true)}>
               <Plus size={13} /> Thêm dòng nợ
             </button>
@@ -1343,6 +1360,26 @@ export default function NsnnDebtsTab({ company }) {
       {deleteTarget && (
         <DeleteConfirmModal debt={deleteTarget}
           onConfirm={handleDelete} onClose={() => setDeleteTarget(null)} />
+      )}
+      {showImport && (
+        <ExcelImportModal
+          title="Nhập Nợ NSNN từ Excel"
+          entityLabel="dòng nợ"
+          fixedCols={NSNN_IMPORT_COLS}
+          dynCols={columns}
+          templateName="mau_import_no_nsnn.xlsx"
+          sheetName="Nợ NSNN"
+          onImport={async (validRows) => {
+            const rows = validRows.map((r) => ({
+              ...r,
+              customFields: extractCustomFields(r, columns),
+            }))
+            const result = await nsnnApi.batchImport(companyId, rows)
+            if (result.inserted > 0) await load()
+            return result
+          }}
+          onClose={() => setShowImport(false)}
+        />
       )}
     </div>
   )

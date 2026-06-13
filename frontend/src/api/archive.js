@@ -51,6 +51,11 @@ export async function reorderDocs(companyId, yearId, items) {
   await api.patch(`/companies/${companyId}/archive/years/${yearId}/docs/reorder`, items)
 }
 
+export async function batchImport(companyId, rows) {
+  const { data } = await api.post(`/companies/${companyId}/archive/batch`, rows)
+  return data.data // { inserted, failed, errors }
+}
+
 // ── Export ────────────────────────────────────────────────────────────────────
 
 export async function exportDocs(companyId, yearId, fields = '') {

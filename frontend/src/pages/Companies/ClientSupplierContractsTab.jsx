@@ -1,10 +1,22 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Plus, Pencil, Trash2, Download, Loader2, FileSignature, Columns, GripVertical, Filter } from 'lucide-react'
+import { Plus, Pencil, Trash2, Download, Loader2, FileSignature, Columns, GripVertical, Filter, Upload } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as cscApi from '../../api/clientSupplierContracts'
 import Modal from '../../components/ui/Modal'
+import ExcelImportModal from '../../components/ui/ExcelImportModal'
+import { extractCustomFields } from '../../utils/excelImport'
 import s from './companies.module.css'
+
+const CSC_IMPORT_COLS = [
+  { key: 'partyName',       label: 'Tên đối tượng',    required: true,  type: 'text', example: 'Công ty ABC' },
+  { key: 'contractParty',   label: 'Đối tượng HĐ',     required: false, type: 'text', example: 'Khách hàng' },
+  { key: 'contractContent', label: 'Nội dung HĐ',      required: false, type: 'text', example: 'Dịch vụ kế toán' },
+  { key: 'contractNumber',  label: 'Số HĐ',            required: false, type: 'text', example: 'HĐ-KH-001' },
+  { key: 'contractDate',    label: 'Ngày HĐ',          required: false, type: 'date', example: '2024-01-01' },
+  { key: 'endDate',         label: 'Ngày kết thúc',    required: false, type: 'date', example: '2025-12-31' },
+  { key: 'notes',           label: 'Ghi chú',          required: false, type: 'text', example: '' },
+]
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -877,6 +889,7 @@ export default function ClientSupplierContractsTab({ company }) {
   const [columns, setColumns]         = useState([])
   const [loading, setLoading]         = useState(true)
   const [showExport, setShowExport]   = useState(false)
+  const [showImport, setShowImport]   = useState(false)
 
   // ── Column resize — persisted in localStorage per company ─────────────────────
   const lsKey = `cscColWidths_${companyId}`
@@ -1164,6 +1177,11 @@ export default function ClientSupplierContractsTab({ company }) {
             <Download size={13} /> Xuất Excel
           </button>
           {canEdit && (
+            <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`} onClick={() => setShowImport(true)}>
+              <Upload size={13} /> Nhập từ Excel
+            </button>
+          )}
+          {canEdit && (
             <button className={`${s.btnNavy} ${s.hdldToolbarBtn}`} onClick={() => setShowCreate(true)}>
               <Plus size={13} /> Thêm hợp đồng
             </button>
@@ -1423,6 +1441,26 @@ export default function ClientSupplierContractsTab({ company }) {
       {deleteTarget && (
         <DeleteConfirmModal contract={deleteTarget}
           onConfirm={handleDelete} onClose={() => setDeleteTarget(null)} />
+      )}
+      {showImport && (
+        <ExcelImportModal
+          title="Nhập HĐ KH.NCC từ Excel"
+          entityLabel="hợp đồng"
+          fixedCols={CSC_IMPORT_COLS}
+          dynCols={columns}
+          templateName="mau_import_hd_kh_ncc.xlsx"
+          sheetName="Theo dõi HĐ KH.NCC"
+          onImport={async (validRows) => {
+            const rows = validRows.map((r) => ({
+              ...r,
+              customFields: extractCustomFields(r, columns),
+            }))
+            const result = await cscApi.batchImport(companyId, rows)
+            if (result.inserted > 0) await load()
+            return result
+          }}
+          onClose={() => setShowImport(false)}
+        />
       )}
     </div>
   )

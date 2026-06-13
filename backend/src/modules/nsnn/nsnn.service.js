@@ -1,4 +1,4 @@
-const { query } = require('../../config/db')
+const { query, getClient } = require('../../config/db')
 const ExcelJS   = require('exceljs')
 
 // ── Access guard ───────────────────────────────────────────────────────────────
@@ -288,8 +288,60 @@ async function exportDebts(companyId, user, fieldsParam) {
   return buffer
 }
 
+// ── Batch import ──────────────────────────────────────────────────────────────
+
+async function batchCreate(companyId, user, rows) {
+  await assertAccess(companyId, user)
+  const client = await getClient()
+  let inserted = 0, failed = 0
+  const errors = []
+  try {
+    await client.query('BEGIN')
+    for (let i = 0; i < rows.length; i++) {
+      const sp = `sp_${i}`
+      await client.query(`SAVEPOINT ${sp}`)
+      try {
+        const {
+          documentType, category, debtAmount, updateDate,
+          repeatCount, notes, customFields = {},
+        } = rows[i]
+        await client.query(
+          `INSERT INTO company_nsnn_debts
+             (company_id, document_type, category, debt_amount, update_date,
+              repeat_count, notes, custom_fields, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [
+            companyId,
+            documentType,
+            category    || null,
+            debtAmount  ?? null,
+            updateDate  || null,
+            repeatCount ?? null,
+            notes       || null,
+            JSON.stringify(typeof customFields === 'object' && !Array.isArray(customFields) ? customFields : {}),
+            user.id,
+          ]
+        )
+        inserted++
+      } catch (err) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${sp}`)
+        failed++
+        errors.push({ row: rows[i]._rowNum ?? i + 2, message: err.message })
+      }
+    }
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+  return { inserted, failed, errors }
+}
+
 module.exports = {
   listDebts, createDebt, updateDebt, deleteDebt,
+  batchCreate,
   listColumns, createColumn, deleteColumn,
   exportDebts,
 }

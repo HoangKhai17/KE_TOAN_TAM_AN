@@ -1,10 +1,22 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Plus, Pencil, Trash2, Download, Loader2, ScrollText, Columns, GripVertical, Filter } from 'lucide-react'
+import { Plus, Pencil, Trash2, Download, Loader2, ScrollText, Columns, GripVertical, Filter, Upload } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as lcApi from '../../api/laborContracts'
 import Modal from '../../components/ui/Modal'
+import ExcelImportModal from '../../components/ui/ExcelImportModal'
+import { extractCustomFields } from '../../utils/excelImport'
 import s from './companies.module.css'
+
+const HDLD_IMPORT_COLS = [
+  { key: 'employeeName',   label: 'Tên nhân viên',    required: true,  type: 'text',    example: 'Nguyễn Văn A' },
+  { key: 'taxCode',        label: 'MST cá nhân',       required: false, type: 'text',    example: '0123456789' },
+  { key: 'contractType',   label: 'Loại HĐ',           required: false, type: 'text',    example: 'Không xác định thời hạn' },
+  { key: 'contractNumber', label: 'Số HĐ',             required: false, type: 'text',    example: 'HĐ-2024-001' },
+  { key: 'contractDate',   label: 'Ngày bắt đầu',      required: false, type: 'date',    example: '2024-01-01' },
+  { key: 'endDate',        label: 'Ngày kết thúc',     required: false, type: 'date',    example: '2025-12-31' },
+  { key: 'notes',          label: 'Ghi chú',           required: false, type: 'text',    example: '' },
+]
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -952,6 +964,7 @@ export default function LaborContractsTab({ company }) {
   const [columns, setColumns]           = useState([])
   const [loading, setLoading]           = useState(true)
   const [showExport, setShowExport]     = useState(false)
+  const [showImport, setShowImport]     = useState(false)
 
   // Column-header filter state
   const [colFilters, setColFilters]     = useState({})   // { colKey: Set<string> | undefined }
@@ -1187,6 +1200,14 @@ export default function LaborContractsTab({ company }) {
           </button>
           {canEdit && (
             <button
+              className={`${s.btnOutline} ${s.hdldToolbarBtn}`}
+              onClick={() => setShowImport(true)}
+            >
+              <Upload size={13} /> Nhập từ Excel
+            </button>
+          )}
+          {canEdit && (
+            <button
               className={`${s.btnNavy} ${s.hdldToolbarBtn}`}
               onClick={() => setShowCreate(true)}
             >
@@ -1388,6 +1409,26 @@ export default function LaborContractsTab({ company }) {
           contract={deleteTarget}
           onConfirm={handleDelete}
           onClose={() => setDeleteTarget(null)}
+        />
+      )}
+      {showImport && (
+        <ExcelImportModal
+          title="Nhập HĐLĐ từ Excel"
+          entityLabel="hợp đồng"
+          fixedCols={HDLD_IMPORT_COLS}
+          dynCols={columns}
+          templateName="mau_import_hdld.xlsx"
+          sheetName="Theo dõi HĐLĐ"
+          onImport={async (validRows) => {
+            const rows = validRows.map((r) => ({
+              ...r,
+              customFields: extractCustomFields(r, columns),
+            }))
+            const result = await lcApi.batchImport(companyId, rows)
+            if (result.inserted > 0) await load()
+            return result
+          }}
+          onClose={() => setShowImport(false)}
         />
       )}
     </div>

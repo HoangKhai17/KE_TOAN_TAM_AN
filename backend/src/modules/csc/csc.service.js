@@ -1,4 +1,4 @@
-const { query } = require('../../config/db')
+const { query, getClient } = require('../../config/db')
 const ExcelJS   = require('exceljs')
 
 const STATUS_LABEL = {
@@ -303,7 +303,60 @@ async function exportContracts(companyId, user, fieldsParam = '') {
   return wb
 }
 
+// ── Batch import ──────────────────────────────────────────────────────────────
+
+async function batchCreate(companyId, user, rows) {
+  await assertAccess(companyId, user)
+  const client = await getClient()
+  let inserted = 0, failed = 0
+  const errors = []
+  try {
+    await client.query('BEGIN')
+    for (let i = 0; i < rows.length; i++) {
+      const sp = `sp_${i}`
+      await client.query(`SAVEPOINT ${sp}`)
+      try {
+        const {
+          contractParty, partyName, contractContent, contractNumber,
+          contractDate, endDate, notes, customFields = {},
+        } = rows[i]
+        await client.query(
+          `INSERT INTO company_csc_contracts
+             (company_id, contract_party, party_name, contract_content, contract_number,
+              contract_date, end_date, notes, custom_fields, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          [
+            companyId,
+            contractParty   ?? null,
+            partyName,
+            contractContent ?? null,
+            contractNumber  ?? null,
+            contractDate    ?? null,
+            endDate         ?? null,
+            notes           ?? null,
+            JSON.stringify(typeof customFields === 'object' && !Array.isArray(customFields) ? customFields : {}),
+            user.id,
+          ]
+        )
+        inserted++
+      } catch (err) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${sp}`)
+        failed++
+        errors.push({ row: rows[i]._rowNum ?? i + 2, message: err.message })
+      }
+    }
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+  return { inserted, failed, errors }
+}
+
 module.exports = {
   listContracts, createContract, updateContract, deleteContract, exportContracts,
+  batchCreate,
   listColumns, createColumn, deleteColumn,
 }

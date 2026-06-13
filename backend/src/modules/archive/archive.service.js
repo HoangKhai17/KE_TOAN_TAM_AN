@@ -1,4 +1,4 @@
-const { query } = require('../../config/db')
+const { query, getClient } = require('../../config/db')
 const ExcelJS   = require('exceljs')
 
 const MONTHS_ARR = ['1','2','3','4','5','6','7','8','9','10','11','12']
@@ -370,6 +370,93 @@ async function exportDocs(companyId, yearId, user, fieldsParam = '') {
   return { wb, companyName, yearValue }
 }
 
+// ── Batch import ──────────────────────────────────────────────────────────────
+
+async function batchCreateDocs(companyId, user, rows) {
+  await assertAccess(companyId, user)
+  const client = await getClient()
+  let inserted = 0, failed = 0
+  const errors = []
+  const yearCache = {}
+
+  try {
+    await client.query('BEGIN')
+    for (let i = 0; i < rows.length; i++) {
+      const sp = `sp_${i}`
+      await client.query(`SAVEPOINT ${sp}`)
+      try {
+        const row = rows[i]
+        const yearValue = row.year ? parseInt(row.year, 10) : null
+        if (!yearValue || isNaN(yearValue)) throw new Error('Năm không hợp lệ')
+        if (!row.documentType) throw new Error('Loại chứng từ là bắt buộc')
+
+        // Resolve or create year record
+        let yearId = yearCache[yearValue]
+        if (!yearId) {
+          const existing = await client.query(
+            'SELECT id FROM company_archive_years WHERE company_id = $1 AND year = $2',
+            [companyId, yearValue]
+          )
+          if (existing.rows.length) {
+            yearId = existing.rows[0].id
+          } else {
+            const created = await client.query(
+              `INSERT INTO company_archive_years (company_id, year, created_by)
+               VALUES ($1, $2, $3) RETURNING id`,
+              [companyId, yearValue, user.id]
+            )
+            yearId = created.rows[0].id
+          }
+          yearCache[yearValue] = yearId
+        }
+
+        // Build months JSONB from month_1 … month_12 fields
+        const months = { ...EMPTY_MONTHS }
+        for (let m = 1; m <= 12; m++) {
+          const v = row[`month_${m}`]
+          if (v !== null && v !== undefined && v !== '') months[String(m)] = String(v)
+        }
+
+        // Custom extra_fields from dyn__ prefixed keys
+        const extraFields = {}
+        for (const [k, v] of Object.entries(row)) {
+          if (k.startsWith('dyn__') && v !== null && v !== undefined && v !== '') {
+            extraFields[k.slice(5)] = v
+          }
+        }
+
+        await client.query(
+          `INSERT INTO company_archive_docs
+             (year_id, document_type, detail, months, extra_fields, notes, characteristics, position)
+           SELECT $1, $2, $3, $4, $5, $6, $7,
+             COALESCE((SELECT MAX(position) + 1 FROM company_archive_docs WHERE year_id = $1), 0)`,
+          [
+            yearId,
+            row.documentType,
+            row.detail          ?? null,
+            JSON.stringify(months),
+            JSON.stringify(extraFields),
+            row.notes           ?? null,
+            row.characteristics ?? null,
+          ]
+        )
+        inserted++
+      } catch (err) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${sp}`)
+        failed++
+        errors.push({ row: rows[i]._rowNum ?? i + 2, message: err.message })
+      }
+    }
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+  return { inserted, failed, errors }
+}
+
 module.exports = {
   listYears,
   createYear,
@@ -380,6 +467,7 @@ module.exports = {
   updateDoc,
   deleteDoc,
   reorderDocs,
+  batchCreateDocs,
   listColumns,
   createColumn,
   deleteColumn,

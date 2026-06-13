@@ -26,6 +26,9 @@ router.post('/years',           ...auth, validate(createYearSchema), ctrl.create
 router.patch('/years/:yearId',  ...auth, validate(updateYearSchema), ctrl.updateYear)
 router.delete('/years/:yearId', ...auth, ctrl.deleteYear)
 
+// ── Batch import (company-level, không gắn với year cụ thể) ──────────────────
+router.post('/batch',                       ...auth, ctrl.batchImport)
+
 // ── Export (/export trước /:docId để tránh bị parse thành UUID) ──────────────
 router.get('/years/:yearId/export',         ...auth, ctrl.exportExcel)
 
