@@ -5568,3 +5568,144 @@
   background: var(--color-primary-ink);
   cursor: col-resize;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NSNN DEBTS TAB — Báo cáo theo dõi nợ NSNN
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Table shell ─────────────────────────────────────────────────────────── */
+
+.nsnnTable {
+  min-width: var(--nsnn-table-w, 1100px);
+  width: var(--nsnn-table-w, 1100px);
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+/* ── Column widths via CSS variable ──────────────────────────────────────── */
+
+.cscThResizable.nsnnThResizable,
+.nsnnTable thead th {
+  width: var(--nsnn-col-w, 160px);
+  min-width: var(--nsnn-col-w, 160px);
+  max-width: var(--nsnn-col-w, 160px);
+  overflow: hidden;
+}
+
+/* ── STT column — sticky left, fixed 42 px ───────────────────────────────── */
+
+.nsnnThSttFixed {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  width: 42px;
+  min-width: 42px;
+  max-width: 42px;
+  text-align: center;
+  background: var(--color-surface, #fff);
+}
+
+.nsnnCellSttFixed {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  background: inherit;
+  white-space: nowrap;
+}
+
+/* ── Actions column — sticky right, fixed 100 px ────────────────────────── */
+
+.nsnnThActionsFixed {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  text-align: center;
+  background: var(--color-surface, #fff);
+}
+
+.nsnnCellActions {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  text-align: center;
+  vertical-align: middle;
+  padding: var(--space-2) !important;
+  background: inherit;
+}
+
+/* ── Main document-type cell ─────────────────────────────────────────────── */
+
+.nsnnCellMain {
+  font-weight: 500;
+  color: var(--color-text-primary, #0f172a);
+}
+
+/* ── Money cell (Số tiền nợ) ─────────────────────────────────────────────── */
+
+.nsnnCellMoney {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--color-text-primary, #0f172a);
+}
+
+/* ── Days-late cell — colored by severity ────────────────────────────────── */
+
+.nsnnCellDaysLate {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.nsnnDaysLateOk {
+  color: var(--color-success, #10b981);
+  font-weight: 500;
+}
+
+.nsnnDaysLateMed {
+  color: var(--color-warning, #f59e0b);
+  font-weight: 600;
+}
+
+.nsnnDaysLateHigh {
+  color: var(--color-danger, #ef4444);
+  font-weight: 700;
+}
+
+/* ── Row ─────────────────────────────────────────────────────────────────── */
+
+.nsnnDocRow {
+  background: var(--color-surface, #fff);
+  transition: background var(--duration-fast, 120ms);
+}
+
+.nsnnDocRow:hover {
+  background: var(--color-info-surface, #eff6ff);
+}
+
+.nsnnDocRow:hover .nsnnCellSttFixed,
+.nsnnDocRow:hover .nsnnCellActions {
+  background: var(--color-info-surface, #eff6ff);
+}
+
+/* ── Resize handle ───────────────────────────────────────────────────────── */
+
+.nsnnTable th .archColResizeHandle {
+  background: transparent;
+  border-left: 2px solid transparent;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+}
+
+.nsnnTable th:hover .archColResizeHandle {
+  border-left: 2px solid var(--color-primary-ink);
+  background: var(--color-primary-ink-soft);
+}
+
+.nsnnTable th .archColResizeHandle:hover {
+  border-left: 2px solid var(--color-primary);
+  background: var(--color-primary-ink);
+  cursor: col-resize;
+}

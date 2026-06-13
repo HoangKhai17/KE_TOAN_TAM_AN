@@ -221,7 +221,10 @@
       "Bash(curl -s -c - http://localhost:8080/api/auth/login -X POST -H 'Content-Type: application/json' -d '{\\\\\"email\\\\\":\\\\\"admin@ktta.vn\\\\\",\\\\\"password\\\\\":\\\\\"Admin@123\\\\\"}')",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://localhost:8080/api/companies/ea47ab77-c2e0-432e-950b-0f54b532dd99/csc\" -H \"Cookie: $\\(curl -s -c - http://localhost:8080/api/auth/login -X POST -H 'Content-Type: application/json' -d '{\\\\\"email\\\\\":\\\\\"admin@ktta.vn\\\\\",\\\\\"password\\\\\":\\\\\"Admin@123\\\\\"}')",
       "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@ktta.vn\",\"password\":\"Admin@123\"}')",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(list\\(d.keys\\(\\)\\)\\)\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(list\\(d.keys\\(\\)\\)\\)\")",
+      "Bash(echo \"---exit:$?\")",
+      "Read(//c/Users/ACER/AppData/Local/Temp/claude/d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM_AN/da432d2f-e202-463d-842d-2abf360ae367/tasks/**)",
+      "Bash(docker container *)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

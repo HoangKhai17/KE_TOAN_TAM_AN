@@ -170,6 +170,41 @@
 
 ---
 
+### 1.8 Báo Cáo Theo Dõi Nợ NSNN
+
+> Theo dõi các khoản nợ ngân sách nhà nước (NSNN) của từng công ty khách hàng. Giúp nhân viên kế toán nắm bắt tình trạng nợ, số ngày chậm và số lần lặp lại từng công việc.
+
+**Tính năng:**
+- Thêm / sửa / xóa dòng nợ NSNN theo từng công ty
+- **Click-to-edit inline** — click thẳng vào ô trong bảng để chỉnh sửa
+- **Tính số ngày chậm tự động:** `CURRENT_DATE − Thời điểm cập nhật`
+- **Quản lý cột tùy chỉnh** — thêm cột văn bản / số / ngày
+- **Column header filter** — lọc dữ liệu trực tiếp từ tiêu đề cột
+- **Drag handle** `|` để resize cột
+- **Xuất Excel** — chọn cột cần xuất, preview trước khi tải
+- **Phân trang** — 20 dòng mỗi trang (client-side)
+
+**Cột dữ liệu cố định:**
+
+| Cột | Mô tả | Lưu DB |
+|-----|-------|--------|
+| STT | Số thứ tự | ✗ (computed) |
+| Khách hàng | Tên công ty (từ context) | ✗ (join) |
+| Mã số thuế | MST của công ty | ✗ (join) |
+| Quản lý | NV phụ trách công ty | ✗ (join) |
+| Loại chứng từ / công việc | Loại chứng từ hoặc tên công việc (bắt buộc) | ✓ |
+| Phạm trù | Phân loại / phạm vi (tùy chọn) | ✓ |
+| Số tiền nợ NSNN | Số tiền nợ (NULL = —) | ✓ |
+| Thời điểm cập nhật | Ngày cập nhật do người dùng nhập | ✓ |
+| Số ngày chậm so với hôm nay | `CURRENT_DATE − Thời điểm cập nhật` | ✗ (computed) |
+| Số lần lặp lại cho 1 công việc | Số lần công việc được lặp lại | ✓ |
+| Ghi chú | Ghi chú nội bộ | ✓ |
+
+**Nơi hiển thị:**
+- Tab **"Nợ NSNN"** trên trang `/companies/:id`
+
+---
+
 ## Module 2: Quản Lý Nhân Sự
 
 > Quản lý thông tin nhân viên kế toán nội bộ của Tâm An.

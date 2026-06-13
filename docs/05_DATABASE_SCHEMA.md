@@ -1262,6 +1262,74 @@ CREATE INDEX idx_csc_cols_company ON company_csc_columns(company_id);
 
 ---
 
+## TABLE: company_nsnn_debts (Báo Cáo Theo Dõi Nợ NSNN)
+
+> Migration: `migrations/070_nsnn_debts.sql`
+
+```sql
+CREATE TABLE company_nsnn_debts (
+  id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id    UUID          NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  document_type VARCHAR(300)  NOT NULL,
+  category      VARCHAR(300),
+  debt_amount   NUMERIC(20,2),
+  update_date   DATE,
+  repeat_count  INTEGER,
+  notes         TEXT,
+  custom_fields JSONB         NOT NULL DEFAULT '{}',
+  created_by    UUID          NOT NULL REFERENCES users(id),
+  created_at    TIMESTAMP     NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_nsnn_company     ON company_nsnn_debts(company_id);
+CREATE INDEX idx_nsnn_update_date ON company_nsnn_debts(update_date) WHERE update_date IS NOT NULL;
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `document_type` | Loại chứng từ / công việc (bắt buộc) |
+| `category` | Phạm trù / phân loại (tùy chọn) |
+| `debt_amount` | Số tiền nợ NSNN (NULL → hiển thị "—") |
+| `update_date` | Thời điểm cập nhật do người dùng nhập |
+| `repeat_count` | Số lần lặp lại cho 1 công việc |
+| `notes` | Ghi chú nội bộ |
+| `custom_fields` | Giá trị cột tùy chỉnh (JSONB keyed by col_name) |
+
+**Computed at query time:**
+```sql
+(CURRENT_DATE - update_date)::INTEGER AS days_late
+-- NULL when update_date IS NULL
+```
+
+---
+
+## TABLE: company_nsnn_columns (Cột Tùy Chỉnh Nợ NSNN)
+
+> Migration: `migrations/071_nsnn_columns.sql`
+
+```sql
+CREATE TABLE company_nsnn_columns (
+  id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID         NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  col_name   VARCHAR(200) NOT NULL,
+  col_type   VARCHAR(10)  NOT NULL DEFAULT 'text'
+             CHECK (col_type IN ('text', 'number', 'date')),
+  position   INT          NOT NULL DEFAULT 0,
+  created_at TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_nsnn_cols_company ON company_nsnn_columns(company_id);
+```
+
+| Column | Mô tả |
+|--------|-------|
+| `col_name` | Tên cột do người dùng đặt |
+| `col_type` | Kiểu dữ liệu: `text` / `number` / `date` |
+| `position` | Thứ tự hiển thị |
+
+---
+
 ## Tóm Tắt Các Bảng
 
 | # | Bảng | Mô tả | Quan hệ chính |
@@ -1306,6 +1374,8 @@ CREATE INDEX idx_csc_cols_company ON company_csc_columns(company_id);
 | 35 | `company_archive_docs` | Dòng chứng từ lưu trữ theo năm | N:1 company_archive_years (cascade) |
 | 36 | `company_csc_contracts` | HĐ khách hàng / nhà cung cấp | N:1 companies, users (created_by) |
 | 37 | `company_csc_columns` | Cột tùy chỉnh tab HĐ KH.NCC | N:1 companies |
+| 38 | `company_nsnn_debts` | Theo dõi nợ ngân sách nhà nước | N:1 companies, users (created_by) |
+| 39 | `company_nsnn_columns` | Cột tùy chỉnh tab Nợ NSNN | N:1 companies |
 
 ---
 

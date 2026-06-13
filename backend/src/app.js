@@ -204,6 +204,9 @@ function createApp() {
   // Phase 21 — Client/Supplier Contracts (Theo dõi HĐ KH.NCC)
   app.use('/api/companies/:companyId/csc', require('./modules/csc/csc.router'))
 
+  // Phase 22 — NSNN Debt Tracking (Báo cáo theo dõi nợ NSNN)
+  app.use('/api/companies/:companyId/nsnn', require('./modules/nsnn/nsnn.router'))
+
   // Dev helper: send a test notification to the calling user
   app.post('/api/notifications/test', require('./middleware/auth').authenticate, async (req, res, next) => {
     try {
