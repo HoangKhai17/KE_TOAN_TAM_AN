@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   Building2, Pencil, AlertTriangle, ChevronRight,
@@ -6,6 +6,7 @@ import {
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
   Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal, ScrollText, Archive, FileSignature, TrendingDown,
+  ChevronDown, X,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -1015,6 +1016,282 @@ function DeleteTaskModal({ task, deleting, onClose, onConfirm }) {
   )
 }
 
+// ── Column-header filter machinery (per docs/018) ─────────────────────────────
+
+/** Filter kind per task column */
+function getTaskColumnFilterType(colKey) {
+  if (colKey === 'status' || colKey === 'priority' || colKey === 'assignedToName') return 'enum'
+  if (colKey === 'createdAt' || colKey === 'dueDate') return 'dateRange'
+  if (colKey === 'progress') return 'numberRange'
+  return 'text'
+}
+
+/** Display string used in enum checkboxes / text search */
+function getTaskDisplayLabel(row, colKey) {
+  switch (colKey) {
+    case 'status':         return STATUS_LABELS[row.status] ?? row.status
+    case 'priority':       return PRIORITY_LABELS[row.priority] ?? row.priority
+    case 'createdAt':      return row.createdAt ? fmtTaskDate(row.createdAt) : '(Trống)'
+    case 'dueDate':        return row.dueDate ? fmtTaskDate(row.dueDate) : '(Trống)'
+    case 'assignedToName': return row.assignedToName || '(Chưa giao)'
+    case 'progress': {
+      const p = progressPct(row)
+      return p !== null ? `${p}%` : '(Trống)'
+    }
+    default: {
+      const v = row[colKey]
+      return v != null && v !== '' ? String(v) : '(Trống)'
+    }
+  }
+}
+
+/** Sortable primitive for the given column */
+function getTaskSortKey(row, colKey) {
+  switch (colKey) {
+    case 'status':         return STATUS_LABELS[row.status] ?? ''
+    case 'priority':       return ({ urgent: 1, high: 2, medium: 3, low: 4 })[row.priority] ?? 5
+    case 'createdAt':      return row.createdAt ?? ''
+    case 'dueDate':        return row.dueDate ?? ''
+    case 'progress':       return progressPct(row) ?? -1
+    case 'assignedToName': return (row.assignedToName ?? '').toLowerCase()
+    default:               return String(row[colKey] ?? '').toLowerCase()
+  }
+}
+
+function TaskEnumFilterSection({ colKey, allRows, currentFilter, onFilterChange, onClose }) {
+  const allValues = useMemo(() => {
+    const seen = new Set()
+    const vals = []
+    for (const row of allRows) {
+      const lbl = getTaskDisplayLabel(row, colKey)
+      if (!seen.has(lbl)) { seen.add(lbl); vals.push(lbl) }
+    }
+    return vals.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
+  }, [allRows, colKey])
+
+  const selected = useMemo(
+    () => (!currentFilter ? new Set(allValues) : currentFilter),
+    [currentFilter, allValues]
+  )
+
+  function toggleValue(val) {
+    const next = new Set(selected)
+    next.has(val) ? next.delete(val) : next.add(val)
+    onFilterChange(colKey, next.size === allValues.length ? null : next)
+  }
+  function toggleAll() {
+    onFilterChange(colKey, selected.size === allValues.length ? new Set() : null)
+  }
+
+  const allChecked  = selected.size === allValues.length
+  const noneChecked = selected.size === 0
+
+  return (
+    <>
+      <label className={s.hdldDdSelectAll}>
+        <input
+          type="checkbox"
+          checked={allChecked}
+          ref={(el) => { if (el) el.indeterminate = !allChecked && !noneChecked }}
+          onChange={toggleAll}
+        />
+        Chọn tất cả ({allValues.length})
+      </label>
+      <div className={s.hdldDdValueList}>
+        {allValues.map((val) => (
+          <label key={val} className={s.hdldDdValueItem}>
+            <input type="checkbox" checked={selected.has(val)} onChange={() => toggleValue(val)} />
+            <span className={s.hdldDdValueText}>{val}</span>
+          </label>
+        ))}
+      </div>
+      <div className={s.hdldDdFooter}>
+        <button className={s.hdldDdClearBtn} onClick={() => { onFilterChange(colKey, null); onClose() }}>
+          Xoá bộ lọc
+        </button>
+      </div>
+    </>
+  )
+}
+
+function TaskTextFilterSection({ colKey, currentFilter, onFilterChange }) {
+  const [query, setQuery] = useState(typeof currentFilter === 'string' ? currentFilter : '')
+  const inputRef = useRef(null)
+  useEffect(() => { inputRef.current?.focus() }, [])
+  return (
+    <div className={s.hdldDdFilterSection}>
+      <input
+        ref={inputRef}
+        type="text"
+        className={s.hdldDdInput}
+        placeholder="Tìm kiếm..."
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); onFilterChange(colKey, e.target.value.trim() || null) }}
+      />
+      {query && (
+        <div className={s.hdldDdFooter}>
+          <button className={s.hdldDdClearBtn} onClick={() => { setQuery(''); onFilterChange(colKey, null) }}>
+            Xoá bộ lọc
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TaskDateRangeFilterSection({ colKey, currentFilter, onFilterChange }) {
+  const [from, setFrom] = useState(currentFilter?.from ?? '')
+  const [to,   setTo  ] = useState(currentFilter?.to   ?? '')
+  function apply(f, t) { onFilterChange(colKey, f || t ? { from: f, to: t } : null) }
+  return (
+    <div className={s.hdldDdFilterSection}>
+      <div className={s.hdldDdRangeGroup}>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Từ ngày</span>
+          <input type="date" className={s.hdldDdInput} value={from}
+            onChange={(e) => { setFrom(e.target.value); apply(e.target.value, to) }} />
+        </div>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Đến ngày</span>
+          <input type="date" className={s.hdldDdInput} value={to}
+            onChange={(e) => { setTo(e.target.value); apply(from, e.target.value) }} />
+        </div>
+      </div>
+      {(from || to) && (
+        <div className={s.hdldDdFooter}>
+          <button className={s.hdldDdClearBtn}
+            onClick={() => { setFrom(''); setTo(''); onFilterChange(colKey, null) }}>
+            Xoá bộ lọc
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TaskNumberRangeFilterSection({ colKey, currentFilter, onFilterChange }) {
+  const [minVal, setMinVal] = useState(currentFilter?.min ?? '')
+  const [maxVal, setMaxVal] = useState(currentFilter?.max ?? '')
+  function apply(mn, mx) { onFilterChange(colKey, mn !== '' || mx !== '' ? { min: mn, max: mx } : null) }
+  return (
+    <div className={s.hdldDdFilterSection}>
+      <div className={s.hdldDdRangeGroup}>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Tối thiểu</span>
+          <input type="number" className={s.hdldDdInput} placeholder="0" value={minVal}
+            onChange={(e) => { setMinVal(e.target.value); apply(e.target.value, maxVal) }} />
+        </div>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Tối đa</span>
+          <input type="number" className={s.hdldDdInput} placeholder="∞" value={maxVal}
+            onChange={(e) => { setMaxVal(e.target.value); apply(minVal, e.target.value) }} />
+        </div>
+      </div>
+      {(minVal !== '' || maxVal !== '') && (
+        <div className={s.hdldDdFooter}>
+          <button className={s.hdldDdClearBtn}
+            onClick={() => { setMinVal(''); setMaxVal(''); onFilterChange(colKey, null) }}>
+            Xoá bộ lọc
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TaskColumnFilterDropdown({ colKey, allRows, currentFilter, sortState, onSort, onFilterChange, onClose, style }) {
+  const dropRef    = useRef(null)
+  const filterType = getTaskColumnFilterType(colKey)
+
+  useEffect(() => {
+    function handler(e) {
+      if (dropRef.current && !dropRef.current.contains(e.target)) {
+        if (!e.target.closest('[data-hdld-filter-btn]')) onClose()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  const activeAsc  = sortState.col === colKey && sortState.dir === 'asc'
+  const activeDesc = sortState.col === colKey && sortState.dir === 'desc'
+
+  return (
+    <div ref={dropRef} className={s.hdldFilterDropdown} style={style}>
+      <div className={s.hdldDdSortSection}>
+        <button className={`${s.hdldDdSortBtn} ${activeAsc ? s.hdldDdSortBtnActive : ''}`}
+          onClick={() => onSort(colKey, 'asc')}>↑&nbsp; Sắp xếp A → Z</button>
+        <button className={`${s.hdldDdSortBtn} ${activeDesc ? s.hdldDdSortBtnActive : ''}`}
+          onClick={() => onSort(colKey, 'desc')}>↓&nbsp; Sắp xếp Z → A</button>
+      </div>
+      {filterType === 'enum' && (
+        <TaskEnumFilterSection colKey={colKey} allRows={allRows} currentFilter={currentFilter}
+          onFilterChange={onFilterChange} onClose={onClose} />
+      )}
+      {filterType === 'text' && (
+        <TaskTextFilterSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
+      )}
+      {filterType === 'dateRange' && (
+        <TaskDateRangeFilterSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
+      )}
+      {filterType === 'numberRange' && (
+        <TaskNumberRangeFilterSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
+      )}
+    </div>
+  )
+}
+
+// ── Multi-select dropdown (status / priority / source filter) ─────────────────
+
+function TaskMultiSelect({ placeholder, options, selected, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onOut(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onOut)
+    return () => document.removeEventListener('mousedown', onOut)
+  }, [open])
+
+  function toggle(key) {
+    onChange(selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key])
+  }
+
+  const count = selected.length
+  const allChecked = options.length > 0 && count === options.length
+
+  return (
+    <div className={ts.multiSelect} ref={ref}>
+      <button
+        type="button"
+        className={`${ts.multiSelectTrigger} ${count > 0 ? ts.multiSelectActive : ''}`}
+        onClick={() => setOpen((p) => !p)}
+      >
+        <span className={ts.multiSelectLabel}>{count === 0 ? placeholder : `${count} đã chọn`}</span>
+        {count > 0 && <span className={ts.multiSelectBadge}>{count}</span>}
+        <ChevronDown size={11} className={`${ts.chevronRotate} ${open ? ts.chevronOpen : ''}`} />
+      </button>
+      {open && (
+        <div className={ts.multiSelectDropdown}>
+          <label className={ts.multiSelectItem}>
+            <input type="checkbox" checked={allChecked}
+              onChange={() => onChange(allChecked ? [] : options.map((o) => o.key))} />
+            <span>Tất cả</span>
+          </label>
+          <div className={ts.multiSelectDivider} />
+          {options.map((o) => (
+            <label key={o.key} className={`${ts.multiSelectItem} ${selected.includes(o.key) ? ts.multiSelectItemChecked : ''}`}>
+              <input type="checkbox" checked={selected.includes(o.key)} onChange={() => toggle(o.key)} />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── CompanyTasksTab ────────────────────────────────────────────────────────────
 
 function CompanyTasksTab({ company, onTaskCountChange }) {
@@ -1038,11 +1315,17 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
 
   const [searchInput, setSearchInput]       = useState('')
   const [search, setSearch]                 = useState('')
-  const [statusFilter, setStatusFilter]     = useState('')
-  const [priorityFilter, setPriorityFilter] = useState('')
+  const [statusFilter, setStatusFilter]     = useState([])
+  const [priorityFilter, setPriorityFilter] = useState([])
+  const [sourceFilter, setSourceFilter]     = useState([])
   const [isOverdue, setIsOverdue]           = useState(false)
   const [monthFilter, setMonthFilter]       = useState(CUR_MONTH)
   const [yearFilter, setYearFilter]         = useState(CUR_YEAR)
+
+  // Column-header filter / sort (client-side, per docs/018)
+  const [colFilters, setColFilters]   = useState({})
+  const [sortState, setSortState]     = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup] = useState(null)
 
   const [showCreate, setShowCreate]     = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -1056,7 +1339,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   }, [searchInput])
 
   // Reset to page 1 when filters or limit change
-  useEffect(() => { setPage(1) }, [statusFilter, priorityFilter, isOverdue, monthFilter, yearFilter, limit])
+  useEffect(() => { setPage(1) }, [statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, colFilters, sortState, limit])
 
   useEffect(() => {
     loadEnums()
@@ -1085,15 +1368,18 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
+    // Load the whole period (server-side coarse filters); column-header filter,
+    // sort and pagination are applied client-side on top of this set.
     tasksApi.listTasks({
       companyId:  company.id,
-      search:     search        || undefined,
-      status:     statusFilter  || undefined,
-      priority:   priorityFilter || undefined,
+      search:     search                         || undefined,
+      status:     statusFilter.length   ? statusFilter   : undefined,
+      priority:   priorityFilter.length ? priorityFilter : undefined,
+      source:     sourceFilter.length   ? sourceFilter   : undefined,
       isOverdue:  isOverdue     ? true : undefined,
       ...getDateRange(),
-      page,
-      limit,
+      page:  1,
+      limit: 100,
       sortBy:  'due_date',
       sortDir: 'asc',
     })
@@ -1107,7 +1393,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [company.id, search, statusFilter, priorityFilter, isOverdue, monthFilter, yearFilter, page, limit]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [company.id, search, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const cancel = load()
@@ -1122,11 +1408,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       addToast(`Đã xoá "${deleteTarget.title}"`, 'success')
       setDeleteTarget(null)
       onTaskCountChange(Math.max(0, (company.taskOpenCount ?? 0) - 1))
-      if (tasks.length === 1 && page > 1) {
-        setPage((p) => p - 1)
-      } else {
-        load()
-      }
+      load()
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể xoá công việc', 'error')
     } finally {
@@ -1136,28 +1418,134 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
 
   function resetFilters() {
     setSearchInput(''); setSearch('')
-    setStatusFilter(''); setPriorityFilter(''); setIsOverdue(false)
+    setStatusFilter([]); setPriorityFilter([]); setSourceFilter([]); setIsOverdue(false)
     setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR)
+    setColFilters({}); setSortState({ col: null, dir: 'asc' })
     setPage(1)
   }
 
-  const activeFilters = [search, statusFilter, priorityFilter].filter(Boolean).length
+  const activeFilters = (search ? 1 : 0)
+    + statusFilter.length + priorityFilter.length + sourceFilter.length
     + (isOverdue ? 1 : 0)
     + (monthFilter !== CUR_MONTH ? 1 : 0)
     + (yearFilter  !== CUR_YEAR  ? 1 : 0)
-  const colSpan = 8  // always 8: title + status + priority + createdAt + dueDate + assigned + progress + actions
-  const from = pagination.total === 0 ? 0 : (page - 1) * limit + 1
-  const to   = Math.min(page * limit, pagination.total)
 
-  function pageWindow() {
-    const total = pagination.totalPages ?? 1
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-    if (page <= 4) return [1, 2, 3, 4, 5, '…', total]
-    if (page >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
-    return [1, '…', page - 1, page, page + 1, '…', total]
+  // ── Client-side column-header filter + sort + pagination (docs/018) ───────────
+  const displayed = useMemo(() => {
+    let result = [...tasks]
+    for (const [colKey, filterVal] of Object.entries(colFilters)) {
+      const ft = getTaskColumnFilterType(colKey)
+      if (ft === 'enum') {
+        if (filterVal instanceof Set && filterVal.size > 0) {
+          result = result.filter((row) => filterVal.has(getTaskDisplayLabel(row, colKey)))
+        }
+      } else if (ft === 'text') {
+        if (typeof filterVal === 'string' && filterVal.trim()) {
+          const q = filterVal.toLowerCase()
+          result = result.filter((row) => getTaskDisplayLabel(row, colKey).toLowerCase().includes(q))
+        }
+      } else if (ft === 'dateRange') {
+        if (filterVal && (filterVal.from || filterVal.to)) {
+          result = result.filter((row) => {
+            const raw = row[colKey]
+            if (!raw) return false
+            const d = String(raw).substring(0, 10)
+            if (filterVal.from && d < filterVal.from) return false
+            if (filterVal.to   && d > filterVal.to)   return false
+            return true
+          })
+        }
+      } else if (ft === 'numberRange') {
+        if (filterVal && (filterVal.min !== '' || filterVal.max !== '')) {
+          result = result.filter((row) => {
+            const num = colKey === 'progress' ? progressPct(row) : parseFloat(row[colKey])
+            if (num === null || num === undefined || isNaN(num)) return false
+            if (filterVal.min !== '' && num < parseFloat(filterVal.min)) return false
+            if (filterVal.max !== '' && num > parseFloat(filterVal.max)) return false
+            return true
+          })
+        }
+      }
+    }
+    if (sortState.col) {
+      result.sort((a, b) => {
+        const ak = getTaskSortKey(a, sortState.col)
+        const bk = getTaskSortKey(b, sortState.col)
+        if (typeof ak === 'number' && typeof bk === 'number') {
+          return sortState.dir === 'asc' ? ak - bk : bk - ak
+        }
+        const cmp = String(ak).localeCompare(String(bk), 'vi', { numeric: true })
+        return sortState.dir === 'asc' ? cmp : -cmp
+      })
+    }
+    return result
+  }, [tasks, colFilters, sortState])
+
+  const clientTotal      = displayed.length
+  const clientTotalPages = Math.max(1, Math.ceil(clientTotal / limit))
+  const safePage         = Math.min(page, clientTotalPages)
+  const pageRows         = displayed.slice((safePage - 1) * limit, safePage * limit)
+
+  function openFilter(colKey, e) {
+    e.stopPropagation()
+    if (filterPopup?.colKey === colKey) setFilterPopup(null)
+    else {
+      const rect = e.currentTarget.getBoundingClientRect()
+      setFilterPopup({ colKey, top: rect.bottom + 4, left: rect.left })
+    }
+  }
+  function handleFilterChange(colKey, val) {
+    setColFilters((prev) => {
+      const next = { ...prev }
+      if (val === null) delete next[colKey]
+      else next[colKey] = val
+      return next
+    })
+  }
+  function handleSort(col, dir) { setSortState({ col, dir }) }
+  function hasColFilter(colKey) {
+    const f = colFilters[colKey]
+    if (f == null) return false
+    const t = getTaskColumnFilterType(colKey)
+    if (t === 'enum')        return f instanceof Set && f.size > 0
+    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
+    if (t === 'dateRange')   return Boolean(f.from || f.to)
+    if (t === 'numberRange') return f.min !== '' || f.max !== ''
+    return false
+  }
+  const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
+  const hasSortActive  = sortState.col !== null
+
+  function FilterTh({ colKey, className, children }) {
+    const active = hasColFilter(colKey) || sortState.col === colKey
+    return (
+      <th className={className}>
+        <div className={s.hdldThInner}>
+          <span className={s.hdldThLabel}>{children}</span>
+          <button
+            data-hdld-filter-btn
+            className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`}
+            onClick={(e) => openFilter(colKey, e)}
+            title="Lọc / Sắp xếp"
+          >
+            <Filter size={10} />
+          </button>
+        </div>
+      </th>
+    )
   }
 
-  const STATUSES = ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed']
+  const colSpan = 8  // title + status + priority + createdAt + dueDate + assigned + progress + actions
+  const from = clientTotal === 0 ? 0 : (safePage - 1) * limit + 1
+  const to   = Math.min(safePage * limit, clientTotal)
+
+  function pageWindow() {
+    const total = clientTotalPages
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+    if (safePage <= 4) return [1, 2, 3, 4, 5, '…', total]
+    if (safePage >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
+    return [1, '…', safePage - 1, safePage, safePage + 1, '…', total]
+  }
 
   return (
     <div>
@@ -1231,16 +1619,43 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             </select>
           </div>
 
-          {/* Ưu tiên */}
+          {/* Trạng thái — multi-select */}
+          <div className={s.cTaskFilterGroup}>
+            <label className={s.cTaskFilterLabel}>Trạng thái</label>
+            <TaskMultiSelect
+              placeholder="Tất cả"
+              options={getOptions('task_status').length > 0
+                ? getOptions('task_status')
+                : ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed'].map((k) => ({ key: k, label: STATUS_LABELS[k] }))}
+              selected={statusFilter}
+              onChange={(v) => { setStatusFilter(v); setPage(1) }}
+            />
+          </div>
+
+          {/* Ưu tiên — multi-select */}
           <div className={s.cTaskFilterGroup}>
             <label className={s.cTaskFilterLabel}>Ưu tiên</label>
-            <select value={priorityFilter} onChange={(e) => { setPriorityFilter(e.target.value); setPage(1) }} className={s.cTaskFilterSelect}>
-              <option value="">Tất cả</option>
-              {(getOptions('task_priority').length > 0
+            <TaskMultiSelect
+              placeholder="Tất cả"
+              options={getOptions('task_priority').length > 0
                 ? getOptions('task_priority')
-                : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
-              ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-            </select>
+                : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))}
+              selected={priorityFilter}
+              onChange={(v) => { setPriorityFilter(v); setPage(1) }}
+            />
+          </div>
+
+          {/* Nguồn công việc — multi-select */}
+          <div className={s.cTaskFilterGroup}>
+            <label className={s.cTaskFilterLabel}>Nguồn</label>
+            <TaskMultiSelect
+              placeholder="Tất cả"
+              options={getOptions('task_source').length > 0
+                ? getOptions('task_source')
+                : [{ key: 'manual', label: 'Thủ công' }, { key: 'auto', label: 'Tự động' }]}
+              selected={sourceFilter}
+              onChange={(v) => { setSourceFilter(v); setPage(1) }}
+            />
           </div>
 
           {/* Quá hạn */}
@@ -1264,12 +1679,18 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               <button className={s.filterChipRemove} onClick={() => { setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR); setPage(1) }}>×</button>
             )}
           </span>
-          {priorityFilter && (
-            <span className={s.filterChip}>
-              Ưu tiên: {PRIORITY_LABELS[priorityFilter] ?? priorityFilter}
-              <button className={s.filterChipRemove} onClick={() => { setPriorityFilter(''); setPage(1) }}>×</button>
+          {priorityFilter.map((p) => (
+            <span key={p} className={s.filterChip}>
+              Ưu tiên: {getLabel('task_priority', p, PRIORITY_LABELS[p] ?? p)}
+              <button className={s.filterChipRemove} onClick={() => { setPriorityFilter((arr) => arr.filter((k) => k !== p)); setPage(1) }}>×</button>
             </span>
-          )}
+          ))}
+          {sourceFilter.map((src) => (
+            <span key={src} className={s.filterChip}>
+              Nguồn: {getLabel('task_source', src, src === 'auto' ? 'Tự động' : 'Thủ công')}
+              <button className={s.filterChipRemove} onClick={() => { setSourceFilter((arr) => arr.filter((k) => k !== src)); setPage(1) }}>×</button>
+            </span>
+          ))}
           {isOverdue && (
             <span className={`${s.filterChip} ${s.filterChipDanger}`}>
               Quá hạn
@@ -1296,12 +1717,16 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             { key: 'completed',     label: STATUS_LABELS.completed,       color: 'var(--color-success-text)', bg: 'var(--color-success-surface)', border: 'var(--color-success-border)' },
           ].map(({ key, label }) => {
             const count = key === '' ? pagination.total : (statusCounts[key] ?? 0)
-            const isActive = statusFilter === key
+            const isActive = key === '' ? statusFilter.length === 0 : statusFilter.includes(key)
             return (
               <button
                 key={key}
                 className={`${s.cTaskStatusChip} ${isActive ? `${s.cTaskStatusChipActive} ${COMPANY_TASK_STATUS_TONE[key] ?? ''}` : ''}`}
-                onClick={() => { setStatusFilter(key); setPage(1) }}
+                onClick={() => {
+                  if (key === '') setStatusFilter([])
+                  else setStatusFilter((arr) => arr.includes(key) ? arr.filter((k) => k !== key) : [...arr, key])
+                  setPage(1)
+                }}
               >
                 <span>{label}</span>
                 <span className={`${s.cTaskStatusChipCount} ${isActive ? s.cTaskStatusChipCountActive : ''}`}>{count}</span>
@@ -1317,13 +1742,13 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           <table className={s.table}>
             <thead>
               <tr>
-                <th>Tiêu đề</th>
-                <th>Trạng thái</th>
-                <th>Ưu tiên</th>
-                <th>Ngày tạo</th>
-                <th>Hết hạn</th>
-                <th>Phụ trách</th>
-                <th>Tiến độ</th>
+                <FilterTh colKey="title">Tiêu đề</FilterTh>
+                <FilterTh colKey="status">Trạng thái</FilterTh>
+                <FilterTh colKey="priority">Ưu tiên</FilterTh>
+                <FilterTh colKey="createdAt">Ngày tạo</FilterTh>
+                <FilterTh colKey="dueDate">Hết hạn</FilterTh>
+                <FilterTh colKey="assignedToName">Phụ trách</FilterTh>
+                <FilterTh colKey="progress">Tiến độ</FilterTh>
                 <th className={s.taskActionHeadAdmin} />
               </tr>
             </thead>
@@ -1339,16 +1764,16 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                     <td />
                   </tr>
                 ))
-              ) : tasks.length === 0 ? (
+              ) : displayed.length === 0 ? (
                 <tr>
                   <td colSpan={colSpan}>
                     <div className={s.taskEmptyInline}>
                       <ListTodo size={28} className={s.taskEmptyInlineIcon} />
-                      {activeFilters > 0 ? 'Không tìm thấy công việc phù hợp' : 'Chưa có công việc nào'}
+                      {(activeFilters > 0 || colFilterCount > 0) ? 'Không tìm thấy công việc phù hợp' : 'Chưa có công việc nào'}
                     </div>
                   </td>
                 </tr>
-              ) : tasks.map((task) => {
+              ) : pageRows.map((task) => {
                 const overdue = isTaskOverdue(task)
                 const pct     = progressPct(task)
                 return (
@@ -1419,26 +1844,28 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         {/* Pagination — always visible when data exists */}
         <div className={s.paginationBar}>
           <span className={s.paginationInfo}>
-            {loading ? '...' : pagination.total === 0 ? '0 công việc' : `${from}–${to} / ${pagination.total}`}
+            {loading ? '...' : clientTotal === 0 ? '0 công việc' : `${from}–${to} / ${clientTotal}`}
+            {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
+            {hasSortActive && ' · đang sắp xếp'}
           </span>
           <div className={s.paginationBtns}>
-            <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={page === 1 || loading}>«</button>
-            <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1 || loading}>‹</button>
+            <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={safePage === 1 || loading}>«</button>
+            <button className={s.paginationBtn} onClick={() => setPage(safePage - 1)} disabled={safePage === 1 || loading}>‹</button>
             {pageWindow().map((n, i) =>
               n === '…' ? (
                 <span key={`e${i}`} className={s.paginationGap}>…</span>
               ) : (
                 <button
                   key={n}
-                  className={`${s.paginationBtn} ${page === n ? s.paginationBtnActive : ''}`}
+                  className={`${s.paginationBtn} ${safePage === n ? s.paginationBtnActive : ''}`}
                   onClick={() => setPage(n)}
                 >
                   {n}
                 </button>
               )
             )}
-            <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === (pagination.totalPages ?? 1) || loading}>›</button>
-            <button className={s.paginationBtn} onClick={() => setPage(pagination.totalPages ?? 1)} disabled={page === (pagination.totalPages ?? 1) || loading}>»</button>
+            <button className={s.paginationBtn} onClick={() => setPage(safePage + 1)} disabled={safePage === clientTotalPages || loading}>›</button>
+            <button className={s.paginationBtn} onClick={() => setPage(clientTotalPages)} disabled={safePage === clientTotalPages || loading}>»</button>
           </div>
           <div className={s.pageSizeWrap}>
             <span className={s.pageSizeLabel}>Hiển thị:</span>
@@ -1492,6 +1919,23 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           taskId={quickViewId}
           onClose={() => setQuickViewId(null)}
           onUpdated={() => load()}
+        />
+      )}
+
+      {/* Column-header filter dropdown — position:fixed, outside table scroll */}
+      {filterPopup && (
+        <TaskColumnFilterDropdown
+          colKey={filterPopup.colKey}
+          allRows={tasks}
+          currentFilter={colFilters[filterPopup.colKey] ?? null}
+          sortState={sortState}
+          onSort={handleSort}
+          onFilterChange={handleFilterChange}
+          onClose={() => setFilterPopup(null)}
+          style={{
+            '--hdld-dd-top':  `${filterPopup.top}px`,
+            '--hdld-dd-left': `${filterPopup.left}px`,
+          }}
         />
       )}
     </div>

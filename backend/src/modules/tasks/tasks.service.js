@@ -178,7 +178,11 @@ async function listTasks(filters = {}) {
 
   if (companyId)           { baseParams.push(companyId);           baseConditions.push(`t.company_id = $${baseParams.length}`) }
   if (effectiveAssignedTo) { baseParams.push(effectiveAssignedTo); baseConditions.push(`t.assigned_to = $${baseParams.length}`) }
-  if (source)      { baseParams.push(source);      baseConditions.push(`t.source = $${baseParams.length}`) }
+  if (source) {
+    const arr = Array.isArray(source) ? source : [source]
+    baseParams.push(arr)
+    baseConditions.push(`t.source = ANY($${baseParams.length})`)
+  }
   if (dueDateFrom && dueDateTo) {
     // Overlap on the task's effective date range. COALESCE anchors a single-date task
     // (e.g. auto-generated tasks have only due_date) to that one date, so it matches
