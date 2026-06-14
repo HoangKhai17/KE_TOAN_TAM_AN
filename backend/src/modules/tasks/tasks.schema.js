@@ -13,6 +13,7 @@ const createTaskSchema = z.object({
   dueDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),
   priority:    z.enum(TASK_PRIORITIES).default('medium'),
   slaDays:     z.number().int().min(1).optional().nullable(),
+  source:      z.string().min(1).max(40).optional().nullable(),
 })
 
 const updateTaskSchema = z.object({

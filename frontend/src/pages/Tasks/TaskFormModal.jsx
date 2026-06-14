@@ -114,6 +114,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   const [form, setForm] = useState({
     title: '', companyId: initialCompanyId || '', taskTypeId: '', assignedToId: '',
     startDate: todayISO, dueDate: '', priority: 'medium', slaDays: '', description: '',
+    source: 'manual',
   })
   const [companies, setCompanies] = useState([])
   const [users,     setUsers]     = useState([])
@@ -193,6 +194,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         priority:    form.priority,
         slaDays:     form.slaDays ? Number(form.slaDays) : null,
         description: form.description.trim() || null,
+        source:      form.source || 'manual',
       })
       for (const item of checklistItems) {
         await addTaskChecklistItem(task.id, { stepText: item.text })
@@ -286,6 +288,18 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
               ? getOptions('task_priority')
               : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
             ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+        </div>
+
+        {/* Source — metadata-driven; 'auto' is reserved for the generator */}
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Nguồn công việc</label>
+          <select value={form.source} onChange={set('source')} className={s.formSelect}>
+            {(() => {
+              const opts = getOptions('task_source').filter((o) => o.key !== 'auto')
+              return (opts.length > 0 ? opts : [{ key: 'manual', label: 'Thủ công' }])
+                .map((o) => <option key={o.key} value={o.key}>{o.label}</option>)
+            })()}
           </select>
         </div>
 

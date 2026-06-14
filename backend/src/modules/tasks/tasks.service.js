@@ -5,6 +5,7 @@ const { canTransition } = require('./tasks.transitions')
 const { checkBlockers } = require('./dependencies.service')
 const { createAndEmit, emitData } = require('../../lib/notify')
 const { countPendingByTask, listClientRequests } = require('../client-requests/clientRequests.service')
+const enums = require('../../lib/enums')
 
 function cdrToTaskDto(cdr) {
   return {
@@ -177,19 +178,22 @@ async function listTasks(filters = {}) {
 
   if (companyId)           { baseParams.push(companyId);           baseConditions.push(`t.company_id = $${baseParams.length}`) }
   if (effectiveAssignedTo) { baseParams.push(effectiveAssignedTo); baseConditions.push(`t.assigned_to = $${baseParams.length}`) }
-  if (source)      { baseParams.push(source);      baseConditions.push(`t.source = $${baseParams.length}::task_source`) }
+  if (source)      { baseParams.push(source);      baseConditions.push(`t.source = $${baseParams.length}`) }
   if (dueDateFrom && dueDateTo) {
-    // Overlap: show task if its date range [start_date, due_date] intersects filter period [from, to]
+    // Overlap on the task's effective date range. COALESCE anchors a single-date task
+    // (e.g. auto-generated tasks have only due_date) to that one date, so it matches
+    // only the period that actually contains it. A task with NO dates at all yields
+    // NULL on both sides and is excluded from any period filter.
     baseParams.push(dueDateTo)
-    baseConditions.push(`(t.start_date IS NULL OR t.start_date <= $${baseParams.length})`)
+    baseConditions.push(`COALESCE(t.start_date, t.due_date) <= $${baseParams.length}`)
     baseParams.push(dueDateFrom)
-    baseConditions.push(`(t.due_date IS NULL OR t.due_date >= $${baseParams.length})`)
+    baseConditions.push(`COALESCE(t.due_date, t.start_date) >= $${baseParams.length}`)
   } else if (dueDateFrom) {
     baseParams.push(dueDateFrom)
-    baseConditions.push(`(t.due_date IS NULL OR t.due_date >= $${baseParams.length})`)
+    baseConditions.push(`COALESCE(t.due_date, t.start_date) >= $${baseParams.length}`)
   } else if (dueDateTo) {
     baseParams.push(dueDateTo)
-    baseConditions.push(`(t.start_date IS NULL OR t.start_date <= $${baseParams.length})`)
+    baseConditions.push(`COALESCE(t.start_date, t.due_date) <= $${baseParams.length}`)
   }
   if (periodLabel) { baseParams.push(periodLabel); baseConditions.push(`t.period_label = $${baseParams.length}`) }
   if (isOverdue === 'true' || isOverdue === true) {
@@ -264,6 +268,16 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
 
+  // Resolve task source (metadata-driven via enum_options); defaults to 'manual'.
+  let source = 'manual'
+  if (data.source) {
+    const validSources = await enums.getValues('task_source')
+    if (!validSources.includes(data.source)) {
+      throw Object.assign(new Error(`Nguồn công việc không hợp lệ: ${data.source}`), { status: 422 })
+    }
+    source = data.source
+  }
+
   // Inherit SLA from task type if not overridden
   let effectiveSlaDays = slaDays ?? null
   if (taskTypeId && !slaDays) {
@@ -275,12 +289,12 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     `INSERT INTO tasks
        (title, description, company_id, task_type_id, assigned_to, assigned_by,
         start_date, due_date, priority, source, sla_days, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'manual',$10,$11)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      RETURNING *`,
     [
       title, description ?? null, companyId, taskTypeId ?? null,
       assignedTo ?? null, actorId, startDate ?? null, dueDate ?? null,
-      priority, effectiveSlaDays, actorId,
+      priority, source, effectiveSlaDays, actorId,
     ]
   )
 
