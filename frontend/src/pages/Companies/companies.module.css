@@ -245,7 +245,7 @@
 }
 
 .msBtnChevron {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--color-muted-soft);
   flex-shrink: 0;
 }
@@ -378,7 +378,7 @@
   background: none;
   cursor: pointer;
   color: currentColor;
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1;
   padding: 1px 4px;
   opacity: 0.6;
@@ -603,7 +603,7 @@
 }
 
 .metricOpen {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: var(--fw-semibold);
   color: var(--color-primary);
 }
@@ -785,14 +785,14 @@
 }
 
 .emptyTitle {
-  font-size: 15px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   color: #374151;
   margin: 0;
 }
 
 .emptyDesc {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   color: var(--color-table-muted);
   margin: 0;
   text-align: center;
@@ -810,7 +810,7 @@
   padding: 56px 24px;
   gap: 12px;
   color: #ef4444;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
 }
 
 /* ── Row delete button ───────────────────────────────────── */
@@ -946,7 +946,7 @@
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -973,7 +973,7 @@
   background: #fff;
   color: #374151;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -999,7 +999,7 @@
   background: transparent;
   color: #6b7280;
   font-family: 'Montserrat', sans-serif;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -1019,7 +1019,7 @@
   background: #fff;
   color: #ef4444;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -1040,7 +1040,7 @@
   background: rgba(15, 52, 94, 0.04);
   color: #0f345e;
   font-family: 'Montserrat', sans-serif;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -1059,7 +1059,7 @@
 
 .formGroupLabel {
   display: block;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: #374151;
   text-transform: uppercase;
@@ -1089,7 +1089,7 @@
 
 .formLabel {
   display: block;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: #374151;
   margin-bottom: 5px;
@@ -1107,7 +1107,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #1f2937;
   background: #fff;
@@ -1132,7 +1132,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #1f2937;
   background-color: #fff;
@@ -1158,7 +1158,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #1f2937;
   background: #fff;
@@ -1175,14 +1175,14 @@
 }
 
 .formError {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: #ef4444;
   margin-top: 3px;
   font-weight: 500;
 }
 
 .formHint {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--color-table-muted);
   margin-top: 3px;
   font-weight: 500;
@@ -1193,7 +1193,7 @@
   background: #fef2f2;
   border: 1px solid #fca5a5;
   border-radius: 8px;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   color: #ef4444;
   font-weight: 600;
 }
@@ -1217,7 +1217,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--color-table-muted);
   margin-bottom: 16px;
@@ -1233,7 +1233,7 @@
 
 .breadcrumbSep {
   color: #d1d5db;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .breadcrumbCurrent {
@@ -1284,7 +1284,7 @@
   border-radius: 13px;
   background: linear-gradient(135deg, rgba(15, 52, 94, 0.12) 0%, rgba(15, 52, 94, 0.08) 100%);
   color: #0f345e;
-  font-size: 15px;
+  font-size: var(--fs-lg);
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -1336,7 +1336,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--fs-xl);
   font-weight: var(--fw-extrabold);
   color: var(--color-primary);
   font-family: var(--font-sans);
@@ -1431,7 +1431,7 @@
 .heroInfo { flex: 1; min-width: 0; }
 
 .heroName {
-  font-size: 20px;
+  font-size: var(--fs-2xl);
   font-weight: 800;
   color: #111827;
   letter-spacing: -0.3px;
@@ -1452,7 +1452,7 @@
   gap: 4px;
   padding: 3px 9px;
   border-radius: 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
 }
 
@@ -1473,7 +1473,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #6b7280;
 }
@@ -1498,7 +1498,7 @@
 }
 
 .heroMetricValue {
-  font-size: 24px;
+  font-size: var(--fs-2xl);
   font-weight: 800;
   line-height: 1;
 }
@@ -1507,7 +1507,7 @@
 .heroMetricValueRed  { color: #dc2626; }
 
 .heroMetricLabel {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--color-table-muted);
   margin-top: 3px;
@@ -1541,7 +1541,7 @@
   border: none;
   background: transparent;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: #6b7280;
   cursor: pointer;
@@ -1567,7 +1567,7 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   background: #e9edf2;
   color: #6b7280;
@@ -1617,7 +1617,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: #0f172a;
 }
@@ -1653,7 +1653,7 @@
 .infoField {}
 
 .infoLabel {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--color-table-muted);
   text-transform: uppercase;
@@ -1662,7 +1662,7 @@
 }
 
 .infoValue {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: #1f2937;
   line-height: 1.4;
@@ -1670,13 +1670,13 @@
 }
 
 .infoValueEmpty {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #d1d5db;
 }
 
 .infoNote {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #1e3a8a;
   line-height: 1.6;
@@ -1700,7 +1700,7 @@
 .staffCardHeader {
   padding: 14px 20px;
   border-bottom: 1px solid #f0f2f5;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: #1f2937;
   display: flex;
@@ -1730,7 +1730,7 @@
 .staffProfileInfo { flex: 1; min-width: 0; }
 
 .staffProfileName {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 700;
   color: #111827;
   white-space: nowrap;
@@ -1739,7 +1739,7 @@
 }
 
 .staffProfileMeta {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #6b7280;
   margin-top: 2px;
@@ -1752,7 +1752,7 @@
   gap: 6px;
   padding: 16px 0;
   color: var(--color-table-muted);
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 
@@ -1769,7 +1769,7 @@
 .metricCardHeader {
   padding: 14px 20px;
   border-bottom: 1px solid #f0f2f5;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: #1f2937;
 }
@@ -1784,7 +1784,7 @@
 .metricItem {}
 
 .metricItemValue {
-  font-size: 22px;
+  font-size: var(--fs-2xl);
   font-weight: 800;
   line-height: 1;
 }
@@ -1795,7 +1795,7 @@
 .metricItemValueGray { color: var(--color-table-muted); }
 
 .metricItemLabel {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--color-table-muted);
   margin-top: 4px;
@@ -1821,7 +1821,7 @@
 }
 
 .assignmentsTitle {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: #1f2937;
 }
@@ -1834,7 +1834,7 @@
   width: 100%;
   min-width: 480px;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
 }
 
 .assignmentsTable thead tr {
@@ -1845,7 +1845,7 @@
 .assignmentsTable th {
   padding: 8px 10px;
   text-align: left;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   color: #1e3a8a;
   text-transform: uppercase;
@@ -1874,7 +1874,7 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: #059669;
   color: #fff;
@@ -1887,7 +1887,7 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: #f9fafb;
   color: #6b7280;
@@ -1919,14 +1919,14 @@
 }
 
 .placeholderTitle {
-  font-size: 15px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   color: #374151;
   margin: 0;
 }
 
 .placeholderDesc {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   color: var(--color-table-muted);
   margin: 0;
   text-align: center;
@@ -1938,7 +1938,7 @@
   display: inline-flex;
   padding: 3px 10px;
   border-radius: 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: #f3f4f6;
   color: #6b7280;
@@ -1955,7 +1955,7 @@
   background: #fffbeb;
   border: 1px solid #fde68a;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: #92400e;
   margin-bottom: 16px;
@@ -1970,7 +1970,7 @@
   height: 240px;
   gap: 10px;
   color: #6b7280;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 
@@ -2021,7 +2021,7 @@
   background: #fef2f2;
   border: 1px solid #fca5a5;
   border-radius: 8px;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   color: #7f1d1d;
   font-weight: 500;
   line-height: 1.5;
@@ -2030,7 +2030,7 @@
 
 .muted {
   color: var(--color-table-muted);
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 500;
 }
 
@@ -2060,7 +2060,7 @@
 }
 
 .scHeaderTitle {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 700;
   color: #1f2937;
 }
@@ -2073,7 +2073,7 @@
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: #dbeafe;
   color: #2563eb;
@@ -2088,26 +2088,26 @@
 /* ── Table cells ─────────────────────────────────────────── */
 
 .scTypeName {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: #111827;
 }
 
 .scRecurrenceLabel {
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: #374151;
 }
 
 .scRecurrenceDesc {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: #6b7280;
   margin-top: 2px;
 }
 
 .scStaffName {
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: #374151;
 }
@@ -2124,7 +2124,7 @@
   align-items: center;
   padding: 2px 7px;
   border-radius: 5px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: #eff6ff;
   color: #1d4ed8;
@@ -2136,7 +2136,7 @@
   align-items: center;
   padding: 2px 7px;
   border-radius: 5px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: #f0fdf4;
   color: #15803d;
@@ -2151,7 +2151,7 @@
   gap: 5px;
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -2223,7 +2223,7 @@
 /* ── Edit mode — task type display ───────────────────────── */
 
 .scEditTypeLabel {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: #6b7280;
   text-transform: uppercase;
@@ -2232,7 +2232,7 @@
 }
 
 .scEditTypeName {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: #111827;
   padding: 7px 10px;
@@ -2251,7 +2251,7 @@
 }
 
 .scConfigSectionTitle {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: #6b7280;
   text-transform: uppercase;
@@ -2291,7 +2291,7 @@
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-md);
   color: var(--color-text);
   background: var(--color-surface);
   outline: none;
@@ -2309,7 +2309,7 @@
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: var(--color-text-soft);
   background: var(--color-surface);
@@ -2364,7 +2364,7 @@
   border-radius: var(--radius-sm);
   background: #fff;
   color: var(--color-text);
-  font-size: 14px;
+  font-size: var(--fs-base);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2375,7 +2375,7 @@
 .actPageBtn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .actPageInfo {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--color-muted);
   min-width: 80px;
   text-align: center;
@@ -2402,13 +2402,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--color-text);
 }
 
 .cTaskFilterBadge {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   padding: 1px 7px;
   border-radius: 99px;
@@ -2421,7 +2421,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--color-muted);
   background: none;
   border: none;
@@ -2450,7 +2450,7 @@
 .cTaskFilterGroupGrow { flex: 1; min-width: 160px; }
 
 .cTaskFilterLabel {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   color: var(--color-muted);
   text-transform: uppercase;
@@ -2524,7 +2524,7 @@
   border: 1px solid var(--color-border);
   border-radius: 99px;
   background: #fff;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--color-text-soft);
   cursor: pointer;
@@ -2544,12 +2544,12 @@
   border-radius: 99px;
   background: #e5e7eb;
   color: #6b7280;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
 }
 
 .scConfigLabel {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #374151;
 }
@@ -2560,7 +2560,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #1f2937;
   background: #fff;
@@ -2581,7 +2581,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #1f2937;
   background: #fff;
@@ -2608,7 +2608,7 @@
 }
 
 .scConfigInfo {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #4b5563;
   background: #eff6ff;
@@ -2634,7 +2634,7 @@
   background: #fff;
   color: #6b7280;
   font-family: 'Montserrat', sans-serif;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
@@ -2669,7 +2669,7 @@
   background: rgba(15, 52, 94, 0.05);
   color: #0f345e;
   font-family: 'Montserrat', sans-serif;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -2702,7 +2702,7 @@
 }
 
 .scDateText {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #374151;
   font-variant-numeric: tabular-nums;
@@ -2713,7 +2713,7 @@
   background: none;
   cursor: pointer;
   color: #9ca3af;
-  font-size: 16px;
+  font-size: var(--fs-lg);
   line-height: 1;
   padding: 0 4px;
   transition: color 0.12s;
@@ -2722,7 +2722,7 @@
 .scDateRemove:hover { color: #ef4444; }
 
 .scDatesEmpty {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: #9ca3af;
   font-weight: 500;
   padding: 6px 0;
@@ -2746,7 +2746,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: #6b7280;
   text-transform: uppercase;
@@ -2779,7 +2779,7 @@
   border-radius: 50%;
   background: rgba(15, 52, 94, 0.08);
   color: #0f345e;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -2788,14 +2788,14 @@
 }
 
 .scPreviewDate {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #374151;
   font-variant-numeric: tabular-nums;
 }
 
 .scPreviewEmpty {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: #9ca3af;
   font-weight: 500;
   padding: 8px 0;
@@ -2836,7 +2836,7 @@
 }
 
 .credCardTitle {
-  font-size: 14.5px;
+  font-size: var(--fs-base);
   font-weight: 700;
   color: #1e293b;
   display: flex;
@@ -2845,7 +2845,7 @@
 }
 
 .credBadgeOff {
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   padding: 1px 7px;
   border-radius: 99px;
@@ -2889,7 +2889,7 @@
   align-items: center;
   gap: 5px;
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: #3b82f6;
   overflow: hidden;
 }
@@ -2909,7 +2909,7 @@
 .credCardMeta {
   display: flex;
   gap: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: #374151;
   margin-bottom: 8px;
   background: #f8fafc;
@@ -2928,14 +2928,14 @@
 .credCardUsername { border-right: 1px solid #e2e8f0; }
 
 .credCardNotes {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: #6b7280;
   margin: 4px 0 6px;
   line-height: 1.5;
 }
 
 .credCardFooter {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: #94a3b8;
   font-weight: 500;
   margin-top: 8px;
@@ -2946,7 +2946,7 @@
 .formLabelHint {
   font-weight: 400;
   color: #94a3b8;
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .pwToggle {
@@ -2986,7 +2986,7 @@
 .credRevealPw {
   flex: 1;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: #1e293b;
   word-break: break-all;
@@ -3038,7 +3038,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 7px;
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   color: #1e293b;
   background: #fff;
   resize: vertical;
@@ -3091,7 +3091,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   color: #d97706;
   text-transform: uppercase;
@@ -3105,7 +3105,7 @@
 
 /* HTML content rendered from Quill (replaces old plain-text .noteContent) */
 .noteHtmlContent {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   color: #1e293b;
   line-height: 1.65;
   word-break: break-word;
@@ -3117,8 +3117,8 @@
 .noteHtmlContent ul,
 .noteHtmlContent ol  { margin: 4px 0 6px; padding-left: 22px; }
 .noteHtmlContent li  { margin-bottom: 2px; }
-.noteHtmlContent h1  { font-size: 16px; font-weight: 700; margin: 0 0 6px; }
-.noteHtmlContent h2  { font-size: 14.5px; font-weight: 700; margin: 0 0 6px; }
+.noteHtmlContent h1  { font-size: var(--fs-lg); font-weight: 700; margin: 0 0 6px; }
+.noteHtmlContent h2  { font-size: var(--fs-base); font-weight: 700; margin: 0 0 6px; }
 .noteHtmlContent a   { color: var(--color-primary); text-decoration: underline; }
 .noteHtmlContent strong { font-weight: 700; }
 
@@ -3137,7 +3137,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--color-primary);
   padding: 0;
@@ -3176,7 +3176,7 @@
   border-radius: 0 0 8px 8px;
   border-color: #e2e8f0;
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   height: calc(88vh - 260px);
   overflow-y: auto;
 }
@@ -3190,7 +3190,7 @@
 .noteEditorWrap :global(.ql-editor.ql-blank::before) {
   color: #94a3b8;
   font-style: normal;
-  font-size: 13.5px;
+  font-size: var(--fs-md);
 }
 
 .noteEditorWrap :global(.ql-toolbar button:hover),
@@ -3206,7 +3206,7 @@
 
 /* Keep old .noteContent for any other usages */
 .noteContent {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   color: #1e293b;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -3238,7 +3238,7 @@
   background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
   border: 1.5px solid #a5b4fc;
   color: #3730a3;
-  font-size: 9px;
+  font-size: var(--fs-3xs);
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -3247,18 +3247,18 @@
 }
 
 .noteAuthorName {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #334155;
 }
 
 .noteTime {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: #94a3b8;
 }
 
 .noteEdited {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: #94a3b8;
   font-style: italic;
 }
@@ -3320,7 +3320,7 @@
 }
 
 .noteConfirmText {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: #ef4444;
 }
@@ -3358,7 +3358,7 @@
 }
 
 .dropZoneText {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--color-text-soft);
   margin: 0;
@@ -3371,7 +3371,7 @@
 }
 
 .dropZoneHint {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--color-muted-soft);
   margin: 0;
 }
@@ -3384,7 +3384,7 @@
 }
 
 .uploadMetaLabel {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--color-muted);
   font-weight: 500;
 }
@@ -3394,7 +3394,7 @@
   padding: 0 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--color-text);
   background: var(--color-surface);
   cursor: pointer;
@@ -3413,7 +3413,7 @@
 }
 
 .docFilterLabel {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--color-muted);
 }
@@ -3430,7 +3430,7 @@
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--color-text-soft);
   cursor: pointer;
   transition: all var(--duration-fast);
@@ -3454,7 +3454,7 @@
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
   background: none;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--color-muted);
   cursor: pointer;
   margin-left: auto;
@@ -3502,7 +3502,7 @@
 }
 
 .docFileName {
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--color-text);
   overflow: hidden;
@@ -3515,7 +3515,7 @@
   align-items: center;
   gap: 8px;
   margin-top: 3px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--color-muted-soft);
   flex-wrap: wrap;
 }
@@ -3526,7 +3526,7 @@
   border: 1px solid #bfdbfe;
   border-radius: var(--radius-pill);
   padding: 0 7px;
-  font-size: 10.5px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -3564,7 +3564,7 @@
   gap: 10px;
   padding: 48px 24px;
   color: var(--color-muted-soft);
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 .docEmpty p { margin: 0; }
@@ -3710,7 +3710,7 @@
 }
 .emptyStatePadded { padding: var(--space-10); }
 .emptyDescSmall { font-size: var(--fs-xs); }
-.staffAvatarSmall { width: 26px; height: 26px; font-size: 9px; }
+.staffAvatarSmall { width: 26px; height: 26px; font-size: var(--fs-3xs); }
 .textSmall { font-size: var(--fs-xs); }
 .assignSkeleton {
   height: var(--control-h-md);
@@ -3943,7 +3943,7 @@
 .addLinkFormInputError { border-color: #f87171; }
 .addLinkFormInputError:focus { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08); }
 .addLinkFormError {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--color-danger);
   margin-top: 3px;
 }
@@ -3993,7 +3993,7 @@
 }
 
 .docCountBadge {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #64748b;
   background: #f1f5f9;
@@ -4018,13 +4018,13 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 .docTable thead th {
   padding: 10px 14px;
   text-align: left;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 800;
   color: #1e3a8a;
   text-transform: uppercase;
@@ -4081,7 +4081,7 @@
 }
 
 .docTableName {
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: #1e293b;
   white-space: nowrap;
@@ -4091,7 +4091,7 @@
 }
 
 .docTableDesc {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: #64748b;
   white-space: nowrap;
   overflow: hidden;
@@ -4107,7 +4107,7 @@
   align-items: center;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -4143,7 +4143,7 @@
 }
 
 .docUrlText {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -4155,14 +4155,14 @@
 /* ── Date / By cells ── */
 
 .docTableDate {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: #64748b;
   white-space: nowrap;
   min-width: 90px;
 }
 
 .docTableBy {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: #334155;
   white-space: nowrap;
   font-weight: 500;
@@ -4251,7 +4251,7 @@
 }
 
 .docModalTitle {
-  font-size: 16px;
+  font-size: var(--fs-lg);
   font-weight: 800;
   color: #1e3a8a;
   margin: 0 0 2px;
@@ -4259,7 +4259,7 @@
 }
 
 .docModalSubtitle {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: #64748b;
   margin: 0;
   font-weight: 500;
@@ -4321,7 +4321,7 @@
 }
 
 .docModalLabel {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 800;
   color: #1e3a8a;
   line-height: 1.3;
@@ -4333,7 +4333,7 @@
 }
 
 .docModalOptional {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: #94a3b8;
 }
@@ -4346,7 +4346,7 @@
   border-radius: 9px;
   background: #fff;
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #1e293b;
   outline: none;
@@ -4383,7 +4383,7 @@
   background-position: right 12px center;
   appearance: none;
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #1e293b;
   outline: none;
@@ -4404,7 +4404,7 @@
   border-radius: 9px;
   background: #fff;
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size: var(--fs-md);
   font-weight: 500;
   color: #1e293b;
   outline: none;
@@ -4421,13 +4421,13 @@
 }
 
 .docModalErr {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: #ef4444;
   font-weight: 600;
 }
 
 .docModalHint {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: #94a3b8;
   font-weight: 500;
 }

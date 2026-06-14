@@ -150,7 +150,7 @@
 .dateSep {
   color: #94a3b8;
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 .rangeBadge {
@@ -560,7 +560,7 @@
   display: inline-block;
   padding: 2px 8px;
   border-radius: 99px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -595,14 +595,14 @@
   border-radius: 8px;
   padding: 8px 12px;
   box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 
 .tooltipLabel {
   font-weight: 800;
   color: #1e3a8a;
   margin: 0 0 4px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }

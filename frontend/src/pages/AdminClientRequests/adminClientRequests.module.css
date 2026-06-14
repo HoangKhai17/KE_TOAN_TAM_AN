@@ -192,7 +192,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(0, 0, 0, 0.06);
-  font-size: 20px;
+  font-size: var(--fs-2xl);
 }
 
 .kpiBody { flex: 1; min-width: 0; }
@@ -450,7 +450,7 @@
   cursor: pointer;
   color: inherit;
   opacity: 0.6;
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1;
   padding: 0;
   display: flex;
@@ -1005,7 +1005,7 @@
   background: var(--color-surface);
   color: var(--color-danger-light);
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--fs-lg);
   line-height: 1;
   height: var(--control-h-md);
   display: flex;
