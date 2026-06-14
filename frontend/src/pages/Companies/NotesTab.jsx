@@ -278,19 +278,19 @@ export default function NotesTab({ company, onNoteCountChange }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <StickyNote size={16} style={{ color: '#d97706' }} />
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--color-text)' }}>
+          <StickyNote size={16} style={{ color: 'var(--color-accent)' }} />
+          <h3 style={{ margin: 0, fontSize: 'var(--fs-lg)', fontWeight: 700, color: 'var(--color-text)' }}>
             Ghi chú nội bộ
           </h3>
           {!loading && notes.length > 0 && (
-            <span style={{ fontSize: 11, fontWeight: 700, background: '#fffbeb', color: '#92400e', border: '1px solid #fcd34d', borderRadius: 99, padding: '1px 8px' }}>
+            <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 700, background: 'var(--color-accent-bg-soft)', color: 'var(--color-warning-text)', border: '1px solid var(--color-warning-border)', borderRadius: 99, padding: '1px 8px' }}>
               {notes.length}
             </span>
           )}
         </div>
         <button
           className={s.btnNavy}
-          style={{ height: 32, fontSize: 13, padding: '0 14px' }}
+          style={{ height: 32, fontSize: 'var(--fs-md)', padding: '0 14px' }}
           onClick={() => setShowAdd(true)}
         >
           <Plus size={13} /> Thêm ghi chú
@@ -304,9 +304,9 @@ export default function NotesTab({ company, onNoteCountChange }) {
         </div>
       ) : notes.length === 0 ? (
         <div className={s.emptyState} style={{ paddingTop: 40 }}>
-          <StickyNote size={32} style={{ color: '#fcd34d', marginBottom: 8 }} />
-          <p style={{ fontSize: 13, color: 'var(--color-muted)', margin: 0 }}>Chưa có ghi chú nào.</p>
-          <p style={{ fontSize: 12, color: 'var(--color-muted)', margin: '4px 0 0' }}>
+          <StickyNote size={32} style={{ color: 'var(--color-warning-border)', marginBottom: 8 }} />
+          <p style={{ fontSize: 'var(--fs-md)', color: 'var(--color-muted)', margin: 0 }}>Chưa có ghi chú nào.</p>
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)', margin: '4px 0 0' }}>
             Nhấn "Thêm ghi chú" để tạo ghi chú đầu tiên.
           </p>
         </div>

@@ -51,6 +51,18 @@
   --color-cyan-dark: #0369a1;
   --color-lime: #65a30d;
 
+  /* Extended status palette (tokenized from inline styles) */
+  --color-success-strong: #16a34a;
+  --color-success-text: #15803d;
+  --color-success-border: #86efac;
+  --color-success-surface: #f0fdf4;
+  --color-warning-text: #92400e;
+  --color-warning-border: #fcd34d;
+  --color-danger-text: #b91c1c;
+  --color-purple-text: #6b21a8;
+  --color-purple-border: #c4b5fd;
+  --color-text-heading: #1e293b;
+
   /* Surfaces, borders, text */
   --color-bg: #f1f5f9;
   --color-bg-soft: #f8fafc;

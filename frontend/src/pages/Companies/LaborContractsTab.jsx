@@ -20,6 +20,8 @@ const HDLD_IMPORT_COLS = [
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 20
+
 const STATUS_LABEL = {
   active:        'Còn hiệu lực',
   expiring_soon: 'Sắp hết hạn',
@@ -970,6 +972,7 @@ export default function LaborContractsTab({ company }) {
   const [colFilters, setColFilters]     = useState({})   // { colKey: Set<string> | undefined }
   const [sortState, setSortState]       = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup]   = useState(null) // { colKey, top, left }
+  const [page, setPage]                 = useState(1)
 
   const [showCreate, setShowCreate]           = useState(false)
   const [editTarget, setEditTarget]           = useState(null)
@@ -1097,6 +1100,11 @@ export default function LaborContractsTab({ company }) {
 
     return result
   }, [contracts, columns, colFilters, sortState])
+
+  useEffect(() => { setPage(1) }, [colFilters, sortState])
+
+  const totalPages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE))
+  const pageRows   = displayed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   function openFilter(colKey, e) {
     e.stopPropagation()
@@ -1258,9 +1266,9 @@ export default function LaborContractsTab({ company }) {
                       Không có hợp đồng nào khớp bộ lọc.
                     </td>
                   </tr>
-                ) : displayed.map((c, idx) => (
+                ) : pageRows.map((c, idx) => (
                   <tr key={c.id}>
-                    <td className={s.hdldCellStt}>{idx + 1}</td>
+                    <td className={s.hdldCellStt}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
                     <LcInlineTdCell
                       value={c.employeeName}
                       canEdit={canEdit}
@@ -1345,6 +1353,26 @@ export default function LaborContractsTab({ company }) {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Footer: count + pagination */}
+          <div className={s.archTableFooter}>
+            <span className={s.archTableCount}>
+              {displayed.length} hợp đồng
+              {displayed.length < contracts.length && ` (lọc từ ${contracts.length})`}
+              {columns.length > 0 && ` · ${columns.length} cột tuỳ chỉnh`}
+            </span>
+            {totalPages > 1 && (
+              <div className={s.archPagination}>
+                <button className={s.archPageBtn} disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+                  ‹ Trước
+                </button>
+                <span className={s.archPageInfo}>{page} / {totalPages}</span>
+                <button className={s.archPageBtn} disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                  Tiếp ›
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -720,7 +720,7 @@ function StaffCard({ company, isAdmin, onAssigned }) {
           </div>
         ) : (
           <div className={s.staffUnassigned}>
-            <Users size={20} color="#d1d5db" />
+            <Users size={20} color="var(--color-border)" />
             <span>Chưa phân công</span>
           </div>
         )}
@@ -1287,13 +1287,13 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         {/* Status count chips */}
         <div className={s.cTaskStatusRow}>
           {[
-            { key: '',              label: 'Tất cả',       color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
-            { key: 'pending',       label: STATUS_LABELS.pending,         color: '#92400e', bg: '#fffbeb', border: '#fcd34d' },
-            { key: 'in_progress',   label: STATUS_LABELS.in_progress,     color: '#1e40af', bg: '#eff6ff', border: '#93c5fd' },
-            { key: 'on_hold',       label: STATUS_LABELS.on_hold,         color: '#6b7280', bg: '#f9fafb', border: '#d1d5db' },
-            { key: 'pending_review',label: STATUS_LABELS.pending_review,  color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
-            { key: 'needs_revision',label: STATUS_LABELS.needs_revision,  color: '#b45309', bg: '#fff7ed', border: '#fed7aa' },
-            { key: 'completed',     label: STATUS_LABELS.completed,       color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
+            { key: '',              label: 'Tất cả',       color: 'var(--color-primary-dark)', bg: 'var(--color-primary-bg)', border: 'var(--color-status-progress-bg)' },
+            { key: 'pending',       label: STATUS_LABELS.pending,         color: 'var(--color-warning-text)', bg: 'var(--color-accent-bg-soft)', border: 'var(--color-warning-border)' },
+            { key: 'in_progress',   label: STATUS_LABELS.in_progress,     color: 'var(--color-primary-deep)', bg: 'var(--color-primary-bg)', border: 'var(--color-primary-soft)' },
+            { key: 'on_hold',       label: STATUS_LABELS.on_hold,         color: 'var(--color-muted)', bg: 'var(--color-bg-soft)', border: 'var(--color-border)' },
+            { key: 'pending_review',label: STATUS_LABELS.pending_review,  color: 'var(--color-purple-bright)', bg: 'var(--color-purple-bg-soft)', border: 'var(--color-purple-border)' },
+            { key: 'needs_revision',label: STATUS_LABELS.needs_revision,  color: 'var(--color-accent-dark)', bg: 'var(--color-warning-bg)', border: 'var(--color-warning-bg-strong)' },
+            { key: 'completed',     label: STATUS_LABELS.completed,       color: 'var(--color-success-text)', bg: 'var(--color-success-surface)', border: 'var(--color-success-border)' },
           ].map(({ key, label }) => {
             const count = key === '' ? pagination.total : (statusCounts[key] ?? 0)
             const isActive = statusFilter === key

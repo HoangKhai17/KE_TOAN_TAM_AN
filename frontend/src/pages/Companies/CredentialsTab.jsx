@@ -211,7 +211,7 @@ function RevealModal({ companyId, credential, onClose }) {
               onClick={handleCopy}
               title="Sao chép"
             >
-              {copied ? <Check size={14} style={{ color: '#22c55e' }} /> : <Copy size={14} />}
+              {copied ? <Check size={14} style={{ color: 'var(--color-success-strong)' }} /> : <Copy size={14} />}
             </button>
           </div>
         )}
@@ -237,7 +237,7 @@ function DeleteConfirmModal({ credential, onConfirm, onClose }) {
   return (
     <Modal title="Xoá tài khoản" onClose={onClose}>
       <div className={s.modalForm}>
-        <p style={{ fontSize: 14, color: 'var(--color-text-soft)', marginBottom: 16 }}>
+        <p style={{ fontSize: 'var(--fs-base)', color: 'var(--color-text-soft)', marginBottom: 16 }}>
           Bạn có chắc muốn xoá tài khoản <strong>{credential.systemName}</strong>?
           Hành động này không thể hoàn tác.
         </p>
@@ -322,19 +322,19 @@ export default function CredentialsTab({ company }) {
           value={filterActive}
           onChange={(e) => setFilterActive(e.target.value)}
           className={s.formSelect}
-          style={{ height: 32, fontSize: 13, width: 'auto', minWidth: 140 }}
+          style={{ height: 32, fontSize: 'var(--fs-md)', width: 'auto', minWidth: 140 }}
         >
           <option value="">Tất cả</option>
           <option value="true">Đang kích hoạt</option>
           <option value="false">Đã tắt</option>
         </select>
-        <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>
           {!loading && `${creds.length} tài khoản`}
         </span>
         {isAdmin && (
           <button
             className={s.btnNavy}
-            style={{ marginLeft: 'auto', height: 32, padding: '0 14px', fontSize: 13 }}
+            style={{ marginLeft: 'auto', height: 32, padding: '0 14px', fontSize: 'var(--fs-md)' }}
             onClick={() => setShowCreate(true)}
           >
             <Plus size={13} /> Thêm tài khoản
@@ -349,8 +349,8 @@ export default function CredentialsTab({ company }) {
         </div>
       ) : creds.length === 0 ? (
         <div className={s.emptyState}>
-          <Shield size={32} style={{ color: '#94a3b8', marginBottom: 8 }} />
-          <p style={{ fontSize: 13, color: 'var(--color-muted)' }}>Chưa có tài khoản hệ thống nào.</p>
+          <Shield size={32} style={{ color: 'var(--color-muted-soft)', marginBottom: 8 }} />
+          <p style={{ fontSize: 'var(--fs-md)', color: 'var(--color-muted)' }}>Chưa có tài khoản hệ thống nào.</p>
         </div>
       ) : (
         <div className={s.credList}>

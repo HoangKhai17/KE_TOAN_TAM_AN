@@ -1065,7 +1065,7 @@ export default function ArchiveTab({ company }) {
       {!activeYear && (
         <div className={s.placeholderTab}>
           <div className={s.placeholderIcon}>
-            <Archive size={28} color="#94a3b8" />
+            <Archive size={28} color="var(--color-muted-soft)" />
           </div>
           <p className={s.placeholderTitle}>Chưa có năm lưu trữ</p>
           <p className={s.placeholderDesc}>

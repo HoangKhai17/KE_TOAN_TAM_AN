@@ -391,7 +391,7 @@ export default function DocumentsTab({ company }) {
               <tr>
                 <td colSpan={6}>
                   <div className={s.docEmpty}>
-                    <FolderOpen size={36} color="#d1d5db" />
+                    <FolderOpen size={36} color="var(--color-border)" />
                     <p>
                       {category
                         ? 'Không có tài liệu trong danh mục này'
@@ -496,7 +496,7 @@ export default function DocumentsTab({ company }) {
           <span className={s.paginationInfo}>{pagination.total} tài liệu</span>
           <div className={s.paginationBtns}>
             <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
-            <span style={{ fontSize: 12, padding: '0 8px', color: 'var(--color-muted)' }}>
+            <span style={{ fontSize: 'var(--fs-sm)', padding: '0 8px', color: 'var(--color-muted)' }}>
               {page} / {pagination.totalPages}
             </span>
             <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
@@ -517,9 +517,9 @@ export default function DocumentsTab({ company }) {
       {deleteTarget && (
         <div className={s.docDeleteOverlay} onClick={() => setDeleteTarget(null)}>
           <div className={s.docDeleteDialog} onClick={(e) => e.stopPropagation()}>
-            <div className={s.terminateWarn} style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
-              <AlertTriangle size={16} style={{ flexShrink: 0, color: '#dc2626' }} />
-              <span style={{ fontSize: 13 }}>
+            <div className={s.terminateWarn} style={{ background: 'var(--color-danger-bg-soft)', borderColor: 'var(--color-danger-border)' }}>
+              <AlertTriangle size={16} style={{ flexShrink: 0, color: 'var(--color-danger)' }} />
+              <span style={{ fontSize: 'var(--fs-md)' }}>
                 Xoá link tài liệu <strong>"{deleteTarget.name}"</strong>?
                 Hành động này không thể hoàn tác.
               </span>

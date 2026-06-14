@@ -15,10 +15,10 @@ import s from './companies.module.css'
 
 // UI-only colour map — not stored in DB enum metadata
 const STATUS_COLOR = {
-  pending:      { bg: '#fffbeb', color: '#92400e', border: '#fcd34d' },
-  received:     { bg: '#f0fdf4', color: '#15803d', border: '#86efac' },
-  not_required: { bg: '#f8fafc', color: '#64748b', border: '#cbd5e1' },
-  overdue:      { bg: '#fef2f2', color: '#b91c1c', border: '#fca5a5' },
+  pending:      { bg: 'var(--color-accent-bg-soft)', color: 'var(--color-warning-text)', border: 'var(--color-warning-border)' },
+  received:     { bg: 'var(--color-success-surface)', color: 'var(--color-success-text)', border: 'var(--color-success-border)' },
+  not_required: { bg: 'var(--color-bg-soft)', color: 'var(--color-muted)', border: 'var(--color-border)' },
+  overdue:      { bg: 'var(--color-danger-bg-soft)', color: 'var(--color-danger-text)', border: 'var(--color-danger-border)' },
 }
 
 const SORT_OPTIONS = [
@@ -42,7 +42,7 @@ function StatusBadge({ status }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+      padding: '2px 9px', borderRadius: 20, fontSize: 'var(--fs-xs)', fontWeight: 600,
       background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
       whiteSpace: 'nowrap',
     }}>
@@ -255,7 +255,7 @@ export default function ClientRequestsTab({ company }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             className={s.btnOutline}
-            style={{ height: 32, padding: '0 10px', fontSize: 12 }}
+            style={{ height: 32, padding: '0 10px', fontSize: 'var(--fs-sm)' }}
             onClick={load}
             title="Làm mới"
           >
@@ -263,7 +263,7 @@ export default function ClientRequestsTab({ company }) {
           </button>
           <button
             className={s.btnPrimary}
-            style={{ height: 32, padding: '0 12px', fontSize: 13 }}
+            style={{ height: 32, padding: '0 12px', fontSize: 'var(--fs-md)' }}
             onClick={() => setShowCreate(true)}
           >
             <Plus size={13} /> Tạo yêu cầu
@@ -357,7 +357,7 @@ export default function ClientRequestsTab({ company }) {
                   <tr key={i}>
                     {[200, 100, 60, 100, 90, 150, 50, 110].map((w, j) => (
                       <td key={j}>
-                        <div style={{ height: 12, width: w, background: '#f1f5f9', borderRadius: 4 }} />
+                        <div style={{ height: 12, width: w, background: 'var(--color-bg)', borderRadius: 4 }} />
                       </td>
                     ))}
                   </tr>
@@ -365,9 +365,9 @@ export default function ClientRequestsTab({ company }) {
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={8}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 16px', gap: 8, color: '#94a3b8' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 16px', gap: 8, color: 'var(--color-muted-soft)' }}>
                       <ClipboardList size={32} />
-                      <span style={{ fontSize: 13 }}>
+                      <span style={{ fontSize: 'var(--fs-md)' }}>
                         {statusFilter || debouncedSearch
                           ? 'Không tìm thấy yêu cầu nào phù hợp'
                           : 'Chưa có yêu cầu tài liệu nào'}
@@ -382,11 +382,11 @@ export default function ClientRequestsTab({ company }) {
                 return (
                   <tr key={item.id}>
                     <td>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b', marginBottom: 2 }}>
+                      <div style={{ fontWeight: 600, fontSize: 'var(--fs-md)', color: 'var(--color-text-heading)', marginBottom: 2 }}>
                         {item.documentName}
                       </div>
                       {item.description && (
-                        <div style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 260 }}>
+                        <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 260 }}>
                           {item.description}
                         </div>
                       )}
@@ -406,25 +406,25 @@ export default function ClientRequestsTab({ company }) {
                           style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
                             padding: '3px 9px', borderRadius: 12, border: 'none',
-                            background: '#eff6ff', color: '#2563eb',
-                            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                            background: 'var(--color-primary-bg)', color: 'var(--color-primary)',
+                            fontSize: 'var(--fs-xs)', fontWeight: 600, cursor: 'pointer',
                             whiteSpace: 'nowrap',
                           }}
                         >
                           <Eye size={11} /> Xem
                         </button>
                       ) : (
-                        <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>
+                        <span style={{ color: 'var(--color-border)', fontSize: 'var(--fs-sm)' }}>—</span>
                       )}
                     </td>
 
-                    <td style={{ fontSize: 12, color: '#64748b' }}>
+                    <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>
                       {item.periodLabel || '—'}
                     </td>
-                    <td style={{ fontSize: 12, color: item.status === 'overdue' ? '#b91c1c' : '#64748b' }}>
+                    <td style={{ fontSize: 'var(--fs-sm)', color: item.status === 'overdue' ? 'var(--color-danger-text)' : 'var(--color-muted)' }}>
                       {fmtDate(item.deadlineDate)}
                     </td>
-                    <td style={{ fontSize: 12, color: '#64748b' }}>
+                    <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>
                       {item.contactEmail || '—'}
                     </td>
 
@@ -435,7 +435,7 @@ export default function ClientRequestsTab({ company }) {
                           className={s.rowActionBtn}
                           title="Xem / sao chép link"
                           onClick={() => openLinkModal(item)}
-                          style={{ color: '#2563eb' }}
+                          style={{ color: 'var(--color-primary)' }}
                         >
                           <Link2 size={13} />
                         </button>
@@ -470,7 +470,7 @@ export default function ClientRequestsTab({ company }) {
                             title={item.tokenSubmittedAt ? 'Cập nhật dữ liệu KH' : 'Nhập dữ liệu KH thủ công'}
                             onClick={() => setManualSubmitTarget(item)}
                             disabled={!!busy}
-                            style={{ color: '#7c3aed' }}
+                            style={{ color: 'var(--color-purple-bright)' }}
                           >
                             <PenLine size={13} />
                           </button>
@@ -482,7 +482,7 @@ export default function ClientRequestsTab({ company }) {
                             title="Đánh dấu đã nhận"
                             onClick={() => handleReceive(item)}
                             disabled={!!busy}
-                            style={{ color: '#16a34a' }}
+                            style={{ color: 'var(--color-success-strong)' }}
                           >
                             {busy === 'receive' ? <Loader2 size={13} className={s.spin} /> : <CheckCircle2 size={13} />}
                           </button>
@@ -516,7 +516,7 @@ export default function ClientRequestsTab({ company }) {
                             title="Thu hồi link"
                             onClick={() => handleRevokeLink(item)}
                             disabled={!!busy}
-                            style={{ color: '#d97706' }}
+                            style={{ color: 'var(--color-accent)' }}
                           >
                             {busy === 'revoke' ? <Loader2 size={13} className={s.spin} /> : <Link2Off size={13} />}
                           </button>
@@ -562,7 +562,7 @@ export default function ClientRequestsTab({ company }) {
             {pagination.totalPages > 1 && (
               <div className={s.paginationBtns}>
                 <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
-                <span style={{ fontSize: 12, padding: '0 8px', color: 'var(--color-muted)' }}>{page} / {pagination.totalPages}</span>
+                <span style={{ fontSize: 'var(--fs-sm)', padding: '0 8px', color: 'var(--color-muted)' }}>{page} / {pagination.totalPages}</span>
                 <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
               </div>
             )}
@@ -596,7 +596,7 @@ export default function ClientRequestsTab({ company }) {
           <div className={s.modalStack}>
             <div className={`${s.terminateWarn} ${s.terminateWarnDanger}`}>
               <AlertTriangle size={16} className={`${s.warnIconInline} ${s.warnIconDanger}`} />
-              <span style={{ fontSize: 13 }}>
+              <span style={{ fontSize: 'var(--fs-md)' }}>
                 Xoá yêu cầu <strong>"{deleteTarget.documentName}"</strong>? Hành động này không thể hoàn tác.
               </span>
             </div>
@@ -785,7 +785,7 @@ function LinkModal({ item, generatedUrl, generating, copied, onGenerate, onCopy,
   return (
     <Modal title="Link chia sẻ cho khách hàng" onClose={onClose} maxWidth={600}>
       <div className={s.modalStack}>
-        <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 'var(--fs-md)', color: 'var(--color-text-soft)', lineHeight: 1.6 }}>
           <strong>{item.documentName}</strong>
           <br />
           {hasToken
@@ -794,7 +794,7 @@ function LinkModal({ item, generatedUrl, generating, copied, onGenerate, onCopy,
         </div>
 
         {item.tokenExpiresAt && (
-          <div style={{ fontSize: 12, color: '#94a3b8' }}>
+          <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted-soft)' }}>
             Hết hạn: {new Date(item.tokenExpiresAt).toLocaleDateString('vi-VN')}
           </div>
         )}
@@ -805,9 +805,9 @@ function LinkModal({ item, generatedUrl, generating, copied, onGenerate, onCopy,
               readOnly
               value={generatedUrl}
               style={{
-                flex: 1, fontSize: 12, padding: '8px 10px',
-                border: '1px solid #e2e8f0', borderRadius: 6,
-                background: '#f8fafc', color: '#334155', fontFamily: 'monospace',
+                flex: 1, fontSize: 'var(--fs-sm)', padding: '8px 10px',
+                border: '1px solid var(--color-border-muted)', borderRadius: 6,
+                background: 'var(--color-bg-soft)', color: 'var(--color-text-soft)', fontFamily: 'monospace',
               }}
               onFocus={(e) => e.target.select()}
             />
@@ -815,8 +815,8 @@ function LinkModal({ item, generatedUrl, generating, copied, onGenerate, onCopy,
               onClick={() => onCopy(generatedUrl)}
               style={{
                 flexShrink: 0, padding: '8px 14px', borderRadius: 6,
-                background: copied ? '#16a34a' : '#2563eb', color: '#fff',
-                border: 'none', cursor: 'pointer', fontSize: 13,
+                background: copied ? 'var(--color-success-strong)' : 'var(--color-primary)', color: 'var(--color-white)',
+                border: 'none', cursor: 'pointer', fontSize: 'var(--fs-md)',
                 display: 'flex', alignItems: 'center', gap: 6,
                 transition: 'background 0.15s',
               }}
@@ -864,8 +864,8 @@ function CopyButton({ text }) {
       title="Copy"
       style={{
         flexShrink: 0, padding: '3px 8px', borderRadius: 5,
-        border: '1px solid #e2e8f0', background: copied ? '#f0fdf4' : '#f8fafc',
-        color: copied ? '#16a34a' : '#64748b', cursor: 'pointer', fontSize: 11,
+        border: '1px solid var(--color-border-muted)', background: copied ? 'var(--color-success-surface)' : 'var(--color-bg-soft)',
+        color: copied ? 'var(--color-success-strong)' : 'var(--color-muted)', cursor: 'pointer', fontSize: 'var(--fs-xs)',
         display: 'inline-flex', alignItems: 'center', gap: 4,
         transition: 'all 0.15s',
       }}
@@ -899,24 +899,24 @@ function SubmittedDataModal({ item, onClose }) {
 
         {/* Meta header */}
         <div style={{
-          background: '#f0fdf4', border: '1px solid #86efac',
+          background: 'var(--color-success-surface)', border: '1px solid var(--color-success-border)',
           borderRadius: 8, padding: '10px 14px',
           display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 13, color: '#15803d',
+          fontSize: 'var(--fs-md)', color: 'var(--color-success-text)',
         }}>
-          <span style={{ fontSize: 16 }}>{data.submitted_via === 'manual' ? '📋' : '✅'}</span>
+          <span style={{ fontSize: 'var(--fs-lg)' }}>{data.submitted_via === 'manual' ? '📋' : '✅'}</span>
           <div style={{ flex: 1 }}>
             <strong>{item.documentName}</strong>
             {submittedAt && (
-              <span style={{ color: '#4ade80', fontSize: 12, marginLeft: 8 }}>
+              <span style={{ color: 'var(--color-success-border)', fontSize: 'var(--fs-sm)', marginLeft: 8 }}>
                 · {data.submitted_via === 'manual' ? 'Nhập lúc' : 'Gửi lúc'} {submittedAt}
               </span>
             )}
             {data.submitted_via === 'manual' && (
               <span style={{
                 display: 'inline-block', marginLeft: 8,
-                fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
-                background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd',
+                fontSize: 'var(--fs-2xs)', fontWeight: 700, padding: '1px 7px', borderRadius: 99,
+                background: 'var(--color-purple-bg)', color: 'var(--color-purple)', border: '1px solid var(--color-purple-border)',
               }}>
                 Nhập thủ công
               </span>
@@ -933,22 +933,22 @@ function SubmittedDataModal({ item, onClose }) {
         ].map((f) => (
           <div key={f.label} style={{
             padding: '10px 0',
-            borderBottom: '1px solid #f1f5f9',
+            borderBottom: '1px solid var(--color-bg)',
             display: 'grid',
             gridTemplateColumns: '140px 1fr',
             gap: '8px 12px',
             alignItems: 'start',
           }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, paddingTop: 1 }}>
-              <span style={{ fontSize: 13 }}>{f.icon}</span>
+            <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--color-muted)', display: 'flex', alignItems: 'center', gap: 5, paddingTop: 1 }}>
+              <span style={{ fontSize: 'var(--fs-md)' }}>{f.icon}</span>
               {f.label}
             </div>
             {!f.value ? (
-              <span style={{ fontSize: 13, color: '#cbd5e1', fontStyle: 'italic' }}>Không có</span>
+              <span style={{ fontSize: 'var(--fs-md)', color: 'var(--color-border)', fontStyle: 'italic' }}>Không có</span>
             ) : (
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{
-                  fontSize: 13, color: '#1e293b', flex: 1,
+                  fontSize: 'var(--fs-md)', color: 'var(--color-text-heading)', flex: 1,
                   whiteSpace: f.multiline ? 'pre-wrap' : 'normal',
                   wordBreak: 'break-word', lineHeight: 1.6,
                 }}>
@@ -968,33 +968,33 @@ function SubmittedDataModal({ item, onClose }) {
           gap: '8px 12px',
           alignItems: 'start',
         }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, paddingTop: 1 }}>
-            <span style={{ fontSize: 13 }}>🔗</span>
+          <div style={{ fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--color-muted)', display: 'flex', alignItems: 'center', gap: 5, paddingTop: 1 }}>
+            <span style={{ fontSize: 'var(--fs-md)' }}>🔗</span>
             Link chia sẻ
             {sharedLinks.length > 1 && (
               <span style={{
-                fontSize: 10, fontWeight: 700, background: '#dbeafe',
-                color: '#1d4ed8', padding: '1px 6px', borderRadius: 10,
+                fontSize: 'var(--fs-2xs)', fontWeight: 700, background: 'var(--color-primary-bg-strong)',
+                color: 'var(--color-primary-dark)', padding: '1px 6px', borderRadius: 10,
               }}>
                 {sharedLinks.length}
               </span>
             )}
           </div>
           {sharedLinks.length === 0 ? (
-            <span style={{ fontSize: 13, color: '#cbd5e1', fontStyle: 'italic' }}>Không có</span>
+            <span style={{ fontSize: 'var(--fs-md)', color: 'var(--color-border)', fontStyle: 'italic' }}>Không có</span>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {sharedLinks.map((link, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {sharedLinks.length > 1 && (
-                    <span style={{ fontSize: 11, color: '#94a3b8', minWidth: 18 }}>#{idx + 1}</span>
+                    <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted-soft)', minWidth: 18 }}>#{idx + 1}</span>
                   )}
                   <a
                     href={link}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                      fontSize: 12, color: '#2563eb', flex: 1,
+                      fontSize: 'var(--fs-sm)', color: 'var(--color-primary)', flex: 1,
                       wordBreak: 'break-all', lineHeight: 1.5,
                       textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: 4,
                     }}
@@ -1083,9 +1083,9 @@ function ManualSubmitModal({ item, onClose, onSaved }) {
       <form onSubmit={handleSubmit} className={s.modalStack}>
         {/* Context banner */}
         <div style={{
-          background: '#faf5ff', border: '1px solid #d8b4fe',
+          background: 'var(--color-purple-bg-soft)', border: '1px solid var(--color-purple-border)',
           borderRadius: 8, padding: '10px 14px',
-          fontSize: 12, color: '#6b21a8', lineHeight: 1.6,
+          fontSize: 'var(--fs-sm)', color: 'var(--color-purple-text)', lineHeight: 1.6,
         }}>
           <strong>📋 {item.documentName}</strong>
           <br />
@@ -1136,7 +1136,7 @@ function ManualSubmitModal({ item, onClose, onSaved }) {
         <div>
           <label className={s.formLabel}>
             Link tài liệu
-            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted-soft)', fontWeight: 400, marginLeft: 6 }}>
               (tuỳ chọn — có thể thêm nhiều)
             </span>
           </label>
@@ -1156,8 +1156,8 @@ function ManualSubmitModal({ item, onClose, onSaved }) {
                   onClick={() => removeLink(idx)}
                   style={{
                     flexShrink: 0, padding: '0 10px', borderRadius: 6,
-                    border: '1px solid #fca5a5', background: '#fff',
-                    color: '#ef4444', cursor: 'pointer', fontSize: 16, lineHeight: 1,
+                    border: '1px solid var(--color-danger-border)', background: 'var(--color-white)',
+                    color: 'var(--color-danger-light)', cursor: 'pointer', fontSize: 'var(--fs-lg)', lineHeight: 1,
                   }}
                 >×</button>
               )}
@@ -1169,12 +1169,12 @@ function ManualSubmitModal({ item, onClose, onSaved }) {
               onClick={addLink}
               style={{
                 padding: '5px 12px', borderRadius: 6,
-                border: '1px dashed #93c5fd', background: '#eff6ff',
-                color: '#2563eb', cursor: 'pointer', fontSize: 12,
+                border: '1px dashed var(--color-primary-soft)', background: 'var(--color-primary-bg)',
+                color: 'var(--color-primary)', cursor: 'pointer', fontSize: 'var(--fs-sm)',
                 display: 'inline-flex', alignItems: 'center', gap: 5,
               }}
             >
-              <span style={{ fontSize: 14 }}>+</span> Thêm link
+              <span style={{ fontSize: 'var(--fs-base)' }}>+</span> Thêm link
             </button>
           )}
         </div>
@@ -1196,21 +1196,21 @@ function ManualSubmitModal({ item, onClose, onSaved }) {
           <label style={{
             display: 'flex', alignItems: 'center', gap: 10,
             padding: '10px 12px', borderRadius: 8,
-            background: markReceived ? '#f0fdf4' : '#f8fafc',
-            border: `1px solid ${markReceived ? '#86efac' : '#e2e8f0'}`,
+            background: markReceived ? 'var(--color-success-surface)' : 'var(--color-bg-soft)',
+            border: `1px solid ${markReceived ? 'var(--color-success-border)' : 'var(--color-border-muted)'}`,
             cursor: 'pointer', transition: 'all 0.15s',
           }}>
             <input
               type="checkbox"
               checked={markReceived}
               onChange={(e) => setMarkReceived(e.target.checked)}
-              style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#16a34a' }}
+              style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--color-success-strong)' }}
             />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: markReceived ? '#15803d' : '#374151' }}>
+              <div style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: markReceived ? 'var(--color-success-text)' : 'var(--color-text-soft)' }}>
                 Đồng thời đánh dấu "Đã nhận"
               </div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted-soft)', marginTop: 2 }}>
                 Chuyển trạng thái yêu cầu này sang Đã nhận sau khi lưu
               </div>
             </div>
@@ -1256,14 +1256,14 @@ function ReminderModal({ item, onClose, onSent }) {
     <Modal title="Gửi nhắc nhở khách hàng" onClose={onClose} maxWidth={560}>
       <form onSubmit={handleSend} className={s.modalStack}>
         {err && <div className={s.errorBox}>{err}</div>}
-        <div style={{ fontSize: 13, color: '#475569' }}>
+        <div style={{ fontSize: 'var(--fs-md)', color: 'var(--color-text-soft)' }}>
           Gửi nhắc nhở đến <strong>{item.contactEmail}</strong> về tài liệu <strong>"{item.documentName}"</strong>.
           {item.reminderCount > 0 && (
-            <span style={{ color: '#94a3b8', fontSize: 12 }}> (đã nhắc {item.reminderCount} lần)</span>
+            <span style={{ color: 'var(--color-muted-soft)', fontSize: 'var(--fs-sm)' }}> (đã nhắc {item.reminderCount} lần)</span>
           )}
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+          <label style={{ display: 'block', fontSize: 'var(--fs-sm)', fontWeight: 600, color: 'var(--color-text-soft)', marginBottom: 6 }}>
             Lời nhắn thêm (tuỳ chọn)
           </label>
           <textarea
