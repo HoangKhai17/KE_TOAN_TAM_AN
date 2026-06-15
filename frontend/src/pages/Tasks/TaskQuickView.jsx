@@ -2,13 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   X, ArrowUpRight, Check, Loader2, Plus,
-  Building2, User, Calendar, Clock, AlertTriangle, Flag, FileText,
+  Building2, User, Calendar, Clock, AlertTriangle, Flag, FileText, Tag,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
 import { listUserOptions } from '../../api/users'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
-  PRIORITY_LABELS, PRIORITY_CSS,
+  PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
   fmtDate, isTaskOverdue,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -104,6 +104,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   const navigate  = useNavigate()
   const addToast  = useToastStore((st) => st.toast)
   const getLabel  = useEnumsStore((st) => st.getLabel)
+  const getOptions = useEnumsStore((st) => st.getOptions)
 
   const [task,        setTask]        = useState(null)
   const [loading,     setLoading]     = useState(true)
@@ -181,6 +182,14 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
       applyUpdate(updated)
       addToast(`Ưu tiên → "${getLabel('task_priority', priority, PRIORITY_LABELS[priority])}"`, 'success')
     } catch { addToast('Không thể đổi ưu tiên', 'error') }
+  }
+
+  async function changeSource(source) {
+    try {
+      const updated = await tasksApi.updateTask(taskId, { source })
+      applyUpdate(updated)
+      addToast(`Nguồn → "${getLabel('task_source', source, SOURCE_LABELS[source] ?? source)}"`, 'success')
+    } catch { addToast('Không thể đổi nguồn công việc', 'error') }
   }
 
   async function changeStartDate(startDate) {
@@ -381,6 +390,20 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                         {getLabel('task_priority', p, PRIORITY_LABELS[p])}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                <div className={s.qvRow}>
+                  <span className={s.qvLabel}><Tag size={11} /> Nguồn</span>
+                  <select
+                    value={task.source ?? 'manual'}
+                    onChange={(e) => changeSource(e.target.value)}
+                    className={`${s.qeSelect} ${s.qvFieldSelect}`}
+                  >
+                    {(getOptions('task_source').length > 0
+                      ? getOptions('task_source')
+                      : [{ key: 'manual', label: 'Thủ công' }, { key: 'auto', label: 'Tự động' }]
+                    ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                   </select>
                 </div>
 

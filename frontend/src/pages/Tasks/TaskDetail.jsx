@@ -923,6 +923,14 @@ export default function TaskDetail() {
     } catch { addToast('Không thể lưu ngày hết hạn', 'error') } finally { setSavingDue(false) }
   }
 
+  async function changeSource(source) {
+    try {
+      const updated = await tasksApi.updateTask(id, { source })
+      setTask(updated)
+      addToast(`Nguồn → "${getLabel('task_source', source, SOURCE_LABELS[source] ?? source)}"`, 'success')
+    } catch { addToast('Không thể đổi nguồn công việc', 'error') }
+  }
+
   // Loading
   if (loading) {
     return (
@@ -1171,7 +1179,16 @@ export default function TaskDetail() {
 
               <div className={s.infoRow}>
                 <span className={s.infoRowLabel}>Nguồn</span>
-                <span className={s.infoRowValue}>{getLabel('task_source', task.source, SOURCE_LABELS[task.source] ?? task.source)}</span>
+                <select
+                  value={task.source ?? 'manual'}
+                  onChange={(e) => changeSource(e.target.value)}
+                  className={s.cfSelect}
+                >
+                  {(getOptions('task_source').length > 0
+                    ? getOptions('task_source')
+                    : [{ key: 'manual', label: 'Thủ công' }, { key: 'auto', label: 'Tự động' }]
+                  ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                </select>
               </div>
 
               {task.periodLabel && (

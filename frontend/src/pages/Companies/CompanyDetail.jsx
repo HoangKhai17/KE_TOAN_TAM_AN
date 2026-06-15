@@ -28,7 +28,7 @@ import ArchiveTab from './ArchiveTab'
 import TaskFormModal from '../Tasks/TaskFormModal'
 import TaskQuickView from '../Tasks/TaskQuickView'
 import {
-  STATUS_LABELS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS,
+  STATUS_LABELS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
   isTaskOverdue, fmtDate as fmtTaskDate, progressPct,
 } from '../Tasks/taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -1020,7 +1020,7 @@ function DeleteTaskModal({ task, deleting, onClose, onConfirm }) {
 
 /** Filter kind per task column */
 function getTaskColumnFilterType(colKey) {
-  if (colKey === 'status' || colKey === 'priority' || colKey === 'assignedToName') return 'enum'
+  if (colKey === 'status' || colKey === 'priority' || colKey === 'assignedToName' || colKey === 'source') return 'enum'
   if (colKey === 'createdAt' || colKey === 'dueDate') return 'dateRange'
   if (colKey === 'progress') return 'numberRange'
   return 'text'
@@ -1034,6 +1034,7 @@ function getTaskDisplayLabel(row, colKey) {
     case 'createdAt':      return row.createdAt ? fmtTaskDate(row.createdAt) : '(Trống)'
     case 'dueDate':        return row.dueDate ? fmtTaskDate(row.dueDate) : '(Trống)'
     case 'assignedToName': return row.assignedToName || '(Chưa giao)'
+    case 'source':         return SOURCE_LABELS[row.source] ?? row.source ?? '(Trống)'
     case 'progress': {
       const p = progressPct(row)
       return p !== null ? `${p}%` : '(Trống)'
@@ -1054,6 +1055,7 @@ function getTaskSortKey(row, colKey) {
     case 'dueDate':        return row.dueDate ?? ''
     case 'progress':       return progressPct(row) ?? -1
     case 'assignedToName': return (row.assignedToName ?? '').toLowerCase()
+    case 'source':         return SOURCE_LABELS[row.source] ?? row.source ?? ''
     default:               return String(row[colKey] ?? '').toLowerCase()
   }
 }
@@ -1535,7 +1537,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     )
   }
 
-  const colSpan = 8  // title + status + priority + createdAt + dueDate + assigned + progress + actions
+  const colSpan = 9  // title + status + priority + source + createdAt + dueDate + assigned + progress + actions
   const from = clientTotal === 0 ? 0 : (safePage - 1) * limit + 1
   const to   = Math.min(safePage * limit, clientTotal)
 
@@ -1745,6 +1747,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                 <FilterTh colKey="title">Tiêu đề</FilterTh>
                 <FilterTh colKey="status">Trạng thái</FilterTh>
                 <FilterTh colKey="priority">Ưu tiên</FilterTh>
+                <FilterTh colKey="source">Nguồn</FilterTh>
                 <FilterTh colKey="createdAt">Ngày tạo</FilterTh>
                 <FilterTh colKey="dueDate">Hết hạn</FilterTh>
                 <FilterTh colKey="assignedToName">Phụ trách</FilterTh>
@@ -1756,7 +1759,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    {[220, 100, 80, 80, 80, 100, 80].map((w, j) => (
+                    {[220, 100, 80, 80, 80, 80, 100, 80].map((w, j) => (
                       <td key={j} className={s.taskSkeletonCell}>
                         <div className={s.taskSkeletonBar} style={{ '--skeleton-w': `${w}px` }} />
                       </td>
@@ -1795,6 +1798,11 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                     <td>
                       <span className={`${ts.priorityBadge} ${ts[PRIORITY_CSS[task.priority]]}`}>
                         {getLabel('task_priority', task.priority, PRIORITY_LABELS[task.priority])}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`${ts.sourceBadge} ${task.source === 'auto' ? ts.sourceAuto : ts.sourceManual}`}>
+                        {getLabel('task_source', task.source, SOURCE_LABELS[task.source] ?? task.source)}
                       </span>
                     </td>
                     <td className={s.cTaskDateCell}>

@@ -346,10 +346,19 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     dueDate:     'due_date',
     priority:    'priority',
     slaDays:     'sla_days',
+    source:      'source',
   }
 
   const { rows: [current] } = await query('SELECT * FROM tasks WHERE id = $1', [id])
   if (!current) throw Object.assign(new Error('Task not found'), { status: 404 })
+
+  // Validate source against active enum options (metadata-driven)
+  if (data.source !== undefined && data.source !== null) {
+    const validSources = await enums.getValues('task_source')
+    if (!validSources.includes(data.source)) {
+      throw Object.assign(new Error(`Nguồn công việc không hợp lệ: ${data.source}`), { status: 422 })
+    }
+  }
 
   if (user?.role === 'staff') {
     if (current.assigned_to !== actorId) {

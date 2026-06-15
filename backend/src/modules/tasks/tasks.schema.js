@@ -24,6 +24,7 @@ const updateTaskSchema = z.object({
   dueDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   priority:    z.enum(TASK_PRIORITIES).optional(),
   slaDays:     z.number().int().min(1).optional().nullable(),
+  source:      z.string().min(1).max(40).optional().nullable(),
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })
 
 const changeStatusSchema = z.object({

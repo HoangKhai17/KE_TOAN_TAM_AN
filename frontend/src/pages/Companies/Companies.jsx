@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2,
-  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X,
+  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X, Filter,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -184,6 +184,182 @@ function MultiSelectFilter({ options, value, onChange, placeholder = 'Tất cả
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
+// ── Column-header filter machinery (per docs/018) ─────────────────────────────
+
+function getCompanyColumnFilterType(colKey) {
+  if (colKey === 'assignedStaffName' || colKey === 'status') return 'enum'
+  if (colKey === 'taskOpenCount' || colKey === 'taskOverdueCount') return 'numberRange'
+  return 'text'
+}
+
+function getCompanyDisplayLabel(row, colKey) {
+  switch (colKey) {
+    case 'name':             return row.name ?? '(Trống)'
+    case 'taxCode':          return row.taxCode || '(Trống)'
+    case 'contactName':      return row.contactName || '(Trống)'
+    case 'assignedStaffName': return row.assignedStaff?.name || '(Chưa giao)'
+    case 'status':           return STATUS_LABELS[row.status] ?? row.status
+    case 'taskOpenCount':    return String(row.taskOpenCount ?? 0)
+    case 'taskOverdueCount': return String(row.taskOverdueCount ?? 0)
+    default: {
+      const v = row[colKey]
+      return v != null && v !== '' ? String(v) : '(Trống)'
+    }
+  }
+}
+
+function getCompanySortKey(row, colKey) {
+  switch (colKey) {
+    case 'taskOpenCount':    return Number(row.taskOpenCount ?? 0)
+    case 'taskOverdueCount': return Number(row.taskOverdueCount ?? 0)
+    case 'assignedStaffName': return (row.assignedStaff?.name ?? '').toLowerCase()
+    case 'status':           return STATUS_LABELS[row.status] ?? ''
+    default:                 return String(row[colKey] ?? '').toLowerCase()
+  }
+}
+
+function CoEnumFilterSection({ colKey, allRows, currentFilter, onFilterChange, onClose }) {
+  const allValues = useMemo(() => {
+    const seen = new Set()
+    const vals = []
+    for (const row of allRows) {
+      const lbl = getCompanyDisplayLabel(row, colKey)
+      if (!seen.has(lbl)) { seen.add(lbl); vals.push(lbl) }
+    }
+    return vals.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
+  }, [allRows, colKey])
+
+  const selected = useMemo(
+    () => (!currentFilter ? new Set(allValues) : currentFilter),
+    [currentFilter, allValues]
+  )
+
+  function toggleValue(val) {
+    const next = new Set(selected)
+    next.has(val) ? next.delete(val) : next.add(val)
+    onFilterChange(colKey, next.size === allValues.length ? null : next)
+  }
+  function toggleAll() {
+    onFilterChange(colKey, selected.size === allValues.length ? new Set() : null)
+  }
+
+  const allChecked  = selected.size === allValues.length
+  const noneChecked = selected.size === 0
+
+  return (
+    <>
+      <label className={s.hdldDdSelectAll}>
+        <input type="checkbox" checked={allChecked}
+          ref={(el) => { if (el) el.indeterminate = !allChecked && !noneChecked }}
+          onChange={toggleAll} />
+        Chọn tất cả ({allValues.length})
+      </label>
+      <div className={s.hdldDdValueList}>
+        {allValues.map((val) => (
+          <label key={val} className={s.hdldDdValueItem}>
+            <input type="checkbox" checked={selected.has(val)} onChange={() => toggleValue(val)} />
+            <span className={s.hdldDdValueText}>{val}</span>
+          </label>
+        ))}
+      </div>
+      <div className={s.hdldDdFooter}>
+        <button className={s.hdldDdClearBtn} onClick={() => { onFilterChange(colKey, null); onClose() }}>
+          Xoá bộ lọc
+        </button>
+      </div>
+    </>
+  )
+}
+
+function CoTextFilterSection({ colKey, currentFilter, onFilterChange }) {
+  const [query, setQuery] = useState(typeof currentFilter === 'string' ? currentFilter : '')
+  const inputRef = useRef(null)
+  useEffect(() => { inputRef.current?.focus() }, [])
+  return (
+    <div className={s.hdldDdFilterSection}>
+      <input ref={inputRef} type="text" className={s.hdldDdInput} placeholder="Tìm kiếm..."
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); onFilterChange(colKey, e.target.value.trim() || null) }} />
+      {query && (
+        <div className={s.hdldDdFooter}>
+          <button className={s.hdldDdClearBtn} onClick={() => { setQuery(''); onFilterChange(colKey, null) }}>
+            Xoá bộ lọc
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CoNumberRangeFilterSection({ colKey, currentFilter, onFilterChange }) {
+  const [minVal, setMinVal] = useState(currentFilter?.min ?? '')
+  const [maxVal, setMaxVal] = useState(currentFilter?.max ?? '')
+  function apply(mn, mx) { onFilterChange(colKey, mn !== '' || mx !== '' ? { min: mn, max: mx } : null) }
+  return (
+    <div className={s.hdldDdFilterSection}>
+      <div className={s.hdldDdRangeGroup}>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Tối thiểu</span>
+          <input type="number" className={s.hdldDdInput} placeholder="0" value={minVal}
+            onChange={(e) => { setMinVal(e.target.value); apply(e.target.value, maxVal) }} />
+        </div>
+        <div className={s.hdldDdRangeRow}>
+          <span className={s.hdldDdRangeLabel}>Tối đa</span>
+          <input type="number" className={s.hdldDdInput} placeholder="∞" value={maxVal}
+            onChange={(e) => { setMaxVal(e.target.value); apply(minVal, e.target.value) }} />
+        </div>
+      </div>
+      {(minVal !== '' || maxVal !== '') && (
+        <div className={s.hdldDdFooter}>
+          <button className={s.hdldDdClearBtn}
+            onClick={() => { setMinVal(''); setMaxVal(''); onFilterChange(colKey, null) }}>
+            Xoá bộ lọc
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CoColumnFilterDropdown({ colKey, allRows, currentFilter, sortState, onSort, onFilterChange, onClose, style }) {
+  const dropRef    = useRef(null)
+  const filterType = getCompanyColumnFilterType(colKey)
+
+  useEffect(() => {
+    function handler(e) {
+      if (dropRef.current && !dropRef.current.contains(e.target)) {
+        if (!e.target.closest('[data-hdld-filter-btn]')) onClose()
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  const activeAsc  = sortState.col === colKey && sortState.dir === 'asc'
+  const activeDesc = sortState.col === colKey && sortState.dir === 'desc'
+
+  return (
+    <div ref={dropRef} className={s.hdldFilterDropdown} style={style}>
+      <div className={s.hdldDdSortSection}>
+        <button className={`${s.hdldDdSortBtn} ${activeAsc ? s.hdldDdSortBtnActive : ''}`}
+          onClick={() => onSort(colKey, 'asc')}>↑&nbsp; Sắp xếp A → Z</button>
+        <button className={`${s.hdldDdSortBtn} ${activeDesc ? s.hdldDdSortBtnActive : ''}`}
+          onClick={() => onSort(colKey, 'desc')}>↓&nbsp; Sắp xếp Z → A</button>
+      </div>
+      {filterType === 'enum' && (
+        <CoEnumFilterSection colKey={colKey} allRows={allRows} currentFilter={currentFilter}
+          onFilterChange={onFilterChange} onClose={onClose} />
+      )}
+      {filterType === 'text' && (
+        <CoTextFilterSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
+      )}
+      {filterType === 'numberRange' && (
+        <CoNumberRangeFilterSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
+      )}
+    </div>
+  )
+}
+
 export default function Companies() {
   const navigate  = useNavigate()
   const currentUser = useAuthStore((s) => s.user)
@@ -208,6 +384,11 @@ export default function Companies() {
   const [page, setPage]                 = useState(() => readSaved().page ?? 1)
   const [limit, setLimit]               = useState(() => readSaved().limit ?? 20)
 
+  // Column-header filter / sort (client-side, per docs/018)
+  const [colFilters, setColFilters]   = useState({})
+  const [sortState, setSortState]     = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup] = useState(null)
+
   const [syncKey, setSyncKey]         = useState(0)
   const [showCreate, setShowCreate]   = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)  // company to delete
@@ -220,8 +401,6 @@ export default function Companies() {
   const pageActiveTotal    = companies.filter((c) => c.status === 'active').length
   const pageInactiveTotal  = companies.filter((c) => c.status === 'inactive').length
   const pageTerminatedTotal = companies.filter((c) => c.status === 'terminated').length
-  const paginationFrom = pagination.total === 0 ? 0 : (page - 1) * limit + 1
-  const paginationTo = Math.min(page * limit, pagination.total)
 
   // Persist filters to sessionStorage
   useEffect(() => {
@@ -237,7 +416,7 @@ export default function Companies() {
   }, [searchInput])
 
   // Reset page on filter/limit change
-  useEffect(() => { setPage(1) }, [statusFilter, btFilter, staffFilter, limit])
+  useEffect(() => { setPage(1) }, [statusFilter, btFilter, staffFilter, limit, colFilters, sortState])
 
   // Load staff for filter + enums
   useEffect(() => {
@@ -257,8 +436,8 @@ export default function Companies() {
     setError(null)
     companiesApi
       .listCompanies({
-        page,
-        limit,
+        page: 1,
+        limit: 1000,  // load all matching the coarse filters; column filter + paginate client-side
         status:          statusFilter.length > 0 ? statusFilter.join(',') : undefined,
         businessType:    btFilter.length     > 0 ? btFilter.join(',')     : undefined,
         search:          search || undefined,
@@ -271,7 +450,7 @@ export default function Companies() {
       .catch(() => { if (!cancelled) setError('Không thể tải danh sách khách hàng') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, limit, statusFilter, btFilter, staffFilter, search, syncKey])
+  }, [statusFilter, btFilter, staffFilter, search, syncKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function resetFilters() {
     setSearchInput('')
@@ -279,8 +458,103 @@ export default function Companies() {
     setStatusFilter([])
     setBtFilter([])
     setStaffFilter([])
+    setColFilters({})
+    setSortState({ col: null, dir: 'asc' })
     setPage(1)
     sessionStorage.removeItem(FILTER_KEY)
+  }
+
+  // ── Client-side column-header filter + sort + pagination (docs/018) ───────────
+  const displayed = useMemo(() => {
+    let result = [...companies]
+    for (const [colKey, filterVal] of Object.entries(colFilters)) {
+      const ft = getCompanyColumnFilterType(colKey)
+      if (ft === 'enum') {
+        if (filterVal instanceof Set && filterVal.size > 0) {
+          result = result.filter((row) => filterVal.has(getCompanyDisplayLabel(row, colKey)))
+        }
+      } else if (ft === 'text') {
+        if (typeof filterVal === 'string' && filterVal.trim()) {
+          const q = filterVal.toLowerCase()
+          result = result.filter((row) => getCompanyDisplayLabel(row, colKey).toLowerCase().includes(q))
+        }
+      } else if (ft === 'numberRange') {
+        if (filterVal && (filterVal.min !== '' || filterVal.max !== '')) {
+          result = result.filter((row) => {
+            const num = Number(row[colKey] ?? 0)
+            if (isNaN(num)) return false
+            if (filterVal.min !== '' && num < parseFloat(filterVal.min)) return false
+            if (filterVal.max !== '' && num > parseFloat(filterVal.max)) return false
+            return true
+          })
+        }
+      }
+    }
+    if (sortState.col) {
+      result.sort((a, b) => {
+        const ak = getCompanySortKey(a, sortState.col)
+        const bk = getCompanySortKey(b, sortState.col)
+        if (typeof ak === 'number' && typeof bk === 'number') {
+          return sortState.dir === 'asc' ? ak - bk : bk - ak
+        }
+        const cmp = String(ak).localeCompare(String(bk), 'vi', { numeric: true })
+        return sortState.dir === 'asc' ? cmp : -cmp
+      })
+    }
+    return result
+  }, [companies, colFilters, sortState])
+
+  const clientTotal      = displayed.length
+  const clientTotalPages = Math.max(1, Math.ceil(clientTotal / limit))
+  const safePage         = Math.min(page, clientTotalPages)
+  const pageRows         = displayed.slice((safePage - 1) * limit, safePage * limit)
+
+  function openFilter(colKey, e) {
+    e.stopPropagation()
+    if (filterPopup?.colKey === colKey) setFilterPopup(null)
+    else {
+      const rect = e.currentTarget.getBoundingClientRect()
+      setFilterPopup({ colKey, top: rect.bottom + 4, left: rect.left })
+    }
+  }
+  function handleColFilterChange(colKey, val) {
+    setColFilters((prev) => {
+      const next = { ...prev }
+      if (val === null) delete next[colKey]
+      else next[colKey] = val
+      return next
+    })
+  }
+  function handleColSort(col, dir) { setSortState({ col, dir }) }
+  function hasColFilter(colKey) {
+    const f = colFilters[colKey]
+    if (f == null) return false
+    const t = getCompanyColumnFilterType(colKey)
+    if (t === 'enum')        return f instanceof Set && f.size > 0
+    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
+    if (t === 'numberRange') return f.min !== '' || f.max !== ''
+    return false
+  }
+  const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
+  const hasColSortActive = sortState.col !== null
+
+  function FilterTh({ colKey, className, children }) {
+    const active = hasColFilter(colKey) || sortState.col === colKey
+    return (
+      <th className={className}>
+        <div className={s.hdldThInner}>
+          <span className={s.hdldThLabel}>{children}</span>
+          <button
+            data-hdld-filter-btn
+            className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`}
+            onClick={(e) => openFilter(colKey, e)}
+            title="Lọc / Sắp xếp"
+          >
+            <Filter size={10} />
+          </button>
+        </div>
+      </th>
+    )
   }
 
   async function handleDelete() {
@@ -302,13 +576,15 @@ export default function Companies() {
     }
   }
 
-  // Pagination window
-  const totalPages = pagination.totalPages
+  // Pagination window (client-side)
+  const paginationFrom = clientTotal === 0 ? 0 : (safePage - 1) * limit + 1
+  const paginationTo   = Math.min(safePage * limit, clientTotal)
+  const totalPages     = clientTotalPages
   function pageWindow() {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    if (page <= 4) return [1, 2, 3, 4, 5, '…', totalPages]
-    if (page >= totalPages - 3) return [1, '…', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
-    return [1, '…', page - 1, page, page + 1, '…', totalPages]
+    if (safePage <= 4) return [1, 2, 3, 4, 5, '…', totalPages]
+    if (safePage >= totalPages - 3) return [1, '…', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+    return [1, '…', safePage - 1, safePage, safePage + 1, '…', totalPages]
   }
 
   return (
@@ -476,27 +752,27 @@ export default function Companies() {
               <table className={s.table}>
                 <thead>
                   <tr>
-                    <th>Tên công ty</th>
-                    <th className={s.tableCellVisible}>MST</th>
-                    <th className={s.tableContactHead}>Người liên hệ</th>
-                    <th className={s.tableCellVisible}>Phụ trách</th>
-                    <th className={s.tableMetricOpenHead}>Việc mở</th>
-                    <th className={s.tableMetricOverdueHead}>Quá hạn</th>
-                    <th>Hợp đồng</th>
+                    <FilterTh colKey="name">Tên công ty</FilterTh>
+                    <FilterTh colKey="taxCode" className={s.tableCellVisible}>MST</FilterTh>
+                    <FilterTh colKey="contactName" className={s.tableContactHead}>Người liên hệ</FilterTh>
+                    <FilterTh colKey="assignedStaffName" className={s.tableCellVisible}>Phụ trách</FilterTh>
+                    <FilterTh colKey="taskOpenCount" className={s.tableMetricOpenHead}>Việc mở</FilterTh>
+                    <FilterTh colKey="taskOverdueCount" className={s.tableMetricOverdueHead}>Quá hạn</FilterTh>
+                    <FilterTh colKey="status">Hợp đồng</FilterTh>
                     <th className={s.actionsHead}>Hành động</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} isAdmin={isAdmin} />)
-                  ) : companies.length === 0 ? (
+                  ) : displayed.length === 0 ? (
                     <tr>
                       <td colSpan={8}>
                         <div className={s.emptyState}>
                           <div className={s.emptyIcon}><Building2 size={26} /></div>
                           <p className={s.emptyTitle}>Không tìm thấy doanh nghiệp</p>
                           <p className={s.emptyDesc}>
-                            {hasActiveFilters
+                            {(hasActiveFilters || colFilterCount > 0)
                               ? 'Thử thay đổi bộ lọc hoặc từ khoá tìm kiếm.'
                               : 'Chưa có khách hàng nào. Nhấn "+ Thêm khách hàng" để bắt đầu.'}
                           </p>
@@ -504,7 +780,7 @@ export default function Companies() {
                       </td>
                     </tr>
                   ) : (
-                    companies.map((c) => (
+                    pageRows.map((c) => (
                       <CompanyRow
                         key={c.id}
                         company={c}
@@ -522,27 +798,29 @@ export default function Companies() {
           {/* Pagination — gộp trong table card */}
           <div className={s.paginationBar}>
             <span className={s.paginationInfo}>
-              {loading ? '...' : `Hiển thị ${paginationFrom}-${paginationTo} / ${pagination.total} record`}
+              {loading ? '...' : `Hiển thị ${paginationFrom}-${paginationTo} / ${clientTotal} record`}
+              {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
+              {hasColSortActive && ' · đang sắp xếp'}
             </span>
 
             <div className={s.paginationBtns}>
-              <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={page === 1}>«</button>
-              <button className={s.paginationBtn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>‹</button>
+              <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={safePage === 1}>«</button>
+              <button className={s.paginationBtn} onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage === 1}>‹</button>
               {pageWindow().map((n, i) =>
                 n === '…' ? (
                   <span key={`sep-${i}`} className={s.paginationEllipsis}>…</span>
                 ) : (
                   <button
                     key={n}
-                    className={`${s.paginationBtn} ${page === n ? s.paginationBtnActive : ''}`}
+                    className={`${s.paginationBtn} ${safePage === n ? s.paginationBtnActive : ''}`}
                     onClick={() => setPage(n)}
                   >
                     {n}
                   </button>
                 )
               )}
-              <button className={s.paginationBtn} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>›</button>
-              <button className={s.paginationBtn} onClick={() => setPage(totalPages)} disabled={page === totalPages}>»</button>
+              <button className={s.paginationBtn} onClick={() => setPage(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}>›</button>
+              <button className={s.paginationBtn} onClick={() => setPage(totalPages)} disabled={safePage === totalPages}>»</button>
             </div>
 
             <div className={s.pageSizeWrap}>
@@ -582,6 +860,23 @@ export default function Companies() {
           deleting={deleting}
           onClose={() => setDeleteTarget(null)}
           onConfirm={handleDelete}
+        />
+      )}
+
+      {/* Column-header filter dropdown — position:fixed, outside table scroll */}
+      {filterPopup && (
+        <CoColumnFilterDropdown
+          colKey={filterPopup.colKey}
+          allRows={companies}
+          currentFilter={colFilters[filterPopup.colKey] ?? null}
+          sortState={sortState}
+          onSort={handleColSort}
+          onFilterChange={handleColFilterChange}
+          onClose={() => setFilterPopup(null)}
+          style={{
+            '--hdld-dd-top':  `${filterPopup.top}px`,
+            '--hdld-dd-left': `${filterPopup.left}px`,
+          }}
         />
       )}
     </AppLayout>

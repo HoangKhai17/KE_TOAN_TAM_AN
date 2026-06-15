@@ -6,7 +6,7 @@ async function listCompanies(req, res, next) {
     const parseMulti = (v) => v ? (Array.isArray(v) ? v.filter(Boolean) : v.split(',').filter(Boolean)) : []
     const result = await svc.listCompanies({
       page: Math.max(1, parseInt(page, 10)),
-      limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
+      limit: Math.min(1000, Math.max(1, parseInt(limit, 10))),
       status: parseMulti(status),
       businessType: parseMulti(businessType),
       assignedStaffId: parseMulti(assignedStaffId),
