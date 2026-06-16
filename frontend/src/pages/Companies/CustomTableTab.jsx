@@ -1,10 +1,87 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Plus, Trash2, Filter, Loader2, Download } from 'lucide-react'
+import { Plus, Trash2, Filter, Loader2, Download, Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import * as api from '../../api/companyTables'
+import Modal from '../../components/ui/Modal'
+import ExcelImportModal from '../../components/ui/ExcelImportModal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import s from './companies.module.css'
+
+// ── Cell value as plain text (for export/preview) ─────────────────────────────
+function cellText(col, row) {
+  if (col.dataType === 'computed') {
+    if (col.computedType === 'status_threshold') {
+      return resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).label
+    }
+    const v = computeDays(col, row); return v ?? ''
+  }
+  const v = row.data?.[col.colKey]
+  return col.dataType === 'date' ? fmtDate(v) : (v ?? '')
+}
+
+// ── Export modal: chọn cột + preview (giống flow tab cũ) ──────────────────────
+function ExportModal({ def, columns, rows, company, onClose }) {
+  const [selected, setSelected] = useState(() => new Set(columns.map((c) => c.colKey)))
+  function toggle(k) { setSelected((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n }) }
+
+  function doExport() {
+    const cols = columns.filter((c) => selected.has(c.colKey))
+    const header = ['STT', ...cols.map((c) => c.label)]
+    const body = rows.map((r, i) => [i + 1, ...cols.map((c) => cellText(c, r))])
+    const ws = XLSX.utils.aoa_to_sheet([header, ...body])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, def.name.substring(0, 30))
+    XLSX.writeFile(wb, `${def.tableKey}_${(company.name || company.id).replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    onClose()
+  }
+
+  const previewCols = columns.filter((c) => selected.has(c.colKey))
+  const previewRows = rows.slice(0, 8)
+  return (
+    <Modal title={`Xuất Excel — ${def.name}`} onClose={onClose} wide>
+      <div className={s.modalForm}>
+        <div className={s.hdldExportBody}>
+          <div className={s.hdldExportSidebar}>
+            <div className={s.hdldExportSidebarTitle}>Chọn cột xuất</div>
+            {columns.map((c) => (
+              <label key={c.colKey} className={s.hdldExportFieldItem}>
+                <input type="checkbox" checked={selected.has(c.colKey)} onChange={() => toggle(c.colKey)} />
+                <span>{c.label}</span>
+              </label>
+            ))}
+          </div>
+          <div className={s.hdldExportPreviewPane}>
+            <div className={s.hdldExportPreviewTitle}>Xem trước ({Math.min(8, rows.length)} / {rows.length} dòng)</div>
+            <div className={s.hdldExportPreviewWrap}>
+              {previewCols.length === 0 ? (
+                <div className={s.hdldExportPreviewEmpty}>Chưa chọn cột nào</div>
+              ) : (
+                <table className={s.hdldExportPreviewTable}>
+                  <thead><tr>{previewCols.map((c) => <th key={c.colKey}>{c.label}</th>)}</tr></thead>
+                  <tbody>
+                    {previewRows.map((r) => (
+                      <tr key={r.id}>{previewCols.map((c) => <td key={c.colKey}>{String(cellText(c, r) || '—')}</td>)}</tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className={s.hdldExportFooter}>
+          <span className={s.hdldExportCount}>{selected.size} cột · {rows.length} dòng</span>
+          <div className={s.modalActions}>
+            <button type="button" className={s.btnOutline} onClick={onClose}>Huỷ</button>
+            <button type="button" className={s.btnNavy} onClick={doExport} disabled={selected.size === 0}>
+              <Download size={13} /> Xuất Excel
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function fmtDate(iso) {
@@ -285,6 +362,8 @@ export default function CustomTableTab({ def, company }) {
   const [filterPopup, setFilterPopup]   = useState(null)
   const [page, setPage]                 = useState(1)
   const [deletingRow, setDeletingRow]   = useState(null)
+  const [showExport, setShowExport]     = useState(false)
+  const [showImport, setShowImport]     = useState(false)
 
   const lsKey = `ctbl_${def.tableKey}_${companyId}`
   const [colWidths, setColWidths] = useState(() => {
@@ -404,24 +483,24 @@ export default function CustomTableTab({ def, company }) {
     finally { setDeletingRow(null) }
   }
 
-  // ── Export Excel ─────────────────────────────────────────────────────────────
-  function exportExcel() {
-    const header = ['STT', ...columns.map((c) => c.label)]
-    const body = displayed.map((r, i) => [
-      i + 1,
-      ...columns.map((c) => {
-        if (c.dataType === 'computed') {
-          if (c.computedType === 'status_threshold') return resolveBucket(c.computedConfig, r.data?.[c.computedConfig?.source_col]).label
-          const v = computeDays(c, r); return v ?? ''
-        }
-        const v = r.data?.[c.colKey]
-        return c.dataType === 'date' ? fmtDate(v) : (v ?? '')
-      }),
-    ])
-    const ws = XLSX.utils.aoa_to_sheet([header, ...body])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, def.name.substring(0, 30))
-    XLSX.writeFile(wb, `${def.tableKey}_${(company.name || companyId).replace(/\s+/g, '_')}.xlsx`)
+  // ── Import Excel ─────────────────────────────────────────────────────────────
+  const importCols = useMemo(
+    () => columns.filter((c) => c.dataType !== 'computed').map((c) => ({
+      key: c.colKey, label: c.label, required: c.required,
+      type: c.dataType === 'number' ? 'number' : c.dataType === 'date' ? 'date' : 'text',
+      example: '',
+    })),
+    [columns],
+  )
+  async function handleImport(validRows) {
+    const payload = validRows.map((r) => {
+      const d = { _rowNum: r._rowNum }
+      for (const c of importCols) if (r[c.key] !== null && r[c.key] !== undefined) d[c.key] = r[c.key]
+      return d
+    })
+    const res = await api.batchCreateRows(companyId, def.id, payload)
+    load()
+    return res
   }
 
   const colSpan = columns.length + 2 // STT + columns + actions
@@ -444,9 +523,14 @@ export default function CustomTableTab({ def, company }) {
           </button>
         )}
         <div className={s.hdldToolbarRight}>
-          <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`} onClick={exportExcel} disabled={loading || displayed.length === 0}>
+          <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`} onClick={() => setShowExport(true)} disabled={loading || rows.length === 0}>
             <Download size={13} /> Xuất Excel
           </button>
+          {canEdit && columns.length > 0 && (
+            <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`} onClick={() => setShowImport(true)}>
+              <Upload size={13} /> Nhập Excel
+            </button>
+          )}
           {canEdit && (
             <button className={`${s.btnNavy} ${s.hdldToolbarBtn}`} onClick={addRow}>
               <Plus size={13} /> Thêm dòng
@@ -551,6 +635,21 @@ export default function CustomTableTab({ def, company }) {
           />
         )
       })()}
+
+      {showExport && (
+        <ExportModal def={def} columns={columns} rows={rows} company={company} onClose={() => setShowExport(false)} />
+      )}
+      {showImport && (
+        <ExcelImportModal
+          title={`Nhập Excel — ${def.name}`}
+          entityLabel="dòng"
+          fixedCols={importCols}
+          templateName={`${def.tableKey}_template.xlsx`}
+          sheetName={def.name.substring(0, 28)}
+          onImport={handleImport}
+          onClose={() => setShowImport(false)}
+        />
+      )}
     </div>
   )
 }

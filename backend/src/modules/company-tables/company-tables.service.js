@@ -1,4 +1,4 @@
-const { query } = require('../../config/db')
+const { query, getClient } = require('../../config/db')
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -294,6 +294,40 @@ async function deleteRow(defId, companyId, rowId, user) {
   if (!rowCount) { const e = new Error('Không tìm thấy dòng'); e.status = 404; throw e }
 }
 
+async function batchCreateRows(defId, companyId, user, rowsData) {
+  await assertAccess(companyId, user)
+  const columns = await getColumnsForCompany(defId, companyId)
+  const client = await getClient()
+  let inserted = 0, failed = 0
+  const errors = []
+  try {
+    await client.query('BEGIN')
+    const { rows: posRows } = await client.query(
+      'SELECT COALESCE(MAX(position), -1) + 1 AS next FROM company_table_rows WHERE def_id = $1 AND company_id = $2',
+      [defId, companyId])
+    let pos = posRows[0].next
+    for (let i = 0; i < rowsData.length; i++) {
+      const sp = `sp_${i}`
+      await client.query(`SAVEPOINT ${sp}`)
+      try {
+        const clean = sanitizeData(rowsData[i], columns)
+        await client.query(
+          'INSERT INTO company_table_rows (def_id, company_id, data, position, created_by) VALUES ($1,$2,$3,$4,$5)',
+          [defId, companyId, JSON.stringify(clean), pos++, user.id])
+        inserted++
+      } catch (err) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${sp}`)
+        failed++
+        errors.push({ row: rowsData[i]._rowNum ?? i + 2, message: err.message })
+      }
+    }
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK'); throw err
+  } finally { client.release() }
+  return { inserted, failed, errors }
+}
+
 async function reorderRows(defId, companyId, user, orderedIds) {
   await assertAccess(companyId, user)
   for (let idx = 0; idx < orderedIds.length; idx++) {
@@ -306,5 +340,5 @@ module.exports = {
   listDefs, getDef, createDef, updateDef, deleteDef,
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,
-  listRows, createRow, updateRow, deleteRow, reorderRows,
+  listRows, createRow, updateRow, deleteRow, reorderRows, batchCreateRows,
 }

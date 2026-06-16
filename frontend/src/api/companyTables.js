@@ -52,6 +52,10 @@ export async function updateRow(companyId, defId, rowId, rowData) {
 export async function deleteRow(companyId, defId, rowId) {
   await api.delete(`/companies/${companyId}/tables/${defId}/rows/${rowId}`)
 }
+export async function batchCreateRows(companyId, defId, rows) {
+  const { data } = await api.post(`/companies/${companyId}/tables/${defId}/rows/batch`, { rows })
+  return data.data  // { inserted, failed, errors }
+}
 
 // ── Per-company columns (hybrid) ──────────────────────────────────────────────
 export async function listCompanyColumns(companyId, defId) {
