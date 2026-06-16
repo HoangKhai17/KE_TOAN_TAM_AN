@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Loader2, Columns, Power } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, Columns, Power, ChevronUp, ChevronDown } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useToastStore } from '../../stores/toastStore'
 import * as api from '../../api/companyTables'
@@ -224,6 +224,15 @@ export default function CompanyTablesSection() {
     try { await api.deleteColumn(col.id); reload() }
     catch { addToast('Không thể xóa cột', 'error') }
   }
+  async function moveColumn(idx, dir) {
+    const cols = selDef?.columns ?? []
+    const j = idx + dir
+    if (j < 0 || j >= cols.length) return
+    const ids = cols.map((c) => c.id)
+    ;[ids[idx], ids[j]] = [ids[j], ids[idx]]
+    try { await api.reorderColumns(selDef.id, ids); reload() }
+    catch { addToast('Không thể đổi thứ tự cột', 'error') }
+  }
 
   return (
     <div>
@@ -272,7 +281,7 @@ export default function CompanyTablesSection() {
           <table className={s.settingsTable}>
             <thead><tr><th>Nhãn</th><th>Key</th><th>Kiểu</th><th>Bắt buộc</th><th></th></tr></thead>
             <tbody>
-              {(selDef.columns ?? []).map((c) => (
+              {(selDef.columns ?? []).map((c, idx, arr) => (
                 <tr key={c.id}>
                   <td>{c.label}</td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-xs)' }}>{c.colKey}</td>
@@ -280,6 +289,8 @@ export default function CompanyTablesSection() {
                   <td>{c.required ? '✓' : ''}</td>
                   <td>
                     <div style={row}>
+                      <button className={s.btnOutline} disabled={idx === 0} title="Lên" onClick={() => moveColumn(idx, -1)}><ChevronUp size={13} /></button>
+                      <button className={s.btnOutline} disabled={idx === arr.length - 1} title="Xuống" onClick={() => moveColumn(idx, 1)}><ChevronDown size={13} /></button>
                       <button className={s.btnOutline} onClick={() => setColModal({ column: c })}><Pencil size={13} /></button>
                       <button className={s.btnOutline} onClick={() => removeCol(c)}><Trash2 size={13} color="var(--color-danger)" /></button>
                     </div>

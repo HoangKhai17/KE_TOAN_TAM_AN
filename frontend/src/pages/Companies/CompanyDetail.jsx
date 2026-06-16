@@ -101,9 +101,10 @@ export default function CompanyDetail() {
   const [activeTab, setActiveTab] = useState('overview')
   const [customDefs, setCustomDefs] = useState([])
 
-  useEffect(() => {
+  const refetchCustomDefs = useCallback(() => {
     companyTablesApi.listDefs({ activeOnly: true }).then(setCustomDefs).catch(() => {})
   }, [])
+  useEffect(() => { refetchCustomDefs() }, [refetchCustomDefs])
 
   const [noteCount, setNoteCount]         = useState(0)
   const [overviewTick, setOverviewTick]   = useState(0)
@@ -376,7 +377,7 @@ export default function CompanyDetail() {
       )}
       {activeTab.startsWith('ct_') && (() => {
         const d = customDefs.find((x) => `ct_${x.id}` === activeTab)
-        return d ? <CustomTableTab def={d} company={company} /> : null
+        return d ? <CustomTableTab def={d} company={company} onDefUpdated={refetchCustomDefs} /> : null
       })()}
 
       {/* Edit modal */}

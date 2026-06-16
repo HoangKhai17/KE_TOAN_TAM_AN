@@ -333,13 +333,16 @@ function EditableCell({ col, value, canEdit, onSave }) {
 }
 
 // ── Resize handle ─────────────────────────────────────────────────────────────
-function ResizeHandle({ onResize }) {
+function ResizeHandle({ onResize, onResizeEnd }) {
   const startX = useRef(null)
   function down(e) {
     e.preventDefault(); e.stopPropagation()
     startX.current = e.clientX
     function move(me) { const dx = me.clientX - startX.current; startX.current = me.clientX; onResize(dx) }
-    function up() { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up) }
+    function up() {
+      document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up)
+      onResizeEnd?.()
+    }
     document.addEventListener('mousemove', move); document.addEventListener('mouseup', up)
   }
   return <span className={s.archColResizeHandle} onMouseDown={down} />
@@ -348,11 +351,12 @@ function ResizeHandle({ onResize }) {
 const PAGE_SIZE = 20
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function CustomTableTab({ def, company }) {
+export default function CustomTableTab({ def, company, onDefUpdated }) {
   const companyId = company.id
   const user     = useAuthStore((st) => st.user)
   const addToast = useToastStore((st) => st.toast)
-  const canEdit  = user?.role === 'admin' || company.assignedStaffId === user?.id
+  const isAdmin  = user?.role === 'admin'
+  const canEdit  = isAdmin || company.assignedStaffId === user?.id
 
   const [rows, setRows]                 = useState([])
   const [companyCols, setCompanyCols]   = useState([])
@@ -365,16 +369,27 @@ export default function CustomTableTab({ def, company }) {
   const [showExport, setShowExport]     = useState(false)
   const [showImport, setShowImport]     = useState(false)
 
-  const lsKey = `ctbl_${def.tableKey}_${companyId}`
+  // Column widths — GLOBAL (lưu vào company_table_columns.width). Chỉ admin được kéo;
+  // kéo 1 chỗ → đồng bộ mọi công ty. Khởi tạo từ def, cập nhật live khi kéo.
   const [colWidths, setColWidths] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(lsKey)) ?? {} } catch { return {} }
+    const init = {}
+    for (const c of (def.columns || [])) if (c.width != null) init[c.colKey] = c.width
+    return init
   })
-  function resizeCol(key, dx) {
+  const widthsRef = useRef({})
+  function resizeCol(col, dx) {
     setColWidths((prev) => {
-      const next = { ...prev, [key]: Math.max(70, (prev[key] ?? 160) + dx) }
-      try { localStorage.setItem(lsKey, JSON.stringify(next)) } catch { /* ignore */ }
-      return next
+      const w = Math.max(70, (prev[col.colKey] ?? col.width ?? 160) + dx)
+      widthsRef.current[col.colKey] = w
+      return { ...prev, [col.colKey]: w }
     })
+  }
+  async function commitWidth(col) {
+    if (!isAdmin || col.scope !== 'global' || !col.id) return
+    const w = widthsRef.current[col.colKey]
+    if (w == null) return
+    try { await api.updateColumn(col.id, { width: Math.round(w) }); onDefUpdated?.() }
+    catch { addToast('Không thể lưu độ rộng cột', 'error') }
   }
 
   const columns = useMemo(() => {
@@ -564,7 +579,7 @@ export default function CustomTableTab({ def, company }) {
                             <Filter size={10} />
                           </button>
                         </div>
-                        <ResizeHandle onResize={(dx) => resizeCol(col.colKey, dx)} />
+                        {isAdmin && <ResizeHandle onResize={(dx) => resizeCol(col, dx)} onResizeEnd={() => commitWidth(col)} />}
                       </th>
                     )
                   })}
