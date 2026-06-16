@@ -5,7 +5,7 @@ import {
   Hash, Calendar, Briefcase,
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
-  Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal, ScrollText, Archive, FileSignature, TrendingDown,
+  Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal, Archive,
   ChevronDown, X, Table2,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
@@ -21,9 +21,6 @@ import CredentialsTab from './CredentialsTab'
 import DocumentsTab from './DocumentsTab'
 import NotesTab from './NotesTab'
 import ClientRequestsTab from './ClientRequestsTab'
-import LaborContractsTab from './LaborContractsTab'
-import ClientSupplierContractsTab from './ClientSupplierContractsTab'
-import NsnnDebtsTab from './NsnnDebtsTab'
 import ArchiveTab from './ArchiveTab'
 import CustomTableTab from './CustomTableTab'
 import * as companyTablesApi from '../../api/companyTables'
@@ -72,9 +69,6 @@ const TABS = [
   { id: 'tasks',             label: 'Công việc',          icon: ListTodo },
   { id: 'client-requests',   label: 'Yêu cầu KH',        icon: ClipboardList },
   { id: 'schedules',         label: 'Lịch định kỳ',       icon: CalendarDays },
-  { id: 'labor-contracts',   label: 'Theo dõi HĐLĐ',      icon: ScrollText },
-  { id: 'csc',               label: 'Theo dõi HĐ KH.NCC', icon: FileSignature },
-  { id: 'nsnn',              label: 'Nợ NSNN',             icon: TrendingDown },
   { id: 'archive',           label: 'HS lưu trữ khi QT',  icon: Archive },
   { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
   { id: 'documents',         label: 'Tài liệu',           icon: FileText },
@@ -367,15 +361,6 @@ export default function CompanyDetail() {
       )}
       {activeTab === 'schedules' && (
         <SchedulesTab company={company} isAdmin={isAdmin} />
-      )}
-      {activeTab === 'labor-contracts' && (
-        <LaborContractsTab company={company} />
-      )}
-      {activeTab === 'csc' && (
-        <ClientSupplierContractsTab company={company} />
-      )}
-      {activeTab === 'nsnn' && (
-        <NsnnDebtsTab company={company} />
       )}
       {activeTab === 'archive' && (
         <ArchiveTab company={company} />

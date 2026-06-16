@@ -195,17 +195,10 @@ function createApp() {
   app.use('/api/public/client-forms',    require('./modules/client-requests/clientRequestsPublic.router'))
   app.use('/api/admin/client-requests',  require('./modules/client-requests/clientRequestsAdmin.router'))
 
-  // Phase 19 — Labor Contracts (Theo dõi HĐLĐ)
-  app.use('/api/companies/:companyId/labor-contracts', require('./modules/labor-contracts/labor-contracts.router'))
-
-  // Phase 20 — Archive (HS Lưu Trữ Khi Quyết Toán)
+  // Phase 20 — Archive (HS Lưu Trữ Khi Quyết Toán) — vẫn bespoke
   app.use('/api/companies/:companyId/archive', require('./modules/archive/archive.router'))
 
-  // Phase 21 — Client/Supplier Contracts (Theo dõi HĐ KH.NCC)
-  app.use('/api/companies/:companyId/csc', require('./modules/csc/csc.router'))
-
-  // Phase 22 — NSNN Debt Tracking (Báo cáo theo dõi nợ NSNN)
-  app.use('/api/companies/:companyId/nsnn', require('./modules/nsnn/nsnn.router'))
+  // HĐLĐ / HĐ KH.NCC / Nợ NSNN đã migrate sang Generic Company Tables (docs/019)
 
   // Phase 23 — Generic Company Tables (bảng báo cáo tùy biến do admin tạo) — docs/019
   app.use('/api/company-tables', require('./modules/company-tables/company-tables.router'))
