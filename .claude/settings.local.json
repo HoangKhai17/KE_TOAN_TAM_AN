@@ -230,7 +230,8 @@
       "PowerShell(docker compose -f \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\docker-compose.yml\" restart backend 2>&1)",
       "PowerShell(docker compose -f \"d:\\\\WorkSpace_ADA_Bamboo\\\\PROJECT_BBOTECH\\\\KE_TOAN_TAM_AN\\\\docker-compose.yml\" ps --format json 2>&1)",
       "Bash(node --check src/modules/tasks/tasks.schema.js)",
-      "Bash(timeout 30 node src/db/migrate.js status)"
+      "Bash(timeout 30 node src/db/migrate.js status)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8080/api/company-tables/defs)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

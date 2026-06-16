@@ -7,7 +7,7 @@ import {
   Search, Eye, EyeOff, UserX, UserCheck, Camera, Tag,
   Play, RotateCcw, CheckCircle, XCircle,
   ChevronDown, ChevronUp, ListChecks, History,
-  Trash2, Check, X, Mail, Send, Info, ExternalLink, AlarmClock,
+  Trash2, Check, X, Mail, Send, Info, ExternalLink, AlarmClock, Table2,
 } from 'lucide-react'
 import { testEmail } from '../../api/notifications'
 import AppLayout from '../../components/layout/AppLayout'
@@ -18,6 +18,7 @@ import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
 import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerConfig, deleteSchedulerLog, clearSchedulerLogs } from '../../api/scheduler'
 import TaskTypesSection from './TaskTypesSection'
+import CompanyTablesSection from './CompanyTablesSection'
 import EnumManagementSection from './EnumManagementSection'
 import EmailTemplatesSection from './EmailTemplatesSection'
 import AttendanceConfigSection from './AttendanceConfigSection'
@@ -94,6 +95,7 @@ const SECTIONS = [
   { key: 'users',           label: 'Quản lý người dùng',     icon: Users,       dot: '#059669', bg: '#f0fdf4', iconColor: '#059669' },
   { key: 'task-types',      label: 'Loại công việc',         icon: ListTodo,    dot: '#7c3aed', bg: '#f5f3ff', iconColor: '#7c3aed' },
   { key: 'enum-management', label: 'Danh mục hệ thống',      icon: Tag,         dot: '#0f766e', bg: '#f0fdfa', iconColor: '#0f766e' },
+  { key: 'company-tables',  label: 'Bảng tùy chỉnh',         icon: Table2,      dot: '#0369a1', bg: '#f0f9ff', iconColor: '#0369a1' },
   { key: 'deadline',        label: 'Cảnh báo deadline',      icon: Bell,        dot: '#dc2626', bg: '#fef2f2', iconColor: '#dc2626' },
   { key: 'templates',       label: 'Bộ lập lịch tự động',   icon: CalendarDays,dot: '#0891b2', bg: '#ecfeff', iconColor: '#0891b2' },
   { key: 'escalation',      label: 'Quy tắc Escalation',     icon: ShieldAlert, dot: '#4f46e5', bg: '#eef2ff', iconColor: '#4f46e5' },
@@ -192,6 +194,7 @@ export default function Settings() {
             {activeSection === 'users'           && <UsersSection />}
             {activeSection === 'task-types'      && <TaskTypesSection />}
             {activeSection === 'enum-management' && <EnumManagementSection />}
+            {activeSection === 'company-tables'  && <CompanyTablesSection />}
             {activeSection === 'deadline'        && <DeadlineSection />}
             {activeSection === 'templates'       && <TemplatesSection />}
             {activeSection === 'escalation'      && <EscalationSection />}

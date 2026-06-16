@@ -6,7 +6,7 @@ import {
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
   Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal, ScrollText, Archive, FileSignature, TrendingDown,
-  ChevronDown, X,
+  ChevronDown, X, Table2,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -25,6 +25,8 @@ import LaborContractsTab from './LaborContractsTab'
 import ClientSupplierContractsTab from './ClientSupplierContractsTab'
 import NsnnDebtsTab from './NsnnDebtsTab'
 import ArchiveTab from './ArchiveTab'
+import CustomTableTab from './CustomTableTab'
+import * as companyTablesApi from '../../api/companyTables'
 import TaskFormModal from '../Tasks/TaskFormModal'
 import TaskQuickView from '../Tasks/TaskQuickView'
 import {
@@ -103,6 +105,11 @@ export default function CompanyDetail() {
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [customDefs, setCustomDefs] = useState([])
+
+  useEffect(() => {
+    companyTablesApi.listDefs({ activeOnly: true }).then(setCustomDefs).catch(() => {})
+  }, [])
 
   const [noteCount, setNoteCount]         = useState(0)
   const [overviewTick, setOverviewTick]   = useState(0)
@@ -325,6 +332,16 @@ export default function CompanyDetail() {
             )}
           </button>
         ))}
+        {customDefs.map((d) => (
+          <button
+            key={`ct_${d.id}`}
+            className={`${s.tabBtn} ${activeTab === `ct_${d.id}` ? s.tabBtnActive : ''}`}
+            onClick={() => setActiveTab(`ct_${d.id}`)}
+          >
+            <Table2 size={13} />
+            {d.name}
+          </button>
+        ))}
       </div>
 
       {/* Tab content */}
@@ -372,6 +389,10 @@ export default function CompanyDetail() {
       {activeTab === 'notes' && (
         <NotesTab company={company} onNoteCountChange={setNoteCount} />
       )}
+      {activeTab.startsWith('ct_') && (() => {
+        const d = customDefs.find((x) => `ct_${x.id}` === activeTab)
+        return d ? <CustomTableTab def={d} company={company} /> : null
+      })()}
 
       {/* Edit modal */}
       {showEdit && (

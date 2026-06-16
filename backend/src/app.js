@@ -207,6 +207,10 @@ function createApp() {
   // Phase 22 — NSNN Debt Tracking (Báo cáo theo dõi nợ NSNN)
   app.use('/api/companies/:companyId/nsnn', require('./modules/nsnn/nsnn.router'))
 
+  // Phase 23 — Generic Company Tables (bảng báo cáo tùy biến do admin tạo) — docs/019
+  app.use('/api/company-tables', require('./modules/company-tables/company-tables.router'))
+  app.use('/api/companies/:companyId/tables', require('./modules/company-tables/company-table-rows.router'))
+
   // Dev helper: send a test notification to the calling user
   app.post('/api/notifications/test', require('./middleware/auth').authenticate, async (req, res, next) => {
     try {
