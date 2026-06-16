@@ -224,6 +224,128 @@ Trang `/settings` thêm mục **"Bảng tùy chỉnh (Company tables)"**:
 | `required` thêm sau khi đã có row trống | Chỉ enforce khi tạo/sửa row mới; row cũ không bị chặn |
 | Cap dữ liệu | ≤ 1000 row/company/def (client-side filter/sort/paginate) |
 
+## P1.5 Wireframe màn hình (UI/UX)
+
+> ASCII mockup — chốt bố cục trước khi code. Ký hiệu: `⏷` nút filter/sort header · `⠿` handle kéo-thả · `●` badge màu · `🔒` không sửa được.
+
+### Flow tổng thể
+```
+Admin: Settings ▸ Bảng tùy chỉnh ──(tạo Def)──▶ Column editor ──(thêm cột)──▶ [ON]
+                                                                                  │
+                                                              đồng bộ GLOBAL ▼
+Staff/Admin: /companies/:id ─▶ tab mới tự xuất hiện ─▶ nhập liệu (inline) / lọc / xuất
+```
+
+### Màn A — Settings ▸ Bảng tùy chỉnh (danh sách Def)
+```
+┌─ Settings ▸ Bảng tùy chỉnh (Company Tables) ──────────────────────────────────┐
+│  Các tab báo cáo tự tạo — áp dụng cho TẤT CẢ công ty        [ + Tạo bảng mới ] │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ ⠿ │ Tab                  │ Key            │ Số cột │ Hiện  │ Thao tác           │
+├───┼──────────────────────┼────────────────┼────────┼───────┼────────────────────┤
+│ ⠿ │ 🛡 Theo dõi BHXH      │ bhxh_tracking  │   6    │ [ ON] │ ⚙ Cột   ✎ Sửa   🗑 │
+│ ⠿ │ 📄 Theo dõi hóa đơn   │ invoice_track  │   8    │ [ ON] │ ⚙ Cột   ✎ Sửa   🗑 │
+│ ⠿ │ 📑 Theo dõi BHYT      │ bhyt_tracking  │   5    │ [OFF] │ ⚙ Cột   ✎ Sửa   🗑 │
+└──────────────────────────────────────────────────────────────────────────────┘
+   ⠿ kéo-thả đổi sort_order · [ON/OFF] is_active · 🗑 xóa def (xác nhận 2 bước)
+```
+
+### Màn B — Tạo / Sửa Def (modal)
+```
+┌─ Tạo bảng mới ─────────────────────────────────────────[ × ]┐
+│ Tên tab *      [ Theo dõi BHXH_______________________ ]      │
+│ Key (tự sinh)  [ bhxh_tracking ] 🔒  (không đổi sau khi tạo) │
+│ Icon           [ 🛡 ShieldCheck            ▾ ]  (whitelist)  │
+│ Mô tả          [ ____________________________________ ]      │
+│                                        [ Huỷ ]  [ Tạo bảng ] │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Màn C — Column editor (mở 1 Def)
+```
+┌─ Bảng "Theo dõi BHXH" ▸ Quản lý cột ─────────────────────────────────[ Đóng ]┐
+│  Cột áp dụng cho MỌI công ty                                  [ + Thêm cột ]   │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ ⠿ │ Nhãn          │ Key          │ Kiểu      │ Bắt buộc │ Rộng │ Thao tác       │
+├───┼───────────────┼──────────────┼───────────┼──────────┼──────┼────────────────┤
+│ ⠿ │ Số sổ BHXH    │ so_so_bhxh   │ Văn bản   │    ✓     │ 140  │ ✎   🗑          │
+│ ⠿ │ Loại          │ loai         │ Lựa chọn  │          │ 120  │ ✎   🗑          │
+│ ⠿ │ Ngày nộp      │ ngay_nop     │ Ngày      │          │ 120  │ ✎   🗑          │
+│ ⠿ │ Số tiền       │ so_tien      │ Số        │          │ 120  │ ✎   🗑          │
+│ ⠿ │ Trạng thái    │ trang_thai   │ Lựa chọn  │          │ 120  │ ✎   🗑          │
+│ ⠿ │ Ghi chú       │ ghi_chu      │ Văn bản   │          │ 200  │ ✎   🗑          │
+└──────────────────────────────────────────────────────────────────────────────┘
+   🗑 cột đang có data → cảnh báo: "12 công ty đang có dữ liệu ở cột này"
+```
+
+### Màn D — Thêm / Sửa cột (modal, field đổi theo Kiểu)
+```
+┌─ Thêm cột ─────────────────────────────────────────────[ × ]┐
+│ Nhãn hiển thị *   [ Trạng thái________________________ ]     │
+│ Key (tự sinh)     [ trang_thai ] 🔒                          │
+│ Kiểu dữ liệu *    [ Lựa chọn (select)             ▾ ]        │
+│                     Văn bản · Số · Ngày · Lựa chọn · Computed│
+│ ┌─ chỉ hiện khi Kiểu = "Lựa chọn" ───────────────────────┐   │
+│ │ Giá trị:  [ Đã nộp_________ ] [×]                       │   │
+│ │           [ Chưa nộp_______ ] [×]                       │   │
+│ │           [ + Thêm giá trị ]                            │   │
+│ └────────────────────────────────────────────────────────┘   │
+│ ☐ Bắt buộc nhập         Độ rộng (px) [ 120 ]                 │
+│                                         [ Huỷ ]  [ Lưu cột ] │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Màn E — CompanyDetail: tab bar (tab generic xuất hiện tự động)
+```
+┌─ /companies/123 — Công ty ABC ───────────────────────────────────────────────┐
+│ [Thông tin][Công việc][Yêu cầu KH][Credentials][Documents][Notes]             │
+│ [Theo dõi HĐLĐ][HĐ KH.NCC][Nợ NSNN][HS lưu trữ]            ◀ built-in (cố định)│
+│ │ 🛡 Theo dõi BHXH │ 📄 Theo dõi hóa đơn │             ◀ generic (từ defs)      │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Màn F — CustomTableTab (tab generic render)
+```
+┌─ Tab "Theo dõi BHXH" ─────────────────────────────────────────────────────────┐
+│  🛡 Theo dõi BHXH    24 dòng · 2 lọc cột · đang sắp xếp   [⤓ Xuất Excel][+ Thêm dòng]│
+├──────────────────────────────────────────────────────────────────────────────┤
+│ STT│ Số sổ BHXH ⏷│ Loại ⏷   │ Ngày nộp ⏷│ Số tiền ⏷│ Trạng thái ⏷│ Ghi chú ⏷│ ⋯ │
+├────┼─────────────┼──────────┼───────────┼──────────┼─────────────┼──────────┼───┤
+│ 1  │ SO-0012     │ Tăng mới │ 01/06/2026│ 1.200.000│ ● Đã nộp    │ ...      │🗑 │
+│ 2  │ SO-0013     │ [Giảm▾ ] │ 03/06/2026│   850.000│ ● Chưa nộp  │          │🗑 │
+│    │             │  ↑ inline edit đang mở (select)                            │   │
+│ 3  │ SO-0014     │ Giảm     │ 05/06/2026│ 2.000.000│ ● Đã nộp    │ KPS      │🗑 │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  ‹ Trước   1 2 [3] 4 … 7   Tiếp ›       20/trang ▾       Hiển thị 41–60 / 137  │
+└──────────────────────────────────────────────────────────────────────────────┘
+   ⏷ filter/sort header (docs/018) · click ô = inline edit · 🗑 xóa dòng · ⋯ cột hành động
+```
+
+### Màn G — Dropdown filter trên header (theo data_type, docs/018)
+```
+ "Trạng thái" (select→enum)        "Ngày nộp" (date→dateRange)    "Số tiền" (number→numberRange)
+ ┌─────────────────────────┐       ┌─────────────────────────┐    ┌─────────────────────────┐
+ │ ↑ Sắp xếp A → Z         │       │ ↑ Sắp xếp A → Z         │    │ ↑ Sắp xếp A → Z         │
+ │ ↓ Sắp xếp Z → A         │       │ ↓ Sắp xếp Z → A         │    │ ↓ Sắp xếp Z → A         │
+ ├─────────────────────────┤       ├─────────────────────────┤    ├─────────────────────────┤
+ │ ☑ Chọn tất cả (3)       │       │ TỪ NGÀY [ 2026-06-01 ]  │    │ TỐI THIỂU [ 500000   ]  │
+ │ ☑ Đã nộp                │       │ ĐẾN NGÀY [ 2026-06-30 ] │    │ TỐI ĐA    [ ________ ]  │
+ │ ☑ Chưa nộp              │       ├─────────────────────────┤    ├─────────────────────────┤
+ │ ☐ (Trống)               │       │             Xoá bộ lọc  │    │             Xoá bộ lọc  │
+ ├─────────────────────────┤       └─────────────────────────┘    └─────────────────────────┘
+ │             Xoá bộ lọc  │       (cột "Văn bản" → ô search text 1 dòng)
+ └─────────────────────────┘
+```
+
+### Màn H — Trạng thái rỗng
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              ▢  (icon)                                        │
+│                   Chưa có dữ liệu trong bảng này                              │
+│                   Nhấn "+ Thêm dòng" để bắt đầu nhập                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 # PHA 2 — Computed Columns & Conditional Formatting
@@ -275,6 +397,29 @@ Trang `/settings` thêm mục **"Bảng tùy chỉnh (Company tables)"**:
 Khi thêm cột type `computed`:
 - Chọn `computed_type`, chọn `source_col` (dropdown từ các cột date/number của def), cấu hình buckets (label + ngưỡng + màu) cho `status_threshold`.
 - Validate: `source_col` phải tồn tại & đúng kiểu.
+
+### Wireframe — Thêm cột Computed (status_threshold)
+```
+┌─ Thêm cột — Kiểu = Computed ──────────────────────────[ × ]┐
+│ Nhãn          [ Tình trạng__________________ ]             │
+│ Loại computed [ Tô màu theo ngưỡng (status_threshold) ▾ ]  │
+│                 Số ngày còn lại (days_until)               │
+│                 Số ngày chậm (days_since)                  │
+│                 Tô màu theo ngưỡng (status_threshold)      │
+│ Cột nguồn *   [ Ngày kết thúc (end_date) ▾ ]  (date/number)│
+│ ┌─ Ngưỡng (bucket) — xét từ trên xuống ─────────────────┐  │
+│ │ ≤ [  0 ] →  [ Đã hết hạn   ]  ● Đỏ   (danger)   [×]   │  │
+│ │ ≤ [ 30 ] →  [ Sắp hết hạn  ]  ● Vàng (warning)  [×]   │  │
+│ │ còn lại →   [ Còn hiệu lực ]  ● Xanh (success)       │  │
+│ │ NULL →      [ Không xác định] ● Xám  (muted)         │  │
+│ │ [ + Thêm ngưỡng ]                                    │  │
+│ └──────────────────────────────────────────────────────┘  │
+│ Preview:  end_date=01/06/2026 → "● Sắp hết hạn"           │
+│                                       [ Huỷ ]  [ Lưu cột ] │
+└────────────────────────────────────────────────────────────┘
+```
+- Cột `days_until`/`days_since` không cần bucket → chỉ chọn `source_col`, hiển thị số.
+- Badge ở bảng (Màn F) lấy `tone` → class màu token sẵn có (`--color-danger/-warning/-success/-muted`).
 
 ## P2.4 Edge cases Pha 2
 - `source_col` bị xóa → cột computed báo "cấu hình lỗi", không crash (trả null).
