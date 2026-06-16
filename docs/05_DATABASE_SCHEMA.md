@@ -1405,8 +1405,8 @@ CREATE TABLE company_table_rows (
 |---|---|
 | Định nghĩa global, data per-company | `defs`+`columns` dùng chung mọi công ty; `rows` thuộc từng công ty |
 | Computed không lưu DB | Cột `computed` tính tại render từ `data[source_col]` (số ngày / nhãn + màu) |
-| `is_system` | 3 def `hdld`/`csc`/`nsnn` (migration 074) — sửa cột/ẩn được, **không xóa** |
-| Migration | `073` tạo bảng · `074` copy data tab cũ · `075` drop bảng cũ |
+| `is_system` | Cờ chống xóa def. 3 def `hdld`/`csc`/`nsnn` đã **tắt cờ này** (migration 076) → xóa được như bảng thường |
+| Migration | `073` tạo bảng · `074` copy data tab cũ · `075` drop bảng cũ · `076` tắt `is_system` 3 def |
 
 ---
 

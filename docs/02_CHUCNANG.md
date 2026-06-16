@@ -226,7 +226,7 @@
 - Đầy đủ: **inline edit · column header filter · resize cột · phân trang · xuất Excel (chọn cột + preview) · nhập Excel (mẫu + validate)**.
 - Định nghĩa bảng/cột là **global**; dữ liệu dòng là **per-company**.
 
-**Bảng được migrate sang engine này:** Theo dõi HĐLĐ (§1.5), HĐ KH.NCC (§1.7), Nợ NSNN (§1.8) — đánh dấu `is_system` (sửa cột/ẩn được, **không xóa** để tránh mất dữ liệu lõi). **Giữ bespoke:** HS lưu trữ khi QT (§1.6 — cấu trúc lưới 12 tháng).
+**Bảng được migrate sang engine này:** Theo dõi HĐLĐ (§1.5), HĐ KH.NCC (§1.7), Nợ NSNN (§1.8) — sửa cột / ẩn / **xóa** như bảng tùy chỉnh thường (cờ bảo vệ `is_system` đã tắt ở migration 076 theo yêu cầu). **Giữ bespoke:** HS lưu trữ khi QT (§1.6 — cấu trúc lưới 12 tháng).
 
 **Nơi hiển thị:** mỗi bảng active là 1 tab trên trang `/companies/:id`.
 
