@@ -990,7 +990,9 @@ CREATE INDEX idx_cc_active     ON company_credentials(company_id, is_active) WHE
 
 ---
 
-## TABLE: company_labor_contracts (Theo Dõi HĐLĐ Nhân Viên KH)
+## TABLE: company_labor_contracts (Theo Dõi HĐLĐ Nhân Viên KH) — ⚠️ ĐÃ GỠ
+
+> ⚠️ **ĐÃ GỠ (migration 075)** — migrate sang **Generic Company Tables** (`company_table_*`); dữ liệu chuyển vào `company_table_rows` (def `hdld`). Schema dưới giữ để tham chiếu lịch sử.
 
 > Lưu trữ danh sách hợp đồng lao động của nhân viên tại từng doanh nghiệp khách hàng. Trường `days_remaining` và `contract_status` **không lưu DB** — tính tại query time để luôn phản ánh đúng thực tế.
 
@@ -1184,7 +1186,9 @@ Operator `||` chỉ ghi đè đúng key được chỉ định, 11 key còn lạ
 
 ---
 
-## TABLE: company_csc_contracts (HĐ Khách Hàng / Nhà Cung Cấp)
+## TABLE: company_csc_contracts (HĐ Khách Hàng / Nhà Cung Cấp) — ⚠️ ĐÃ GỠ
+
+> ⚠️ **ĐÃ GỠ (migration 075)** — migrate sang `company_table_*` (def `csc`).
 
 > Migration: `migrations/068_csc_contracts.sql`
 
@@ -1236,7 +1240,9 @@ END AS contract_status
 
 ---
 
-## TABLE: company_csc_columns (Cột Tùy Chỉnh HĐ KH.NCC)
+## TABLE: company_csc_columns (Cột Tùy Chỉnh HĐ KH.NCC) — ⚠️ ĐÃ GỠ
+
+> ⚠️ **ĐÃ GỠ (migration 075)** — cột riêng nay nằm trong `company_table_company_columns`.
 
 > Migration: `migrations/069_csc_columns.sql`
 
@@ -1262,7 +1268,9 @@ CREATE INDEX idx_csc_cols_company ON company_csc_columns(company_id);
 
 ---
 
-## TABLE: company_nsnn_debts (Báo Cáo Theo Dõi Nợ NSNN)
+## TABLE: company_nsnn_debts (Báo Cáo Theo Dõi Nợ NSNN) — ⚠️ ĐÃ GỠ
+
+> ⚠️ **ĐÃ GỠ (migration 075)** — migrate sang `company_table_*` (def `nsnn`).
 
 > Migration: `migrations/070_nsnn_debts.sql`
 
@@ -1304,7 +1312,9 @@ CREATE INDEX idx_nsnn_update_date ON company_nsnn_debts(update_date) WHERE updat
 
 ---
 
-## TABLE: company_nsnn_columns (Cột Tùy Chỉnh Nợ NSNN)
+## TABLE: company_nsnn_columns (Cột Tùy Chỉnh Nợ NSNN) — ⚠️ ĐÃ GỠ
+
+> ⚠️ **ĐÃ GỠ (migration 075)** — cột riêng nay nằm trong `company_table_company_columns`.
 
 > Migration: `migrations/071_nsnn_columns.sql`
 
@@ -1327,6 +1337,76 @@ CREATE INDEX idx_nsnn_cols_company ON company_nsnn_columns(company_id);
 | `col_name` | Tên cột do người dùng đặt |
 | `col_type` | Kiểu dữ liệu: `text` / `number` / `date` |
 | `position` | Thứ tự hiển thị |
+
+---
+
+## TABLE: company_table_defs / columns / company_columns / rows (Generic Company Tables)
+
+> **Migration `073`.** Engine bảng báo cáo tùy biến do admin tạo (kiểu Excel) — thay thế các tab schema-cứng (HĐLĐ/CSC/NSNN, đã gỡ ở migration 075). Thiết kế: [019_GENERIC_COMPANY_TABLES.md](./019_GENERIC_COMPANY_TABLES.md).
+
+```sql
+-- Định nghĩa TAB / loại bảng (GLOBAL — đồng bộ mọi công ty)
+CREATE TABLE company_table_defs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  table_key TEXT NOT NULL UNIQUE,          -- key ổn định, vd 'hdld'
+  name TEXT NOT NULL, description TEXT, icon TEXT,
+  sort_order INT NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,  -- ẩn tab mà không mất data
+  allow_company_columns BOOLEAN NOT NULL DEFAULT FALSE,  -- cho phép cột riêng per-company
+  is_system BOOLEAN NOT NULL DEFAULT FALSE, -- def migrate từ tab cũ — khóa xóa
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Cột (GLOBAL)
+CREATE TABLE company_table_columns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  def_id UUID NOT NULL REFERENCES company_table_defs(id) ON DELETE CASCADE,
+  col_key TEXT NOT NULL, label TEXT NOT NULL,
+  data_type TEXT NOT NULL DEFAULT 'text'
+            CHECK (data_type IN ('text','number','date','select','computed')),
+  required BOOLEAN NOT NULL DEFAULT FALSE, options JSONB,
+  sort_order INT NOT NULL DEFAULT 0, width INT,
+  computed_type TEXT CHECK (computed_type IN ('days_until','days_since','status_threshold')),
+  computed_config JSONB,                    -- {source_col, mode, buckets[], null_label...}
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (def_id, col_key)
+);
+
+-- Cột riêng theo từng công ty (hybrid)
+CREATE TABLE company_table_company_columns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  def_id UUID NOT NULL REFERENCES company_table_defs(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  col_key TEXT NOT NULL, label TEXT NOT NULL,
+  data_type TEXT NOT NULL DEFAULT 'text'
+            CHECK (data_type IN ('text','number','date','select')),
+  options JSONB, sort_order INT NOT NULL DEFAULT 0, width INT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (def_id, company_id, col_key)
+);
+
+-- Dữ liệu dòng (PER-COMPANY)
+CREATE TABLE company_table_rows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  def_id UUID NOT NULL REFERENCES company_table_defs(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  data JSONB NOT NULL DEFAULT '{}',          -- { col_key: value }
+  position INT NOT NULL DEFAULT 0,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+| Điểm chính | Ghi chú |
+|---|---|
+| Định nghĩa global, data per-company | `defs`+`columns` dùng chung mọi công ty; `rows` thuộc từng công ty |
+| Computed không lưu DB | Cột `computed` tính tại render từ `data[source_col]` (số ngày / nhãn + màu) |
+| `is_system` | 3 def `hdld`/`csc`/`nsnn` (migration 074) — sửa cột/ẩn được, **không xóa** |
+| Migration | `073` tạo bảng · `074` copy data tab cũ · `075` drop bảng cũ |
 
 ---
 
@@ -1369,13 +1449,18 @@ CREATE INDEX idx_nsnn_cols_company ON company_nsnn_columns(company_id);
 | **—** | **— Module 8: Client Document Requests —** | | |
 | 32 | `client_document_requests` | Yêu cầu tài liệu từ KH (entity độc lập) | N:1 companies, users; N:0..1 tasks (nullable) |
 | **—** | **— Module 1: Công Ty (bổ sung) —** | | |
-| 33 | `company_labor_contracts` | Theo dõi HĐLĐ nhân viên KH | N:1 companies, users (created_by) |
+| ~~33~~ | ~~`company_labor_contracts`~~ | ⚠️ **ĐÃ GỠ** (mig 075) — migrate sang `company_table_*` | — |
 | 34 | `company_archive_years` | Năm lưu trữ hồ sơ theo công ty KH | N:1 companies |
 | 35 | `company_archive_docs` | Dòng chứng từ lưu trữ theo năm | N:1 company_archive_years (cascade) |
-| 36 | `company_csc_contracts` | HĐ khách hàng / nhà cung cấp | N:1 companies, users (created_by) |
-| 37 | `company_csc_columns` | Cột tùy chỉnh tab HĐ KH.NCC | N:1 companies |
-| 38 | `company_nsnn_debts` | Theo dõi nợ ngân sách nhà nước | N:1 companies, users (created_by) |
-| 39 | `company_nsnn_columns` | Cột tùy chỉnh tab Nợ NSNN | N:1 companies |
+| ~~36~~ | ~~`company_csc_contracts`~~ | ⚠️ **ĐÃ GỠ** (mig 075) | — |
+| ~~37~~ | ~~`company_csc_columns`~~ | ⚠️ **ĐÃ GỠ** (mig 075) | — |
+| ~~38~~ | ~~`company_nsnn_debts`~~ | ⚠️ **ĐÃ GỠ** (mig 075) | — |
+| ~~39~~ | ~~`company_nsnn_columns`~~ | ⚠️ **ĐÃ GỠ** (mig 075) | — |
+| **—** | **— Generic Company Tables (mig 073) —** | | |
+| 40 | `company_table_defs` | Định nghĩa tab báo cáo tùy biến (global) | — |
+| 41 | `company_table_columns` | Cột của bảng (global) | N:1 company_table_defs |
+| 42 | `company_table_company_columns` | Cột riêng per-company (hybrid) | N:1 defs, companies |
+| 43 | `company_table_rows` | Dữ liệu dòng per-company (JSONB) | N:1 defs, companies |
 
 ---
 

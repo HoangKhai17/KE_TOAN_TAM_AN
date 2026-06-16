@@ -65,6 +65,8 @@
 
 > Quản lý danh sách hợp đồng lao động của nhân viên tại từng doanh nghiệp khách hàng — cho phép nhân viên kế toán phụ trách theo dõi hạn hợp đồng và nhắc nhở gia hạn kịp thời.
 
+> 🔄 **Triển khai (2026):** Tab này nay chạy trên **engine Generic Company Tables** (xem §1.9 · [019_GENERIC_COMPANY_TABLES.md](./019_GENERIC_COMPANY_TABLES.md)). Bảng schema riêng cũ (`company_labor_contracts`) **đã gỡ** (migration 075); dữ liệu lưu trong `company_table_rows`. "Số ngày còn lại" / "Tình trạng" là **computed columns** (`days_until` / `status_threshold`). Cấu hình cột tại **Settings ▸ Bảng tùy chỉnh**.
+
 **Tính năng:**
 - Xem danh sách toàn bộ HĐLĐ của nhân viên thuộc công ty KH
 - Thêm / sửa / xóa từng hợp đồng — **staff toàn quyền trên công ty mình phụ trách**, admin toàn quyền
@@ -132,6 +134,8 @@
 
 > Theo dõi các hợp đồng mà khách hàng ký kết với đối tác bên ngoài (khách hàng hoặc nhà cung cấp). Giúp nhân viên kế toán nắm bắt tình trạng hiệu lực hợp đồng và cảnh báo hết hạn.
 
+> 🔄 **Triển khai (2026):** Tab này nay chạy trên **engine Generic Company Tables** (§1.9 · [019_GENERIC_COMPANY_TABLES.md](./019_GENERIC_COMPANY_TABLES.md)). Bảng cũ (`company_csc_contracts`, `company_csc_columns`) **đã gỡ** (migration 075); dữ liệu trong `company_table_rows`. "Ngày còn lại" / "Tình trạng" là computed columns.
+
 **Tính năng:**
 - Thêm / sửa / xóa hợp đồng KH.NCC theo từng công ty
 - **Click-to-edit inline** — click thẳng vào ô trong bảng để chỉnh sửa (giống tab HĐLĐ)
@@ -174,6 +178,8 @@
 
 > Theo dõi các khoản nợ ngân sách nhà nước (NSNN) của từng công ty khách hàng. Giúp nhân viên kế toán nắm bắt tình trạng nợ, số ngày chậm và số lần lặp lại từng công việc.
 
+> 🔄 **Triển khai (2026):** Tab này nay chạy trên **engine Generic Company Tables** (§1.9 · [019_GENERIC_COMPANY_TABLES.md](./019_GENERIC_COMPANY_TABLES.md)). Bảng cũ (`company_nsnn_debts`, `company_nsnn_columns`) **đã gỡ** (migration 075); dữ liệu trong `company_table_rows`. "Số ngày chậm" là computed column (`days_since`).
+
 **Tính năng:**
 - Thêm / sửa / xóa dòng nợ NSNN theo từng công ty
 - **Click-to-edit inline** — click thẳng vào ô trong bảng để chỉnh sửa
@@ -202,6 +208,27 @@
 
 **Nơi hiển thị:**
 - Tab **"Nợ NSNN"** trên trang `/companies/:id`
+
+---
+
+### 1.9 Bảng Báo Cáo Tùy Biến (Generic Company Tables)
+
+> Cho phép **admin tự tạo các tab báo cáo mới** trong Company Detail (kiểu Excel) — định nghĩa **một lần**, **đồng bộ tự động cho mọi công ty** — thay vì code cứng từng loại. Thiết kế chi tiết: [019_GENERIC_COMPANY_TABLES.md](./019_GENERIC_COMPANY_TABLES.md).
+
+**Tính năng:**
+- **Admin tự tạo / sửa / ẩn bảng** và cột tại **Settings ▸ Bảng tùy chỉnh** — không cần dev.
+- Kiểu cột: **văn bản · số · ngày · lựa chọn (select) · computed**.
+- **Computed columns** (tính tại render, không lưu DB):
+  - `days_until` — số ngày còn lại đến 1 cột ngày
+  - `days_since` — số ngày trôi qua từ 1 cột ngày
+  - `status_threshold` — nhãn + **màu theo ngưỡng** (vd Còn hiệu lực/Sắp hết hạn/Đã hết hạn)
+- Mỗi công ty tự thêm **cột riêng** (hybrid) nếu bảng cho phép.
+- Đầy đủ: **inline edit · column header filter · resize cột · phân trang · xuất Excel (chọn cột + preview) · nhập Excel (mẫu + validate)**.
+- Định nghĩa bảng/cột là **global**; dữ liệu dòng là **per-company**.
+
+**Bảng được migrate sang engine này:** Theo dõi HĐLĐ (§1.5), HĐ KH.NCC (§1.7), Nợ NSNN (§1.8) — đánh dấu `is_system` (sửa cột/ẩn được, **không xóa** để tránh mất dữ liệu lõi). **Giữ bespoke:** HS lưu trữ khi QT (§1.6 — cấu trúc lưới 12 tháng).
+
+**Nơi hiển thị:** mỗi bảng active là 1 tab trên trang `/companies/:id`.
 
 ---
 
@@ -743,7 +770,8 @@ Khi staff / admin tạo task, họ chọn **Loại task**:
 |--------|-----------|---------|---------|
 | M1 | Hồ sơ doanh nghiệp | 🔴 P1 | Nền tảng của toàn hệ thống |
 | M1 | Tài khoản hệ thống KH (Credentials) | 🔴 P1 | Nhu cầu hàng ngày của nhân viên kế toán |
-| M1 | Theo dõi HĐLĐ nhân viên KH | 🟠 P2 | Tab trong company detail; staff toàn quyền; dynamic fields (text/number/date); xuất Excel |
+| M1 | Theo dõi HĐLĐ nhân viên KH | 🟠 P2 | Tab trong company detail; staff toàn quyền; **nay chạy trên Generic Company Tables** (§1.9) |
+| M1 | Generic Company Tables (admin tự tạo tab báo cáo) | 🟠 P2 | Engine dùng chung cho HĐLĐ/HĐ KH.NCC/Nợ NSNN + bảng admin tự tạo; computed + màu; xem §1.9 / docs/019 |
 | M1 | Hồ Sơ Lưu Trữ Khi Quyết Toán | 🟠 P2 | Tab trong company detail; tổ chức theo năm; 12 ô tháng click-to-edit inline; xóa theo năm cascade |
 | M2 | Hồ sơ nhân viên + phân công | 🔴 P1 | |
 | M2 | Quản lý lương & thưởng | 🟠 P2 | Lập bảng lương hàng tháng, tính net salary |
