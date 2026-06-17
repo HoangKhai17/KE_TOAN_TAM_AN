@@ -23,9 +23,12 @@ export default function ExcelImportModal({
   dynCols = [],
   templateName = 'import_template.xlsx',
   sheetName = 'Dữ liệu',
+  matchKeyOptions = [],   // [{value, label}] — bật chế độ Cập nhật (đè) nếu có
   onImport,
   onClose,
 }) {
+  const [mode,        setMode]        = useState('insert')  // insert | upsert
+  const [matchKey,    setMatchKey]    = useState(() => matchKeyOptions[0]?.value ?? '')
   const [step,        setStep]        = useState('select')  // select | preview | result
   const [rows,        setRows]        = useState([])
   const [parseErrors, setParseErrors] = useState([])
@@ -72,7 +75,7 @@ export default function ExcelImportModal({
     if (validRows.length === 0) return
     setImporting(true)
     try {
-      const res = await onImport(validRows)
+      const res = await onImport(validRows, { mode, matchKey })
       setResult(res)
       setStep('result')
     } catch (err) {
@@ -134,6 +137,26 @@ export default function ExcelImportModal({
         {/* ══ STEP 2: PREVIEW ══════════════════════════════════════════════════ */}
         {step === 'preview' && (
           <div className={s.previewStep}>
+            {matchKeyOptions.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10, fontSize: '0.8rem', padding: '8px 10px', background: 'var(--color-bg-soft)', borderRadius: 8 }}>
+                <span style={{ fontWeight: 600 }}>Chế độ nhập:</span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                  <input type="radio" checked={mode === 'insert'} onChange={() => setMode('insert')} /> Thêm mới
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                  <input type="radio" checked={mode === 'upsert'} onChange={() => setMode('upsert')} /> Cập nhật (đè)
+                </label>
+                {mode === 'upsert' && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    · Cột khóa:
+                    <select value={matchKey} onChange={(e) => setMatchKey(e.target.value)}>
+                      {matchKeyOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    <span style={{ color: 'var(--color-muted)' }}>(ưu tiên khớp cột “ID dòng” nếu file có)</span>
+                  </span>
+                )}
+              </div>
+            )}
             <div className={s.previewStats}>
               <span className={s.statValid}>
                 <CheckCircle2 size={13} /> {validRows.length} dòng hợp lệ
@@ -218,7 +241,13 @@ export default function ExcelImportModal({
             {result.inserted > 0 && (
               <div className={s.resultSuccess}>
                 <CheckCircle2 size={28} />
-                <span>Đã nhập thành công <strong>{result.inserted}</strong> {entityLabel}</span>
+                <span>Đã thêm mới <strong>{result.inserted}</strong> {entityLabel}</span>
+              </div>
+            )}
+            {result.updated > 0 && (
+              <div className={s.resultSuccess}>
+                <CheckCircle2 size={28} />
+                <span>Đã cập nhật <strong>{result.updated}</strong> {entityLabel}</span>
               </div>
             )}
             {result.failed > 0 && (

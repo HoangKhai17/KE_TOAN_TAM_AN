@@ -336,9 +336,71 @@ async function reorderRows(defId, companyId, user, orderedIds) {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Upsert: ưu tiên khớp theo __id (UUID), fallback theo cột khóa matchKey; merge data.
+async function upsertRows(defId, companyId, user, matchKey, rowsData) {
+  await assertAccess(companyId, user)
+  const columns = await getColumnsForCompany(defId, companyId)
+  const useMatch = matchKey && columns.some((c) => c.col_key === matchKey)
+  const client = await getClient()
+  let inserted = 0, updated = 0, failed = 0
+  const errors = []
+  try {
+    await client.query('BEGIN')
+    const { rows: posRows } = await client.query(
+      'SELECT COALESCE(MAX(position), -1) + 1 AS next FROM company_table_rows WHERE def_id = $1 AND company_id = $2',
+      [defId, companyId])
+    let pos = posRows[0].next
+    for (let i = 0; i < rowsData.length; i++) {
+      const sp = `sp_${i}`
+      await client.query(`SAVEPOINT ${sp}`)
+      try {
+        const raw = rowsData[i]
+        const id = raw.__id && UUID_RE.test(String(raw.__id).trim()) ? String(raw.__id).trim() : null
+        const clean = sanitizeData(raw, columns)  // bỏ __id / computed / key lạ
+        let targets = []
+        if (id) {
+          const r = await client.query(
+            'SELECT id, data FROM company_table_rows WHERE id = $1 AND def_id = $2 AND company_id = $3',
+            [id, defId, companyId])
+          targets = r.rows
+        }
+        if (!targets.length && useMatch && clean[matchKey] != null && clean[matchKey] !== '') {
+          const r = await client.query(
+            'SELECT id, data FROM company_table_rows WHERE def_id = $1 AND company_id = $2 AND data->>$3 = $4',
+            [defId, companyId, matchKey, String(clean[matchKey])])
+          targets = r.rows
+        }
+        if (targets.length) {
+          for (const t of targets) {
+            const merged = { ...(t.data ?? {}), ...clean }   // MERGE: chỉ ghi đè cột có trong file
+            await client.query('UPDATE company_table_rows SET data = $1, updated_at = NOW() WHERE id = $2',
+              [JSON.stringify(merged), t.id])
+          }
+          updated += targets.length
+        } else {
+          await client.query(
+            'INSERT INTO company_table_rows (def_id, company_id, data, position, created_by) VALUES ($1,$2,$3,$4,$5)',
+            [defId, companyId, JSON.stringify(clean), pos++, user.id])
+          inserted++
+        }
+      } catch (err) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${sp}`)
+        failed++
+        errors.push({ row: rowsData[i]._rowNum ?? i + 2, message: err.message })
+      }
+    }
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK'); throw err
+  } finally { client.release() }
+  return { inserted, updated, failed, errors }
+}
+
 module.exports = {
   listDefs, getDef, createDef, updateDef, deleteDef,
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,
-  listRows, createRow, updateRow, deleteRow, reorderRows, batchCreateRows,
+  listRows, createRow, updateRow, deleteRow, reorderRows, batchCreateRows, upsertRows,
 }

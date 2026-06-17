@@ -24,11 +24,16 @@ function cellText(col, row) {
 function ExportModal({ def, columns, rows, company, onClose }) {
   // Trường thông tin công ty (giá trị giống nhau mọi dòng) — tùy chọn xuất
   const extraFields = [
+    { key: '__row_id',         label: 'ID dòng',           perRow: (r) => r.id },
     { key: '__company_name',   label: 'Tên công ty',       value: company.name ?? '' },
     { key: '__tax_code',       label: 'Mã số thuế',        value: company.taxCode ?? '' },
     { key: '__assigned_staff', label: 'Nhân sự phụ trách', value: company.assignedStaff?.name ?? '' },
   ]
-  const [selected, setSelected] = useState(() => new Set([...extraFields.map((f) => f.key), ...columns.map((c) => c.colKey)]))
+  // Mặc định tick các trường công ty + cột bảng; "ID dòng" để TẮT (chỉ bật khi cần round-trip update)
+  const [selected, setSelected] = useState(() => new Set([
+    ...extraFields.filter((f) => f.key !== '__row_id').map((f) => f.key),
+    ...columns.map((c) => c.colKey),
+  ]))
   function toggle(k) { setSelected((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n }) }
 
   // Thứ tự xuất: STT → trường công ty (đã chọn) → cột bảng (đã chọn)
@@ -36,7 +41,7 @@ function ExportModal({ def, columns, rows, company, onClose }) {
     ...extraFields.filter((f) => selected.has(f.key)),
     ...columns.filter((c) => selected.has(c.colKey)).map((c) => ({ key: c.colKey, label: c.label, col: c })),
   ]
-  const cellOf = (f, r) => (f.col ? cellText(f.col, r) : f.value)
+  const cellOf = (f, r) => (f.col ? cellText(f.col, r) : (f.perRow ? f.perRow(r) : f.value))
 
   function doExport() {
     const header = ['STT', ...outFields.map((f) => f.label)]
@@ -557,21 +562,30 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   }
 
   // ── Import Excel ─────────────────────────────────────────────────────────────
-  const importCols = useMemo(
-    () => columns.filter((c) => c.dataType !== 'computed').map((c) => ({
+  const importCols = useMemo(() => {
+    const cols = columns.filter((c) => c.dataType !== 'computed').map((c) => ({
       key: c.colKey, label: c.label, required: c.required,
       type: c.dataType === 'number' ? 'number' : c.dataType === 'date' ? 'date' : 'text',
       example: '',
-    })),
+    }))
+    // Cột "ID dòng" (tùy chọn) — dùng khi cập nhật theo ID; thêm mới thì để trống
+    cols.push({ key: '__id', label: 'ID dòng', required: false, type: 'text', example: '' })
+    return cols
+  }, [columns])
+  const matchKeyOptions = useMemo(
+    () => columns.filter((c) => c.dataType !== 'computed').map((c) => ({ value: c.colKey, label: c.label })),
     [columns],
   )
-  async function handleImport(validRows) {
+  async function handleImport(validRows, opts = {}) {
     const payload = validRows.map((r) => {
       const d = { _rowNum: r._rowNum }
-      for (const c of importCols) if (r[c.key] !== null && r[c.key] !== undefined) d[c.key] = r[c.key]
+      if (r.__id) d.__id = r.__id
+      for (const c of importCols) if (c.key !== '__id' && r[c.key] !== null && r[c.key] !== undefined) d[c.key] = r[c.key]
       return d
     })
-    const res = await api.batchCreateRows(companyId, def.id, payload)
+    const res = opts.mode === 'upsert'
+      ? await api.upsertRows(companyId, def.id, opts.matchKey || null, payload)
+      : await api.batchCreateRows(companyId, def.id, payload)
     load()
     return res
   }
@@ -742,6 +756,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
           title={`Nhập Excel — ${def.name}`}
           entityLabel="dòng"
           fixedCols={importCols}
+          matchKeyOptions={matchKeyOptions}
           templateName={`${def.tableKey}_template.xlsx`}
           sheetName={def.name.substring(0, 28)}
           onImport={handleImport}

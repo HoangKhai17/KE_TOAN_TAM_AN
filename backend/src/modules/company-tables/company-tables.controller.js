@@ -79,6 +79,12 @@ async function batchRows(req, res, next) {
     res.json({ success: true, data: await svc.batchCreateRows(defId, companyId, req.user, req.body.rows || []) })
   } catch (e) { next(e) }
 }
+async function upsertRows(req, res, next) {
+  try {
+    const { companyId, defId } = req.params
+    res.json({ success: true, data: await svc.upsertRows(defId, companyId, req.user, req.body.matchKey || null, req.body.rows || []) })
+  } catch (e) { next(e) }
+}
 
 // ── Per-company columns (ownership) ───────────────────────────────────────────
 async function listCompanyColumns(req, res, next) {
@@ -103,6 +109,6 @@ async function deleteCompanyColumn(req, res, next) {
 module.exports = {
   listDefs, getDef, createDef, updateDef, deleteDef,
   addColumn, updateColumn, deleteColumn, reorderColumns,
-  listRows, createRow, updateRow, deleteRow, reorderRows, batchRows,
+  listRows, createRow, updateRow, deleteRow, reorderRows, batchRows, upsertRows,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,
 }

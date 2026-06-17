@@ -14,6 +14,7 @@ router.delete('/:defId/company-columns/:colId', ...auth, ctrl.deleteCompanyColum
 // Rows — specific paths before `/:rowId`
 router.patch('/:defId/rows/reorder', ...auth, ctrl.reorderRows)
 router.post('/:defId/rows/batch',    ...auth, ctrl.batchRows)
+router.post('/:defId/rows/upsert',   ...auth, ctrl.upsertRows)
 router.get('/:defId/rows',           ...auth, ctrl.listRows)
 router.post('/:defId/rows',          ...auth, ctrl.createRow)
 router.patch('/:defId/rows/:rowId',  ...auth, ctrl.updateRow)

@@ -56,6 +56,10 @@ export async function batchCreateRows(companyId, defId, rows) {
   const { data } = await api.post(`/companies/${companyId}/tables/${defId}/rows/batch`, { rows })
   return data.data  // { inserted, failed, errors }
 }
+export async function upsertRows(companyId, defId, matchKey, rows) {
+  const { data } = await api.post(`/companies/${companyId}/tables/${defId}/rows/upsert`, { matchKey, rows })
+  return data.data  // { inserted, updated, failed, errors }
+}
 
 // ── Per-company columns (hybrid) ──────────────────────────────────────────────
 export async function listCompanyColumns(companyId, defId) {
