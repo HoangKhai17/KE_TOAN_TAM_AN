@@ -163,6 +163,7 @@ const STATUS_ORDER = { danger: 0, warning: 1, info: 2, success: 3, muted: 4 }
 
 // ── Type-driven helpers (docs/018) ────────────────────────────────────────────
 function columnFilterType(col) {
+  if (col.colKey === '__stt') return 'none'   // STT: chỉ sắp xếp, không lọc giá trị
   if (col.dataType === 'computed') {
     return col.computedType === 'status_threshold' ? 'enum' : 'numberRange'
   }
@@ -190,6 +191,7 @@ function numericValue(row, col) {
   return v == null || v === '' ? null : Number(v)
 }
 function sortKey(row, col) {
+  if (col.colKey === '__stt') return row.createdAt ?? ''   // STT = theo thời gian tạo
   if (col.dataType === 'computed') {
     if (col.computedType === 'status_threshold') {
       return STATUS_ORDER[resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).tone] ?? 9
@@ -301,11 +303,14 @@ function ColumnFilterDropdown({ col, allRows, currentFilter, sortState, onSort, 
   }, [onClose])
   const asc = sortState.col === col.colKey && sortState.dir === 'asc'
   const desc = sortState.col === col.colKey && sortState.dir === 'desc'
+  const isStt = col.colKey === '__stt'
+  const ascLabel  = isStt ? '↑  Cũ nhất → Mới nhất' : '↑  Sắp xếp A → Z'
+  const descLabel = isStt ? '↓  Mới nhất → Cũ nhất' : '↓  Sắp xếp Z → A'
   return (
     <div ref={ref} className={s.hdldFilterDropdown} style={style}>
       <div className={s.hdldDdSortSection}>
-        <button className={`${s.hdldDdSortBtn} ${asc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.colKey, 'asc')}>↑&nbsp; Sắp xếp A → Z</button>
-        <button className={`${s.hdldDdSortBtn} ${desc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.colKey, 'desc')}>↓&nbsp; Sắp xếp Z → A</button>
+        <button className={`${s.hdldDdSortBtn} ${asc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.colKey, 'asc')}>{ascLabel}</button>
+        <button className={`${s.hdldDdSortBtn} ${desc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.colKey, 'desc')}>{descLabel}</button>
       </div>
       {ft === 'enum'        && <EnumSection col={col} allRows={allRows} currentFilter={currentFilter} onChange={onChange} onClose={onClose} />}
       {ft === 'text'        && <TextSection currentFilter={currentFilter} onChange={onChange} />}
@@ -394,7 +399,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   const [companyCols, setCompanyCols]   = useState([])
   const [loading, setLoading]           = useState(true)
   const [colFilters, setColFilters]     = useState({})
-  const [sortState, setSortState]       = useState({ col: null, dir: 'asc' })
+  const [sortState, setSortState]       = useState({ col: '__stt', dir: 'desc' })  // mặc định: mới nhất trước
   const [filterPopup, setFilterPopup]   = useState(null)
   const [page, setPage]                 = useState(1)
   const [deletingRow, setDeletingRow]   = useState(null)
@@ -479,7 +484,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       }
     }
     if (sortState.col) {
-      const col = columns.find((c) => c.colKey === sortState.col)
+      const col = sortState.col === '__stt' ? { colKey: '__stt' } : columns.find((c) => c.colKey === sortState.col)
       if (col) result.sort((a, b) => {
         const ak = sortKey(a, col), bk = sortKey(b, col)
         if (typeof ak === 'number' && typeof bk === 'number') return sortState.dir === 'asc' ? ak - bk : bk - ak
@@ -514,11 +519,16 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     return false
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
+  const isDefaultSort = sortState.col === '__stt' && sortState.dir === 'desc'
 
   // ── Row mutations ────────────────────────────────────────────────────────────
   async function addRow() {
-    try { const row = await api.createRow(companyId, def.id, {}); setRows((p) => [...p, row]) }
-    catch { addToast('Không thể thêm dòng', 'error') }
+    try {
+      const row = await api.createRow(companyId, def.id, {})
+      setRows((p) => [row, ...p])   // dòng mới lên đầu
+      setSortState({ col: '__stt', dir: 'desc' })  // đảm bảo mới nhất ở trên
+      setPage(1)                     // nhảy về trang 1 để nhập ngay
+    } catch { addToast('Không thể thêm dòng', 'error') }
   }
   async function saveCell(row, colKey, value) {
     try {
@@ -600,12 +610,12 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
           <span className={s.hdldToolbarCount}>
             {displayed.length}{displayed.length < rows.length && `/${rows.length}`} dòng
             {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
-            {sortState.col && ' · đang sắp xếp'}
+            {!isDefaultSort && ' · đang sắp xếp'}
           </span>
         )}
-        {(colFilterCount > 0 || sortState.col) && (
+        {(colFilterCount > 0 || !isDefaultSort) && (
           <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`}
-            onClick={() => { setColFilters({}); setSortState({ col: null, dir: 'asc' }) }}>
+            onClick={() => { setColFilters({}); setSortState({ col: '__stt', dir: 'desc' }) }}>
             Xoá tất cả bộ lọc
           </button>
         )}
@@ -650,7 +660,16 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
                         onChange={toggleSelectAll} title="Chọn tất cả trang này" />
                     </th>
                   )}
-                  <th className={s.hdldThStt}>STT</th>
+                  <th className={`${s.hdldThStt} ${s.ctblTh}`}>
+                    <div className={s.hdldThInner}>
+                      <span className={s.hdldThLabel}>STT</span>
+                      <button data-hdld-filter-btn
+                        className={`${s.hdldFilterBtn} ${sortState.col === '__stt' && !isDefaultSort ? s.hdldFilterBtnActive : ''}`}
+                        onClick={(e) => openFilter('__stt', e)} title="Sắp xếp theo thời gian">
+                        <Filter size={10} />
+                      </button>
+                    </div>
+                  </th>
                   {columns.map((col) => {
                     const active = hasColFilter(col.colKey) || sortState.col === col.colKey
                     const w = colWidths[col.colKey] ?? col.width ?? undefined
@@ -733,7 +752,9 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       )}
 
       {filterPopup && (() => {
-        const col = columns.find((c) => c.colKey === filterPopup.colKey)
+        const col = filterPopup.colKey === '__stt'
+          ? { colKey: '__stt', label: 'STT' }
+          : columns.find((c) => c.colKey === filterPopup.colKey)
         if (!col) return null
         return (
           <ColumnFilterDropdown
