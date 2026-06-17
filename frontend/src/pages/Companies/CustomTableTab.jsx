@@ -368,6 +368,9 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   const [deletingRow, setDeletingRow]   = useState(null)
   const [showExport, setShowExport]     = useState(false)
   const [showImport, setShowImport]     = useState(false)
+  const [pageSize, setPageSize]         = useState(PAGE_SIZE)
+  const [selectedIds, setSelectedIds]   = useState(() => new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Column widths — GLOBAL (lưu vào company_table_columns.width). Chỉ admin được kéo;
   // kéo 1 chỗ → đồng bộ mọi công ty. Khởi tạo từ def, cập nhật live khi kéo.
@@ -404,14 +407,14 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       api.listRows(companyId, def.id),
       def.allowCompanyColumns ? api.listCompanyColumns(companyId, def.id) : Promise.resolve([]),
     ])
-      .then(([r, cc]) => { if (!cancelled) { setRows(r); setCompanyCols(cc) } })
+      .then(([r, cc]) => { if (!cancelled) { setRows(r); setCompanyCols(cc); setSelectedIds(new Set()) } })
       .catch(() => { if (!cancelled) setRows([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [companyId, def.id, def.allowCompanyColumns])
 
   useEffect(() => load(), [load])
-  useEffect(() => { setPage(1) }, [colFilters, sortState])
+  useEffect(() => { setPage(1) }, [colFilters, sortState, pageSize])
 
   // ── Client filter + sort + pagination ───────────────────────────────────────
   const displayed = useMemo(() => {
@@ -455,9 +458,9 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     return result
   }, [rows, columns, colFilters, sortState])
 
-  const totalPages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
   const safePage   = Math.min(page, totalPages)
-  const pageRows   = displayed.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const pageRows   = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
 
   // ── Filter handlers ──────────────────────────────────────────────────────────
   function openFilter(colKey, e) {
@@ -498,6 +501,34 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     finally { setDeletingRow(null) }
   }
 
+  // ── Row multi-select + bulk delete ───────────────────────────────────────────
+  function toggleSelect(id) {
+    setSelectedIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  const allPageSelected = pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id))
+  const somePageSelected = pageRows.some((r) => selectedIds.has(r.id))
+  function toggleSelectAll() {
+    setSelectedIds((p) => {
+      const n = new Set(p)
+      if (allPageSelected) pageRows.forEach((r) => n.delete(r.id))
+      else pageRows.forEach((r) => n.add(r.id))
+      return n
+    })
+  }
+  async function bulkDelete() {
+    if (!selectedIds.size) return
+    if (!window.confirm(`Xoá ${selectedIds.size} dòng đã chọn? Không thể hoàn tác.`)) return
+    setBulkDeleting(true)
+    let done = 0
+    for (const id of [...selectedIds]) {
+      try { await api.deleteRow(companyId, def.id, id); done++ } catch { /* skip */ }
+    }
+    setRows((p) => p.filter((r) => !selectedIds.has(r.id)))
+    setSelectedIds(new Set())
+    setBulkDeleting(false)
+    addToast(done > 0 ? `Đã xoá ${done} dòng` : 'Không xoá được dòng nào', done > 0 ? 'success' : 'error')
+  }
+
   // ── Import Excel ─────────────────────────────────────────────────────────────
   const importCols = useMemo(
     () => columns.filter((c) => c.dataType !== 'computed').map((c) => ({
@@ -518,7 +549,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     return res
   }
 
-  const colSpan = columns.length + 2 // STT + columns + actions
+  const colSpan = columns.length + 2 + (canEdit ? 1 : 0) // [check] + STT + columns + actions
 
   return (
     <div>
@@ -535,6 +566,12 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
           <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`}
             onClick={() => { setColFilters({}); setSortState({ col: null, dir: 'asc' }) }}>
             Xoá tất cả bộ lọc
+          </button>
+        )}
+        {canEdit && selectedIds.size > 0 && (
+          <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`} onClick={bulkDelete} disabled={bulkDeleting}>
+            {bulkDeleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} color="var(--color-danger)" />}
+            Xoá {selectedIds.size} dòng
           </button>
         )}
         <div className={s.hdldToolbarRight}>
@@ -565,12 +602,19 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
             <table className={`${s.table} ${s.hdldTable}`}>
               <thead>
                 <tr>
+                  {canEdit && (
+                    <th className={s.hdldThStt}>
+                      <input type="checkbox" checked={allPageSelected}
+                        ref={(el) => { if (el) el.indeterminate = !allPageSelected && somePageSelected }}
+                        onChange={toggleSelectAll} title="Chọn tất cả trang này" />
+                    </th>
+                  )}
                   <th className={s.hdldThStt}>STT</th>
                   {columns.map((col) => {
                     const active = hasColFilter(col.colKey) || sortState.col === col.colKey
                     const w = colWidths[col.colKey] ?? col.width ?? undefined
                     return (
-                      <th key={col.colKey} style={w ? { '--hdld-col-w': `${w}px`, width: `${w}px` } : undefined}>
+                      <th key={col.colKey} className={s.ctblTh} style={w ? { '--hdld-col-w': `${w}px`, width: `${w}px` } : undefined}>
                         <div className={s.hdldThInner}>
                           <span className={s.hdldThLabel}>{col.label}{col.required && ' *'}</span>
                           <button data-hdld-filter-btn
@@ -593,7 +637,12 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
                   </td></tr>
                 ) : pageRows.map((row, idx) => (
                   <tr key={row.id}>
-                    <td className={s.hdldCellStt}>{(safePage - 1) * PAGE_SIZE + idx + 1}</td>
+                    {canEdit && (
+                      <td className={s.hdldCellStt} onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} />
+                      </td>
+                    )}
+                    <td className={s.hdldCellStt}>{(safePage - 1) * pageSize + idx + 1}</td>
                     {columns.map((col) => {
                       if (col.dataType === 'computed') {
                         if (col.computedType === 'status_threshold') {
@@ -631,6 +680,13 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
                 <button className={s.archPageBtn} disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>Tiếp ›</button>
               </div>
             )}
+            <div className={s.pageSizeWrap}>
+              <span className={s.pageSizeLabel}>Hiển thị:</span>
+              {[20, 50, 100].map((n) => (
+                <button key={n} className={`${s.pageSizeBtn} ${pageSize === n ? s.pageSizeBtnActive : ''}`} onClick={() => setPageSize(n)}>{n}</button>
+              ))}
+              <span className={s.pageSizeLabel}>/ trang</span>
+            </div>
           </div>
         </div>
       )}

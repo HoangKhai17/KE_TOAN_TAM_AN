@@ -106,6 +106,8 @@
 
 > Theo dõi trạng thái hồ sơ / chứng từ mà từng khách hàng đã giao nộp cho kế toán, tổ chức theo năm. Giúp nhân viên biết ngay tháng nào còn thiếu chứng từ khi chuẩn bị quyết toán cuối năm.
 
+> ⚠️ **ĐÃ GỠ (migration 077):** Tab bespoke "HS lưu trữ khi QT" đã được loại bỏ (DB + backend + frontend). Nay admin **tự dựng lại bằng Generic Company Tables** (§1.9 · Settings ▸ Bảng tùy chỉnh) — vd: 12 cột "Tháng 1–12" + Loại chứng từ + Chi tiết + Ghi chú + Đặc điểm. **Dữ liệu archive cũ không được migrate** (cấu trúc lưới 12 tháng khác hẳn). Mô tả dưới đây giữ để tham chiếu nghiệp vụ.
+
 **Tính năng:**
 - Tổ chức dữ liệu theo năm — mỗi năm là một tập hồ sơ độc lập, có thể xóa toàn bộ khi không còn cần thiết
 - Thêm / sửa / xóa từng dòng chứng từ
@@ -226,7 +228,7 @@
 - Đầy đủ: **inline edit · column header filter · resize cột · phân trang · xuất Excel (chọn cột + preview) · nhập Excel (mẫu + validate)**.
 - Định nghĩa bảng/cột là **global**; dữ liệu dòng là **per-company**.
 
-**Bảng được migrate sang engine này:** Theo dõi HĐLĐ (§1.5), HĐ KH.NCC (§1.7), Nợ NSNN (§1.8) — sửa cột / ẩn / **xóa** như bảng tùy chỉnh thường (cờ bảo vệ `is_system` đã tắt ở migration 076 theo yêu cầu). **Giữ bespoke:** HS lưu trữ khi QT (§1.6 — cấu trúc lưới 12 tháng).
+**Bảng đã chuyển sang engine này (gỡ bespoke):** Theo dõi HĐLĐ (§1.5), HĐ KH.NCC (§1.7), Nợ NSNN (§1.8) — migrate dữ liệu (mig 074); và **HS lưu trữ khi QT (§1.6)** — gỡ hẳn (mig 077), admin tự dựng lại. Tất cả sửa cột / ẩn / **xóa** như bảng thường (cờ `is_system` đã tắt — mig 076). **Không còn tab "báo cáo" bespoke nào** (chỉ còn các tab nghiệp vụ lõi: Credentials, Documents, Notes, Công việc, Yêu cầu KH).
 
 **Nơi hiển thị:** mỗi bảng active là 1 tab trên trang `/companies/:id`.
 
@@ -772,7 +774,7 @@ Khi staff / admin tạo task, họ chọn **Loại task**:
 | M1 | Tài khoản hệ thống KH (Credentials) | 🔴 P1 | Nhu cầu hàng ngày của nhân viên kế toán |
 | M1 | Theo dõi HĐLĐ nhân viên KH | 🟠 P2 | Tab trong company detail; staff toàn quyền; **nay chạy trên Generic Company Tables** (§1.9) |
 | M1 | Generic Company Tables (admin tự tạo tab báo cáo) | 🟠 P2 | Engine dùng chung cho HĐLĐ/HĐ KH.NCC/Nợ NSNN + bảng admin tự tạo; computed + màu; xem §1.9 / docs/019 |
-| M1 | Hồ Sơ Lưu Trữ Khi Quyết Toán | 🟠 P2 | Tab trong company detail; tổ chức theo năm; 12 ô tháng click-to-edit inline; xóa theo năm cascade |
+| M1 | Hồ Sơ Lưu Trữ Khi Quyết Toán | 🟠 P2 | **ĐÃ GỠ bespoke (mig 077)** — nay admin tự dựng bằng Generic Company Tables (§1.9) |
 | M2 | Hồ sơ nhân viên + phân công | 🔴 P1 | |
 | M2 | Quản lý lương & thưởng | 🟠 P2 | Lập bảng lương hàng tháng, tính net salary |
 | M3 | Tạo & giao công việc (thủ công + template) | 🔴 P1 | |

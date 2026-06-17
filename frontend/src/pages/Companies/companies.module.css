@@ -5726,3 +5726,7 @@
 .ctblToneDanger  { background: var(--color-danger-bg);       color: var(--color-danger-text); }
 .ctblToneInfo    { background: var(--color-primary-bg);      color: var(--color-primary-dark); }
 .ctblToneMuted   { background: var(--color-bg-soft);         color: var(--color-muted); }
+
+/* ── Generic Company Tables — resizable th (admin drag) ── */
+.ctblTh { position: relative; }
+.ctblTh:hover .archColResizeHandle { background: rgba(37, 99, 235, 0.18); }

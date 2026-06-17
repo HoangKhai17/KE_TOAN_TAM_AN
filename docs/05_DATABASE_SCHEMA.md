@@ -1110,7 +1110,9 @@ CREATE INDEX idx_cdr_token     ON client_document_requests(public_token) WHERE p
 
 ---
 
-## TABLE: company_archive_years (Năm Lưu Trữ Hồ Sơ)
+## TABLE: company_archive_years (Năm Lưu Trữ Hồ Sơ) — ⚠️ ĐÃ GỠ
+
+> ⚠️ **ĐÃ GỠ (migration 077)** — tab "HS lưu trữ khi QT" bespoke đã loại bỏ; admin tự dựng lại bằng Generic Company Tables (`company_table_*`). Dữ liệu cũ không migrate.
 
 > Migration: `migrations/064_archive_years.sql`
 > Mỗi năm lưu trữ là một record độc lập — xóa năm = cascade toàn bộ dòng chứng từ của năm đó.
@@ -1137,7 +1139,9 @@ CREATE INDEX idx_cay_company ON company_archive_years(company_id);
 
 ---
 
-## TABLE: company_archive_docs (Dòng Chứng Từ Lưu Trữ)
+## TABLE: company_archive_docs (Dòng Chứng Từ Lưu Trữ) — ⚠️ ĐÃ GỠ
+
+> ⚠️ **ĐÃ GỠ (migration 077)** — xem ghi chú ở `company_archive_years`.
 
 > Migration: `migrations/065_archive_docs.sql`
 
@@ -1450,8 +1454,8 @@ CREATE TABLE company_table_rows (
 | 32 | `client_document_requests` | Yêu cầu tài liệu từ KH (entity độc lập) | N:1 companies, users; N:0..1 tasks (nullable) |
 | **—** | **— Module 1: Công Ty (bổ sung) —** | | |
 | ~~33~~ | ~~`company_labor_contracts`~~ | ⚠️ **ĐÃ GỠ** (mig 075) — migrate sang `company_table_*` | — |
-| 34 | `company_archive_years` | Năm lưu trữ hồ sơ theo công ty KH | N:1 companies |
-| 35 | `company_archive_docs` | Dòng chứng từ lưu trữ theo năm | N:1 company_archive_years (cascade) |
+| ~~34~~ | ~~`company_archive_years`~~ | ⚠️ **ĐÃ GỠ** (mig 077) — dựng lại bằng `company_table_*` | — |
+| ~~35~~ | ~~`company_archive_docs`~~ | ⚠️ **ĐÃ GỠ** (mig 077) | — |
 | ~~36~~ | ~~`company_csc_contracts`~~ | ⚠️ **ĐÃ GỠ** (mig 075) | — |
 | ~~37~~ | ~~`company_csc_columns`~~ | ⚠️ **ĐÃ GỠ** (mig 075) | — |
 | ~~38~~ | ~~`company_nsnn_debts`~~ | ⚠️ **ĐÃ GỠ** (mig 075) | — |
