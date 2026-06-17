@@ -22,13 +22,25 @@ function cellText(col, row) {
 
 // ── Export modal: chọn cột + preview (giống flow tab cũ) ──────────────────────
 function ExportModal({ def, columns, rows, company, onClose }) {
-  const [selected, setSelected] = useState(() => new Set(columns.map((c) => c.colKey)))
+  // Trường thông tin công ty (giá trị giống nhau mọi dòng) — tùy chọn xuất
+  const extraFields = [
+    { key: '__company_name',   label: 'Tên công ty',       value: company.name ?? '' },
+    { key: '__tax_code',       label: 'Mã số thuế',        value: company.taxCode ?? '' },
+    { key: '__assigned_staff', label: 'Nhân sự phụ trách', value: company.assignedStaff?.name ?? '' },
+  ]
+  const [selected, setSelected] = useState(() => new Set([...extraFields.map((f) => f.key), ...columns.map((c) => c.colKey)]))
   function toggle(k) { setSelected((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n }) }
 
+  // Thứ tự xuất: STT → trường công ty (đã chọn) → cột bảng (đã chọn)
+  const outFields = [
+    ...extraFields.filter((f) => selected.has(f.key)),
+    ...columns.filter((c) => selected.has(c.colKey)).map((c) => ({ key: c.colKey, label: c.label, col: c })),
+  ]
+  const cellOf = (f, r) => (f.col ? cellText(f.col, r) : f.value)
+
   function doExport() {
-    const cols = columns.filter((c) => selected.has(c.colKey))
-    const header = ['STT', ...cols.map((c) => c.label)]
-    const body = rows.map((r, i) => [i + 1, ...cols.map((c) => cellText(c, r))])
+    const header = ['STT', ...outFields.map((f) => f.label)]
+    const body = rows.map((r, i) => [i + 1, ...outFields.map((f) => cellOf(f, r))])
     const ws = XLSX.utils.aoa_to_sheet([header, ...body])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, def.name.substring(0, 30))
@@ -36,14 +48,20 @@ function ExportModal({ def, columns, rows, company, onClose }) {
     onClose()
   }
 
-  const previewCols = columns.filter((c) => selected.has(c.colKey))
   const previewRows = rows.slice(0, 8)
   return (
     <Modal title={`Xuất Excel — ${def.name}`} onClose={onClose} wide>
       <div className={s.modalForm}>
         <div className={s.hdldExportBody}>
           <div className={s.hdldExportSidebar}>
-            <div className={s.hdldExportSidebarTitle}>Chọn cột xuất</div>
+            <div className={s.hdldExportSidebarTitle}>Thông tin công ty</div>
+            {extraFields.map((f) => (
+              <label key={f.key} className={s.hdldExportFieldItem}>
+                <input type="checkbox" checked={selected.has(f.key)} onChange={() => toggle(f.key)} />
+                <span>{f.label}</span>
+              </label>
+            ))}
+            <div className={s.hdldExportSidebarTitle}>Cột bảng</div>
             {columns.map((c) => (
               <label key={c.colKey} className={s.hdldExportFieldItem}>
                 <input type="checkbox" checked={selected.has(c.colKey)} onChange={() => toggle(c.colKey)} />
@@ -54,14 +72,14 @@ function ExportModal({ def, columns, rows, company, onClose }) {
           <div className={s.hdldExportPreviewPane}>
             <div className={s.hdldExportPreviewTitle}>Xem trước ({Math.min(8, rows.length)} / {rows.length} dòng)</div>
             <div className={s.hdldExportPreviewWrap}>
-              {previewCols.length === 0 ? (
-                <div className={s.hdldExportPreviewEmpty}>Chưa chọn cột nào</div>
+              {outFields.length === 0 ? (
+                <div className={s.hdldExportPreviewEmpty}>Chưa chọn trường nào</div>
               ) : (
                 <table className={s.hdldExportPreviewTable}>
-                  <thead><tr>{previewCols.map((c) => <th key={c.colKey}>{c.label}</th>)}</tr></thead>
+                  <thead><tr>{outFields.map((f) => <th key={f.key}>{f.label}</th>)}</tr></thead>
                   <tbody>
                     {previewRows.map((r) => (
-                      <tr key={r.id}>{previewCols.map((c) => <td key={c.colKey}>{String(cellText(c, r) || '—')}</td>)}</tr>
+                      <tr key={r.id}>{outFields.map((f) => <td key={f.key}>{String(cellOf(f, r) || '—')}</td>)}</tr>
                     ))}
                   </tbody>
                 </table>
@@ -70,10 +88,10 @@ function ExportModal({ def, columns, rows, company, onClose }) {
           </div>
         </div>
         <div className={s.hdldExportFooter}>
-          <span className={s.hdldExportCount}>{selected.size} cột · {rows.length} dòng</span>
+          <span className={s.hdldExportCount}>{selected.size} trường · {rows.length} dòng</span>
           <div className={s.modalActions}>
             <button type="button" className={s.btnOutline} onClick={onClose}>Huỷ</button>
-            <button type="button" className={s.btnNavy} onClick={doExport} disabled={selected.size === 0}>
+            <button type="button" className={s.btnNavy} onClick={doExport} disabled={outFields.length === 0}>
               <Download size={13} /> Xuất Excel
             </button>
           </div>
