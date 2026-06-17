@@ -1834,7 +1834,7 @@
   width: 100%;
   min-width: 480px;
   border-collapse: collapse;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 
 .assignmentsTable thead tr {
@@ -1845,7 +1845,7 @@
 .assignmentsTable th {
   padding: 8px 10px;
   text-align: left;
-  font-size: var(--fs-2xs);
+  font-size: var(--fs-xs);
   font-weight: 800;
   color: #1e3a8a;
   text-transform: uppercase;
@@ -3841,12 +3841,12 @@
 }
 .cTaskTitleOverdue { color: var(--color-danger); }
 .cTaskDateCell {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-md);
   color: var(--color-text-soft);
   white-space: nowrap;
 }
 .cTaskDueOverdue { color: var(--color-danger); font-weight: var(--fw-bold); }
-.cTaskAssigneeCell { font-size: var(--fs-xs); color: var(--color-text-soft); }
+.cTaskAssigneeCell { font-size: var(--fs-md); color: var(--color-text-soft); }
 .cTaskProgress { display: flex; align-items: center; gap: 5px; }
 .cTaskProgressBar {
   flex: 1;
@@ -3866,7 +3866,7 @@
 .cTaskProgressFillDone { background: var(--color-success-light); }
 .cTaskProgressText,
 .cTaskDash {
-  font-size: var(--fs-2xs);
+  font-size: var(--fs-md);
   color: var(--color-muted);
   white-space: nowrap;
 }

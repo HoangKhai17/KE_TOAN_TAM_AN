@@ -414,17 +414,17 @@ export default function ClientRequestsTab({ company }) {
                           <Eye size={11} /> Xem
                         </button>
                       ) : (
-                        <span style={{ color: 'var(--color-border)', fontSize: 'var(--fs-sm)' }}>—</span>
+                        <span style={{ color: 'var(--color-border)', fontSize: 'var(--fs-md)' }}>—</span>
                       )}
                     </td>
 
-                    <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>
+                    <td style={{ fontSize: 'var(--fs-md)', color: 'var(--color-muted)' }}>
                       {item.periodLabel || '—'}
                     </td>
-                    <td style={{ fontSize: 'var(--fs-sm)', color: item.status === 'overdue' ? 'var(--color-danger-text)' : 'var(--color-muted)' }}>
+                    <td style={{ fontSize: 'var(--fs-md)', color: item.status === 'overdue' ? 'var(--color-danger-text)' : 'var(--color-muted)' }}>
                       {fmtDate(item.deadlineDate)}
                     </td>
-                    <td style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>
+                    <td style={{ fontSize: 'var(--fs-md)', color: 'var(--color-muted)' }}>
                       {item.contactEmail || '—'}
                     </td>
 
