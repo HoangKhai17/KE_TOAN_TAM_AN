@@ -6,7 +6,7 @@ import * as api from '../../api/companyTables'
 import s from './settings.module.css'
 
 const TYPE_LABELS = { text: 'Văn bản', number: 'Số', date: 'Ngày', select: 'Lựa chọn', computed: 'Computed' }
-const COMPUTED_LABELS = { days_until: 'Số ngày còn lại', days_since: 'Số ngày chậm', status_threshold: 'Tô màu theo ngưỡng' }
+const COMPUTED_LABELS = { days_until: 'Số ngày còn lại', days_since: 'Số ngày chậm', months_since: 'Số tháng chậm', status_threshold: 'Tô màu theo ngưỡng' }
 const TONES = ['success', 'warning', 'danger', 'info', 'muted']
 
 const row = { display: 'flex', alignItems: 'center', gap: 8 }

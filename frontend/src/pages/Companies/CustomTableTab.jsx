@@ -97,6 +97,14 @@ function daysBetween(fromISO, toISO) {
   if (isNaN(a) || isNaN(b)) return null
   return Math.round((b - a) / 86_400_000)
 }
+function monthsBetween(fromISO, toISO) {
+  const a = new Date(String(fromISO).substring(0, 10))
+  const b = new Date(String(toISO).substring(0, 10))
+  if (isNaN(a) || isNaN(b)) return null
+  let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
+  if (b.getDate() < a.getDate()) m -= 1   // chưa đủ tháng → trừ 1
+  return m
+}
 
 // ── Computed engine (Pha 2) ───────────────────────────────────────────────────
 function computeDays(col, row) {
@@ -104,6 +112,7 @@ function computeDays(col, row) {
   if (!src) return null
   if (col.computedType === 'days_until') return daysBetween(todayISO(), src)
   if (col.computedType === 'days_since') return daysBetween(src, todayISO())
+  if (col.computedType === 'months_since') return monthsBetween(src, todayISO())
   return null
 }
 function resolveBucket(cfg, src) {

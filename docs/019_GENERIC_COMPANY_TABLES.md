@@ -359,6 +359,7 @@ Staff/Admin: /companies/:id ─▶ tab mới tự xuất hiện ─▶ nhập li
 | computed_type | config | Công thức | Dùng cho |
 |---|---|---|---|
 | `days_until` | `{ source_col }` | `data[source_col] − today` (ngày) | "Số ngày còn lại" (HĐLĐ/CSC) |
+| `months_since` | `{ source_col }` | số tháng từ `data[source_col]` → today | "Số tháng chậm" |
 | `days_since` | `{ source_col }` | `today − data[source_col]` | "Số ngày chậm" (NSNN) |
 | `status_threshold` | `{ source_col, mode, buckets:[{ max, label, tone }] }` | map số/ngày → nhãn + màu | "Tình trạng" (xanh/vàng/đỏ) |
 

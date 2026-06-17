@@ -223,6 +223,7 @@
 - **Computed columns** (tính tại render, không lưu DB):
   - `days_until` — số ngày còn lại đến 1 cột ngày
   - `days_since` — số ngày trôi qua từ 1 cột ngày
+  - `months_since` — số tháng chậm (số tháng trôi qua từ 1 cột ngày)
   - `status_threshold` — nhãn + **màu theo ngưỡng** (vd Còn hiệu lực/Sắp hết hạn/Đã hết hạn)
 - Mỗi công ty tự thêm **cột riêng** (hybrid) nếu bảng cho phép.
 - Đầy đủ: **inline edit · column header filter · resize cột · phân trang · xuất Excel (chọn cột + preview) · nhập Excel (mẫu + validate)**.
