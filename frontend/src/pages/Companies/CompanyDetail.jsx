@@ -6,8 +6,12 @@ import {
   User, UserPlus, ListTodo, CalendarDays, Lock, FileText, StickyNote,
   Loader2, Users, BarChart2, Clock, Trash2,
   Plus, Search, RotateCcw, Filter, Eye, ClipboardList, SlidersHorizontal,
-  ChevronDown, X, Table2,
+  ChevronDown, X, Table2, Check, LayoutGrid, List,
 } from 'lucide-react'
+import {
+  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
+  closestCenter, useDraggable, useDroppable,
+} from '@dnd-kit/core'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
@@ -83,6 +87,13 @@ const COMPANY_TASK_STATUS_TONE = {
   completed: s.cTaskStatusCompleted,
 }
 
+// ── sessionStorage: remember the active tab per company (survives F5) ───────────
+const ACTIVE_TAB_KEY = (cid) => `company_detail_tab:${cid}`
+function loadActiveTab(cid) {
+  try { return sessionStorage.getItem(ACTIVE_TAB_KEY(cid)) || 'overview' }
+  catch { return 'overview' }
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function CompanyDetail() {
@@ -96,8 +107,13 @@ export default function CompanyDetail() {
   const [company, setCompany]   = useState(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState(() => loadActiveTab(id))
   const [customDefs, setCustomDefs] = useState([])
+
+  // Persist the active tab so a page reload (F5) returns to the same tab
+  useEffect(() => {
+    try { sessionStorage.setItem(ACTIVE_TAB_KEY(id), activeTab) } catch { /* ignore */ }
+  }, [activeTab, id])
 
   const refetchCustomDefs = useCallback(() => {
     companyTablesApi.listDefs({ activeOnly: true }).then(setCustomDefs).catch(() => {})
@@ -1298,6 +1314,140 @@ function TaskMultiSelect({ placeholder, options, selected, onChange }) {
 
 // ── CompanyTasksTab ────────────────────────────────────────────────────────────
 
+// ── sessionStorage: remember Công việc tab filters/view per company (survives F5) ─
+const CT_STATE_KEY = (cid) => `company_tasks_state:${cid}`
+function loadCtState(cid) {
+  try { return JSON.parse(sessionStorage.getItem(CT_STATE_KEY(cid))) ?? {} }
+  catch { return {} }
+}
+function saveCtState(cid, obj) {
+  try { sessionStorage.setItem(CT_STATE_KEY(cid), JSON.stringify(obj)) } catch { /* ignore */ }
+}
+
+// ── Kanban board grouped by task source (Nguồn công việc) ───────────────────────
+
+function SourceCardInner({ task, getLabel }) {
+  const overdue = isTaskOverdue(task)
+  const pct     = progressPct(task)
+  return (
+    <>
+      <div className={`${s.cTaskTitle} ${overdue ? s.cTaskTitleOverdue : ''}`}>{task.title}</div>
+      <div className={s.srcCardMeta}>
+        <span className={`${ts.statusBadge} ${ts[STATUS_CSS[task.status]]}`}>
+          {getLabel('task_status', task.status, STATUS_LABELS[task.status])}
+        </span>
+        <span className={`${ts.priorityBadge} ${ts[PRIORITY_CSS[task.priority]]}`}>
+          {getLabel('task_priority', task.priority, PRIORITY_LABELS[task.priority])}
+        </span>
+      </div>
+      <div className={s.srcCardFoot}>
+        <span className={overdue ? s.cTaskDueOverdue : ''}>{fmtTaskDate(task.dueDate) ?? 'Chưa có hạn'}</span>
+        <span>{task.assignedToName ?? '—'}</span>
+      </div>
+      {pct !== null && (
+        <div className={s.cTaskProgressBar}>
+          <div
+            className={`${s.cTaskProgressFill} ${pct === 100 ? s.cTaskProgressFillDone : ''}`}
+            style={{ '--progress-width': `${pct}%` }}
+          />
+        </div>
+      )}
+    </>
+  )
+}
+
+function DraggableSourceCard({ task, onOpen, getLabel }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: task.id, data: { source: task.source },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={`${ts.boardCard} ${isDragging ? ts.boardCardDragging : ''} ${transform ? ts.dragTransform : ''}`}
+      style={transform ? { '--drag-x': `${transform.x}px`, '--drag-y': `${transform.y}px` } : undefined}
+      onClick={() => !isDragging && onOpen(task.id)}
+    >
+      <SourceCardInner task={task} getLabel={getLabel} />
+    </div>
+  )
+}
+
+function DroppableSourceColumn({ srcKey, label, tasks, onOpen, getLabel }) {
+  const { setNodeRef, isOver } = useDroppable({ id: srcKey })
+  return (
+    <div className={ts.boardCol}>
+      <div className={ts.boardColHead}>
+        <span className={ts.boardColDot} />
+        <span className={ts.boardColTitle}>{label}</span>
+        <span className={ts.boardColCount}>{tasks.length}</span>
+      </div>
+      <div ref={setNodeRef} className={`${ts.boardCards} ${isOver ? ts.boardCardsOver : ''}`}>
+        {tasks.map((t) => (
+          <DraggableSourceCard key={t.id} task={t} onOpen={onOpen} getLabel={getLabel} />
+        ))}
+        {tasks.length === 0 && <p className={ts.boardEmptyText}>Không có</p>}
+      </div>
+    </div>
+  )
+}
+
+function SourceBoardView({ tasks, sources, onSourceChange, onOpen, getLabel }) {
+  const [activeTask, setActiveTask] = useState(null)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  const bySource = useMemo(() => {
+    const map = {}
+    for (const sc of sources) map[sc.key] = []
+    for (const t of tasks) {
+      if (map[t.source]) map[t.source].push(t)
+      else (map.__other ??= []).push(t)
+    }
+    return map
+  }, [tasks, sources])
+
+  const cols = [...sources]
+  if ((bySource.__other ?? []).length > 0) cols.push({ key: '__other', label: 'Khác' })
+
+  function handleDragStart({ active }) {
+    setActiveTask(tasks.find((t) => t.id === active.id) ?? null)
+  }
+  function handleDragEnd({ active, over }) {
+    setActiveTask(null)
+    if (!over) return
+    const src = active.data.current?.source
+    const dst = over.id
+    if (src === dst || dst === '__other') return
+    const task = tasks.find((t) => t.id === active.id)
+    if (task) onSourceChange(task, dst)
+  }
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className={ts.boardWrap}>
+        {cols.map((sc) => (
+          <DroppableSourceColumn
+            key={sc.key}
+            srcKey={sc.key}
+            label={sc.label}
+            tasks={bySource[sc.key] ?? []}
+            onOpen={onOpen}
+            getLabel={getLabel}
+          />
+        ))}
+      </div>
+      <DragOverlay dropAnimation={null}>
+        {activeTask ? (
+          <div className={`${ts.boardCard} ${ts.boardCardOverlay}`}>
+            <SourceCardInner task={activeTask} getLabel={getLabel} />
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  )
+}
+
 function CompanyTasksTab({ company, onTaskCountChange }) {
   const navigate   = useNavigate()
   const isAdmin    = useAuthStore((st) => st.user?.role === 'admin')
@@ -1309,26 +1459,35 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const CUR_MONTH = String(new Date().getMonth() + 1)
   const CUR_YEAR  = String(new Date().getFullYear())
 
+  // Restore saved filters/view from sessionStorage (once on mount)
+  const [initCt] = useState(() => loadCtState(company.id))
+
+  const [view, setView]             = useState(initCt.view ?? 'list')
   const [tasks, setTasks]           = useState([])
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
   const [statusCounts, setStatusCounts] = useState({})
   const [page, setPage]             = useState(1)
-  const [limit, setLimit]           = useState(20)
+  const [limit, setLimit]           = useState(initCt.limit ?? 20)
   const [loading, setLoading]       = useState(true)
   const [availableYears, setAvailableYears] = useState([])
 
-  const [searchInput, setSearchInput]       = useState('')
-  const [search, setSearch]                 = useState('')
-  const [statusFilter, setStatusFilter]     = useState([])
-  const [priorityFilter, setPriorityFilter] = useState([])
-  const [sourceFilter, setSourceFilter]     = useState([])
-  const [isOverdue, setIsOverdue]           = useState(false)
-  const [monthFilter, setMonthFilter]       = useState(CUR_MONTH)
-  const [yearFilter, setYearFilter]         = useState(CUR_YEAR)
+  const [searchInput, setSearchInput]       = useState(initCt.searchInput   ?? '')
+  const [search, setSearch]                 = useState(initCt.searchInput   ?? '')
+  const [statusFilter, setStatusFilter]     = useState(initCt.statusFilter  ?? [])
+  const [priorityFilter, setPriorityFilter] = useState(initCt.priorityFilter ?? [])
+  const [sourceFilter, setSourceFilter]     = useState(initCt.sourceFilter  ?? [])
+  const [isOverdue, setIsOverdue]           = useState(initCt.isOverdue     ?? false)
+  const [monthFilter, setMonthFilter]       = useState(initCt.monthFilter   ?? CUR_MONTH)
+  const [yearFilter, setYearFilter]         = useState(initCt.yearFilter    ?? CUR_YEAR)
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds]       = useState(new Set())
+  const [showBulkDelete, setShowBulkDelete] = useState(false)
+  const [bulkDeleting, setBulkDeleting]     = useState(false)
 
   // Column-header filter / sort (client-side, per docs/018)
   const [colFilters, setColFilters]   = useState({})
-  const [sortState, setSortState]     = useState({ col: null, dir: 'asc' })
+  const [sortState, setSortState]     = useState(initCt.sortState ?? { col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup] = useState(null)
 
   const [showCreate, setShowCreate]     = useState(false)
@@ -1344,6 +1503,14 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
 
   // Reset to page 1 when filters or limit change
   useEffect(() => { setPage(1) }, [statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, colFilters, sortState, limit])
+
+  // Persist filters/view to sessionStorage (survives F5). colFilters holds Sets → skipped.
+  useEffect(() => {
+    saveCtState(company.id, {
+      view, limit, searchInput, statusFilter, priorityFilter, sourceFilter,
+      isOverdue, monthFilter, yearFilter, sortState,
+    })
+  }, [company.id, view, limit, searchInput, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, sortState])
 
   useEffect(() => {
     loadEnums()
@@ -1428,6 +1595,63 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     setPage(1)
   }
 
+  // ── Bulk selection actions ────────────────────────────────────────────────────
+  function toggleSelect(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+  function selectAllOnPage(checked) {
+    setSelectedIds(checked ? new Set(pageRows.map((t) => t.id)) : new Set())
+  }
+  async function bulkComplete() {
+    let done = 0
+    for (const id of selectedIds) {
+      const task = tasks.find((t) => t.id === id)
+      if (!task || task.status === 'completed') continue
+      try { await tasksApi.changeTaskStatus(id, { status: 'completed', force: true }); done++ }
+      catch (_e) { /* skip individual failures */ }
+    }
+    if (done > 0) {
+      addToast(`Đã hoàn thành ${done} công việc`, 'success')
+      onTaskCountChange(Math.max(0, (company.taskOpenCount ?? 0) - done))
+      load()
+    } else {
+      addToast('Không có công việc nào được hoàn thành', 'info')
+    }
+    setSelectedIds(new Set())
+  }
+  async function bulkDelete() {
+    setBulkDeleting(true)
+    let done = 0
+    for (const id of [...selectedIds]) {
+      try { await tasksApi.deleteTask(id); done++ } catch (_e) { /* skip */ }
+    }
+    addToast(`Đã xoá ${done} công việc`, done > 0 ? 'success' : 'error')
+    if (done > 0) {
+      onTaskCountChange(Math.max(0, (company.taskOpenCount ?? 0) - done))
+      load()
+    }
+    setSelectedIds(new Set())
+    setShowBulkDelete(false)
+    setBulkDeleting(false)
+  }
+
+  // ── Kanban: change a task's source via drag-and-drop ──────────────────────────
+  async function handleSourceChange(task, newSource) {
+    const prevSource = task.source
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, source: newSource } : t)))
+    try {
+      await tasksApi.updateTask(task.id, { source: newSource })
+      addToast('Đã chuyển nguồn công việc', 'success')
+    } catch (err) {
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, source: prevSource } : t)))
+      addToast(err.response?.data?.error?.message ?? 'Không thể chuyển nguồn', 'error')
+    }
+  }
+
   const activeFilters = (search ? 1 : 0)
     + statusFilter.length + priorityFilter.length + sourceFilter.length
     + (isOverdue ? 1 : 0)
@@ -1490,6 +1714,11 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const safePage         = Math.min(page, clientTotalPages)
   const pageRows         = displayed.slice((safePage - 1) * limit, safePage * limit)
 
+  const sourceOptions = getOptions('task_source').length > 0
+    ? getOptions('task_source')
+    : [{ key: 'manual', label: 'Thủ công' }, { key: 'auto', label: 'Tự động' }]
+  const allPageSelected = pageRows.length > 0 && pageRows.every((t) => selectedIds.has(t.id))
+
   function openFilter(colKey, e) {
     e.stopPropagation()
     if (filterPopup?.colKey === colKey) setFilterPopup(null)
@@ -1539,7 +1768,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     )
   }
 
-  const colSpan = 9  // title + status + priority + source + createdAt + dueDate + assigned + progress + actions
+  const colSpan = 10  // check + title + status + priority + source + createdAt + dueDate + assigned + progress + actions
   const from = clientTotal === 0 ? 0 : (safePage - 1) * limit + 1
   const to   = Math.min(safePage * limit, clientTotal)
 
@@ -1565,9 +1794,27 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             </span>
           )}
         </div>
-        <button className={`${ts.btnPrimary} ${s.taskCreateBtnCompact}`} onClick={() => setShowCreate(true)}>
-          <Plus size={13} /> Tạo công việc
-        </button>
+        <div className={s.cTaskHeaderActions}>
+          <div className={s.viewToggle}>
+            <button
+              className={`${s.viewToggleBtn} ${view === 'list' ? s.viewToggleBtnActive : ''}`}
+              onClick={() => setView('list')}
+              title="Dạng danh sách"
+            >
+              <List size={14} /> Danh sách
+            </button>
+            <button
+              className={`${s.viewToggleBtn} ${view === 'board' ? s.viewToggleBtnActive : ''}`}
+              onClick={() => { setView('board'); setSelectedIds(new Set()) }}
+              title="Kanban theo nguồn công việc"
+            >
+              <LayoutGrid size={14} /> Kanban
+            </button>
+          </div>
+          <button className={`${ts.btnPrimary} ${s.taskCreateBtnCompact}`} onClick={() => setShowCreate(true)}>
+            <Plus size={13} /> Tạo công việc
+          </button>
+        </div>
       </div>
 
       {/* Filter panel */}
@@ -1740,12 +1987,58 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Bulk action bar (list view) */}
+      {view === 'list' && selectedIds.size > 0 && (
+        <div className={ts.bulkBar}>
+          <span className={ts.bulkCount}>{selectedIds.size} đã chọn</span>
+          <span className={ts.bulkDivider} />
+          <button className={ts.btnGhost} onClick={bulkComplete}>
+            <Check size={13} /> Hoàn thành tất cả
+          </button>
+          <button className={`${ts.btnGhost} ${ts.btnDangerText}`} onClick={() => setShowBulkDelete(true)}>
+            <Trash2 size={13} /> Xóa đã chọn
+          </button>
+          <button className={ts.btnGhost} onClick={() => setSelectedIds(new Set())}>
+            Bỏ chọn
+          </button>
+        </div>
+      )}
+
+      {/* ── Kanban board (theo nguồn công việc) ── */}
+      {view === 'board' ? (
+        <div className={s.tableWrap}>
+          {loading ? (
+            <div className={s.cTaskBoardLoading}>Đang tải...</div>
+          ) : displayed.length === 0 ? (
+            <div className={s.taskEmptyInline}>
+              <ListTodo size={28} className={s.taskEmptyInlineIcon} />
+              {(activeFilters > 0 || colFilterCount > 0) ? 'Không tìm thấy công việc phù hợp' : 'Chưa có công việc nào'}
+            </div>
+          ) : (
+            <SourceBoardView
+              tasks={displayed}
+              sources={sourceOptions}
+              onSourceChange={handleSourceChange}
+              onOpen={setQuickViewId}
+              getLabel={getLabel}
+            />
+          )}
+        </div>
+      ) : (
+      /* ── Table (list view) ── */
       <div className={s.tableWrap}>
         <div className={s.tableScroll}>
           <table className={s.table}>
             <thead>
               <tr>
+                <th className={ts.thCheck}>
+                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={(e) => selectAllOnPage(e.target.checked)}
+                    title="Chọn tất cả trên trang"
+                  />
+                </th>
                 <FilterTh colKey="title">Tiêu đề</FilterTh>
                 <FilterTh colKey="status">Trạng thái</FilterTh>
                 <FilterTh colKey="priority">Ưu tiên</FilterTh>
@@ -1761,6 +2054,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
+                    <td className={ts.tdCheck} />
                     {[220, 100, 80, 80, 80, 80, 100, 80].map((w, j) => (
                       <td key={j} className={s.taskSkeletonCell}>
                         <div className={s.taskSkeletonBar} style={{ '--skeleton-w': `${w}px` }} />
@@ -1784,9 +2078,16 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                 return (
                   <tr
                     key={task.id}
-                    className={`${s.cTaskRow} ${overdue ? s.cTaskRowOverdue : ''}`}
+                    className={`${s.cTaskRow} ${selectedIds.has(task.id) ? ts.trSelected : ''} ${overdue ? s.cTaskRowOverdue : ''}`}
                     onClick={() => setQuickViewId(task.id)}
                   >
+                    <td className={ts.tdCheck} onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(task.id)}
+                        onChange={() => toggleSelect(task.id)}
+                      />
+                    </td>
                     <td>
                       <div className={`${s.cTaskTitle} ${overdue ? s.cTaskTitleOverdue : ''}`}>
                         {task.title}
@@ -1892,6 +2193,29 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           </div>
         </div>
       </div>
+      )}
+
+      {/* Bulk delete confirm modal */}
+      {showBulkDelete && (
+        <Modal title={`Xóa ${selectedIds.size} công việc`} onClose={() => !bulkDeleting && setShowBulkDelete(false)}>
+          <div className={s.modalStack}>
+            <div className={`${s.terminateWarn} ${s.terminateWarnDanger}`}>
+              <AlertTriangle size={18} className={`${s.warnIconInline} ${s.warnIconDanger}`} />
+              <span>
+                Bạn có chắc muốn xoá <strong>{selectedIds.size}</strong> công việc đã chọn?
+                Hành động này không thể hoàn tác.
+              </span>
+            </div>
+            <div className={s.modalActions}>
+              <button className={s.btnOutline} onClick={() => setShowBulkDelete(false)} disabled={bulkDeleting}>Huỷ bỏ</button>
+              <button className={s.btnDanger} onClick={bulkDelete} disabled={bulkDeleting}>
+                {bulkDeleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
+                {bulkDeleting ? 'Đang xoá...' : `Xoá ${selectedIds.size} mục`}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Create task modal */}
       {showCreate && (

@@ -5730,3 +5730,58 @@
 /* ── Generic Company Tables — resizable th (admin drag) ── */
 .ctblTh { position: relative; }
 .ctblTh:hover .archColResizeHandle { background: rgba(37, 99, 235, 0.18); }
+
+/* ── Công việc tab: header actions + view toggle (Danh sách / Kanban) ── */
+.cTaskHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.viewToggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.viewToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  border: none;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  transition: background 0.12s, color 0.12s;
+}
+.viewToggleBtn:hover { background: var(--color-bg-soft); color: var(--color-text); }
+.viewToggleBtn + .viewToggleBtn { border-left: 1px solid var(--color-border); }
+.viewToggleBtnActive,
+.viewToggleBtnActive:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary-deep);
+}
+
+/* ── Công việc tab: Kanban source cards ── */
+.srcCardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+.srcCardFoot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+}
+.cTaskBoardLoading {
+  padding: 28px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: var(--fs-md);
+}
