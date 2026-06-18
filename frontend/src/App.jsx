@@ -19,6 +19,7 @@ import TaskDetail from './pages/Tasks/TaskDetail'
 import Payroll from './pages/Payroll/Payroll'
 import PayrollDetail from './pages/Payroll/PayrollDetail'
 import Reports from './pages/Reports/Reports'
+import ProgressMatrix from './pages/ProgressMatrix/ProgressMatrix'
 import Notifications from './pages/Notifications/Notifications'
 import PublicForm from './pages/PublicForm/PublicForm'
 import AdminClientRequests from './pages/AdminClientRequests/AdminClientRequests'
@@ -165,6 +166,10 @@ function AppRoutes() {
       <Route
         path="/reports"
         element={<ProtectedRoute><Reports /></ProtectedRoute>}
+      />
+      <Route
+        path="/progress-matrix"
+        element={<ProtectedRoute><ProgressMatrix /></ProtectedRoute>}
       />
       <Route
         path="/notifications"

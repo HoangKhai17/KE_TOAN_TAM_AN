@@ -1,0 +1,163 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.titleGroup { display: flex; align-items: center; gap: var(--space-3); }
+.titleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+.title { font-size: var(--fs-xl); font-weight: var(--fw-extrabold); color: var(--color-text-strong); }
+.subtitle { font-size: var(--fs-xs); color: var(--color-muted); margin-top: 1px; }
+
+.btnExport {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+.btnExport:hover:not(:disabled) { background: var(--color-bg-soft); border-color: var(--color-primary); }
+.btnExport:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Filter bar ── */
+.filterBar {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.filterGroup { display: flex; flex-direction: column; gap: var(--space-1); }
+.filterLabel {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.select {
+  height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  outline: none;
+  min-width: 160px;
+}
+.select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-bg); }
+
+/* ── Title line ── */
+.matrixTitle {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  color: var(--color-primary-deep);
+  padding: var(--space-2) 0;
+}
+
+/* ── State boxes ── */
+.stateBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-9);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.warnIcon { color: var(--color-warning); flex-shrink: 0; }
+.emptyIcon { color: var(--color-muted-soft); }
+
+/* ── Matrix table ── */
+.tableWrap {
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.matrix {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+}
+.th {
+  background: var(--color-surface-muted);
+  color: var(--color-text-strong);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  padding: var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border-muted);
+  text-align: left;
+  vertical-align: middle;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.thStep {
+  width: 116px;
+  min-width: 116px;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border-soft);
+  border-right: 1px solid var(--color-border-muted);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  vertical-align: middle;
+}
+.tr:hover .td { background: var(--color-bg-soft); }
+.tdName { font-weight: var(--fw-semibold); }
+.tdMuted { color: var(--color-muted); }
+.tdCell { text-align: center; }
+.cellDone { background: var(--color-success-bg-soft); }
+.tr:hover .cellDone { background: var(--color-success-bg); }
+.checkIcon { color: var(--color-success); vertical-align: middle; }
+
+/* Sticky left columns (3 cột cố định) */
+.colName  { position: sticky; left: 0;     width: 220px; min-width: 220px; z-index: 3; }
+.colTax   { position: sticky; left: 220px; width: 130px; min-width: 130px; z-index: 3; }
+.colStaff { position: sticky; left: 350px; width: 130px; min-width: 130px; z-index: 3; box-shadow: 2px 0 4px -2px rgba(0,0,0,0.12); }
+.th.colName, .th.colTax, .th.colStaff { z-index: 4; }
+
+.spin { animation: pm-spin 0.7s linear infinite; }
+@keyframes pm-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

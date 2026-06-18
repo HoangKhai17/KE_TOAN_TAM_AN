@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Building2, CheckSquare,
   Users, BarChart3, Settings,
   ChevronLeft, ChevronRight, LogOut, Wallet, CalendarCheck, ClipboardList,
-  ClipboardCheck,
+  ClipboardCheck, LayoutGrid,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { logout } from '../../api/auth'
@@ -18,6 +18,7 @@ const NAV_GROUPS = [
       { to: '/tasks',                  label: 'Công việc',          icon: CheckSquare },
       { to: '/internal-assignments',   label: 'Nội bộ',             icon: ClipboardCheck },
       { to: '/client-requests',        label: 'Yêu cầu KH',        icon: ClipboardList },
+      { to: '/progress-matrix',        label: 'BC Tiến độ CV',      icon: LayoutGrid },
       { to: '/reports',                label: 'Báo cáo',            icon: BarChart3 },
     ],
   },
