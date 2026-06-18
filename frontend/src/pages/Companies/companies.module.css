@@ -5785,3 +5785,130 @@
   color: var(--color-muted);
   font-size: var(--fs-md);
 }
+
+/* ── Companies list: row checkbox + bulk export bar ── */
+.coCheckTh,
+.coCheckTd {
+  width: 38px;
+  text-align: center;
+  padding-left: 10px;
+  padding-right: 4px;
+}
+.coCheckTh input,
+.coCheckTd input { cursor: pointer; }
+.coRowSelected { background: var(--color-primary-bg); }
+.coBulkBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.coBulkCount { font-weight: 600; font-size: var(--fs-sm); color: var(--color-text); }
+.coBulkSpacer { flex: 1; }
+
+/* ── CompanyExportModal ── */
+.expBlock { margin-bottom: 16px; }
+.expBlockHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.expBlockTitle {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+.expBlockHead .expBlockTitle { margin-bottom: 0; }
+.expSelectAll { display: flex; align-items: center; gap: 6px; }
+.expLinkBtn {
+  background: none;
+  border: none;
+  color: var(--color-primary-deep);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.expLinkBtn:hover { text-decoration: underline; }
+.expDot { color: var(--color-muted); }
+
+.expStructRow { display: flex; gap: 10px; flex-wrap: wrap; }
+.expStructBtn {
+  flex: 1 1 240px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  text-align: left;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: border-color 0.12s, background 0.12s;
+}
+.expStructBtn:hover { background: var(--color-bg-soft); }
+.expStructBtnActive,
+.expStructBtnActive:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+.expStructName { font-size: var(--fs-sm); font-weight: 600; }
+.expStructDesc { font-size: var(--fs-xs); color: var(--color-muted); margin-top: 2px; }
+
+.expSectionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+.expSectionItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.expSectionItem:hover { background: var(--color-bg-soft); }
+.expSectionItem input { cursor: pointer; }
+.expSectionItemSensitive { border-color: var(--color-warning-border); }
+.expSectionGeneric { display: inline-flex; align-items: center; gap: 5px; color: var(--color-muted); }
+
+.expProgress { margin: 6px 0 4px; }
+.expProgressBar {
+  height: 8px;
+  background: var(--color-bg-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.expProgressFill {
+  height: 100%;
+  width: var(--exp-pct, 0%);
+  background: var(--color-primary);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+.expProgressText { display: block; margin-top: 6px; font-size: var(--fs-xs); color: var(--color-muted); }
+.expError {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--color-danger-bg, #fef2f2);
+  color: var(--color-danger-text, #b91c1c);
+  border-radius: 8px;
+  font-size: var(--fs-sm);
+  margin-bottom: 8px;
+}
+
+/* ── Companies header: action button group ── */
+.pageHeaderActions { display: flex; align-items: center; gap: 8px; }

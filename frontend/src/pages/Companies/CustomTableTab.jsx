@@ -9,7 +9,7 @@ import { useToastStore } from '../../stores/toastStore'
 import s from './companies.module.css'
 
 // ── Cell value as plain text (for export/preview) ─────────────────────────────
-function cellText(col, row) {
+export function cellText(col, row) {
   if (col.dataType === 'computed') {
     if (col.computedType === 'status_threshold') {
       return resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).label

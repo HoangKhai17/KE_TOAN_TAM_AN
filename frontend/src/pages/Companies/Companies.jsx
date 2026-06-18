@@ -2,13 +2,15 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2,
-  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X, Filter,
+  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X, Filter, Download,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
+import CompanyExportModal from './CompanyExportModal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
+import * as companyTablesApi from '../../api/companyTables'
 import { listUserOptions } from '../../api/users'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -394,6 +396,11 @@ export default function Companies() {
   const [deleteTarget, setDeleteTarget] = useState(null)  // company to delete
   const [deleting, setDeleting]       = useState(false)
 
+  // Bulk export (admin-only)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [showExport, setShowExport]   = useState(false)
+  const [customDefs, setCustomDefs]   = useState([])
+
   const hasActiveFilters = search || statusFilter.length > 0 || btFilter.length > 0 || staffFilter.length > 0
   const activeFilterCount = [search, statusFilter.length > 0, btFilter.length > 0, staffFilter.length > 0].filter(Boolean).length
   const pageOpenTotal      = companies.reduce((sum, c) => sum + (Number(c.taskOpenCount) || 0), 0)
@@ -424,6 +431,9 @@ export default function Companies() {
       .then(({ users }) => setStaffList(users))
       .catch(() => {})
     loadEnums()
+    if (isAdmin) {
+      companyTablesApi.listDefs({ activeOnly: true }).then(setCustomDefs).catch(() => {})
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live sync: reload when any user creates / updates / deletes a company
@@ -462,6 +472,18 @@ export default function Companies() {
     setSortState({ col: null, dir: 'asc' })
     setPage(1)
     sessionStorage.removeItem(FILTER_KEY)
+  }
+
+  // ── Bulk selection (admin export) ─────────────────────────────────────────────
+  function toggleSelect(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  function selectAllOnPage(checked) {
+    setSelectedIds(checked ? new Set(pageRows.map((c) => c.id)) : new Set())
   }
 
   // ── Client-side column-header filter + sort + pagination (docs/018) ───────────
@@ -508,6 +530,11 @@ export default function Companies() {
   const clientTotalPages = Math.max(1, Math.ceil(clientTotal / limit))
   const safePage         = Math.min(page, clientTotalPages)
   const pageRows         = displayed.slice((safePage - 1) * limit, safePage * limit)
+
+  const allPageSelected  = pageRows.length > 0 && pageRows.every((c) => selectedIds.has(c.id))
+  const selectedCompanies = companies.filter((c) => selectedIds.has(c.id))
+  // Header button: nếu đã tick → xuất các công ty đã chọn; nếu chưa → xuất toàn bộ đang lọc
+  const exportTargets = selectedCompanies.length > 0 ? selectedCompanies : companies
 
   function openFilter(colKey, e) {
     e.stopPropagation()
@@ -602,9 +629,14 @@ export default function Companies() {
             </p>
           </div>
           {isAdmin && (
-            <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
-              <Plus size={14} /> Thêm khách hàng
-            </button>
+            <div className={s.pageHeaderActions}>
+              <button className={s.btnOutline} onClick={() => setShowExport(true)} disabled={companies.length === 0}>
+                <Download size={14} /> Xuất Excel
+              </button>
+              <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
+                <Plus size={14} /> Thêm khách hàng
+              </button>
+            </div>
           )}
         </div>
 
@@ -740,6 +772,18 @@ export default function Companies() {
           </div>
         </div>
 
+        {/* Bulk export bar (admin) */}
+        {isAdmin && selectedIds.size > 0 && (
+          <div className={s.coBulkBar}>
+            <span className={s.coBulkCount}>{selectedIds.size} công ty đã chọn</span>
+            <span className={s.coBulkSpacer} />
+            <button className={s.btnPrimary} onClick={() => setShowExport(true)}>
+              <Download size={14} /> Xuất tổng hợp
+            </button>
+            <button className={s.btnOutline} onClick={() => setSelectedIds(new Set())}>Bỏ chọn</button>
+          </div>
+        )}
+
         {/* Table */}
         <div className={s.tableWrap}>
           {error ? (
@@ -752,6 +796,16 @@ export default function Companies() {
               <table className={s.table}>
                 <thead>
                   <tr>
+                    {isAdmin && (
+                      <th className={s.coCheckTh}>
+                        <input
+                          type="checkbox"
+                          checked={allPageSelected}
+                          onChange={(e) => selectAllOnPage(e.target.checked)}
+                          title="Chọn tất cả trên trang"
+                        />
+                      </th>
+                    )}
                     <FilterTh colKey="name">Tên công ty</FilterTh>
                     <FilterTh colKey="taxCode" className={s.tableCellVisible}>MST</FilterTh>
                     <FilterTh colKey="contactName" className={s.tableContactHead}>Người liên hệ</FilterTh>
@@ -767,7 +821,7 @@ export default function Companies() {
                     Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} isAdmin={isAdmin} />)
                   ) : displayed.length === 0 ? (
                     <tr>
-                      <td colSpan={8}>
+                      <td colSpan={isAdmin ? 9 : 8}>
                         <div className={s.emptyState}>
                           <div className={s.emptyIcon}><Building2 size={26} /></div>
                           <p className={s.emptyTitle}>Không tìm thấy doanh nghiệp</p>
@@ -785,6 +839,8 @@ export default function Companies() {
                         key={c.id}
                         company={c}
                         isAdmin={isAdmin}
+                        selected={selectedIds.has(c.id)}
+                        onToggleSelect={() => toggleSelect(c.id)}
                         onClick={() => navigate(`/companies/${c.id}`)}
                         onDelete={(e) => { e.stopPropagation(); setDeleteTarget(c) }}
                       />
@@ -853,6 +909,15 @@ export default function Companies() {
         />
       )}
 
+      {/* Export modal (admin) */}
+      {showExport && (
+        <CompanyExportModal
+          companies={exportTargets}
+          customDefs={customDefs}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
       {/* Delete confirm modal */}
       {deleteTarget && (
         <DeleteCompanyModal
@@ -885,12 +950,17 @@ export default function Companies() {
 
 // ── CompanyRow ─────────────────────────────────────────────────────────────────
 
-function CompanyRow({ company, isAdmin, onClick, onDelete }) {
+function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onDelete }) {
   const staff    = company.assignedStaff
   const getLabel = useEnumsStore((st) => st.getLabel)
 
   return (
-    <tr onClick={onClick}>
+    <tr onClick={onClick} className={selected ? s.coRowSelected : ''}>
+      {isAdmin && (
+        <td className={s.coCheckTd} onClick={(e) => e.stopPropagation()}>
+          <input type="checkbox" checked={selected} onChange={onToggleSelect} />
+        </td>
+      )}
       <td>
         <div className={s.companyCell}>
           {company.avatarUrl ? (
@@ -989,6 +1059,7 @@ function CompanyRow({ company, isAdmin, onClick, onDelete }) {
 function SkeletonRow({ isAdmin }) {
   return (
     <tr className={`${s.skeletonRow} ${s.skeletonPulse}`}>
+      {isAdmin && <td className={s.coCheckTd} />}
       <td>
         <div className={s.companyNameSkeletonRow}>
           <div className={`${s.skeletonSquare} ${s.skeletonSquareCompany}`} />

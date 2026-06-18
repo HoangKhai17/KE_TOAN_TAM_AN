@@ -10,6 +10,15 @@ export async function getCompany(id) {
   return data.data.company
 }
 
+// Xuất tổng hợp nhiều công ty ra Excel/zip (admin) — server-side, trả về Blob
+export async function exportCompanies(body) {
+  const res = await api.post('/companies/export', body, { responseType: 'blob' })
+  const cd = res.headers['content-disposition'] || ''
+  const m = /filename="?([^"]+)"?/i.exec(cd)
+  const filename = m ? m[1] : (body.layout === 'per_company' ? 'export.zip' : 'export.xlsx')
+  return { blob: res.data, filename }
+}
+
 export async function createCompany(body) {
   const { data } = await api.post('/companies', body)
   return data.data.company

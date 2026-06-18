@@ -1,4 +1,5 @@
 const svc = require('./companies.service')
+const exportSvc = require('./company-export.service')
 
 async function listCompanies(req, res, next) {
   try {
@@ -108,4 +109,36 @@ async function deleteNote(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote }
+async function exportCompanies(req, res, next) {
+  try {
+    const {
+      companyIds, sections = [], defIds = [],
+      includeCredentials = false, layout = 'aggregate',
+    } = req.body ?? {}
+
+    if (!Array.isArray(companyIds) || companyIds.length === 0) {
+      return res.status(400).json({ success: false, error: { message: 'Chưa chọn công ty để xuất' } })
+    }
+    if (companyIds.length > 500) {
+      return res.status(400).json({ success: false, error: { message: 'Tối đa 500 công ty mỗi lần xuất' } })
+    }
+    if (!Array.isArray(sections) || (sections.length === 0 && defIds.length === 0)) {
+      return res.status(400).json({ success: false, error: { message: 'Chưa chọn nội dung để xuất' } })
+    }
+
+    const { buffer, filename, contentType } = await exportSvc.exportCompanies({
+      companyIds,
+      sections,
+      defIds: Array.isArray(defIds) ? defIds : [],
+      includeCredentials: Boolean(includeCredentials),
+      layout: layout === 'per_company' ? 'per_company' : 'aggregate',
+    })
+
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Length', buffer.length)
+    res.send(buffer)
+  } catch (err) { next(err) }
+}
+
+module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote, exportCompanies }
