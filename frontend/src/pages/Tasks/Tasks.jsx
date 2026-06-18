@@ -769,7 +769,7 @@ function FilterCompanyMultiPicker({ companies, value, onChange }) {
               <div className={s.cpItem} onClick={() => onChange([])}>Bỏ chọn tất cả</div>
             )}
             {filtered.map((c) => (
-              <label key={c.id} className={`${s.cpItem} ${selectedSet.has(c.id) ? s.cpItemActive : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <label key={c.id} className={`${s.cpItem} ${s.cpItemMulti} ${selectedSet.has(c.id) ? s.cpItemActive : ''}`}>
                 <input type="checkbox" checked={selectedSet.has(c.id)} onChange={() => toggle(c.id)} />
                 <span>{c.name}</span>
               </label>

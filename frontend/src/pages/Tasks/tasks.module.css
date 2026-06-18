@@ -3863,3 +3863,9 @@
 .thFilterBtn:hover { opacity: 1; background: rgba(0, 0, 0, 0.07); }
 .thFilterBtnActive,
 .thFilterBtnActive:hover { opacity: 1; background: var(--color-primary, #2563eb); color: #fff; }
+
+/* ── Inline-style refactors (docs/014 compliance) ── */
+.miniTitleWarn { color: var(--color-accent-dark); }
+.miniTitleIcon { margin-right: 6px; vertical-align: middle; }
+.miniBodyHint  { margin-top: 8px; color: var(--color-muted); font-size: var(--fs-xs); }
+.cpItemMulti   { display: flex; align-items: center; gap: 8px; cursor: pointer; }

@@ -236,7 +236,8 @@
       "Bash(grep -nA6 \"^\\\\.assignmentsTable\" companies.module.css)",
       "Bash(node -e \"console.log\\('jszip', require\\('jszip/package.json'\\).version\\)\")",
       "Bash(grep -nA20 \"backend:\" docker-compose.yml)",
-      "Bash(curl -s -o /dev/null -w \"no-auth POST /api/companies/export -> HTTP %{http_code}\\\\n\" -X POST http://localhost:5173/api/companies/export -H \"Content-Type: application/json\" -d '{\"companyIds\":[],\"sections\":[\"overview\"]}')"
+      "Bash(curl -s -o /dev/null -w \"no-auth POST /api/companies/export -> HTTP %{http_code}\\\\n\" -X POST http://localhost:5173/api/companies/export -H \"Content-Type: application/json\" -d '{\"companyIds\":[],\"sections\":[\"overview\"]}')",
+      "Bash(grep -oE \"#[0-9a-fA-F]{3,6}\" tasks.module.css)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

@@ -1221,12 +1221,12 @@ export default function TaskDetail() {
       {cdrBlockMsg && (
         <div className={s.miniOverlay}>
           <div className={s.miniDialog}>
-            <h4 className={s.miniTitle} style={{ color: '#b45309' }}>
-              <AlertTriangle size={15} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            <h4 className={`${s.miniTitle} ${s.miniTitleWarn}`}>
+              <AlertTriangle size={15} className={s.miniTitleIcon} />
               Không thể hoàn thành
             </h4>
             <p className={s.miniBody}>{cdrBlockMsg}</p>
-            <p className={s.miniBody} style={{ marginTop: 8, color: '#64748b', fontSize: 12 }}>
+            <p className={`${s.miniBody} ${s.miniBodyHint}`}>
               Vào tab <strong>Yêu cầu KH</strong> của công ty để xem và xử lý các yêu cầu tài liệu còn chờ.
             </p>
             <div className={s.miniActions}>
