@@ -239,7 +239,14 @@
       "Bash(curl -s -o /dev/null -w \"no-auth POST /api/companies/export -> HTTP %{http_code}\\\\n\" -X POST http://localhost:5173/api/companies/export -H \"Content-Type: application/json\" -d '{\"companyIds\":[],\"sections\":[\"overview\"]}')",
       "Bash(grep -oE \"#[0-9a-fA-F]{3,6}\" tasks.module.css)",
       "Bash(grep -ivE \"skeleton-w|width: \\\\`|--cfd|--progress|--drag\")",
-      "Bash(grep -nE \"style=\\\\{\\\\{[^}]*\\(#[0-9a-fA-F]{3,6}|fontSize|background:|color:\\)\" AdminClientRequests/AdminClientRequests.jsx)"
+      "Bash(grep -nE \"style=\\\\{\\\\{[^}]*\\(#[0-9a-fA-F]{3,6}|fontSize|background:|color:\\)\" AdminClientRequests/AdminClientRequests.jsx)",
+      "Bash(awk '/^\\\\.filterBar \\\\{/{p=1} p{print} p&&/^}/{p=0}' Tasks/tasks.module.css)",
+      "Bash(awk '/^\\\\.filterChipsRow \\\\{/{p=1} p{print} p&&/^}/{p=0}' Tasks/tasks.module.css)",
+      "Bash(awk '/^\\\\.filterBar \\\\{/{p=1} p{print} p&&/^}/{p=0}' InternalAssignments/internalAssignments.module.css)",
+      "Bash(awk '/^\\\\.filterChipsRow \\\\{/{p=1} p{print} p&&/^}/{p=0}' InternalAssignments/internalAssignments.module.css)",
+      "Bash(grep -coE \"#[0-9a-fA-F]{3,6}\" InternalDocLinks.module.css)",
+      "Bash(grep -oE \"#[0-9a-fA-F]{3,6}\" InternalDocLinks.module.css)",
+      "Bash(grep -nE \"#[0-9a-fA-F]{3,6}\" pages/InternalAssignments/InternalDocLinks.module.css)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

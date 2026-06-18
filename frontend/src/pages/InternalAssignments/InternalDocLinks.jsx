@@ -81,7 +81,7 @@ function CategoryModal({ initial, onClose, onSave }) {
                   key={c}
                   type="button"
                   className={`${s.colorSwatch} ${color === c ? s.colorSwatchActive : ''}`}
-                  style={{ background: c }}
+                  style={{ '--swatch-bg': c }}
                   onClick={() => setColor(c)}
                 >
                   {color === c && <Check size={10} color="#fff" />}
@@ -237,7 +237,7 @@ function LinkCard({ link, canEdit, onEdit, onDelete }) {
           )}
           <div className={s.cardMeta}>
             {link.category && (
-              <span className={s.categoryBadge} style={{ background: link.category.color + '22', color: link.category.color }}>
+              <span className={s.categoryBadge} style={{ '--cat': link.category.color, '--cat-bg': link.category.color + '22' }}>
                 {link.category.name}
               </span>
             )}
@@ -481,7 +481,7 @@ export default function InternalDocLinks() {
                   className={`${s.catItem} ${activeCategory === cat.id ? s.catItemActive : ''}`}
                   onClick={() => setActiveCategory(cat.id)}
                 >
-                  <span className={s.catDot} style={{ background: cat.color }} />
+                  <span className={s.catDot} style={{ '--dot-bg': cat.color }} />
                   <span className={s.catName}>{cat.name}</span>
                   <span className={s.catCount}>{cat.linkCount}</span>
                 </button>
