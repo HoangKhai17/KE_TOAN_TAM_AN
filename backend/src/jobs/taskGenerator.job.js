@@ -62,6 +62,8 @@ async function runTaskGenerator() {
           continue
         }
 
+        // start_date = ngày phát sinh (occurrence) của kỳ; due_date = start + offset hạn chót
+        const startDateStr = format(forDate, 'yyyy-MM-dd')
         const dueDateStr = format(
           addDays(forDate, schedule.deadline_offset_days || 0),
           'yyyy-MM-dd'
@@ -92,8 +94,8 @@ async function runTaskGenerator() {
         const { rows: [newTask] } = await query(
           `INSERT INTO tasks
              (title, company_id, task_type_id, customer_task_schedule_id,
-              assigned_to, due_date, period_label, source, sla_days, priority, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,'auto',$8,'medium',$9)
+              assigned_to, start_date, due_date, period_label, source, sla_days, priority, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'auto',$9,'medium',$10)
            RETURNING id`,
           [
             title,
@@ -101,6 +103,7 @@ async function runTaskGenerator() {
             schedule.task_type_id,
             schedule.id,
             schedule.assigned_staff_id ?? null,
+            startDateStr,
             dueDateStr,
             periodLabel,
             sla,
