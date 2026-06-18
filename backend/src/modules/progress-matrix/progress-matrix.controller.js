@@ -26,18 +26,30 @@ async function getMatrix(req, res, next) {
   } catch (err) { next(err) }
 }
 
-async function exportMatrix(req, res, next) {
+async function getByCompany(req, res, next) {
   try {
-    const { taskTypeId, month, year } = req.query
-    const matrix = await svc.getMatrix({ taskTypeId, month, year, forceAssignedTo: staffScope(req) })
-    const buffer = await svc.exportMatrix(matrix)
+    const { companyId, month, year } = req.query
+    const data = await svc.byCompany({ companyId, month, year, forceAssignedTo: staffScope(req) })
+    res.json({ success: true, data })
+  } catch (err) { next(err) }
+}
 
-    const slug = String(matrix.taskType.name)
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .replace(/đ/g, 'd').replace(/Đ/g, 'D')
-      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-    const filename = `bc-tien-do-${slug}-T${matrix.period.month}-${matrix.period.year}.xlsx`
+async function getByStaff(req, res, next) {
+  try {
+    const { staffId, month, year } = req.query
+    const data = await svc.byStaff({ staffId, month, year, forceAssignedTo: staffScope(req) })
+    res.json({ success: true, data })
+  } catch (err) { next(err) }
+}
 
+async function exportReport(req, res, next) {
+  try {
+    const { view, taskTypeId, companyId, staffId, month, year, columns } = req.body ?? {}
+    const { buffer, nameBase, period } = await svc.exportReport({
+      view, taskTypeId, companyId, staffId, month, year, columns,
+      forceAssignedTo: staffScope(req),
+    })
+    const filename = `bc-tien-do-${nameBase}-T${period.month}-${period.year}.xlsx`
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
     res.setHeader('Content-Length', buffer.length)
@@ -45,4 +57,4 @@ async function exportMatrix(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { getTaskTypes, getYears, getMatrix, exportMatrix }
+module.exports = { getTaskTypes, getYears, getMatrix, getByCompany, getByStaff, exportReport }

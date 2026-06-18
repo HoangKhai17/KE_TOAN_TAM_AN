@@ -12,15 +12,27 @@ export async function getYears() {
   return data.data.years
 }
 
-// Ma trận tiến độ theo (taskTypeId, month, year)
+// Ma trận tiến độ theo quy trình (taskTypeId, month, year)
 export async function getMatrix(params) {
   const { data } = await api.get('/progress-matrix', { params })
   return data.data
 }
 
-// Xuất Excel — trả về Blob + filename
-export async function exportMatrix(params) {
-  const res = await api.get('/progress-matrix/export', { params, responseType: 'blob' })
+// Bảng tiến độ theo công ty
+export async function getByCompany(params) {
+  const { data } = await api.get('/progress-matrix/by-company', { params })
+  return data.data
+}
+
+// Bảng tiến độ theo nhân viên
+export async function getByStaff(params) {
+  const { data } = await api.get('/progress-matrix/by-staff', { params })
+  return data.data
+}
+
+// Xuất Excel (POST) — body: { view, taskTypeId|companyId|staffId, month, year, columns } → Blob
+export async function exportReport(body) {
+  const res = await api.post('/progress-matrix/export', body, { responseType: 'blob' })
   const cd = res.headers['content-disposition'] || ''
   const m = /filename="?([^"]+)"?/i.exec(cd)
   return { blob: res.data, filename: m ? m[1] : 'bc-tien-do.xlsx' }
