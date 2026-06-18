@@ -73,9 +73,15 @@ async function listClientRequests(filters = {}) {
   const conditions = ['1=1']
   const params = []
 
-  if (companyId)   { params.push(companyId);   conditions.push(`cdr.company_id = $${params.length}`) }
+  if (companyId) {
+    const arr = Array.isArray(companyId) ? companyId : String(companyId).split(',').map((x) => x.trim()).filter(Boolean)
+    if (arr.length) { params.push(arr); conditions.push(`cdr.company_id = ANY($${params.length}::uuid[])`) }
+  }
   if (taskId)      { params.push(taskId);       conditions.push(`cdr.task_id = $${params.length}`) }
-  if (requestedBy) { params.push(requestedBy);  conditions.push(`cdr.requested_by = $${params.length}`) }
+  if (requestedBy) {
+    const arr = Array.isArray(requestedBy) ? requestedBy : String(requestedBy).split(',').map((x) => x.trim()).filter(Boolean)
+    if (arr.length) { params.push(arr); conditions.push(`cdr.requested_by = ANY($${params.length}::uuid[])`) }
+  }
   if (status) {
     const arr = Array.isArray(status) ? status : [status]
     params.push(arr)

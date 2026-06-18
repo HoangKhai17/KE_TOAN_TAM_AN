@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ClipboardList, Search, Filter, RotateCcw, Plus, Loader2,
@@ -13,6 +13,7 @@ import Modal from '../../components/ui/Modal'
 import * as cdrApi from '../../api/clientRequests'
 import { listCompanies } from '../../api/companies'
 import { listUserOptions } from '../../api/users'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import s from './adminClientRequests.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -510,6 +511,83 @@ function ReminderModal({ item, onClose, onSent }) {
 
 // ── FilterCompanyPicker ───────────────────────────────────────────────────────
 
+// ── Column-header filter helpers (docs/018) ─────────────────────────────────────
+const CDR_STATUS_RANK = { pending: 1, overdue: 2, received: 3, not_required: 4 }
+const CDR_COL_TYPE = {
+  documentName: 'text', companyName: 'enum', status: 'enum',
+  periodLabel: 'text', deadlineDate: 'dateRange', contactEmail: 'text',
+}
+function cdrColFilterType(k) { return CDR_COL_TYPE[k] ?? 'text' }
+function cdrColDisplayLabel(it, k) {
+  switch (k) {
+    case 'status':       return STATUS_LABEL[it.status] ?? it.status ?? '(Trống)'
+    case 'companyName':  return it.companyName || '(Không có)'
+    case 'deadlineDate': return it.deadlineDate ? fmtDate(it.deadlineDate) : '(Trống)'
+    default: { const v = it[k]; return v != null && v !== '' ? String(v) : '(Trống)' }
+  }
+}
+function cdrColSortKey(it, k) {
+  switch (k) {
+    case 'status':       return CDR_STATUS_RANK[it.status] ?? 99
+    case 'deadlineDate': return it.deadlineDate || ''
+    default:             return (it[k] || '').toLowerCase()
+  }
+}
+
+// Multi-select picker (searchable) — options: [{id, name}], value: id[]
+function FilterMultiPicker({ options, value, onChange, placeholder = 'Tất cả', searchPlaceholder = 'Tìm...' }) {
+  const [search, setSearch] = useState('')
+  const [open,   setOpen]   = useState(false)
+  const wrapRef   = useRef(null)
+  const searchRef = useRef(null)
+  const selectedSet = new Set(value)
+  const filtered = search.trim()
+    ? options.filter((o) => o.name.toLowerCase().includes(search.toLowerCase()))
+    : options
+
+  useEffect(() => {
+    if (!open) return
+    searchRef.current?.focus()
+    function onOutside(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onOutside)
+    return () => document.removeEventListener('mousedown', onOutside)
+  }, [open])
+
+  function toggle(id) { onChange(selectedSet.has(id) ? value.filter((x) => x !== id) : [...value, id]) }
+
+  return (
+    <div ref={wrapRef} className={s.companyPickerWrap}>
+      <div className={`${s.cpTrigger} ${s.companyPickerTriggerCompact}`} onClick={() => setOpen((o) => !o)}>
+        <span className={`${s.cpTriggerText} ${value.length ? s.companyPickerSelected : s.companyPickerPlaceholder}`}>
+          {value.length === 0 ? placeholder : `${value.length} đã chọn`}
+        </span>
+        <ChevronDown size={11} className={`${s.iconMuted} ${s.chevronRotate} ${open ? s.chevronOpen : ''}`} />
+      </div>
+      {open && (
+        <div className={s.cpDropdown}>
+          <div className={s.cpSearch}>
+            <Search size={12} className={s.iconMuted} />
+            <input ref={searchRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+              placeholder={searchPlaceholder} className={s.cpSearchInput} />
+            {search && <button type="button" className={s.cpSearchClear} onClick={() => setSearch('')}><X size={10} /></button>}
+          </div>
+          <div className={s.cpList}>
+            {value.length > 0 && <div className={s.cpItem} onClick={() => onChange([])}>Bỏ chọn tất cả</div>}
+            {filtered.map((o) => (
+              <label key={o.id} className={`${s.cpItem} ${selectedSet.has(o.id) ? s.cpItemActive : ''} ${s.cpItemMulti}`}>
+                <input type="checkbox" checked={selectedSet.has(o.id)} onChange={() => toggle(o.id)} />
+                <span>{o.name}</span>
+              </label>
+            ))}
+            {filtered.length === 0 && <div className={s.cpEmpty}>Không tìm thấy &quot;{search}&quot;</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FilterCompanyPicker({ companies, value, onChange, placeholder = 'Tất cả', showAll = true, compact = true }) {
   const [search,   setSearch] = useState('')
   const [open,     setOpen]   = useState(false)
@@ -702,9 +780,14 @@ export default function AdminClientRequests() {
   const [deadlineTo,   setDeadlineTo]   = useState(initF.deadlineTo   ?? INIT_DATES.to)
 
   // Filters
-  const [statusFilter, setStatusFilter]       = useState(initF.statusFilter  ?? '')
-  const [companyFilter, setCompanyFilter]     = useState(initF.companyFilter ?? '')
-  const [staffFilter, setStaffFilter]         = useState(initF.staffFilter   ?? '')
+  const [statusFilter, setStatusFilter]       = useState(() => Array.isArray(initF.statusFilter)  ? initF.statusFilter  : [])
+  const [companyFilter, setCompanyFilter]     = useState(() => Array.isArray(initF.companyFilter) ? initF.companyFilter : [])
+  const [staffFilter, setStaffFilter]         = useState(() => Array.isArray(initF.staffFilter)   ? initF.staffFilter   : [])
+
+  // Column-header filter (docs/018) — client-side over the loaded set
+  const [colFilters, setColFilters]     = useState({})
+  const [sortColState, setSortColState] = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup]   = useState(null)
   const [searchQuery, setSearchQuery]         = useState(initF.searchQuery   ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(initF.searchQuery   ?? '')
   const [sortFilter, setSortFilter]           = useState(initF.sortFilter    ?? 'deadline_date:asc')
@@ -808,14 +891,15 @@ export default function AdminClientRequests() {
     setLoading(true)
     const [sortBy, sortDir] = sortFilter.split(':')
     cdrApi.getClientRequests({
-      status:           statusFilter  || undefined,
-      companyId:        companyFilter || undefined,
-      requestedBy:      !isAdmin ? currentUser?.id : (staffFilter || undefined),
+      status:           statusFilter.length  ? statusFilter.join(',')  : undefined,
+      companyId:        companyFilter.length ? companyFilter.join(',') : undefined,
+      requestedBy:      !isAdmin ? currentUser?.id : (staffFilter.length ? staffFilter.join(',') : undefined),
       search:           debouncedSearch || undefined,
       deadlineDateFrom: deadlineFrom  || undefined,
       deadlineDateTo:   deadlineTo    || undefined,
-      page,
-      limit: view === 'board' ? 500 : pageSize,
+      // Load working set once; list filters/sorts/paginates client-side (docs/018)
+      page: 1,
+      limit: 500,
       sortBy,
       sortDir,
     })
@@ -828,7 +912,7 @@ export default function AdminClientRequests() {
       .catch(() => { if (!cancelled) setItems([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, page, pageSize, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, view, listKey])
+  }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, listKey])
 
   useEffect(() => {
     const cancel = loadList()
@@ -943,12 +1027,94 @@ export default function AdminClientRequests() {
   }
 
   function resetFilters() {
-    setStatusFilter(''); setCompanyFilter(''); setStaffFilter('')
+    setStatusFilter([]); setCompanyFilter([]); setStaffFilter([])
+    setColFilters({}); setSortColState({ col: null, dir: 'asc' })
     setSearchQuery(''); setSortFilter('deadline_date:asc'); setPage(1)
     setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
     setDeadlineFrom(INIT_DATES.from); setDeadlineTo(INIT_DATES.to)
     setPageSize(20)
     try { sessionStorage.removeItem(FILTER_KEY) } catch (_) {}
+  }
+
+  // ── Column-header filter: handlers + client-side displayed/pagination ─────────
+  function hasColFilter(colKey) {
+    const f = colFilters[colKey]
+    if (f == null) return false
+    const t = cdrColFilterType(colKey)
+    if (t === 'enum')      return f instanceof Set && f.size > 0
+    if (t === 'text')      return typeof f === 'string' && f.trim().length > 0
+    if (t === 'dateRange') return Boolean(f.from || f.to)
+    return false
+  }
+  const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
+  const hasColSort = sortColState.col !== null
+  function openColFilter(colKey, e) {
+    e.stopPropagation()
+    if (filterPopup?.colKey === colKey) { setFilterPopup(null); return }
+    const rect = e.currentTarget.getBoundingClientRect()
+    setFilterPopup({ colKey, top: rect.bottom + 4, left: rect.left })
+  }
+  function handleColFilterChange(colKey, val) {
+    setColFilters((prev) => { const n = { ...prev }; if (val == null) delete n[colKey]; else n[colKey] = val; return n }); setPage(1)
+  }
+  function handleColSort(col, dir) { setSortColState({ col, dir }); setFilterPopup(null) }
+
+  const displayed = useMemo(() => {
+    let result = [...items]
+    for (const [colKey, fv] of Object.entries(colFilters)) {
+      const ft = cdrColFilterType(colKey)
+      if (ft === 'enum') {
+        if (fv instanceof Set && fv.size > 0) result = result.filter((r) => fv.has(cdrColDisplayLabel(r, colKey)))
+      } else if (ft === 'text') {
+        if (typeof fv === 'string' && fv.trim()) {
+          const q = fv.toLowerCase()
+          result = result.filter((r) => cdrColDisplayLabel(r, colKey).toLowerCase().includes(q))
+        }
+      } else if (ft === 'dateRange') {
+        if (fv && (fv.from || fv.to)) {
+          result = result.filter((r) => {
+            const raw = r.deadlineDate; if (!raw) return false
+            const d = String(raw).substring(0, 10)
+            if (fv.from && d < fv.from) return false
+            if (fv.to   && d > fv.to)   return false
+            return true
+          })
+        }
+      }
+    }
+    if (sortColState.col) {
+      result.sort((a, b) => {
+        const ak = cdrColSortKey(a, sortColState.col)
+        const bk = cdrColSortKey(b, sortColState.col)
+        if (typeof ak === 'number' && typeof bk === 'number') return sortColState.dir === 'asc' ? ak - bk : bk - ak
+        const cmp = String(ak).localeCompare(String(bk), 'vi', { numeric: true })
+        return sortColState.dir === 'asc' ? cmp : -cmp
+      })
+    }
+    return result
+  }, [items, colFilters, sortColState])
+
+  const clientTotalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
+  const safePage = Math.min(page, clientTotalPages)
+  const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+  function ColTh({ colKey, className, children }) {
+    const active = hasColFilter(colKey) || sortColState.col === colKey
+    return (
+      <th className={`${s.th} ${className ?? ''}`}>
+        <div className={s.thFilterInner}>
+          <span className={s.thFilterLabel}>{children}</span>
+          <button
+            data-colfilter-btn
+            className={`${s.thFilterBtn} ${active ? s.thFilterBtnActive : ''}`}
+            onClick={(e) => openColFilter(colKey, e)}
+            title="Lọc / Sắp xếp"
+          >
+            <Filter size={10} />
+          </button>
+        </div>
+      </th>
+    )
   }
 
   const activeFilterCount = [statusFilter, companyFilter, staffFilter, debouncedSearch].filter(Boolean).length
@@ -964,15 +1130,15 @@ export default function AdminClientRequests() {
   ]
 
   function pageWindow() {
-    const total = pagination.totalPages ?? 1
+    const total = clientTotalPages
     if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-    if (page <= 4) return [1, 2, 3, 4, 5, '…', total]
-    if (page >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
-    return [1, '…', page - 1, page, page + 1, '…', total]
+    if (safePage <= 4) return [1, 2, 3, 4, 5, '…', total]
+    if (safePage >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
+    return [1, '…', safePage - 1, safePage, safePage + 1, '…', total]
   }
 
-  const from = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
-  const to   = Math.min(page * pageSize, pagination.total)
+  const from = displayed.length === 0 ? 0 : (safePage - 1) * pageSize + 1
+  const to   = Math.min(safePage * pageSize, displayed.length)
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -1050,24 +1216,27 @@ export default function AdminClientRequests() {
               </select>
             </div>
 
-            {/* Công ty */}
+            {/* Công ty — multi-select */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Khách hàng</label>
-              <FilterCompanyPicker
-                companies={companies}
+              <FilterMultiPicker
+                options={companies}
                 value={companyFilter}
-                onChange={(id) => { setCompanyFilter(id); setPage(1) }}
+                onChange={(v) => { setCompanyFilter(v); setPage(1) }}
+                searchPlaceholder="Tìm khách hàng..."
               />
             </div>
 
-            {/* Nhân viên (admin only) */}
+            {/* Nhân viên (admin only) — multi-select */}
             {isAdmin && staffList.length > 0 && (
               <div className={s.filterGroup}>
                 <label className={s.filterLabel}>Nhân viên</label>
-                <select value={staffFilter} onChange={(e) => setStaffFilter(e.target.value)} className={s.filterSelect}>
-                  <option value="">Tất cả</option>
-                  {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
+                <FilterMultiPicker
+                  options={staffList}
+                  value={staffFilter}
+                  onChange={(v) => { setStaffFilter(v); setPage(1) }}
+                  searchPlaceholder="Tìm nhân viên..."
+                />
               </div>
             )}
 
@@ -1089,19 +1258,26 @@ export default function AdminClientRequests() {
 
           {/* Status chips */}
           <div className={s.statusChips}>
-            {STATUS_FILTERS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setStatusFilter(key)}
-                className={`${s.statusChip} ${statusFilter === key ? s.statusChipActive : ''}`}
-              >
-                {label}
-              </button>
-            ))}
+            {STATUS_FILTERS.map(({ key, label }) => {
+              const active = key === '' ? statusFilter.length === 0 : statusFilter.includes(key)
+              return (
+                <button
+                  key={key}
+                  onClick={() => {
+                    if (key === '') setStatusFilter([])
+                    else setStatusFilter((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])
+                    setPage(1)
+                  }}
+                  className={`${s.statusChip} ${active ? s.statusChipActive : ''}`}
+                >
+                  {label}
+                </button>
+              )
+            })}
           </div>
 
           {/* Active filter chips */}
-          {(yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH || companyFilter || staffFilter || debouncedSearch) && (
+          {(yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH || companyFilter.length > 0 || staffFilter.length > 0 || debouncedSearch) && (
             <div className={s.filterChipsRow}>
               {(yearFilter || monthFilter) && (yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH) && (
                 <span className={s.filterChip}>
@@ -1109,18 +1285,18 @@ export default function AdminClientRequests() {
                   <button className={s.filterChipRemove} onClick={() => { setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH); setDeadlineFrom(INIT_DATES.from); setDeadlineTo(INIT_DATES.to) }}>×</button>
                 </span>
               )}
-              {companyFilter && (
-                <span className={s.filterChip}>
-                  KH: {companies.find((c) => c.id === companyFilter)?.name ?? '?'}
-                  <button className={s.filterChipRemove} onClick={() => setCompanyFilter('')}>×</button>
+              {companyFilter.map((cid) => (
+                <span key={cid} className={s.filterChip}>
+                  KH: {companies.find((c) => c.id === cid)?.name ?? '?'}
+                  <button className={s.filterChipRemove} onClick={() => setCompanyFilter((p) => p.filter((x) => x !== cid))}>×</button>
                 </span>
-              )}
-              {isAdmin && staffFilter && (
-                <span className={s.filterChip}>
-                  NV: {staffList.find((u) => u.id === staffFilter)?.name ?? '?'}
-                  <button className={s.filterChipRemove} onClick={() => setStaffFilter('')}>×</button>
+              ))}
+              {isAdmin && staffFilter.map((sid) => (
+                <span key={sid} className={s.filterChip}>
+                  NV: {staffList.find((u) => u.id === sid)?.name ?? '?'}
+                  <button className={s.filterChipRemove} onClick={() => setStaffFilter((p) => p.filter((x) => x !== sid))}>×</button>
                 </span>
-              )}
+              ))}
               {debouncedSearch && (
                 <span className={s.filterChip}>
                   &ldquo;{debouncedSearch}&rdquo;
@@ -1179,15 +1355,15 @@ export default function AdminClientRequests() {
               <table className={s.table}>
                 <thead>
                   <tr>
-                    <th className={s.th} style={{ minWidth: 200 }}>Tài liệu yêu cầu</th>
-                    <th className={s.th} style={{ minWidth: 150 }}>Công ty</th>
-                    <th className={s.th} style={{ width: 110 }}>Trạng thái</th>
-                    <th className={`${s.th} ${s.thCenter}`} style={{ width: 80 }}>Dữ liệu KH</th>
-                    <th className={s.th} style={{ width: 110 }}>Kỳ</th>
-                    <th className={s.th} style={{ width: 100 }}>Hạn nộp</th>
-                    <th className={s.th} style={{ width: 155 }}>Email KH</th>
-                    <th className={`${s.th} ${s.thCenter}`} style={{ width: 60 }}>Link</th>
-                    <th className={s.th} style={{ width: 150 }} />
+                    <ColTh colKey="documentName" className={s.colDoc}>Tài liệu yêu cầu</ColTh>
+                    <ColTh colKey="companyName" className={s.colCompany}>Công ty</ColTh>
+                    <ColTh colKey="status" className={s.colStatus}>Trạng thái</ColTh>
+                    <th className={`${s.th} ${s.thCenter} ${s.colData}`}>Dữ liệu KH</th>
+                    <ColTh colKey="periodLabel" className={s.colPeriod}>Kỳ</ColTh>
+                    <ColTh colKey="deadlineDate" className={s.colDeadline}>Hạn nộp</ColTh>
+                    <ColTh colKey="contactEmail" className={s.colEmail}>Email KH</ColTh>
+                    <th className={`${s.th} ${s.thCenter} ${s.colLink}`}>Link</th>
+                    <th className={`${s.th} ${s.colActions}`} />
                   </tr>
                 </thead>
                 <tbody>
@@ -1201,7 +1377,7 @@ export default function AdminClientRequests() {
                         ))}
                       </tr>
                     ))
-                  ) : items.length === 0 ? (
+                  ) : displayed.length === 0 ? (
                     <tr>
                       <td colSpan={9} className={s.td}>
                         <div className={s.emptyBox}>
@@ -1211,7 +1387,7 @@ export default function AdminClientRequests() {
                         </div>
                       </td>
                     </tr>
-                  ) : items.map((item) => {
+                  ) : pageRows.map((item) => {
                     const busy         = actionLoading[item.id]
                     const hasToken     = !!item.publicToken
                     const hasSubmitted = !!item.tokenSubmittedAt
@@ -1331,7 +1507,9 @@ export default function AdminClientRequests() {
             <div className={s.pagination}>
               <div className={s.paginationLeft}>
                 <span className={s.paginationInfo}>
-                  {loading ? '...' : `${from}–${to} / ${pagination.total} yêu cầu`}
+                  {loading ? '...' : `${from}–${to} / ${displayed.length} yêu cầu`}
+                  {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
+                  {hasColSort && ' · đang sắp xếp'}
                 </span>
                 <div className={s.pageSizeBtns}>
                   {[20, 50, 100].map((n) => (
@@ -1346,20 +1524,36 @@ export default function AdminClientRequests() {
                 </div>
               </div>
               <div className={s.paginationBtns}>
-                <button className={s.pageBtn} onClick={() => setPage(1)} disabled={page === 1}>«</button>
-                <button className={s.pageBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
+                <button className={s.pageBtn} onClick={() => setPage(1)} disabled={safePage === 1}>«</button>
+                <button className={s.pageBtn} onClick={() => setPage(safePage - 1)} disabled={safePage === 1}>‹</button>
                 {pageWindow().map((n, i) =>
                   n === '…' ? (
                     <span key={`e${i}`} className={s.paginationGap}>…</span>
                   ) : (
-                    <button key={n} className={`${s.pageBtn} ${page === n ? s.pageBtnActive : ''}`} onClick={() => setPage(n)}>{n}</button>
+                    <button key={n} className={`${s.pageBtn} ${safePage === n ? s.pageBtnActive : ''}`} onClick={() => setPage(n)}>{n}</button>
                   )
                 )}
-                <button className={s.pageBtn} onClick={() => setPage((p) => p + 1)} disabled={page === (pagination.totalPages ?? 1)}>›</button>
-                <button className={s.pageBtn} onClick={() => setPage(pagination.totalPages ?? 1)} disabled={page === (pagination.totalPages ?? 1)}>»</button>
+                <button className={s.pageBtn} onClick={() => setPage(safePage + 1)} disabled={safePage === clientTotalPages}>›</button>
+                <button className={s.pageBtn} onClick={() => setPage(clientTotalPages)} disabled={safePage === clientTotalPages}>»</button>
               </div>
             </div>
           </div>
+        )}
+
+        {/* Column-header filter dropdown (docs/018) */}
+        {filterPopup && view === 'list' && (
+          <ColumnFilterDropdown
+            colKey={filterPopup.colKey}
+            filterType={cdrColFilterType(filterPopup.colKey)}
+            allRows={items}
+            getDisplayLabel={cdrColDisplayLabel}
+            currentFilter={colFilters[filterPopup.colKey] ?? null}
+            sortState={sortColState}
+            onSort={handleColSort}
+            onFilterChange={handleColFilterChange}
+            onClose={() => setFilterPopup(null)}
+            style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }}
+          />
         )}
 
       </div>

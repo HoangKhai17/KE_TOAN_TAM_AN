@@ -159,12 +159,12 @@ async function listAssignments(actorId, actorRole, {
   }
 
   if (status) {
-    params.push(status)
-    conds.push(`ia.status = $${params.length}`)
+    const arr = Array.isArray(status) ? status : String(status).split(',').map((x) => x.trim()).filter(Boolean)
+    if (arr.length) { params.push(arr); conds.push(`ia.status::text = ANY($${params.length})`) }
   }
   if (priority) {
-    params.push(priority)
-    conds.push(`ia.priority = $${params.length}`)
+    const arr = Array.isArray(priority) ? priority : String(priority).split(',').map((x) => x.trim()).filter(Boolean)
+    if (arr.length) { params.push(arr); conds.push(`ia.priority::text = ANY($${params.length})`) }
   }
   if (companyId) {
     params.push(companyId)

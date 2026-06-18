@@ -19,6 +19,7 @@ import { listUserOptions } from '../../api/users'
 import AssignmentDetailPanel from './AssignmentDetailPanel'
 import CreateEditAssignmentModal from './CreateEditAssignmentModal'
 import InternalNavTabs from './InternalNavTabs'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import s from './internalAssignments.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -94,6 +95,35 @@ function progressPct(item) {
     return Math.round((item.checklistDone / item.checklistTotal) * 100)
   }
   return null
+}
+
+// ── Column-header filter helpers (docs/018) for the list view ───────────────────
+const IA_STATUS_RANK   = { draft: 1, active: 2, done: 3, cancelled: 4 }
+const IA_PRIORITY_RANK = { urgent: 1, high: 2, normal: 3, low: 4 }
+const IA_COL_TYPE = {
+  title: 'text', priority: 'enum', startDate: 'dateRange',
+  deadlineDate: 'dateRange', progress: 'numberRange', status: 'enum',
+}
+function iaColFilterType(k) { return IA_COL_TYPE[k] ?? 'text' }
+function iaColRawDate(it, k) { return k === 'startDate' ? it.startDate : it.deadlineDate }
+function iaColDisplayLabel(it, k) {
+  switch (k) {
+    case 'status':       return STATUS_LABELS[it.status] ?? it.status ?? '(Trống)'
+    case 'priority':     return PRIORITY_LABELS[it.priority] ?? it.priority ?? '(Trống)'
+    case 'startDate':    return it.startDate    ? fmtDate(it.startDate)    : '(Trống)'
+    case 'deadlineDate': return it.deadlineDate ? fmtDate(it.deadlineDate) : '(Trống)'
+    default: { const v = it[k]; return v != null && v !== '' ? String(v) : '(Trống)' }
+  }
+}
+function iaColSortKey(it, k) {
+  switch (k) {
+    case 'status':       return IA_STATUS_RANK[it.status] ?? 99
+    case 'priority':     return IA_PRIORITY_RANK[it.priority] ?? 99
+    case 'progress':     { const p = progressPct(it); return p == null ? -1 : p }
+    case 'startDate':    return it.startDate || ''
+    case 'deadlineDate': return it.deadlineDate || ''
+    default:             return (it.title || '').toLowerCase()
+  }
 }
 
 // ── MultiSelect component ─────────────────────────────────────────────────────
@@ -418,8 +448,28 @@ function ListView({
   onPageChange, onPageSizeChange, onOpen, isAdmin, onDelete, currentUserId,
   selectedIds, onToggleSelect, onSelectAll,
   onStatusChange, onPriorityChange,
+  sortColState, hasColFilter, onOpenColFilter, colFilterCount = 0, hasColSort = false,
 }) {
   const allSelected = items.length > 0 && items.every((t) => selectedIds.has(t.id))
+
+  function Th({ colKey, children }) {
+    const active = hasColFilter?.(colKey) || sortColState?.col === colKey
+    return (
+      <th className={s.th}>
+        <div className={s.thFilterInner}>
+          <span className={s.thFilterLabel}>{children}</span>
+          <button
+            data-colfilter-btn
+            className={`${s.thFilterBtn} ${active ? s.thFilterBtnActive : ''}`}
+            onClick={(e) => onOpenColFilter(colKey, e)}
+            title="Lọc / Sắp xếp"
+          >
+            <Filter size={10} />
+          </button>
+        </div>
+      </th>
+    )
+  }
   const from = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
   const to   = Math.min(page * pageSize, pagination.total)
 
@@ -444,13 +494,13 @@ function ListView({
                   onChange={(e) => onSelectAll(e.target.checked)}
                 />
               </th>
-              <th className={s.th}>Tiêu đề / Khách hàng</th>
+              <Th colKey="title">Tiêu đề / Khách hàng</Th>
               <th className={s.th}>Người thực hiện</th>
-              <th className={s.th}>Ưu tiên</th>
-              <th className={s.th}>Ngày bắt đầu</th>
-              <th className={s.th}>Hạn chót</th>
-              <th className={s.th}>Tiến độ</th>
-              <th className={s.th}>Trạng thái</th>
+              <Th colKey="priority">Ưu tiên</Th>
+              <Th colKey="startDate">Ngày bắt đầu</Th>
+              <Th colKey="deadlineDate">Hạn chót</Th>
+              <Th colKey="progress">Tiến độ</Th>
+              <Th colKey="status">Trạng thái</Th>
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
             </tr>
           </thead>
@@ -633,6 +683,8 @@ function ListView({
         <div className={s.paginationLeft}>
           <span className={s.paginationInfo}>
             {loading ? '...' : `${from}–${to} / ${pagination.total} phiếu`}
+            {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
+            {hasColSort && ' · đang sắp xếp'}
           </span>
           <div className={s.pageSizeBtns}>
             {[20, 50, 100].map((n) => (
@@ -702,10 +754,15 @@ export default function InternalAssignments() {
   const [sortValue,       setSortValue]        = useState(initF.sortValue       ?? 'created_at:desc')
   const [searchInput,     setSearchInput]      = useState(initF.searchInput     ?? '')
   const [search,          setSearch]           = useState(initF.searchInput     ?? '')
-  const [filterStatus,    setFilterStatus]     = useState(initF.filterStatus    ?? '')
-  const [filterPriority,  setFilterPriority]   = useState(initF.filterPriority  ?? '')
+  const [filterStatus,    setFilterStatus]     = useState(() => Array.isArray(initF.filterStatus)   ? initF.filterStatus   : [])
+  const [filterPriority,  setFilterPriority]   = useState(() => Array.isArray(initF.filterPriority) ? initF.filterPriority : [])
   const [filterAssignees, setFilterAssignees]  = useState(initF.filterAssignees ?? [])
   const [filterMyStatus,  setFilterMyStatus]   = useState(initF.filterMyStatus  ?? '')
+
+  // Column-header filter (docs/018) — client-side over the loaded set
+  const [colFilters, setColFilters]     = useState({})
+  const [sortColState, setSortColState] = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup]   = useState(null)
 
   // Pagination
   const [pageSize, setPageSize] = useState(initF.pageSize ?? 20)
@@ -788,16 +845,17 @@ export default function InternalAssignments() {
     setLoading(true)
     const [sortBy, sortDir] = sortValue.split(':')
     const params = {
-      page,
-      limit: view === 'list' ? pageSize : 200,
+      // Load the working set once; list filters/sorts/paginates client-side (docs/018)
+      page: 1,
+      limit: 200,
       search: search || undefined,
       deadlineFrom: deadlineFrom || undefined,
       deadlineTo:   deadlineTo   || undefined,
       sortBy,
       sortDir,
     }
-    if (filterStatus)    params.status   = filterStatus
-    if (filterPriority)  params.priority = filterPriority
+    if (filterStatus.length)    params.status   = filterStatus.join(',')
+    if (filterPriority.length)  params.priority = filterPriority.join(',')
     if (isAdmin && filterAssignees.length) params.assigneeIds = filterAssignees.join(',')
     if (!isAdmin && filterMyStatus)        params.myStatus    = filterMyStatus
     api.listAssignments(params)
@@ -809,9 +867,84 @@ export default function InternalAssignments() {
       .catch(() => { if (!cancelled) setItems([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, search, view, pageSize, sortValue, deadlineFrom, deadlineTo, filterStatus, filterPriority, filterAssignees, filterMyStatus, isAdmin, refreshKey])
+  }, [search, view, sortValue, deadlineFrom, deadlineTo, filterStatus, filterPriority, filterAssignees, filterMyStatus, isAdmin, refreshKey])
 
   function refresh() { setRefreshKey((k) => k + 1) }
+
+  // ── Column-header filter: handlers + client-side displayed/pagination ─────────
+  function hasColFilter(colKey) {
+    const f = colFilters[colKey]
+    if (f == null) return false
+    const t = iaColFilterType(colKey)
+    if (t === 'enum')        return f instanceof Set && f.size > 0
+    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
+    if (t === 'dateRange')   return Boolean(f.from || f.to)
+    if (t === 'numberRange') return f.min !== '' || f.max !== ''
+    return false
+  }
+  const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
+  const hasColSort = sortColState.col !== null
+
+  function openColFilter(colKey, e) {
+    e.stopPropagation()
+    if (filterPopup?.colKey === colKey) { setFilterPopup(null); return }
+    const rect = e.currentTarget.getBoundingClientRect()
+    setFilterPopup({ colKey, top: rect.bottom + 4, left: rect.left })
+  }
+  function handleColFilterChange(colKey, val) {
+    setColFilters((prev) => { const n = { ...prev }; if (val == null) delete n[colKey]; else n[colKey] = val; return n }); setPage(1)
+  }
+  function handleColSort(col, dir) { setSortColState({ col, dir }); setFilterPopup(null) }
+
+  const displayed = useMemo(() => {
+    let result = [...items]
+    for (const [colKey, fv] of Object.entries(colFilters)) {
+      const ft = iaColFilterType(colKey)
+      if (ft === 'enum') {
+        if (fv instanceof Set && fv.size > 0) result = result.filter((r) => fv.has(iaColDisplayLabel(r, colKey)))
+      } else if (ft === 'text') {
+        if (typeof fv === 'string' && fv.trim()) {
+          const q = fv.toLowerCase()
+          result = result.filter((r) => iaColDisplayLabel(r, colKey).toLowerCase().includes(q))
+        }
+      } else if (ft === 'dateRange') {
+        if (fv && (fv.from || fv.to)) {
+          result = result.filter((r) => {
+            const raw = iaColRawDate(r, colKey); if (!raw) return false
+            const d = String(raw).substring(0, 10)
+            if (fv.from && d < fv.from) return false
+            if (fv.to   && d > fv.to)   return false
+            return true
+          })
+        }
+      } else if (ft === 'numberRange') {
+        if (fv && (fv.min !== '' || fv.max !== '')) {
+          result = result.filter((r) => {
+            const num = progressPct(r)
+            if (num == null || isNaN(num)) return false
+            if (fv.min !== '' && num < parseFloat(fv.min)) return false
+            if (fv.max !== '' && num > parseFloat(fv.max)) return false
+            return true
+          })
+        }
+      }
+    }
+    if (sortColState.col) {
+      result.sort((a, b) => {
+        const ak = iaColSortKey(a, sortColState.col)
+        const bk = iaColSortKey(b, sortColState.col)
+        if (typeof ak === 'number' && typeof bk === 'number') return sortColState.dir === 'asc' ? ak - bk : bk - ak
+        const cmp = String(ak).localeCompare(String(bk), 'vi', { numeric: true })
+        return sortColState.dir === 'asc' ? cmp : -cmp
+      })
+    }
+    return result
+  }, [items, colFilters, sortColState])
+
+  const clientTotalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
+  const safePage = Math.min(page, clientTotalPages)
+  const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const clientPagination = { total: displayed.length, totalPages: clientTotalPages, page: safePage }
 
   // Bulk selection helpers
   function toggleSelect(id) {
@@ -824,7 +957,7 @@ export default function InternalAssignments() {
   }
 
   function selectAll(checked) {
-    setSelectedIds(checked ? new Set(items.map((t) => t.id)) : new Set())
+    setSelectedIds(checked ? new Set(pageRows.map((t) => t.id)) : new Set())
   }
 
   async function bulkClose() {
@@ -898,8 +1031,9 @@ export default function InternalAssignments() {
 
   function resetFilters() {
     setSearchInput(''); setSearch('')
-    setFilterStatus(''); setFilterPriority('')
+    setFilterStatus([]); setFilterPriority([])
     setFilterAssignees([]); setFilterMyStatus('')
+    setColFilters({}); setSortColState({ col: null, dir: 'asc' })
     setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
     setDeadlineFrom(INIT_DATES.from); setDeadlineTo(INIT_DATES.to)
     setSortValue('created_at:desc')
@@ -907,8 +1041,8 @@ export default function InternalAssignments() {
     try { sessionStorage.removeItem(FILTER_KEY) } catch (_) { /* ignore */ }
   }
 
-  const activeFilterCount = [search, filterStatus, filterPriority, filterMyStatus].filter(Boolean).length
-    + filterAssignees.length
+  const activeFilterCount = [search, filterMyStatus].filter(Boolean).length
+    + filterStatus.length + filterPriority.length + filterAssignees.length
 
   // Board drag-drop status change (admin only)
   async function handleBoardStatusChange(item, newStatus) {
@@ -929,9 +1063,9 @@ export default function InternalAssignments() {
     }
   }
 
-  // Stats clickable filter
+  // Stats clickable filter (multi-toggle)
   function handleFilterStatus(key) {
-    setFilterStatus((prev) => prev === key ? '' : key)
+    setFilterStatus((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])
     setPage(1)
   }
 
@@ -979,7 +1113,6 @@ export default function InternalAssignments() {
   ]
 
   const statsItems   = isAdmin ? adminStatsItems : staffStatsItems
-  const activeStatus = filterStatus
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -1097,27 +1230,22 @@ export default function InternalAssignments() {
               </div>
             </div>
 
-            {/* TRẠNG THÁI */}
+            {/* TRẠNG THÁI — multi-select */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Trạng thái</label>
-              <select
-                className={s.filterSelect}
-                value={filterStatus}
-                onChange={(e) => { setFilterStatus(e.target.value); setPage(1) }}
-              >
-                <option value="">Tất cả</option>
-                {getOptions('assignment_status').length > 0
-                  ? getOptions('assignment_status').map((o) => (
-                    <option key={o.key} value={o.key}>{o.label}</option>
-                  ))
-                  : <>
-                    <option value="draft">Nháp</option>
-                    <option value="active">Đang thực hiện</option>
-                    <option value="done">Hoàn thành</option>
-                    <option value="cancelled">Đã hủy</option>
-                  </>
-                }
-              </select>
+              <MultiSelect
+                placeholder="Tất cả"
+                options={getOptions('assignment_status').length > 0
+                  ? getOptions('assignment_status')
+                  : [
+                    { key: 'draft',     label: 'Nháp' },
+                    { key: 'active',    label: 'Đang thực hiện' },
+                    { key: 'done',      label: 'Hoàn thành' },
+                    { key: 'cancelled', label: 'Đã hủy' },
+                  ]}
+                selected={filterStatus}
+                onChange={(v) => { setFilterStatus(v); setPage(1) }}
+              />
             </div>
 
             {/* TRẠNG THÁI CỦA TÔI (staff only) */}
@@ -1139,22 +1267,17 @@ export default function InternalAssignments() {
               </div>
             )}
 
-            {/* ƯU TIÊN */}
+            {/* ƯU TIÊN — multi-select */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Ưu tiên</label>
-              <select
-                className={s.filterSelect}
-                value={filterPriority}
-                onChange={(e) => { setFilterPriority(e.target.value); setPage(1) }}
-              >
-                <option value="">Tất cả</option>
-                {(getOptions('assignment_priority').length > 0
+              <MultiSelect
+                placeholder="Tất cả"
+                options={getOptions('assignment_priority').length > 0
                   ? getOptions('assignment_priority')
-                  : ['low', 'normal', 'high', 'urgent'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
-                ).map((o) => (
-                  <option key={o.key} value={o.key}>{o.label}</option>
-                ))}
-              </select>
+                  : ['low', 'normal', 'high', 'urgent'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))}
+                selected={filterPriority}
+                onChange={(v) => { setFilterPriority(v); setPage(1) }}
+              />
             </div>
 
             {/* NGƯỜI THỰC HIỆN (admin only) */}
@@ -1173,7 +1296,7 @@ export default function InternalAssignments() {
           </div>
 
           {/* ── Active filter chips ── */}
-          {(yearFilter || monthFilter || filterStatus || filterPriority || filterAssignees.length > 0 || filterMyStatus || search) && (
+          {(yearFilter || monthFilter || filterStatus.length > 0 || filterPriority.length > 0 || filterAssignees.length > 0 || filterMyStatus || search) && (
             <div className={s.filterChipsRow}>
               {(yearFilter || monthFilter) && (
                 <span className={s.filterChip}>
@@ -1181,24 +1304,24 @@ export default function InternalAssignments() {
                   <button className={s.filterChipRemove} onClick={() => { setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH); const { from, to } = yearMonthToDates(CUR_YEAR, CUR_MONTH); setDeadlineFrom(from); setDeadlineTo(to); setPage(1) }}>×</button>
                 </span>
               )}
-              {filterStatus && (
-                <span className={s.filterChip}>
-                  {STATUS_LABELS[filterStatus]}
-                  <button className={s.filterChipRemove} onClick={() => { setFilterStatus(''); setPage(1) }}>×</button>
+              {filterStatus.map((st) => (
+                <span key={st} className={s.filterChip}>
+                  {STATUS_LABELS[st] ?? st}
+                  <button className={s.filterChipRemove} onClick={() => { setFilterStatus((prev) => prev.filter((x) => x !== st)); setPage(1) }}>×</button>
                 </span>
-              )}
+              ))}
               {!isAdmin && filterMyStatus && (
                 <span className={s.filterChip}>
                   {ASSIGNEE_STATUS_LABELS[filterMyStatus]}
                   <button className={s.filterChipRemove} onClick={() => { setFilterMyStatus(''); setPage(1) }}>×</button>
                 </span>
               )}
-              {filterPriority && (
-                <span className={s.filterChip}>
-                  {PRIORITY_LABELS[filterPriority]}
-                  <button className={s.filterChipRemove} onClick={() => { setFilterPriority(''); setPage(1) }}>×</button>
+              {filterPriority.map((pr) => (
+                <span key={pr} className={s.filterChip}>
+                  {PRIORITY_LABELS[pr] ?? pr}
+                  <button className={s.filterChipRemove} onClick={() => { setFilterPriority((prev) => prev.filter((x) => x !== pr)); setPage(1) }}>×</button>
                 </span>
-              )}
+              ))}
               {isAdmin && filterAssignees.map((id) => (
                 <span key={id} className={s.filterChip}>
                   NV: {staffList.find((u) => u.id === id)?.name ?? '?'}
@@ -1220,7 +1343,7 @@ export default function InternalAssignments() {
               i > 0 ? <span key={`d${i}`} className={s.statDivider} /> : null,
               <div
                 key={item.key}
-                className={`${s.statItem} ${activeStatus === item.key ? s.statItemActive : ''}`}
+                className={`${s.statItem} ${filterStatus.includes(item.key) ? s.statItemActive : ''}`}
                 onClick={() => handleFilterStatus(item.key)}
               >
                 <span className={`${s.statValue} ${item.css}`}>{item.value}</span>
@@ -1260,10 +1383,10 @@ export default function InternalAssignments() {
 
         {view === 'list' && (
           <ListView
-            items={items}
+            items={pageRows}
             loading={loading}
-            pagination={pagination}
-            page={page}
+            pagination={clientPagination}
+            page={safePage}
             pageSize={pageSize}
             onPageChange={(p) => { setPage(p); setSelectedIds(new Set()) }}
             onPageSizeChange={(n) => { setPageSize(n); setPage(1) }}
@@ -1276,6 +1399,27 @@ export default function InternalAssignments() {
             onSelectAll={selectAll}
             onStatusChange={handleStatusChange}
             onPriorityChange={handlePriorityChange}
+            sortColState={sortColState}
+            hasColFilter={hasColFilter}
+            onOpenColFilter={openColFilter}
+            colFilterCount={colFilterCount}
+            hasColSort={hasColSort}
+          />
+        )}
+
+        {/* Column-header filter dropdown (docs/018) */}
+        {filterPopup && view === 'list' && (
+          <ColumnFilterDropdown
+            colKey={filterPopup.colKey}
+            filterType={iaColFilterType(filterPopup.colKey)}
+            allRows={items}
+            getDisplayLabel={iaColDisplayLabel}
+            currentFilter={colFilters[filterPopup.colKey] ?? null}
+            sortState={sortColState}
+            onSort={handleColSort}
+            onFilterChange={handleColFilterChange}
+            onClose={() => setFilterPopup(null)}
+            style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }}
           />
         )}
 
