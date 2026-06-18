@@ -11,7 +11,7 @@ async function listTasks(req, res, next) {
     const { page = '1', limit = '20', status, priority, ...rest } = req.query
     const result = await svc.listTasks({
       page:             Math.max(1, parseInt(page, 10)),
-      limit:            Math.min(100, Math.max(1, parseInt(limit, 10))),
+      limit:            Math.min(1000, Math.max(1, parseInt(limit, 10))),
       status:           status   ? (Array.isArray(status)   ? status   : [status])   : undefined,
       priority:         priority ? (Array.isArray(priority) ? priority : [priority]) : undefined,
       forceAssignedTo:  req.user.role === 'staff' ? req.user.id : undefined,

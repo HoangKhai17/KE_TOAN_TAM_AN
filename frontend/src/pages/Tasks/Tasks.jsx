@@ -6,8 +6,8 @@ import {
   useDraggable, useDroppable, closestCenter,
 } from '@dnd-kit/core'
 import {
-  Plus, Search, RotateCcw, List, Columns, Calendar,
-  ChevronLeft, ChevronRight, ChevronDown, Filter, ClipboardList, Check,
+  Plus, Search, RotateCcw, List, Columns, Layers,
+  ChevronRight, ChevronDown, Filter, ClipboardList, Check,
   Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2,
 } from 'lucide-react'
 import {
@@ -24,6 +24,7 @@ import { listCompanies } from '../../api/companies'
 import { listUserOptions } from '../../api/users'
 import TaskFormModal from './TaskFormModal'
 import TaskQuickView from './TaskQuickView'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import {
   TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS,
@@ -412,353 +413,129 @@ function BoardView({ tasks, onStatusChange, onOpen, isAdmin, onDelete, onQuickVi
   )
 }
 
-// ── CalendarView ──────────────────────────────────────────────────────────────
 
-const WEEK_DAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+// ── Column-header filter helpers (docs/018) for the list view ───────────────────
 
-const CAL_PRIORITY_CLASS = {
-  urgent: s.calTaskUrgent,
-  high:   s.calTaskHigh,
-  medium: s.calTaskMedium,
-  low:    s.calTaskLow,
+const STATUS_RANK   = { pending: 1, in_progress: 2, on_hold: 3, pending_review: 4, needs_revision: 5, completed: 6 }
+const PRIORITY_RANK = { urgent: 1, high: 2, medium: 3, low: 4 }
+
+const TASK_LIST_COL_TYPE = {
+  title:          'text',
+  companyName:    'enum',
+  startDate:      'dateRange',
+  days:           'numberRange',
+  status:         'enum',
+  priority:       'enum',
+  dueDate:        'dateRange',
+  progress:       'numberRange',
+  assignedToName: 'enum',
 }
+function taskColFilterType(colKey) { return TASK_LIST_COL_TYPE[colKey] ?? 'text' }
 
-// Month view constants
-const CAL_DAY_H  = 36   // px: day-number header height inside each week row
-const CAL_SLOT_H = 80   // px: task bar slot height in month view
-const CAL_MAX_SL = 3    // max visible task bars before "+N more"
+// Raw value used for date/number filtering (must mirror what the column shows)
+function taskColRawDate(t, colKey)   { return colKey === 'startDate' ? (t.startDate || t.createdAt) : t.dueDate }
+function taskColRawNumber(t, colKey) { return colKey === 'days' ? calcDays(t) : progressPct(t) }
 
-// Week view constants
-const WEEK_TOP_H  = 10  // px: top offset for bars in week view row
-const WEEK_SLOT_H = 80  // px: task bar slot height in week view
-
-// Greedy slot-assignment for one week row
-function computeBarLayout(week, allTasks, maxSlots) {
-  const wStart = format(week[0], 'yyyy-MM-dd')
-  const wEnd   = format(week[6], 'yyyy-MM-dd')
-
-  const wTasks = allTasks.filter((t) => {
-    const ts = t.startDate || t.dueDate
-    const te = t.dueDate   || t.startDate
-    if (!ts && !te) return false
-    return te >= wStart && ts <= wEnd
-  })
-
-  wTasks.sort((a, b) => {
-    const as = a.startDate || a.dueDate || ''
-    const bs = b.startDate || b.dueDate || ''
-    if (as !== bs) return as.localeCompare(bs)
-    const ad = a.dueDate && a.startDate ? new Date(a.dueDate) - new Date(a.startDate) : 0
-    const bd = b.dueDate && b.startDate ? new Date(b.dueDate) - new Date(b.startDate) : 0
-    return bd - ad
-  })
-
-  const dayIdxMap = {}
-  week.forEach((d, i) => { dayIdxMap[format(d, 'yyyy-MM-dd')] = i })
-
-  const slots         = []
-  const bars          = []
-  const overflowByDay = Array(7).fill(0)
-
-  for (const t of wTasks) {
-    const ts = t.startDate || t.dueDate
-    const te = t.dueDate   || t.startDate
-    const cs = ts < wStart ? wStart : ts
-    const ce = te > wEnd   ? wEnd   : te
-    const si = dayIdxMap[cs] ?? 0
-    const ei = dayIdxMap[ce] ?? 6
-
-    let slot = slots.findIndex((end) => end < si)
-    if (slot === -1) slot = slots.length
-
-    if (slot < maxSlots) {
-      slots[slot] = ei
-      bars.push({
-        task: t, si, ei, slot,
-        continuesLeft:  !!t.startDate && t.startDate < wStart,
-        continuesRight: !!t.dueDate   && t.dueDate   > wEnd,
-      })
-    } else {
-      for (let d = si; d <= ei; d++) overflowByDay[d]++
-    }
+function taskColSortKey(t, colKey) {
+  switch (colKey) {
+    case 'status':         return STATUS_RANK[t.status] ?? 99
+    case 'priority':       return PRIORITY_RANK[t.priority] ?? 99
+    case 'days':           { const d = calcDays(t);    return d == null ? Number.MAX_SAFE_INTEGER : d }
+    case 'progress':       { const p = progressPct(t); return p == null ? -1 : p }
+    case 'startDate':      return t.startDate || t.createdAt || ''
+    case 'dueDate':        return t.dueDate || ''
+    case 'companyName':    return (t.companyName || '').toLowerCase()
+    case 'assignedToName': return (t.assignedToName || '').toLowerCase()
+    default:               return (t.title || '').toLowerCase()
   }
-
-  return { bars, overflowByDay, slotCount: slots.length }
 }
 
-function CalendarView({ tasks, onOpen }) {
-  const [calMode, setCalMode]       = useState('month')  // 'month' | 'week'
-  const [calDate, setCalDate]       = useState(new Date())
-  const [dayPopover, setDayPopover] = useState(null)
+// ── SourceBoardView — Kanban theo Nguồn công việc (drag để đổi nguồn) ────────────
 
-  function goPrev()  { setCalDate((d) => calMode === 'month' ? subMonths(d, 1) : addDays(d, -7)) }
-  function goNext()  { setCalDate((d) => calMode === 'month' ? addMonths(d, 1) : addDays(d,  7)) }
-  function goToday() { setCalDate(new Date()) }
+function DraggableSourceCard({ task, onOpen, isAdmin, onDelete, onQuickView }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: task.id, data: { source: task.source },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={`${s.boardCard} ${isDragging ? s.boardCardDragging : ''} ${transform ? s.dragTransform : ''}`}
+      style={transform ? { '--drag-x': `${transform.x}px`, '--drag-y': `${transform.y}px` } : undefined}
+      onClick={() => !isDragging && onOpen(task.id)}
+    >
+      <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
+    </div>
+  )
+}
 
-  const navTitle = useMemo(() => {
-    if (calMode === 'month') return format(calDate, 'MMMM yyyy', { locale: vi })
-    const ws = startOfWeek(calDate, { weekStartsOn: 1 })
-    const we = endOfWeek(calDate,   { weekStartsOn: 1 })
-    return `${format(ws, 'dd/MM')} – ${format(we, 'dd/MM/yyyy')}`
-  }, [calMode, calDate])
+function DroppableSourceColumn({ srcKey, label, tasks, onOpen, isAdmin, onDelete, onQuickView }) {
+  const { setNodeRef, isOver } = useDroppable({ id: srcKey })
+  return (
+    <div className={s.boardCol}>
+      <div className={s.boardColHead}>
+        <span className={s.boardColDot} />
+        <span className={s.boardColTitle}>{label}</span>
+        <span className={s.boardColCount}>{tasks.length}</span>
+      </div>
+      <div ref={setNodeRef} className={`${s.boardCards} ${isOver ? s.boardCardsOver : ''}`}>
+        {tasks.map((t) => (
+          <DraggableSourceCard key={t.id} task={t} onOpen={onOpen} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
+        ))}
+        {tasks.length === 0 && <p className={s.boardEmptyText}>Không có</p>}
+      </div>
+    </div>
+  )
+}
 
-  // ── Month view ─────────────────────────────────────────────
-  const monthDays = useMemo(() => {
-    if (calMode !== 'month') return []
-    const start = startOfWeek(startOfMonth(calDate), { weekStartsOn: 1 })
-    const end   = endOfWeek(endOfMonth(calDate),     { weekStartsOn: 1 })
-    return eachDayOfInterval({ start, end })
-  }, [calMode, calDate])
+function SourceBoardView({ tasks, sourceOptions, onSourceChange, onOpen, onQuickView, isAdmin, onDelete }) {
+  const [activeTask, setActiveTask] = useState(null)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  const monthWeeks = useMemo(() => {
-    const result = []
-    for (let i = 0; i < monthDays.length; i += 7) result.push(monthDays.slice(i, i + 7))
-    return result
-  }, [monthDays])
-
-  const monthWeekBars = useMemo(() => {
-    return monthWeeks.map((week) => ({ week, ...computeBarLayout(week, tasks, CAL_MAX_SL) }))
-  }, [tasks, monthWeeks])
-
-  // ── Week view ──────────────────────────────────────────────
-  const weekDays = useMemo(() => {
-    if (calMode !== 'week') return []
-    const start = startOfWeek(calDate, { weekStartsOn: 1 })
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i))
-  }, [calMode, calDate])
-
-  const weekLayout = useMemo(() => {
-    if (calMode !== 'week' || weekDays.length === 0)
-      return { bars: [], overflowByDay: Array(7).fill(0), slotCount: 0 }
-    return computeBarLayout(weekDays, tasks, Infinity)
-  }, [tasks, weekDays, calMode])
-
-  // ── Tasks by day (for "+N more" popover) ──────────────────
-  const tasksByDay = useMemo(() => {
-    const allDays = calMode === 'month' ? monthDays : weekDays
-    if (allDays.length === 0) return {}
-    const map      = {}
-    const calStart = allDays[0]
-    const calEnd   = allDays[allDays.length - 1]
+  const bySource = useMemo(() => {
+    const map = {}
+    for (const sc of sourceOptions) map[sc.key] = []
     for (const t of tasks) {
-      const ts = t.startDate || t.dueDate
-      const te = t.dueDate   || t.startDate
-      if (!ts && !te) continue
-      let cur      = isAfter(parseISO(ts), calStart) ? parseISO(ts) : calStart
-      const stopAt = isAfter(parseISO(te), calEnd)   ? calEnd       : parseISO(te)
-      while (!isAfter(cur, stopAt)) {
-        const key = format(cur, 'yyyy-MM-dd')
-        if (!map[key]) map[key] = []
-        if (!map[key].find((x) => x.id === t.id)) map[key].push(t)
-        cur = addDays(cur, 1)
-      }
+      if (map[t.source]) map[t.source].push(t)
+      else (map.__other ??= []).push(t)
     }
     return map
-  }, [tasks, monthDays, weekDays, calMode])
+  }, [tasks, sourceOptions])
 
-  function taskBarClass(t) {
-    if (t.status === 'completed') return s.calTaskDone
-    if (isTaskOverdue(t))        return s.calTaskOverdue
-    return CAL_PRIORITY_CLASS[t.priority] ?? s.calTaskLow
-  }
+  const cols = [...sourceOptions]
+  if ((bySource.__other ?? []).length > 0) cols.push({ key: '__other', label: 'Khác' })
 
-  function renderBar({ task, si, ei, slot, continuesLeft, continuesRight }, topH, slotH) {
-    const lm = continuesLeft  ? 0 : 3
-    const rm = continuesRight ? 0 : 3
-    const startShort = task.startDate ? fmtDate(task.startDate).slice(0, 5) : null
-    const endShort   = task.dueDate   ? fmtDate(task.dueDate).slice(0, 5)   : null
-    return (
-      <div
-        key={task.id}
-        className={`${s.calTaskBar} ${s.calendarTaskBarDynamic} ${taskBarClass(task)} ${continuesLeft ? s.calBarLeft : ''} ${continuesRight ? s.calBarRight : ''}`}
-        style={{
-          '--cal-left':   `calc(${(si / 7) * 100}% + ${lm}px)`,
-          '--cal-width':  `calc(${((ei - si + 1) / 7) * 100}% - ${lm + rm}px)`,
-          '--cal-top':    `${topH + slot * slotH + 3}px`,
-          '--cal-height': `${slotH - 5}px`,
-        }}
-        onClick={() => onOpen(task.id)}
-        title={task.title}
-      >
-        {!continuesLeft && <span className={s.calBarStartMark}>▶</span>}
-        <div className={s.calBarBody}>
-          <span className={s.calBarTitle}>{task.title}</span>
-          {task.companyName && (
-            <span className={s.calBarCompany}>{task.companyName}</span>
-          )}
-          <div className={s.calBarFooter}>
-            <span className={s.calBarStatusPill}>{STATUS_LABELS[task.status]}</span>
-            {(startShort || endShort) && (
-              <span className={s.calBarDue}>{startShort ?? '—'} → {endShort ?? '—'}</span>
-            )}
-          </div>
-        </div>
-        {!continuesRight && <span className={s.calBarEndMark}>→</span>}
-      </div>
-    )
+  function handleDragStart({ active }) { setActiveTask(tasks.find((t) => t.id === active.id) ?? null) }
+  function handleDragEnd({ active, over }) {
+    setActiveTask(null)
+    if (!over) return
+    const src = active.data.current?.source
+    const dst = over.id
+    if (src === dst || dst === '__other') return
+    const task = tasks.find((t) => t.id === active.id)
+    if (task) onSourceChange(task, dst)
   }
 
   return (
-    <div className={s.calWrap}>
-
-      {/* Navigation: [←][→] [Title] [Hôm nay|Tháng|Tuần] */}
-      <div className={s.calNav}>
-        <button className={s.calNavBtn} onClick={goPrev}><ChevronLeft size={16} /></button>
-        <button className={s.calNavBtn} onClick={goNext}><ChevronRight size={16} /></button>
-        <span className={s.calNavTitle}>{navTitle}</span>
-        <div className={s.calModeSwitch}>
-          <button
-            className={`${s.calModeBtn} ${calMode === 'month' ? s.calModeBtnActive : ''}`}
-            onClick={() => setCalMode('month')}
-          >Tháng</button>
-          <button
-            className={`${s.calModeBtn} ${calMode === 'week' ? s.calModeBtnActive : ''}`}
-            onClick={() => setCalMode('week')}
-          >Tuần</button>
-        </div>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className={s.boardWrap}>
+        {cols.map((sc) => (
+          <DroppableSourceColumn
+            key={sc.key} srcKey={sc.key} label={sc.label}
+            tasks={bySource[sc.key] ?? []}
+            onOpen={onOpen} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView}
+          />
+        ))}
       </div>
-
-      {/* ── MONTH VIEW ── */}
-      {calMode === 'month' && (
-        <>
-          <div className={s.calDayHeaders}>
-            {WEEK_DAYS.map((d) => <div key={d} className={s.calDayHead}>{d}</div>)}
+      <DragOverlay dropAnimation={null}>
+        {activeTask ? (
+          <div className={`${s.boardCard} ${s.boardCardOverlay}`}>
+            <BoardCardInner task={activeTask} isAdmin={false} onDelete={null} />
           </div>
-          <div className={s.calWeeksContainer}>
-            {monthWeekBars.map(({ week, bars, overflowByDay }, wIdx) => {
-              const isLast = wIdx === monthWeekBars.length - 1
-              return (
-                <div
-                  key={format(week[0], 'yyyy-MM-dd')}
-                  className={`${s.calWeekRow} ${isLast ? s.calWeekRowLast : ''}`}
-                >
-                  {week.map((day, dIdx) => {
-                    const key      = format(day, 'yyyy-MM-dd')
-                    const isOther  = !isSameMonth(day, calDate)
-                    const isTod    = isToday(day)
-                    const overflow = overflowByDay[dIdx]
-                    const dayTasks = tasksByDay[key] ?? []
-                    return (
-                      <div
-                        key={key}
-                        className={`${s.calDayCol} ${s.calendarDayColDynamic} ${isOther ? s.calColOther : ''} ${isTod ? s.calColToday : ''} ${dIdx === 6 ? s.calColLast : ''}`}
-                        style={{ '--cal-left': `${(dIdx / 7) * 100}%`, '--cal-width': `${100 / 7}%` }}
-                      >
-                        <div className={s.calDayNum}>
-                          <span className={isTod ? s.calDayNumToday : ''}>{format(day, 'd')}</span>
-                        </div>
-                        {overflow > 0 && (
-                          <button
-                            className={s.calMoreBtn}
-                            onClick={(e) => { e.stopPropagation(); setDayPopover({ date: key, tasks: dayTasks }) }}
-                          >+{overflow} thêm</button>
-                        )}
-                      </div>
-                    )
-                  })}
-                  {bars.map((b) => renderBar(b, CAL_DAY_H, CAL_SLOT_H))}
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
-
-      {/* ── WEEK VIEW ── */}
-      {calMode === 'week' && (
-        <>
-          {/* Day headers: show weekday name + full date */}
-          <div className={s.calDayHeaders}>
-            {weekDays.map((day, dIdx) => {
-              const isTod = isToday(day)
-              return (
-                <div key={dIdx} className={`${s.calDayHead} ${s.calDayHeadWide} ${isTod ? s.calDayHeadToday : ''}`}>
-                  <span className={s.calWeekDayName}>{WEEK_DAYS[dIdx]}</span>
-                  <span className={`${s.calWeekDayDate} ${isTod ? s.calWeekDayDateToday : ''}`}>
-                    {format(day, 'd/M')}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          {/* Single week row — all tasks visible, grows to fit */}
-          <div className={s.calWeeksContainer}>
-            <div
-              className={`${s.calWeekRow} ${s.calWeekRowLast} ${s.calendarWeekRowDynamic}`}
-              style={{ '--week-row-min-h': `${Math.max(160, WEEK_TOP_H + weekLayout.slotCount * WEEK_SLOT_H + 32)}px` }}
-            >
-              {weekDays.map((day, dIdx) => {
-                const isTod = isToday(day)
-                return (
-                  <div
-                    key={format(day, 'yyyy-MM-dd')}
-                    className={`${s.calDayCol} ${s.calendarDayColDynamic} ${isTod ? s.calColToday : ''} ${dIdx === 6 ? s.calColLast : ''}`}
-                    style={{ '--cal-left': `${(dIdx / 7) * 100}%`, '--cal-width': `${100 / 7}%` }}
-                  />
-                )
-              })}
-              {weekLayout.bars.map((b) => renderBar(b, WEEK_TOP_H, WEEK_SLOT_H))}
-              {weekLayout.bars.length === 0 && (
-                <div className={s.calNoTasks}>Không có công việc trong tuần này</div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Day detail popover (month view "+N more") */}
-      {dayPopover && (
-        <div className={s.miniOverlay} onClick={() => setDayPopover(null)}>
-          <div className={s.calDayPopover} onClick={(e) => e.stopPropagation()}>
-            <div className={s.calDayPopoverHead}>
-              <span className={s.calPopoverDate}>
-                {dayPopover.date.split('-').reverse().join('/')}
-              </span>
-              <span className={s.calPopoverCount}>
-                {dayPopover.tasks.length} công việc
-              </span>
-              <button className={`${s.btnIcon} ${s.calPopoverCloseBtn}`} onClick={() => setDayPopover(null)}>
-                <X size={14} />
-              </button>
-            </div>
-            <div className={s.calDayPopoverList}>
-              {dayPopover.tasks.map((t) => {
-                const overdue = isTaskOverdue(t)
-                return (
-                  <div
-                    key={t.id}
-                    className={s.calDayPopoverItem}
-                    onClick={() => { onOpen(t.id); setDayPopover(null) }}
-                  >
-                    <span className={`${s.statusBadge} ${s[STATUS_CSS[t.status]]} ${s.calPopoverStatusBadge}`}>
-                      {STATUS_LABELS[t.status]}
-                    </span>
-                    <div className={s.calPopoverMain}>
-                      <div className={`${s.calPopoverTitle} ${overdue ? s.calPopoverOverdue : ''}`}>
-                        {t.title}
-                      </div>
-                      {t.companyName && (
-                        <div className={s.calPopoverMeta}>{t.companyName}</div>
-                      )}
-                    </div>
-                    <div className={s.calPopoverRight}>
-                      {(t.startDate || t.dueDate) && (
-                        <span className={`${s.calPopoverDates} ${overdue ? s.calPopoverDatesOver : ''}`}>
-                          {t.startDate ? fmtDate(t.startDate).slice(0, 5) : '—'}
-                          {' → '}
-                          {t.dueDate ? fmtDate(t.dueDate).slice(0, 5) : '—'}
-                        </span>
-                      )}
-                      <PriorityBadge priority={t.priority} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   )
 }
 
@@ -937,6 +714,74 @@ function FilterCompanyPicker({ companies, value, onChange }) {
   )
 }
 
+// ── FilterCompanyMultiPicker: searchable multi-select company dropdown ─────────
+
+function FilterCompanyMultiPicker({ companies, value, onChange }) {
+  const [search, setSearch] = useState('')
+  const [open,   setOpen]   = useState(false)
+  const wrapRef   = useRef(null)
+  const searchRef = useRef(null)
+
+  const selectedSet = new Set(value)
+  const filtered = search.trim()
+    ? companies.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
+    : companies
+
+  useEffect(() => {
+    if (!open) return
+    searchRef.current?.focus()
+    function onOutside(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onOutside)
+    return () => document.removeEventListener('mousedown', onOutside)
+  }, [open])
+
+  function toggle(id) {
+    onChange(selectedSet.has(id) ? value.filter((x) => x !== id) : [...value, id])
+  }
+
+  return (
+    <div ref={wrapRef} className={s.companyPickerWrap}>
+      <div className={`${s.cpTrigger} ${s.companyPickerTriggerCompact}`} onClick={() => setOpen((o) => !o)}>
+        <span className={`${s.cpTriggerText} ${value.length ? s.companyPickerSelected : s.companyPickerPlaceholder}`}>
+          {value.length === 0 ? 'Tất cả' : `${value.length} đã chọn`}
+        </span>
+        <ChevronDown size={11} className={`${s.iconMuted} ${s.chevronRotate} ${open ? s.chevronOpen : ''}`} />
+      </div>
+      {open && (
+        <div className={s.cpDropdown}>
+          <div className={s.cpSearch}>
+            <Search size={12} className={s.iconMuted} />
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+              placeholder="Tìm khách hàng..."
+              className={s.cpSearchInput}
+            />
+            {search && (
+              <button type="button" className={s.cpSearchClear} onClick={() => setSearch('')}><X size={10} /></button>
+            )}
+          </div>
+          <div className={s.cpList}>
+            {value.length > 0 && (
+              <div className={s.cpItem} onClick={() => onChange([])}>Bỏ chọn tất cả</div>
+            )}
+            {filtered.map((c) => (
+              <label key={c.id} className={`${s.cpItem} ${selectedSet.has(c.id) ? s.cpItemActive : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={selectedSet.has(c.id)} onChange={() => toggle(c.id)} />
+                <span>{c.name}</span>
+              </label>
+            ))}
+            {filtered.length === 0 && <div className={s.cpEmpty}>Không tìm thấy &quot;{search}&quot;</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── ListView ──────────────────────────────────────────────────────────────────
 
 function ListView({
@@ -945,9 +790,29 @@ function ListView({
   selectedIds, onToggleSelect, onSelectAll,
   onStatusChange, onPriorityChange, onDueDateChange, onDelete,
   isAdmin,
+  sortColState, hasColFilter, onOpenColFilter, colFilterCount = 0, hasColSort = false,
 }) {
   const getLabel    = useEnumsStore((st) => st.getLabel)
   const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.has(t.id))
+
+  function Th({ colKey, children }) {
+    const active = hasColFilter(colKey) || sortColState?.col === colKey
+    return (
+      <th className={s.th}>
+        <div className={s.thFilterInner}>
+          <span className={s.thFilterLabel}>{children}</span>
+          <button
+            data-colfilter-btn
+            className={`${s.thFilterBtn} ${active ? s.thFilterBtnActive : ''}`}
+            onClick={(e) => onOpenColFilter(colKey, e)}
+            title="Lọc / Sắp xếp"
+          >
+            <Filter size={10} />
+          </button>
+        </div>
+      </th>
+    )
+  }
   const from = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
   const to   = Math.min(page * pageSize, pagination.total)
 
@@ -972,14 +837,14 @@ function ListView({
                   onChange={(e) => onSelectAll(e.target.checked)}
                 />
               </th>
-              <th className={s.th}>Tiêu đề / Khách hàng</th>
-              <th className={s.th}>Ngày bắt đầu</th>
-              <th className={s.th}>Số ngày</th>
-              <th className={s.th}>Trạng thái</th>
-              <th className={s.th}>Ưu tiên</th>
-              <th className={s.th}>Hết hạn</th>
-              <th className={s.th}>Tiến độ</th>
-              <th className={s.th}>Giao cho</th>
+              <Th colKey="title">Tiêu đề / Khách hàng</Th>
+              <Th colKey="startDate">Ngày bắt đầu</Th>
+              <Th colKey="days">Số ngày</Th>
+              <Th colKey="status">Trạng thái</Th>
+              <Th colKey="priority">Ưu tiên</Th>
+              <Th colKey="dueDate">Hết hạn</Th>
+              <Th colKey="progress">Tiến độ</Th>
+              <Th colKey="assignedToName">Giao cho</Th>
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
             </tr>
           </thead>
@@ -1141,6 +1006,8 @@ function ListView({
         <div className={s.paginationLeft}>
           <span className={s.paginationInfo}>
             {loading ? '...' : `${from}–${to} / ${pagination.total} công việc`}
+            {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
+            {hasColSort && ' · đang sắp xếp'}
           </span>
           <div className={s.pageSizeBtns}>
             {[20, 50, 100].map((n) => (
@@ -1242,14 +1109,17 @@ export default function Tasks() {
   // Other filters (status/priority/source are multi-select arrays)
   const [searchInput, setSearchInput]       = useState(initF.searchInput    ?? '')
   const [search, setSearch]                 = useState(initF.searchInput    ?? '')
-  const [companyFilter, setCompanyFilter]   = useState(initF.companyFilter  ?? '')
-  const [staffFilter, setStaffFilter]       = useState(initF.staffFilter    ?? '')
+  const [companyFilter, setCompanyFilter]   = useState(() => Array.isArray(initF.companyFilter) ? initF.companyFilter : [])
+  const [staffFilter, setStaffFilter]       = useState(() => Array.isArray(initF.staffFilter)   ? initF.staffFilter   : [])
   const [statusFilter, setStatusFilter]     = useState(initF.statusFilter   ?? [])
   const [priorityFilter, setPriorityFilter] = useState(initF.priorityFilter ?? [])
   const [sourceFilter, setSourceFilter]     = useState(initF.sourceFilter   ?? [])
   const [isOverdue, setIsOverdue]           = useState(initF.isOverdue      ?? false)
 
-  const effectiveAssignedTo = isAdmin ? staffFilter : currentUser?.id
+  // Column-header filter (docs/018) — client-side over the loaded set
+  const [colFilters, setColFilters]     = useState({})
+  const [sortColState, setSortColState] = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup]   = useState(null)
 
   // Stats (counts across base filters, ignoring status/priority/isOverdue)
   const [stats, setStats] = useState({
@@ -1367,8 +1237,8 @@ export default function Tasks() {
     let cancelled = false
     const base = {
       search:      search                  || undefined,
-      companyId:   companyFilter           || undefined,
-      assignedTo:  effectiveAssignedTo     || undefined,
+      companyId:   companyFilter.length ? companyFilter : undefined,
+      assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : (currentUser?.id || undefined),
       dueDateFrom: dueDateFrom             || undefined,
       dueDateTo:   dueDateTo               || undefined,
       limit: 1, page: 1,
@@ -1394,17 +1264,19 @@ export default function Tasks() {
     const [sortBy, sortDir] = sortValue.split(':')
     const params = {
       search:      search              || undefined,
-      companyId:   companyFilter       || undefined,
-      assignedTo:  effectiveAssignedTo || undefined,
+      companyId:   companyFilter.length ? companyFilter : undefined,
+      assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : (currentUser?.id || undefined),
       status:      statusFilter.length   > 0 ? statusFilter   : undefined,
       priority:    priorityFilter.length > 0 ? priorityFilter : undefined,
-      source:      sourceFilter.length   > 0 ? sourceFilter[0] : undefined,
+      source:      sourceFilter.length   > 0 ? sourceFilter   : undefined,
       isOverdue:   isOverdue      ? true : undefined,
       dueDateFrom: dueDateFrom    || undefined,
       dueDateTo:   dueDateTo      || undefined,
       audience:    'internal',
-      limit:       view === 'list' ? pageSize : 500,
-      page:        view === 'list' ? page : 1,
+      // Load the working set once; the list filters/sorts/paginates client-side
+      // (column-header filter, docs/018). Board views group this set in memory.
+      limit:       500,
+      page:        1,
       sortBy,
       sortDir,
     }
@@ -1419,7 +1291,7 @@ export default function Tasks() {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, page, view, sortValue, refreshKey])
+  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, view, sortValue, refreshKey])
 
   // ── Date filter handlers ──────────────────────────────────────────────────────
 
@@ -1512,19 +1384,125 @@ export default function Tasks() {
 
   function resetFilters() {
     setSearchInput(''); setSearch('')
-    setCompanyFilter(''); setStaffFilter('')
+    setCompanyFilter([]); setStaffFilter([])
     setStatusFilter([]); setPriorityFilter([])
     setSourceFilter([]); setIsOverdue(false)
     setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
     setDueDateFrom(INIT_DATES.from)
     setDueDateTo(INIT_DATES.to)
     setSortValue('created_at:desc')
+    setColFilters({}); setSortColState({ col: null, dir: 'asc' })
     setView('list'); setPageSize(20)
     setPage(1)
     try { sessionStorage.removeItem(FILTER_KEY) } catch (_) { /* ignore storage errors */ }
   }
 
-  const activeFilterCount = [search, companyFilter, staffFilter].filter(Boolean).length
+  // ── Column-header filter: helpers + handlers (docs/018) ───────────────────────
+  const colDisplayLabel = useMemo(() => (row, colKey) => {
+    switch (colKey) {
+      case 'companyName':    return row.companyName || '(Không có)'
+      case 'assignedToName': return row.assignedToName || '(Chưa giao)'
+      case 'status':         return getLabel('task_status', row.status, STATUS_LABELS[row.status] ?? row.status)
+      case 'priority':       return getLabel('task_priority', row.priority, PRIORITY_LABELS[row.priority] ?? row.priority)
+      default: { const v = row[colKey]; return v != null && v !== '' ? String(v) : '(Trống)' }
+    }
+  }, [getLabel])
+
+  function hasColFilter(colKey) {
+    const f = colFilters[colKey]
+    if (f == null) return false
+    const t = taskColFilterType(colKey)
+    if (t === 'enum')        return f instanceof Set && f.size > 0
+    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
+    if (t === 'dateRange')   return Boolean(f.from || f.to)
+    if (t === 'numberRange') return f.min !== '' || f.max !== ''
+    return false
+  }
+  const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
+  const hasColSort = sortColState.col !== null
+
+  function openColFilter(colKey, e) {
+    e.stopPropagation()
+    if (filterPopup?.colKey === colKey) { setFilterPopup(null); return }
+    const rect = e.currentTarget.getBoundingClientRect()
+    setFilterPopup({ colKey, top: rect.bottom + 4, left: rect.left })
+  }
+  function handleColFilterChange(colKey, val) {
+    setColFilters((prev) => { const n = { ...prev }; if (val == null) delete n[colKey]; else n[colKey] = val; return n }); setPage(1)
+  }
+  function handleColSort(col, dir) { setSortColState({ col, dir }); setFilterPopup(null) }
+
+  // Client-side filter + sort over the loaded working set
+  const displayed = useMemo(() => {
+    let result = [...tasks]
+    for (const [colKey, fv] of Object.entries(colFilters)) {
+      const ft = taskColFilterType(colKey)
+      if (ft === 'enum') {
+        if (fv instanceof Set && fv.size > 0) result = result.filter((r) => fv.has(colDisplayLabel(r, colKey)))
+      } else if (ft === 'text') {
+        if (typeof fv === 'string' && fv.trim()) {
+          const q = fv.toLowerCase()
+          result = result.filter((r) => colDisplayLabel(r, colKey).toLowerCase().includes(q))
+        }
+      } else if (ft === 'dateRange') {
+        if (fv && (fv.from || fv.to)) {
+          result = result.filter((r) => {
+            const raw = taskColRawDate(r, colKey); if (!raw) return false
+            const d = String(raw).substring(0, 10)
+            if (fv.from && d < fv.from) return false
+            if (fv.to   && d > fv.to)   return false
+            return true
+          })
+        }
+      } else if (ft === 'numberRange') {
+        if (fv && (fv.min !== '' || fv.max !== '')) {
+          result = result.filter((r) => {
+            const num = taskColRawNumber(r, colKey)
+            if (num == null || isNaN(num)) return false
+            if (fv.min !== '' && num < parseFloat(fv.min)) return false
+            if (fv.max !== '' && num > parseFloat(fv.max)) return false
+            return true
+          })
+        }
+      }
+    }
+    if (sortColState.col) {
+      result.sort((a, b) => {
+        const ak = taskColSortKey(a, sortColState.col)
+        const bk = taskColSortKey(b, sortColState.col)
+        if (typeof ak === 'number' && typeof bk === 'number') return sortColState.dir === 'asc' ? ak - bk : bk - ak
+        const cmp = String(ak).localeCompare(String(bk), 'vi', { numeric: true })
+        return sortColState.dir === 'asc' ? cmp : -cmp
+      })
+    }
+    return result
+  }, [tasks, colFilters, sortColState, colDisplayLabel])
+
+  // Client pagination for the list view
+  const clientTotalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
+  const safePage = Math.min(page, clientTotalPages)
+  const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const clientPagination = { total: displayed.length, totalPages: clientTotalPages, page: safePage }
+
+  // Source options for the Kanban-by-source view
+  const sourceOptions = getOptions('task_source').length > 0
+    ? getOptions('task_source')
+    : [{ key: 'manual', label: 'Thủ công' }, { key: 'auto', label: 'Tự động' }]
+
+  async function handleSourceChange(task, newSource) {
+    const prev = task.source
+    setTasks((p) => p.map((t) => (t.id === task.id ? { ...t, source: newSource } : t)))
+    try {
+      await tasksApi.updateTask(task.id, { source: newSource })
+      addToast('Đã chuyển nguồn công việc', 'success')
+    } catch (err) {
+      setTasks((p) => p.map((t) => (t.id === task.id ? { ...t, source: prev } : t)))
+      addToast(err.response?.data?.error?.message ?? 'Không thể chuyển nguồn', 'error')
+    }
+  }
+
+  const activeFilterCount = [search].filter(Boolean).length
+    + companyFilter.length + staffFilter.length
     + statusFilter.length + priorityFilter.length + sourceFilter.length
     + (isOverdue ? 1 : 0)
 
@@ -1538,7 +1516,7 @@ export default function Tasks() {
   }
 
   function selectAll(checked) {
-    setSelectedIds(checked ? new Set(tasks.map((t) => t.id)) : new Set())
+    setSelectedIds(checked ? new Set(pageRows.map((t) => t.id)) : new Set())
   }
 
   async function bulkComplete() {
@@ -1612,8 +1590,8 @@ export default function Tasks() {
               <button className={`${s.viewBtn} ${view === 'board'    ? s.viewBtnActive : ''}`} onClick={() => setView('board')}>
                 <Columns size={13} /> Board
               </button>
-              <button className={`${s.viewBtn} ${view === 'calendar' ? s.viewBtnActive : ''}`} onClick={() => setView('calendar')}>
-                <Calendar size={13} /> Lịch
+              <button className={`${s.viewBtn} ${view === 'board_source' ? s.viewBtnActive : ''}`} onClick={() => setView('board_source')}>
+                <Layers size={13} /> Kanban nguồn
               </button>
             </div>
 
@@ -1714,10 +1692,10 @@ export default function Tasks() {
             {/* KHÁCH HÀNG */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Khách hàng</label>
-              <FilterCompanyPicker
+              <FilterCompanyMultiPicker
                 companies={companies}
                 value={companyFilter}
-                onChange={(id) => { setCompanyFilter(id); setPage(1) }}
+                onChange={(v) => { setCompanyFilter(v); setPage(1) }}
               />
             </div>
 
@@ -1725,10 +1703,12 @@ export default function Tasks() {
             {isAdmin && (
               <div className={s.filterGroup}>
                 <label className={s.filterLabel}>Nhân viên</label>
-                <select value={staffFilter} onChange={(e) => { setStaffFilter(e.target.value); setPage(1) }} className={s.filterSelect}>
-                  <option value="">Tất cả</option>
-                  {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
+                <MultiSelect
+                  placeholder="Tất cả"
+                  options={staffList.map((u) => ({ key: u.id, label: u.name }))}
+                  selected={staffFilter}
+                  onChange={(v) => { setStaffFilter(v); setPage(1) }}
+                />
               </div>
             )}
 
@@ -1791,7 +1771,7 @@ export default function Tasks() {
           </div>
 
           {/* ── Active filter chips ── */}
-          {(yearFilter || monthFilter || staffFilter || companyFilter || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || search) && (
+          {(yearFilter || monthFilter || staffFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || search) && (
             <div className={s.filterChipsRow}>
               {(yearFilter || monthFilter) && (
                 <span className={s.filterChip}>
@@ -1799,18 +1779,18 @@ export default function Tasks() {
                   <button className={s.filterChipRemove} onClick={() => { setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH); const { from, to } = yearMonthToDates(CUR_YEAR, CUR_MONTH); setDueDateFrom(from); setDueDateTo(to); setPage(1) }}>×</button>
                 </span>
               )}
-              {companyFilter && (
-                <span className={s.filterChip}>
-                  KH: {companies.find((c) => c.id === companyFilter)?.name ?? '?'}
-                  <button className={s.filterChipRemove} onClick={() => { setCompanyFilter(''); setPage(1) }}>×</button>
+              {companyFilter.map((cid) => (
+                <span key={cid} className={s.filterChip}>
+                  KH: {companies.find((c) => c.id === cid)?.name ?? '?'}
+                  <button className={s.filterChipRemove} onClick={() => { setCompanyFilter((p) => p.filter((x) => x !== cid)); setPage(1) }}>×</button>
                 </span>
-              )}
-              {isAdmin && staffFilter && (
-                <span className={s.filterChip}>
-                  NV: {staffList.find((u) => u.id === staffFilter)?.name ?? '?'}
-                  <button className={s.filterChipRemove} onClick={() => { setStaffFilter(''); setPage(1) }}>×</button>
+              ))}
+              {isAdmin && staffFilter.map((sid) => (
+                <span key={sid} className={s.filterChip}>
+                  NV: {staffList.find((u) => u.id === sid)?.name ?? '?'}
+                  <button className={s.filterChipRemove} onClick={() => { setStaffFilter((p) => p.filter((x) => x !== sid)); setPage(1) }}>×</button>
                 </span>
-              )}
+              ))}
               {statusFilter.map((st) => (
                 <span key={st} className={s.filterChip}>
                   {getLabel('task_status', st, STATUS_LABELS[st])}
@@ -1915,10 +1895,10 @@ export default function Tasks() {
 
         {view === 'list' && (
           <ListView
-            tasks={tasks}
+            tasks={pageRows}
             loading={loading}
-            pagination={pagination}
-            page={page}
+            pagination={clientPagination}
+            page={safePage}
             pageSize={pageSize}
             onPageChange={(p) => { setPage(p); setSelectedIds(new Set()) }}
             onPageSizeChange={(n) => { setPageSize(n); setPage(1) }}
@@ -1932,6 +1912,27 @@ export default function Tasks() {
             onDueDateChange={handleDueDateChange}
             onDelete={setDeleteTarget}
             isAdmin={isAdmin}
+            sortColState={sortColState}
+            hasColFilter={hasColFilter}
+            onOpenColFilter={openColFilter}
+            colFilterCount={colFilterCount}
+            hasColSort={hasColSort}
+          />
+        )}
+
+        {/* Column-header filter dropdown (docs/018) — position:fixed, outside table */}
+        {filterPopup && view === 'list' && (
+          <ColumnFilterDropdown
+            colKey={filterPopup.colKey}
+            filterType={taskColFilterType(filterPopup.colKey)}
+            allRows={tasks}
+            getDisplayLabel={colDisplayLabel}
+            currentFilter={colFilters[filterPopup.colKey] ?? null}
+            sortState={sortColState}
+            onSort={handleColSort}
+            onFilterChange={handleColFilterChange}
+            onClose={() => setFilterPopup(null)}
+            style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }}
           />
         )}
 
@@ -1946,10 +1947,17 @@ export default function Tasks() {
           />
         )}
 
-        {view === 'calendar' && !loading && (
-          <div className={s.calendarPane}>
-            <CalendarView tasks={tasks} onOpen={openTask} />
-          </div>
+        {view === 'board_source' && !loading && (
+          <SourceBoardView
+            tasks={tasks}
+            sourceOptions={sourceOptions}
+            onSourceChange={handleSourceChange}
+            onOpen={openTask}
+            onQuickView={setQuickViewId}
+            isAdmin={isAdmin}
+            onDelete={setDeleteTarget}
+            getLabel={getLabel}
+          />
         )}
 
       </div>

@@ -176,8 +176,16 @@ async function listTasks(filters = {}) {
   const baseConditions = ['1=1']
   const baseParams = []
 
-  if (companyId)           { baseParams.push(companyId);           baseConditions.push(`t.company_id = $${baseParams.length}`) }
-  if (effectiveAssignedTo) { baseParams.push(effectiveAssignedTo); baseConditions.push(`t.assigned_to = $${baseParams.length}`) }
+  if (companyId && (!Array.isArray(companyId) || companyId.length > 0)) {
+    const arr = Array.isArray(companyId) ? companyId : [companyId]
+    baseParams.push(arr)
+    baseConditions.push(`t.company_id = ANY($${baseParams.length}::uuid[])`)
+  }
+  if (effectiveAssignedTo && (!Array.isArray(effectiveAssignedTo) || effectiveAssignedTo.length > 0)) {
+    const arr = Array.isArray(effectiveAssignedTo) ? effectiveAssignedTo : [effectiveAssignedTo]
+    baseParams.push(arr)
+    baseConditions.push(`t.assigned_to = ANY($${baseParams.length}::uuid[])`)
+  }
   if (source) {
     const arr = Array.isArray(source) ? source : [source]
     baseParams.push(arr)

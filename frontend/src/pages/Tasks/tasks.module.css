@@ -3843,3 +3843,23 @@
   font-style: italic;
   margin: 0 0 6px;
 }
+
+/* ── Column-header filter button (docs/018) ── */
+.thFilterInner { display: flex; align-items: center; gap: 4px; }
+.thFilterLabel { flex: 1; }
+.thFilterBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.5;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.thFilterBtn:hover { opacity: 1; background: rgba(0, 0, 0, 0.07); }
+.thFilterBtnActive,
+.thFilterBtnActive:hover { opacity: 1; background: var(--color-primary, #2563eb); color: #fff; }
