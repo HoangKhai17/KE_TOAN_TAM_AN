@@ -1232,7 +1232,7 @@
   color: #fff;
 }
 
-.viewBtnActive:hover { background: var(--color-primary); filter: brightness(1.06); }
+.viewBtnActive:hover { background: var(--color-primary); color: var(--color-white); filter: brightness(1.06); }
 
 /* ── Filter bar head ────────────────────────────────────────────── */
 

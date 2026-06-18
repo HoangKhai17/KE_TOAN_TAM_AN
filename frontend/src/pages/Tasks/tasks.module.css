@@ -88,7 +88,11 @@
   color: #fff;
   box-shadow: 0 2px 8px -2px rgba(37, 99, 235, 0.45);
 }
-.viewBtnActive:hover { filter: brightness(1.06); color: #fff; }
+.viewBtnActive:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  filter: brightness(1.06);
+}
 
 .fullscreenBtn {
   display: flex;
