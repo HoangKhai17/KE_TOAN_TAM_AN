@@ -307,29 +307,36 @@ function ChecklistTab({ taskId, onCountChange }) {
 
 // ── Tab: Dependencies ─────────────────────────────────────────────────────────
 
-function DependenciesTab({ taskId, currentTaskId }) {
+function DependenciesTab({ taskId, currentTaskId, companyId }) {
   const addToast = useToastStore((s) => s.toast)
   const [deps, setDeps]           = useState([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
   const [results, setResults]     = useState([])
   const [searching, setSearching] = useState(false)
+  const [focused, setFocused]     = useState(false)
 
   useEffect(() => {
     tasksApi.getTaskDependencies(taskId).then(setDeps).catch(() => {}).finally(() => setLoading(false))
   }, [taskId])
 
+  // Tìm/gợi ý công việc làm phụ thuộc — luôn giới hạn trong CÔNG TY của task (nhẹ,
+  // liên quan). Khi ô trống mà đang focus → preload 10 việc gần đây của công ty đó.
   useEffect(() => {
-    if (!search.trim()) { setResults([]); return }
+    const q = search.trim()
+    if (!q && !focused) { setResults([]); return }
     const t = setTimeout(async () => {
       setSearching(true)
       try {
-        const { tasks } = await tasksApi.listTasks({ search: search.trim(), limit: 10 })
+        const params = q
+          ? { search: q, companyId: companyId || undefined, limit: 10 }
+          : { companyId: companyId || undefined, limit: 10, sortBy: 'created_at', sortDir: 'desc' }
+        const { tasks } = await tasksApi.listTasks(params)
         setResults(tasks.filter((t) => t.id !== currentTaskId && !deps.find((d) => d.dependsOnTaskId === t.id)))
       } catch (_e) { /* ignore */ } finally { setSearching(false) }
-    }, 300)
+    }, q ? 300 : 0)
     return () => clearTimeout(t)
-  }, [search, deps, currentTaskId])
+  }, [search, focused, deps, currentTaskId, companyId])
 
   async function addDep(dependsOnTaskId) {
     try {
@@ -382,7 +389,9 @@ function DependenciesTab({ taskId, currentTaskId }) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm công việc cần hoàn thành trước..."
+            onFocus={() => setFocused(true)}
+            onBlur={() => setTimeout(() => setFocused(false), 150)}
+            placeholder="Tìm công việc của công ty này..."
             className={`${s.filterInput} ${s.filterInputFull}`}
           />
           {searching && (
@@ -391,6 +400,9 @@ function DependenciesTab({ taskId, currentTaskId }) {
         </div>
         {results.length > 0 && (
           <div className={s.depSearchResults}>
+            {!search.trim() && (
+              <div className={s.depSearchHint}>Gần đây trong công ty — chọn để thêm phụ thuộc</div>
+            )}
             {results.map((t) => (
               <div key={t.id} className={s.depSearchItem} onClick={() => addDep(t.id)} role="button" tabIndex={0}>
                 <span className={s.depSearchTitle}>{t.title}</span>
@@ -1092,7 +1104,7 @@ export default function TaskDetail() {
                 />
               )}
               {activeTab === 'deps' && (
-                <DependenciesTab taskId={id} currentTaskId={id} />
+                <DependenciesTab taskId={id} currentTaskId={id} companyId={task.companyId} />
               )}
               {activeTab === 'comments' && (
                 <CommentsTab taskId={id} />

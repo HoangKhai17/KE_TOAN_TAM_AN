@@ -3869,3 +3869,11 @@
 .miniTitleIcon { margin-right: 6px; vertical-align: middle; }
 .miniBodyHint  { margin-top: 8px; color: var(--color-muted); font-size: var(--fs-xs); }
 .cpItemMulti   { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+/* Tab Phụ thuộc — gợi ý preload theo công ty */
+.depSearchHint {
+  padding: 6px 10px;
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border-muted);
+}
