@@ -154,11 +154,23 @@ function parseSources(source) {
   return arr.length ? arr : null
 }
 
-// Danh sách nguồn task có trong dữ liệu (cho dropdown lọc) — nhãn từ enum
+// Danh sách nguồn cho dropdown lọc = TẤT CẢ nguồn cấu hình (active) trong enum,
+// kể cả nguồn chưa có task (vd "CV đi ra ngoài"); bổ sung nguồn lạ có trong data.
 async function listSources() {
   const labels = await loadSourceLabels()
-  const { rows } = await query(`SELECT DISTINCT source FROM tasks WHERE source IS NOT NULL ORDER BY source`)
-  return rows.map((r) => ({ key: r.source, label: labels[r.source] ?? r.source }))
+  const { rows: enumRows } = await query(`
+    SELECT eo.option_key AS key
+    FROM enum_options eo JOIN enum_types et ON et.id = eo.type_id
+    WHERE et.type_key = 'task_source' AND eo.is_active = TRUE
+    ORDER BY eo.sort_order, eo.option_key`)
+  const list = enumRows.map((r) => ({ key: r.key, label: labels[r.key] ?? r.key }))
+  const seen = new Set(list.map((x) => x.key))
+  // An toàn: thêm nguồn có trong dữ liệu nhưng chưa khai báo enum
+  const { rows: dataRows } = await query(`SELECT DISTINCT source FROM tasks WHERE source IS NOT NULL`)
+  for (const r of dataRows) {
+    if (!seen.has(r.source)) { list.push({ key: r.source, label: labels[r.source] ?? r.source }); seen.add(r.source) }
+  }
+  return list
 }
 function fmtDate(v) {
   if (!v) return ''
