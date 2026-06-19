@@ -130,11 +130,23 @@ const STATUS_LABELS = {
 const STATUS_PROGRESS = {
   pending: 0, in_progress: 40, on_hold: 20, needs_revision: 60, pending_review: 80, completed: 100,
 }
-const SOURCE_LABELS = {
-  auto: 'Định kỳ (tự sinh)', manual: 'Tự sắp xếp',
-  customerrequest: 'KH yêu cầu', client_request: 'KH yêu cầu', external: 'Ra ngoài',
+// Fallback chỉ dùng khi enum chưa có (nhãn chuẩn lấy từ enum_options 'task_source')
+const SOURCE_LABELS_FALLBACK = {
+  auto: 'CV định kỳ', manual: 'CV tự sắp xếp', customerrequest: 'CV KH yêu cầu',
+  handout: 'CV đi ra ngoài', client_request: 'CV KH yêu cầu',
 }
-function sourceLabel(src) { return SOURCE_LABELS[src] ?? (src || '—') }
+// Nhãn nguồn LẤY TỪ ENUM (metadata-driven), fallback nếu enum thiếu key
+async function loadSourceLabels() {
+  const map = { ...SOURCE_LABELS_FALLBACK }
+  try {
+    const { rows } = await query(`
+      SELECT eo.option_key, eo.label
+      FROM enum_options eo JOIN enum_types et ON et.id = eo.type_id
+      WHERE et.type_key = 'task_source'`)
+    for (const r of rows) map[r.option_key] = r.label
+  } catch { /* dùng fallback */ }
+  return map
+}
 // Chuẩn hóa tham số nguồn → mảng hoặc null (không lọc)
 function parseSources(source) {
   if (!source) return null
@@ -142,10 +154,11 @@ function parseSources(source) {
   return arr.length ? arr : null
 }
 
-// Danh sách nguồn task có trong dữ liệu (cho dropdown lọc)
+// Danh sách nguồn task có trong dữ liệu (cho dropdown lọc) — nhãn từ enum
 async function listSources() {
+  const labels = await loadSourceLabels()
   const { rows } = await query(`SELECT DISTINCT source FROM tasks WHERE source IS NOT NULL ORDER BY source`)
-  return rows.map((r) => ({ key: r.source, label: sourceLabel(r.source) }))
+  return rows.map((r) => ({ key: r.source, label: labels[r.source] ?? r.source }))
 }
 function fmtDate(v) {
   if (!v) return ''
@@ -172,14 +185,16 @@ async function summaryRows({ scope, id, month, year, source, forceAssignedTo }) 
   const srcArr = parseSources(source)
   if (srcArr) { params.push(srcArr); scopeCond += ` AND t.source = ANY($${params.length})` }
 
+  // LEFT JOIN task_types: task ad-hoc (tự sắp xếp / KH yêu cầu / ra ngoài) KHÔNG có task_type
+  // → vẫn phải hiện. Tên "Quy trình" lấy tt.name, không có thì lấy tiêu đề task.
   const { rows } = await query(`
-    SELECT t.id, t.status, t.source, t.due_date, t.period_label,
-           tt.name AS task_type_name,
+    SELECT t.id, t.title, t.status, t.source, t.due_date, t.period_label,
+           COALESCE(tt.name, t.title) AS task_type_name,
            c.name AS company_name, c.tax_code,
            u.name AS assignee_name,
            cl.total, cl.done
     FROM tasks t
-    JOIN task_types tt ON tt.id = t.task_type_id
+    LEFT JOIN task_types tt ON tt.id = t.task_type_id
     JOIN companies  c  ON c.id  = t.company_id
     LEFT JOIN users u  ON u.id  = t.assigned_to
     LEFT JOIN LATERAL (
@@ -189,9 +204,10 @@ async function summaryRows({ scope, id, month, year, source, forceAssignedTo }) 
     WHERE ${scopeCond}
       AND COALESCE(t.start_date, t.due_date) >= $2::date
       AND COALESCE(t.start_date, t.due_date) <  ($2::date + INTERVAL '1 month')
-    ORDER BY ${scope === 'company' ? 'tt.name' : 'c.name'}, t.created_at DESC
+    ORDER BY ${scope === 'company' ? 'COALESCE(tt.name, t.title)' : 'c.name'}, t.created_at DESC
   `, params)
 
+  const srcLabels = await loadSourceLabels()
   return rows.map((r) => {
     const total = parseInt(r.total, 10) || 0
     const done = parseInt(r.done, 10) || 0
@@ -208,7 +224,7 @@ async function summaryRows({ scope, id, month, year, source, forceAssignedTo }) 
       taxCode:      r.tax_code,
       assigneeName: r.assignee_name,
       source:       r.source,
-      sourceLabel:  sourceLabel(r.source),
+      sourceLabel:  srcLabels[r.source] ?? r.source,
       hasChecklist,
       doneSteps:    done,
       totalSteps:   total,

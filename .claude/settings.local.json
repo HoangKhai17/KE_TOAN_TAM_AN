@@ -251,7 +251,8 @@
       "Bash(grep -nE \"rgba\\\\\\(|[^-]\\([0-9]{1,3}\\)px\" ProgressMatrix.module.css)",
       "Bash(docker exec ke_toan_tam_an-postgres-1 psql -U ktta_user -d ktta_db -At -c ' *)",
       "Read(//tmp/**)",
-      "Bash(grep -nE \"role *= *'staff'|role = \\\\\\\\\\\\$|u.role|WHERE u.role\" backend/src/modules/reports/reports.service.js)"
+      "Bash(grep -nE \"role *= *'staff'|role = \\\\\\\\\\\\$|u.role|WHERE u.role\" backend/src/modules/reports/reports.service.js)",
+      "Bash(docker start *)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",
