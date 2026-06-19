@@ -25,6 +25,7 @@ const ROUTE_LABELS = {
   payroll:                'Bảng lương',
   'internal-assignments': 'Công việc nội bộ',
   'client-requests':      'Yêu cầu KH',
+  'progress-matrix':      'BC Tiến độ CV',
 }
 
 function useBreadcrumb() {

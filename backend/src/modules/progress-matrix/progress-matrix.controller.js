@@ -18,35 +18,42 @@ async function getYears(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function getSources(req, res, next) {
+  try {
+    const sources = await svc.listSources()
+    res.json({ success: true, data: { sources } })
+  } catch (err) { next(err) }
+}
+
 async function getMatrix(req, res, next) {
   try {
-    const { taskTypeId, month, year } = req.query
-    const data = await svc.getMatrix({ taskTypeId, month, year, forceAssignedTo: staffScope(req) })
+    const { taskTypeId, month, year, source } = req.query
+    const data = await svc.getMatrix({ taskTypeId, month, year, source, forceAssignedTo: staffScope(req) })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
 
 async function getByCompany(req, res, next) {
   try {
-    const { companyId, month, year } = req.query
-    const data = await svc.byCompany({ companyId, month, year, forceAssignedTo: staffScope(req) })
+    const { companyId, month, year, source } = req.query
+    const data = await svc.byCompany({ companyId, month, year, source, forceAssignedTo: staffScope(req) })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
 
 async function getByStaff(req, res, next) {
   try {
-    const { staffId, month, year } = req.query
-    const data = await svc.byStaff({ staffId, month, year, forceAssignedTo: staffScope(req) })
+    const { staffId, month, year, source } = req.query
+    const data = await svc.byStaff({ staffId, month, year, source, forceAssignedTo: staffScope(req) })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
 
 async function exportReport(req, res, next) {
   try {
-    const { view, taskTypeId, companyId, staffId, month, year, columns } = req.body ?? {}
+    const { view, taskTypeId, companyId, staffId, month, year, source, columns } = req.body ?? {}
     const { buffer, nameBase, period } = await svc.exportReport({
-      view, taskTypeId, companyId, staffId, month, year, columns,
+      view, taskTypeId, companyId, staffId, month, year, source, columns,
       forceAssignedTo: staffScope(req),
     })
     const filename = `bc-tien-do-${nameBase}-T${period.month}-${period.year}.xlsx`
@@ -57,4 +64,4 @@ async function exportReport(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { getTaskTypes, getYears, getMatrix, getByCompany, getByStaff, exportReport }
+module.exports = { getTaskTypes, getYears, getSources, getMatrix, getByCompany, getByStaff, exportReport }

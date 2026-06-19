@@ -133,7 +133,8 @@ async function staffPerformance({ from, to, staffIds }) {
     FROM users u
     LEFT JOIN tasks t ON t.assigned_to = u.id
       AND t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
-    WHERE u.role = 'staff' ${staffFilter}
+    -- Gồm cả admin: admin cũng được giao việc / phụ trách công ty như nhân viên
+    WHERE u.role IN ('staff', 'admin') AND u.status = 'active' ${staffFilter}
     GROUP BY u.id, u.name, u.job_title
     ORDER BY total DESC
   `, params)

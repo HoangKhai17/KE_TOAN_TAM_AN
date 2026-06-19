@@ -39,7 +39,7 @@ async function listYears() {
 }
 
 // Ma trận tiến độ cho (taskTypeId, month, year). forceAssignedTo: staff chỉ thấy phiếu của mình.
-async function getMatrix({ taskTypeId, month, year, forceAssignedTo }) {
+async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
   const m = parseInt(month, 10)
   const y = parseInt(year, 10)
   if (!taskTypeId || !m || !y) {
@@ -63,7 +63,9 @@ async function getMatrix({ taskTypeId, month, year, forceAssignedTo }) {
   // Hàng = phiếu của quy trình có kỳ rơi vào tháng (1 phiếu mới nhất / công ty)
   const params = [taskTypeId, periodStart]
   let staffCond = ''
-  if (forceAssignedTo) { params.push(forceAssignedTo); staffCond = `AND t.assigned_to = $${params.length}` }
+  if (forceAssignedTo) { params.push(forceAssignedTo); staffCond += ` AND t.assigned_to = $${params.length}` }
+  const srcArr = parseSources(source)
+  if (srcArr) { params.push(srcArr); staffCond += ` AND t.source = ANY($${params.length})` }
   const { rows: tasks } = await query(`
     SELECT DISTINCT ON (t.company_id)
            t.id, t.company_id, t.assigned_to,
@@ -124,6 +126,27 @@ const STATUS_LABELS = {
   pending: 'Chờ xử lý', in_progress: 'Đang làm', on_hold: 'Tạm hoãn',
   pending_review: 'Chờ duyệt', needs_revision: 'Cần sửa', completed: 'Hoàn thành',
 }
+// % suy ra từ trạng thái cho task KHÔNG có checklist (tiến độ thích ứng)
+const STATUS_PROGRESS = {
+  pending: 0, in_progress: 40, on_hold: 20, needs_revision: 60, pending_review: 80, completed: 100,
+}
+const SOURCE_LABELS = {
+  auto: 'Định kỳ (tự sinh)', manual: 'Tự sắp xếp',
+  customerrequest: 'KH yêu cầu', client_request: 'KH yêu cầu', external: 'Ra ngoài',
+}
+function sourceLabel(src) { return SOURCE_LABELS[src] ?? (src || '—') }
+// Chuẩn hóa tham số nguồn → mảng hoặc null (không lọc)
+function parseSources(source) {
+  if (!source) return null
+  const arr = Array.isArray(source) ? source : String(source).split(',').map((s) => s.trim()).filter(Boolean)
+  return arr.length ? arr : null
+}
+
+// Danh sách nguồn task có trong dữ liệu (cho dropdown lọc)
+async function listSources() {
+  const { rows } = await query(`SELECT DISTINCT source FROM tasks WHERE source IS NOT NULL ORDER BY source`)
+  return rows.map((r) => ({ key: r.source, label: sourceLabel(r.source) }))
+}
 function fmtDate(v) {
   if (!v) return ''
   const d = new Date(v)
@@ -135,8 +158,8 @@ function slug(name) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'bc'
 }
 
-// Mỗi hàng = 1 phiếu, kèm tiến độ checklist (done/total/%) — dùng chung 2 view
-async function summaryRows({ scope, id, month, year, forceAssignedTo }) {
+// Mỗi hàng = 1 phiếu, kèm tiến độ THÍCH ỨNG (checklist nếu có, không thì theo trạng thái) + nguồn
+async function summaryRows({ scope, id, month, year, source, forceAssignedTo }) {
   const y = parseInt(year, 10)
   const m = parseInt(month, 10)
   const periodStart = `${y}-${String(m).padStart(2, '0')}-01`
@@ -146,8 +169,11 @@ async function summaryRows({ scope, id, month, year, forceAssignedTo }) {
     params.push(forceAssignedTo)
     scopeCond += ` AND t.assigned_to = $${params.length}`
   }
+  const srcArr = parseSources(source)
+  if (srcArr) { params.push(srcArr); scopeCond += ` AND t.source = ANY($${params.length})` }
+
   const { rows } = await query(`
-    SELECT t.id, t.status, t.due_date, t.period_label,
+    SELECT t.id, t.status, t.source, t.due_date, t.period_label,
            tt.name AS task_type_name,
            c.name AS company_name, c.tax_code,
            u.name AS assignee_name,
@@ -169,24 +195,35 @@ async function summaryRows({ scope, id, month, year, forceAssignedTo }) {
   return rows.map((r) => {
     const total = parseInt(r.total, 10) || 0
     const done = parseInt(r.done, 10) || 0
+    const hasChecklist = total > 0
+    const statusLabel = STATUS_LABELS[r.status] ?? r.status
+    // Tiến độ thích ứng: hoàn thành = 100; có checklist → done/total; không → suy từ trạng thái
+    const percent = r.status === 'completed'
+      ? 100
+      : hasChecklist ? Math.round(done * 100 / total) : (STATUS_PROGRESS[r.status] ?? 0)
     return {
       taskId:       r.id,
       taskTypeName: r.task_type_name,
       companyName:  r.company_name,
       taxCode:      r.tax_code,
       assigneeName: r.assignee_name,
+      source:       r.source,
+      sourceLabel:  sourceLabel(r.source),
+      hasChecklist,
       doneSteps:    done,
       totalSteps:   total,
-      percent:      total > 0 ? Math.round(done * 100 / total) : null,
+      percent,
+      progressMode: hasChecklist ? 'checklist' : 'status',
+      progressLabel: hasChecklist ? `${done}/${total}` : statusLabel,
       status:       r.status,
-      statusLabel:  STATUS_LABELS[r.status] ?? r.status,
+      statusLabel,
       dueDate:      r.due_date,
       periodLabel:  r.period_label,
     }
   })
 }
 
-async function byCompany({ companyId, month, year, forceAssignedTo }) {
+async function byCompany({ companyId, month, year, source, forceAssignedTo }) {
   if (!companyId || !month || !year) throw Object.assign(new Error('Thiếu companyId / month / year'), { status: 400 })
   const { rows } = await query('SELECT name, tax_code FROM companies WHERE id = $1', [companyId])
   if (!rows[0]) throw Object.assign(new Error('Công ty không tồn tại'), { status: 404 })
@@ -195,11 +232,11 @@ async function byCompany({ companyId, month, year, forceAssignedTo }) {
     view: 'company',
     subject: { id: companyId, name: rows[0].name, taxCode: rows[0].tax_code },
     period: { month: m, year: y, label: `Tháng ${m}/${y}` },
-    rows: await summaryRows({ scope: 'company', id: companyId, month, year, forceAssignedTo }),
+    rows: await summaryRows({ scope: 'company', id: companyId, month, year, source, forceAssignedTo }),
   }
 }
 
-async function byStaff({ staffId, month, year, forceAssignedTo }) {
+async function byStaff({ staffId, month, year, source, forceAssignedTo }) {
   const id = forceAssignedTo || staffId
   if (!id || !month || !year) throw Object.assign(new Error('Thiếu staffId / month / year'), { status: 400 })
   const { rows } = await query('SELECT name FROM users WHERE id = $1', [id])
@@ -209,7 +246,7 @@ async function byStaff({ staffId, month, year, forceAssignedTo }) {
     view: 'staff',
     subject: { id, name: rows[0].name },
     period: { month: m, year: y, label: `Tháng ${m}/${y}` },
-    rows: await summaryRows({ scope: 'staff', id, month, year }),
+    rows: await summaryRows({ scope: 'staff', id, month, year, source }),
   }
 }
 
@@ -284,10 +321,12 @@ async function buildSummaryExcel(data, includeSet) {
   wb.creator = 'Kế Toán Tâm An'
   const ws = wb.addWorksheet('Tiến độ')
 
-  const progressText = (r) => (r.totalSteps > 0 ? `${r.doneSteps}/${r.totalSteps} (${r.percent}%)` : '—')
+  // Tiến độ thích ứng: có checklist → X/Y (%); không → % suy từ trạng thái
+  const progressText = (r) => (r.hasChecklist ? `${r.doneSteps}/${r.totalSteps} (${r.percent}%)` : `${r.percent}%`)
   const colDefs = data.view === 'company'
     ? [
         { key: 'taskType', header: 'Quy trình',    always: true, get: (r) => r.taskTypeName },
+        { key: 'source',   header: 'Nguồn',                      get: (r) => r.sourceLabel },
         { key: 'assignee', header: 'NV phụ trách',               get: (r) => r.assigneeName || '' },
         { key: 'progress', header: 'Tiến độ',                    get: progressText },
         { key: 'status',   header: 'Trạng thái',                 get: (r) => r.statusLabel },
@@ -296,6 +335,7 @@ async function buildSummaryExcel(data, includeSet) {
     : [
         { key: 'company',  header: 'Công ty',     always: true, get: (r) => r.companyName },
         { key: 'taskType', header: 'Quy trình',                 get: (r) => r.taskTypeName },
+        { key: 'source',   header: 'Nguồn',                     get: (r) => r.sourceLabel },
         { key: 'progress', header: 'Tiến độ',                   get: progressText },
         { key: 'status',   header: 'Trạng thái',                get: (r) => r.statusLabel },
         { key: 'dueDate',  header: 'Hết hạn',                   get: (r) => fmtDate(r.dueDate) },
@@ -329,18 +369,18 @@ async function buildSummaryExcel(data, includeSet) {
 }
 
 // Entry export thống nhất 3 view + chọn cột → { buffer, nameBase }
-async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, month, year, columns, forceAssignedTo }) {
+async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, month, year, source, columns, forceAssignedTo }) {
   const includeSet = Array.isArray(columns) && columns.length ? new Set(columns) : null
   if (view === 'company') {
-    const data = await byCompany({ companyId, month, year, forceAssignedTo })
+    const data = await byCompany({ companyId, month, year, source, forceAssignedTo })
     return { buffer: await buildSummaryExcel(data, includeSet), nameBase: `cong-ty-${slug(data.subject.name)}`, period: data.period }
   }
   if (view === 'staff') {
-    const data = await byStaff({ staffId, month, year, forceAssignedTo })
+    const data = await byStaff({ staffId, month, year, source, forceAssignedTo })
     return { buffer: await buildSummaryExcel(data, includeSet), nameBase: `nhan-vien-${slug(data.subject.name)}`, period: data.period }
   }
-  const mx = await getMatrix({ taskTypeId, month, year, forceAssignedTo })
+  const mx = await getMatrix({ taskTypeId, month, year, source, forceAssignedTo })
   return { buffer: await exportMatrix(mx, includeSet), nameBase: slug(mx.taskType.name), period: mx.period }
 }
 
-module.exports = { listTaskTypes, listYears, getMatrix, byCompany, byStaff, exportReport }
+module.exports = { listTaskTypes, listYears, listSources, getMatrix, byCompany, byStaff, exportReport }

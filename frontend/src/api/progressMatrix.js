@@ -12,6 +12,12 @@ export async function getYears() {
   return data.data.years
 }
 
+// Các nguồn task (cho dropdown lọc)
+export async function getSources() {
+  const { data } = await api.get('/progress-matrix/sources')
+  return data.data.sources
+}
+
 // Ma trận tiến độ theo quy trình (taskTypeId, month, year)
 export async function getMatrix(params) {
   const { data } = await api.get('/progress-matrix', { params })

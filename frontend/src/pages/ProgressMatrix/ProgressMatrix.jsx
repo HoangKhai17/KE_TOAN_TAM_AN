@@ -7,7 +7,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { listCompanies } from '../../api/companies'
 import { listUserOptions } from '../../api/users'
 import {
-  getTaskTypes, getYears, getMatrix, getByCompany, getByStaff, exportReport,
+  getTaskTypes, getYears, getSources, getMatrix, getByCompany, getByStaff, exportReport,
 } from '../../api/progressMatrix'
 import s from './ProgressMatrix.module.css'
 
@@ -29,17 +29,14 @@ const STATUS_CLASS = {
 // Cột tùy chọn cho popup xuất (theo view) — Tên-KH/Quy-trình/Công-ty là cột cố định luôn có
 const EXPORT_OPTIONAL_COLS = {
   matrix:  [{ key: 'taxCode', label: 'Mã số thuế' }, { key: 'assignee', label: 'NV quản lý' }],
-  company: [{ key: 'assignee', label: 'NV phụ trách' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
-  staff:   [{ key: 'taskType', label: 'Quy trình' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
+  company: [{ key: 'source', label: 'Nguồn' }, { key: 'assignee', label: 'NV phụ trách' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
+  staff:   [{ key: 'source', label: 'Nguồn' }, { key: 'taskType', label: 'Quy trình' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
 }
 
 function fmtDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
   return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-function progressLabel(r) {
-  return r.totalSteps > 0 ? `${r.doneSteps}/${r.totalSteps}` : '—'
 }
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
@@ -94,6 +91,7 @@ function SummaryTable({ data }) {
         <thead>
           <tr>
             <th className={s.th}>{isCompany ? 'Quy trình' : 'Công ty'}</th>
+            <th className={s.th}>Nguồn</th>
             <th className={s.th}>{isCompany ? 'NV phụ trách' : 'Quy trình'}</th>
             <th className={s.th}>Tiến độ</th>
             <th className={s.th}>Trạng thái</th>
@@ -106,6 +104,7 @@ function SummaryTable({ data }) {
             return (
               <tr key={r.taskId} className={s.tr}>
                 <td className={`${s.td} ${s.tdName}`}>{isCompany ? r.taskTypeName : r.companyName}</td>
+                <td className={s.td}><span className={s.sourceChip}>{r.sourceLabel}</span></td>
                 <td className={s.td}>{isCompany ? (r.assigneeName || '—') : r.taskTypeName}</td>
                 <td className={s.td}>
                   <div className={s.progressCell}>
@@ -113,7 +112,7 @@ function SummaryTable({ data }) {
                       <div className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`} style={{ '--pm-pct': `${pct}%` }} />
                     </div>
                     <span className={s.progressText}>
-                      {progressLabel(r)}{r.totalSteps > 0 ? ` · ${pct}%` : ''}
+                      {r.hasChecklist ? `${r.doneSteps}/${r.totalSteps} · ${pct}%` : `${pct}%`}
                     </span>
                   </div>
                 </td>
@@ -148,7 +147,7 @@ function ExportModal({ view, filters, data, onClose }) {
   async function handleExport() {
     setExporting(true)
     try {
-      const body = { view, month: filters.month, year: filters.year, columns: [...selected] }
+      const body = { view, month: filters.month, year: filters.year, source: filters.source, columns: [...selected] }
       if (view === 'matrix') body.taskTypeId = filters.taskTypeId
       if (view === 'company') body.companyId = filters.companyId
       if (view === 'staff') body.staffId = filters.staffId
@@ -232,7 +231,8 @@ function previewCell(view, r, key) {
   if (key === 'taxCode')  return r.taxCode || '—'
   if (key === 'assignee') return r.assigneeName || '—'
   if (key === 'taskType') return r.taskTypeName
-  if (key === 'progress') return r.totalSteps > 0 ? `${r.doneSteps}/${r.totalSteps} (${r.percent}%)` : '—'
+  if (key === 'source')   return r.sourceLabel
+  if (key === 'progress') return r.hasChecklist ? `${r.doneSteps}/${r.totalSteps} (${r.percent}%)` : `${r.percent}%`
   if (key === 'status')   return r.statusLabel
   if (key === 'dueDate')  return fmtDate(r.dueDate)
   return ''
@@ -254,6 +254,8 @@ export default function ProgressMatrix() {
   const [companyId, setCompanyId] = useState('')
   const [staffList, setStaffList] = useState([])
   const [staffId, setStaffId] = useState('')
+  const [sources, setSources] = useState([])
+  const [sourceFilter, setSourceFilter] = useState('')   // '' = tất cả nguồn
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -267,6 +269,7 @@ export default function ProgressMatrix() {
     getYears()
       .then((years) => { const list = years.length ? years : [CUR_YEAR]; setAvailableYears(list); if (!list.includes(CUR_YEAR)) setYear(list[0]) })
       .catch(() => setAvailableYears([CUR_YEAR]))
+    getSources().then(setSources).catch(() => {})
     listCompanies({ limit: 500, status: 'active' })
       .then(({ companies: c }) => { setCompanies(c); if (c[0]) setCompanyId(c[0].id) })
       .catch(() => {})
@@ -285,17 +288,18 @@ export default function ProgressMatrix() {
     if (!canLoad) { setData(null); return }
     let cancelled = false
     setLoading(true)
+    const src = sourceFilter || undefined
     const fetcher = tab === 'matrix'
-      ? getMatrix({ taskTypeId, month, year })
+      ? getMatrix({ taskTypeId, month, year, source: src })
       : tab === 'company'
-        ? getByCompany({ companyId, month, year })
-        : getByStaff({ staffId: staffId || undefined, month, year })
+        ? getByCompany({ companyId, month, year, source: src })
+        : getByStaff({ staffId: staffId || undefined, month, year, source: src })
     fetcher
       .then((d) => { if (!cancelled) setData(d) })
       .catch(() => { if (!cancelled) { setData(null); addToast('Không tải được dữ liệu', 'error') } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [tab, taskTypeId, companyId, staffId, month, year, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, taskTypeId, companyId, staffId, month, year, sourceFilter, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped = useMemo(() => {
     const map = new Map()
@@ -314,7 +318,7 @@ export default function ProgressMatrix() {
       ? `TIẾN ĐỘ CÔNG VIỆC — ${data.subject.name} — ${data.period.label}`
       : `TIẾN ĐỘ CÔNG VIỆC — NV ${data.subject.name} — ${data.period.label}`
 
-  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year }
+  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, source: sourceFilter || undefined }
 
   return (
     <AppLayout>
@@ -374,6 +378,13 @@ export default function ProgressMatrix() {
               </select>
             </div>
           )}
+          <div className={s.filterGroup}>
+            <label className={s.filterLabel}>Nguồn</label>
+            <select className={s.select} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+              <option value="">Tất cả nguồn</option>
+              {sources.map((sc) => <option key={sc.key} value={sc.key}>{sc.label}</option>)}
+            </select>
+          </div>
           <div className={s.filterGroup}>
             <label className={s.filterLabel}>Tháng</label>
             <select className={s.select} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
