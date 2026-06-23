@@ -38,7 +38,7 @@ export async function getByStaff(params) {
 
 // Xuất Excel (POST) — body: { view, taskTypeId|companyId|staffId, month, year, columns } → Blob
 export async function exportReport(body) {
-  const res = await api.post('/progress-matrix/export', body, { responseType: 'blob' })
+  const res = await api.post('/progress-matrix/export', body, { responseType: 'blob', timeout: 120000 })
   const cd = res.headers['content-disposition'] || ''
   const m = /filename="?([^"]+)"?/i.exec(cd)
   return { blob: res.data, filename: m ? m[1] : 'bc-tien-do.xlsx' }

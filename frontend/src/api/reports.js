@@ -12,6 +12,7 @@ export async function exportReport(type, params = {}) {
   const res = await api.get(`/reports/export/${type}`, {
     params,
     responseType: 'blob',
+    timeout: 120000,
   })
   const url  = window.URL.createObjectURL(new Blob([res.data]))
   const link = document.createElement('a')

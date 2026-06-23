@@ -42,10 +42,10 @@ export const getMonthlyReport = (params) =>
   api.get('/attendance/report', { params }).then(r => r.data)
 
 export const exportAttendanceReport = (params) =>
-  api.get('/attendance/report/export', { params, responseType: 'blob' })
+  api.get('/attendance/report/export', { params, responseType: 'blob', timeout: 120000 })
 
 export const exportCustomReport = (params) =>
-  api.get('/attendance/report/export-custom', { params, responseType: 'blob' })
+  api.get('/attendance/report/export-custom', { params, responseType: 'blob', timeout: 120000 })
 
 export const syncPayroll = (payrollPeriodId) =>
   api.post('/attendance/sync-payroll', { payrollPeriodId }).then(r => r.data)
@@ -121,10 +121,10 @@ export const rejectOvertimeRequest = (id, body = {}) =>
   api.put(`/overtime-requests/${id}/reject`, body).then(r => r.data)
 
 export const exportOvertimeReport = (params) =>
-  api.get('/overtime-requests/export-custom', { params, responseType: 'blob' })
+  api.get('/overtime-requests/export-custom', { params, responseType: 'blob', timeout: 120000 })
 
 export const exportLeaveReport = (params) =>
-  api.get('/leave-requests/export-custom', { params, responseType: 'blob' })
+  api.get('/leave-requests/export-custom', { params, responseType: 'blob', timeout: 120000 })
 
 // ── Attendance Settings ───────────────────────────────────────────────────────
 

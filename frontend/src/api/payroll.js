@@ -36,12 +36,12 @@ export async function markPaid(id) {
 }
 
 export async function exportExcel(id) {
-  const response = await api.get(`/payroll/${id}/export`, { responseType: 'blob' })
+  const response = await api.get(`/payroll/${id}/export`, { responseType: 'blob', timeout: 120000 })
   return response
 }
 
 export async function exportExcelCustom(id, params) {
-  return api.get(`/payroll/${id}/export-custom`, { params, responseType: 'blob' })
+  return api.get(`/payroll/${id}/export-custom`, { params, responseType: 'blob', timeout: 120000 })
 }
 
 export async function listRecords(id) {

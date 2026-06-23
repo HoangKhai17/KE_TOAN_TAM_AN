@@ -41,6 +41,6 @@ export async function resetUserPassword(id, newPassword) {
 }
 
 export async function exportStaffExcel(params = {}) {
-  const { data } = await api.get('/users/export', { params, responseType: 'blob' })
+  const { data } = await api.get('/users/export', { params, responseType: 'blob', timeout: 120000 })
   return data
 }

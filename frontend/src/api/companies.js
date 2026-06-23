@@ -12,7 +12,7 @@ export async function getCompany(id) {
 
 // Xuất tổng hợp nhiều công ty ra Excel/zip (admin) — server-side, trả về Blob
 export async function exportCompanies(body) {
-  const res = await api.post('/companies/export', body, { responseType: 'blob' })
+  const res = await api.post('/companies/export', body, { responseType: 'blob', timeout: 120000 })
   const cd = res.headers['content-disposition'] || ''
   const m = /filename="?([^"]+)"?/i.exec(cd)
   const filename = m ? m[1] : (body.layout === 'per_company' ? 'export.zip' : 'export.xlsx')

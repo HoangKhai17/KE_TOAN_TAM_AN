@@ -29,7 +29,7 @@ module.exports = {
     url:
       process.env.DATABASE_URL ||
       `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST || 'postgres'}:5432/${process.env.POSTGRES_DB}`,
-    max: 10,
+    max: parseInt(process.env.DB_POOL_MAX || '25', 10),
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
   },

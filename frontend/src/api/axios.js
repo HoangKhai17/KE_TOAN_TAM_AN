@@ -5,6 +5,7 @@ import { refreshSession } from './session'
 const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
+  timeout: 30000, // fail-fast, tránh giữ kết nối treo vô hạn (docs/13 Pha A). Export dùng timeout riêng dài hơn.
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -40,6 +41,19 @@ api.interceptors.response.use(
           window.location.href = '/login'
         }
         return Promise.reject(refreshError)
+      }
+    }
+
+    // 429 Too Many Requests — chờ (Retry-After + jitter) rồi thử lại tối đa 2 lần,
+    // tránh "hammer" làm server càng quá tải (docs/13 Pha A)
+    if (error.response?.status === 429 && originalRequest) {
+      const tries = originalRequest._retry429 ?? 0
+      if (tries < 2) {
+        originalRequest._retry429 = tries + 1
+        const ra = Number(error.response.headers?.['retry-after'])
+        const waitMs = (Number.isFinite(ra) && ra > 0 ? ra : 1.5) * 1000 + Math.random() * 400
+        await new Promise((resolve) => setTimeout(resolve, waitMs))
+        return api(originalRequest)
       }
     }
 

@@ -13,6 +13,10 @@ const requestId = require('./middleware/requestId')
 const errorHandler = require('./middleware/errorHandler')
 const notFound = require('./middleware/notFound')
 
+// Compression (gzip) — guard để app vẫn chạy nếu module chưa được cài
+let compression = null
+try { compression = require('compression') } catch { /* optional */ }
+
 function createApp() {
   const app = express()
 
@@ -58,18 +62,36 @@ function createApp() {
     })
   )
 
-  // Rate limiting
+  // Response compression (gzip) — giảm payload 60–80% (docs/13 Pha A)
+  if (compression) app.use(compression())
+
+  // Rate limiting — auth (siết) + phân tầng đọc/ghi (docs/13 Pha A)
+  const rateLimitHandler = (req, res) => {
+    res.set('Retry-After', '10')
+    res.status(429).json({ success: false, error: { message: 'Quá nhiều yêu cầu, vui lòng thử lại sau ít giây.' } })
+  }
   app.use(
     '/api/auth/login',
-    rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false })
+    rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, handler: rateLimitHandler })
   )
   app.use(
     '/api/auth/refresh',
-    rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false })
+    rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, handler: rateLimitHandler })
+  )
+  // Đọc (GET) nới rộng cho thao tác liên tục; Ghi (POST/PATCH/DELETE) siết hơn
+  app.use(
+    '/api/',
+    rateLimit({
+      windowMs: 60 * 1000, max: 600, standardHeaders: true, legacyHeaders: false,
+      skip: (req) => req.method !== 'GET', handler: rateLimitHandler,
+    })
   )
   app.use(
     '/api/',
-    rateLimit({ windowMs: 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false })
+    rateLimit({
+      windowMs: 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false,
+      skip: (req) => req.method === 'GET' || req.method === 'OPTIONS', handler: rateLimitHandler,
+    })
   )
 
   // Request ID
