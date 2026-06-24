@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ClipboardList, Search, Filter, RotateCcw, Plus, Loader2,
@@ -11,8 +11,8 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
 import * as cdrApi from '../../api/clientRequests'
-import { listCompanies } from '../../api/companies'
-import { listUserOptions } from '../../api/users'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import s from './adminClientRequests.module.css'
 
@@ -747,6 +747,7 @@ export default function AdminClientRequests() {
   const navigate    = useNavigate()
   const currentUser = useAuthStore((st) => st.user)
   const addToast    = useToastStore((st) => st.toast)
+  const queryClient = useQueryClient()
   const isAdmin     = currentUser?.role === 'admin'
 
   // Restore saved filters on mount
@@ -755,21 +756,19 @@ export default function AdminClientRequests() {
   // View
   const [view, setView] = useState(initF.view ?? 'list')
 
-  // Reference data
-  const [companies, setCompanies]         = useState([])
-  const [staffList, setStaffList]         = useState([])
+  // Reference data (React Query — cache + gộp request dùng chung giữa các trang)
+  const { data: companies = [] } = useCompanyOptions()
+  const { data: staffList = [] } = useStaffOptions()
   const [availableYears, setAvailableYears] = useState([])
 
   // Stats
   const [stats, setStats]               = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsKey, setStatsKey]         = useState(0)
-  const [listKey, setListKey]           = useState(0)
 
-  // List data
+  // List data (local mirror — sync từ React Query để giữ optimistic update)
   const [items, setItems]           = useState([])
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
-  const [loading, setLoading]       = useState(true)
   const [page, setPage]             = useState(1)
   const [pageSize, setPageSize]     = useState(initF.pageSize ?? 20)
 
@@ -807,14 +806,8 @@ export default function AdminClientRequests() {
   const [actionLoading, setActionLoading]           = useState({})
   const [dismissTarget, setDismissTarget]           = useState(null)
 
-  // Load reference data on mount
+  // Load years on mount (companies/staff đã chuyển sang React Query hooks)
   useEffect(() => {
-    listCompanies({ limit: 300, status: 'active' })
-      .then(({ companies: c }) => setCompanies(c))
-      .catch(() => {})
-    listUserOptions({ status: 'active' })
-      .then(({ users: u }) => setStaffList(u))
-      .catch(() => {})
     cdrApi.getCdrYears()
       .then((years) => {
         setAvailableYears(years)
@@ -871,11 +864,11 @@ export default function AdminClientRequests() {
   useEffect(() => {
     function handleCdrRefresh() {
       setStatsKey((k) => k + 1)
-      setListKey((k) => k + 1)
+      queryClient.invalidateQueries({ queryKey: ['cdr', 'list'] })
     }
     window.addEventListener('cdr:refresh', handleCdrRefresh)
     return () => window.removeEventListener('cdr:refresh', handleCdrRefresh)
-  }, [])
+  }, [queryClient])
 
   // Persist filters to sessionStorage
   useEffect(() => {
@@ -885,39 +878,38 @@ export default function AdminClientRequests() {
     })
   }, [view, yearFilter, monthFilter, deadlineFrom, deadlineTo, sortFilter, searchQuery, companyFilter, staffFilter, statusFilter, pageSize])
 
-  // Load list — staff always forced to their own, admin can filter
-  const loadList = useCallback(() => {
-    let cancelled = false
-    setLoading(true)
+  // ── CDR list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
+  // Tải working set 1 lần; lọc/sắp/phân trang phía client (docs/018).
+  const listParams = useMemo(() => {
     const [sortBy, sortDir] = sortFilter.split(':')
-    cdrApi.getClientRequests({
+    return {
       status:           statusFilter.length  ? statusFilter.join(',')  : undefined,
       companyId:        companyFilter.length ? companyFilter.join(',') : undefined,
       requestedBy:      !isAdmin ? currentUser?.id : (staffFilter.length ? staffFilter.join(',') : undefined),
       search:           debouncedSearch || undefined,
       deadlineDateFrom: deadlineFrom  || undefined,
       deadlineDateTo:   deadlineTo    || undefined,
-      // Load working set once; list filters/sorts/paginates client-side (docs/018)
       page: 1,
       limit: 500,
       sortBy,
       sortDir,
-    })
-      .then(({ items: it, pagination: p }) => {
-        if (!cancelled) {
-          setItems(it ?? [])
-          setPagination(p ?? { total: 0, totalPages: 1 })
-        }
-      })
-      .catch(() => { if (!cancelled) setItems([]) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, listKey])
+    }
+  }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, isAdmin, currentUser?.id, deadlineFrom, deadlineTo])
 
+  const listQuery = useQuery({
+    queryKey: ['cdr', 'list', listParams],
+    queryFn: () => cdrApi.getClientRequests(listParams),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+  })
+  const loading = listQuery.isFetching
+
+  // Sync kết quả query → local state (để optimistic update qua setItems vẫn hoạt động)
   useEffect(() => {
-    const cancel = loadList()
-    return cancel
-  }, [loadList])
+    if (!listQuery.data) return
+    setItems(listQuery.data.items ?? [])
+    setPagination(listQuery.data.pagination ?? { total: 0, totalPages: 1 })
+  }, [listQuery.data])
 
   // ── Row actions ──────────────────────────────────────────────────────────────
 
@@ -1570,7 +1562,7 @@ export default function AdminClientRequests() {
               setItems((prev) => prev.map((r) => r.id === saved.id ? saved : r))
               addToast('Đã cập nhật yêu cầu', 'success')
             } else {
-              loadList()
+              queryClient.invalidateQueries({ queryKey: ['cdr', 'list'] })
               setStatsKey((k) => k + 1)
               addToast(`Đã tạo yêu cầu "${saved.documentName}"`, 'success')
             }

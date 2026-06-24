@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidateRefCompanies } from '../../hooks/useReferenceData'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   Building2, Pencil, AlertTriangle, ChevronRight,
@@ -98,15 +100,13 @@ function loadActiveTab(cid) {
 
 export default function CompanyDetail() {
   const { id }      = useParams()
+  const queryClient = useQueryClient()
   const currentUser = useAuthStore((st) => st.user)
   const isAdmin     = currentUser?.role === 'admin'
   const addToast  = useToastStore((st) => st.toast)
   const getLabel  = useEnumsStore((st) => st.getLabel)
   const loadEnums = useEnumsStore((st) => st.load)
 
-  const [company, setCompany]   = useState(null)
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState(null)
   const [activeTab, setActiveTab] = useState(() => loadActiveTab(id))
   const [customDefs, setCustomDefs] = useState([])
 
@@ -122,7 +122,6 @@ export default function CompanyDetail() {
 
   const [noteCount, setNoteCount]         = useState(0)
   const [overviewTick, setOverviewTick]   = useState(0)
-  const [companyTick, setCompanyTick]     = useState(0)
   const [showEdit, setShowEdit]           = useState(false)
   const [showTerminate, setShowTerminate] = useState(false)
   const [terminating, setTerminating]       = useState(false)
@@ -131,31 +130,29 @@ export default function CompanyDetail() {
 
   useEffect(() => { loadEnums() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    companiesApi
-      .getCompany(id)
-      .then((c) => { if (!cancelled) setCompany(c) })
-      .catch((err) => {
-        if (!cancelled) {
-          const status = err.response?.status
-          setError(
-            status === 404 ? 'Không tìm thấy công ty' :
-            status === 403 ? 'Bạn không có quyền xem thông tin công ty này' :
-            'Lỗi tải dữ liệu'
-          )
-        }
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [id, companyTick])
+  // ── Thông tin công ty — React Query (cache theo id, optimistic qua setQueryData) ──
+  const companyKey = ['company', 'detail', id]
+  const companyQuery = useQuery({
+    queryKey: companyKey,
+    queryFn: () => companiesApi.getCompany(id),
+    staleTime: 30_000,
+    retry: false,
+  })
+  const company = companyQuery.data ?? null
+  const loading = companyQuery.isLoading
+  const error = companyQuery.isError ? (() => {
+    const status = companyQuery.error?.response?.status
+    return status === 404 ? 'Không tìm thấy công ty'
+      : status === 403 ? 'Bạn không có quyền xem thông tin công ty này'
+      : 'Lỗi tải dữ liệu'
+  })() : null
+  // Cập nhật optimistic vào cache (giữ hành vi setCompany cũ)
+  const patchCompany = (updater) => queryClient.setQueryData(companyKey, (old) => (old ? updater(old) : old))
 
   // Live sync: reload company + overview cards when related data changes
   useDataSync(['data:task', 'data:company'], (payload) => {
     if (payload.companyId === id || payload.id === id) {
-      setCompanyTick((k) => k + 1)
+      queryClient.invalidateQueries({ queryKey: companyKey })
       setOverviewTick((k) => k + 1)
     }
   }, [id])
@@ -179,7 +176,7 @@ export default function CompanyDetail() {
     setTerminating(true)
     try {
       await companiesApi.terminateCompany(id)
-      setCompany((c) => ({ ...c, status: 'terminated' }))
+      patchCompany((c) => ({ ...c, status: 'terminated' }))
       setShowTerminate(false)
       addToast(`Đã kết thúc hợp đồng với "${company?.name}"`, 'warning')
     } catch (err) {
@@ -360,7 +357,7 @@ export default function CompanyDetail() {
           isAdmin={isAdmin}
           refreshTick={overviewTick}
           onAssigned={() => {
-            companiesApi.getCompany(id).then(setCompany).catch(() => {})
+            queryClient.invalidateQueries({ queryKey: companyKey })
             setOverviewTick((t) => t + 1)
           }}
         />
@@ -368,7 +365,7 @@ export default function CompanyDetail() {
       {activeTab === 'tasks' && (
         <CompanyTasksTab
           company={company}
-          onTaskCountChange={(openCount) => setCompany((c) => ({ ...c, taskOpenCount: openCount }))}
+          onTaskCountChange={(openCount) => patchCompany((c) => ({ ...c, taskOpenCount: openCount }))}
         />
       )}
       {activeTab === 'client-requests' && (
@@ -397,7 +394,8 @@ export default function CompanyDetail() {
           company={company}
           onClose={() => setShowEdit(false)}
           onSaved={(updated) => {
-            setCompany((c) => ({ ...c, ...updated }))
+            invalidateRefCompanies(queryClient)   // tên công ty đổi → refresh dropdown
+            patchCompany((c) => ({ ...c, ...updated }))
             setOverviewTick((t) => t + 1)
             setShowEdit(false)
             addToast('Đã cập nhật thông tin công ty', 'success')

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -303,14 +304,10 @@ export default function Dashboard() {
   const user     = useAuthStore((s) => s.user)
   const navigate = useNavigate()
 
-  const [summary,        setSummary]        = useState(null)
-  const [charts,         setCharts]         = useState(null)
-  const [loading,        setLoading]        = useState(true)
-  const [error,          setError]          = useState(null)
+  const queryClient = useQueryClient()
   const [range,          setRange]          = useState('28d')
   const [isFullscreen,   setIsFullscreen]   = useState(false)
   const [activeTaskType, setActiveTaskType] = useState('traditional')
-  const [syncKey,        setSyncKey]        = useState(0)
   const syncTimer = useRef(null)
 
   useEffect(() => {
@@ -324,31 +321,31 @@ export default function Dashboard() {
     else document.exitFullscreen().catch(() => {})
   }
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      setError(null)
+  // ── Dashboard — React Query (cache theo range/loại CV + giữ data cũ khi đổi) ──
+  const dashQuery = useQuery({
+    queryKey: ['dashboard', range, activeTaskType],
+    queryFn: async () => {
       const params = { ...getRangeDates(range), taskType: activeTaskType }
-      try {
-        const [sum, chrt] = await Promise.all([
-          getDashboardSummary(params),
-          getDashboardCharts(params),
-        ])
-        if (!cancelled) { setSummary(sum); setCharts(chrt) }
-      } catch (err) {
-        if (!cancelled) setError(err?.response?.data?.message ?? err?.message ?? 'Lỗi tải dashboard')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
-  }, [range, syncKey, activeTaskType])
+      const [summary, charts] = await Promise.all([
+        getDashboardSummary(params),
+        getDashboardCharts(params),
+      ])
+      return { summary, charts }
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  })
+  const summary = dashQuery.data?.summary ?? null
+  const charts  = dashQuery.data?.charts ?? null
+  const loading = dashQuery.isFetching
+  const error   = dashQuery.isError
+    ? (dashQuery.error?.response?.data?.message ?? dashQuery.error?.message ?? 'Lỗi tải dashboard')
+    : null
 
+  // Làm mới cache (debounce) khi có người thay đổi task/company
   useDataSync(['data:task', 'data:company'], () => {
     clearTimeout(syncTimer.current)
-    syncTimer.current = setTimeout(() => setSyncKey((k) => k + 1), 1500)
+    syncTimer.current = setTimeout(() => queryClient.invalidateQueries({ queryKey: ['dashboard'] }), 1500)
   }, [])
 
   const greetHour = new Date().getHours()

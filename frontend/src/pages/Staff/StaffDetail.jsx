@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidateRefStaff } from '../../hooks/useReferenceData'
 import {
   ArrowLeft, Phone, Briefcase, Calendar, Shield, Loader2,
   AlertTriangle, Edit2, Camera,
@@ -47,30 +49,31 @@ function fmtDate(iso) {
 export default function StaffDetail() {
   const { id }    = useParams()
   const navigate  = useNavigate()
+  const queryClient = useQueryClient()
   const self      = useAuthStore((st) => st.user)
   const patchUser = useAuthStore((st) => st.patchUser)
   const addToast  = useToastStore((st) => st.toast)
   const isAdmin   = self?.role === 'admin'
 
-  const [user, setUser]     = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState(null)
   const [editOpen, setEditOpen] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    usersApi.getUser(id)
-      .then((u) => { if (!cancelled) setUser(u) })
-      .catch(() => { if (!cancelled) setError('Không tìm thấy nhân viên') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [id])
+  // ── Thông tin nhân viên — React Query (cache theo id) ──
+  const userKey = ['user', 'detail', id]
+  const userQuery = useQuery({
+    queryKey: userKey,
+    queryFn: () => usersApi.getUser(id),
+    staleTime: 30_000,
+    retry: false,
+  })
+  const user    = userQuery.data ?? null
+  const loading = userQuery.isLoading
+  const error   = userQuery.isError ? 'Không tìm thấy nhân viên' : null
 
   async function handleStatusChange(status) {
     try {
       const updated = await usersApi.updateUserStatus(id, status)
-      setUser(updated)
+      invalidateRefStaff(queryClient)   // đổi active/inactive → refresh dropdown nhân viên
+      queryClient.setQueryData(userKey, updated)
       addToast('Đã cập nhật trạng thái', 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
@@ -244,7 +247,8 @@ export default function StaffDetail() {
             isAdmin={isAdmin}
             onClose={() => setEditOpen(false)}
             onSaved={(u) => {
-              setUser(u)
+              invalidateRefStaff(queryClient)   // tên/role đổi → refresh dropdown
+              queryClient.setQueryData(userKey, u)
               if (self?.id === u.id) {
                 patchUser({ name: u.name, avatarUrl: u.avatarUrl, role: u.role })
               }

@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { invalidateRefCompanies, useStaffOptions } from '../../hooks/useReferenceData'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2,
@@ -11,7 +13,6 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import * as companyTablesApi from '../../api/companyTables'
-import { listUserOptions } from '../../api/users'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
 import s from './companies.module.css'
@@ -364,6 +365,7 @@ function CoColumnFilterDropdown({ colKey, allRows, currentFilter, sortState, onS
 
 export default function Companies() {
   const navigate  = useNavigate()
+  const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const isAdmin   = currentUser?.role === 'admin'
   const addToast  = useToastStore((st) => st.toast)
@@ -371,11 +373,10 @@ export default function Companies() {
   const getLabel   = useEnumsStore((st) => st.getLabel)
   const loadEnums  = useEnumsStore((st) => st.load)
 
+  // Danh sách công ty — local mirror, sync từ React Query (giữ optimistic create/delete)
   const [companies, setCompanies]   = useState([])
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 })
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState(null)
-  const [staffList, setStaffList]   = useState([])
+  const { data: staffList = [] } = useStaffOptions()   // React Query — cache dùng chung
 
   const [searchInput, setSearchInput]   = useState(() => readSaved().search ?? '')
   const [search, setSearch]             = useState(() => readSaved().search ?? '')
@@ -391,7 +392,6 @@ export default function Companies() {
   const [sortState, setSortState]     = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup] = useState(null)
 
-  const [syncKey, setSyncKey]         = useState(0)
   const [showCreate, setShowCreate]   = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)  // company to delete
   const [deleting, setDeleting]       = useState(false)
@@ -425,42 +425,43 @@ export default function Companies() {
   // Reset page on filter/limit change
   useEffect(() => { setPage(1) }, [statusFilter, btFilter, staffFilter, limit, colFilters, sortState])
 
-  // Load staff for filter + enums
+  // Load enums + custom table defs (staff list đã chuyển sang React Query hook)
   useEffect(() => {
-    listUserOptions({ status: 'active' })
-      .then(({ users }) => setStaffList(users))
-      .catch(() => {})
     loadEnums()
     if (isAdmin) {
       companyTablesApi.listDefs({ activeOnly: true }).then(setCustomDefs).catch(() => {})
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live sync: reload when any user creates / updates / deletes a company
-  useDataSync('data:company', () => setSyncKey((k) => k + 1), [])
+  // Live sync: làm mới cache khi bất kỳ ai tạo/sửa/xoá công ty
+  useDataSync('data:company', () => queryClient.invalidateQueries({ queryKey: ['companies', 'list'] }), [])
 
-  // Fetch companies
+  // ── Companies list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
+  // Tải toàn bộ theo bộ lọc thô, rồi column-filter + phân trang phía client (docs/018).
+  const listParams = useMemo(() => ({
+    page: 1,
+    limit: 1000,
+    status:          statusFilter.length > 0 ? statusFilter.join(',') : undefined,
+    businessType:    btFilter.length     > 0 ? btFilter.join(',')     : undefined,
+    search:          search || undefined,
+    assignedStaffId: isAdmin ? (staffFilter.length > 0 ? staffFilter.join(',') : undefined) : currentUser?.id,
+  }), [statusFilter, btFilter, staffFilter, search, isAdmin, currentUser?.id])
+
+  const listQuery = useQuery({
+    queryKey: ['companies', 'list', listParams],
+    queryFn: () => companiesApi.listCompanies(listParams),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+  })
+  const loading = listQuery.isFetching
+  const error = listQuery.isError ? 'Không thể tải danh sách khách hàng' : null
+
+  // Sync kết quả query → local state (để optimistic create/delete vẫn hoạt động)
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    companiesApi
-      .listCompanies({
-        page: 1,
-        limit: 1000,  // load all matching the coarse filters; column filter + paginate client-side
-        status:          statusFilter.length > 0 ? statusFilter.join(',') : undefined,
-        businessType:    btFilter.length     > 0 ? btFilter.join(',')     : undefined,
-        search:          search || undefined,
-        // Staff always scoped to their own companies; admin can filter by any staff
-        assignedStaffId: isAdmin ? (staffFilter.length > 0 ? staffFilter.join(',') : undefined) : currentUser?.id,
-      })
-      .then(({ companies: c, pagination: p }) => {
-        if (!cancelled) { setCompanies(c); setPagination(p) }
-      })
-      .catch(() => { if (!cancelled) setError('Không thể tải danh sách khách hàng') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [statusFilter, btFilter, staffFilter, search, syncKey]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!listQuery.data) return
+    setCompanies(listQuery.data.companies)
+    setPagination(listQuery.data.pagination)
+  }, [listQuery.data])
 
   function resetFilters() {
     setSearchInput('')
@@ -589,6 +590,7 @@ export default function Companies() {
     setDeleting(true)
     try {
       await companiesApi.deleteCompany(deleteTarget.id)
+      invalidateRefCompanies(queryClient)   // refresh dropdown công ty ở các trang khác
       setCompanies((prev) => prev.filter((c) => c.id !== deleteTarget.id))
       setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }))
       addToast(`Đã xoá "${deleteTarget.name}"`, 'success')
@@ -902,6 +904,7 @@ export default function Companies() {
           onClose={() => setShowCreate(false)}
           onSaved={(c) => {
             setShowCreate(false)
+            invalidateRefCompanies(queryClient)   // công ty mới hiển thị ngay ở dropdown các trang
             setCompanies((prev) => [c, ...prev])
             setPagination((p) => ({ ...p, total: p.total + 1 }))
             addToast(`Đã thêm khách hàng "${c.name}"`, 'success')

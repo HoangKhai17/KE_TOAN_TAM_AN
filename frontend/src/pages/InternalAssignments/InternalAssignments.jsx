@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+
+const EMPTY_ITEMS = []   // ref ổn định để useMemo phía dưới không recompute mỗi render
 import {
   Plus, Search, ClipboardCheck, Loader2, Check,
   List, Columns, Filter, RotateCcw,
@@ -15,7 +18,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import * as api from '../../api/internalAssignments'
-import { listUserOptions } from '../../api/users'
+import { useStaffOptions } from '../../hooks/useReferenceData'
 import AssignmentDetailPanel from './AssignmentDetailPanel'
 import CreateEditAssignmentModal from './CreateEditAssignmentModal'
 import InternalNavTabs from './InternalNavTabs'
@@ -768,12 +771,10 @@ export default function InternalAssignments() {
   const [pageSize, setPageSize] = useState(initF.pageSize ?? 20)
   const [page,     setPage]     = useState(1)
 
-  // Data
-  const [items,          setItems]          = useState([])
-  const [pagination,     setPagination]     = useState({ page: 1, totalPages: 1, total: 0 })
-  const [loading,        setLoading]        = useState(true)
+  // Data (items/pagination/loading được derive từ React Query bên dưới)
   const [stats,          setStats]          = useState({})
-  const [staffList,      setStaffList]      = useState([])
+  const { data: staffList = [] } = useStaffOptions()  // React Query — cache dùng chung
+  const queryClient = useQueryClient()
   const [availableYears, setAvailableYears] = useState([])
 
   // UI
@@ -799,10 +800,9 @@ export default function InternalAssignments() {
     setPage(1)
   }, [filterStatus, filterPriority, filterAssignees, filterMyStatus, deadlineFrom, deadlineTo, pageSize, sortValue])
 
-  // Load staff list + years + enums
+  // Load years + enums (staff list đã chuyển sang React Query hook)
   useEffect(() => {
     loadEnums()
-    listUserOptions({ status: 'active' }).then(({ users: u }) => setStaffList(u)).catch(() => {})
     api.getYears()
       .then((years) => {
         setAvailableYears(years)
@@ -840,12 +840,11 @@ export default function InternalAssignments() {
     return () => { cancelled = true }
   }, [deadlineFrom, deadlineTo, refreshKey])
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
+  // ── Assignments list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
+  // Tải working set 1 lần; lọc/sắp/phân trang phía client (docs/018).
+  const listParams = useMemo(() => {
     const [sortBy, sortDir] = sortValue.split(':')
     const params = {
-      // Load the working set once; list filters/sorts/paginates client-side (docs/018)
       page: 1,
       limit: 200,
       search: search || undefined,
@@ -858,18 +857,23 @@ export default function InternalAssignments() {
     if (filterPriority.length)  params.priority = filterPriority.join(',')
     if (isAdmin && filterAssignees.length) params.assigneeIds = filterAssignees.join(',')
     if (!isAdmin && filterMyStatus)        params.myStatus    = filterMyStatus
-    api.listAssignments(params)
-      .then((result) => {
-        if (cancelled) return
-        setItems(result.items)
-        setPagination(result.pagination)
-      })
-      .catch(() => { if (!cancelled) setItems([]) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [search, view, sortValue, deadlineFrom, deadlineTo, filterStatus, filterPriority, filterAssignees, filterMyStatus, isAdmin, refreshKey])
+    return params
+  }, [search, sortValue, deadlineFrom, deadlineTo, filterStatus, filterPriority, filterAssignees, filterMyStatus, isAdmin])
 
-  function refresh() { setRefreshKey((k) => k + 1) }
+  const listQuery = useQuery({
+    queryKey: ['assignments', 'list', listParams],
+    queryFn: () => api.listAssignments(listParams),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+  })
+  const items   = listQuery.data?.items ?? EMPTY_ITEMS
+  const loading = listQuery.isFetching
+
+  // refresh stats (refreshKey) + làm mới cache danh sách
+  function refresh() {
+    setRefreshKey((k) => k + 1)
+    queryClient.invalidateQueries({ queryKey: ['assignments', 'list'] })
+  }
 
   // ── Column-header filter: handlers + client-side displayed/pagination ─────────
   function hasColFilter(colKey) {

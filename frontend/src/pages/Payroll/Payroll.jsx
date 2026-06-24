@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Loader2, DollarSign } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
@@ -144,10 +145,7 @@ export default function Payroll() {
   const isAdmin   = useAuthStore((st) => st.user?.role === 'admin')
   const addToast  = useToastStore((st) => st.toast)
 
-  const [periods,      setPeriods]      = useState([])
-  const [pagination,   setPagination]   = useState({ total: 0, totalPages: 1 })
   const [page,         setPage]         = useState(1)
-  const [loading,      setLoading]      = useState(true)
   const [showCreate,   setShowCreate]   = useState(false)
   const [availableYears, setAvailableYears] = useState([])
   const [selectedYear,   setSelectedYear]   = useState('')   // '' = tất cả năm
@@ -167,24 +165,17 @@ export default function Payroll() {
   // Reset to page 1 when year filter changes
   useEffect(() => { setPage(1) }, [selectedYear])
 
-  async function load(p = page, year = selectedYear) {
-    setLoading(true)
-    try {
-      const result = await payrollApi.listPeriods({
-        page:  p,
-        limit: 24,
-        ...(year ? { year } : {}),
-      })
-      setPeriods(result.periods ?? [])
-      setPagination(result.pagination ?? { total: 0, totalPages: 1 })
-    } catch {
-      addToast('Không thể tải danh sách kỳ lương', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { load(page, selectedYear) }, [page, selectedYear]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ── Danh sách kỳ lương — React Query (cache theo trang/năm) ──
+  const listQuery = useQuery({
+    queryKey: ['payroll', 'periods', page, selectedYear],
+    queryFn: () => payrollApi.listPeriods({ page, limit: 24, ...(selectedYear ? { year: selectedYear } : {}) }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  })
+  const periods    = listQuery.data?.periods ?? []
+  const pagination = listQuery.data?.pagination ?? { total: 0, totalPages: 1 }
+  const loading    = listQuery.isFetching
+  useEffect(() => { if (listQuery.isError) addToast('Không thể tải danh sách kỳ lương', 'error') }, [listQuery.errorUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <AppLayout>

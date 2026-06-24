@@ -20,8 +20,8 @@ import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as tasksApi from '../../api/tasks'
-import { listCompanies } from '../../api/companies'
-import { listUserOptions } from '../../api/users'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
 import TaskFormModal from './TaskFormModal'
 import TaskQuickView from './TaskQuickView'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
@@ -1064,6 +1064,7 @@ function saveFilters(obj) {
 export default function Tasks() {
   const navigate      = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const queryClient = useQueryClient()
   const currentUser = useAuthStore((state) => state.user)
   const addToast    = useToastStore((state) => state.toast)
   const getOptions  = useEnumsStore((st) => st.getOptions)
@@ -1128,21 +1129,18 @@ export default function Tasks() {
   })
   const [statsKey, setStatsKey] = useState(0)  // increment to force stats refresh
 
-  // Refresh trigger (e.g. on tab-focus)
-  const [refreshKey, setRefreshKey] = useState(0)
 
   // Pagination
   const [pageSize, setPageSize] = useState(initF.pageSize ?? 20)
   const [page, setPage]         = useState(1)
 
-  // Data
+  // Data (local mirror — được sync từ React Query để optimistic update vẫn hoạt động)
   const [tasks, setTasks]           = useState([])
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 })
-  const [loading, setLoading]       = useState(true)
 
-  // Reference data
-  const [companies, setCompanies]       = useState([])
-  const [staffList, setStaffList]       = useState([])
+  // Reference data (React Query — cache + gộp request dùng chung giữa các trang)
+  const { data: companies = [] } = useCompanyOptions()
+  const { data: staffList = [] } = useStaffOptions({ enabled: isAdmin })
   const [availableYears, setAvailableYears] = useState([])
 
   // Modals
@@ -1181,10 +1179,8 @@ export default function Tasks() {
     setPage(1)
   }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter, sortValue])
 
-  // Load reference data + enums + years
+  // Load enums + years (companies/staff đã chuyển sang React Query hooks)
   useEffect(() => {
-    listCompanies({ limit: 300, status: 'active' }).then(({ companies: c }) => setCompanies(c)).catch(() => {})
-    listUserOptions({ status: 'active' }).then(({ users: u }) => setStaffList(u)).catch(() => {})
     loadEnums()
     tasksApi.getTaskYears()
       .then((years) => {
@@ -1209,17 +1205,17 @@ export default function Tasks() {
   useEffect(() => {
     function onVisible() {
       if (document.visibilityState === 'visible') {
-        setRefreshKey((k) => k + 1)
+        queryClient.invalidateQueries({ queryKey: ['tasks', 'list'] })
         setStatsKey((k) => k + 1)
       }
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [])
+  }, [queryClient])
 
   // Live sync: reload when any user mutates a task
   useDataSync('data:task', () => {
-    setRefreshKey((k) => k + 1)
+    queryClient.invalidateQueries({ queryKey: ['tasks', 'list'] })
     setStatsKey((k) => k + 1)
   }, [])
 
@@ -1257,12 +1253,11 @@ export default function Tasks() {
     return () => { cancelled = true }
   }, [search, companyFilter, staffFilter, dueDateFrom, dueDateTo, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load tasks
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
+  // ── Tasks list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
+  // Tải "working set" (tối đa 500) rồi lọc/sắp/phân trang phía client (docs/018).
+  const listParams = useMemo(() => {
     const [sortBy, sortDir] = sortValue.split(':')
-    const params = {
+    return {
       search:      search              || undefined,
       companyId:   companyFilter.length ? companyFilter : undefined,
       assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : (currentUser?.id || undefined),
@@ -1273,25 +1268,29 @@ export default function Tasks() {
       dueDateFrom: dueDateFrom    || undefined,
       dueDateTo:   dueDateTo      || undefined,
       audience:    'internal',
-      // Load the working set once; the list filters/sorts/paginates client-side
-      // (column-header filter, docs/018). Board views group this set in memory.
       limit:       500,
       page:        1,
       sortBy,
       sortDir,
     }
-    tasksApi.listTasks(params)
-      .then(({ tasks: t, pagination: p }) => {
-        if (!cancelled) {
-          setTasks(t)
-          setPagination(p ?? { page: 1, totalPages: 1, total: t.length })
-          setSelectedIds(new Set())
-        }
-      })
-      .catch(() => { if (!cancelled) setTasks([]) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, view, sortValue, refreshKey])
+  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id])
+
+  const listQuery = useQuery({
+    queryKey: ['tasks', 'list', listParams],
+    queryFn: () => tasksApi.listTasks(listParams),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+  })
+  const loading = listQuery.isFetching
+
+  // Sync kết quả query → local state (để optimistic update qua setTasks vẫn hoạt động)
+  useEffect(() => {
+    if (!listQuery.data) return
+    const { tasks: t, pagination: p } = listQuery.data
+    setTasks(t)
+    setPagination(p ?? { page: 1, totalPages: 1, total: t.length })
+    setSelectedIds(new Set())
+  }, [listQuery.data])
 
   // ── Date filter handlers ──────────────────────────────────────────────────────
 

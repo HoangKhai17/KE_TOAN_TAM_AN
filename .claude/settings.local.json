@@ -253,7 +253,8 @@
       "Read(//tmp/**)",
       "Bash(grep -nE \"role *= *'staff'|role = \\\\\\\\\\\\$|u.role|WHERE u.role\" backend/src/modules/reports/reports.service.js)",
       "Bash(docker start *)",
-      "Bash(curl -s -D - -o /dev/null -H \"Accept-Encoding: gzip\" http://localhost:5173/api/health)"
+      "Bash(curl -s -D - -o /dev/null -H \"Accept-Encoding: gzip\" http://localhost:5173/api/health)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts\\)\\)\")"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

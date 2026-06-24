@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { invalidateRefStaff } from '../../hooks/useReferenceData'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, ChevronLeft, ChevronRight, Users, Loader2,
@@ -36,14 +38,14 @@ const FALLBACK_AVATAR = `https://ui-avatars.com/api/?name=&size=56&background=e2
 
 export default function Staff() {
   const navigate    = useNavigate()
+  const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const addToast    = useToastStore((st) => st.toast)
   const isAdmin     = currentUser?.role === 'admin'
 
+  // Danh sách nhân viên — local mirror, sync từ React Query (giữ optimistic update)
   const [users, setUsers]           = useState([])
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 })
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState(null)
 
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch]           = useState('')
@@ -64,30 +66,36 @@ export default function Staff() {
   // Reset page when filter changes
   useEffect(() => { setPage(1) }, [roleFilter, statusFilter])
 
-  // Fetch users
+  // ── Staff list — React Query (cache theo trang/bộ lọc + dedup + giữ data cũ khi đổi trang) ──
+  const listParams = useMemo(() => ({
+    page,
+    limit: 20,
+    role:   roleFilter   || undefined,
+    status: statusFilter || undefined,
+    search: search       || undefined,
+  }), [page, roleFilter, statusFilter, search])
+
+  const listQuery = useQuery({
+    queryKey: ['staff', 'list', listParams],
+    queryFn: () => usersApi.listUsers(listParams),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+  })
+  const loading = listQuery.isFetching
+  const error = listQuery.isError ? 'Không thể tải danh sách nhân viên' : null
+
+  // Sync kết quả query → local state (để optimistic update qua setUsers vẫn hoạt động)
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    usersApi
-      .listUsers({
-        page,
-        limit: 20,
-        role:   roleFilter   || undefined,
-        status: statusFilter || undefined,
-        search: search       || undefined,
-      })
-      .then(({ users: u, pagination: p }) => {
-        if (!cancelled) { setUsers(u); setPagination(p) }
-      })
-      .catch(() => { if (!cancelled) setError('Không thể tải danh sách nhân viên') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [page, roleFilter, statusFilter, search])
+    if (!listQuery.data) return
+    setUsers(listQuery.data.users)
+    setPagination(listQuery.data.pagination)
+  }, [listQuery.data])
 
   async function handleStatusChange(userId, status) {
     try {
       const updated = await usersApi.updateUserStatus(userId, status)
+      invalidateRefStaff(queryClient)   // đổi active/inactive → refresh dropdown nhân viên
+      queryClient.invalidateQueries({ queryKey: ['staff', 'list'] })
       setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)))
       addToast('Đã cập nhật trạng thái', 'success')
     } catch (err) {
@@ -99,6 +107,8 @@ export default function Staff() {
     if (!window.confirm(`Xóa nhân viên "${user.name}"? Thao tác này không thể hoàn tác.`)) return
     try {
       await usersApi.deleteUser(user.id)
+      invalidateRefStaff(queryClient)
+      queryClient.invalidateQueries({ queryKey: ['staff', 'list'] })
       setUsers((prev) => prev.filter((u) => u.id !== user.id))
       setPagination((p) => ({ ...p, total: p.total - 1 }))
       addToast(`Đã xóa nhân viên ${user.name}`, 'success')
@@ -263,6 +273,8 @@ export default function Staff() {
             onClose={() => setShowCreateModal(false)}
             onSaved={(u) => {
               setShowCreateModal(false)
+              invalidateRefStaff(queryClient)   // nhân viên mới hiển thị ngay ở dropdown
+              queryClient.invalidateQueries({ queryKey: ['staff', 'list'] })
               setUsers((prev) => [u, ...prev])
               setPagination((p) => ({ ...p, total: p.total + 1 }))
               addToast(`Đã thêm nhân viên ${u.name}`, 'success')
@@ -275,6 +287,8 @@ export default function Staff() {
             onClose={() => setEditUser(null)}
             onSaved={(u) => {
               setEditUser(null)
+              invalidateRefStaff(queryClient)   // tên/role đổi → refresh dropdown
+              queryClient.invalidateQueries({ queryKey: ['staff', 'list'] })
               setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)))
               addToast('Đã cập nhật thông tin nhân viên', 'success')
             }}

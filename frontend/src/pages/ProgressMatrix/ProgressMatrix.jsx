@@ -4,10 +4,10 @@ import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
-import { listCompanies } from '../../api/companies'
-import { listUserOptions } from '../../api/users'
+import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
+import { useProgressTaskTypes, useProgressYears, useProgressSources } from '../../hooks/useProgressMatrixData'
 import {
-  getTaskTypes, getYears, getSources, getMatrix, getByCompany, getByStaff, exportReport,
+  getMatrix, getByCompany, getByStaff, exportReport,
 } from '../../api/progressMatrix'
 import s from './ProgressMatrix.module.css'
 
@@ -246,39 +246,39 @@ export default function ProgressMatrix() {
   const [tab, setTab] = useState('matrix')
   const [month, setMonth] = useState(CUR_MONTH)
   const [year, setYear] = useState(CUR_YEAR)
-  const [availableYears, setAvailableYears] = useState([])
+  // Dữ liệu tham chiếu — React Query (cache + gộp request dùng chung giữa các trang)
+  const { data: taskTypes = [] } = useProgressTaskTypes()
+  const { data: yearsData = [] } = useProgressYears()
+  const { data: sources = [] }   = useProgressSources()
+  const { data: companies = [] } = useCompanyOptions()
+  const { data: staffList = [] } = useStaffOptions({ enabled: isAdmin })
+  const availableYears = yearsData.length ? yearsData : [CUR_YEAR]
 
-  const [taskTypes, setTaskTypes] = useState([])
   const [taskTypeId, setTaskTypeId] = useState('')
-  const [companies, setCompanies] = useState([])
   const [companyId, setCompanyId] = useState('')
-  const [staffList, setStaffList] = useState([])
   const [staffId, setStaffId] = useState('')
-  const [sources, setSources] = useState([])
   const [sourceFilter, setSourceFilter] = useState('')   // '' = tất cả nguồn
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showExport, setShowExport] = useState(false)
 
-  // Tải dữ liệu tham chiếu (1 lần)
+  // Đặt lựa chọn mặc định khi dữ liệu tham chiếu về (chỉ set lần đầu, không ghi đè lựa chọn của user)
   useEffect(() => {
-    getTaskTypes()
-      .then((tts) => { setTaskTypes(tts); const def = tts.find((t) => t.stepCount > 0) ?? tts[0]; if (def) setTaskTypeId(def.id) })
-      .catch(() => addToast('Không tải được danh sách quy trình', 'error'))
-    getYears()
-      .then((years) => { const list = years.length ? years : [CUR_YEAR]; setAvailableYears(list); if (!list.includes(CUR_YEAR)) setYear(list[0]) })
-      .catch(() => setAvailableYears([CUR_YEAR]))
-    getSources().then(setSources).catch(() => {})
-    listCompanies({ limit: 500, status: 'active' })
-      .then(({ companies: c }) => { setCompanies(c); if (c[0]) setCompanyId(c[0].id) })
-      .catch(() => {})
-    if (isAdmin) {
-      listUserOptions({ status: 'active' })
-        .then(({ users }) => { setStaffList(users); if (users[0]) setStaffId(users[0].id) })
-        .catch(() => {})
+    if (taskTypes.length && !taskTypeId) {
+      const def = taskTypes.find((t) => t.stepCount > 0) ?? taskTypes[0]
+      if (def) setTaskTypeId(def.id)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [taskTypes, taskTypeId])
+  useEffect(() => {
+    if (companies.length && !companyId) setCompanyId(companies[0].id)
+  }, [companies, companyId])
+  useEffect(() => {
+    if (isAdmin && staffList.length && !staffId) setStaffId(staffList[0].id)
+  }, [isAdmin, staffList, staffId])
+  useEffect(() => {
+    if (availableYears.length && !availableYears.includes(year)) setYear(availableYears[0])
+  }, [availableYears, year])
 
   const subjectId = tab === 'matrix' ? taskTypeId : tab === 'company' ? companyId : staffId
   const canLoad = tab === 'staff' ? (isAdmin ? !!staffId : true) : !!subjectId

@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, Loader2, CalendarDays,
   ClipboardList, BarChart3, Check, X, Plus, Clock,
@@ -8,8 +9,10 @@ import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
-import { listCompanies } from '../../api/companies'
+import { useCompanyOptions } from '../../hooks/useReferenceData'
 import s from './Attendance.module.css'
+
+const EMPTY_ARR = []   // ref ổn định cho fallback danh sách rỗng
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -243,34 +246,30 @@ export default function Attendance() {
 
 function CalendarTab({ year, month, userId, isAdmin }) {
   const addToast = useToastStore((st) => st.toast)
-  const [records,        setRecords]        = useState([])
-  const [loading,        setLoading]        = useState(true)
   const [selectedDay,    setSelectedDay]    = useState(null)
-  const [totalApprovedOt, setTotalApprovedOt] = useState(0)
 
   const from = `${year}-${String(month).padStart(2, '0')}-01`
   const to   = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
 
-  const load = useCallback(() => {
-    let cancelled = false
-    setLoading(true)
-    const requests = [attendanceApi.listAttendanceRecords({ userId, month, year, limit: 31 })]
-    if (!isAdmin) requests.push(attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 }))
-    Promise.all(requests)
-      .then(([attRes, otRes]) => {
-        if (cancelled) return
-        setRecords(attRes.records ?? [])
-        if (otRes) {
-          const all = otRes.requests ?? otRes.data ?? []
-          setTotalApprovedOt(all.reduce((sum, r) => sum + (Number(r.otHours) || 0), 0))
-        }
-      })
-      .catch(() => { if (!cancelled) addToast('Không thể tải dữ liệu chấm công', 'error') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [userId, month, year, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { return load() }, [load])
+  // React Query — cache theo userId/tháng/năm
+  const calQuery = useQuery({
+    queryKey: ['attendance', 'calendar', userId, month, year, isAdmin],
+    queryFn: async () => {
+      const requests = [attendanceApi.listAttendanceRecords({ userId, month, year, limit: 31 })]
+      if (!isAdmin) requests.push(attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 }))
+      const [attRes, otRes] = await Promise.all(requests)
+      const all = otRes ? (otRes.requests ?? otRes.data ?? []) : []
+      return {
+        records: attRes.records ?? [],
+        totalApprovedOt: all.reduce((sum, r) => sum + (Number(r.otHours) || 0), 0),
+      }
+    },
+    staleTime: 30_000,
+  })
+  const records         = calQuery.data?.records ?? EMPTY_ARR
+  const totalApprovedOt = calQuery.data?.totalApprovedOt ?? 0
+  const loading         = calQuery.isFetching
+  useEffect(() => { if (calQuery.isError) addToast('Không thể tải dữ liệu chấm công', 'error') }, [calQuery.errorUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const recordMap = useMemo(() => {
     const m = {}
@@ -525,38 +524,30 @@ function DayDetailModal({ dateStr, record, onClose }) {
 
 function LeaveTab({ isAdmin, year, month, userId }) {
   const addToast = useToastStore((st) => st.toast)
-  const [requests,     setRequests]     = useState([])
-  const [pagination,   setPagination]   = useState({ total: 0, totalPages: 1 })
   const [page,         setPage]         = useState(1)
-  const [loading,      setLoading]      = useState(true)
   const [showForm,     setShowForm]     = useState(false)
   const [reviewTarget, setReviewTarget] = useState(null)
 
   const from = `${year}-${String(month).padStart(2, '0')}-01`
   const to   = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
 
-  const load = useCallback(() => {
-    let cancelled = false
-    setLoading(true)
-    attendanceApi.listLeaveRequests({ userId, from, to, page, limit: 20 })
-      .then((res) => {
-        if (!cancelled) {
-          setRequests(res.requests ?? [])
-          setPagination(res.pagination ?? { total: 0, totalPages: 1 })
-        }
-      })
-      .catch(() => { if (!cancelled) addToast('Không thể tải đơn nghỉ phép', 'error') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [userId, from, to, page]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { return load() }, [load])
+  // React Query — cache theo userId/tháng/trang
+  const listQuery = useQuery({
+    queryKey: ['attendance', 'leave', userId, from, to, page],
+    queryFn: () => attendanceApi.listLeaveRequests({ userId, from, to, page, limit: 20 }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  })
+  const requests   = listQuery.data?.requests ?? EMPTY_ARR
+  const pagination = listQuery.data?.pagination ?? { total: 0, totalPages: 1 }
+  const loading    = listQuery.isFetching
+  useEffect(() => { if (listQuery.isError) addToast('Không thể tải đơn nghỉ phép', 'error') }, [listQuery.errorUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCancel(id) {
     try {
       await attendanceApi.cancelLeaveRequest(id)
       addToast('Đã huỷ đơn nghỉ phép', 'success')
-      load()
+      listQuery.refetch()
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể huỷ', 'error')
     }
@@ -675,14 +666,14 @@ function LeaveTab({ isAdmin, year, month, userId }) {
       {showForm && (
         <LeaveFormModal
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); load() }}
+          onSaved={() => { setShowForm(false); listQuery.refetch() }}
         />
       )}
       {reviewTarget && (
         <ReviewLeaveModal
           request={reviewTarget}
           onClose={() => setReviewTarget(null)}
-          onSaved={() => { setReviewTarget(null); load() }}
+          onSaved={() => { setReviewTarget(null); listQuery.refetch() }}
         />
       )}
     </>
@@ -822,39 +813,35 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
 
 function OvertimeTab({ isAdmin, year, month, userId }) {
   const addToast = useToastStore((st) => st.toast)
-  const [requests,        setRequests]        = useState([])
-  const [pagination,      setPagination]      = useState({ total: 0, totalPages: 1 })
   const [page,            setPage]            = useState(1)
-  const [loading,         setLoading]         = useState(true)
   const [showForm,        setShowForm]        = useState(false)
   const [reviewTarget,    setReviewTarget]    = useState(null)
-  const [totalApprovedOt, setTotalApprovedOt] = useState(0)
 
   const from = `${year}-${String(month).padStart(2, '0')}-01`
   const to   = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
 
-  const load = useCallback(() => {
-    let cancelled = false
-    setLoading(true)
-    // Run paginated list + monthly total concurrently (total is independent of pagination)
-    const requests = [attendanceApi.listOvertimeRequests({ userId, from, to, page, limit: 20 })]
-    if (!isAdmin) requests.push(attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 }))
-    Promise.all(requests)
-      .then(([pageRes, totalRes]) => {
-        if (cancelled) return
-        setRequests(pageRes.requests ?? pageRes.data ?? [])
-        setPagination(pageRes.pagination ?? { total: 0, totalPages: 1 })
-        if (totalRes) {
-          const all = totalRes.requests ?? totalRes.data ?? []
-          setTotalApprovedOt(all.reduce((sum, r) => sum + (Number(r.otHours) || 0), 0))
-        }
-      })
-      .catch(() => { if (!cancelled) addToast('Không thể tải đơn tăng ca', 'error') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [userId, from, to, page, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { return load() }, [load])
+  // React Query — list phân trang + tổng OT tháng (chạy song song)
+  const listQuery = useQuery({
+    queryKey: ['attendance', 'overtime', userId, from, to, page, isAdmin],
+    queryFn: async () => {
+      const reqs = [attendanceApi.listOvertimeRequests({ userId, from, to, page, limit: 20 })]
+      if (!isAdmin) reqs.push(attendanceApi.listOvertimeRequests({ userId, from, to, status: 'approved', limit: 500 }))
+      const [pageRes, totalRes] = await Promise.all(reqs)
+      const all = totalRes ? (totalRes.requests ?? totalRes.data ?? []) : []
+      return {
+        requests: pageRes.requests ?? pageRes.data ?? [],
+        pagination: pageRes.pagination ?? { total: 0, totalPages: 1 },
+        totalApprovedOt: all.reduce((sum, r) => sum + (Number(r.otHours) || 0), 0),
+      }
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  })
+  const requests        = listQuery.data?.requests ?? EMPTY_ARR
+  const pagination      = listQuery.data?.pagination ?? { total: 0, totalPages: 1 }
+  const totalApprovedOt = listQuery.data?.totalApprovedOt ?? 0
+  const loading         = listQuery.isFetching
+  useEffect(() => { if (listQuery.isError) addToast('Không thể tải đơn tăng ca', 'error') }, [listQuery.errorUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -972,14 +959,14 @@ function OvertimeTab({ isAdmin, year, month, userId }) {
       {showForm && (
         <OvertimeFormModal
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); load() }}
+          onSaved={() => { setShowForm(false); listQuery.refetch() }}
         />
       )}
       {reviewTarget && (
         <ReviewOvertimeModal
           request={reviewTarget}
           onClose={() => setReviewTarget(null)}
-          onSaved={() => { setReviewTarget(null); load() }}
+          onSaved={() => { setReviewTarget(null); listQuery.refetch() }}
         />
       )}
     </>
@@ -994,13 +981,7 @@ function OvertimeFormModal({ onClose, onSaved }) {
   const [form,      setForm]      = useState({ otDate: today, startTime: '18:00', endTime: '20:00', reason: '', clientCompanyId: '' })
   const [saving,    setSaving]    = useState(false)
   const [error,     setError]     = useState(null)
-  const [companies, setCompanies] = useState([])
-
-  useEffect(() => {
-    listCompanies({ status: 'active', limit: 500 })
-      .then((res) => setCompanies(res?.companies ?? res ?? []))
-      .catch(() => {})
-  }, [])
+  const { data: companies = [] } = useCompanyOptions()   // React Query — cache dùng chung
 
   function set(field) { return (e) => setForm((p) => ({ ...p, [field]: e.target.value })) }
 
@@ -1159,18 +1140,16 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
 
 function SummaryTab({ year, month, userId }) {
   const addToast = useToastStore((st) => st.toast)
-  const [rows,    setRows]    = useState([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    attendanceApi.getRecordsSummary({ userId, month, year })
-      .then((data) => { if (!cancelled) setRows(Array.isArray(data) ? data : []) })
-      .catch(() => { if (!cancelled) addToast('Không thể tải tổng hợp', 'error') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [userId, month, year]) // eslint-disable-line react-hooks/exhaustive-deps
+  const summaryQuery = useQuery({
+    queryKey: ['attendance', 'summary', userId, month, year],
+    queryFn: () => attendanceApi.getRecordsSummary({ userId, month, year }),
+    select: (data) => (Array.isArray(data) ? data : EMPTY_ARR),
+    staleTime: 30_000,
+  })
+  const rows    = summaryQuery.data ?? EMPTY_ARR
+  const loading = summaryQuery.isFetching
+  useEffect(() => { if (summaryQuery.isError) addToast('Không thể tải tổng hợp', 'error') }, [summaryQuery.errorUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={s.section}>

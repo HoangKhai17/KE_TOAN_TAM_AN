@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, Cell,
@@ -127,6 +128,7 @@ function ChartTooltip({ active, payload, label }) {
 export default function Reports() {
   const user    = useAuthStore((st) => st.user)
   const toast   = useToastStore((st) => st.toast)
+  const queryClient = useQueryClient()
   const isAdmin = user?.role === 'admin' || user?.role === 'manager'
 
   const [activeTab,     setActiveTab]     = useState('overview')
@@ -138,59 +140,37 @@ export default function Reports() {
   const [periodUnit,    setPeriodUnit]    = useState('week')
   const [forecastMonth, setForecastMonth] = useState(() => defaultForecastPeriod().month)
   const [forecastYear,  setForecastYear]  = useState(() => defaultForecastPeriod().year)
-  const [loading,       setLoading]       = useState(false)
   const [exporting,     setExporting]     = useState(false)
-  const [error,         setError]         = useState(null)
-  const [data,          setData]          = useState(null)
   const [fullscreen,    setFullscreen]    = useState(false)
-  const [refreshKey,    setRefreshKey]    = useState(0)
 
   const isForecast = activeTab === 'forecast'
   const isOverview = activeTab === 'overview'
 
+  // ── Báo cáo — React Query (cache theo tab + tham số; báo cáo đổi chậm nên staleTime dài) ──
+  const reportQuery = useQuery({
+    queryKey: ['reports', activeTab, preset, customFrom, customTo, compare, groupBy, periodUnit, forecastMonth, forecastYear],
+    queryFn: async () => {
+      const { from, to } = computeRange(preset, customFrom, customTo)
+      const prev = compare && activeTab === 'overview' ? computePrevRange(from, to) : null
+      if (activeTab === 'overview') return getOverviewReport({ from, to, ...(prev ? { prevFrom: prev.from, prevTo: prev.to } : {}) })
+      if (activeTab === 'staff')    return getStaffReport({ from, to })
+      if (activeTab === 'company')  return getCompanyReport({ from, to })
+      if (activeTab === 'sla')      return getSlaReport({ from, to, groupBy })
+      if (activeTab === 'aging')    return getAgingReport({})
+      if (activeTab === 'velocity') return getVelocityReport({ from, to, period: periodUnit })
+      if (activeTab === 'forecast') return getForecastReport({ month: forecastMonth, year: forecastYear })
+      return null
+    },
+    staleTime: 60_000,
+  })
+  const data    = reportQuery.data ?? null
+  const loading = reportQuery.isFetching
+  const error   = reportQuery.isError ? (reportQuery.error?.response?.data?.message ?? 'Không thể tải báo cáo') : null
+
+  // Toast 1 lần mỗi khi tải báo cáo thất bại
   useEffect(() => {
-    const { from, to } = computeRange(preset, customFrom, customTo)
-    const prev = compare && activeTab === 'overview' ? computePrevRange(from, to) : null
-    let cancelled = false
-
-    async function fetch() {
-      setLoading(true)
-      setError(null)
-      try {
-        let result
-        if (activeTab === 'overview') {
-          result = await getOverviewReport({
-            from, to,
-            ...(prev ? { prevFrom: prev.from, prevTo: prev.to } : {}),
-          })
-        } else if (activeTab === 'staff') {
-          result = await getStaffReport({ from, to })
-        } else if (activeTab === 'company') {
-          result = await getCompanyReport({ from, to })
-        } else if (activeTab === 'sla') {
-          result = await getSlaReport({ from, to, groupBy })
-        } else if (activeTab === 'aging') {
-          result = await getAgingReport({})
-        } else if (activeTab === 'velocity') {
-          result = await getVelocityReport({ from, to, period: periodUnit })
-        } else if (activeTab === 'forecast') {
-          result = await getForecastReport({ month: forecastMonth, year: forecastYear })
-        }
-        if (!cancelled) setData(result)
-      } catch (e) {
-        if (!cancelled) {
-          setError(e?.response?.data?.message ?? 'Không thể tải báo cáo')
-          toast('Lỗi tải báo cáo', 'error')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    setData(null)
-    fetch()
-    return () => { cancelled = true }
-  }, [activeTab, preset, customFrom, customTo, compare, groupBy, periodUnit, forecastMonth, forecastYear, refreshKey, toast])
+    if (reportQuery.isError) toast('Lỗi tải báo cáo', 'error')
+  }, [reportQuery.errorUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleExport() {
     const { from, to } = computeRange(preset, customFrom, customTo)
@@ -215,13 +195,11 @@ export default function Reports() {
   }
 
   function handleRefresh() {
-    setRefreshKey((k) => k + 1)
+    queryClient.invalidateQueries({ queryKey: ['reports'] })
   }
 
   function switchTab(id) {
     setActiveTab(id)
-    setData(null)
-    setError(null)
   }
 
   const currentYear = new Date().getFullYear()
