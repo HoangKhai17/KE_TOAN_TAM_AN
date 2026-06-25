@@ -25,6 +25,8 @@ import PublicForm from './pages/PublicForm/PublicForm'
 import AdminClientRequests from './pages/AdminClientRequests/AdminClientRequests'
 import InternalAssignments from './pages/InternalAssignments/InternalAssignments'
 import InternalDocLinks from './pages/InternalAssignments/InternalDocLinks'
+import MobileHome from './pages/MobileHome/MobileHome'
+import { homePath } from './utils/isMobile'
 import s from './App.module.css'
 
 // ── Route guards ──────────────────────────────────────────────────────
@@ -43,7 +45,7 @@ function GuestRoute({ children }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const isAuthReady     = useAuthStore((s) => s.isAuthReady)
   if (!isAuthReady)    return null
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  if (isAuthenticated) return <Navigate to={homePath()} replace />
   return children
 }
 
@@ -199,12 +201,18 @@ function AppRoutes() {
         element={<ProtectedRoute><InternalDocLinks /></ProtectedRoute>}
       />
 
+      {/* Màn hình mobile (Chấm công + Ghi chú nhanh) */}
+      <Route
+        path="/m"
+        element={<ProtectedRoute><MobileHome /></ProtectedRoute>}
+      />
+
       {/* Phase 17 — Public form (no auth required) */}
       <Route path="/public/form/:token" element={<PublicForm />} />
 
-      {/* Catch-all */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Catch-all — mobile → /m, desktop → /dashboard */}
+      <Route path="/" element={<Navigate to={homePath()} replace />} />
+      <Route path="*" element={<Navigate to={homePath()} replace />} />
     </Routes>
   )
 }

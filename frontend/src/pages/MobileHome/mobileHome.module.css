@@ -1,0 +1,123 @@
+.page {
+  min-height: 100vh;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-7);
+  background: var(--gradient-sidebar);
+  color: var(--color-white);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand { font-weight: var(--fw-bold); font-size: var(--fs-lg); letter-spacing: 0.3px; }
+.barActions { display: flex; align-items: center; gap: var(--space-3); }
+.barBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--color-white);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+.barBtn:active { background: rgba(255, 255, 255, 0.3); }
+
+.main {
+  flex: 1;
+  padding: var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.greet { font-size: var(--fs-lg); color: var(--color-text-soft); line-height: var(--lh-normal); }
+.greet strong { color: var(--color-text); font-size: var(--fs-2xl); }
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7);
+  box-shadow: var(--shadow-sm);
+}
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-md);
+  color: var(--color-text);
+  margin-bottom: var(--space-6);
+}
+
+.status { display: flex; gap: var(--space-5); margin-bottom: var(--space-7); }
+.statusItem {
+  flex: 1;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.statusItem span { font-size: var(--fs-xs); color: var(--color-muted); }
+.statusItem strong { font-size: var(--fs-xl); color: var(--color-text); }
+
+.adminNote { font-size: var(--fs-sm); color: var(--color-muted); text-align: center; padding: var(--space-2) 0; }
+
+.actions { display: flex; flex-direction: column; gap: var(--space-4); }
+.bigBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  color: var(--color-white);
+  cursor: pointer;
+}
+.bigBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+.in  { background: var(--color-success); }
+.in:active:not(:disabled)  { background: var(--color-success-dark); }
+.out { background: var(--color-danger); }
+.out:active:not(:disabled) { background: var(--color-danger-dark); }
+
+/* Card ghi chú: padding 0, để QuickNotes tự lo phần thân */
+.notesCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.notesTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-md);
+  color: var(--color-text);
+  padding: var(--space-7) var(--space-7) 0;
+}
+
+.spin { animation: app-spin 0.8s linear infinite; }

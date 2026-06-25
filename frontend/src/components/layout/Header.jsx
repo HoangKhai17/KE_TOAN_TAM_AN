@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Menu, Bell, ChevronDown, User, LogOut, Search, Plus, CheckCheck } from 'lucide-react'
+import { Menu, Bell, ChevronDown, User, LogOut, Search, Plus, CheckCheck, StickyNote } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useNotificationStore } from '../../stores/notificationStore'
 import { logout } from '../../api/auth'
 import { listNotifications, markOneRead, markAllRead, getUnreadCount } from '../../api/notifications'
 import CheckInWidget from './CheckInWidget'
+import QuickNotesDrawer from '../quicknotes/QuickNotesDrawer'
 import s from './layout.module.css'
 
 const ROUTE_LABELS = {
@@ -80,6 +81,7 @@ export default function Header({ onMenuToggle }) {
 
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [bellOpen, setBellOpen]         = useState(false)
+  const [notesOpen, setNotesOpen]       = useState(false)
   const [searchQuery, setSearchQuery]   = useState('')
   const bellRef = useRef(null)
   const crumbs  = useBreadcrumb()
@@ -190,6 +192,16 @@ export default function Header({ onMenuToggle }) {
 
         {/* Check-in widget */}
         <CheckInWidget />
+
+        {/* Quick notes */}
+        <button
+          className={s.headerIconBtn}
+          aria-label="Ghi chú nhanh"
+          title="Ghi chú nhanh"
+          onClick={() => setNotesOpen(true)}
+        >
+          <StickyNote size={18} />
+        </button>
 
         {/* Notification bell */}
         <div className={s.bellWrap} ref={bellRef}>
@@ -312,6 +324,8 @@ export default function Header({ onMenuToggle }) {
           )}
         </div>
       </div>
+
+      <QuickNotesDrawer open={notesOpen} onClose={() => setNotesOpen(false)} />
     </header>
   )
 }

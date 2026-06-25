@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { login } from '../../api/auth'
+import { homePath } from '../../utils/isMobile'
 import s from './login.module.css'
 
 // ── Validation ──────────────────────────────────────────────────────
@@ -122,7 +123,7 @@ export default function Login() {
     try {
       const data = await login({ email: email.trim(), password })
       setAuth(data.user, data.accessToken)
-      navigate(data.user.mustChangePw ? '/change-password' : '/dashboard', { replace: true })
+      navigate(data.user.mustChangePw ? '/change-password' : homePath(), { replace: true })
     } catch (err) {
       const parsed = parseApiError(err)
       if (parsed.fields) {
