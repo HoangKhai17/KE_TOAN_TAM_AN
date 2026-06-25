@@ -58,6 +58,9 @@ async function start() {
     // Start notification & escalation cron jobs (Phase 12)
     scheduler.startNotificationJobs()
 
+    // Start auto-backup cron (đọc lịch từ system_configs)
+    await require('./modules/backup/backup.service').scheduleBackupCron()
+
     // Graceful shutdown
     const shutdown = async (signal) => {
       logger.info(`${signal} received — shutting down gracefully`)

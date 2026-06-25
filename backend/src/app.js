@@ -212,6 +212,9 @@ function createApp() {
   // Ghi chú nhanh cá nhân (quick notes)
   app.use('/api/quick-notes', require('./modules/quick-notes/quick-notes.router'))
 
+  // Backup DB (admin)
+  app.use('/api/admin/backup', require('./modules/backup/backup.router'))
+
   // Phase 18 — Internal Assignments (Phiếu giao việc nội bộ)
   app.use('/api/internal-assignments', require('./modules/internal-assignments/internalAssignments.router'))
   app.use('/api/internal-doc-links',   require('./modules/internal-doc-links/internalDocLinks.router'))

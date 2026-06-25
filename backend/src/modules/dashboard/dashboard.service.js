@@ -93,27 +93,27 @@ async function getTraditionalCharts(userId, role, from, to) {
 
 // ─── CDR ─────────────────────────────────────────────────────────────────────
 
-const CDR_STAFF_COMPANY_FILTER = `
-  AND company_id IN (SELECT DISTINCT company_id FROM tasks WHERE assigned_to = $1 AND status != 'completed')
-`
+// Staff chỉ thấy yêu cầu MÌNH tạo (requested_by) — khớp mô hình quyền của trang Yêu cầu KH.
+const CDR_STAFF_FILTER = `AND requested_by = $1`
 
-async function getCdrSummary(userId, role) {
+async function getCdrSummary(userId, role, from, to) {
   const isStaff = role === 'staff'
+  // pending/overdue/total = ảnh chụp hiện tại; received = "đã nhận" TRONG khoảng range (đồng bộ biểu đồ)
   const { rows } = await (isStaff
     ? query(`
         SELECT COUNT(*) AS total,
           COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
           COUNT(*) FILTER (WHERE status = 'overdue')  AS overdue,
-          COUNT(*) FILTER (WHERE status = 'received') AS received
-        FROM client_document_requests WHERE 1=1 ${CDR_STAFF_COMPANY_FILTER}
-      `, [userId])
+          COUNT(*) FILTER (WHERE status = 'received' AND updated_at::date BETWEEN $2 AND $3) AS received
+        FROM client_document_requests WHERE 1=1 ${CDR_STAFF_FILTER}
+      `, [userId, from, to])
     : query(`
         SELECT COUNT(*) AS total,
           COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
           COUNT(*) FILTER (WHERE status = 'overdue')  AS overdue,
-          COUNT(*) FILTER (WHERE status = 'received') AS received
+          COUNT(*) FILTER (WHERE status = 'received' AND updated_at::date BETWEEN $1 AND $2) AS received
         FROM client_document_requests
-      `)
+      `, [from, to])
   )
   const r = rows[0] ?? {}
   return {
@@ -137,7 +137,7 @@ async function getCdrCharts(userId, role, from, to) {
           SELECT DATE_TRUNC('week', updated_at)::date AS week_start, COUNT(*) AS completed
           FROM client_document_requests
           WHERE status = 'received' AND updated_at::date BETWEEN $2 AND $3
-            ${CDR_STAFF_COMPANY_FILTER}
+            ${CDR_STAFF_FILTER}
           GROUP BY week_start ORDER BY week_start
         `, [userId, from, to])
       : query(`
@@ -155,7 +155,7 @@ async function getCdrCharts(userId, role, from, to) {
             COUNT(*) FILTER (WHERE cdr.status = 'received' AND cdr.updated_at::date BETWEEN $2 AND $3) AS completed
           FROM client_document_requests cdr
           JOIN companies c ON c.id = cdr.company_id
-          WHERE cdr.company_id IN (SELECT DISTINCT company_id FROM tasks WHERE assigned_to = $1 AND status != 'completed')
+          WHERE cdr.requested_by = $1
           GROUP BY c.id, c.name ORDER BY c.name
         `, [userId, from, to])
       : query(`
@@ -175,7 +175,7 @@ async function getCdrCharts(userId, role, from, to) {
           SELECT COALESCE(period_label, 'Không xác định') AS name, COUNT(*) AS value
           FROM client_document_requests
           WHERE created_at::date BETWEEN $2 AND $3
-            ${CDR_STAFF_COMPANY_FILTER}
+            ${CDR_STAFF_FILTER}
           GROUP BY COALESCE(period_label, 'Không xác định')
           ORDER BY COUNT(*) DESC LIMIT 8
         `, [userId, from, to])
@@ -196,7 +196,7 @@ async function getCdrCharts(userId, role, from, to) {
           FROM client_document_requests cdr
           JOIN companies c ON c.id = cdr.company_id
           WHERE cdr.status = 'overdue' AND cdr.deadline_date IS NOT NULL
-            AND cdr.company_id IN (SELECT DISTINCT company_id FROM tasks WHERE assigned_to = $1 AND status != 'completed')
+            AND cdr.requested_by = $1
           ORDER BY cdr.deadline_date ASC LIMIT 10
         `, [userId])
       : query(`
@@ -218,7 +218,7 @@ async function getCdrCharts(userId, role, from, to) {
           JOIN companies c ON c.id = cdr.company_id
           WHERE cdr.deadline_date = CURRENT_DATE
             AND cdr.status NOT IN ('received', 'not_required')
-            AND cdr.company_id IN (SELECT DISTINCT company_id FROM tasks WHERE assigned_to = $1 AND status != 'completed')
+            AND cdr.requested_by = $1
           ORDER BY cdr.created_at ASC LIMIT 20
         `, [userId])
       : query(`
@@ -258,27 +258,28 @@ async function getCdrCharts(userId, role, from, to) {
 
 // ─── Internal Assignments ─────────────────────────────────────────────────────
 
-async function getIaSummary(userId, role) {
+async function getIaSummary(userId, role, from, to) {
   const isStaff = role === 'staff'
+  // draft/active/overdue/total = ảnh chụp hiện tại; done = hoàn thành TRONG khoảng range (đồng bộ biểu đồ)
   const { rows } = await (isStaff
     ? query(`
         SELECT COUNT(*) AS total,
           COUNT(*) FILTER (WHERE ia.status = 'draft')     AS draft,
           COUNT(*) FILTER (WHERE ia.status = 'active')    AS active,
-          COUNT(*) FILTER (WHERE ia.status = 'done')      AS done,
+          COUNT(*) FILTER (WHERE ia.status = 'done' AND ia.closed_at::date BETWEEN $2 AND $3) AS done,
           COUNT(*) FILTER (WHERE ia.status NOT IN ('done','cancelled') AND ia.deadline_date < CURRENT_DATE) AS overdue
         FROM internal_assignments ia
         JOIN internal_assignment_assignees iaa ON iaa.assignment_id = ia.id
         WHERE iaa.user_id = $1
-      `, [userId])
+      `, [userId, from, to])
     : query(`
         SELECT COUNT(*) AS total,
           COUNT(*) FILTER (WHERE status = 'draft')     AS draft,
           COUNT(*) FILTER (WHERE status = 'active')    AS active,
-          COUNT(*) FILTER (WHERE status = 'done')      AS done,
+          COUNT(*) FILTER (WHERE status = 'done' AND closed_at::date BETWEEN $1 AND $2) AS done,
           COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND deadline_date < CURRENT_DATE) AS overdue
         FROM internal_assignments
-      `)
+      `, [from, to])
   )
   const r = rows[0] ?? {}
   return {
@@ -449,8 +450,8 @@ async function getIaCharts(userId, role, from, to) {
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 async function getSummary(userId, role, from, to, taskType) {
-  if (taskType === 'cdr') return getCdrSummary(userId, role)
-  if (taskType === 'ia')  return getIaSummary(userId, role)
+  if (taskType === 'cdr') return getCdrSummary(userId, role, from, to)
+  if (taskType === 'ia')  return getIaSummary(userId, role, from, to)
   return getTraditionalSummary(userId, role, from, to)
 }
 

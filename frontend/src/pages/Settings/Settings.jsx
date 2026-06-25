@@ -8,6 +8,7 @@ import {
   Play, RotateCcw, CheckCircle, XCircle,
   ChevronDown, ChevronUp, ListChecks, History,
   Trash2, Check, X, Mail, Send, Info, ExternalLink, AlarmClock, Table2,
+  Database, Download,
 } from 'lucide-react'
 import { testEmail } from '../../api/notifications'
 import AppLayout from '../../components/layout/AppLayout'
@@ -22,6 +23,7 @@ import CompanyTablesSection from './CompanyTablesSection'
 import EnumManagementSection from './EnumManagementSection'
 import EmailTemplatesSection from './EmailTemplatesSection'
 import AttendanceConfigSection from './AttendanceConfigSection'
+import BackupSection from './BackupSection'
 import s from './settings.module.css'
 
 function getInitials(name) {
@@ -101,6 +103,7 @@ const SECTIONS = [
   { key: 'escalation',      label: 'Quy tắc Escalation',     icon: ShieldAlert, dot: '#4f46e5', bg: '#eef2ff', iconColor: '#4f46e5' },
   { key: 'email',           label: 'Cấu hình Email (SMTP)',  icon: Mail,        dot: '#ea580c', bg: '#fff7ed', iconColor: '#ea580c' },
   { key: 'attendance',     label: 'Cấu hình chấm công',     icon: AlarmClock,  dot: '#d97706', bg: '#fffbeb', iconColor: '#d97706' },
+  { key: 'backup',          label: 'Sao lưu dữ liệu',        icon: Database,    dot: '#0f766e', bg: '#f0fdfa', iconColor: '#0f766e' },
 ]
 
 const TIMEZONES = [
@@ -200,6 +203,7 @@ export default function Settings() {
             {activeSection === 'escalation'      && <EscalationSection />}
             {activeSection === 'email'           && <><EmailSection /><EmailTemplatesSection /></>}
             {activeSection === 'attendance'      && <AttendanceConfigSection />}
+            {activeSection === 'backup'          && <BackupSection />}
           </div>
         </div>
 

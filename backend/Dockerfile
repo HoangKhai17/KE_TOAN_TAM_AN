@@ -1,6 +1,7 @@
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN apk add --no-cache curl python3 make g++
+# postgresql16-client cung cấp pg_dump/pg_restore (khớp Postgres 16) cho chức năng backup
+RUN apk add --no-cache curl python3 make g++ postgresql16-client
 
 # Development stage
 FROM base AS development

@@ -66,6 +66,7 @@ const TYPE_ICON = {
   task_status_changed:  { emoji: '🔄', color: '#7c3aed' },
   client_doc_submitted: { emoji: '📩', color: '#0891b2' },
   client_doc_overdue:   { emoji: '📂', color: '#dc2626' },
+  birthday:             { emoji: '🎂', color: '#db2777' },
 }
 
 export default function Header({ onMenuToggle }) {

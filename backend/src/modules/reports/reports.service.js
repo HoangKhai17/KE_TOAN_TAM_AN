@@ -61,7 +61,7 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
       FROM tasks t
       LEFT JOIN task_types tt ON tt.id = t.task_type_id
       WHERE t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
-      GROUP BY tt.name ORDER BY total DESC LIMIT 10
+      GROUP BY tt.id, tt.name ORDER BY total DESC LIMIT 10
     `, [from, to]),
 
     query(`
@@ -78,7 +78,7 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
       FROM tasks t
       LEFT JOIN users u ON u.id = t.assigned_to
       WHERE t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
-      GROUP BY u.name ORDER BY total DESC LIMIT 10
+      GROUP BY u.id, u.name ORDER BY total DESC LIMIT 10
     `, [from, to]),
   ])
 
@@ -121,22 +121,29 @@ async function staffPerformance({ from, to, staffIds }) {
     staffFilter = `AND u.id = ANY($${params.length})`
   }
 
+  // Đo theo THROUGHPUT (khớp Dashboard/SLA/Velocity):
+  //   completed/on_time/avg_hours = việc HOÀN THÀNH trong kỳ (completed_at)
+  //   overdue = ảnh chụp hiện tại (đang trễ)
+  //   total = việc xử lý liên quan kỳ = (hoàn thành trong kỳ) + (đang mở) → completion_rate có nghĩa
   const { rows } = await query(`
     SELECT
       u.id, u.name, u.job_title,
-      COUNT(t.id)                                                                          AS total,
-      COUNT(t.id) FILTER (WHERE t.status = 'completed')                                   AS completed,
-      COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.completed_at::date <= t.due_date) AS on_time,
-      COUNT(t.id) FILTER (WHERE t.due_date < CURRENT_DATE AND t.status != 'completed')    AS overdue,
-      ROUND(COALESCE(AVG(t.actual_hours) FILTER (WHERE t.actual_hours > 0), 0), 1)        AS avg_hours,
-      ROUND(COUNT(t.id) FILTER (WHERE t.status = 'completed') * 100.0 / NULLIF(COUNT(t.id), 0), 1) AS completion_rate
+      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)
+        + COUNT(t.id) FILTER (WHERE t.status != 'completed')                              AS total,
+      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)                    AS completed,
+      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2 AND t.completed_at::date <= t.due_date) AS on_time,
+      COUNT(t.id) FILTER (WHERE t.due_date < CURRENT_DATE AND t.status != 'completed')     AS overdue,
+      ROUND(COALESCE(AVG(t.actual_hours) FILTER (WHERE t.actual_hours > 0 AND t.completed_at::date BETWEEN $1 AND $2), 0), 1) AS avg_hours,
+      ROUND(
+        COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2) * 100.0
+        / NULLIF(COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)
+                 + COUNT(t.id) FILTER (WHERE t.status != 'completed'), 0), 1)              AS completion_rate
     FROM users u
     LEFT JOIN tasks t ON t.assigned_to = u.id
-      AND t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
     -- Gồm cả admin: admin cũng được giao việc / phụ trách công ty như nhân viên
     WHERE u.role IN ('staff', 'admin') AND u.status = 'active' ${staffFilter}
     GROUP BY u.id, u.name, u.job_title
-    ORDER BY total DESC
+    ORDER BY completed DESC, total DESC
   `, params)
 
   return rows.map((r) => ({
@@ -162,17 +169,22 @@ async function companyStatus({ from, to, companyIds }) {
     companyFilter = `AND c.id = ANY($${params.length})`
   }
 
+  // Throughput: completed = hoàn thành trong kỳ; open/overdue = ảnh chụp hiện tại;
+  // total = (hoàn thành trong kỳ) + (đang mở) → khớp biểu đồ stack completed + open.
   const { rows } = await query(`
     SELECT
       c.id, c.name, c.tax_code,
-      COUNT(t.id)                                                                          AS total,
-      COUNT(t.id) FILTER (WHERE t.status = 'completed')                                   AS completed,
+      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)
+        + COUNT(t.id) FILTER (WHERE t.status != 'completed')                              AS total,
+      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)                    AS completed,
       COUNT(t.id) FILTER (WHERE t.status != 'completed')                                  AS open_count,
-      COUNT(t.id) FILTER (WHERE t.due_date < CURRENT_DATE AND t.status != 'completed')    AS overdue,
-      ROUND(COUNT(t.id) FILTER (WHERE t.status = 'completed') * 100.0 / NULLIF(COUNT(t.id), 0), 1) AS completion_rate
+      COUNT(t.id) FILTER (WHERE t.due_date < CURRENT_DATE AND t.status != 'completed')     AS overdue,
+      ROUND(
+        COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2) * 100.0
+        / NULLIF(COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)
+                 + COUNT(t.id) FILTER (WHERE t.status != 'completed'), 0), 1)              AS completion_rate
     FROM companies c
     LEFT JOIN tasks t ON t.company_id = c.id
-      AND t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
     WHERE c.status != 'terminated' ${companyFilter}
     GROUP BY c.id, c.name, c.tax_code
     ORDER BY total DESC
@@ -193,8 +205,14 @@ async function companyStatus({ from, to, companyIds }) {
 // ── 3. SLA Compliance ─────────────────────────────────────────────────────────
 
 async function slaCompliance({ from, to, groupBy = 'staff' }) {
-  const allowedGroups = { staff: 'u.name', company: 'c.name', task_type: 'tt.name' }
-  const labelExpr = allowedGroups[groupBy] || 'u.name'
+  // GROUP BY id (không phải tên) để không gộp nhầm 2 thực thể trùng tên
+  const allowedGroups = {
+    staff:     { id: 'u.id',  label: 'u.name' },
+    company:   { id: 'c.id',  label: 'c.name' },
+    task_type: { id: 'tt.id', label: 'tt.name' },
+  }
+  const g = allowedGroups[groupBy] || allowedGroups.staff
+  const labelExpr = g.label
 
   const { rows } = await query(`
     SELECT
@@ -211,7 +229,7 @@ async function slaCompliance({ from, to, groupBy = 'staff' }) {
     WHERE t.status = 'completed'
       AND t.completed_at >= $1::date AND t.completed_at < ($2::date + INTERVAL '1 day')
       AND t.due_date IS NOT NULL
-    GROUP BY ${labelExpr}
+    GROUP BY ${g.id}, ${labelExpr}
     ORDER BY total DESC
     LIMIT 20
   `, [from, to])

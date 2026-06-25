@@ -51,3 +51,5 @@ temp/
 # Backup files
 *.sql.gz
 *.bak
+*.dump
+/backup/

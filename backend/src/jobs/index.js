@@ -10,6 +10,7 @@ const { runOnHoldReminder }   = require('./onHoldReminder.job')
 const { runMorningSummary }        = require('./morningSummary.job')
 const { runAdminAttendanceJob }    = require('./adminAttendance.job')
 const { runClientDocOverdueJob }   = require('./clientDocOverdue.job')
+const { runBirthday }              = require('./birthday.job')
 
 let schedulerTask = null
 let lastRunAt     = null
@@ -205,7 +206,14 @@ function startNotificationJobs() {
     }
   }, { timezone: 'UTC' })
 
-  logger.info('[Jobs] Notification cron jobs scheduled (07:00/07:30/08:00/08:05/08:30 VN + 06:30 VN admin attendance)')
+  // Birthday — 08:00 VN = 01:00 UTC
+  cron.schedule('0 1 * * *', async () => {
+    try { await runBirthday() } catch (err) {
+      logger.error('[Jobs] Birthday job failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  logger.info('[Jobs] Notification cron jobs scheduled (07:00/07:30/08:00/08:05/08:30 VN + 08:00 birthday + 06:30 VN admin attendance)')
 }
 
 module.exports = { startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs, deleteLog, clearLogs, startNotificationJobs }

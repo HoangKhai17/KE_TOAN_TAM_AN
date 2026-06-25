@@ -222,6 +222,15 @@ DEFAULTS.email_tpl_payroll_slip = WRAPPER(`
   </p>
 </div>`)
 
+DEFAULTS.email_tpl_birthday = WRAPPER(`
+<h2 style="color:#db2777;margin-top:0">🎂 Chúc mừng sinh nhật!</h2>
+<p>Thân gửi <strong>{{user_name}}</strong>,</p>
+<p>Hôm nay là một ngày thật đặc biệt — <strong style="color:#db2777">sinh nhật của bạn</strong>! 🎉</p>
+<p>Tập thể <strong>Kế Toán Tâm An</strong> xin gửi đến bạn lời chúc mừng sinh nhật nồng nhiệt nhất. Chúc bạn một tuổi mới thật nhiều sức khỏe, niềm vui và gặt hái nhiều thành công trong công việc cũng như cuộc sống.</p>
+<div style="margin-top:20px;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:8px;padding:14px 18px">
+  <p style="margin:0;font-size:14px;color:#be185d;line-height:1.6">🎈 Chúc bạn có một ngày sinh nhật thật ấm áp và ý nghĩa bên gia đình, bạn bè và đồng nghiệp!</p>
+</div>`)
+
 async function getTemplate(key) {
   try {
     const { rows: [row] } = await query(
