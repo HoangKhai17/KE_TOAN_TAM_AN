@@ -255,7 +255,16 @@
       "Bash(docker start *)",
       "Bash(curl -s -D - -o /dev/null -H \"Accept-Encoding: gzip\" http://localhost:5173/api/health)",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts\\)\\)\")",
-      "Bash(grep -vE \"^\\\\s*$\")"
+      "Bash(grep -vE \"^\\\\s*$\")",
+      "Bash(grep -rnE \"\\(SELECT|INSERT|UPDATE|DELETE|WHERE|FROM|ORDER BY|VALUES\\).*\\\\\\\\\\\\$\\\\{\" backend/src --include=*.js)",
+      "Bash(grep -vE \"\\\\\\\\\\\\$\\\\{\\(idx|i|params\\\\.length|n\\)\\\\b\")",
+      "Bash(grep -rnE \"ORDER BY \\\\\\\\\\\\$\\\\{|sortBy|sortDir|orderBy\" backend/src/modules --include=*.service.js)",
+      "Bash(grep -iE \"order by \\\\\\\\\\\\$\\\\{|\\\\`.*\\\\\\\\\\\\$\\\\{\\(sortBy|sortDir|orderBy|column|col\\)\")",
+      "Bash(grep -iE \"SELECT|RETURNING|row|\\\\\\\\*\")",
+      "Bash(ls node_modules/dompurify/package.json)",
+      "Bash(node -e \"console.log\\('dompurify version:', require\\('dompurify/package.json'\\).version\\)\")",
+      "Bash(npm audit *)",
+      "Bash(node -e 'let d=\"\";process.stdin.on\\(\"data\",c=>d+=c\\).on\\(\"end\",\\(\\)=>{const j=JSON.parse\\(d\\);const v=j.vulnerabilities||{};for\\(const k in v\\){const o=v[k];if\\(o.severity===\"high\"||o.severity===\"critical\"\\){const fix=o.fixAvailable;const fixStr=fix===true?\"fix\":fix&&fix.name?\\(\"→\"+fix.name+\"@\"+fix.version+\\(fix.isSemVerMajor?\" \\(MAJOR\\)\":\"\"\\)\\):\"NO-FIX\";console.log\\(o.severity.toUpperCase\\(\\).padEnd\\(9\\),k.padEnd\\(22\\),fixStr\\)}}}\\)')"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

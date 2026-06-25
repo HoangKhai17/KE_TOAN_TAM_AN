@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
+import DOMPurify from 'dompurify'
 import {
   StickyNote, Plus, Pencil, Trash2, Pin, PinOff,
   Loader2, Check, X,
@@ -115,9 +116,11 @@ function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin 
 
   // Backward compat: old records are plain text (no HTML tags)
   const isHtml = /<[a-z][\s\S]*>/i.test(note.content)
-  const displayHtml = isHtml
+  const rawHtml = isHtml
     ? note.content
     : `<p>${note.content.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`
+  // Sanitize trước khi render — chống stored XSS (loại <script>, onerror, javascript: …)
+  const displayHtml = DOMPurify.sanitize(rawHtml)
 
   return (
     <div className={`${s.noteCard} ${note.isPinned ? s.noteCardPinned : ''}`}>

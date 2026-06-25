@@ -1,5 +1,9 @@
 import * as XLSX from 'xlsx'
 
+// Giới hạn kích thước file import — giảm thiểu ReDoS/DoS của xlsx (SheetJS chưa có bản vá).
+// Xem docs/14_SECURITY_AUDIT.md (H3). Cách khắc phục triệt để: thay thư viện đọc Excel.
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024 // 5MB
+
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 function fmtDateIso(d) {
@@ -78,6 +82,9 @@ export function downloadImportTemplate(fixedCols, dynCols, filename, sheetName =
  * @returns {Promise<{rows: object[], parseErrors: string[]}>}
  */
 export async function parseImportFile(file, fixedCols, dynCols = []) {
+  if (file && file.size > MAX_IMPORT_BYTES) {
+    return { rows: [], parseErrors: [`File quá lớn (tối đa ${MAX_IMPORT_BYTES / 1024 / 1024}MB). Vui lòng chia nhỏ file.`] }
+  }
   const buffer = await file.arrayBuffer()
   const wb     = XLSX.read(buffer, { type: 'array', cellDates: true })
   const wsName = wb.SheetNames[0]
