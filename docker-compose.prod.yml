@@ -26,6 +26,8 @@ services:
     env_file: /opt/ktta/.env.production
     environment:
       - NODE_ENV=production
+    volumes:
+      - ./backup:/app/backup
     networks:
       - internal
     dns:
