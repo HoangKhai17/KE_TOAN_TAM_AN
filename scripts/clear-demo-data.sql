@@ -21,6 +21,9 @@
 --     psql -U <POSTGRES_USER> -d <POSTGRES_DB> < scripts/clear-demo-data.sql
 -- ============================================================================
 
+-- Email admin DUY NHẤT được giữ lại (đổi ở đây nếu cần):
+\set keeper_email 'nguyenhoangkhai.010103@gmail.com'
+
 BEGIN;
 
 -- Tắt kiểm tra FK trong lúc TRUNCATE (cho phép xoá theo nhóm, không cần thứ tự)
@@ -53,11 +56,18 @@ TRUNCATE TABLE
 -- Bật lại FK
 SET session_replication_role = DEFAULT;
 
+-- Gán lại created_by/updated_by của các bảng cấu hình được GIỮ về admin chính,
+-- để không còn trỏ tới user sắp bị xoá (các FK này là NO ACTION → nếu không sẽ chặn xoá user).
+UPDATE company_table_defs      SET created_by = k.id FROM (SELECT id FROM users WHERE lower(email)=lower(:'keeper_email')) k WHERE company_table_defs.created_by      IS DISTINCT FROM k.id;
+UPDATE internal_doc_categories SET created_by = k.id FROM (SELECT id FROM users WHERE lower(email)=lower(:'keeper_email')) k WHERE internal_doc_categories.created_by IS DISTINCT FROM k.id;
+UPDATE shifts                  SET created_by = k.id FROM (SELECT id FROM users WHERE lower(email)=lower(:'keeper_email')) k WHERE shifts.created_by                  IS DISTINCT FROM k.id;
+UPDATE system_configs          SET updated_by = k.id FROM (SELECT id FROM users WHERE lower(email)=lower(:'keeper_email')) k WHERE system_configs.updated_by          IS DISTINCT FROM k.id;
+UPDATE task_types              SET created_by = k.id FROM (SELECT id FROM users WHERE lower(email)=lower(:'keeper_email')) k WHERE task_types.created_by              IS DISTINCT FROM k.id;
+
 -- Xoá TẤT CẢ user (kể cả các admin khác), CHỈ GIỮ 1 admin chính theo email.
--- ⚠️  BẮT BUỘC kiểm tra email tồn tại trước khi chạy (xem lệnh kiểm tra bên dưới file),
+-- ⚠️  BẮT BUỘC kiểm tra email tồn tại trước khi chạy (xem lệnh kiểm tra ở đầu file),
 --     nếu gõ sai email → xoá SẠCH mọi user → không đăng nhập được!
--- So khớp không phân biệt hoa/thường cho an toàn.
-DELETE FROM users WHERE lower(email) <> lower('nguyenhoangkhai.010103@gmail.com');
+DELETE FROM users WHERE lower(email) <> lower(:'keeper_email');
 
 COMMIT;
 
