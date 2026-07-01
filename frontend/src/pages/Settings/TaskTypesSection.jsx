@@ -15,7 +15,7 @@ import { CSS } from '@dnd-kit/utilities'
 import Modal from '../../components/ui/Modal'
 import { useToastStore } from '../../stores/toastStore'
 import {
-  listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType,
+  listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
   addCustomField, deleteCustomField,
 } from '../../api/taskTypes'
@@ -109,6 +109,19 @@ export default function TaskTypesSection() {
     }
   }
 
+  async function handleDelete(tt) {
+    if (!window.confirm(`Xóa loại công việc "${tt.name}"?\nChỉ xóa được nếu chưa có công việc/lịch nào dùng. Không thể hoàn tác.`)) return
+    try {
+      await deleteTaskType(tt.id)
+      setDetailCache((p) => { const n = { ...p }; delete n[tt.id]; return n })
+      load()
+      addToast(`Đã xóa loại công việc "${tt.name}"`, 'success')
+    } catch (err) {
+      // Backend trả 409 kèm lý do (đã có công việc/lịch dùng) → hiện nguyên message
+      addToast(err.response?.data?.error?.message ?? 'Không thể xóa loại công việc', 'error')
+    }
+  }
+
   function toggleGroup(group) {
     setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }))
   }
@@ -159,6 +172,7 @@ export default function TaskTypesSection() {
                         onExpand={() => handleExpand(tt.id)}
                         onEdit={() => { setEditing(tt); setShowModal(true) }}
                         onToggle={() => handleToggle(tt)}
+                        onDelete={() => handleDelete(tt)}
                         onDetailRefresh={() => refreshDetail(tt.id)}
                       />
                     ))}
@@ -183,7 +197,7 @@ export default function TaskTypesSection() {
 
 // ── Task Type Row ─────────────────────────────────────────────────────────────
 
-function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit, onToggle, onDetailRefresh }) {
+function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit, onToggle, onDelete, onDetailRefresh }) {
   return (
     <div className={`${s.ttRow} ${isExpanded ? s.ttRowExpanded : ''}`}>
       {/* Row header */}
@@ -215,6 +229,13 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
             onClick={onToggle}
           >
             <Power size={13} />
+          </button>
+          <button
+            className={`${s.iconBtn} ${s.cfDeleteBtn}`}
+            title="Xóa loại công việc (chỉ khi chưa được dùng)"
+            onClick={onDelete}
+          >
+            <Trash2 size={13} />
           </button>
         </div>
       </div>

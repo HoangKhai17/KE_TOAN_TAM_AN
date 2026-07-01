@@ -135,6 +135,18 @@ router.patch('/:id', ...admin, validate(updateTaskTypeSchema), ctrl.updateTaskTy
  */
 router.post('/:id/toggle', ...admin, ctrl.toggleTaskType)
 
+/**
+ * @openapi
+ * /task-types/{id}:
+ *   delete:
+ *     tags: [Task Types]
+ *     summary: Delete a task type (admin only) — chỉ khi CHƯA có task/lịch sử dụng
+ *     responses:
+ *       204: { description: Deleted }
+ *       409: { description: Đang được sử dụng — không thể xoá }
+ */
+router.delete('/:id', ...admin, ctrl.deleteTaskType)
+
 // ── Checklist ─────────────────────────────────────────────────────────────────
 
 /**

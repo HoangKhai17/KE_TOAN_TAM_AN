@@ -36,6 +36,13 @@ async function toggleTaskType(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function deleteTaskType(req, res, next) {
+  try {
+    await svc.deleteTaskType(req.params.id, req.user.id, req.ip, req.headers['user-agent'])
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
 // Checklist
 async function getChecklist(req, res, next) {
   try {
@@ -102,7 +109,7 @@ async function deleteCustomField(req, res, next) {
 }
 
 module.exports = {
-  listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType,
+  listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   getChecklist, addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
   getCustomFields, addCustomField, updateCustomField, deleteCustomField,
 }

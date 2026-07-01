@@ -91,11 +91,20 @@ async function getTaskTypeById(id) {
 
 async function createTaskType(data, actorId, ipAddress, userAgent) {
   const { name, groupName, description, defaultSlaDays = 7 } = data
-  const { rows: [tt] } = await query(
-    `INSERT INTO task_types (name, group_name, description, default_sla_days, created_by)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [name, groupName ?? null, description ?? null, defaultSlaDays, actorId]
-  )
+  let tt
+  try {
+    const { rows } = await query(
+      `INSERT INTO task_types (name, group_name, description, default_sla_days, created_by)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [name, groupName ?? null, description ?? null, defaultSlaDays, actorId]
+    )
+    tt = rows[0]
+  } catch (err) {
+    if (err.code === '23505') { // unique_violation trên name
+      throw Object.assign(new Error(`Tên loại công việc "${name}" đã tồn tại. Vui lòng dùng tên khác.`), { status: 409 })
+    }
+    throw err
+  }
   await audit.log({
     userId: actorId, action: 'task_type.created',
     targetType: 'task_type', targetId: tt.id, meta: { name }, ipAddress, userAgent,
@@ -118,11 +127,20 @@ async function updateTaskType(id, data, actorId, ipAddress, userAgent) {
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
 
   params.push(id)
-  const { rows: [tt] } = await query(
-    `UPDATE task_types SET ${updates.join(', ')}, updated_at = NOW()
-     WHERE id = $${params.length} RETURNING *`,
-    params
-  )
+  let tt
+  try {
+    const { rows } = await query(
+      `UPDATE task_types SET ${updates.join(', ')}, updated_at = NOW()
+       WHERE id = $${params.length} RETURNING *`,
+      params
+    )
+    tt = rows[0]
+  } catch (err) {
+    if (err.code === '23505') {
+      throw Object.assign(new Error(`Tên loại công việc "${data.name}" đã tồn tại. Vui lòng dùng tên khác.`), { status: 409 })
+    }
+    throw err
+  }
   if (!tt) throw Object.assign(new Error('Task type not found'), { status: 404 })
 
   await audit.log({
@@ -144,6 +162,34 @@ async function toggleTaskType(id, actorId, ipAddress, userAgent) {
     targetType: 'task_type', targetId: id, ipAddress, userAgent,
   })
   return toTaskTypeDto(tt)
+}
+
+async function deleteTaskType(id, actorId, ipAddress, userAgent) {
+  const { rows: [tt] } = await query('SELECT id, name FROM task_types WHERE id = $1', [id])
+  if (!tt) throw Object.assign(new Error('Task type not found'), { status: 404 })
+
+  // Chặn xoá nếu ĐÃ DÙNG: có công việc hoặc lịch định kỳ tham chiếu
+  const { rows: [u] } = await query(
+    `SELECT
+       EXISTS(SELECT 1 FROM tasks WHERE task_type_id = $1)                    AS has_tasks,
+       EXISTS(SELECT 1 FROM customer_task_schedules WHERE task_type_id = $1)  AS has_schedules`,
+    [id]
+  )
+  if (u.has_tasks || u.has_schedules) {
+    const reason = u.has_tasks ? 'đã có công việc sử dụng' : 'đang có lịch định kỳ sử dụng'
+    throw Object.assign(
+      new Error(`Không thể xoá loại công việc "${tt.name}" vì ${reason}. Hãy TẮT (ngừng hoạt động) thay vì xoá.`),
+      { status: 409 }
+    )
+  }
+
+  // Xoá — checklist templates & custom field schemas tự cascade (ON DELETE CASCADE)
+  await query('DELETE FROM task_types WHERE id = $1', [id])
+  await audit.log({
+    userId: actorId, action: 'task_type.deleted',
+    targetType: 'task_type', targetId: id, ipAddress, userAgent,
+  })
+  return { id, name: tt.name }
 }
 
 // ── Checklist ────────────────────────────────────────────────────────────────
@@ -306,7 +352,7 @@ async function deleteCustomField(taskTypeId, fieldId) {
 }
 
 module.exports = {
-  listTaskTypes, getTaskTypeById, createTaskType, updateTaskType, toggleTaskType,
+  listTaskTypes, getTaskTypeById, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   getChecklist, addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
   getCustomFields, addCustomField, updateCustomField, deleteCustomField,
 }

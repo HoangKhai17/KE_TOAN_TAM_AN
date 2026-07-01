@@ -25,6 +25,10 @@ export async function toggleTaskType(id) {
   return data.data.taskType
 }
 
+export async function deleteTaskType(id) {
+  await api.delete(`/task-types/${id}`)
+}
+
 // Checklist
 export async function getChecklist(id) {
   const { data } = await api.get(`/task-types/${id}/checklist`)
