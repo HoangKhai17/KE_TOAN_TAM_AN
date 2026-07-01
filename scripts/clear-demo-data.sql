@@ -5,10 +5,16 @@
 --
 -- XOÁ:  công ty, công việc, chấm công (record/log/nghỉ/tăng ca), yêu cầu KH (CDR),
 --       phiếu nội bộ, bảng lương, tài liệu, thông báo, ghi chú nhanh, audit log,
---       và TẤT CẢ user KHÔNG phải admin.
+--       và TẤT CẢ user — CHỈ GIỮ 1 admin chính (email nguyenhoangkhai.010103@gmail.com).
 -- GIỮ:  schema, ENUM (enum_types/options), cấu hình hệ thống (system_configs),
 --       thư viện Loại công việc (task_types…), định nghĩa bảng tuỳ chỉnh,
---       ca làm việc, ngày lễ, danh mục tài liệu nội bộ, và các tài khoản ADMIN.
+--       ca làm việc, ngày lễ, danh mục tài liệu nội bộ, và 1 tài khoản admin nêu trên.
+--
+-- ⚠️  KIỂM TRA TRƯỚC KHI CHẠY (đảm bảo email tồn tại, tránh tự khoá mình):
+--   docker compose -f docker-compose.prod.yml exec -T postgres \
+--     psql -U <POSTGRES_USER> -d <POSTGRES_DB> \
+--     -c "SELECT id, email, role FROM users WHERE lower(email)=lower('nguyenhoangkhai.010103@gmail.com');"
+--   → PHẢI trả về đúng 1 dòng role=admin. Nếu trống → DỪNG, kiểm tra lại email.
 --
 -- CÁCH CHẠY (trên máy chủ demo, thư mục deploy):
 --   docker compose -f docker-compose.prod.yml exec -T postgres \
@@ -47,10 +53,11 @@ TRUNCATE TABLE
 -- Bật lại FK
 SET session_replication_role = DEFAULT;
 
--- Xoá user demo, GIỮ tài khoản admin (để còn đăng nhập).
--- Muốn chỉ giữ 1 admin cụ thể: đổi dòng dưới thành
---   DELETE FROM users WHERE email <> 'admin-that@email.com';
-DELETE FROM users WHERE role <> 'admin';
+-- Xoá TẤT CẢ user (kể cả các admin khác), CHỈ GIỮ 1 admin chính theo email.
+-- ⚠️  BẮT BUỘC kiểm tra email tồn tại trước khi chạy (xem lệnh kiểm tra bên dưới file),
+--     nếu gõ sai email → xoá SẠCH mọi user → không đăng nhập được!
+-- So khớp không phân biệt hoa/thường cho an toàn.
+DELETE FROM users WHERE lower(email) <> lower('nguyenhoangkhai.010103@gmail.com');
 
 COMMIT;
 
