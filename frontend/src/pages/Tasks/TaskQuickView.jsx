@@ -467,7 +467,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                           >
                             {item.isCompleted && <Check size={10} color="#fff" />}
                           </div>
-                          <span className={`${s.qvChecklistText} ${item.isCompleted ? s.qvChecklistTextDone : ''}`}>
+                          <span className={`${s.qvChecklistText} ${item.isCompleted ? s.qvChecklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>
                             {item.stepText}
                           </span>
                           <button
@@ -485,14 +485,15 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                   {/* Add checklist item */}
                   <div className={s.qvAddItem}>
                     <Plus size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
-                    <input
+                    <textarea
                       ref={newItemRef}
-                      type="text"
                       value={newItemText}
                       onChange={(e) => setNewItemText(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addChecklistItem() } }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); addChecklistItem() } }}
                       className={s.qvAddItemInput}
-                      placeholder="Thêm việc cần làm... (Enter để thêm)"
+                      placeholder="Thêm việc cần làm… (Enter để thêm · Alt/Shift+Enter xuống dòng)"
+                      rows={2}
+                      style={{ resize: 'vertical' }}
                       disabled={addingItem}
                     />
                     {addingItem && <Loader2 size={13} className={s.spinIcon} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />}

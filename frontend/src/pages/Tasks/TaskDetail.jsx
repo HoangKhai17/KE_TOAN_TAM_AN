@@ -264,20 +264,24 @@ function ChecklistTab({ taskId, onCountChange }) {
 
           {editId === item.id ? (
             <>
-              <input
-                type="text"
+              <textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
                 className={s.checklistTextInput}
                 autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(item.id); if (e.key === 'Escape') setEditId(null) }}
+                rows={2}
+                style={{ resize: 'vertical', whiteSpace: 'pre-wrap' }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); saveEdit(item.id) }
+                  if (e.key === 'Escape') setEditId(null)
+                }}
               />
               <button className={s.btnIcon} onClick={() => saveEdit(item.id)} title="Lưu"><Check size={12} /></button>
               <button className={s.btnIcon} onClick={() => setEditId(null)} title="Huỷ"><X size={12} /></button>
             </>
           ) : (
             <>
-              <span className={`${s.checklistText} ${item.isCompleted ? s.checklistTextDone : ''}`}>{item.stepText}</span>
+              <span className={`${s.checklistText} ${item.isCompleted ? s.checklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>{item.stepText}</span>
               <div className={s.checklistItemActions}>
                 <button className={s.btnIcon} onClick={() => { setEditId(item.id); setEditText(item.stepText) }} title="Sửa"><Edit2 size={11} /></button>
                 <button className={`${s.btnIcon} ${s.btnIconDanger}`} onClick={() => deleteItem(item.id)} title="Xoá"><Trash2 size={11} /></button>
@@ -289,13 +293,14 @@ function ChecklistTab({ taskId, onCountChange }) {
       })}
 
       <div className={s.checklistAddRow}>
-        <input
-          type="text"
+        <textarea
           value={addText}
           onChange={(e) => setAddText(e.target.value)}
-          placeholder="Thêm bước mới..."
+          placeholder="Thêm bước mới… (Enter để thêm · Alt/Shift+Enter xuống dòng)"
           className={s.checklistAddInput}
-          onKeyDown={(e) => { if (e.key === 'Enter') addItem() }}
+          rows={2}
+          style={{ resize: 'vertical' }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); addItem() } }}
         />
         <button className={`${s.btnPrimary} ${s.btnCompactMd}`} onClick={addItem} disabled={adding || !addText.trim()}>
           <Plus size={13} /> Thêm

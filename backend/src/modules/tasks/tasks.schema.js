@@ -35,11 +35,11 @@ const changeStatusSchema = z.object({
 
 // --- Checklist ---
 const addChecklistItemSchema = z.object({
-  stepText: z.string().min(1).max(500),
+  stepText: z.string().min(1).max(2000),   // cho phép nhiều dòng
 })
 
 const updateChecklistItemSchema = z.object({
-  stepText:    z.string().min(1).max(500).optional(),
+  stepText:    z.string().min(1).max(2000).optional(),
   isCompleted: z.boolean().optional(),
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })
 

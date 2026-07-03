@@ -290,20 +290,25 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
 
       {isEditing ? (
         <>
-          <input
+          <textarea
             autoFocus
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel() }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); onSave() }
+              if (e.key === 'Escape') onCancel()
+            }}
             className={s.clStepInput}
-            maxLength={300}
+            maxLength={2000}
+            rows={2}
+            style={{ resize: 'vertical', whiteSpace: 'pre-wrap' }}
           />
           <button className={`${s.clActionBtn} ${s.clSaveBtn}`} onClick={onSave} title="Lưu"><Check size={12} /></button>
           <button className={s.clActionBtn} onClick={onCancel} title="Huỷ"><X size={12} /></button>
         </>
       ) : (
         <>
-          <span className={s.clStepText} onClick={onStartEdit} title="Nhấp để chỉnh sửa">
+          <span className={s.clStepText} onClick={onStartEdit} title="Nhấp để chỉnh sửa" style={{ whiteSpace: 'pre-wrap' }}>
             {step.stepText}
           </span>
           <button className={`${s.clActionBtn} ${s.clDeleteBtn}`} onClick={onDelete} title="Xóa bước">
@@ -378,7 +383,7 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
   async function handleAdd() {
     const text = addText.trim()
     if (!text) return
-    if (text.length > 300) { addToast('Bước không được quá 300 ký tự', 'error'); return }
+    if (text.length > 2000) { addToast('Bước không được quá 2000 ký tự', 'error'); return }
     setAdding(true)
     try {
       await addChecklistStep(taskTypeId, text)
@@ -419,14 +424,15 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
       </DndContext>
 
       <div className={s.clAddRow}>
-        <input
-          type="text"
-          placeholder="Thêm bước mới… (Enter)"
+        <textarea
+          placeholder="Thêm bước mới… (Enter để thêm · Alt/Shift+Enter xuống dòng)"
           value={addText}
           onChange={(e) => setAddText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); handleAdd() } }}
           className={s.clAddInput}
-          maxLength={300}
+          maxLength={2000}
+          rows={2}
+          style={{ resize: 'vertical' }}
         />
         <button
           onClick={handleAdd}
@@ -674,7 +680,7 @@ function TaskTypeModal({ taskType, onClose, onSaved }) {
 
     if (!isEdit) {
       for (const step of steps.filter((v) => v.trim())) {
-        if (step.trim().length > 300) { setError('Bước checklist không được quá 300 ký tự'); return }
+        if (step.trim().length > 2000) { setError('Bước checklist không được quá 2000 ký tự'); return }
       }
     }
 
@@ -770,14 +776,14 @@ function TaskTypeModal({ taskType, onClose, onSaved }) {
               {steps.map((step, i) => (
                 <div key={i} className={s.ttModalStepRow}>
                   <span className={s.ttModalStepNum}>{i + 1}.</span>
-                  <input
-                    type="text"
+                  <textarea
                     value={step}
                     onChange={(e) => setStep(i, e.target.value)}
-                    placeholder={`Bước ${i + 1}…`}
+                    placeholder={`Bước ${i + 1}… (có thể xuống dòng)`}
                     className={s.settingsInput}
-                    maxLength={300}
-                    style={{ flex: 1 }}
+                    maxLength={2000}
+                    rows={2}
+                    style={{ flex: 1, resize: 'vertical' }}
                   />
                   {steps.length > 1 && (
                     <button type="button" onClick={() => removeStep(i)} className={s.ttModalRemoveStepBtn} title="Xóa bước">

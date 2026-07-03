@@ -364,7 +364,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
               {checklistItems.map((item, idx) => (
                 <div key={item.id} className={s.fmClItem}>
                   <span className={s.fmClIdx}>{idx + 1}.</span>
-                  <span className={s.fmClText}>{item.text}</span>
+                  <span className={s.fmClText} style={{ whiteSpace: 'pre-wrap' }}>{item.text}</span>
                   <button
                     type="button"
                     className={s.fmClDel}
@@ -380,14 +380,15 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
 
           <div className={s.fmClAdd}>
             <Plus size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
-            <input
+            <textarea
               ref={newItemRef}
-              type="text"
               value={newItemText}
               onChange={(e) => setNewItemText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addToChecklist() } }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); addToChecklist() } }}
               className={s.fmClInput}
-              placeholder="Thêm bước công việc... (Enter để thêm)"
+              placeholder="Thêm bước công việc… (Enter để thêm · Alt/Shift+Enter xuống dòng)"
+              rows={2}
+              style={{ resize: 'vertical' }}
             />
             {newItemText.trim() && (
               <button type="button" className={s.fmClAddBtn} onClick={addToChecklist}>

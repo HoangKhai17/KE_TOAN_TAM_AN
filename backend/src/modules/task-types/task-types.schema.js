@@ -17,11 +17,11 @@ const updateTaskTypeSchema = taskTypeBase.partial().refine(
 )
 
 const checklistStepSchema = z.object({
-  stepText: z.string().min(1).max(300),
+  stepText: z.string().min(1).max(2000),   // cho phép nhiều dòng
 })
 
 const updateChecklistStepSchema = z.object({
-  stepText:  z.string().min(1).max(300).optional(),
+  stepText:  z.string().min(1).max(2000).optional(),
   stepOrder: z.number().int().min(1).optional(),
 }).refine((d) => d.stepText !== undefined || d.stepOrder !== undefined, {
   message: 'Provide stepText or stepOrder',
