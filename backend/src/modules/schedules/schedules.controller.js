@@ -18,28 +18,28 @@ async function getSchedule(req, res, next) {
 async function createSchedule(req, res, next) {
   try {
     const companyId = req.params.companyId || req.params.id
-    const schedule = await svc.createSchedule(companyId, req.body, req.user.id, req.ip, req.headers['user-agent'])
+    const schedule = await svc.createSchedule(companyId, req.body, req.user, req.ip, req.headers['user-agent'])
     res.status(201).json({ success: true, data: { schedule } })
   } catch (err) { next(err) }
 }
 
 async function updateSchedule(req, res, next) {
   try {
-    const schedule = await svc.updateSchedule(req.params.id, req.body, req.user.id, req.ip, req.headers['user-agent'])
+    const schedule = await svc.updateSchedule(req.params.id, req.body, req.user, req.ip, req.headers['user-agent'])
     res.json({ success: true, data: { schedule } })
   } catch (err) { next(err) }
 }
 
 async function deleteSchedule(req, res, next) {
   try {
-    await svc.deleteSchedule(req.params.id, req.user.id, req.ip, req.headers['user-agent'])
+    await svc.deleteSchedule(req.params.id, req.user, req.ip, req.headers['user-agent'])
     res.status(204).end()
   } catch (err) { next(err) }
 }
 
 async function toggleSchedule(req, res, next) {
   try {
-    const schedule = await svc.toggleSchedule(req.params.id, req.user.id, req.ip, req.headers['user-agent'])
+    const schedule = await svc.toggleSchedule(req.params.id, req.user, req.ip, req.headers['user-agent'])
     res.json({ success: true, data: { schedule } })
   } catch (err) { next(err) }
 }

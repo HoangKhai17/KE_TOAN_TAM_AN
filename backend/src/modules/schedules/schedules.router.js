@@ -1,13 +1,11 @@
 const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
-const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
 const { updateScheduleSchema } = require('./schedules.schema')
 const ctrl = require('./schedules.controller')
 
 const router = Router()
-const auth  = [authenticate]
-const admin = [authenticate, requireRole('admin')]
+const auth  = [authenticate]   // quyền theo công ty phụ trách kiểm tra trong service
 
 /**
  * @openapi
@@ -52,7 +50,7 @@ router.get('/:id', ...auth, ctrl.getSchedule)
  *       200: { description: Updated }
  *       404: { description: Not found }
  */
-router.patch('/:id', ...admin, validate(updateScheduleSchema), ctrl.updateSchedule)
+router.patch('/:id', ...auth, validate(updateScheduleSchema), ctrl.updateSchedule)
 
 /**
  * @openapi
@@ -69,7 +67,7 @@ router.patch('/:id', ...admin, validate(updateScheduleSchema), ctrl.updateSchedu
  *       204: { description: Deleted }
  *       409: { description: Cannot delete — tasks already generated }
  */
-router.delete('/:id', ...admin, ctrl.deleteSchedule)
+router.delete('/:id', ...auth, ctrl.deleteSchedule)
 
 /**
  * @openapi
@@ -114,6 +112,6 @@ router.get('/:id/preview', ...auth, ctrl.previewSchedule)
  *     responses:
  *       200: { description: Toggled }
  */
-router.post('/:id/toggle', ...admin, ctrl.toggleSchedule)
+router.post('/:id/toggle', ...auth, ctrl.toggleSchedule)
 
 module.exports = router

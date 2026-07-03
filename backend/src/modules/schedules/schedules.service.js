@@ -28,6 +28,22 @@ async function assertCompanyExists(companyId) {
   if (!c) throw Object.assign(new Error('Company not found'), { status: 404 })
 }
 
+// Admin: toàn quyền. Staff: chỉ thao tác lịch của công ty MÌNH phụ trách (assigned_staff_id).
+async function assertCompanyAccess(companyId, user) {
+  const { rows: [c] } = await query('SELECT assigned_staff_id FROM companies WHERE id = $1', [companyId])
+  if (!c) throw Object.assign(new Error('Company not found'), { status: 404 })
+  if (user && user.role !== 'admin' && c.assigned_staff_id !== user.id) {
+    throw Object.assign(new Error('Bạn không có quyền thao tác lịch của công ty này'), { status: 403 })
+  }
+}
+
+// Lấy company_id của 1 lịch (để check quyền cho các thao tác theo schedule id)
+async function getScheduleCompanyId(id) {
+  const { rows: [s] } = await query('SELECT company_id FROM customer_task_schedules WHERE id = $1', [id])
+  if (!s) throw Object.assign(new Error('Schedule not found'), { status: 404 })
+  return s.company_id
+}
+
 async function getScheduleById(id) {
   const { rows: [row] } = await query(
     `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name
@@ -55,8 +71,9 @@ async function listSchedules(companyId) {
   return rows.map(toDto)
 }
 
-async function createSchedule(companyId, data, actorId, ipAddress, userAgent) {
-  await assertCompanyExists(companyId)
+async function createSchedule(companyId, data, user, ipAddress, userAgent) {
+  await assertCompanyAccess(companyId, user)   // admin hoặc staff phụ trách công ty
+  const actorId = user.id
 
   const {
     taskTypeId, assignedStaffId, recurrenceType, recurrenceConfig,
@@ -88,7 +105,9 @@ async function createSchedule(companyId, data, actorId, ipAddress, userAgent) {
   return getScheduleById(schedule.id)
 }
 
-async function updateSchedule(id, data, actorId, ipAddress, userAgent) {
+async function updateSchedule(id, data, user, ipAddress, userAgent) {
+  await assertCompanyAccess(await getScheduleCompanyId(id), user)
+  const actorId = user.id
   const fieldMap = {
     assignedStaffId:    'assigned_staff_id',
     recurrenceType:     'recurrence_type',
@@ -129,9 +148,11 @@ async function updateSchedule(id, data, actorId, ipAddress, userAgent) {
   return getScheduleById(id)
 }
 
-async function deleteSchedule(id, actorId, ipAddress, userAgent) {
-  const { rows: [schedule] } = await query('SELECT id FROM customer_task_schedules WHERE id = $1', [id])
+async function deleteSchedule(id, user, ipAddress, userAgent) {
+  const { rows: [schedule] } = await query('SELECT id, company_id FROM customer_task_schedules WHERE id = $1', [id])
   if (!schedule) throw Object.assign(new Error('Schedule not found'), { status: 404 })
+  await assertCompanyAccess(schedule.company_id, user)
+  const actorId = user.id
 
   const { rows: [taskCount] } = await query(
     'SELECT COUNT(*) FROM tasks WHERE customer_task_schedule_id = $1',
@@ -149,7 +170,9 @@ async function deleteSchedule(id, actorId, ipAddress, userAgent) {
   })
 }
 
-async function toggleSchedule(id, actorId, ipAddress, userAgent) {
+async function toggleSchedule(id, user, ipAddress, userAgent) {
+  await assertCompanyAccess(await getScheduleCompanyId(id), user)
+  const actorId = user.id
   const { rows: [row] } = await query(
     `UPDATE customer_task_schedules SET is_active = NOT is_active, updated_at = NOW()
      WHERE id = $1 RETURNING id, is_active`,

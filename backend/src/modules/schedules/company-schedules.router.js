@@ -1,14 +1,12 @@
 const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
-const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
 const { createScheduleSchema } = require('./schedules.schema')
 const ctrl = require('./schedules.controller')
 
 // mergeParams: true allows access to :companyId from the parent router
 const router = Router({ mergeParams: true })
-const auth  = [authenticate]
-const admin = [authenticate, requireRole('admin')]
+const auth  = [authenticate]   // quyền theo công ty phụ trách kiểm tra trong service
 
 /**
  * @openapi
@@ -71,6 +69,6 @@ router.get('/', ...auth, ctrl.listSchedules)
  *       404: { description: Company or task type not found }
  *       422: { description: Validation error }
  */
-router.post('/', ...admin, validate(createScheduleSchema), ctrl.createSchedule)
+router.post('/', ...auth, validate(createScheduleSchema), ctrl.createSchedule)
 
 module.exports = router
