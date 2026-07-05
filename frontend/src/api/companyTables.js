@@ -52,6 +52,10 @@ export async function updateRow(companyId, defId, rowId, rowData) {
 export async function deleteRow(companyId, defId, rowId) {
   await api.delete(`/companies/${companyId}/tables/${defId}/rows/${rowId}`)
 }
+// Sắp xếp lại thứ tự hàng (kéo thả) — orderedIds theo đúng thứ tự hiển thị mong muốn
+export async function reorderRows(companyId, defId, orderedIds) {
+  await api.patch(`/companies/${companyId}/tables/${defId}/rows/reorder`, { orderedIds })
+}
 export async function batchCreateRows(companyId, defId, rows) {
   const { data } = await api.post(`/companies/${companyId}/tables/${defId}/rows/batch`, { rows })
   return data.data  // { inserted, failed, errors }

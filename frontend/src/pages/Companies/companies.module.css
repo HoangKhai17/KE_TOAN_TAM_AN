@@ -6131,3 +6131,37 @@
   margin-top: 16px;
 }
 .ovPagerInfo { font-size: var(--fs-sm); color: var(--color-muted); font-weight: var(--fw-semibold); }
+
+/* ── Bảng tùy biến: kéo thả hàng + ô đang nhập ─────────────────────────────── */
+.ctblDragTh { width: 30px; padding: 0; }
+.ctblDragTd {
+  width: 30px;
+  text-align: center;
+  padding: 0;
+  vertical-align: middle;
+}
+.ctblDragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  cursor: grab;
+}
+.ctblDragHandle:hover { color: var(--color-primary); }
+.ctblDragHandle:active { cursor: grabbing; }
+.ctblDragHandleOff {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #e2e8f0;
+  cursor: not-allowed;
+}
+.ctblRowDragging { opacity: 0.45; }
+.ctblRowDragOver td { box-shadow: inset 0 2px 0 0 var(--color-primary); }
+
+/* Ô đang mở để nhập (điều hướng bằng phím) */
+.ctblCellActive {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  background: #f0f6ff;
+}

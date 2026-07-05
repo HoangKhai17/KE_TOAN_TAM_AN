@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Plus, Trash2, Filter, Loader2, Download, Upload } from 'lucide-react'
+import { Plus, Trash2, Filter, Loader2, Download, Upload, GripVertical } from 'lucide-react'
 // xlsx-js-style: bản drop-in cùng API SheetJS nhưng ghi được style (font/border).
 // SheetJS community ('xlsx') không hỗ trợ style khi ghi file.
 import * as XLSX from 'xlsx-js-style'
@@ -214,7 +214,7 @@ function numericValue(row, col) {
   return v == null || v === '' ? null : Number(v)
 }
 function sortKey(row, col) {
-  if (col.colKey === '__stt') return row.createdAt ?? ''   // STT = theo thời gian tạo
+  if (col.colKey === '__stt') return typeof row.position === 'number' ? row.position : 0   // STT = thứ tự thủ công (position, cho phép kéo thả)
   if (col.dataType === 'computed') {
     if (col.computedType === 'status_threshold') {
       return STATUS_ORDER[resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).tone] ?? 9
@@ -344,45 +344,55 @@ function ColumnFilterDropdown({ col, allRows, currentFilter, sortState, onSort, 
 }
 
 // ── Inline editable cell ──────────────────────────────────────────────────────
-function EditableCell({ col, value, canEdit, onSave }) {
-  const [editing, setEditing] = useState(false)
+// Ô nhập điều khiển bởi cha (active) — hỗ trợ Tab/Shift+Tab/Enter/Esc để nhập liền mạch như Excel
+function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavigate }) {
   const [local, setLocal] = useState(value ?? '')
   const ref = useRef(null)
   useEffect(() => { setLocal(value ?? '') }, [value])
-  useEffect(() => { if (editing) ref.current?.focus() }, [editing])
+  useEffect(() => {
+    if (active && ref.current) {
+      ref.current.focus()
+      if (ref.current.select && col.dataType !== 'date') { try { ref.current.select() } catch { /* ignore */ } }
+    }
+  }, [active, col.dataType])
 
   function commit(val) {
-    setEditing(false)
     const next = val !== undefined ? val : (col.dataType === 'date' ? local : String(local).trim())
     if (String(next ?? '') === String(value ?? '')) return
     onSave(next === '' ? null : next)
   }
+  function handleKey(e) {
+    if (e.key === 'Enter')       { e.preventDefault(); commit(); onNavigate?.('down') }
+    else if (e.key === 'Tab')    { e.preventDefault(); commit(); onNavigate?.(e.shiftKey ? 'prev' : 'next') }
+    else if (e.key === 'Escape') { setLocal(value ?? ''); onNavigate?.('cancel') }
+  }
+
+  if (!canEdit) {
+    if (col.dataType === 'select') return <td>{value || <span className={s.archInlineEmpty}>—</span>}</td>
+    return <td>{(value == null || value === '') ? <span className={s.archInlineEmpty}>—</span> : (col.dataType === 'date' ? fmtDate(value) : String(value))}</td>
+  }
 
   if (col.dataType === 'select') {
     return (
-      <td className={canEdit ? s.archInlineTdEditable : ''}>
-        {canEdit ? (
-          <select className={s.archInlineEditInput} value={value ?? ''}
-            onChange={(e) => onSave(e.target.value || null)}>
-            <option value=""></option>
-            {(col.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        ) : (value || <span className={s.archInlineEmpty}>—</span>)}
+      <td className={`${s.archInlineTdEditable} ${active ? s.ctblCellActive : ''}`} onClick={onActivate}>
+        <select ref={ref} className={s.archInlineEditInput} value={value ?? ''}
+          onChange={(e) => onSave(e.target.value || null)} onKeyDown={handleKey}>
+          <option value=""></option>
+          {(col.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
       </td>
     )
   }
 
   return (
-    <td className={canEdit ? s.archInlineTdEditable : ''} onClick={() => canEdit && !editing && setEditing(true)}>
-      {editing ? (
+    <td className={`${s.archInlineTdEditable} ${active ? s.ctblCellActive : ''}`}
+      onClick={onActivate}>
+      {active ? (
         <input ref={ref} type={col.dataType === 'number' ? 'number' : col.dataType === 'date' ? 'date' : 'text'}
           value={local} className={s.archInlineEditInput}
           onChange={(e) => setLocal(e.target.value)} onBlur={() => commit()}
           onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.preventDefault(); commit() }
-            if (e.key === 'Escape') { setLocal(value ?? ''); setEditing(false) }
-          }} />
+          onKeyDown={handleKey} />
       ) : (
         (value == null || value === '')
           ? <span className={s.archInlineEmpty}>—</span>
@@ -422,7 +432,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   const [companyCols, setCompanyCols]   = useState([])
   const [loading, setLoading]           = useState(true)
   const [colFilters, setColFilters]     = useState({})
-  const [sortState, setSortState]       = useState({ col: '__stt', dir: 'desc' })  // mặc định: mới nhất trước
+  const [sortState, setSortState]       = useState({ col: '__stt', dir: 'asc' })  // mặc định: thứ tự thủ công (kéo thả được)
   const [filterPopup, setFilterPopup]   = useState(null)
   const [page, setPage]                 = useState(1)
   const [deletingRow, setDeletingRow]   = useState(null)
@@ -431,6 +441,13 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   const [pageSize, setPageSize]         = useState(PAGE_SIZE)
   const [selectedIds, setSelectedIds]   = useState(() => new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  // Nhập bằng phím (Tab/Enter) — ô đang mở để nhập; và focus dòng vừa thêm
+  const [activeCell, setActiveCell]     = useState(null)   // { rowId, colKey }
+  const [pendingFocus, setPendingFocus] = useState(null)   // { rowId, colKey } — focus sau khi render
+  // Kéo thả hàng
+  const [dragRowId, setDragRowId]       = useState(null)
+  const [dragOverId, setDragOverId]     = useState(null)
 
   // Column widths — GLOBAL (lưu vào company_table_columns.width). Chỉ admin được kéo;
   // kéo 1 chỗ → đồng bộ mọi công ty. Khởi tạo từ def, cập nhật live khi kéo.
@@ -542,16 +559,89 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     return false
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
-  const isDefaultSort = sortState.col === '__stt' && sortState.dir === 'desc'
+  const isDefaultSort = sortState.col === '__stt' && sortState.dir === 'asc'
+  // Kéo thả hàng chỉ hợp lệ khi đang ở thứ tự thủ công (không lọc cột, không sắp theo cột khác)
+  const canReorder = canEdit && colFilterCount === 0 && sortState.col === '__stt' && sortState.dir === 'asc'
 
   // ── Row mutations ────────────────────────────────────────────────────────────
   async function addRow() {
     try {
       const row = await api.createRow(companyId, def.id, {})
-      setRows((p) => [row, ...p])   // dòng mới lên đầu
-      setSortState({ col: '__stt', dir: 'desc' })  // đảm bảo mới nhất ở trên
-      setPage(1)                     // nhảy về trang 1 để nhập ngay
-    } catch { addToast('Không thể thêm dòng', 'error') }
+      // Backend gán position = cuối → thêm vào cuối danh sách (giống Excel thêm dòng dưới cùng)
+      setRows((p) => [...p, row])
+      setColFilters({})
+      setSortState({ col: '__stt', dir: 'asc' })  // về thứ tự thủ công để thấy dòng mới
+      return row
+    } catch { addToast('Không thể thêm dòng', 'error'); return null }
+  }
+  // Thêm dòng rồi đặt con trỏ nhập vào ô đầu (dùng cho Enter/Tab ở cuối bảng)
+  async function addRowAndFocus(colKey) {
+    const row = await addRow()
+    if (row) setPendingFocus({ rowId: row.id, colKey })
+  }
+
+  // Các cột có thể nhập (bỏ cột tính toán)
+  const editableCols = useMemo(() => columns.filter((c) => c.dataType !== 'computed'), [columns])
+
+  // Điều hướng ô bằng phím: next=Tab, prev=Shift+Tab, down=Enter, cancel=Esc
+  function navigateCell(rowId, colKey, dir) {
+    if (dir === 'cancel') { setActiveCell(null); return }
+    if (!editableCols.length) return
+    const rIdx = displayed.findIndex((r) => r.id === rowId)
+    const cIdx = editableCols.findIndex((c) => c.colKey === colKey)
+    if (rIdx < 0 || cIdx < 0) { setActiveCell(null); return }
+
+    const goTo = (targetRowId, targetColKey) => {
+      const idx = displayed.findIndex((r) => r.id === targetRowId)
+      if (idx >= 0) {
+        const tp = Math.floor(idx / pageSize) + 1
+        if (tp !== safePage) setPage(tp)
+      }
+      setActiveCell({ rowId: targetRowId, colKey: targetColKey })
+    }
+
+    if (dir === 'next') {
+      if (cIdx < editableCols.length - 1) return goTo(rowId, editableCols[cIdx + 1].colKey)
+      if (rIdx < displayed.length - 1)    return goTo(displayed[rIdx + 1].id, editableCols[0].colKey)
+      return addRowAndFocus(editableCols[0].colKey)          // cuối bảng → thêm dòng
+    }
+    if (dir === 'prev') {
+      if (cIdx > 0)      return goTo(rowId, editableCols[cIdx - 1].colKey)
+      if (rIdx > 0)      return goTo(displayed[rIdx - 1].id, editableCols[editableCols.length - 1].colKey)
+      return                                                  // ô đầu tiên → giữ nguyên
+    }
+    if (dir === 'down') {
+      if (rIdx < displayed.length - 1) return goTo(displayed[rIdx + 1].id, colKey)
+      return addRowAndFocus(colKey)                           // dòng cuối → thêm dòng mới
+    }
+  }
+
+  // Sau khi thêm dòng: chuyển đúng trang + mở ô nhập của dòng mới
+  useEffect(() => {
+    if (!pendingFocus) return
+    const idx = displayed.findIndex((r) => r.id === pendingFocus.rowId)
+    if (idx < 0) return
+    setPage(Math.floor(idx / pageSize) + 1)
+    setActiveCell({ rowId: pendingFocus.rowId, colKey: pendingFocus.colKey ?? editableCols[0]?.colKey })
+    setPendingFocus(null)
+  }, [pendingFocus, displayed, pageSize, editableCols])
+
+  // ── Kéo thả sắp xếp hàng ─────────────────────────────────────────────────────
+  function handleRowDrop(targetId) {
+    setDragOverId(null)
+    const srcId = dragRowId
+    setDragRowId(null)
+    if (!srcId || srcId === targetId || !canReorder) return
+    const order = displayed.map((r) => r.id)          // thứ tự thủ công hiện tại (position asc, toàn bộ)
+    const from = order.indexOf(srcId), to = order.indexOf(targetId)
+    if (from < 0 || to < 0) return
+    order.splice(to, 0, order.splice(from, 1)[0])
+    // Cập nhật position cục bộ ngay (optimistic) rồi lưu server
+    setRows((prev) => {
+      const rank = new Map(order.map((id, i) => [id, i]))
+      return prev.map((r) => (rank.has(r.id) ? { ...r, position: rank.get(r.id) } : r))
+    })
+    api.reorderRows(companyId, def.id, order).catch(() => { addToast('Không thể lưu thứ tự', 'error'); load() })
   }
   async function saveCell(row, colKey, value) {
     try {
@@ -623,7 +713,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     return res
   }
 
-  const colSpan = columns.length + 2 + (canEdit ? 1 : 0) // [check] + STT + columns + actions
+  const colSpan = columns.length + 2 + (canEdit ? 2 : 0) // [drag]+[check] + STT + columns + actions
 
   return (
     <div>
@@ -638,7 +728,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
         )}
         {(colFilterCount > 0 || !isDefaultSort) && (
           <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`}
-            onClick={() => { setColFilters({}); setSortState({ col: '__stt', dir: 'desc' }) }}>
+            onClick={() => { setColFilters({}); setSortState({ col: '__stt', dir: 'asc' }) }}>
             Xoá tất cả bộ lọc
           </button>
         )}
@@ -658,7 +748,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
             </button>
           )}
           {canEdit && (
-            <button className={`${s.btnNavy} ${s.hdldToolbarBtn}`} onClick={addRow}>
+            <button className={`${s.btnNavy} ${s.hdldToolbarBtn}`} onClick={() => addRowAndFocus(editableCols[0]?.colKey)}>
               <Plus size={13} /> Thêm dòng
             </button>
           )}
@@ -676,6 +766,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
             <table className={`${s.table} ${s.hdldTable}`}>
               <thead>
                 <tr>
+                  {canEdit && <th className={s.ctblDragTh} />}
                   {canEdit && (
                     <th className={s.hdldThStt}>
                       <input type="checkbox" checked={allPageSelected}
@@ -688,7 +779,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
                       <span className={s.hdldThLabel}>STT</span>
                       <button data-hdld-filter-btn
                         className={`${s.hdldFilterBtn} ${sortState.col === '__stt' && !isDefaultSort ? s.hdldFilterBtnActive : ''}`}
-                        onClick={(e) => openFilter('__stt', e)} title="Sắp xếp theo thời gian">
+                        onClick={(e) => openFilter('__stt', e)} title="Sắp xếp theo thứ tự">
                         <Filter size={10} />
                       </button>
                     </div>
@@ -719,7 +810,27 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
                     {(colFilterCount > 0) ? 'Không có dòng khớp bộ lọc.' : 'Chưa có dữ liệu. Nhấn "Thêm dòng".'}
                   </td></tr>
                 ) : pageRows.map((row, idx) => (
-                  <tr key={row.id}>
+                  <tr key={row.id}
+                    className={`${dragOverId === row.id ? s.ctblRowDragOver : ''} ${dragRowId === row.id ? s.ctblRowDragging : ''}`}
+                    onDragOver={canReorder ? (e) => { e.preventDefault(); if (dragOverId !== row.id) setDragOverId(row.id) } : undefined}
+                    onDrop={canReorder ? () => handleRowDrop(row.id) : undefined}
+                  >
+                    {canEdit && (
+                      <td className={s.ctblDragTd} onClick={(e) => e.stopPropagation()}>
+                        {canReorder ? (
+                          <span className={s.ctblDragHandle} title="Kéo để đổi vị trí"
+                            draggable
+                            onDragStart={() => setDragRowId(row.id)}
+                            onDragEnd={() => { setDragRowId(null); setDragOverId(null) }}>
+                            <GripVertical size={14} />
+                          </span>
+                        ) : (
+                          <span className={s.ctblDragHandleOff} title="Bỏ lọc/sắp xếp cột để kéo thả hàng">
+                            <GripVertical size={14} />
+                          </span>
+                        )}
+                      </td>
+                    )}
                     {canEdit && (
                       <td className={s.hdldCellStt} onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} />
@@ -737,7 +848,11 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
                       }
                       return (
                         <EditableCell key={col.colKey} col={col} value={row.data?.[col.colKey]}
-                          canEdit={canEdit} onSave={(val) => saveCell(row, col.colKey, val)} />
+                          canEdit={canEdit}
+                          active={canEdit && activeCell?.rowId === row.id && activeCell?.colKey === col.colKey}
+                          onActivate={() => canEdit && setActiveCell({ rowId: row.id, colKey: col.colKey })}
+                          onNavigate={(dir) => navigateCell(row.id, col.colKey, dir)}
+                          onSave={(val) => saveCell(row, col.colKey, val)} />
                       )
                     })}
                     <td className={s.cTaskActionCell}>
