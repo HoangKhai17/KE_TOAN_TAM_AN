@@ -994,7 +994,7 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onDel
           <div className={`${s.companyInitials} ${company.avatarUrl ? s.isHidden : ''}`}>
             {getInitials(company.name)}
           </div>
-          <div>
+          <div className={s.companyInfo}>
             <div className={s.companyName}>{company.name}</div>
             {(company.industry || company.businessType) && (
               <div className={s.companyMeta}>
