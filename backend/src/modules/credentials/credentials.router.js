@@ -1,14 +1,13 @@
 const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
-const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
 const { createCredentialSchema, updateCredentialSchema } = require('./credentials.schema')
 const ctrl = require('./credentials.controller')
 
 // Mounted at /api/companies/:companyId/credentials
+// Quyền theo công ty phụ trách được kiểm tra trong service (admin: toàn quyền; staff: cty của mình)
 const router = Router({ mergeParams: true })
 const auth  = [authenticate]
-const admin = [authenticate, requireRole('admin')]
 
 /**
  * @openapi
@@ -70,7 +69,7 @@ const admin = [authenticate, requireRole('admin')]
  *       404: { description: Company not found }
  */
 router.get('/',     ...auth,  ctrl.listCredentials)
-router.post('/',    ...admin, validate(createCredentialSchema), ctrl.createCredential)
+router.post('/',    ...auth,  validate(createCredentialSchema), ctrl.createCredential)
 
 /**
  * @openapi
@@ -128,8 +127,8 @@ router.post('/',    ...admin, validate(createCredentialSchema), ctrl.createCrede
  *       404: { description: Not found }
  */
 router.get('/:id',          ...auth,  ctrl.getCredential)
-router.patch('/:id',        ...admin, validate(updateCredentialSchema), ctrl.updateCredential)
-router.delete('/:id',       ...admin, ctrl.deleteCredential)
+router.patch('/:id',        ...auth,  validate(updateCredentialSchema), ctrl.updateCredential)
+router.delete('/:id',       ...auth,  ctrl.deleteCredential)
 
 /**
  * @openapi

@@ -42,6 +42,19 @@ const FILTER_KEY = 'companies_filters'
 function readSaved() {
   try { return JSON.parse(sessionStorage.getItem(FILTER_KEY) || '{}') } catch { return {} }
 }
+// colFilters của cột enum là Set (không JSON hoá được) → chuyển Set↔Array khi lưu/khôi phục.
+function serializeColFilters(cf) {
+  const out = {}
+  for (const [k, v] of Object.entries(cf || {})) out[k] = v instanceof Set ? [...v] : v
+  return out
+}
+function deserializeColFilters(obj) {
+  const out = {}
+  for (const [k, v] of Object.entries(obj || {})) {
+    out[k] = (getCompanyColumnFilterType(k) === 'enum' && Array.isArray(v)) ? new Set(v) : v
+  }
+  return out
+}
 
 // ── Small helpers ──────────────────────────────────────────────────────────────
 
@@ -388,8 +401,8 @@ export default function Companies() {
   const [limit, setLimit]               = useState(() => readSaved().limit ?? 20)
 
   // Column-header filter / sort (client-side, per docs/018)
-  const [colFilters, setColFilters]   = useState({})
-  const [sortState, setSortState]     = useState({ col: null, dir: 'asc' })
+  const [colFilters, setColFilters]   = useState(() => deserializeColFilters(readSaved().colFilters))
+  const [sortState, setSortState]     = useState(() => readSaved().sortState ?? { col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup] = useState(null)
 
   const [showCreate, setShowCreate]   = useState(false)
@@ -409,12 +422,13 @@ export default function Companies() {
   const pageInactiveTotal  = companies.filter((c) => c.status === 'inactive').length
   const pageTerminatedTotal = companies.filter((c) => c.status === 'terminated').length
 
-  // Persist filters to sessionStorage
+  // Persist filters to sessionStorage (gồm cả bộ lọc header cột: colFilters + sortState)
   useEffect(() => {
     sessionStorage.setItem(FILTER_KEY, JSON.stringify({
       search, statusFilter, btFilter, staffFilter, page, limit,
+      colFilters: serializeColFilters(colFilters), sortState,
     }))
-  }, [search, statusFilter, btFilter, staffFilter, page, limit])
+  }, [search, statusFilter, btFilter, staffFilter, page, limit, colFilters, sortState])
 
   // Debounce search
   useEffect(() => {

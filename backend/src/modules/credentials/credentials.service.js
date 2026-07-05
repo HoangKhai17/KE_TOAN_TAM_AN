@@ -21,13 +21,17 @@ function toDto(row, includePassword = false) {
   }
 }
 
-async function assertCompany(companyId) {
-  const { rows } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
-  if (!rows[0]) throw Object.assign(new Error('Company not found'), { status: 404 })
+// Admin: toàn quyền. Staff: chỉ tài khoản hệ thống của công ty MÌNH phụ trách.
+async function assertCompanyAccess(companyId, user) {
+  const { rows: [c] } = await query('SELECT assigned_staff_id FROM companies WHERE id = $1', [companyId])
+  if (!c) throw Object.assign(new Error('Company not found'), { status: 404 })
+  if (user && user.role !== 'admin' && c.assigned_staff_id !== user.id) {
+    throw Object.assign(new Error('Bạn không có quyền truy cập tài khoản hệ thống của công ty này'), { status: 403 })
+  }
 }
 
-async function listCredentials(companyId, { isActive } = {}) {
-  await assertCompany(companyId)
+async function listCredentials(companyId, { isActive } = {}, user) {
+  await assertCompanyAccess(companyId, user)
 
   const conditions = ['company_id = $1']
   const params = [companyId]
@@ -43,7 +47,8 @@ async function listCredentials(companyId, { isActive } = {}) {
   return rows.map(r => toDto(r, false))
 }
 
-async function getCredential(companyId, id) {
+async function getCredential(companyId, id, user) {
+  await assertCompanyAccess(companyId, user)
   const { rows: [row] } = await query(
     'SELECT * FROM company_credentials WHERE id = $1 AND company_id = $2',
     [id, companyId]
@@ -52,8 +57,9 @@ async function getCredential(companyId, id) {
   return toDto(row, false)
 }
 
-async function createCredential(companyId, data, actorId) {
-  await assertCompany(companyId)
+async function createCredential(companyId, data, user) {
+  await assertCompanyAccess(companyId, user)
+  const actorId = user.id
   const { systemName, systemUrl, username, password, notes, isActive = true } = data
   const { ciphertext, iv } = encrypt(password)
 
@@ -67,7 +73,9 @@ async function createCredential(companyId, data, actorId) {
   return toDto(row, false)
 }
 
-async function updateCredential(companyId, id, data, actorId) {
+async function updateCredential(companyId, id, data, user) {
+  await assertCompanyAccess(companyId, user)
+  const actorId = user.id
   const { rows: [row] } = await query(
     'SELECT * FROM company_credentials WHERE id = $1 AND company_id = $2',
     [id, companyId]
@@ -97,7 +105,9 @@ async function updateCredential(companyId, id, data, actorId) {
   return toDto(updated, false)
 }
 
-async function deleteCredential(companyId, id, actorId, ipAddress, userAgent) {
+async function deleteCredential(companyId, id, user, ipAddress, userAgent) {
+  await assertCompanyAccess(companyId, user)
+  const actorId = user.id
   const { rows: [row] } = await query(
     'SELECT id, system_name FROM company_credentials WHERE id = $1 AND company_id = $2',
     [id, companyId]
@@ -112,7 +122,9 @@ async function deleteCredential(companyId, id, actorId, ipAddress, userAgent) {
   })
 }
 
-async function revealCredential(companyId, id, actorId, ipAddress, userAgent) {
+async function revealCredential(companyId, id, user, ipAddress, userAgent) {
+  await assertCompanyAccess(companyId, user)
+  const actorId = user.id
   const { rows: [row] } = await query(
     'SELECT * FROM company_credentials WHERE id = $1 AND company_id = $2',
     [id, companyId]

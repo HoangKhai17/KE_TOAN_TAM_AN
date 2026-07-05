@@ -14,7 +14,7 @@ const NAV_GROUPS = [
     label: 'ĐIỀU HƯỚNG',
     items: [
       { to: '/dashboard',              label: 'Dashboard',          icon: LayoutDashboard },
-      { to: '/companies',              label: 'Công ty',            icon: Building2 },
+      { to: '/companies',              label: 'Khách hàng',         icon: Building2 },
       { to: '/tasks',                  label: 'Công việc',          icon: CheckSquare },
       { to: '/internal-assignments',   label: 'Nội bộ',             icon: ClipboardCheck },
       { to: '/client-requests',        label: 'Yêu cầu KH',        icon: ClipboardList },

@@ -11,7 +11,7 @@ import s from './layout.module.css'
 
 const ROUTE_LABELS = {
   dashboard:              'Trang chủ',
-  companies:              'Công ty',
+  companies:              'Khách hàng',
   tasks:                  'Công việc',
   'task-types':           'Loại công việc',
   schedules:              'Lịch định kỳ',

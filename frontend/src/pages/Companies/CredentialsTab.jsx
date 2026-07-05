@@ -3,7 +3,6 @@ import {
   Plus, Pencil, Trash2, Eye, EyeOff, Copy, Check,
   Shield, Loader2, ExternalLink,
 } from 'lucide-react'
-import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as credApi from '../../api/credentials'
 import Modal from '../../components/ui/Modal'
@@ -257,7 +256,6 @@ function DeleteConfirmModal({ credential, onConfirm, onClose }) {
 
 export default function CredentialsTab({ company }) {
   const companyId  = company.id
-  const isAdmin    = useAuthStore((st) => st.user?.role === 'admin')
   const addToast   = useToastStore((st) => st.toast)
 
   const [creds, setCreds]         = useState([])
@@ -331,15 +329,13 @@ export default function CredentialsTab({ company }) {
         <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>
           {!loading && `${creds.length} tài khoản`}
         </span>
-        {isAdmin && (
-          <button
-            className={s.btnNavy}
-            style={{ marginLeft: 'auto', height: 32, padding: '0 14px', fontSize: 'var(--fs-md)' }}
-            onClick={() => setShowCreate(true)}
-          >
-            <Plus size={13} /> Thêm tài khoản
-          </button>
-        )}
+        <button
+          className={s.btnNavy}
+          style={{ marginLeft: 'auto', height: 32, padding: '0 14px', fontSize: 'var(--fs-md)' }}
+          onClick={() => setShowCreate(true)}
+        >
+          <Plus size={13} /> Thêm tài khoản
+        </button>
       </div>
 
       {/* List */}
@@ -386,24 +382,20 @@ export default function CredentialsTab({ company }) {
                   >
                     <Eye size={13} />
                   </button>
-                  {isAdmin && (
-                    <>
-                      <button
-                        className={s.iconBtnSm}
-                        onClick={() => setEditTarget(cred)}
-                        title="Chỉnh sửa"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        className={`${s.iconBtnSm} ${s.iconBtnDanger}`}
-                        onClick={() => setDeleteTarget(cred)}
-                        title="Xoá"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </>
-                  )}
+                  <button
+                    className={s.iconBtnSm}
+                    onClick={() => setEditTarget(cred)}
+                    title="Chỉnh sửa"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    className={`${s.iconBtnSm} ${s.iconBtnDanger}`}
+                    onClick={() => setDeleteTarget(cred)}
+                    title="Xoá"
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
 
