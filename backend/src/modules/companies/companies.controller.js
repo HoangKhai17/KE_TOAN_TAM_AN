@@ -132,6 +132,7 @@ async function exportCompanies(req, res, next) {
       defIds: Array.isArray(defIds) ? defIds : [],
       includeCredentials: Boolean(includeCredentials),
       layout: layout === 'per_company' ? 'per_company' : 'aggregate',
+      user: req.user,
     })
 
     res.setHeader('Content-Type', contentType)

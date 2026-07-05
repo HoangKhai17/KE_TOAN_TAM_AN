@@ -101,8 +101,9 @@ router.get('/', ...auth, ctrl.listCompanies)
  */
 router.post('/', ...admin, validate(createCompanySchema), ctrl.createCompany)
 
-// Export tổng hợp nhiều công ty ra Excel/zip (admin) — đặt trước '/:id'
-router.post('/export', ...admin, ctrl.exportCompanies)
+// Export tổng hợp nhiều công ty ra Excel/zip — đặt trước '/:id'
+// Admin: mọi công ty. Staff: chỉ công ty mình phụ trách (lọc trong service).
+router.post('/export', ...auth, ctrl.exportCompanies)
 
 /**
  * @openapi

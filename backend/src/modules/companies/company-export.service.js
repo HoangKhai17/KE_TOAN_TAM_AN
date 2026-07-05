@@ -320,7 +320,24 @@ function zipToBuffer(files) {
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────────
-async function exportCompanies({ companyIds, sections, defIds = [], includeCredentials = false, layout = 'aggregate' }) {
+async function exportCompanies({ companyIds, sections, defIds = [], includeCredentials = false, layout = 'aggregate', user = null }) {
+  // RBAC: staff chỉ được xuất dữ liệu công ty mình phụ trách (giống rule danh sách công ty).
+  // Lọc companyIds về đúng phạm vi trước khi truy vấn — admin giữ nguyên toàn quyền.
+  if (user && user.role !== 'admin') {
+    const { rows } = await query(
+      'SELECT id FROM companies WHERE id = ANY($1) AND assigned_staff_id = $2',
+      [companyIds, user.id],
+    )
+    const allowed = new Set(rows.map((r) => r.id))
+    companyIds = companyIds.filter((id) => allowed.has(id))
+    if (companyIds.length === 0) {
+      throw Object.assign(
+        new Error('Bạn chỉ được xuất dữ liệu công ty do mình phụ trách'),
+        { status: 403 },
+      )
+    }
+  }
+
   const lbl = await loadLbl()
 
   const fixedKeys = FIXED_SECTION_KEYS.filter(

@@ -442,9 +442,8 @@ export default function Companies() {
   // Load enums + custom table defs (staff list đã chuyển sang React Query hook)
   useEffect(() => {
     loadEnums()
-    if (isAdmin) {
-      companyTablesApi.listDefs({ activeOnly: true }).then(setCustomDefs).catch(() => {})
-    }
+    // Nạp cho cả admin lẫn staff — bảng tuỳ chỉnh cũng là dữ liệu công ty (rows đã scope theo công ty khi xuất)
+    companyTablesApi.listDefs({ activeOnly: true }).then(setCustomDefs).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live sync: làm mới cache khi bất kỳ ai tạo/sửa/xoá công ty
@@ -644,16 +643,17 @@ export default function Companies() {
                 : `${pagination.total} công ty tôi phụ trách`}
             </p>
           </div>
-          {isAdmin && (
-            <div className={s.pageHeaderActions}>
-              <button className={s.btnOutline} onClick={() => setShowExport(true)} disabled={companies.length === 0}>
-                <Download size={14} /> Xuất Excel
-              </button>
+          <div className={s.pageHeaderActions}>
+            {/* Staff cũng được xuất — chỉ gồm công ty mình phụ trách (backend đã chốt quyền) */}
+            <button className={s.btnOutline} onClick={() => setShowExport(true)} disabled={companies.length === 0}>
+              <Download size={14} /> Xuất Excel
+            </button>
+            {isAdmin && (
               <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
                 <Plus size={14} /> Thêm khách hàng
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Filter panel */}
