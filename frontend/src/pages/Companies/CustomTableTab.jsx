@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Plus, Trash2, Filter, Loader2, Download, Upload } from 'lucide-react'
-import * as XLSX from 'xlsx'
+// xlsx-js-style: bản drop-in cùng API SheetJS nhưng ghi được style (font/border).
+// SheetJS community ('xlsx') không hỗ trợ style khi ghi file.
+import * as XLSX from 'xlsx-js-style'
 import * as api from '../../api/companyTables'
 import Modal from '../../components/ui/Modal'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
@@ -46,7 +48,28 @@ function ExportModal({ def, columns, rows, company, onClose }) {
   function doExport() {
     const header = ['STT', ...outFields.map((f) => f.label)]
     const body = rows.map((r, i) => [i + 1, ...outFields.map((f) => cellOf(f, r))])
-    const ws = XLSX.utils.aoa_to_sheet([header, ...body])
+    const aoa = [header, ...body]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+
+    // Format theo yêu cầu KH: font Aptos Narrow cỡ 11 + border mọi ô có dữ liệu (header + các dòng dữ liệu)
+    const thin = { style: 'thin', color: { rgb: 'FF000000' } }
+    const border = { top: thin, bottom: thin, left: thin, right: thin }
+    const nRows = aoa.length
+    const nCols = header.length
+    for (let r = 0; r < nRows; r++) {
+      for (let c = 0; c < nCols; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c })
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' }   // ô rỗng vẫn kẻ border
+        ws[addr].s = {
+          font: { name: 'Aptos Narrow', sz: 11, bold: r === 0 },
+          border,
+          alignment: { vertical: 'center', wrapText: false },
+        }
+      }
+    }
+    // Bảo đảm vùng dữ liệu bao trùm mọi ô vừa tạo
+    ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: nRows - 1, c: nCols - 1 } })
+
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, def.name.substring(0, 30))
     XLSX.writeFile(wb, `${def.tableKey}_${(company.name || company.id).replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`)

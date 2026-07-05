@@ -1,4 +1,5 @@
-import * as XLSX from 'xlsx'
+// Dùng chung xlsx-js-style (superset của SheetJS) để cả dự án chỉ 1 thư viện Excel.
+import * as XLSX from 'xlsx-js-style'
 
 // Giới hạn kích thước file import — giảm thiểu ReDoS/DoS của xlsx (SheetJS chưa có bản vá).
 // Xem docs/14_SECURITY_AUDIT.md (H3). Cách khắc phục triệt để: thay thư viện đọc Excel.
