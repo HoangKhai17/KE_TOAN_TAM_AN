@@ -125,6 +125,7 @@ function columnsFor(key, lbl) {
     case 'overview':
       return [
         { header: 'Tên công ty',       get: (r) => safe(r.name) },
+        { header: 'Tên viết tắt',      get: (r) => safe(r.short_name) },
         { header: 'Mã số thuế',        get: (r) => safe(r.tax_code) },
         { header: 'Loại hình',         get: (r) => lbl('business_type', r.business_type, BUSINESS_TYPE_VI) },
         { header: 'Ngành nghề',        get: (r) => safe(r.industry) },

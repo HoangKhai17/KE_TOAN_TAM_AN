@@ -250,6 +250,7 @@ export default function CompanyDetail() {
           </div>
           <div className={s.heroInfo}>
             <h1 className={s.heroName}>{company.name}</h1>
+            {company.shortName && <div className={s.heroShortName}>{company.shortName}</div>}
             <div className={s.heroBadges}>
               <StatusPill status={company.status} />
               {company.businessType && (
@@ -491,6 +492,7 @@ function BusinessInfoCard({ company }) {
       <div className={s.infoCardBody}>
         <div className={s.infoGrid}>
           <InfoField label="Tên công ty"        value={company.name} />
+          <InfoField label="Tên viết tắt"       value={company.shortName} />
           <InfoField label="Mã số thuế"         value={company.taxCode} />
           <InfoField label="Loại hình"          value={getLabel('business_type', company.businessType, BUSINESS_TYPE_LABELS[company.businessType] ?? company.businessType)} />
           <InfoField label="Ngành nghề"         value={company.industry} />

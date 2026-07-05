@@ -823,6 +823,7 @@ export default function Companies() {
                       </th>
                     )}
                     <FilterTh colKey="name">Tên công ty</FilterTh>
+                    <FilterTh colKey="shortName" className={s.tableCellVisible}>Tên viết tắt</FilterTh>
                     <FilterTh colKey="taxCode" className={s.tableCellVisible}>MST</FilterTh>
                     <FilterTh colKey="contactName" className={s.tableContactHead}>Người liên hệ</FilterTh>
                     <FilterTh colKey="assignedStaffName" className={s.tableCellVisible}>Phụ trách</FilterTh>
@@ -837,7 +838,7 @@ export default function Companies() {
                     Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} isAdmin={isAdmin} />)
                   ) : displayed.length === 0 ? (
                     <tr>
-                      <td colSpan={isAdmin ? 9 : 8}>
+                      <td colSpan={isAdmin ? 10 : 9}>
                         <div className={s.emptyState}>
                           <div className={s.emptyIcon}><Building2 size={26} /></div>
                           <p className={s.emptyTitle}>Không tìm thấy doanh nghiệp</p>
@@ -1005,6 +1006,11 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onDel
         </div>
       </td>
       <td className={s.tableCellVisible}>
+        {company.shortName
+          ? <span className={s.shortNameCell}>{company.shortName}</span>
+          : <span className={s.muted}>—</span>}
+      </td>
+      <td className={s.tableCellVisible}>
         <span className={s.muted}>{company.taxCode || '—'}</span>
       </td>
       <td className={s.tableCellVisible}>
@@ -1087,6 +1093,7 @@ function SkeletonRow({ isAdmin }) {
         </div>
       </td>
       <td><div className={`${s.skeletonBlock} ${s.skeletonTax}`} /></td>
+      <td><div className={`${s.skeletonBlock} ${s.skeletonTax}`} /></td>
       <td><div className={`${s.skeletonBlock} ${s.skeletonContact}`} /></td>
       <td>
         <div className={s.companyStaffSkeletonRow}>
@@ -1149,6 +1156,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
   const isEdit = !!company
   const [form, setForm] = useState({
     name:             company?.name             ?? '',
+    shortName:        company?.shortName         ?? '',
     taxCode:          company?.taxCode          ?? '',
     businessType:     company?.businessType     ?? 'TNHH',
     address:          company?.address          ?? '',
@@ -1196,6 +1204,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     try {
       const body = {
         name:             form.name.trim(),
+        shortName:        form.shortName.trim()         || null,
         taxCode:          form.taxCode.trim()          || null,
         businessType:     form.businessType,
         address:          form.address.trim()          || null,
@@ -1254,6 +1263,18 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
                 autoFocus
               />
               {fe.name && <p className={s.formError}>{fe.name}</p>}
+            </div>
+            <div className={s.formFullRow}>
+              <label className={s.formLabel}>Tên viết tắt</label>
+              <input
+                type="text"
+                value={form.shortName}
+                onChange={set('shortName')}
+                className={inputCls('shortName')}
+                placeholder="VD: ABC Corp, Cty ABC..."
+                maxLength={100}
+              />
+              {fe.shortName && <p className={s.formError}>{fe.shortName}</p>}
             </div>
           </div>
           <div className={s.formGrid3}>

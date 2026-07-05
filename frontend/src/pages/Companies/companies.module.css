@@ -550,6 +550,13 @@
   word-break: break-word;
 }
 
+.shortNameCell {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-soft);
+  word-break: break-word;
+}
+
 /* ── Contact cell ────────────────────────────────────────── */
 
 .contactName {
@@ -1436,6 +1443,13 @@
   letter-spacing: -0.3px;
   margin: 0 0 8px;
   line-height: 1.2;
+}
+
+.heroShortName {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-table-muted);
+  margin: -4px 0 8px;
 }
 
 .heroBadges {

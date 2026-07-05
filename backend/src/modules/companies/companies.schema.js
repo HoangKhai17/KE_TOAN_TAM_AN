@@ -5,6 +5,7 @@ const COMPANY_STATUSES = ['active', 'inactive', 'terminated']
 
 const companyBaseSchema = z.object({
   name:             z.string().min(2).max(200),
+  shortName:        z.string().max(100).optional().nullable(),
   taxCode:          z.string().max(20).optional().nullable(),
   address:          z.string().optional().nullable(),
   businessType:     z.enum(BUSINESS_TYPES).default('TNHH'),
