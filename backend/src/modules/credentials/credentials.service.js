@@ -3,15 +3,17 @@ const audit     = require('../../lib/audit')
 const { encrypt, decrypt } = require('../../utils/encrypt')
 
 function toDto(row, includePassword = false) {
+  let plain = ''
+  try { plain = decrypt(row.encrypted_password, row.iv) } catch { plain = '' }
   return {
     id:         row.id,
     companyId:  row.company_id,
     systemName: row.system_name,
     systemUrl:  row.system_url ?? null,
-    username:   row.username,
-    password:   includePassword
-      ? decrypt(row.encrypted_password, row.iv)
-      : '***',
+    username:   row.username ?? '',
+    // Cho biết có mật khẩu hay không (không lộ mật khẩu) để UI hiển thị chính xác
+    hasPassword: plain.length > 0,
+    password:   includePassword ? plain : '***',
     notes:      row.notes ?? null,
     isActive:   row.is_active,
     createdBy:  row.created_by,
@@ -61,14 +63,14 @@ async function createCredential(companyId, data, user) {
   await assertCompanyAccess(companyId, user)
   const actorId = user.id
   const { systemName, systemUrl, username, password, notes, isActive = true } = data
-  const { ciphertext, iv } = encrypt(password)
+  const { ciphertext, iv } = encrypt(password ?? '')
 
   const { rows: [row] } = await query(
     `INSERT INTO company_credentials
        (company_id, system_name, system_url, username, encrypted_password, iv, notes, is_active, created_by, updated_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)
      RETURNING *`,
-    [companyId, systemName, systemUrl ?? null, username, ciphertext, iv, notes ?? null, isActive, actorId]
+    [companyId, systemName, systemUrl ?? null, username ?? '', ciphertext, iv, notes ?? null, isActive, actorId]
   )
   return toDto(row, false)
 }
@@ -87,12 +89,12 @@ async function updateCredential(companyId, id, data, user) {
 
   if (data.systemName !== undefined) { params.push(data.systemName); updates.push(`system_name = $${params.length}`) }
   if (data.systemUrl  !== undefined) { params.push(data.systemUrl ?? null); updates.push(`system_url = $${params.length}`) }
-  if (data.username   !== undefined) { params.push(data.username); updates.push(`username = $${params.length}`) }
+  if (data.username   !== undefined) { params.push(data.username ?? ''); updates.push(`username = $${params.length}`) }
   if (data.notes      !== undefined) { params.push(data.notes ?? null); updates.push(`notes = $${params.length}`) }
   if (data.isActive   !== undefined) { params.push(data.isActive); updates.push(`is_active = $${params.length}`) }
 
   if (data.password !== undefined) {
-    const { ciphertext, iv } = encrypt(data.password)
+    const { ciphertext, iv } = encrypt(data.password ?? '')
     params.push(ciphertext); updates.push(`encrypted_password = $${params.length}`)
     params.push(iv);         updates.push(`iv = $${params.length}`)
   }

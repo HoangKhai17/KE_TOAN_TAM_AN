@@ -25,8 +25,16 @@ function emptyForm() {
 // ── CredentialForm (shared by create/edit modals) ─────────────────────────────
 
 function CredentialForm({ initial, onSubmit, onClose, title }) {
-  // Always start password as empty in edit mode — user must type a new one to change it
-  const [form, setForm] = useState(initial ? { ...initial, password: '' } : emptyForm())
+  // Always start password as empty in edit mode — user must type a new one to change it.
+  // Chuẩn hoá null → '' để các field text luôn là chuỗi (tránh lỗi .trim() khi lưu).
+  const [form, setForm] = useState(initial ? {
+    systemName: initial.systemName ?? '',
+    systemUrl:  initial.systemUrl  ?? '',
+    username:   initial.username   ?? '',
+    password:   '',
+    notes:      initial.notes      ?? '',
+    isActive:   initial.isActive   ?? true,
+  } : emptyForm())
   const [showPw, setShowPw] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -37,9 +45,8 @@ function CredentialForm({ initial, onSubmit, onClose, title }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    // Chỉ bắt buộc Tên hệ thống — tên đăng nhập & mật khẩu là tuỳ chọn (theo yêu cầu KH)
     if (!form.systemName.trim()) { setError('Vui lòng nhập tên hệ thống'); return }
-    if (!form.username.trim())   { setError('Vui lòng nhập tên đăng nhập'); return }
-    if (!initial && !form.password.trim()) { setError('Vui lòng nhập mật khẩu'); return }
     setError(null)
     setSaving(true)
     try {
@@ -89,7 +96,7 @@ function CredentialForm({ initial, onSubmit, onClose, title }) {
           </div>
 
           <div>
-            <label className={`${s.formLabel} ${s.formLabelReq}`}>Tên đăng nhập</label>
+            <label className={s.formLabel}>Tên đăng nhập</label>
             <input
               type="text"
               value={form.username}
@@ -101,7 +108,7 @@ function CredentialForm({ initial, onSubmit, onClose, title }) {
           </div>
 
           <div>
-            <label className={`${s.formLabel} ${!initial ? s.formLabelReq : ''}`}>
+            <label className={s.formLabel}>
               Mật khẩu {initial && <span className={s.formLabelHint}>(bỏ trống = giữ nguyên)</span>}
             </label>
             <div style={{ position: 'relative' }}>
@@ -375,13 +382,15 @@ export default function CredentialsTab({ company }) {
                       <ExternalLink size={13} />
                     </a>
                   )}
-                  <button
-                    className={s.iconBtnSm}
-                    onClick={() => setRevealTarget(cred)}
-                    title="Xem mật khẩu"
-                  >
-                    <Eye size={13} />
-                  </button>
+                  {cred.hasPassword && (
+                    <button
+                      className={s.iconBtnSm}
+                      onClick={() => setRevealTarget(cred)}
+                      title="Xem mật khẩu"
+                    >
+                      <Eye size={13} />
+                    </button>
+                  )}
                   <button
                     className={s.iconBtnSm}
                     onClick={() => setEditTarget(cred)}
@@ -415,10 +424,10 @@ export default function CredentialsTab({ company }) {
 
               <div className={s.credCardMeta}>
                 <span className={s.credCardUsername}>
-                  <strong>Tài khoản:</strong> {cred.username}
+                  <strong>Tài khoản:</strong> {cred.username || '—'}
                 </span>
                 <span className={s.credCardPw}>
-                  <strong>Mật khẩu:</strong> •••••••
+                  <strong>Mật khẩu:</strong> {cred.hasPassword ? '•••••••' : '—'}
                 </span>
               </div>
 
