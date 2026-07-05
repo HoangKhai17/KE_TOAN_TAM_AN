@@ -59,12 +59,20 @@ function yearMonthToDates(year, month) {
   return { from: `${year}-${mm}-01`, to: `${year}-${mm}-${String(lastDay).padStart(2, '0')}` }
 }
 
+// Số ngày hoàn thành thực tế, tính INCLUSIVE (bắt đầu & hoàn thành cùng ngày = 1 ngày)
 function calcDays(task) {
   const base = task.startDate || task.createdAt
   if (!base) return null
   const start = parseISO(base)
   const end   = task.completedAt ? parseISO(task.completedAt) : new Date()
-  return Math.max(0, differenceInDays(end, start))
+  return Math.max(0, differenceInDays(end, start)) + 1
+}
+
+// Số ngày kế hoạch = ngày hết hạn − ngày bắt đầu, tính INCLUSIVE (cùng ngày = 1 ngày)
+function calcPlannedDays(task) {
+  const base = task.startDate || task.createdAt
+  if (!base || !task.dueDate) return null
+  return Math.max(0, differenceInDays(parseISO(task.dueDate), parseISO(base))) + 1
 }
 
 const STATUS_SELECT_CLASS = {
@@ -424,6 +432,7 @@ const TASK_LIST_COL_TYPE = {
   companyName:    'enum',
   startDate:      'dateRange',
   days:           'numberRange',
+  plannedDays:    'numberRange',
   status:         'enum',
   priority:       'enum',
   dueDate:        'dateRange',
@@ -434,13 +443,18 @@ function taskColFilterType(colKey) { return TASK_LIST_COL_TYPE[colKey] ?? 'text'
 
 // Raw value used for date/number filtering (must mirror what the column shows)
 function taskColRawDate(t, colKey)   { return colKey === 'startDate' ? (t.startDate || t.createdAt) : t.dueDate }
-function taskColRawNumber(t, colKey) { return colKey === 'days' ? calcDays(t) : progressPct(t) }
+function taskColRawNumber(t, colKey) {
+  if (colKey === 'days')        return calcDays(t)
+  if (colKey === 'plannedDays') return calcPlannedDays(t)
+  return progressPct(t)
+}
 
 function taskColSortKey(t, colKey) {
   switch (colKey) {
     case 'status':         return STATUS_RANK[t.status] ?? 99
     case 'priority':       return PRIORITY_RANK[t.priority] ?? 99
     case 'days':           { const d = calcDays(t);    return d == null ? Number.MAX_SAFE_INTEGER : d }
+    case 'plannedDays':    { const d = calcPlannedDays(t); return d == null ? Number.MAX_SAFE_INTEGER : d }
     case 'progress':       { const p = progressPct(t); return p == null ? -1 : p }
     case 'startDate':      return t.startDate || t.createdAt || ''
     case 'dueDate':        return t.dueDate || ''
@@ -840,6 +854,7 @@ function ListView({
               <Th colKey="title">Tiêu đề / Khách hàng</Th>
               <Th colKey="startDate">Ngày bắt đầu</Th>
               <Th colKey="days">Số ngày hoàn thành</Th>
+              <Th colKey="plannedDays">Số ngày kế hoạch</Th>
               <Th colKey="status">Trạng thái</Th>
               <Th colKey="priority">Ưu tiên</Th>
               <Th colKey="dueDate">Hết hạn</Th>
@@ -853,7 +868,7 @@ function ListView({
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className={s.tr}>
                   <td className={s.tdCheck} />
-                  {[240, 80, 55, 110, 80, 80, 90, 110, 70].map((w, j) => (
+                  {[240, 80, 55, 55, 110, 80, 80, 90, 110, 70].map((w, j) => (
                     <td key={j} className={s.td}>
                       <div className={s.tableSkeletonBar} style={{ '--skeleton-w': `${w}px` }} />
                     </td>
@@ -862,7 +877,7 @@ function ListView({
               ))
             ) : tasks.length === 0 ? (
               <tr>
-                <td colSpan={10}>
+                <td colSpan={11}>
                   <div className={s.emptyBox}>
                     <div className={s.emptyIcon}><ClipboardList size={32} /></div>
                     <p className={s.emptyTitle}>Không có công việc</p>
@@ -874,6 +889,7 @@ function ListView({
               const overdue = isTaskOverdue(t)
               const pct     = progressPct(t)
               const days    = calcDays(t)
+              const planned = calcPlannedDays(t)
               return (
                 <tr
                   key={t.id}
@@ -897,12 +913,19 @@ function ListView({
                     <span className={s.dueDateNormal}>{fmtDate(t.startDate || t.createdAt)}</span>
                   </td>
 
-                  {/* Số ngày thực hiện */}
+                  {/* Số ngày hoàn thành (thực tế) */}
                   <td className={s.td}>
                     {days !== null ? (
                       <span className={`${s.daysBadge} ${t.status === 'completed' ? s.daysBadgeDone : ''}`}>
                         {days}d
                       </span>
+                    ) : <span className={s.mutedDash}>—</span>}
+                  </td>
+
+                  {/* Số ngày kế hoạch (hết hạn − bắt đầu) */}
+                  <td className={s.td}>
+                    {planned !== null ? (
+                      <span className={`${s.daysBadge} ${s.daysBadgePlan}`}>{planned}d</span>
                     ) : <span className={s.mutedDash}>—</span>}
                   </td>
 

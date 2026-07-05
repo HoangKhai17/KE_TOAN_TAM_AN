@@ -2629,6 +2629,13 @@
   border-color: #86efac;
 }
 
+/* Số ngày kế hoạch — xanh dương để phân biệt với số ngày hoàn thành thực tế */
+.daysBadgePlan {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
 /* ── Board card delete button ────────────────────────────────── */
 
 .boardCardActions {
