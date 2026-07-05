@@ -116,4 +116,22 @@ router.post('/:typeKey/options', ...admin, validate(addOptionSchema), ctrl.addOp
  */
 router.post('/:typeKey/options/:optionKey/toggle', ...admin, ctrl.toggleOption)
 
+/**
+ * @openapi
+ * /enums/{typeKey}/options/{optionKey}:
+ *   delete:
+ *     tags: [Enums]
+ *     summary: Delete an enum option if unused (admin only)
+ *     description: Blocked with 409 if the option value is referenced by any data row.
+ *     parameters:
+ *       - { in: path, name: typeKey,   required: true, schema: { type: string } }
+ *       - { in: path, name: optionKey, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Deleted }
+ *       403: { description: Non-editable system enum }
+ *       404: { description: Not found }
+ *       409: { description: Option is in use }
+ */
+router.delete('/:typeKey/options/:optionKey', ...admin, ctrl.deleteOption)
+
 module.exports = router

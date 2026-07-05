@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { Pencil, Save, X, Loader2, ChevronRight, Plus, Power } from 'lucide-react'
-import { fetchAllEnums, updateEnumOptionLabel, addEnumOption, toggleEnumOption } from '../../api/enums'
+import { Pencil, Save, X, Loader2, ChevronRight, Plus, Power, Trash2 } from 'lucide-react'
+import { fetchAllEnums, updateEnumOptionLabel, addEnumOption, toggleEnumOption, deleteEnumOption } from '../../api/enums'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
 import s from './settings.module.css'
@@ -29,6 +29,8 @@ export default function EnumManagementSection() {
 
   // Toggle active state
   const [togglingKey, setTogglingKey] = useState(null)
+  // Delete state
+  const [deletingKey, setDeletingKey] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -104,6 +106,31 @@ export default function EnumManagementSection() {
       addToast('Không thể cập nhật', 'error')
     } finally {
       setTogglingKey(null)
+    }
+  }
+
+  // ── Delete option (chỉ khi chưa dùng) ──────────────────────────────────────
+
+  async function handleDelete(optionKey, label) {
+    if (!window.confirm(`Xóa mục "${label}"?\nChỉ xóa được khi mục này chưa được sử dụng trong dữ liệu.`)) return
+    setDeletingKey(optionKey)
+    try {
+      await deleteEnumOption(activeType, optionKey)
+      setAllEnums((prev) => ({
+        ...prev,
+        [activeType]: {
+          ...prev[activeType],
+          options: prev[activeType].options.filter((o) => o.key !== optionKey),
+        },
+      }))
+      syncStore()
+      addToast(`Đã xóa "${label}"`, 'success')
+    } catch (err) {
+      // Hiển thị lý do không xóa được (vd: đang được sử dụng, hoặc danh mục hệ thống)
+      const msg = err.response?.data?.error?.message ?? 'Không thể xóa mục này'
+      addToast(msg, 'error')
+    } finally {
+      setDeletingKey(null)
     }
   }
 
@@ -316,6 +343,16 @@ export default function EnumManagementSection() {
                               : <Power size={13} />
                             }
                           </button>
+                          {activeData.isEditable !== false && editKey !== opt.key && (
+                            <button
+                              className={`${s.iconBtn} ${s.iconBtnDanger}`}
+                              onClick={() => handleDelete(opt.key, opt.label)}
+                              disabled={deletingKey === opt.key}
+                              title="Xóa (nếu chưa dùng)"
+                            >
+                              {deletingKey === opt.key ? <Loader2 size={13} /> : <Trash2 size={13} />}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

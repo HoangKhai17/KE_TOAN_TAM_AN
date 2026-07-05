@@ -49,4 +49,13 @@ async function toggleOption(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listAllEnums, getEnumType, updateOptionLabel, addOption, toggleOption }
+async function deleteOption(req, res, next) {
+  try {
+    const { typeKey, optionKey } = req.params
+    const result = await svc.deleteOption(typeKey, optionKey)
+    if (result?.notFound) return res.status(404).json({ success: false, error: { message: 'Enum option not found' } })
+    res.json({ success: true })
+  } catch (err) { next(err) }
+}
+
+module.exports = { listAllEnums, getEnumType, updateOptionLabel, addOption, toggleOption, deleteOption }

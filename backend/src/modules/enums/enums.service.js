@@ -84,4 +84,58 @@ async function toggleOption(typeKey, optionKey) {
   }
 }
 
-module.exports = { listAllEnums, listEnumType, updateOptionLabel, addOption, toggleOption }
+// Các type không phải native PG enum (cột varchar) — map thủ công tới nơi lưu giá trị
+const NON_ENUM_USAGE = {
+  task_source: [{ table: 'tasks', column: 'source' }],
+}
+
+// Tìm mọi cột (bảng.cột) đang dùng giá trị của một enum type.
+// Với native PG enum: tra catalog (tự động, không hardcode). Với type varchar: dùng NON_ENUM_USAGE.
+async function findUsageColumns(typeKey) {
+  const { rows } = await query(`
+    SELECT c.relname AS tbl, a.attname AS col
+    FROM pg_type ty
+    JOIN pg_attribute a ON a.atttypid = ty.oid
+    JOIN pg_class c ON c.oid = a.attrelid AND c.relkind = 'r'
+    JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+    WHERE ty.typname = $1 AND ty.typtype = 'e' AND a.attnum > 0 AND NOT a.attisdropped
+  `, [typeKey])
+  if (rows.length) return rows.map((r) => ({ table: r.tbl, column: r.col }))
+  return NON_ENUM_USAGE[typeKey] ?? []
+}
+
+async function deleteOption(typeKey, optionKey) {
+  const { rows: typeRows } = await query(
+    'SELECT id, is_editable FROM enum_types WHERE type_key = $1', [typeKey]
+  )
+  if (typeRows.length === 0) return { notFound: true }
+  if (!typeRows[0].is_editable) {
+    throw Object.assign(new Error('Danh mục hệ thống này không cho phép xóa'), { status: 403 })
+  }
+
+  const { rows: optRows } = await query(
+    'SELECT id, label FROM enum_options WHERE type_id = $1 AND option_key = $2',
+    [typeRows[0].id, optionKey]
+  )
+  if (optRows.length === 0) return { notFound: true }
+
+  // Kiểm tra đang được sử dụng trong dữ liệu thực tế
+  const cols = await findUsageColumns(typeKey)
+  for (const { table, column } of cols) {
+    const { rows: used } = await query(
+      `SELECT 1 FROM "${table}" WHERE "${column}"::text = $1 LIMIT 1`, [optionKey]
+    )
+    if (used.length > 0) {
+      throw Object.assign(
+        new Error(`Không thể xóa "${optRows[0].label}" vì đang được sử dụng trong dữ liệu (bảng ${table}). Bạn có thể tắt (ẩn) mục này thay vì xóa.`),
+        { status: 409 }
+      )
+    }
+  }
+
+  await query('DELETE FROM enum_options WHERE id = $1', [optRows[0].id])
+  enumsLib.invalidate()
+  return { deleted: true }
+}
+
+module.exports = { listAllEnums, listEnumType, updateOptionLabel, addOption, toggleOption, deleteOption }

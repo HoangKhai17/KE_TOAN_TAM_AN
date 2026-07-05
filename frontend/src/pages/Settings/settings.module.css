@@ -804,6 +804,9 @@
 .iconBtnActivate          { background: #f0fdf4; color: #10b981; border: 1px solid #a7f3d0; }
 .iconBtnActivate:hover    { background: #dcfce7; color: #047857; border-color: #6ee7b7; }
 
+.iconBtnDanger            { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.iconBtnDanger:hover      { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+
 .pillWarn {
   display: inline-flex;
   align-items: center;
