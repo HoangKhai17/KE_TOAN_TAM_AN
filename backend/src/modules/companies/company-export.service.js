@@ -196,7 +196,8 @@ function columnsFor(key, lbl) {
         { header: 'Hệ thống',  get: (r) => safe(r.system_name) },
         { header: 'URL',       get: (r) => safe(r.system_url) },
         { header: 'Tài khoản', get: (r) => safe(r.username) },
-        { header: 'Mật khẩu',  get: (r) => safe(r.__password) },
+        // __password chỉ có khi được phép nhúng (Excel). Chế độ xem → '***', tiết lộ theo yêu cầu.
+        { header: 'Mật khẩu',  get: (r) => (r.__password !== undefined ? safe(r.__password) : '***') },
         { header: 'Ghi chú',   get: (r) => safe(r.notes) },
         { header: 'Cập nhật',  get: (r) => fmtDateTime(r.updated_at) },
       ]
@@ -261,7 +262,7 @@ async function fetchSection(key, companyIds, includeCredentials) {
       )).rows
     case 'credentials': {
       const rows = (await query(
-        `SELECT company_id, system_name, system_url, username, encrypted_password, iv, notes, updated_at
+        `SELECT id, company_id, system_name, system_url, username, encrypted_password, iv, notes, updated_at
          FROM company_credentials WHERE company_id = ANY($1)
          ORDER BY company_id, system_name`,
         [companyIds],
@@ -320,23 +321,27 @@ function zipToBuffer(files) {
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────────
-async function exportCompanies({ companyIds, sections, defIds = [], includeCredentials = false, layout = 'aggregate', user = null }) {
-  // RBAC: staff chỉ được xuất dữ liệu công ty mình phụ trách (giống rule danh sách công ty).
-  // Lọc companyIds về đúng phạm vi trước khi truy vấn — admin giữ nguyên toàn quyền.
-  if (user && user.role !== 'admin') {
-    const { rows } = await query(
-      'SELECT id FROM companies WHERE id = ANY($1) AND assigned_staff_id = $2',
-      [companyIds, user.id],
+// RBAC: staff chỉ được xem/xuất dữ liệu công ty mình phụ trách (giống rule danh sách công ty).
+// Lọc companyIds về đúng phạm vi — admin giữ nguyên toàn quyền. Dùng chung cho export + overview.
+async function filterCompanyIdsForUser(companyIds, user) {
+  if (!user || user.role === 'admin') return companyIds
+  const { rows } = await query(
+    'SELECT id FROM companies WHERE id = ANY($1) AND assigned_staff_id = $2',
+    [companyIds, user.id],
+  )
+  const allowed = new Set(rows.map((r) => r.id))
+  const filtered = companyIds.filter((id) => allowed.has(id))
+  if (filtered.length === 0) {
+    throw Object.assign(
+      new Error('Bạn chỉ được xem/xuất dữ liệu công ty do mình phụ trách'),
+      { status: 403 },
     )
-    const allowed = new Set(rows.map((r) => r.id))
-    companyIds = companyIds.filter((id) => allowed.has(id))
-    if (companyIds.length === 0) {
-      throw Object.assign(
-        new Error('Bạn chỉ được xuất dữ liệu công ty do mình phụ trách'),
-        { status: 403 },
-      )
-    }
   }
+  return filtered
+}
+
+async function exportCompanies({ companyIds, sections, defIds = [], includeCredentials = false, layout = 'aggregate', user = null }) {
+  companyIds = await filterCompanyIdsForUser(companyIds, user)
 
   const lbl = await loadLbl()
 
@@ -456,4 +461,91 @@ async function exportCompanies({ companyIds, sections, defIds = [], includeCrede
   return { buffer: Buffer.from(buffer), filename: `TongHop_CongTy_${stamp}.xlsx`, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
 }
 
-module.exports = { exportCompanies, FIXED_SECTION_KEYS }
+// ── Overview (JSON để xem trên hệ thống) ────────────────────────────────────────
+//
+// Trả về đúng dữ liệu như bản Excel "aggregate" nhưng dạng JSON để render bảng.
+// Mật khẩu KHÔNG nhúng ở đây (embedPasswords=false) → cột Mật khẩu = '***', kèm
+// credentialId để front-end tiết lộ theo yêu cầu (ghi audit log qua endpoint reveal).
+// Mỗi dòng có companyId để điều hướng sang chi tiết công ty.
+async function assembleOverview({ companyIds, sections = [], defIds = [], includeCredentials = false, user = null }) {
+  companyIds = await filterCompanyIdsForUser(companyIds, user)
+
+  const lbl = await loadLbl()
+  const fixedKeys = FIXED_SECTION_KEYS.filter(
+    (k) => sections.includes(k) && (k !== 'credentials' || includeCredentials),
+  )
+
+  const companies = (await query(
+    `SELECT c.*, u.name AS assigned_staff_name
+     FROM companies c LEFT JOIN users u ON u.id = c.assigned_staff_id
+     WHERE c.id = ANY($1) ORDER BY c.name`,
+    [companyIds],
+  )).rows
+  const cInfo = new Map(companies.map((c) => [c.id, { name: c.name, taxCode: c.tax_code }]))
+
+  // Fixed sections (trừ overview) — embedPasswords=false (không giải mã mật khẩu)
+  const fixedRows = {}
+  for (const key of fixedKeys) {
+    if (key === 'overview') continue
+    fixedRows[key] = await fetchSection(key, companyIds, false)
+  }
+
+  // Generic tables
+  let defs = []
+  const defColumns = {}
+  const defRows = {}
+  if (defIds.length) {
+    defs = (await query(
+      `SELECT id, name, table_key FROM company_table_defs WHERE id = ANY($1) ORDER BY sort_order, name`,
+      [defIds],
+    )).rows
+    const cols = (await query(
+      `SELECT * FROM company_table_columns WHERE def_id = ANY($1) AND is_active IS NOT FALSE ORDER BY sort_order, created_at`,
+      [defIds],
+    )).rows
+    for (const c of cols) (defColumns[c.def_id] ??= []).push(c)
+    const rws = (await query(
+      `SELECT def_id, company_id, data FROM company_table_rows
+       WHERE def_id = ANY($1) AND company_id = ANY($2)
+       ORDER BY def_id, company_id, position, created_at`,
+      [defIds, companyIds],
+    )).rows
+    for (const r of rws) (defRows[r.def_id] ??= []).push(r)
+  }
+
+  const out = []
+  for (const key of fixedKeys) {
+    const cols = columnsFor(key, lbl)
+    if (key === 'overview') {
+      out.push({
+        key, label: SECTION_LABELS[key],
+        columns: cols.map((c) => c.header),
+        rows: companies.map((c) => ({ cells: cols.map((col) => col.get(c)), companyId: c.id })),
+      })
+      continue
+    }
+    const columns = ['Công ty', 'MST', ...cols.map((c) => c.header)]
+    const rows = []
+    for (const r of (fixedRows[key] ?? [])) {
+      const info = cInfo.get(r.company_id) ?? {}
+      const row = { cells: [info.name ?? '', info.taxCode ?? '', ...cols.map((c) => c.get(r))], companyId: r.company_id }
+      if (key === 'credentials') row.credentialId = r.id  // để tiết lộ mật khẩu theo yêu cầu
+      rows.push(row)
+    }
+    out.push({ key, label: SECTION_LABELS[key], columns, rows })
+  }
+  for (const def of defs) {
+    const cols = defColumns[def.id] ?? []
+    const columns = ['Công ty', 'MST', ...cols.map((c) => c.label)]
+    const rows = []
+    for (const r of (defRows[def.id] ?? [])) {
+      const info = cInfo.get(r.company_id) ?? {}
+      rows.push({ cells: [info.name ?? '', info.taxCode ?? '', ...cols.map((c) => safe(genCell(c, r.data)))], companyId: r.company_id })
+    }
+    out.push({ key: `def:${def.id}`, label: def.name, columns, rows })
+  }
+
+  return { companyCount: companies.length, sections: out }
+}
+
+module.exports = { exportCompanies, assembleOverview, FIXED_SECTION_KEYS }

@@ -105,6 +105,9 @@ router.post('/', ...admin, validate(createCompanySchema), ctrl.createCompany)
 // Admin: mọi công ty. Staff: chỉ công ty mình phụ trách (lọc trong service).
 router.post('/export', ...auth, ctrl.exportCompanies)
 
+// Overview: xem tổng hợp dữ liệu trên hệ thống (JSON) — cùng RBAC như export
+router.post('/overview', ...auth, ctrl.overviewCompanies)
+
 /**
  * @openapi
  * /companies/{id}:

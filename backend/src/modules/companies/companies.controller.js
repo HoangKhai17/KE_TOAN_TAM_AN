@@ -142,4 +142,29 @@ async function exportCompanies(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote, exportCompanies }
+async function overviewCompanies(req, res, next) {
+  try {
+    const { companyIds, sections = [], defIds = [], includeCredentials = false } = req.body ?? {}
+
+    if (!Array.isArray(companyIds) || companyIds.length === 0) {
+      return res.status(400).json({ success: false, error: { message: 'Chưa chọn công ty để xem' } })
+    }
+    if (companyIds.length > 500) {
+      return res.status(400).json({ success: false, error: { message: 'Tối đa 500 công ty mỗi lần xem' } })
+    }
+    if ((!Array.isArray(sections) || sections.length === 0) && (!Array.isArray(defIds) || defIds.length === 0)) {
+      return res.status(400).json({ success: false, error: { message: 'Chưa chọn nội dung để xem' } })
+    }
+
+    const data = await exportSvc.assembleOverview({
+      companyIds,
+      sections: Array.isArray(sections) ? sections : [],
+      defIds: Array.isArray(defIds) ? defIds : [],
+      includeCredentials: Boolean(includeCredentials),
+      user: req.user,
+    })
+    res.json({ success: true, data })
+  } catch (err) { next(err) }
+}
+
+module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote, exportCompanies, overviewCompanies }

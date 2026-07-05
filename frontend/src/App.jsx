@@ -13,6 +13,7 @@ import Attendance from './pages/Attendance/Attendance'
 import AttendanceAdmin from './pages/Attendance/AttendanceAdmin'
 import Companies from './pages/Companies/Companies'
 import CompanyDetail from './pages/Companies/CompanyDetail'
+import CompanyOverview from './pages/Companies/CompanyOverview'
 import Settings from './pages/Settings/Settings'
 import Tasks from './pages/Tasks/Tasks'
 import TaskDetail from './pages/Tasks/TaskDetail'
@@ -127,6 +128,10 @@ function AppRoutes() {
       <Route
         path="/companies"
         element={<ProtectedRoute><Companies /></ProtectedRoute>}
+      />
+      <Route
+        path="/companies/overview"
+        element={<ProtectedRoute><CompanyOverview /></ProtectedRoute>}
       />
       <Route
         path="/companies/:id"

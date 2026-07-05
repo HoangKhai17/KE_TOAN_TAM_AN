@@ -4,7 +4,7 @@ import { invalidateRefCompanies, useStaffOptions } from '../../hooks/useReferenc
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2,
-  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X, Filter, Download,
+  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X, Filter, Download, LayoutGrid,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -644,6 +644,20 @@ export default function Companies() {
             </p>
           </div>
           <div className={s.pageHeaderActions}>
+            {/* Xem tổng quan trên hệ thống — cùng phạm vi (đã tick / toàn bộ đang lọc) như xuất Excel */}
+            <button
+              className={s.btnOutline}
+              onClick={() => navigate('/companies/overview', {
+                state: {
+                  companyIds: exportTargets.map((c) => c.id),
+                  defIds: customDefs.map((d) => d.id),
+                  scopeLabel: selectedCompanies.length > 0 ? `${selectedCompanies.length} công ty đã chọn` : 'toàn bộ đang lọc',
+                },
+              })}
+              disabled={companies.length === 0}
+            >
+              <LayoutGrid size={14} /> Tổng quan
+            </button>
             {/* Staff cũng được xuất — chỉ gồm công ty mình phụ trách (backend đã chốt quyền) */}
             <button className={s.btnOutline} onClick={() => setShowExport(true)} disabled={companies.length === 0}>
               <Download size={14} /> Xuất Excel

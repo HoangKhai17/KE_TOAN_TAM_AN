@@ -19,6 +19,12 @@ export async function exportCompanies(body) {
   return { blob: res.data, filename }
 }
 
+// Xem tổng hợp dữ liệu công ty trên hệ thống (JSON) — cùng RBAC như export
+export async function overviewCompanies(body) {
+  const { data } = await api.post('/companies/overview', body, { timeout: 120000 })
+  return data.data  // { companyCount, sections: [{ key, label, columns, rows }] }
+}
+
 export async function createCompany(body) {
   const { data } = await api.post('/companies', body)
   return data.data.company

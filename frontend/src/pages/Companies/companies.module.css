@@ -5925,3 +5925,194 @@
 
 /* ── Companies header: action button group ── */
 .pageHeaderActions { display: flex; align-items: center; gap: 8px; }
+
+/* ── Company Overview page ─────────────────────────────────────────────────── */
+.ovEmptyPage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 16px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: var(--fs-md);
+}
+
+/* Chips bật/tắt nhóm */
+.ovChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.ovChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1.5px solid var(--color-border-soft, #e2e8f0);
+  background: #fff;
+  color: var(--color-muted);
+  border-radius: 999px;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  opacity: 0.6;
+}
+.ovChipOn {
+  border-color: #93c5fd;
+  background: linear-gradient(180deg, #f0f6ff 0%, #dbeafe 100%);
+  color: #1e3a8a;
+  opacity: 1;
+}
+.ovChipCount {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(30, 58, 138, 0.12);
+}
+
+/* Tabs */
+.ovTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 2px solid var(--color-border-soft, #e2e8f0);
+  margin-bottom: 14px;
+}
+.ovTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color var(--duration-fast);
+}
+.ovTab:hover { color: var(--color-primary); }
+.ovTabActive {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+.ovTabCount {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--color-border-soft, #eef2f7);
+  color: var(--color-muted);
+}
+.ovTabActive .ovTabCount {
+  background: var(--color-primary-ink-soft, #dbeafe);
+  color: var(--color-primary);
+}
+
+/* Toolbar */
+.ovToolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.ovSearch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  height: 34px;
+  border: 1.5px solid var(--color-border-soft, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-muted);
+  min-width: 260px;
+}
+.ovSearch input {
+  border: none;
+  outline: none;
+  background: none;
+  font-size: var(--fs-md);
+  width: 100%;
+  color: var(--color-text-strong);
+}
+.ovCount { font-size: var(--fs-sm); color: var(--color-muted); }
+
+.ovEmpty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: var(--fs-md);
+  background: #f8fbff;
+  border: 1.5px dashed var(--color-border-soft, #dbeafe);
+  border-radius: var(--radius-lg);
+}
+
+/* Bảng overview */
+.ovTable { font-size: var(--fs-sm); }
+.ovTable th, .ovTable td {
+  white-space: nowrap;
+  vertical-align: top;
+}
+.ovCell { white-space: pre-wrap; max-width: 360px; }
+.ovSttCol { width: 44px; text-align: right; color: var(--color-muted); }
+.ovCompanyLink {
+  color: var(--color-primary);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+}
+.ovCompanyLink:hover { text-decoration: underline; }
+
+/* Reveal mật khẩu */
+.ovRevealBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1.5px solid #93c5fd;
+  background: #f0f6ff;
+  color: #1e3a8a;
+  border-radius: 6px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+.ovRevealBtn:disabled { opacity: 0.6; cursor: default; }
+.ovPwRevealed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ovPwRevealed code {
+  font-family: var(--font-mono, monospace);
+  background: #fef9c3;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #713f12;
+}
+.ovIconBtn {
+  display: inline-flex;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-muted);
+  padding: 2px;
+}
+.ovIconBtn:hover { color: var(--color-primary); }
+
+/* Phân trang */
+.ovPager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 16px;
+}
+.ovPagerInfo { font-size: var(--fs-sm); color: var(--color-muted); font-weight: var(--fw-semibold); }
