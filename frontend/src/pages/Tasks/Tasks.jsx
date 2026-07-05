@@ -839,7 +839,7 @@ function ListView({
               </th>
               <Th colKey="title">Tiêu đề / Khách hàng</Th>
               <Th colKey="startDate">Ngày bắt đầu</Th>
-              <Th colKey="days">Số ngày</Th>
+              <Th colKey="days">Số ngày hoàn thành</Th>
               <Th colKey="status">Trạng thái</Th>
               <Th colKey="priority">Ưu tiên</Th>
               <Th colKey="dueDate">Hết hạn</Th>
