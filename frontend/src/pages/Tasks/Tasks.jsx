@@ -8,7 +8,7 @@ import {
 import {
   Plus, Search, RotateCcw, List, Columns, Layers,
   ChevronRight, ChevronDown, Filter, ClipboardList, Check,
-  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2,
+  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal,
 } from 'lucide-react'
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
@@ -429,20 +429,52 @@ const PRIORITY_RANK = { urgent: 1, high: 2, medium: 3, low: 4 }
 
 const TASK_LIST_COL_TYPE = {
   title:          'text',
-  companyName:    'enum',
+  companyShort:   'text',
   startDate:      'dateRange',
+  dueDate:        'dateRange',
   days:           'numberRange',
   plannedDays:    'numberRange',
+  source:         'enum',
+  createdAt:      'dateRange',
   status:         'enum',
   priority:       'enum',
-  dueDate:        'dateRange',
   progress:       'numberRange',
   assignedToName: 'enum',
 }
 function taskColFilterType(colKey) { return TASK_LIST_COL_TYPE[colKey] ?? 'text' }
 
+// Danh mục cột danh sách (thứ tự hiển thị + nhãn) — dùng cho render, bộ chọn cột, skeleton.
+// fixed: luôn hiện (không cho tắt).
+const TASK_COLUMNS = [
+  { key: 'title',          label: 'Tiêu đề',            fixed: true },
+  { key: 'companyShort',   label: 'Tên viết tắt' },
+  { key: 'startDate',      label: 'Ngày bắt đầu' },
+  { key: 'dueDate',        label: 'Hết hạn' },
+  { key: 'days',           label: 'Số ngày hoàn thành' },
+  { key: 'plannedDays',    label: 'Số ngày kế hoạch' },
+  { key: 'source',         label: 'Nguồn tạo' },
+  { key: 'createdAt',      label: 'Ngày tạo' },
+  { key: 'status',         label: 'Trạng thái' },
+  { key: 'priority',       label: 'Ưu tiên' },
+  { key: 'progress',       label: 'Tiến độ' },
+  { key: 'assignedToName', label: 'Giao cho' },
+]
+
+const TASK_COLS_KEY = 'tasks_hidden_cols_v1'
+function loadHiddenCols() {
+  try { const a = JSON.parse(sessionStorage.getItem(TASK_COLS_KEY)); return new Set(Array.isArray(a) ? a : []) }
+  catch { return new Set() }
+}
+function saveHiddenCols(set) {
+  try { sessionStorage.setItem(TASK_COLS_KEY, JSON.stringify([...set])) } catch { /* ignore */ }
+}
+
 // Raw value used for date/number filtering (must mirror what the column shows)
-function taskColRawDate(t, colKey)   { return colKey === 'startDate' ? (t.startDate || t.createdAt) : t.dueDate }
+function taskColRawDate(t, colKey) {
+  if (colKey === 'startDate') return t.startDate || t.createdAt
+  if (colKey === 'createdAt')  return t.createdAt
+  return t.dueDate
+}
 function taskColRawNumber(t, colKey) {
   if (colKey === 'days')        return calcDays(t)
   if (colKey === 'plannedDays') return calcPlannedDays(t)
@@ -458,6 +490,9 @@ function taskColSortKey(t, colKey) {
     case 'progress':       { const p = progressPct(t); return p == null ? -1 : p }
     case 'startDate':      return t.startDate || t.createdAt || ''
     case 'dueDate':        return t.dueDate || ''
+    case 'createdAt':      return t.createdAt || ''
+    case 'companyShort':   return (t.companyShortName || t.companyName || '').toLowerCase()
+    case 'source':         return t.source || ''
     case 'companyName':    return (t.companyName || '').toLowerCase()
     case 'assignedToName': return (t.assignedToName || '').toLowerCase()
     default:               return (t.title || '').toLowerCase()
@@ -805,9 +840,13 @@ function ListView({
   onStatusChange, onPriorityChange, onDueDateChange, onDelete,
   isAdmin,
   sortColState, hasColFilter, onOpenColFilter, colFilterCount = 0, hasColSort = false,
+  hiddenCols,
 }) {
   const getLabel    = useEnumsStore((st) => st.getLabel)
   const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.has(t.id))
+  const vis = (key) => !hiddenCols?.has(key)
+  const visibleDataCols = TASK_COLUMNS.filter((c) => c.fixed || vis(c.key)).length
+  const colSpanAll = visibleDataCols + 2   // + checkbox + actions
 
   function Th({ colKey, children }) {
     const active = hasColFilter(colKey) || sortColState?.col === colKey
@@ -851,15 +890,18 @@ function ListView({
                   onChange={(e) => onSelectAll(e.target.checked)}
                 />
               </th>
-              <Th colKey="title">Tiêu đề / Khách hàng</Th>
-              <Th colKey="startDate">Ngày bắt đầu</Th>
-              <Th colKey="days">Số ngày hoàn thành</Th>
-              <Th colKey="plannedDays">Số ngày kế hoạch</Th>
-              <Th colKey="status">Trạng thái</Th>
-              <Th colKey="priority">Ưu tiên</Th>
-              <Th colKey="dueDate">Hết hạn</Th>
-              <Th colKey="progress">Tiến độ</Th>
-              <Th colKey="assignedToName">Giao cho</Th>
+              <Th colKey="title">Tiêu đề</Th>
+              {vis('companyShort') && <Th colKey="companyShort">Tên viết tắt</Th>}
+              {vis('startDate')    && <Th colKey="startDate">Ngày bắt đầu</Th>}
+              {vis('dueDate')      && <Th colKey="dueDate">Hết hạn</Th>}
+              {vis('days')         && <Th colKey="days">Số ngày hoàn thành</Th>}
+              {vis('plannedDays')  && <Th colKey="plannedDays">Số ngày kế hoạch</Th>}
+              {vis('source')       && <Th colKey="source">Nguồn tạo</Th>}
+              {vis('createdAt')    && <Th colKey="createdAt">Ngày tạo</Th>}
+              {vis('status')       && <Th colKey="status">Trạng thái</Th>}
+              {vis('priority')     && <Th colKey="priority">Ưu tiên</Th>}
+              {vis('progress')     && <Th colKey="progress">Tiến độ</Th>}
+              {vis('assignedToName') && <Th colKey="assignedToName">Giao cho</Th>}
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
             </tr>
           </thead>
@@ -868,16 +910,16 @@ function ListView({
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className={s.tr}>
                   <td className={s.tdCheck} />
-                  {[240, 80, 55, 55, 110, 80, 80, 90, 110, 70].map((w, j) => (
+                  {Array.from({ length: visibleDataCols }).map((_, j) => (
                     <td key={j} className={s.td}>
-                      <div className={s.tableSkeletonBar} style={{ '--skeleton-w': `${w}px` }} />
+                      <div className={s.tableSkeletonBar} style={{ '--skeleton-w': `${j === 0 ? 220 : 80}px` }} />
                     </td>
                   ))}
                 </tr>
               ))
             ) : tasks.length === 0 ? (
               <tr>
-                <td colSpan={11}>
+                <td colSpan={colSpanAll}>
                   <div className={s.emptyBox}>
                     <div className={s.emptyIcon}><ClipboardList size={32} /></div>
                     <p className={s.emptyTitle}>Không có công việc</p>
@@ -903,100 +945,141 @@ function ListView({
                       onChange={() => onToggleSelect(t.id)}
                     />
                   </td>
+                  {/* Tiêu đề (không còn tên KH bên dưới) */}
                   <td className={s.td}>
                     <div className={`${s.taskTitle} ${overdue ? s.taskTitleOverdue : ''}`}>{t.title}</div>
-                    {t.companyName && <div className={s.taskMeta}>{t.companyName}</div>}
                   </td>
+
+                  {/* Tên viết tắt (thiếu thì lấy tên công ty) */}
+                  {vis('companyShort') && (
+                    <td className={s.td}>
+                      {(t.companyShortName || t.companyName)
+                        ? <span className={s.taskMeta}>{t.companyShortName || t.companyName}</span>
+                        : <span className={s.mutedDash}>—</span>}
+                    </td>
+                  )}
 
                   {/* Ngày bắt đầu */}
-                  <td className={s.td}>
-                    <span className={s.dueDateNormal}>{fmtDate(t.startDate || t.createdAt)}</span>
-                  </td>
+                  {vis('startDate') && (
+                    <td className={s.td}>
+                      <span className={s.dueDateNormal}>{fmtDate(t.startDate || t.createdAt)}</span>
+                    </td>
+                  )}
+
+                  {/* Hết hạn (cạnh ngày bắt đầu) */}
+                  {vis('dueDate') && (
+                    <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                      <ListDateField
+                        value={t.dueDate ?? ''}
+                        onChange={(e) => onDueDateChange(t, e.target.value)}
+                        isOverdue={overdue}
+                      />
+                    </td>
+                  )}
 
                   {/* Số ngày hoàn thành (thực tế) */}
-                  <td className={s.td}>
-                    {days !== null ? (
-                      <span className={`${s.daysBadge} ${t.status === 'completed' ? s.daysBadgeDone : ''}`}>
-                        {days}d
-                      </span>
-                    ) : <span className={s.mutedDash}>—</span>}
-                  </td>
+                  {vis('days') && (
+                    <td className={s.td}>
+                      {days !== null ? (
+                        <span className={`${s.daysBadge} ${t.status === 'completed' ? s.daysBadgeDone : ''}`}>
+                          {days}d
+                        </span>
+                      ) : <span className={s.mutedDash}>—</span>}
+                    </td>
+                  )}
 
                   {/* Số ngày kế hoạch (hết hạn − bắt đầu) */}
-                  <td className={s.td}>
-                    {planned !== null ? (
-                      <span className={`${s.daysBadge} ${s.daysBadgePlan}`}>{planned}d</span>
-                    ) : <span className={s.mutedDash}>—</span>}
-                  </td>
+                  {vis('plannedDays') && (
+                    <td className={s.td}>
+                      {planned !== null ? (
+                        <span className={`${s.daysBadge} ${s.daysBadgePlan}`}>{planned}d</span>
+                      ) : <span className={s.mutedDash}>—</span>}
+                    </td>
+                  )}
+
+                  {/* Nguồn tạo */}
+                  {vis('source') && (
+                    <td className={s.td}>
+                      <span className={s.taskMeta}>{getLabel('task_source', t.source, t.source === 'auto' ? 'Tự động' : 'Thủ công')}</span>
+                    </td>
+                  )}
+
+                  {/* Ngày tạo (hệ thống tự lấy) */}
+                  {vis('createdAt') && (
+                    <td className={s.td}>
+                      <span className={s.dueDateNormal}>{fmtDate(t.createdAt)}</span>
+                    </td>
+                  )}
 
                   {/* Quick edit: status */}
-                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={t.status}
-                      onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
-                      className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[t.status] ?? ''}`}
-                      title="Đổi trạng thái"
-                    >
-                      <option value={t.status}>
-                        {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
-                      </option>
-                      {(STATUS_TRANSITIONS[t.status] ?? []).map((st) => (
-                        <option key={st} value={st}>
-                          {getLabel('task_status', st, STATUS_LABELS[st])}
+                  {vis('status') && (
+                    <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={t.status}
+                        onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
+                        className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[t.status] ?? ''}`}
+                        title="Đổi trạng thái"
+                      >
+                        <option value={t.status}>
+                          {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
                         </option>
-                      ))}
-                    </select>
-                  </td>
+                        {(STATUS_TRANSITIONS[t.status] ?? []).map((st) => (
+                          <option key={st} value={st}>
+                            {getLabel('task_status', st, STATUS_LABELS[st])}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
 
                   {/* Quick edit: priority */}
-                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={t.priority ?? ''}
-                      onChange={(e) => onPriorityChange(t, e.target.value)}
-                      className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[t.priority] ?? ''}`}
-                      title="Đổi ưu tiên"
-                    >
-                      {['urgent', 'high', 'medium', 'low'].map((p) => (
-                        <option key={p} value={p}>
-                          {getLabel('task_priority', p, PRIORITY_LABELS[p])}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
+                  {vis('priority') && (
+                    <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={t.priority ?? ''}
+                        onChange={(e) => onPriorityChange(t, e.target.value)}
+                        className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[t.priority] ?? ''}`}
+                        title="Đổi ưu tiên"
+                      >
+                        {['urgent', 'high', 'medium', 'low'].map((p) => (
+                          <option key={p} value={p}>
+                            {getLabel('task_priority', p, PRIORITY_LABELS[p])}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
 
-                  {/* Quick edit: due date */}
-                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                    <ListDateField
-                      value={t.dueDate ?? ''}
-                      onChange={(e) => onDueDateChange(t, e.target.value)}
-                      isOverdue={overdue}
-                    />
-                  </td>
-
-                  <td className={s.td}>
-                    {pct !== null ? (
-                      <div className={s.progressWrap}>
-                        <div className={s.progressBar}>
-                          <div
-                            className={`${s.progressFill} ${s.progressFillDynamic} ${pct === 100 ? s.progressFillDone : ''}`}
-                            style={{ '--progress-width': `${pct}%` }}
-                          />
+                  {/* Tiến độ */}
+                  {vis('progress') && (
+                    <td className={s.td}>
+                      {pct !== null ? (
+                        <div className={s.progressWrap}>
+                          <div className={s.progressBar}>
+                            <div
+                              className={`${s.progressFill} ${s.progressFillDynamic} ${pct === 100 ? s.progressFillDone : ''}`}
+                              style={{ '--progress-width': `${pct}%` }}
+                            />
+                          </div>
+                          <span className={s.progressText}>{pct}%</span>
                         </div>
-                        <span className={s.progressText}>{pct}%</span>
-                      </div>
-                    ) : <span className={s.mutedDash}>—</span>}
-                  </td>
+                      ) : <span className={s.mutedDash}>—</span>}
+                    </td>
+                  )}
 
-                  <td className={s.td}>
-                    {t.assignedToName ? (
-                      <div className={s.assignedCell}>
-                        <div className={s.avatarXs}>{t.assignedToName[0]?.toUpperCase()}</div>
-                        <span>{t.assignedToName}</span>
-                      </div>
-                    ) : (
-                      <span className={s.mutedDash}>—</span>
-                    )}
-                  </td>
+                  {/* Giao cho */}
+                  {vis('assignedToName') && (
+                    <td className={s.td}>
+                      {t.assignedToName ? (
+                        <div className={s.assignedCell}>
+                          <div className={s.avatarXs}>{t.assignedToName[0]?.toUpperCase()}</div>
+                          <span>{t.assignedToName}</span>
+                        </div>
+                      ) : (
+                        <span className={s.mutedDash}>—</span>
+                      )}
+                    </td>
+                  )}
 
                   {/* Action column — always visible */}
                   <td className={s.tdAction} onClick={(e) => e.stopPropagation()}>
@@ -1144,6 +1227,21 @@ export default function Tasks() {
   const [colFilters, setColFilters]     = useState({})
   const [sortColState, setSortColState] = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup]   = useState(null)
+
+  // Ẩn/hiện cột — lưu sessionStorage (giữ sau F5)
+  const [hiddenCols, setHiddenCols] = useState(loadHiddenCols)
+  useEffect(() => { saveHiddenCols(hiddenCols) }, [hiddenCols])
+  function toggleColVisible(key) {
+    setHiddenCols((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+  const [showColMenu, setShowColMenu] = useState(false)
+  const colMenuRef = useRef(null)
+  useEffect(() => {
+    if (!showColMenu) return
+    function onDoc(e) { if (colMenuRef.current && !colMenuRef.current.contains(e.target)) setShowColMenu(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [showColMenu])
 
   // Stats (counts across base filters, ignoring status/priority/isOverdue)
   const [stats, setStats] = useState({
@@ -1423,7 +1521,9 @@ export default function Tasks() {
   const colDisplayLabel = useMemo(() => (row, colKey) => {
     switch (colKey) {
       case 'companyName':    return row.companyName || '(Không có)'
+      case 'companyShort':   return row.companyShortName || row.companyName || '(Không có)'
       case 'assignedToName': return row.assignedToName || '(Chưa giao)'
+      case 'source':         return getLabel('task_source', row.source, row.source === 'auto' ? 'Tự động' : 'Thủ công')
       case 'status':         return getLabel('task_status', row.status, STATUS_LABELS[row.status] ?? row.status)
       case 'priority':       return getLabel('task_priority', row.priority, PRIORITY_LABELS[row.priority] ?? row.priority)
       default: { const v = row[colKey]; return v != null && v !== '' ? String(v) : '(Trống)' }
@@ -1616,6 +1716,37 @@ export default function Tasks() {
                 <Layers size={13} /> Kanban nguồn
               </button>
             </div>
+
+            {view === 'list' && (
+              <div className={s.colMenuWrap} ref={colMenuRef}>
+                <button
+                  className={`${s.fullscreenBtn} ${showColMenu ? s.fullscreenActive : ''}`}
+                  onClick={() => setShowColMenu((v) => !v)}
+                  title="Chọn cột hiển thị"
+                >
+                  <SlidersHorizontal size={14} />
+                </button>
+                {showColMenu && (
+                  <div className={s.colMenu}>
+                    <div className={s.colMenuHead}>
+                      <span>Cột hiển thị</span>
+                      <button className={s.colMenuReset} onClick={() => setHiddenCols(new Set())}>Hiện tất cả</button>
+                    </div>
+                    {TASK_COLUMNS.map((c) => (
+                      <label key={c.key} className={`${s.colMenuItem} ${c.fixed ? s.colMenuItemFixed : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={c.fixed || !hiddenCols.has(c.key)}
+                          disabled={c.fixed}
+                          onChange={() => toggleColVisible(c.key)}
+                        />
+                        <span>{c.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <button
               className={`${s.fullscreenBtn} ${isFullscreen ? s.fullscreenActive : ''}`}
@@ -1939,6 +2070,7 @@ export default function Tasks() {
             onOpenColFilter={openColFilter}
             colFilterCount={colFilterCount}
             hasColSort={hasColSort}
+            hiddenCols={hiddenCols}
           />
         )}
 

@@ -58,6 +58,7 @@ function toDto(row) {
     description:            row.description ?? null,
     companyId:              row.company_id,
     companyName:            row.company_name ?? null,
+    companyShortName:       row.company_short_name ?? null,
     taskTypeId:             row.task_type_id ?? null,
     taskTypeName:           row.task_type_name ?? null,
     customerTaskScheduleId: row.customer_task_schedule_id ?? null,
@@ -84,7 +85,8 @@ function toDto(row) {
 
 const TASK_SELECT = `
   SELECT t.*,
-         c.name   AS company_name,
+         c.name       AS company_name,
+         c.short_name AS company_short_name,
          tt.name  AS task_type_name,
          ua.name  AS assigned_to_name,
          cl.checklist_total,

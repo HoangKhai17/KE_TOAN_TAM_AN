@@ -430,6 +430,12 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                     <span className={s.qvValue}>{task.slaDays} ngày</span>
                   </div>
                 )}
+
+                {/* Ngày tạo — hệ thống tự lấy khi tạo task (không cho sửa) */}
+                <div className={s.qvRow}>
+                  <span className={s.qvLabel}><Calendar size={11} /> Ngày tạo</span>
+                  <span className={s.qvValue}>{fmtDate(task.createdAt)}</span>
+                </div>
               </div>
 
               {/* ── RIGHT: checklist + description ── */}

@@ -1187,6 +1187,12 @@ export default function TaskDetail() {
                 <PriorityBadge priority={task.priority} />
               </div>
 
+              {/* Ngày tạo — hệ thống tự lấy khi tạo task (không cho sửa) */}
+              <div className={s.infoRow}>
+                <span className={s.infoRowLabel}>Ngày tạo</span>
+                <span className={s.infoRowValue}>{fmtDate(task.createdAt)}</span>
+              </div>
+
               {task.completedAt && (
                 <div className={s.infoRow}>
                   <span className={s.infoRowLabel}>Hoàn thành</span>
