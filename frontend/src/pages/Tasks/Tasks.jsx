@@ -1167,6 +1167,20 @@ function saveFilters(obj) {
   try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(obj)) } catch (_) { /* ignore storage errors */ }
 }
 
+// Bộ lọc header cột: enum là Set (không JSON hoá được) → chuyển Set↔Array khi lưu/khôi phục
+function serializeColFilters(cf) {
+  const out = {}
+  for (const [k, v] of Object.entries(cf || {})) out[k] = v instanceof Set ? [...v] : v
+  return out
+}
+function deserializeColFilters(obj) {
+  const out = {}
+  for (const [k, v] of Object.entries(obj || {})) {
+    out[k] = (taskColFilterType(k) === 'enum' && Array.isArray(v)) ? new Set(v) : v
+  }
+  return out
+}
+
 export default function Tasks() {
   const navigate      = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1223,9 +1237,9 @@ export default function Tasks() {
   const [sourceFilter, setSourceFilter]     = useState(initF.sourceFilter   ?? [])
   const [isOverdue, setIsOverdue]           = useState(initF.isOverdue      ?? false)
 
-  // Column-header filter (docs/018) — client-side over the loaded set
-  const [colFilters, setColFilters]     = useState({})
-  const [sortColState, setSortColState] = useState({ col: null, dir: 'asc' })
+  // Column-header filter (docs/018) — client-side over the loaded set. Khôi phục từ sessionStorage.
+  const [colFilters, setColFilters]     = useState(() => deserializeColFilters(initF.colFilters))
+  const [sortColState, setSortColState] = useState(initF.sortColState ?? { col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup]   = useState(null)
 
   // Ẩn/hiện cột — lưu sessionStorage (giữ sau F5)
@@ -1346,8 +1360,9 @@ export default function Tasks() {
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
       sortValue, searchInput, companyFilter, staffFilter,
       statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize,
+      colFilters: serializeColFilters(colFilters), sortColState,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize, colFilters, sortColState])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
