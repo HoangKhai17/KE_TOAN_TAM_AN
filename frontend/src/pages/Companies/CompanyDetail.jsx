@@ -110,6 +110,28 @@ export default function CompanyDetail() {
   const [activeTab, setActiveTab] = useState(() => loadActiveTab(id))
   const [customDefs, setCustomDefs] = useState([])
 
+  // ── Kéo ngang dải tab bằng chuột (desktop không có scroll ngang) ──────────────
+  const tabBarRef = useRef(null)
+  const dragRef   = useRef({ down: false, moved: false, startX: 0, startScroll: 0 })
+
+  function onTabBarMouseDown(e) {
+    const el = tabBarRef.current
+    if (!el) return
+    dragRef.current = { down: true, moved: false, startX: e.pageX, startScroll: el.scrollLeft }
+  }
+  function onTabBarMouseMove(e) {
+    const st = dragRef.current
+    if (!st.down || !tabBarRef.current) return
+    const dx = e.pageX - st.startX
+    if (Math.abs(dx) > 4) st.moved = true
+    if (st.moved) tabBarRef.current.scrollLeft = st.startScroll - dx
+  }
+  function endTabBarDrag() { dragRef.current.down = false }
+  // Nếu vừa kéo (không phải click) thì chặn click để không nhảy tab ngoài ý muốn
+  function onTabBarClickCapture(e) {
+    if (dragRef.current.moved) { e.preventDefault(); e.stopPropagation(); dragRef.current.moved = false }
+  }
+
   // Persist the active tab so a page reload (F5) returns to the same tab
   useEffect(() => {
     try { sessionStorage.setItem(ACTIVE_TAB_KEY(id), activeTab) } catch { /* ignore */ }
@@ -321,8 +343,16 @@ export default function CompanyDetail() {
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div className={s.tabBar}>
+      {/* Tab bar — cuộn ngang: kéo chuột trên dải tab hoặc kéo thanh cuộn */}
+      <div
+        className={s.tabBar}
+        ref={tabBarRef}
+        onMouseDown={onTabBarMouseDown}
+        onMouseMove={onTabBarMouseMove}
+        onMouseUp={endTabBarDrag}
+        onMouseLeave={endTabBarDrag}
+        onClickCapture={onTabBarClickCapture}
+      >
         {TABS.map(({ id: tid, label, icon: Icon }) => (
           <button
             key={tid}

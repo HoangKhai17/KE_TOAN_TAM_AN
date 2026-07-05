@@ -1540,10 +1540,25 @@
   border-bottom: 1.5px solid #e5e7eb;
   margin-bottom: 20px;
   overflow-x: auto;
-  scrollbar-width: none;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  cursor: grab;
+  /* Hiện thanh cuộn ngang mảnh để dùng chuột kéo được (desktop không có scroll ngang) */
+  scrollbar-width: thin;                       /* Firefox */
+  scrollbar-color: #cbd5e1 transparent;
 }
 
-.tabBar::-webkit-scrollbar { display: none; }
+.tabBar:active { cursor: grabbing; }
+
+/* WebKit (Chrome/Edge/Safari): thanh cuộn mảnh, chỉ hiện khi tab tràn ngang */
+.tabBar::-webkit-scrollbar { height: 8px; }
+.tabBar::-webkit-scrollbar-track { background: transparent; }
+.tabBar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.tabBar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 .tabBtn {
   position: relative;
