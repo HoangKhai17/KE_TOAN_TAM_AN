@@ -1254,6 +1254,7 @@ export default function Tasks() {
   const [priorityFilter, setPriorityFilter] = useState(initF.priorityFilter ?? [])
   const [sourceFilter, setSourceFilter]     = useState(initF.sourceFilter   ?? [])
   const [isOverdue, setIsOverdue]           = useState(initF.isOverdue      ?? false)
+  const [scheduleToday, setScheduleToday]   = useState(initF.scheduleToday  ?? false)
 
   // Column-header filter (docs/018) — client-side over the loaded set. Khôi phục từ sessionStorage.
   const [colFilters, setColFilters]     = useState(() => deserializeColFilters(initF.colFilters))
@@ -1380,10 +1381,10 @@ export default function Tasks() {
     saveFilters({
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
       sortValue, searchInput, companyFilter, staffFilter,
-      statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize,
+      statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize,
       colFilters: serializeColFilters(colFilters), sortColState, filterCollapsed,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize, colFilters, sortColState, filterCollapsed])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, colFilters, sortColState, filterCollapsed])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1392,8 +1393,9 @@ export default function Tasks() {
       search:      search                  || undefined,
       companyId:   companyFilter.length ? companyFilter : undefined,
       assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : (currentUser?.id || undefined),
-      dueDateFrom: dueDateFrom             || undefined,
-      dueDateTo:   dueDateTo               || undefined,
+      scheduleToday: scheduleToday ? true : undefined,
+      dueDateFrom: scheduleToday ? undefined : (dueDateFrom || undefined),
+      dueDateTo:   scheduleToday ? undefined : (dueDateTo   || undefined),
       limit: 1, page: 1,
     }
     const statusKeys = ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed']
@@ -1408,7 +1410,7 @@ export default function Tasks() {
       }
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, dueDateFrom, dueDateTo, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, companyFilter, staffFilter, dueDateFrom, dueDateTo, scheduleToday, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tasks list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
   // Tải "working set" (tối đa 500) rồi lọc/sắp/phân trang phía client (docs/018).
@@ -1421,16 +1423,18 @@ export default function Tasks() {
       status:      statusFilter.length   > 0 ? statusFilter   : undefined,
       priority:    priorityFilter.length > 0 ? priorityFilter : undefined,
       source:      sourceFilter.length   > 0 ? sourceFilter   : undefined,
-      isOverdue:   isOverdue      ? true : undefined,
-      dueDateFrom: dueDateFrom    || undefined,
-      dueDateTo:   dueDateTo      || undefined,
+      isOverdue:     scheduleToday ? undefined : (isOverdue ? true : undefined),
+      scheduleToday: scheduleToday ? true : undefined,
+      // "Hôm nay" cần cả việc quá hạn từ trước → bỏ giới hạn khoảng ngày (tháng)
+      dueDateFrom:   scheduleToday ? undefined : (dueDateFrom || undefined),
+      dueDateTo:     scheduleToday ? undefined : (dueDateTo   || undefined),
       audience:    'internal',
       limit:       500,
       page:        1,
       sortBy,
       sortDir,
     }
-  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id])
+  }, [search, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id])
 
   const listQuery = useQuery({
     queryKey: ['tasks', 'list', listParams],
@@ -1542,7 +1546,7 @@ export default function Tasks() {
     setSearchInput(''); setSearch('')
     setCompanyFilter([]); setStaffFilter([])
     setStatusFilter([]); setPriorityFilter([])
-    setSourceFilter([]); setIsOverdue(false)
+    setSourceFilter([]); setIsOverdue(false); setScheduleToday(false)
     setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
     setDueDateFrom(INIT_DATES.from)
     setDueDateTo(INIT_DATES.to)
@@ -1662,7 +1666,7 @@ export default function Tasks() {
   const activeFilterCount = [search].filter(Boolean).length
     + companyFilter.length + staffFilter.length
     + statusFilter.length + priorityFilter.length + sourceFilter.length
-    + (isOverdue ? 1 : 0)
+    + (isOverdue ? 1 : 0) + (scheduleToday ? 1 : 0)
 
   function toggleSelect(id) {
     setSelectedIds((prev) => {
@@ -1826,7 +1830,7 @@ export default function Tasks() {
             {/* NĂM */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Năm</label>
-              <select value={yearFilter} onChange={(e) => handleYearChange(e.target.value)} className={s.filterSelect}>
+              <select value={yearFilter} onChange={(e) => handleYearChange(e.target.value)} className={s.filterSelect} disabled={scheduleToday} title={scheduleToday ? '"Hôm nay" không dùng bộ lọc theo tháng' : undefined}>
                 <option value="">Tất cả năm</option>
                 {availableYears.map((y) => (
                   <option key={y} value={String(y)}>Năm {y}</option>
@@ -1837,7 +1841,7 @@ export default function Tasks() {
             {/* THÁNG */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Tháng</label>
-              <select value={monthFilter} onChange={(e) => handleMonthChange(e.target.value)} className={s.filterSelect} disabled={!yearFilter}>
+              <select value={monthFilter} onChange={(e) => handleMonthChange(e.target.value)} className={s.filterSelect} disabled={!yearFilter || scheduleToday}>
                 <option value="">Cả năm</option>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                   <option key={m} value={String(m)}>Tháng {m}</option>
@@ -1954,12 +1958,26 @@ export default function Tasks() {
               />
             </div>
 
+            {/* HÔM NAY — lịch làm việc hàng ngày (việc chưa xong đã tới lượt: đến hạn/quá hạn/đang làm) */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>&nbsp;</label>
+              <button
+                className={`${s.filterToggle} ${scheduleToday ? s.filterToggleActive : ''}`}
+                onClick={() => { setScheduleToday((p) => !p); setPage(1) }}
+                title="Lịch làm việc hôm nay: việc chưa hoàn thành đã bắt đầu (đến hạn hôm nay, quá hạn trước đó, đang trong giai đoạn làm)"
+              >
+                {scheduleToday ? '✓ ' : ''}Hôm nay
+              </button>
+            </div>
+
             {/* QUÁ HẠN */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>&nbsp;</label>
               <button
                 className={`${s.filterToggle} ${isOverdue ? s.filterToggleActive : ''}`}
                 onClick={() => { setIsOverdue((p) => !p); setPage(1) }}
+                disabled={scheduleToday}
+                title={scheduleToday ? '"Hôm nay" đã bao gồm việc quá hạn' : undefined}
               >
                 {isOverdue ? '✓ ' : ''}Quá hạn
               </button>
@@ -1969,7 +1987,7 @@ export default function Tasks() {
           )}
 
           {/* ── Active filter chips ── */}
-          {(yearFilter || monthFilter || staffFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || search) && (
+          {(yearFilter || monthFilter || staffFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || scheduleToday || search) && (
             <div className={s.filterChipsRow}>
               {(yearFilter || monthFilter) && (
                 <span className={s.filterChip}>
@@ -2007,6 +2025,12 @@ export default function Tasks() {
                   <button className={s.filterChipRemove} onClick={() => { setSourceFilter((prev) => prev.filter((x) => x !== src)); setPage(1) }}>×</button>
                 </span>
               ))}
+              {scheduleToday && (
+                <span className={s.filterChip}>
+                  Hôm nay
+                  <button className={s.filterChipRemove} onClick={() => { setScheduleToday(false); setPage(1) }}>×</button>
+                </span>
+              )}
               {isOverdue && (
                 <span className={`${s.filterChip} ${s.filterChipDanger}`}>
                   Quá hạn

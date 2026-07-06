@@ -114,7 +114,7 @@ async function listTasks(filters = {}) {
   const {
     page = 1, limit = 20,
     companyId, assignedTo, status, priority, source,
-    dueDateFrom, dueDateTo, periodLabel, isOverdue, search,
+    dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
     sortBy = 'created_at', sortDir = 'desc',
     audience = 'internal',
     forceAssignedTo,
@@ -193,7 +193,15 @@ async function listTasks(filters = {}) {
     baseParams.push(arr)
     baseConditions.push(`t.source = ANY($${baseParams.length})`)
   }
-  if (dueDateFrom && dueDateTo) {
+  // "Lịch làm việc hôm nay": việc CHƯA hoàn thành và ĐÃ tới lượt tính đến hôm nay:
+  //   - đến hạn hôm nay hoặc quá hạn trước đó  → due_date <= CURRENT_DATE
+  //   - đang trong giai đoạn làm (đã tới ngày bắt đầu, chưa tới hạn) → start_date <= CURRENT_DATE
+  // KHÔNG dùng created_at làm mốc: task chưa có ngày bắt đầu + hạn ở tương lai thì chưa hiện.
+  // Bỏ qua bộ lọc khoảng ngày (tháng) để lấy được cả việc quá hạn từ trước.
+  const scheduleTodayOn = scheduleToday === 'true' || scheduleToday === true
+  if (scheduleTodayOn) {
+    baseConditions.push(`t.status != 'completed' AND (t.due_date <= CURRENT_DATE OR t.start_date <= CURRENT_DATE)`)
+  } else if (dueDateFrom && dueDateTo) {
     // Overlap on the task's effective date range. COALESCE anchors a single-date task
     // (e.g. auto-generated tasks have only due_date) to that one date, so it matches
     // only the period that actually contains it. A task with NO dates at all yields
@@ -210,7 +218,7 @@ async function listTasks(filters = {}) {
     baseConditions.push(`COALESCE(t.start_date, t.due_date) <= $${baseParams.length}`)
   }
   if (periodLabel) { baseParams.push(periodLabel); baseConditions.push(`t.period_label = $${baseParams.length}`) }
-  if (isOverdue === 'true' || isOverdue === true) {
+  if (!scheduleTodayOn && (isOverdue === 'true' || isOverdue === true)) {
     baseConditions.push(`t.due_date < CURRENT_DATE AND t.status != 'completed'`)
   }
   if (search && search.trim()) {
