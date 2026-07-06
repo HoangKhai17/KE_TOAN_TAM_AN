@@ -10,11 +10,6 @@ import {
   ChevronRight, ChevronDown, Filter, ClipboardList, Check,
   Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal,
 } from 'lucide-react'
-import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
-  isSameMonth, format, addMonths, subMonths, isToday, differenceInDays, parseISO,
-  addDays, isAfter,
-} from 'date-fns'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
@@ -30,6 +25,7 @@ import {
   PRIORITY_LABELS, PRIORITY_CSS,
   isTaskOverdue, fmtDate, progressPct,
   completionKind, taskStatusLabel, canEditDueDate,
+  calcDays, calcPlannedDays,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -58,22 +54,6 @@ function yearMonthToDates(year, month) {
   const lastDay = new Date(parseInt(year, 10), m, 0).getDate()
   const mm = String(m).padStart(2, '0')
   return { from: `${year}-${mm}-01`, to: `${year}-${mm}-${String(lastDay).padStart(2, '0')}` }
-}
-
-// Số ngày hoàn thành thực tế, tính INCLUSIVE (bắt đầu & hoàn thành cùng ngày = 1 ngày)
-function calcDays(task) {
-  const base = task.startDate || task.createdAt
-  if (!base) return null
-  const start = parseISO(base)
-  const end   = task.completedAt ? parseISO(task.completedAt) : new Date()
-  return Math.max(0, differenceInDays(end, start)) + 1
-}
-
-// Số ngày kế hoạch = ngày hết hạn − ngày bắt đầu, tính INCLUSIVE (cùng ngày = 1 ngày)
-function calcPlannedDays(task) {
-  const base = task.startDate || task.createdAt
-  if (!base || !task.dueDate) return null
-  return Math.max(0, differenceInDays(parseISO(task.dueDate), parseISO(base))) + 1
 }
 
 const STATUS_SELECT_CLASS = {
@@ -1380,7 +1360,9 @@ export default function Tasks() {
     const base = {
       search:      search                  || undefined,
       companyId:   companyFilter.length ? companyFilter : undefined,
-      assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : (currentUser?.id || undefined),
+      // Staff: KHÔNG ép assignedTo — backend tự giới hạn phạm vi (việc được giao HOẶC
+      // việc thuộc công ty mình phụ trách). Ép assignedTo sẽ che mất việc đã nhờ đồng nghiệp hỗ trợ.
+      assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : undefined,
       scheduleToday: scheduleToday ? true : undefined,
       dueDateFrom: scheduleToday ? undefined : (dueDateFrom || undefined),
       dueDateTo:   scheduleToday ? undefined : (dueDateTo   || undefined),
@@ -1407,7 +1389,9 @@ export default function Tasks() {
     return {
       search:      search              || undefined,
       companyId:   companyFilter.length ? companyFilter : undefined,
-      assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : (currentUser?.id || undefined),
+      // Staff: KHÔNG ép assignedTo — backend tự giới hạn phạm vi (việc được giao HOẶC
+      // việc thuộc công ty mình phụ trách). Ép assignedTo sẽ che mất việc đã nhờ đồng nghiệp hỗ trợ.
+      assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : undefined,
       status:      statusFilter.length   > 0 ? statusFilter   : undefined,
       priority:    priorityFilter.length > 0 ? priorityFilter : undefined,
       source:      sourceFilter.length   > 0 ? sourceFilter   : undefined,

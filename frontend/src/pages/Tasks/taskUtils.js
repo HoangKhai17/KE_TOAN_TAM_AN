@@ -1,4 +1,4 @@
-import { format, parseISO, isBefore, startOfDay } from 'date-fns'
+import { format, parseISO, isBefore, startOfDay, differenceInDays } from 'date-fns'
 
 export const TASK_STATUSES = ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed']
 
@@ -52,6 +52,22 @@ export function fmtDateTime(iso) {
 export function progressPct(task) {
   if (!task.checklistTotal) return null
   return Math.round((task.checklistDone / task.checklistTotal) * 100)
+}
+
+// Số ngày hoàn thành thực tế, tính INCLUSIVE (bắt đầu & hoàn thành cùng ngày = 1 ngày)
+export function calcDays(task) {
+  const base = task.startDate || task.createdAt
+  if (!base) return null
+  const start = parseISO(base)
+  const end   = task.completedAt ? parseISO(task.completedAt) : new Date()
+  return Math.max(0, differenceInDays(end, start)) + 1
+}
+
+// Số ngày kế hoạch = ngày hết hạn − ngày bắt đầu, tính INCLUSIVE (cùng ngày = 1 ngày)
+export function calcPlannedDays(task) {
+  const base = task.startDate || task.createdAt
+  if (!base || !task.dueDate) return null
+  return Math.max(0, differenceInDays(parseISO(task.dueDate), parseISO(base))) + 1
 }
 
 // ── Hoàn thành trước/trễ hạn (dẫn xuất từ completed_at vs due_date) ─────────────

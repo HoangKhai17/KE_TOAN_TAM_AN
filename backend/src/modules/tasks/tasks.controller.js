@@ -14,8 +14,10 @@ async function listTasks(req, res, next) {
       limit:            Math.min(1000, Math.max(1, parseInt(limit, 10))),
       status:           status   ? (Array.isArray(status)   ? status   : [status])   : undefined,
       priority:         priority ? (Array.isArray(priority) ? priority : [priority]) : undefined,
-      forceAssignedTo:  req.user.role === 'staff' ? req.user.id : undefined,
       ...rest,
+      // Phạm vi của nhân sự: thấy việc ĐƯỢC GIAO cho mình HOẶC việc thuộc công ty mình PHỤ TRÁCH.
+      // Đặt sau ...rest để nhân sự không thể tự ghi đè phạm vi qua query string.
+      staffScopeId:     req.user.role === 'staff' ? req.user.id : undefined,
     })
     res.json({ success: true, data: result })
   } catch (err) { next(err) }

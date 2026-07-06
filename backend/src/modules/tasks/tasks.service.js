@@ -90,6 +90,7 @@ const TASK_SELECT = `
   SELECT t.*,
          c.name       AS company_name,
          c.short_name AS company_short_name,
+         c.assigned_staff_id AS company_assigned_staff_id,
          tt.name  AS task_type_name,
          ua.name  AS assigned_to_name,
          cl.checklist_total,
@@ -119,11 +120,22 @@ const TASK_SELECT = `
     ORDER BY cm.created_at DESC LIMIT 1
   ) lc ON TRUE`
 
+// Nhân sự được truy cập 1 task khi: được GIAO (assigned_to) HOẶC là nhân sự PHỤ TRÁCH
+// công ty của task (companies.assigned_staff_id). Trả về false nếu không đủ quyền.
+function staffOwnsOrManagesRow(row, staffId) {
+  return row.assigned_to === staffId || row.company_assigned_staff_id === staffId
+}
+
 async function assertTaskAccess(taskId, user) {
   if (!user || user.role !== 'staff') return
-  const { rows: [task] } = await query('SELECT assigned_to FROM tasks WHERE id = $1', [taskId])
+  const { rows: [task] } = await query(
+    `SELECT t.assigned_to, c.assigned_staff_id AS company_assigned_staff_id
+     FROM tasks t LEFT JOIN companies c ON c.id = t.company_id
+     WHERE t.id = $1`,
+    [taskId]
+  )
   if (!task) throw Object.assign(new Error('Task not found'), { status: 404 })
-  if (task.assigned_to !== user.id) {
+  if (!staffOwnsOrManagesRow(task, user.id)) {
     throw Object.assign(new Error('Bạn không có quyền thực hiện thao tác này'), { status: 403 })
   }
 }
@@ -135,7 +147,7 @@ async function listTasks(filters = {}) {
     dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
     sortBy = 'created_at', sortDir = 'desc',
     audience = 'internal',
-    forceAssignedTo,
+    forceAssignedTo, staffScopeId,
   } = filters
 
   const effectiveAssignedTo = forceAssignedTo ?? assignedTo
@@ -146,7 +158,7 @@ async function listTasks(filters = {}) {
       page: parseInt(page, 10),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
       companyId,
-      requestedBy:      effectiveAssignedTo,
+      requestedBy:      effectiveAssignedTo ?? staffScopeId,
       periodLabel,
       deadlineDateFrom: dueDateFrom,
       deadlineDateTo:   dueDateTo,
@@ -167,7 +179,7 @@ async function listTasks(filters = {}) {
     const [tasksResult, cdrsResult] = await Promise.all([
       listTasks({ ...filters, audience: 'internal', page: 1, limit: 1000 }),
       listClientRequests({
-        companyId, requestedBy: effectiveAssignedTo, periodLabel,
+        companyId, requestedBy: effectiveAssignedTo ?? staffScopeId, periodLabel,
         deadlineDateFrom: dueDateFrom, deadlineDateTo: dueDateTo,
         page: 1, limit: 1000,
       }),
@@ -205,6 +217,16 @@ async function listTasks(filters = {}) {
     const arr = Array.isArray(effectiveAssignedTo) ? effectiveAssignedTo : [effectiveAssignedTo]
     baseParams.push(arr)
     baseConditions.push(`t.assigned_to = ANY($${baseParams.length}::uuid[])`)
+  }
+  // Phạm vi nhân sự: việc ĐƯỢC GIAO cho mình HOẶC việc thuộc công ty mình PHỤ TRÁCH
+  // (companies.assigned_staff_id). Nhờ vậy nhân sự quản lý công ty vẫn thấy việc đã
+  // nhờ đồng nghiệp khác hỗ trợ (giao cho người khác) trong công ty của mình.
+  if (staffScopeId) {
+    baseParams.push(staffScopeId)
+    const p = baseParams.length
+    baseConditions.push(
+      `(t.assigned_to = $${p} OR t.company_id IN (SELECT id FROM companies WHERE assigned_staff_id = $${p}))`
+    )
   }
   if (source) {
     const arr = Array.isArray(source) ? source : [source]
@@ -296,7 +318,7 @@ async function listTasks(filters = {}) {
 async function getTaskById(id, user = null) {
   const { rows } = await query(`${TASK_SELECT} WHERE t.id = $1`, [id])
   if (!rows[0]) throw Object.assign(new Error('Task not found'), { status: 404 })
-  if (user?.role === 'staff' && rows[0].assigned_to !== user.id) {
+  if (user?.role === 'staff' && !staffOwnsOrManagesRow(rows[0], user.id)) {
     throw Object.assign(new Error('Bạn không có quyền xem công việc này'), { status: 403 })
   }
   return toDto(rows[0])
@@ -406,7 +428,10 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
   }
 
   if (user?.role === 'staff') {
-    if (current.assigned_to !== actorId) {
+    // Được chỉnh sửa nếu: được giao việc HOẶC là nhân sự phụ trách công ty của việc.
+    const { rows: [co] } = await query('SELECT assigned_staff_id FROM companies WHERE id = $1', [current.company_id])
+    const managesCompany = !!co && co.assigned_staff_id === actorId
+    if (current.assigned_to !== actorId && !managesCompany) {
       throw Object.assign(new Error('Bạn không có quyền chỉnh sửa công việc này'), { status: 403 })
     }
     delete fieldMap.assignedTo
@@ -514,18 +539,19 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
 
   const { rows } = await query(
     `SELECT t.*,
+            c.assigned_staff_id AS company_assigned_staff_id,
             (SELECT COUNT(*) FROM (
                SELECT is_completed,
                       NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
                FROM task_checklist_items WHERE task_id = t.id
              ) z WHERE is_leaf AND NOT is_completed) AS unchecked_count
-     FROM tasks t WHERE t.id = $1`,
+     FROM tasks t LEFT JOIN companies c ON c.id = t.company_id WHERE t.id = $1`,
     [id]
   )
   const task = rows[0]
   if (!task) throw Object.assign(new Error('Task not found'), { status: 404 })
 
-  if (user?.role === 'staff' && task.assigned_to !== user.id) {
+  if (user?.role === 'staff' && !staffOwnsOrManagesRow(task, user.id)) {
     throw Object.assign(new Error('Bạn không có quyền thay đổi trạng thái công việc này'), { status: 403 })
   }
 

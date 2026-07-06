@@ -33,7 +33,8 @@ import TaskFormModal from '../Tasks/TaskFormModal'
 import TaskQuickView from '../Tasks/TaskQuickView'
 import {
   STATUS_LABELS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
-  isTaskOverdue, fmtDate as fmtTaskDate, progressPct,
+  STATUS_TRANSITIONS, isTaskOverdue, fmtDate as fmtTaskDate, progressPct,
+  completionKind, taskStatusLabel, canEditDueDate, calcDays, calcPlannedDays,
 } from '../Tasks/taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -1064,13 +1065,60 @@ function DeleteTaskModal({ task, deleting, onClose, onConfirm }) {
   )
 }
 
+// ── Cột danh sách công việc (đồng bộ với trang Tasks) ─────────────────────────
+// Bỏ "Tên viết tắt" vì trong 1 công ty mọi dòng đều cùng công ty.
+const CT_TASK_COLUMNS = [
+  { key: 'title',          label: 'Tiêu đề', fixed: true },
+  { key: 'startDate',      label: 'Ngày bắt đầu' },
+  { key: 'dueDate',        label: 'Hết hạn' },
+  { key: 'days',           label: 'Số ngày hoàn thành' },
+  { key: 'plannedDays',    label: 'Số ngày kế hoạch' },
+  { key: 'source',         label: 'Nguồn tạo' },
+  { key: 'createdAt',      label: 'Ngày tạo' },
+  { key: 'status',         label: 'Trạng thái' },
+  { key: 'priority',       label: 'Ưu tiên' },
+  { key: 'progress',       label: 'Tiến độ' },
+  { key: 'assignedToName', label: 'Giao cho' },
+  { key: 'latestComment',  label: 'Bình luận mới nhất' },
+]
+
+const CT_STATUS_SELECT_CLASS = {
+  pending: ts.qeStatusPending,
+  in_progress: ts.qeStatusInProgress,
+  on_hold: ts.qeStatusOnHold,
+  pending_review: ts.qeStatusPendingReview,
+  needs_revision: ts.qeStatusNeedsRevision,
+  completed: ts.qeStatusCompleted,
+}
+const CT_PRIORITY_SELECT_CLASS = {
+  urgent: ts.qePriorityUrgent,
+  high: ts.qePriorityHigh,
+  medium: ts.qePriorityMedium,
+  low: ts.qePriorityLow,
+}
+
+// Ô chỉnh nhanh Ngày hết hạn (đồng bộ giao diện với trang Tasks)
+function CtListDateField({ value, onChange, isOverdue }) {
+  const ref = useRef(null)
+  const dateStr = value ? value.slice(0, 10) : ''
+  return (
+    <div
+      className={`${ts.qeDate} ${ts.qeDateInteractive} ${isOverdue ? ts.qeDateOverdue : ''}`}
+      onClick={() => ref.current?.showPicker?.()}
+    >
+      <span className={ts.qeDateText}>{dateStr ? fmtTaskDate(dateStr) : '—'}</span>
+      <input ref={ref} type="date" value={dateStr} onChange={onChange} className={ts.qeDateInputNative} tabIndex={-1} />
+    </div>
+  )
+}
+
 // ── Column-header filter machinery (per docs/018) ─────────────────────────────
 
 /** Filter kind per task column */
 function getTaskColumnFilterType(colKey) {
   if (colKey === 'status' || colKey === 'priority' || colKey === 'assignedToName' || colKey === 'source') return 'enum'
-  if (colKey === 'createdAt' || colKey === 'dueDate') return 'dateRange'
-  if (colKey === 'progress') return 'numberRange'
+  if (colKey === 'createdAt' || colKey === 'dueDate' || colKey === 'startDate') return 'dateRange'
+  if (colKey === 'progress' || colKey === 'days' || colKey === 'plannedDays') return 'numberRange'
   return 'text'
 }
 
@@ -1079,9 +1127,13 @@ function getTaskDisplayLabel(row, colKey) {
   switch (colKey) {
     case 'status':         return STATUS_LABELS[row.status] ?? row.status
     case 'priority':       return PRIORITY_LABELS[row.priority] ?? row.priority
+    case 'startDate':      { const d = row.startDate || row.createdAt; return d ? fmtTaskDate(d) : '(Trống)' }
     case 'createdAt':      return row.createdAt ? fmtTaskDate(row.createdAt) : '(Trống)'
     case 'dueDate':        return row.dueDate ? fmtTaskDate(row.dueDate) : '(Trống)'
+    case 'days':           { const d = calcDays(row);        return d !== null ? `${d}d` : '(Trống)' }
+    case 'plannedDays':    { const d = calcPlannedDays(row); return d !== null ? `${d}d` : '(Trống)' }
     case 'assignedToName': return row.assignedToName || '(Chưa giao)'
+    case 'latestComment':  return row.latestComment || '(Trống)'
     case 'source':         return SOURCE_LABELS[row.source] ?? row.source ?? '(Trống)'
     case 'progress': {
       const p = progressPct(row)
@@ -1099,10 +1151,14 @@ function getTaskSortKey(row, colKey) {
   switch (colKey) {
     case 'status':         return STATUS_LABELS[row.status] ?? ''
     case 'priority':       return ({ urgent: 1, high: 2, medium: 3, low: 4 })[row.priority] ?? 5
+    case 'startDate':      return row.startDate || row.createdAt || ''
     case 'createdAt':      return row.createdAt ?? ''
     case 'dueDate':        return row.dueDate ?? ''
+    case 'days':           { const d = calcDays(row);        return d == null ? Number.MAX_SAFE_INTEGER : d }
+    case 'plannedDays':    { const d = calcPlannedDays(row); return d == null ? Number.MAX_SAFE_INTEGER : d }
     case 'progress':       return progressPct(row) ?? -1
     case 'assignedToName': return (row.assignedToName ?? '').toLowerCase()
+    case 'latestComment':  return (row.latestComment ?? '').toLowerCase()
     case 'source':         return SOURCE_LABELS[row.source] ?? row.source ?? ''
     default:               return String(row[colKey] ?? '').toLowerCase()
   }
@@ -1525,6 +1581,21 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const [deleting, setDeleting]         = useState(false)
   const [quickViewId, setQuickViewId]   = useState(null)
 
+  // Ẩn/hiện cột (đồng bộ với trang Tasks) — lưu sessionStorage theo công ty
+  const [hiddenCols, setHiddenCols] = useState(() => new Set(Array.isArray(initCt.hiddenCols) ? initCt.hiddenCols : []))
+  const [showColMenu, setShowColMenu] = useState(false)
+  const colMenuRef = useRef(null)
+  useEffect(() => {
+    if (!showColMenu) return
+    function onDoc(e) { if (colMenuRef.current && !colMenuRef.current.contains(e.target)) setShowColMenu(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [showColMenu])
+  const vis = (key) => !hiddenCols.has(key)
+  function toggleColVisible(key) {
+    setHiddenCols((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 350)
@@ -1538,9 +1609,9 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   useEffect(() => {
     saveCtState(company.id, {
       view, limit, searchInput, statusFilter, priorityFilter, sourceFilter,
-      isOverdue, monthFilter, yearFilter, sortState,
+      isOverdue, monthFilter, yearFilter, sortState, hiddenCols: [...hiddenCols],
     })
-  }, [company.id, view, limit, searchInput, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, sortState])
+  }, [company.id, view, limit, searchInput, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, sortState, hiddenCols])
 
   useEffect(() => {
     loadEnums()
@@ -1637,20 +1708,21 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     setSelectedIds(checked ? new Set(pageRows.map((t) => t.id)) : new Set())
   }
   async function bulkComplete() {
-    let done = 0
+    let done = 0, blocked = 0
     for (const id of selectedIds) {
       const task = tasks.find((t) => t.id === id)
       if (!task || task.status === 'completed') continue
-      try { await tasksApi.changeTaskStatus(id, { status: 'completed', force: true }); done++ }
-      catch (_e) { /* skip individual failures */ }
+      try { await tasksApi.changeTaskStatus(id, { status: 'completed' }); done++ }
+      catch (err) { if (err.response?.status === 409) blocked++ }
     }
     if (done > 0) {
       addToast(`Đã hoàn thành ${done} công việc`, 'success')
       onTaskCountChange(Math.max(0, (company.taskOpenCount ?? 0) - done))
       load()
-    } else {
+    } else if (blocked === 0) {
       addToast('Không có công việc nào được hoàn thành', 'info')
     }
+    if (blocked > 0) addToast(`${blocked} công việc chưa tích đủ checklist nên không thể hoàn thành.`, 'error')
     setSelectedIds(new Set())
   }
   async function bulkDelete() {
@@ -1682,6 +1754,38 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     }
   }
 
+  // ── Quick-edit trong danh sách (đồng bộ với trang Tasks) ──────────────────────
+  async function handleStatusChange(task, newStatus) {
+    try {
+      const updated = await tasksApi.changeTaskStatus(task.id, { status: newStatus })
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+      addToast(`Đã chuyển sang "${getLabel('task_status', newStatus, STATUS_LABELS[newStatus])}"`, 'success')
+      if (newStatus === 'completed') onTaskCountChange(Math.max(0, (company.taskOpenCount ?? 0) - 1))
+    } catch (err) {
+      const status = err.response?.status
+      const msg    = err.response?.data?.error?.message
+      if (status === 409) addToast(msg ?? 'Còn mục checklist chưa hoàn thành. Vui lòng tích đủ checklist trước khi hoàn thành.', 'error')
+      else                addToast(msg ?? 'Không thể cập nhật trạng thái', 'error')
+    }
+  }
+  async function handlePriorityChange(task, priority) {
+    try {
+      const updated = await tasksApi.updateTask(task.id, { priority })
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật ưu tiên', 'error')
+    }
+  }
+  async function handleDueDateChange(task, dueDate) {
+    try {
+      const updated = await tasksApi.updateTask(task.id, { dueDate: dueDate || null })
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+      addToast(dueDate ? 'Đã cập nhật ngày hết hạn' : 'Đã xoá ngày hết hạn', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật ngày hết hạn', 'error')
+    }
+  }
+
   const activeFilters = (search ? 1 : 0)
     + statusFilter.length + priorityFilter.length + sourceFilter.length
     + (isOverdue ? 1 : 0)
@@ -1705,7 +1809,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       } else if (ft === 'dateRange') {
         if (filterVal && (filterVal.from || filterVal.to)) {
           result = result.filter((row) => {
-            const raw = row[colKey]
+            const raw = colKey === 'startDate' ? (row.startDate || row.createdAt) : row[colKey]
             if (!raw) return false
             const d = String(raw).substring(0, 10)
             if (filterVal.from && d < filterVal.from) return false
@@ -1716,7 +1820,10 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       } else if (ft === 'numberRange') {
         if (filterVal && (filterVal.min !== '' || filterVal.max !== '')) {
           result = result.filter((row) => {
-            const num = colKey === 'progress' ? progressPct(row) : parseFloat(row[colKey])
+            const num = colKey === 'progress'     ? progressPct(row)
+                      : colKey === 'days'         ? calcDays(row)
+                      : colKey === 'plannedDays'  ? calcPlannedDays(row)
+                      : parseFloat(row[colKey])
             if (num === null || num === undefined || isNaN(num)) return false
             if (filterVal.min !== '' && num < parseFloat(filterVal.min)) return false
             if (filterVal.max !== '' && num > parseFloat(filterVal.max)) return false
@@ -1798,7 +1905,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     )
   }
 
-  const colSpan = 10  // check + title + status + priority + source + createdAt + dueDate + assigned + progress + actions
+  const visibleDataCols = CT_TASK_COLUMNS.filter((c) => c.fixed || vis(c.key)).length
+  const colSpan = visibleDataCols + 2  // + checkbox + actions
   const from = clientTotal === 0 ? 0 : (safePage - 1) * limit + 1
   const to   = Math.min(safePage * limit, clientTotal)
 
@@ -1841,6 +1949,38 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               <LayoutGrid size={14} /> Kanban
             </button>
           </div>
+
+          {view === 'list' && (
+            <div className={ts.colMenuWrap} ref={colMenuRef}>
+              <button
+                className={`${s.viewToggleBtn} ${showColMenu ? s.viewToggleBtnActive : ''}`}
+                onClick={() => setShowColMenu((v) => !v)}
+                title="Chọn cột hiển thị"
+              >
+                <SlidersHorizontal size={14} /> Cột
+              </button>
+              {showColMenu && (
+                <div className={ts.colMenu}>
+                  <div className={ts.colMenuHead}>
+                    <span>Cột hiển thị</span>
+                    <button className={ts.colMenuReset} onClick={() => setHiddenCols(new Set())}>Hiện tất cả</button>
+                  </div>
+                  {CT_TASK_COLUMNS.map((c) => (
+                    <label key={c.key} className={`${ts.colMenuItem} ${c.fixed ? ts.colMenuItemFixed : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={c.fixed || !hiddenCols.has(c.key)}
+                        disabled={c.fixed}
+                        onChange={() => toggleColVisible(c.key)}
+                      />
+                      <span>{c.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <button className={`${ts.btnPrimary} ${s.taskCreateBtnCompact}`} onClick={() => setShowCreate(true)}>
             <Plus size={13} /> Tạo công việc
           </button>
@@ -2070,13 +2210,17 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                   />
                 </th>
                 <FilterTh colKey="title">Tiêu đề</FilterTh>
-                <FilterTh colKey="status">Trạng thái</FilterTh>
-                <FilterTh colKey="priority">Ưu tiên</FilterTh>
-                <FilterTh colKey="source">Nguồn</FilterTh>
-                <FilterTh colKey="createdAt">Ngày tạo</FilterTh>
-                <FilterTh colKey="dueDate">Hết hạn</FilterTh>
-                <FilterTh colKey="assignedToName">Phụ trách</FilterTh>
-                <FilterTh colKey="progress">Tiến độ</FilterTh>
+                {vis('startDate')      && <FilterTh colKey="startDate">Ngày bắt đầu</FilterTh>}
+                {vis('dueDate')        && <FilterTh colKey="dueDate">Hết hạn</FilterTh>}
+                {vis('days')           && <FilterTh colKey="days">Số ngày hoàn thành</FilterTh>}
+                {vis('plannedDays')    && <FilterTh colKey="plannedDays">Số ngày kế hoạch</FilterTh>}
+                {vis('source')         && <FilterTh colKey="source">Nguồn tạo</FilterTh>}
+                {vis('createdAt')      && <FilterTh colKey="createdAt">Ngày tạo</FilterTh>}
+                {vis('status')         && <FilterTh colKey="status">Trạng thái</FilterTh>}
+                {vis('priority')       && <FilterTh colKey="priority">Ưu tiên</FilterTh>}
+                {vis('progress')       && <FilterTh colKey="progress">Tiến độ</FilterTh>}
+                {vis('assignedToName') && <FilterTh colKey="assignedToName">Giao cho</FilterTh>}
+                {vis('latestComment')  && <FilterTh colKey="latestComment">Bình luận mới nhất</FilterTh>}
                 <th className={s.taskActionHeadAdmin} />
               </tr>
             </thead>
@@ -2085,9 +2229,9 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
                     <td className={ts.tdCheck} />
-                    {[220, 100, 80, 80, 80, 80, 100, 80].map((w, j) => (
+                    {Array.from({ length: visibleDataCols }).map((_, j) => (
                       <td key={j} className={s.taskSkeletonCell}>
-                        <div className={s.taskSkeletonBar} style={{ '--skeleton-w': `${w}px` }} />
+                        <div className={s.taskSkeletonBar} style={{ '--skeleton-w': `${j === 0 ? 220 : 80}px` }} />
                       </td>
                     ))}
                     <td />
@@ -2105,6 +2249,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               ) : pageRows.map((task) => {
                 const overdue = isTaskOverdue(task)
                 const pct     = progressPct(task)
+                const days    = calcDays(task)
+                const planned = calcPlannedDays(task)
                 return (
                   <tr
                     key={task.id}
@@ -2118,45 +2264,138 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                         onChange={() => toggleSelect(task.id)}
                       />
                     </td>
+
+                    {/* Tiêu đề (cố định) */}
                     <td>
                       <div className={`${s.cTaskTitle} ${overdue ? s.cTaskTitleOverdue : ''}`}>
                         {task.title}
                       </div>
                     </td>
-                    <td>
-                      <span className={`${ts.statusBadge} ${ts[STATUS_CSS[task.status]]}`}>
-                        {getLabel('task_status', task.status, STATUS_LABELS[task.status])}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`${ts.priorityBadge} ${ts[PRIORITY_CSS[task.priority]]}`}>
-                        {getLabel('task_priority', task.priority, PRIORITY_LABELS[task.priority])}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`${ts.sourceBadge} ${task.source === 'auto' ? ts.sourceAuto : ts.sourceManual}`}>
-                        {getLabel('task_source', task.source, SOURCE_LABELS[task.source] ?? task.source)}
-                      </span>
-                    </td>
-                    <td className={s.cTaskDateCell}>
-                      {fmtTaskDate(task.createdAt)}
-                    </td>
-                    <td className={`${s.cTaskDateCell} ${overdue ? s.cTaskDueOverdue : ''}`}>
-                      {fmtTaskDate(task.dueDate)}
-                    </td>
-                    <td className={s.cTaskAssigneeCell}>
-                      {task.assignedToName ?? '—'}
-                    </td>
-                    <td>
-                      {pct !== null ? (
-                        <div className={s.cTaskProgress}>
-                          <div className={s.cTaskProgressBar}>
-                            <div className={`${s.cTaskProgressFill} ${pct === 100 ? s.cTaskProgressFillDone : ''}`} style={{ '--progress-width': `${pct}%` }} />
+
+                    {/* Ngày bắt đầu */}
+                    {vis('startDate') && (
+                      <td className={s.cTaskDateCell}>
+                        {fmtTaskDate(task.startDate || task.createdAt)}
+                      </td>
+                    )}
+
+                    {/* Hết hạn — staff chỉ sửa được với task từ lịch định kỳ; nguồn khác chỉ admin */}
+                    {vis('dueDate') && (
+                      <td className={`${s.cTaskDateCell} ${overdue ? s.cTaskDueOverdue : ''}`} onClick={(e) => e.stopPropagation()}>
+                        {canEditDueDate(task, isAdmin) ? (
+                          <CtListDateField
+                            value={task.dueDate ?? ''}
+                            onChange={(e) => handleDueDateChange(task, e.target.value)}
+                            isOverdue={overdue}
+                          />
+                        ) : (
+                          <span title="Chỉ Quản trị viên được sửa (công việc này không phải từ lịch định kỳ)">
+                            {task.dueDate ? fmtTaskDate(task.dueDate) : '—'}
+                          </span>
+                        )}
+                      </td>
+                    )}
+
+                    {/* Số ngày hoàn thành (thực tế) */}
+                    {vis('days') && (
+                      <td>
+                        {days !== null ? (
+                          <span className={`${ts.daysBadge} ${task.status === 'completed' ? ts.daysBadgeDone : ''}`}>{days}d</span>
+                        ) : <span className={s.cTaskDash}>—</span>}
+                      </td>
+                    )}
+
+                    {/* Số ngày kế hoạch (hết hạn − bắt đầu) */}
+                    {vis('plannedDays') && (
+                      <td>
+                        {planned !== null ? (
+                          <span className={`${ts.daysBadge} ${ts.daysBadgePlan}`}>{planned}d</span>
+                        ) : <span className={s.cTaskDash}>—</span>}
+                      </td>
+                    )}
+
+                    {/* Nguồn tạo */}
+                    {vis('source') && (
+                      <td>
+                        <span className={`${ts.sourceBadge} ${task.source === 'auto' ? ts.sourceAuto : ts.sourceManual}`}>
+                          {getLabel('task_source', task.source, SOURCE_LABELS[task.source] ?? task.source)}
+                        </span>
+                      </td>
+                    )}
+
+                    {/* Ngày tạo */}
+                    {vis('createdAt') && (
+                      <td className={s.cTaskDateCell}>
+                        {fmtTaskDate(task.createdAt)}
+                      </td>
+                    )}
+
+                    {/* Trạng thái — chỉnh nhanh */}
+                    {vis('status') && (
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={task.status}
+                          onChange={(e) => { if (e.target.value !== task.status) handleStatusChange(task, e.target.value) }}
+                          className={`${ts.qeSelect} ${ts.qeSelectStyled} ${(task.status === 'completed' && completionKind(task) === 'late') ? ts.qeStatusCompletedLate : (CT_STATUS_SELECT_CLASS[task.status] ?? '')}`}
+                          title="Đổi trạng thái"
+                        >
+                          <option value={task.status}>{taskStatusLabel(task, getLabel)}</option>
+                          {(STATUS_TRANSITIONS[task.status] ?? []).map((st) => (
+                            <option key={st} value={st}>{getLabel('task_status', st, STATUS_LABELS[st])}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
+
+                    {/* Ưu tiên — chỉnh nhanh */}
+                    {vis('priority') && (
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={task.priority ?? ''}
+                          onChange={(e) => handlePriorityChange(task, e.target.value)}
+                          className={`${ts.qeSelect} ${ts.qeSelectStyled} ${CT_PRIORITY_SELECT_CLASS[task.priority] ?? ''}`}
+                          title="Đổi ưu tiên"
+                        >
+                          {['urgent', 'high', 'medium', 'low'].map((p) => (
+                            <option key={p} value={p}>{getLabel('task_priority', p, PRIORITY_LABELS[p])}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
+
+                    {/* Tiến độ */}
+                    {vis('progress') && (
+                      <td>
+                        {pct !== null ? (
+                          <div className={s.cTaskProgress}>
+                            <div className={s.cTaskProgressBar}>
+                              <div className={`${s.cTaskProgressFill} ${pct === 100 ? s.cTaskProgressFillDone : ''}`} style={{ '--progress-width': `${pct}%` }} />
+                            </div>
+                            <span className={s.cTaskProgressText}>{pct}%</span>
                           </div>
-                          <span className={s.cTaskProgressText}>{pct}%</span>
-                        </div>
-                      ) : <span className={s.cTaskDash}>—</span>}
-                    </td>
+                        ) : <span className={s.cTaskDash}>—</span>}
+                      </td>
+                    )}
+
+                    {/* Giao cho */}
+                    {vis('assignedToName') && (
+                      <td className={s.cTaskAssigneeCell}>
+                        {task.assignedToName ?? '—'}
+                      </td>
+                    )}
+
+                    {/* Bình luận mới nhất */}
+                    {vis('latestComment') && (
+                      <td>
+                        {task.latestComment ? (
+                          <div className={ts.latestCommentCell} title={`${task.latestCommentBy ?? ''}: ${task.latestComment}`}>
+                            {task.latestCommentBy && <span className={ts.latestCommentBy}>{task.latestCommentBy}:</span>}
+                            <span className={ts.latestCommentText}>{task.latestComment}</span>
+                          </div>
+                        ) : <span className={s.cTaskDash}>—</span>}
+                      </td>
+                    )}
+
                     <td className={s.cTaskActionCell} onClick={(e) => e.stopPropagation()}>
                       <div className={s.cTaskActionBtns}>
                         <button
