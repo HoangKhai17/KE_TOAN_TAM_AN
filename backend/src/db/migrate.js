@@ -27,10 +27,14 @@ async function getApplied(client) {
   return new Set(res.rows.map((r) => r.filename))
 }
 
+// CHỈ nhận file migration đánh số dạng NNN_*.sql (001_..., 082_...).
+// Cố tình BỎ QUA mọi file khác (vd seed_*.sql) để migrate KHÔNG bao giờ
+// chạy nhầm dữ liệu seed/demo trên production.
+const MIGRATION_RE = /^\d{3,}_.*\.sql$/
 function getUpFiles() {
   return fs
     .readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))
+    .filter((f) => MIGRATION_RE.test(f) && !f.endsWith('.down.sql'))
     .sort()
 }
 

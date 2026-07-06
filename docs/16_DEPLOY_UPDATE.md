@@ -60,9 +60,11 @@ Sau đó **Ctrl+F5** trên trình duyệt để nạp frontend mới.
 ---
 
 ## ⚠️ TUYỆT ĐỐI KHÔNG chạy trên server có data thật
-- **KHÔNG** `npm run seed` / `seed_*.sql` → chèn dữ liệu demo (rác).
+- **KHÔNG** `npm run seed -- --demo` (và **KHÔNG** đặt `SEED_DEMO=true`) → chèn users/companies/payroll/tasks demo (rác).
+  - Từ nay `seed.js` đã tách: `npm run seed` (không cờ) **chỉ** nạp seed NỀN (admin, cấu hình, loại công việc) và an toàn; demo nằm ở `backend/seeds/demo/` chỉ chạy khi có `--demo`, và bị **chặn hẳn** khi `NODE_ENV=production`.
 - **KHÔNG** `migrate.js down` → rollback có thể phá/cắt dữ liệu.
-- `clear-demo-data.sql` chỉ chạy khi **cố ý** dọn sạch.
+- `migrate up` cũng đã được vá: chỉ chạy migration đánh số `NNN_*.sql`, **không** còn nuốt nhầm `seed_*.sql`.
+- Nếu server đã lỡ dính demo: backup rồi chạy `backend/scripts/cleanup_demo_data.sql` để dọn theo prefix UUID demo (không đụng data thật).
 
 ## Vì sao migrate KHÔNG đè data
 - Migration = DDL (CREATE/ALTER) đổi **cấu trúc**, không chứa dữ liệu local.
