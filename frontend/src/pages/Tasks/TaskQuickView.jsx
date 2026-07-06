@@ -13,6 +13,7 @@ import {
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
+import { useAuthStore } from '../../stores/authStore'
 import TaskLinksSection from './TaskLinksSection'
 import s from './tasks.module.css'
 
@@ -108,6 +109,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   const addToast  = useToastStore((st) => st.toast)
   const getLabel  = useEnumsStore((st) => st.getLabel)
   const getOptions = useEnumsStore((st) => st.getOptions)
+  const isAdmin   = useAuthStore((st) => st.user?.role === 'admin')
 
   const [task,        setTask]        = useState(null)
   const [loading,     setLoading]     = useState(true)
@@ -420,11 +422,17 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
 
                 <div className={s.qvRow}>
                   <span className={s.qvLabel}><Clock size={11} /> Hết hạn</span>
-                  <QvDateField
-                    value={toDateValue(task.dueDate)}
-                    onChange={(e) => changeDueDate(e.target.value)}
-                    isError={overdue}
-                  />
+                  {isAdmin ? (
+                    <QvDateField
+                      value={toDateValue(task.dueDate)}
+                      onChange={(e) => changeDueDate(e.target.value)}
+                      isError={overdue}
+                    />
+                  ) : (
+                    <span className={s.qvValue} title="Chỉ Quản trị viên được sửa ngày hết hạn">
+                      {task.dueDate ? fmtDate(task.dueDate) : '—'}
+                    </span>
+                  )}
                 </div>
 
                 {task.slaDays && (

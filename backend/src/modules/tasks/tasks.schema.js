@@ -10,7 +10,8 @@ const createTaskSchema = z.object({
   taskTypeId:  z.string().uuid().optional().nullable(),
   assignedTo:  z.string().uuid().optional().nullable(),
   startDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),
-  dueDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),
+  // Ngày hết hạn bắt buộc khi tạo (để nhân viên tự tính toán thời gian hoàn thành)
+  dueDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày hết hạn không hợp lệ (YYYY-MM-DD)'),
   priority:    z.enum(TASK_PRIORITIES).default('medium'),
   slaDays:     z.number().int().min(1).optional().nullable(),
   source:      z.string().min(1).max(40).optional().nullable(),

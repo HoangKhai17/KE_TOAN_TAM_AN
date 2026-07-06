@@ -98,7 +98,7 @@ function CompanyPicker({ companies, value, onChange, disabled, hasError }) {
               </div>
             ))}
             {filtered.length === 0 && (
-              <div className={s.cpEmpty}>Không tìm thấy "{search}"</div>
+              <div className={s.cpEmpty}>Không tìm thấy &ldquo;{search}&rdquo;</div>
             )}
           </div>
         </div>
@@ -181,6 +181,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
     const errs = {}
     if (!form.title.trim()) errs.title = 'Tiêu đề không được để trống'
     if (!form.companyId)    errs.companyId = 'Vui lòng chọn khách hàng'
+    if (!form.dueDate)      errs.dueDate = 'Vui lòng nhập ngày hết hạn'
     if (Object.keys(errs).length) { setFE(errs); return }
     setError(null); setFE({}); setSaving(true)
     try {
@@ -311,14 +312,16 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
 
         {/* Due date */}
         <div className={s.formGroup}>
-          <label className={s.formLabel}>Ngày hết hạn</label>
+          <label className={`${s.formLabel} ${s.required}`}>Ngày hết hạn</label>
           <input
             type="date"
             value={form.dueDate}
             onChange={set('dueDate')}
             className={s.formInput}
             min={form.startDate || undefined}
+            style={fe.dueDate ? { borderColor: '#ef4444' } : {}}
           />
+          {fe.dueDate && <p className={s.formError}>{fe.dueDate}</p>}
         </div>
 
         {/* SLA */}

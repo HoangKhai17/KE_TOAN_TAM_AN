@@ -978,14 +978,20 @@ function ListView({
                     </td>
                   )}
 
-                  {/* Hết hạn (cạnh ngày bắt đầu) */}
+                  {/* Hết hạn (cạnh ngày bắt đầu) — staff không được sửa, chỉ admin */}
                   {vis('dueDate') && (
                     <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                      <ListDateField
-                        value={t.dueDate ?? ''}
-                        onChange={(e) => onDueDateChange(t, e.target.value)}
-                        isOverdue={overdue}
-                      />
+                      {isAdmin ? (
+                        <ListDateField
+                          value={t.dueDate ?? ''}
+                          onChange={(e) => onDueDateChange(t, e.target.value)}
+                          isOverdue={overdue}
+                        />
+                      ) : (
+                        <span className={s.dueDateNormal} title="Chỉ Quản trị viên được sửa ngày hết hạn">
+                          {t.dueDate ? fmtDate(t.dueDate) : '—'}
+                        </span>
+                      )}
                     </td>
                   )}
 

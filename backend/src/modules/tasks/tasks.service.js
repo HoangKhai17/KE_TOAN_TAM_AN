@@ -347,6 +347,15 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   return result
 }
 
+// Chuẩn hoá về chuỗi 'YYYY-MM-DD' (theo giờ địa phương của node-pg) để so sánh ngày an toàn
+function toDateStr(v) {
+  if (!v) return null
+  if (typeof v === 'string') return v.slice(0, 10)
+  const d = v instanceof Date ? v : new Date(v)
+  if (isNaN(d.getTime())) return null
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) {
   const fieldMap = {
     title:       'title',
@@ -375,6 +384,14 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
       throw Object.assign(new Error('Bạn không có quyền chỉnh sửa công việc này'), { status: 403 })
     }
     delete fieldMap.assignedTo
+    // Nhân viên KHÔNG được sửa Ngày hết hạn (chỉ admin) — chặn khi có thay đổi thực sự
+    if (data.dueDate !== undefined && toDateStr(data.dueDate) !== toDateStr(current.due_date)) {
+      throw Object.assign(
+        new Error('Nhân viên không được sửa Ngày hết hạn. Vui lòng báo Quản trị viên để điều chỉnh.'),
+        { status: 403 }
+      )
+    }
+    delete fieldMap.dueDate
   }
 
   const updates = []

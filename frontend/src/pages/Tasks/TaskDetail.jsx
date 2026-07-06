@@ -841,6 +841,7 @@ export default function TaskDetail() {
   const getOptions = useEnumsStore((st) => st.getOptions)
   const loadEnums  = useEnumsStore((st) => st.load)
   const currentUser = useAuthStore((s) => s.user)
+  const isAdmin     = currentUser?.role === 'admin'
 
   const [task, setTask]       = useState(null)
   const [loading, setLoading] = useState(true)
@@ -1136,13 +1137,19 @@ export default function TaskDetail() {
 
               <div className={s.infoRow}>
                 <span className={s.infoRowLabel}>Hết hạn</span>
-                <input
-                  type="date"
-                  value={task.dueDate?.slice(0, 10) ?? ''}
-                  onChange={(e) => saveDueDate(e.target.value)}
-                  className={`${s.dateInput} ${s.dateInputCompact}`}
-                  disabled={savingDue}
-                />
+                {isAdmin ? (
+                  <input
+                    type="date"
+                    value={task.dueDate?.slice(0, 10) ?? ''}
+                    onChange={(e) => saveDueDate(e.target.value)}
+                    className={`${s.dateInput} ${s.dateInputCompact}`}
+                    disabled={savingDue}
+                  />
+                ) : (
+                  <span className={s.infoRowValue} title="Chỉ Quản trị viên được sửa ngày hết hạn">
+                    {fmtDate(task.dueDate)}
+                  </span>
+                )}
               </div>
 
               {task.slaDays && (
