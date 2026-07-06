@@ -77,6 +77,9 @@ function toDto(row) {
     actualHours:            row.actual_hours ? parseFloat(row.actual_hours) : null,
     checklistTotal:         parseInt(row.checklist_total ?? 0, 10),
     checklistDone:          parseInt(row.checklist_done ?? 0, 10),
+    latestComment:          row.latest_comment ?? null,
+    latestCommentAt:        row.latest_comment_at ?? null,
+    latestCommentBy:        row.latest_comment_by ?? null,
     createdBy:              row.created_by,
     createdAt:              row.created_at,
     updatedAt:              row.updated_at,
@@ -90,7 +93,10 @@ const TASK_SELECT = `
          tt.name  AS task_type_name,
          ua.name  AS assigned_to_name,
          cl.checklist_total,
-         cl.checklist_done
+         cl.checklist_done,
+         lc.latest_comment,
+         lc.latest_comment_at,
+         lc.latest_comment_by
   FROM tasks t
   LEFT JOIN companies  c  ON c.id  = t.company_id
   LEFT JOIN task_types tt ON tt.id = t.task_type_id
@@ -99,7 +105,13 @@ const TASK_SELECT = `
     SELECT COUNT(*)                                        AS checklist_total,
            COUNT(*) FILTER (WHERE ci.is_completed = TRUE) AS checklist_done
     FROM task_checklist_items ci WHERE ci.task_id = t.id
-  ) cl ON TRUE`
+  ) cl ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT cm.content AS latest_comment, cm.created_at AS latest_comment_at, ucm.name AS latest_comment_by
+    FROM task_comments cm JOIN users ucm ON ucm.id = cm.user_id
+    WHERE cm.task_id = t.id
+    ORDER BY cm.created_at DESC LIMIT 1
+  ) lc ON TRUE`
 
 async function assertTaskAccess(taskId, user) {
   if (!user || user.role !== 'staff') return

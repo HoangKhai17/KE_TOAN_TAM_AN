@@ -4003,3 +4003,26 @@
 .colMenuItem input { cursor: pointer; }
 .colMenuItemFixed { opacity: 0.6; cursor: default; }
 .colMenuItemFixed:hover { background: none; }
+
+/* ── Cột "Bình luận mới nhất" trong danh sách ─────────────────────────────── */
+.latestCommentCell {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+  max-width: 280px;
+  overflow: hidden;
+}
+.latestCommentBy {
+  flex-shrink: 0;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary, #2563eb);
+  white-space: nowrap;
+}
+.latestCommentText {
+  font-size: var(--fs-xs);
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

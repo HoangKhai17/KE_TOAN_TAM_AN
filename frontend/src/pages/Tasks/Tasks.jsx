@@ -452,6 +452,7 @@ const TASK_LIST_COL_TYPE = {
   priority:       'enum',
   progress:       'numberRange',
   assignedToName: 'enum',
+  latestComment:  'text',
 }
 function taskColFilterType(colKey) { return TASK_LIST_COL_TYPE[colKey] ?? 'text' }
 
@@ -470,6 +471,7 @@ const TASK_COLUMNS = [
   { key: 'priority',       label: 'Ưu tiên' },
   { key: 'progress',       label: 'Tiến độ' },
   { key: 'assignedToName', label: 'Giao cho' },
+  { key: 'latestComment',  label: 'Bình luận mới nhất' },
 ]
 
 const TASK_COLS_KEY = 'tasks_hidden_cols_v1'
@@ -505,6 +507,7 @@ function taskColSortKey(t, colKey) {
     case 'createdAt':      return t.createdAt || ''
     case 'companyShort':   return (t.companyShortName || t.companyName || '').toLowerCase()
     case 'source':         return t.source || ''
+    case 'latestComment':  return (t.latestComment || '').toLowerCase()
     case 'companyName':    return (t.companyName || '').toLowerCase()
     case 'assignedToName': return (t.assignedToName || '').toLowerCase()
     default:               return (t.title || '').toLowerCase()
@@ -914,6 +917,7 @@ function ListView({
               {vis('priority')     && <Th colKey="priority">Ưu tiên</Th>}
               {vis('progress')     && <Th colKey="progress">Tiến độ</Th>}
               {vis('assignedToName') && <Th colKey="assignedToName">Giao cho</Th>}
+              {vis('latestComment') && <Th colKey="latestComment">Bình luận mới nhất</Th>}
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
             </tr>
           </thead>
@@ -1092,6 +1096,20 @@ function ListView({
                         <div className={s.assignedCell}>
                           <div className={s.avatarXs}>{t.assignedToName[0]?.toUpperCase()}</div>
                           <span>{t.assignedToName}</span>
+                        </div>
+                      ) : (
+                        <span className={s.mutedDash}>—</span>
+                      )}
+                    </td>
+                  )}
+
+                  {/* Bình luận mới nhất */}
+                  {vis('latestComment') && (
+                    <td className={s.td}>
+                      {t.latestComment ? (
+                        <div className={s.latestCommentCell} title={`${t.latestCommentBy ?? ''}: ${t.latestComment}`}>
+                          {t.latestCommentBy && <span className={s.latestCommentBy}>{t.latestCommentBy}:</span>}
+                          <span className={s.latestCommentText}>{t.latestComment}</span>
                         </div>
                       ) : (
                         <span className={s.mutedDash}>—</span>
@@ -1564,6 +1582,7 @@ export default function Tasks() {
       case 'companyShort':   return row.companyShortName || row.companyName || '(Không có)'
       case 'assignedToName': return row.assignedToName || '(Chưa giao)'
       case 'source':         return getLabel('task_source', row.source, row.source === 'auto' ? 'Tự động' : 'Thủ công')
+      case 'latestComment':  return row.latestComment || '(Chưa có)'
       case 'status':         return taskStatusLabel(row, getLabel)
       case 'priority':       return getLabel('task_priority', row.priority, PRIORITY_LABELS[row.priority] ?? row.priority)
       default: { const v = row[colKey]; return v != null && v !== '' ? String(v) : '(Trống)' }

@@ -74,6 +74,14 @@ async function addComment(taskId, { content }, actorId) {
 
     notifyUser(taskInfo.assigned_to)
     notifyUser(taskInfo.created_by)
+
+    // Nếu người bình luận là nhân viên (staff) → báo cho TẤT CẢ admin để theo dõi/điều chỉnh
+    // (vd: staff note lại lý do dueDate không hợp lý cho admin xem). notifyUser tự bỏ trùng.
+    const { rows: [actor] } = await query('SELECT role FROM users WHERE id = $1', [actorId])
+    if (actor?.role === 'staff') {
+      const { rows: admins } = await query("SELECT id FROM users WHERE role = 'admin' AND status = 'active'")
+      for (const a of admins) notifyUser(a.id)
+    }
   }
 
   emitData('data:comment', { taskId, actorId })

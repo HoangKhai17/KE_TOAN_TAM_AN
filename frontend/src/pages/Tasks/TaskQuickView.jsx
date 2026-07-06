@@ -15,6 +15,7 @@ import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
 import TaskLinksSection from './TaskLinksSection'
+import TaskComments from './TaskComments'
 import s from './tasks.module.css'
 
 // Convert any ISO string to local yyyy-MM-dd.
@@ -545,8 +546,14 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                 </div>
 
                 {/* Links */}
-                <div className={s.qvSection} style={{ borderBottom: 'none', marginBottom: 0 }}>
+                <div className={s.qvSection}>
                   <TaskLinksSection taskId={taskId} compact />
+                </div>
+
+                {/* Bình luận — để nhân viên/staff xem & trao đổi ngay trong quick view */}
+                <div className={s.qvSection} style={{ borderBottom: 'none', marginBottom: 0 }}>
+                  <div className={s.qvSectionTitle}>Bình luận</div>
+                  <TaskComments taskId={taskId} />
                 </div>
 
               </div>
