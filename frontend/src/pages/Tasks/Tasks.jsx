@@ -29,6 +29,7 @@ import {
   TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS,
   isTaskOverdue, fmtDate, progressPct,
+  completionKind, taskStatusLabel,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -249,12 +250,45 @@ function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
   const overdue = isTaskOverdue(task)
   const startShort = task.startDate ? fmtDate(task.startDate).slice(0, 5) : null
   const endShort   = task.dueDate   ? fmtDate(task.dueDate).slice(0, 5)   : null
+  const company = task.companyShortName || task.companyName
   return (
     <>
-      <div className={s.boardCardTitle}>{task.title}</div>
-      {task.companyName && <div className={s.boardCardCompany}>{task.companyName}</div>}
+      {/* Hàng tiêu đề + icon thao tác (hover) ngang hàng title → card gọn hơn */}
+      <div className={s.boardCardHead}>
+        <div className={s.boardCardTitle}>{task.title}</div>
+        {(onQuickView || onDelete) && (
+          <div className={s.boardCardActions}>
+            {onQuickView && (
+              <button
+                className={s.boardCardViewBtn}
+                onClick={(e) => { e.stopPropagation(); onQuickView(task.id) }}
+                title="Xem nhanh"
+              >
+                <Eye size={11} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                className={s.boardCardDeleteBtn}
+                onClick={(e) => { e.stopPropagation(); onDelete(task) }}
+                title="Xóa công việc"
+              >
+                <Trash2 size={11} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {company && <div className={s.boardCardCompany}>{company}</div>}
+      {/* Hàng: mức độ + nhân sự phụ trách + ngày (gọn 1 dòng để rút height) */}
       <div className={s.boardCardMeta}>
         <PriorityBadge priority={task.priority} />
+        {completionKind(task) && (
+          <span className={`${s.boardCompBadge} ${completionKind(task) === 'late' ? s.boardCompLate : s.boardCompOnTime}`}>
+            {completionKind(task) === 'late' ? 'Trễ hạn' : 'Trước hạn'}
+          </span>
+        )}
+        {task.assignedToName && <span className={s.boardCardAssigneeName}>{task.assignedToName}</span>}
         {(startShort || endShort) && (
           <span className={`${s.boardCardDates} ${overdue ? s.boardCardDateOver : ''}`}>
             {startShort ?? '—'} → {endShort ?? '—'}
@@ -275,35 +309,13 @@ function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
           <span className={s.boardCardProgressText}>{pct}%</span>
         </div>
       )}
-      {(onQuickView || onDelete) && (
-        <div className={s.boardCardActions}>
-          {onQuickView && (
-            <button
-              className={s.boardCardViewBtn}
-              onClick={(e) => { e.stopPropagation(); onQuickView(task.id) }}
-              title="Xem nhanh"
-            >
-              <Eye size={11} />
-            </button>
-          )}
-          {onDelete && (
-            <button
-              className={s.boardCardDeleteBtn}
-              onClick={(e) => { e.stopPropagation(); onDelete(task) }}
-              title="Xóa công việc"
-            >
-              <Trash2 size={11} />
-            </button>
-          )}
-        </div>
-      )}
     </>
   )
 }
 
 // ── DraggableCard ─────────────────────────────────────────────────────────────
 
-function DraggableCard({ task, onOpen, isAdmin, onDelete, onQuickView }) {
+function DraggableCard({ task, isAdmin, onDelete, onQuickView }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { status: task.status },
@@ -316,7 +328,7 @@ function DraggableCard({ task, onOpen, isAdmin, onDelete, onQuickView }) {
       {...listeners}
       className={`${s.boardCard} ${isDragging ? s.boardCardDragging : ''} ${transform ? s.dragTransform : ''}`}
       style={transform ? { '--drag-x': `${transform.x}px`, '--drag-y': `${transform.y}px` } : undefined}
-      onClick={() => !isDragging && onOpen(task.id)}
+      onClick={() => !isDragging && onQuickView(task.id)}
     >
       <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
     </div>
@@ -501,7 +513,7 @@ function taskColSortKey(t, colKey) {
 
 // ── SourceBoardView — Kanban theo Nguồn công việc (drag để đổi nguồn) ────────────
 
-function DraggableSourceCard({ task, onOpen, isAdmin, onDelete, onQuickView }) {
+function DraggableSourceCard({ task, isAdmin, onDelete, onQuickView }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id, data: { source: task.source },
   })
@@ -512,7 +524,7 @@ function DraggableSourceCard({ task, onOpen, isAdmin, onDelete, onQuickView }) {
       {...listeners}
       className={`${s.boardCard} ${isDragging ? s.boardCardDragging : ''} ${transform ? s.dragTransform : ''}`}
       style={transform ? { '--drag-x': `${transform.x}px`, '--drag-y': `${transform.y}px` } : undefined}
-      onClick={() => !isDragging && onOpen(task.id)}
+      onClick={() => !isDragging && onQuickView(task.id)}
     >
       <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
     </div>
@@ -1017,11 +1029,11 @@ function ListView({
                       <select
                         value={t.status}
                         onChange={(e) => { if (e.target.value !== t.status) onStatusChange(t, e.target.value) }}
-                        className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[t.status] ?? ''}`}
+                        className={`${s.qeSelect} ${s.qeSelectStyled} ${(t.status === 'completed' && completionKind(t) === 'late') ? s.qeStatusCompletedLate : (STATUS_SELECT_CLASS[t.status] ?? '')}`}
                         title="Đổi trạng thái"
                       >
                         <option value={t.status}>
-                          {getLabel('task_status', t.status, STATUS_LABELS[t.status])}
+                          {taskStatusLabel(t, getLabel)}
                         </option>
                         {(STATUS_TRANSITIONS[t.status] ?? []).map((st) => (
                           <option key={st} value={st}>
@@ -1245,6 +1257,9 @@ export default function Tasks() {
   // Ẩn/hiện cột — lưu sessionStorage (giữ sau F5)
   const [hiddenCols, setHiddenCols] = useState(loadHiddenCols)
   useEffect(() => { saveHiddenCols(hiddenCols) }, [hiddenCols])
+
+  // Thu gọn / mở panel bộ lọc — lưu sessionStorage
+  const [filterCollapsed, setFilterCollapsed] = useState(initF.filterCollapsed ?? false)
   function toggleColVisible(key) {
     setHiddenCols((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
   }
@@ -1360,9 +1375,9 @@ export default function Tasks() {
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
       sortValue, searchInput, companyFilter, staffFilter,
       statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize,
-      colFilters: serializeColFilters(colFilters), sortColState,
+      colFilters: serializeColFilters(colFilters), sortColState, filterCollapsed,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize, colFilters, sortColState])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, pageSize, colFilters, sortColState, filterCollapsed])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1539,7 +1554,7 @@ export default function Tasks() {
       case 'companyShort':   return row.companyShortName || row.companyName || '(Không có)'
       case 'assignedToName': return row.assignedToName || '(Chưa giao)'
       case 'source':         return getLabel('task_source', row.source, row.source === 'auto' ? 'Tự động' : 'Thủ công')
-      case 'status':         return getLabel('task_status', row.status, STATUS_LABELS[row.status] ?? row.status)
+      case 'status':         return taskStatusLabel(row, getLabel)
       case 'priority':       return getLabel('task_priority', row.priority, PRIORITY_LABELS[row.priority] ?? row.priority)
       default: { const v = row[colKey]; return v != null && v !== '' ? String(v) : '(Trống)' }
     }
@@ -1780,18 +1795,26 @@ export default function Tasks() {
         {/* ── Unified filter panel (always visible) ── */}
         <div className={s.filterBar}>
           <div className={s.filterBarHead}>
-            <div className={s.filterBarTitle}>
-              <Filter size={12} />
-              Bộ lọc
-              {activeFilterCount > 0 && (
-                <span className={s.filterActiveBadge}>{activeFilterCount} đang bật</span>
-              )}
-            </div>
+            <button
+              className={s.filterCollapseBtn}
+              onClick={() => setFilterCollapsed((v) => !v)}
+              title={filterCollapsed ? 'Mở bộ lọc' : 'Thu gọn bộ lọc'}
+            >
+              {filterCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+              <span className={s.filterBarTitle}>
+                <Filter size={12} />
+                Bộ lọc
+                {activeFilterCount > 0 && (
+                  <span className={s.filterActiveBadge}>{activeFilterCount} đang bật</span>
+                )}
+              </span>
+            </button>
             <button className={s.filterReset} onClick={resetFilters}>
               <RotateCcw size={11} /> Đặt lại
             </button>
           </div>
 
+          {!filterCollapsed && (
           <div className={s.filterGrid}>
 
             {/* NĂM */}
@@ -1937,6 +1960,7 @@ export default function Tasks() {
             </div>
 
           </div>
+          )}
 
           {/* ── Active filter chips ── */}
           {(yearFilter || monthFilter || staffFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || search) && (

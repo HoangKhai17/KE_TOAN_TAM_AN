@@ -12,7 +12,7 @@ import * as tasksApi from '../../api/tasks'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
-  fmtDate, fmtDateTime, isTaskOverdue,
+  fmtDate, fmtDateTime, isTaskOverdue, completionKind, taskStatusLabel,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -32,11 +32,14 @@ const SA_CLASS = {
 
 // ── Shared badges ─────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, task }) {
   const getLabel = useEnumsStore((st) => st.getLabel)
+  const t = task ?? { status }
+  const late = t.status === 'completed' && completionKind(t) === 'late'
+  const cssKey = late ? 'statusCompletedLate' : STATUS_CSS[t.status]
   return (
-    <span className={`${s.statusBadge} ${s[STATUS_CSS[status]]}`}>
-      {getLabel('task_status', status, STATUS_LABELS[status])}
+    <span className={`${s.statusBadge} ${s[cssKey]}`}>
+      {taskStatusLabel(t, getLabel)}
     </span>
   )
 }
@@ -1002,7 +1005,7 @@ export default function TaskDetail() {
                 disabled={savingTitle}
               />
               <div className={s.detailBadges}>
-                <StatusBadge status={task.status} />
+                <StatusBadge task={task} />
                 <PriorityBadge priority={task.priority} />
                 {overdue && (
                   <span className={s.overdueTag}><AlertTriangle size={10} /> Quá hạn</span>

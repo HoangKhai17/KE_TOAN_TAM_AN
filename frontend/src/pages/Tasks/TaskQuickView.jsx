@@ -9,7 +9,7 @@ import { listUserOptions } from '../../api/users'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
-  fmtDate, isTaskOverdue,
+  fmtDate, isTaskOverdue, completionKind, taskStatusLabel,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
@@ -80,11 +80,14 @@ const PRIORITY_SELECT_STYLE = {
 
 // ── Badges ────────────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, task }) {
   const getLabel = useEnumsStore((st) => st.getLabel)
+  const t = task ?? { status }
+  const late = t.status === 'completed' && completionKind(t) === 'late'
+  const cssKey = late ? 'statusCompletedLate' : STATUS_CSS[t.status]
   return (
-    <span className={`${s.statusBadge} ${s[STATUS_CSS[status]]}`}>
-      {getLabel('task_status', status, STATUS_LABELS[status])}
+    <span className={`${s.statusBadge} ${s[cssKey]}`}>
+      {taskStatusLabel(t, getLabel)}
     </span>
   )
 }
@@ -297,7 +300,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
             }
             {task && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                <StatusBadge status={task.status} />
+                <StatusBadge task={task} />
                 <PriorityBadge priority={task.priority} />
                 {overdue && (
                   <span className={s.overdueTag}><AlertTriangle size={10} /> Quá hạn</span>

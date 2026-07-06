@@ -54,6 +54,33 @@ export function progressPct(task) {
   return Math.round((task.checklistDone / task.checklistTotal) * 100)
 }
 
+// ── Hoàn thành trước/trễ hạn (dẫn xuất từ completed_at vs due_date) ─────────────
+// 'on_time' = hoàn thành đúng/trước hạn · 'late' = trễ hạn · null = chưa hoàn thành / không có hạn
+export function completionKind(task) {
+  if (!task || task.status !== 'completed' || !task.dueDate || !task.completedAt) return null
+  const done = String(task.completedAt).slice(0, 10)
+  const due  = String(task.dueDate).slice(0, 10)
+  return done <= due ? 'on_time' : 'late'
+}
+
+// Nhãn trạng thái hiển thị: hoàn thành → tách "trước hạn" / "trễ hạn"
+export function taskStatusLabel(task, getLabel) {
+  if (task.status === 'completed') {
+    const k = completionKind(task)
+    if (k === 'on_time') return 'Hoàn thành trước hạn'
+    if (k === 'late')    return 'Hoàn thành trễ hạn'
+  }
+  return getLabel
+    ? getLabel('task_status', task.status, STATUS_LABELS[task.status] ?? task.status)
+    : (STATUS_LABELS[task.status] ?? task.status)
+}
+
+// Class CSS badge cho trạng thái (hoàn thành trễ hạn dùng biến thể riêng)
+export function taskStatusCss(task) {
+  if (task.status === 'completed' && completionKind(task) === 'late') return 'statusCompletedLate'
+  return STATUS_CSS[task.status] ?? 'statusPending'
+}
+
 export const STATUS_CSS = {
   pending:        'statusPending',
   in_progress:    'statusInProgress',

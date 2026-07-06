@@ -223,6 +223,19 @@
   letter-spacing: 0.5px;
 }
 
+/* Nút thu gọn / mở panel bộ lọc */
+.filterCollapseBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: #1e3a8a;
+}
+.filterCollapseBtn:hover { opacity: 0.75; }
+
 .filterActiveBadge {
   display: inline-flex;
   align-items: center;
@@ -540,6 +553,7 @@
 .statusPendingReview  { background: #e9d5ff; color: #6d28d9; border-color: #c4b5fd; }
 .statusNeedsRevision  { background: #fecdd3; color: #be123c; border-color: #f9a8d4; }
 .statusCompleted      { background: #059669; color: #fff; border-color: #059669; }
+.statusCompletedLate  { background: #ea580c; color: #fff; border-color: #ea580c; }
 
 /* ── Priority badges ─────────────────────────────────────────── */
 
@@ -790,7 +804,8 @@
 
 .boardWrap {
   display: grid;
-  grid-template-columns: repeat(6, minmax(240px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: 360px;      /* cột rộng cố định, thoáng; cuộn ngang khi không đủ chỗ */
   gap: 10px;
   overflow-x: auto;
   padding-bottom: 12px;
@@ -860,10 +875,10 @@
 .boardCards {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   min-height: 120px;
   max-height: calc(100vh - 360px);
   transition: background 0.12s;
@@ -872,10 +887,11 @@
 .boardCardsOver { background: rgba(37, 99, 235, 0.05); }
 
 .boardCard {
+  position: relative;
   background: #fff;
   border: 1.5px solid #e2e8f0;
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: 7px 10px;
   cursor: grab;
   transition: box-shadow 0.16s, border-color 0.16s, transform 0.12s;
   touch-action: none;
@@ -901,45 +917,76 @@
   opacity: 0.96;
 }
 
+.boardCardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
 .boardCardTitle {
-  font-size: var(--fs-xs);
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-3xs);
   font-weight: 700;
   color: #1e3a8a;
-  line-height: 1.4;
-  margin-bottom: 6px;
+  line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
+/* Mức độ ưu tiên trên card kanban — nhỏ gọn hơn (không ảnh hưởng list/detail) */
+.boardCard .priorityBadge {
+  height: 15px;
+  padding: 0 5px;
+  font-size: var(--fs-3xs);
+}
+
+/* Badge hoàn thành trước/trễ hạn trên card kanban */
+.boardCompBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 15px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.boardCompOnTime { background: #d1fae5; color: #047857; }
+.boardCompLate   { background: #ffedd5; color: #c2410c; }
+
 .boardCardMeta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
-.boardCardDate { font-size: var(--fs-2xs); color: #64748b; }
-.boardCardDateOver { font-size: var(--fs-2xs); color: #dc2626; font-weight: 700; }
+.boardCardDate { font-size: var(--fs-3xs); color: #64748b; }
+.boardCardDateOver { font-size: var(--fs-3xs); color: #dc2626; font-weight: 700; }
 
 .boardCardDates {
-  font-size: var(--fs-2xs);
+  margin-left: auto;         /* đẩy ngày về bên phải, mức độ + nhân sự nằm trái */
+  flex-shrink: 0;
+  font-size: var(--fs-3xs);
   color: #64748b;
   white-space: nowrap;
   letter-spacing: 0.01em;
 }
 
 .boardCardOnHold {
-  font-size: var(--fs-2xs);
+  font-size: var(--fs-3xs);
   color: #c2410c;
   background: linear-gradient(90deg, #fff7ed 0%, #ffedd5 100%);
   border-left: 2.5px solid #ea580c;
   border-radius: 0 4px 4px 0;
   padding: 3px 7px;
   margin-bottom: 4px;
-  line-height: 1.4;
+  line-height: 1.35;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -947,27 +994,39 @@
 }
 
 .boardCardCompany {
-  font-size: var(--fs-2xs);
+  font-size: var(--fs-3xs);
   color: #2563eb;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
 }
 
 .boardCardProgress {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 .boardCardProgressText {
-  font-size: var(--fs-2xs);
+  font-size: var(--fs-3xs);
   color: #64748b;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Nhân sự phụ trách — nằm cùng hàng với mức độ */
+.boardCardAssigneeName {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: var(--fs-3xs);
+  color: #475569;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .boardShowMore {
@@ -2639,10 +2698,16 @@
 /* ── Board card delete button ────────────────────────────────── */
 
 .boardCardActions {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;               /* đè lên title để title hiển thị đủ chiều ngang */
   display: flex;
-  justify-content: flex-end;
   gap: 4px;
-  margin-top: 6px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.92);   /* nền mờ để icon rõ khi đè lên chữ */
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1);
   opacity: 0;
   transition: opacity 0.12s;
 }
@@ -3494,6 +3559,7 @@
 .qeStatusPendingReview { background: #faf5ff; color: #7e22ce; border-color: #d8b4fe; }
 .qeStatusNeedsRevision { background: #fff1f2; color: var(--color-status-revision-text); border-color: #fda4af; }
 .qeStatusCompleted { background: #f0fdf4; color: var(--color-success-dark); border-color: #86efac; }
+.qeStatusCompletedLate { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
 .qePriorityUrgent { background: #fef2f2; color: #b91c1c; border-color: var(--color-danger-border); }
 .qePriorityHigh { background: var(--color-warning-bg); color: var(--color-warning-dark); border-color: #fdba74; }
 .qePriorityMedium { background: var(--color-info-bg); color: var(--color-info-dark); border-color: var(--color-primary-ring); }
