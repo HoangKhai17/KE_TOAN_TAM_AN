@@ -12,7 +12,7 @@ import * as tasksApi from '../../api/tasks'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
-  fmtDate, fmtDateTime, isTaskOverdue, completionKind, taskStatusLabel,
+  fmtDate, fmtDateTime, isTaskOverdue, completionKind, taskStatusLabel, canEditDueDate,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -1137,7 +1137,7 @@ export default function TaskDetail() {
 
               <div className={s.infoRow}>
                 <span className={s.infoRowLabel}>Hết hạn</span>
-                {isAdmin ? (
+                {canEditDueDate(task, isAdmin) ? (
                   <input
                     type="date"
                     value={task.dueDate?.slice(0, 10) ?? ''}
@@ -1146,7 +1146,7 @@ export default function TaskDetail() {
                     disabled={savingDue}
                   />
                 ) : (
-                  <span className={s.infoRowValue} title="Chỉ Quản trị viên được sửa ngày hết hạn">
+                  <span className={s.infoRowValue} title="Chỉ Quản trị viên được sửa (công việc này không phải từ lịch định kỳ)">
                     {fmtDate(task.dueDate)}
                   </span>
                 )}

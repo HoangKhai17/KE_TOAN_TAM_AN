@@ -384,14 +384,18 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
       throw Object.assign(new Error('Bạn không có quyền chỉnh sửa công việc này'), { status: 403 })
     }
     delete fieldMap.assignedTo
-    // Nhân viên KHÔNG được sửa Ngày hết hạn (chỉ admin) — chặn khi có thay đổi thực sự
-    if (data.dueDate !== undefined && toDateStr(data.dueDate) !== toDateStr(current.due_date)) {
-      throw Object.assign(
-        new Error('Nhân viên không được sửa Ngày hết hạn. Vui lòng báo Quản trị viên để điều chỉnh.'),
-        { status: 403 }
-      )
+    // Nhân viên KHÔNG được sửa Ngày hết hạn với task nguồn thường (chỉ admin).
+    // NGOẠI LỆ: task sinh từ lịch định kỳ (customer_task_schedule_id) thì staff được sửa.
+    const fromRecurring = current.customer_task_schedule_id != null
+    if (!fromRecurring) {
+      if (data.dueDate !== undefined && toDateStr(data.dueDate) !== toDateStr(current.due_date)) {
+        throw Object.assign(
+          new Error('Nhân viên không được sửa Ngày hết hạn. Vui lòng báo Quản trị viên để điều chỉnh.'),
+          { status: 403 }
+        )
+      }
+      delete fieldMap.dueDate
     }
-    delete fieldMap.dueDate
   }
 
   const updates = []

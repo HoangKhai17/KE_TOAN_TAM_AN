@@ -75,6 +75,12 @@ export function taskStatusLabel(task, getLabel) {
     : (STATUS_LABELS[task.status] ?? task.status)
 }
 
+// Ai được sửa Ngày hết hạn: admin luôn được; staff chỉ được với task sinh từ LỊCH ĐỊNH KỲ
+// (customerTaskScheduleId != null). Task nguồn khác (thủ công...) staff không sửa được.
+export function canEditDueDate(task, isAdmin) {
+  return !!isAdmin || (task?.customerTaskScheduleId != null)
+}
+
 // Class CSS badge cho trạng thái (hoàn thành trễ hạn dùng biến thể riêng)
 export function taskStatusCss(task) {
   if (task.status === 'completed' && completionKind(task) === 'late') return 'statusCompletedLate'

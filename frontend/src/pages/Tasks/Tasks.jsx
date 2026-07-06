@@ -29,7 +29,7 @@ import {
   TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS,
   isTaskOverdue, fmtDate, progressPct,
-  completionKind, taskStatusLabel,
+  completionKind, taskStatusLabel, canEditDueDate,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -978,17 +978,17 @@ function ListView({
                     </td>
                   )}
 
-                  {/* Hết hạn (cạnh ngày bắt đầu) — staff không được sửa, chỉ admin */}
+                  {/* Hết hạn — staff chỉ sửa được với task từ lịch định kỳ; nguồn khác chỉ admin */}
                   {vis('dueDate') && (
                     <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                      {isAdmin ? (
+                      {canEditDueDate(t, isAdmin) ? (
                         <ListDateField
                           value={t.dueDate ?? ''}
                           onChange={(e) => onDueDateChange(t, e.target.value)}
                           isOverdue={overdue}
                         />
                       ) : (
-                        <span className={s.dueDateNormal} title="Chỉ Quản trị viên được sửa ngày hết hạn">
+                        <span className={s.dueDateNormal} title="Chỉ Quản trị viên được sửa (công việc này không phải từ lịch định kỳ)">
                           {t.dueDate ? fmtDate(t.dueDate) : '—'}
                         </span>
                       )}

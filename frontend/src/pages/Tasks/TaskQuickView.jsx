@@ -9,7 +9,7 @@ import { listUserOptions } from '../../api/users'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
-  fmtDate, isTaskOverdue, completionKind, taskStatusLabel,
+  fmtDate, isTaskOverdue, completionKind, taskStatusLabel, canEditDueDate,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
@@ -422,14 +422,14 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
 
                 <div className={s.qvRow}>
                   <span className={s.qvLabel}><Clock size={11} /> Hết hạn</span>
-                  {isAdmin ? (
+                  {canEditDueDate(task, isAdmin) ? (
                     <QvDateField
                       value={toDateValue(task.dueDate)}
                       onChange={(e) => changeDueDate(e.target.value)}
                       isError={overdue}
                     />
                   ) : (
-                    <span className={s.qvValue} title="Chỉ Quản trị viên được sửa ngày hết hạn">
+                    <span className={s.qvValue} title="Chỉ Quản trị viên được sửa (công việc này không phải từ lịch định kỳ)">
                       {task.dueDate ? fmtDate(task.dueDate) : '—'}
                     </span>
                   )}
