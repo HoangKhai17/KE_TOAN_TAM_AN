@@ -75,6 +75,33 @@ export function taskStatusLabel(task, getLabel) {
     : (STATUS_LABELS[task.status] ?? task.status)
 }
 
+// ── Checklist 2 tầng (level 0 = mục chính, 1 = mục phụ) ────────────────────────
+// Mục "cha" = level 0 có mục con (level 1) ngay sau nó.
+export function checklistIsParent(items, index) {
+  const it = items[index]
+  const next = items[index + 1]
+  return it?.level === 0 && next?.level === 1
+}
+// Leaf = mọi mục KHÔNG phải cha → dùng để tính tiến độ.
+export function checklistLeafCounts(items) {
+  let total = 0, done = 0
+  for (let i = 0; i < items.length; i++) {
+    if (checklistIsParent(items, i)) continue
+    total++
+    if (items[i].isCompleted) done++
+  }
+  return { total, done, pct: total ? Math.round((done * 100) / total) : 0 }
+}
+// Cha "xong" (dẫn xuất) khi tất cả con của nó đã xong.
+export function checklistParentDone(items, index) {
+  let hasChild = false
+  for (let j = index + 1; j < items.length && items[j].level === 1; j++) {
+    hasChild = true
+    if (!items[j].isCompleted) return false
+  }
+  return hasChild
+}
+
 // Ai được sửa Ngày hết hạn: admin luôn được; staff chỉ được với task sinh từ LỊCH ĐỊNH KỲ
 // (customerTaskScheduleId != null). Task nguồn khác (thủ công...) staff không sửa được.
 export function canEditDueDate(task, isAdmin) {

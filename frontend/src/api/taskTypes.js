@@ -35,8 +35,8 @@ export async function getChecklist(id) {
   return data.data.steps
 }
 
-export async function addChecklistStep(id, stepText) {
-  const { data } = await api.post(`/task-types/${id}/checklist`, { stepText })
+export async function addChecklistStep(id, stepText, level = 0) {
+  const { data } = await api.post(`/task-types/${id}/checklist`, { stepText, level })
   return data.data.step
 }
 

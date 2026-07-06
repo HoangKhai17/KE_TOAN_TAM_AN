@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  ArrowLeft, Check, X, Plus, Trash2, Edit2,
+  ArrowLeft, Check, X, Plus, Trash2, Edit2, ChevronLeft, ChevronRight,
   Building2, User, Tag, Clock, Calendar, AlertTriangle,
   ClipboardList, MessageSquare, History, Timer, Sliders,
 } from 'lucide-react'
@@ -13,6 +13,7 @@ import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
   fmtDate, fmtDateTime, isTaskOverdue, completionKind, taskStatusLabel, canEditDueDate,
+  checklistLeafCounts, checklistIsParent, checklistParentDone,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -194,9 +195,7 @@ function ChecklistTab({ taskId, onCountChange }) {
       .finally(() => setLoading(false))
   }, [taskId])
 
-  const done  = items.filter((i) => i.isCompleted).length
-  const total = items.length
-  const pct   = total ? Math.round((done / total) * 100) : 0
+  const { total, done, pct } = checklistLeafCounts(items)  // đếm theo mục con (leaf)
 
   useEffect(() => { onCountChange(total, done) }, [total, done, onCountChange]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -221,6 +220,13 @@ function ChecklistTab({ taskId, onCountChange }) {
       setItems((prev) => [...prev, item])
       setAddText('')
     } catch { addToast('Không thể thêm bước', 'error') } finally { setAdding(false) }
+  }
+
+  async function toggleLevel(item) {
+    try {
+      const updated = await tasksApi.updateTaskChecklistItem(taskId, item.id, { level: item.level === 1 ? 0 : 1 })
+      setItems((prev) => prev.map((i) => i.id === updated.id ? updated : i))
+    } catch { addToast('Không thể đổi cấp', 'error') }
   }
 
   async function saveEdit(id) {
@@ -255,16 +261,28 @@ function ChecklistTab({ taskId, onCountChange }) {
         </div>
       )}
 
-      {items.map((item) => {
+      {items.map((item, idx) => {
         const isToggling = togglingIds.has(item.id)
+        const isChild  = item.level === 1
+        const isParent = checklistIsParent(items, idx)
+        const parentDone = isParent && checklistParentDone(items, idx)
         return (
-        <div key={item.id} className={s.checklistItem}>
-          <div
-            className={`${s.checklistCheck} ${item.isCompleted ? s.checklistCheckDone : ''} ${isToggling ? s.checklistCheckDisabled : ''}`}
-            onClick={() => toggle(item)}
-          >
-            {item.isCompleted && <Check size={10} color="#fff" />}
-          </div>
+        <div key={item.id} className={`${s.checklistItem} ${isChild ? s.checklistItemChild : ''}`}>
+          {isParent ? (
+            <div
+              className={`${s.checklistGroupMark} ${parentDone ? s.checklistGroupMarkDone : ''}`}
+              title="Mục chính — tự hoàn thành khi tất cả mục con xong"
+            >
+              {parentDone && <Check size={10} color="#fff" />}
+            </div>
+          ) : (
+            <div
+              className={`${s.checklistCheck} ${item.isCompleted ? s.checklistCheckDone : ''} ${isToggling ? s.checklistCheckDisabled : ''}`}
+              onClick={() => toggle(item)}
+            >
+              {item.isCompleted && <Check size={10} color="#fff" />}
+            </div>
+          )}
 
           {editId === item.id ? (
             <>
@@ -285,8 +303,11 @@ function ChecklistTab({ taskId, onCountChange }) {
             </>
           ) : (
             <>
-              <span className={`${s.checklistText} ${item.isCompleted ? s.checklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>{item.stepText}</span>
+              <span className={`${s.checklistText} ${isParent ? s.checklistTextParent : ''} ${(!isParent && item.isCompleted) ? s.checklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>{item.stepText}</span>
               <div className={s.checklistItemActions}>
+                <button className={s.btnIcon} onClick={() => toggleLevel(item)} title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>
+                  {isChild ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
+                </button>
                 <button className={s.btnIcon} onClick={() => { setEditId(item.id); setEditText(item.stepText) }} title="Sửa"><Edit2 size={11} /></button>
                 <button className={`${s.btnIcon} ${s.btnIconDanger}`} onClick={() => deleteItem(item.id)} title="Xoá"><Trash2 size={11} /></button>
               </div>

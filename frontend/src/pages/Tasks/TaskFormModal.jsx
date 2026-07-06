@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Info, Search, ChevronDown, X, Plus, Link2, Trash2 } from 'lucide-react'
+import { Info, Search, ChevronDown, ChevronLeft, ChevronRight, X, Plus, Link2, Trash2 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { createTask, addTaskChecklistItem, addTaskLink } from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
@@ -152,13 +152,17 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   function addToChecklist() {
     const text = newItemText.trim()
     if (!text) return
-    setChecklistItems((prev) => [...prev, { id: Date.now(), text }])
+    setChecklistItems((prev) => [...prev, { id: Date.now(), text, level: 0 }])
     setNewItemText('')
     newItemRef.current?.focus()
   }
 
   function removeFromChecklist(id) {
     setChecklistItems((prev) => prev.filter((item) => item.id !== id))
+  }
+
+  function toggleItemLevel(id) {
+    setChecklistItems((prev) => prev.map((item) => item.id === id ? { ...item, level: item.level === 1 ? 0 : 1 } : item))
   }
 
   function addLink() {
@@ -198,7 +202,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         source:      form.source || 'manual',
       })
       for (const item of checklistItems) {
-        await addTaskChecklistItem(task.id, { stepText: item.text })
+        await addTaskChecklistItem(task.id, { stepText: item.text, level: item.level ?? 0 })
       }
       await Promise.all(linkItems.map((l) => addTaskLink(task.id, { name: l.name, url: l.url })))
       if (openAfter) onSavedAndOpen(task)
@@ -364,9 +368,19 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
 
           {checklistItems.length > 0 && (
             <div className={s.fmClList}>
-              {checklistItems.map((item, idx) => (
-                <div key={item.id} className={s.fmClItem}>
-                  <span className={s.fmClIdx}>{idx + 1}.</span>
+              {checklistItems.map((item, idx) => {
+                const isChild = item.level === 1
+                return (
+                <div key={item.id} className={`${s.fmClItem} ${isChild ? s.fmClItemChild : ''}`}>
+                  <button
+                    type="button"
+                    className={s.fmClIndent}
+                    onClick={() => toggleItemLevel(item.id)}
+                    title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}
+                  >
+                    {isChild ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
+                  </button>
+                  <span className={s.fmClIdx}>{isChild ? '•' : `${idx + 1}.`}</span>
                   <span className={s.fmClText} style={{ whiteSpace: 'pre-wrap' }}>{item.text}</span>
                   <button
                     type="button"
@@ -377,7 +391,8 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
                     <X size={11} />
                   </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
 

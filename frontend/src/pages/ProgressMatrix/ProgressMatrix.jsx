@@ -49,18 +49,52 @@ function downloadBlob(blob, filename) {
 // ── Matrix table (Theo quy trình) ───────────────────────────────────────────────
 function MatrixTable({ matrix }) {
   const columns = matrix.columns
+  const hasGroups = columns.some((c) => c.group)
+  // Gom cột theo nhóm (mục chính) để dựng header 2 tầng
+  const groupRuns = []
+  for (let i = 0; i < columns.length; i++) {
+    const g = columns[i].group
+    if (g) {
+      let j = i
+      while (j < columns.length && columns[j].group === g) j++
+      groupRuns.push({ group: g, span: j - i, start: i })
+      i = j - 1
+    } else {
+      groupRuns.push({ group: null, span: 1, start: i })
+    }
+  }
   return (
     <div className={s.tableWrap}>
       <table className={s.matrix}>
         <thead>
-          <tr>
-            <th className={`${s.th} ${s.colName}`}>Tên khách hàng</th>
-            <th className={`${s.th} ${s.colTax}`}>Mã số thuế</th>
-            <th className={`${s.th} ${s.colStaff}`}>NV quản lý</th>
-            {columns.map((c) => (
-              <th key={c.stepOrder + c.stepText} className={`${s.th} ${s.thStep}`}>{c.stepText}</th>
-            ))}
-          </tr>
+          {hasGroups ? (
+            <>
+              <tr>
+                <th className={`${s.th} ${s.colName}`} rowSpan={2}>Tên khách hàng</th>
+                <th className={`${s.th} ${s.colTax}`} rowSpan={2}>Mã số thuế</th>
+                <th className={`${s.th} ${s.colStaff}`} rowSpan={2}>NV quản lý</th>
+                {groupRuns.map((run, idx) => (
+                  run.group
+                    ? <th key={idx} colSpan={run.span} className={`${s.th} ${s.thGroup}`}>{run.group}</th>
+                    : <th key={idx} rowSpan={2} className={`${s.th} ${s.thStep}`}>{columns[run.start].stepText}</th>
+                ))}
+              </tr>
+              <tr>
+                {columns.map((c, i) => c.group
+                  ? <th key={i} className={`${s.th} ${s.thStep} ${s.thStepChild}`}>{c.stepText}</th>
+                  : null)}
+              </tr>
+            </>
+          ) : (
+            <tr>
+              <th className={`${s.th} ${s.colName}`}>Tên khách hàng</th>
+              <th className={`${s.th} ${s.colTax}`}>Mã số thuế</th>
+              <th className={`${s.th} ${s.colStaff}`}>NV quản lý</th>
+              {columns.map((c) => (
+                <th key={c.stepOrder + c.stepText} className={`${s.th} ${s.thStep}`}>{c.stepText}</th>
+              ))}
+            </tr>
+          )}
         </thead>
         <tbody>
           {matrix.rows.map((r) => (

@@ -53,12 +53,24 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
   if (!ttRows[0]) throw Object.assign(new Error('Loại công việc không tồn tại'), { status: 404 })
   const taskType = ttRows[0]
 
-  // Cột = các bước checklist của quy trình
-  const { rows: cols } = await query(
-    `SELECT step_order, step_text FROM task_type_checklist_templates
+  // Cột = các bước checklist của quy trình (kèm level để phân cấp)
+  const { rows: templ } = await query(
+    `SELECT step_order, step_text, level FROM task_type_checklist_templates
      WHERE task_type_id = $1 ORDER BY step_order, id`,
     [taskTypeId],
   )
+  // Cột hiển thị = các bước "leaf" (mục phụ, hoặc mục chính không con). Mục chính CÓ con → nhóm.
+  // group = tên mục chính (nếu là mục phụ) để dựng header 2 tầng.
+  const cols = []
+  for (let i = 0; i < templ.length; i++) {
+    const isParent = templ[i].level === 0 && templ[i + 1]?.level === 1
+    if (isParent) continue
+    let group = null
+    if (templ[i].level === 1) {
+      for (let j = i - 1; j >= 0; j--) { if (templ[j].level === 0) { group = templ[j].step_text; break } }
+    }
+    cols.push({ step_order: templ[i].step_order, step_text: templ[i].step_text, group })
+  }
 
   // Hàng = phiếu của quy trình có kỳ rơi vào tháng (1 phiếu mới nhất / công ty)
   const params = [taskTypeId, periodStart]
@@ -116,7 +128,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
   return {
     taskType: { id: taskType.id, name: taskType.name, groupName: taskType.group_name },
     period:   { month: m, year: y, label: `Tháng ${m}/${y}` },
-    columns:  cols.map((c) => ({ stepOrder: c.step_order, stepText: c.step_text })),
+    columns:  cols.map((c) => ({ stepOrder: c.step_order, stepText: c.step_text, group: c.group ?? null })),
     rows,
   }
 }
@@ -210,8 +222,14 @@ async function summaryRows({ scope, id, month, year, source, forceAssignedTo }) 
     JOIN companies  c  ON c.id  = t.company_id
     LEFT JOIN users u  ON u.id  = t.assigned_to
     LEFT JOIN LATERAL (
-      SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE is_completed = TRUE) AS done
-      FROM task_checklist_items ci WHERE ci.task_id = t.id
+      -- Chỉ đếm mục leaf (mục phụ, hoặc mục chính không con) — mục chính có con là nhóm
+      SELECT COUNT(*) FILTER (WHERE is_leaf) AS total,
+             COUNT(*) FILTER (WHERE is_leaf AND is_completed) AS done
+      FROM (
+        SELECT is_completed,
+               NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
+        FROM task_checklist_items WHERE task_id = t.id
+      ) z
     ) cl ON TRUE
     WHERE ${scopeCond}
       AND COALESCE(t.start_date, t.due_date) >= $2::date
@@ -291,9 +309,9 @@ async function exportMatrix(matrix, includeSet) {
   if (has('assignee')) idCols.push({ header: 'NV quản lý', get: (r) => r.assigneeName || '' })
   const idCount = idCols.length
 
-  const stepHeaders = matrix.columns.map((c) => c.stepText)
-  const headers = [...idCols.map((c) => c.header), ...stepHeaders]
-  const totalCols = headers.length
+  const stepCols  = matrix.columns
+  const totalCols = idCount + stepCols.length
+  const hasGroups = stepCols.some((c) => c.group)
 
   // Dòng 1: tiêu đề
   ws.mergeCells(1, 1, 1, totalCols)
@@ -303,24 +321,59 @@ async function exportMatrix(matrix, includeSet) {
   titleCell.alignment = { vertical: 'middle' }
   ws.getRow(1).height = 26
 
-  // Dòng 2: header
-  const headerRow = ws.getRow(2)
-  headerRow.values = headers
-  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1d4ed8' } }
-  headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
-  headerRow.height = 46
+  const headerStyle = (cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1d4ed8' } }
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+  }
+
+  let dataStartRow
+  if (hasGroups) {
+    // Header 2 tầng: dòng 2 = nhóm (mục chính, merge ngang), dòng 3 = mục con/mục lẻ
+    idCols.forEach((c, i) => {
+      const col = i + 1
+      ws.mergeCells(2, col, 3, col)
+      const cell = ws.getCell(2, col); cell.value = c.header; headerStyle(cell)
+    })
+    let c = idCount + 1, i = 0
+    while (i < stepCols.length) {
+      const g = stepCols[i].group
+      if (g) {
+        let j = i
+        while (j < stepCols.length && stepCols[j].group === g) j++
+        ws.mergeCells(2, c, 2, c + (j - i) - 1)
+        const gc = ws.getCell(2, c); gc.value = g; headerStyle(gc)
+        for (let k = i; k < j; k++) { const sc = ws.getCell(3, c); sc.value = stepCols[k].stepText; headerStyle(sc); c++ }
+        i = j
+      } else {
+        ws.mergeCells(2, c, 3, c)
+        const sc = ws.getCell(2, c); sc.value = stepCols[i].stepText; headerStyle(sc)
+        c++; i++
+      }
+    }
+    ws.getRow(2).height = 24
+    ws.getRow(3).height = 44
+    dataStartRow = 4
+  } else {
+    const headerRow = ws.getRow(2)
+    headerRow.values = [...idCols.map((c) => c.header), ...stepCols.map((c) => c.stepText)]
+    for (let cc = 1; cc <= totalCols; cc++) headerStyle(ws.getCell(2, cc))
+    headerRow.height = 46
+    dataStartRow = 3
+  }
 
   // Dòng dữ liệu
+  let rIdx = dataStartRow
   for (const r of matrix.rows) {
-    ws.addRow([...idCols.map((c) => c.get(r)), ...r.cells.map((c) => (c.done ? 'x' : ''))])
+    const row = ws.getRow(rIdx++)
+    row.values = [...idCols.map((c) => c.get(r)), ...r.cells.map((c) => (c.done ? 'x' : ''))]
   }
 
   applyGrid(ws, totalCols, idCount)
   ws.getColumn(1).width = 28
   for (let i = 2; i <= idCount; i++) ws.getColumn(i).width = 16
   for (let i = idCount + 1; i <= totalCols; i++) ws.getColumn(i).width = 15
-  ws.views = [{ state: 'frozen', xSplit: idCount, ySplit: 2 }]
+  ws.views = [{ state: 'frozen', xSplit: idCount, ySplit: dataStartRow - 1 }]
 
   return wb.xlsx.writeBuffer()
 }

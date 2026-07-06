@@ -7,6 +7,7 @@ function toDto(row) {
     taskId:      row.task_id,
     stepOrder:   row.step_order,
     stepText:    row.step_text,
+    level:       row.level ?? 0,
     isCompleted: row.is_completed,
     completedBy: row.completed_by ?? null,
     completedAt: row.completed_at ?? null,
@@ -28,20 +29,20 @@ async function listChecklist(taskId) {
   return rows.map(toDto)
 }
 
-async function addItem(taskId, { stepText }, actorId) {
+async function addItem(taskId, { stepText, level = 0 }, actorId) {
   await assertTask(taskId)
   const { rows: [{ max_order }] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max_order FROM task_checklist_items WHERE task_id = $1',
     [taskId]
   )
   const { rows: [item] } = await query(
-    'INSERT INTO task_checklist_items (task_id, step_order, step_text) VALUES ($1,$2,$3) RETURNING *',
-    [taskId, max_order + 1, stepText]
+    'INSERT INTO task_checklist_items (task_id, step_order, step_text, level) VALUES ($1,$2,$3,$4) RETURNING *',
+    [taskId, max_order + 1, stepText, level === 1 ? 1 : 0]
   )
   return toDto(item)
 }
 
-async function updateItem(taskId, itemId, { stepText, isCompleted }, actorId) {
+async function updateItem(taskId, itemId, { stepText, isCompleted, level }, actorId) {
   const { rows: [item] } = await query(
     'SELECT * FROM task_checklist_items WHERE id = $1 AND task_id = $2',
     [itemId, taskId]
@@ -54,6 +55,10 @@ async function updateItem(taskId, itemId, { stepText, isCompleted }, actorId) {
   if (stepText !== undefined) {
     params.push(stepText)
     updates.push(`step_text = $${params.length}`)
+  }
+  if (level !== undefined) {
+    params.push(level === 1 ? 1 : 0)
+    updates.push(`level = $${params.length}`)
   }
   if (isCompleted !== undefined) {
     params.push(isCompleted)

@@ -1830,6 +1830,22 @@
 
 .checklistTextDone { text-decoration: line-through; color: var(--color-muted); }
 
+/* Checklist 2 tầng */
+.checklistItemChild { margin-left: 26px; border-left: 2px solid #dbeafe; padding-left: 8px; }
+.checklistTextParent { font-weight: var(--fw-bold); color: var(--color-text-strong, #1e293b); }
+.checklistGroupMark {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 2px solid #93c5fd;
+  background: #eff6ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.checklistGroupMarkDone { background: var(--color-success, #059669); border-color: var(--color-success, #059669); }
+
 .checklistTextInput {
   flex: 1;
   height: 28px;
@@ -2400,6 +2416,26 @@
   font-size: var(--fs-sm);
 }
 .fmClItem:last-child { border-bottom: none; }
+
+/* Mục phụ (level 1) trong form tạo — thụt lề + viền trái */
+.fmClItemChild {
+  margin-left: 24px;
+  border-left: 2px solid #dbeafe;
+}
+.fmClIndent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.fmClIndent:hover { color: var(--color-primary, #2563eb); background: #eff6ff; }
 
 .fmClIdx {
   font-size: var(--fs-xs);

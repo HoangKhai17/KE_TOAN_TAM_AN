@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  X, ArrowUpRight, Check, Loader2, Plus,
+  X, ArrowUpRight, Check, Loader2, Plus, ChevronLeft, ChevronRight,
   Building2, User, Calendar, Clock, AlertTriangle, Flag, FileText, Tag,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
@@ -10,6 +10,7 @@ import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
   fmtDate, isTaskOverdue, completionKind, taskStatusLabel, canEditDueDate,
+  checklistLeafCounts, checklistIsParent, checklistParentDone,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
@@ -238,8 +239,8 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
 
   function syncChecklistCounts(newCl) {
     if (!task) return
-    const done = newCl.filter((i) => i.isCompleted).length
-    applyUpdate({ ...task, checklistTotal: newCl.length, checklistDone: done })
+    const { total, done } = checklistLeafCounts(newCl)
+    applyUpdate({ ...task, checklistTotal: total, checklistDone: done })
   }
 
   async function toggleChecklist(item) {
@@ -280,11 +281,19 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
     } catch { addToast('Không thể xóa mục checklist', 'error') }
   }
 
+  async function toggleChecklistLevel(item) {
+    try {
+      const updated = await tasksApi.updateTaskChecklistItem(taskId, item.id, { level: item.level === 1 ? 0 : 1 })
+      const newCl = checklist.map((i) => i.id === updated.id ? updated : i)
+      setChecklist(newCl)
+      syncChecklistCounts(newCl)
+    } catch { addToast('Không thể đổi cấp', 'error') }
+  }
+
   const overdue     = task ? isTaskOverdue(task) : false
   const transitions = task ? (STATUS_TRANSITIONS[task.status] ?? []) : []
-  const clDone      = checklist.filter((i) => i.isCompleted).length
-  const clTotal     = checklist.length
-  const pct         = clTotal ? Math.round((clDone / clTotal) * 100) : null
+  const { total: clTotal, done: clDone, pct: clPct } = checklistLeafCounts(checklist)
+  const pct         = clTotal ? clPct : null
 
   return (
     <>
@@ -474,20 +483,36 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                   )}
 
                   <div className={s.qvChecklistList}>
-                    {checklist.map((item) => {
+                    {checklist.map((item, idx) => {
                       const isToggling = togglingIds.has(item.id)
+                      const isChild  = item.level === 1
+                      const isParent = checklistIsParent(checklist, idx)
+                      const parentDone = isParent && checklistParentDone(checklist, idx)
                       return (
-                        <div key={item.id} className={s.qvChecklistItem}>
-                          <div
-                            className={`${s.checklistCheck} ${item.isCompleted ? s.checklistCheckDone : ''}`}
-                            onClick={() => toggleChecklist(item)}
-                            style={isToggling ? { opacity: 0.5, pointerEvents: 'none' } : { cursor: 'pointer' }}
-                          >
-                            {item.isCompleted && <Check size={10} color="#fff" />}
-                          </div>
-                          <span className={`${s.qvChecklistText} ${item.isCompleted ? s.qvChecklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>
+                        <div key={item.id} className={`${s.qvChecklistItem} ${isChild ? s.checklistItemChild : ''}`}>
+                          {isParent ? (
+                            <div className={`${s.checklistGroupMark} ${parentDone ? s.checklistGroupMarkDone : ''}`} title="Mục chính — tự xong khi các mục con xong">
+                              {parentDone && <Check size={10} color="#fff" />}
+                            </div>
+                          ) : (
+                            <div
+                              className={`${s.checklistCheck} ${item.isCompleted ? s.checklistCheckDone : ''}`}
+                              onClick={() => toggleChecklist(item)}
+                              style={isToggling ? { opacity: 0.5, pointerEvents: 'none' } : { cursor: 'pointer' }}
+                            >
+                              {item.isCompleted && <Check size={10} color="#fff" />}
+                            </div>
+                          )}
+                          <span className={`${s.qvChecklistText} ${isParent ? s.checklistTextParent : ''} ${(!isParent && item.isCompleted) ? s.qvChecklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>
                             {item.stepText}
                           </span>
+                          <button
+                            className={s.qvChecklistDel}
+                            onClick={() => toggleChecklistLevel(item)}
+                            title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}
+                          >
+                            {isChild ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
+                          </button>
                           <button
                             className={s.qvChecklistDel}
                             onClick={() => removeChecklistItem(item.id)}

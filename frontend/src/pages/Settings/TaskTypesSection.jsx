@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  Plus, Pencil, ChevronDown, ChevronRight, Loader2,
+  Plus, Pencil, ChevronDown, ChevronRight, ChevronLeft, Loader2,
   GripVertical, Trash2, Check, X, Tag, AlignLeft,
   Power,
 } from 'lucide-react'
@@ -269,10 +269,11 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
 
 // ── Checklist Panel ───────────────────────────────────────────────────────────
 
-function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete }) {
+function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: step.id })
 
+  const isChild = step.level === 1
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -282,11 +283,18 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
   }
 
   return (
-    <div ref={setNodeRef} style={style} className={s.clItem}>
+    <div ref={setNodeRef} style={style} className={`${s.clItem} ${isChild ? s.clItemChild : ''}`}>
       <button className={s.clDragHandle} {...attributes} {...listeners} title="Kéo để sắp xếp">
         <GripVertical size={14} />
       </button>
-      <span className={s.clStepOrder}>{step.stepOrder}.</span>
+      <button
+        className={s.clIndentBtn}
+        onClick={onToggleLevel}
+        title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}
+      >
+        {isChild ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
+      </button>
+      <span className={`${s.clStepOrder} ${isChild ? s.clStepOrderChild : ''}`}>{isChild ? '•' : `${step.stepOrder}.`}</span>
 
       {isEditing ? (
         <>
@@ -380,6 +388,17 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
     setSaving(false)
   }
 
+  async function handleToggleLevel(step) {
+    setSaving(true)
+    try {
+      await updateChecklistStep(taskTypeId, step.id, { level: step.level === 1 ? 0 : 1 })
+      onRefresh()
+    } catch {
+      addToast('Không thể đổi cấp', 'error')
+    }
+    setSaving(false)
+  }
+
   async function handleAdd() {
     const text = addText.trim()
     if (!text) return
@@ -418,6 +437,7 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
               onSave={handleSaveEdit}
               onCancel={() => setEditingId(null)}
               onDelete={() => handleDelete(step.id)}
+              onToggleLevel={() => handleToggleLevel(step)}
             />
           ))}
         </SortableContext>

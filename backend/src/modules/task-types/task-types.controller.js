@@ -53,7 +53,7 @@ async function getChecklist(req, res, next) {
 
 async function addChecklistStep(req, res, next) {
   try {
-    const step = await svc.addChecklistStep(req.params.id, req.body.stepText)
+    const step = await svc.addChecklistStep(req.params.id, req.body.stepText, req.body.level ?? 0)
     res.status(201).json({ success: true, data: { step } })
   } catch (err) { next(err) }
 }

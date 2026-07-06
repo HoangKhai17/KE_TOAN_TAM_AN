@@ -20,6 +20,7 @@ function toStepDto(row) {
     id:        row.id,
     stepOrder: row.step_order,
     stepText:  row.step_text,
+    level:     row.level ?? 0,
     createdAt: row.created_at,
   }
 }
@@ -208,7 +209,7 @@ async function getChecklist(taskTypeId) {
   return rows.map(toStepDto)
 }
 
-async function addChecklistStep(taskTypeId, stepText) {
+async function addChecklistStep(taskTypeId, stepText, level = 0) {
   await assertTaskTypeExists(taskTypeId)
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_checklist_templates WHERE task_type_id = $1',
@@ -216,9 +217,9 @@ async function addChecklistStep(taskTypeId, stepText) {
   )
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [step] } = await query(
-    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text)
-     VALUES ($1, $2, $3) RETURNING *`,
-    [taskTypeId, nextOrder, stepText]
+    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text, level)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0]
   )
   return toStepDto(step)
 }
@@ -229,6 +230,7 @@ async function updateChecklistStep(taskTypeId, stepId, data) {
   const params = []
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
+  if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
 
   params.push(stepId, taskTypeId)
   const { rows: [step] } = await query(

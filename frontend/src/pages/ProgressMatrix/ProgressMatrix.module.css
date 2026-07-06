@@ -136,6 +136,17 @@
   line-height: 1.25;
 }
 
+/* Header nhóm (mục chính) — hàng trên của header 2 tầng */
+.thGroup {
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
+  background: var(--color-primary, #1d4ed8);
+  color: #fff;
+  border-bottom: 1px solid rgba(255,255,255,0.35);
+}
+.thStepChild { font-weight: var(--fw-medium); }
+
 .td {
   padding: var(--space-3);
   border-bottom: 1px solid var(--color-border-soft);

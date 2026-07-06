@@ -217,9 +217,14 @@ async function fetchSection(key, companyIds, includeCredentials) {
          FROM tasks t
          LEFT JOIN users ua ON ua.id = t.assigned_to
          LEFT JOIN LATERAL (
-           SELECT COUNT(*) AS checklist_total,
-                  COUNT(*) FILTER (WHERE ci.is_completed = TRUE) AS checklist_done
-           FROM task_checklist_items ci WHERE ci.task_id = t.id
+           -- Đếm theo mục con (leaf): loại mục chính có con (level 0 ngay trước level 1)
+           SELECT COUNT(*) FILTER (WHERE is_leaf) AS checklist_total,
+                  COUNT(*) FILTER (WHERE is_leaf AND is_completed) AS checklist_done
+           FROM (
+             SELECT is_completed,
+                    NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
+             FROM task_checklist_items WHERE task_id = t.id
+           ) z
          ) cl ON TRUE
          WHERE t.company_id = ANY($1)
          ORDER BY t.company_id, t.due_date NULLS LAST, t.created_at DESC`,

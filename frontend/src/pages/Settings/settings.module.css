@@ -1209,6 +1209,33 @@
 
 .clItem:hover { background: #f1f5f9; }
 
+/* Mục phụ (level 1) — thụt lề + viền trái để phân cấp */
+.clItemChild {
+  margin-left: 26px;
+  border-left: 2px solid #dbeafe;
+  padding-left: 8px;
+}
+.clStepOrderChild { color: #93c5fd; min-width: 12px; }
+
+/* Nút thụt/lùi cấp */
+.clIndentBtn {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+.clIndentBtn:hover { color: #2563eb; background: #dbeafe; }
+
 .clDragHandle {
   width: 22px;
   height: 22px;

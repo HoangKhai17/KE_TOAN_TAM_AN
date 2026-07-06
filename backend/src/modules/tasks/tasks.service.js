@@ -102,9 +102,15 @@ const TASK_SELECT = `
   LEFT JOIN task_types tt ON tt.id = t.task_type_id
   LEFT JOIN users      ua ON ua.id = t.assigned_to
   LEFT JOIN LATERAL (
-    SELECT COUNT(*)                                        AS checklist_total,
-           COUNT(*) FILTER (WHERE ci.is_completed = TRUE) AS checklist_done
-    FROM task_checklist_items ci WHERE ci.task_id = t.id
+    -- Chỉ đếm mục "leaf": mục phụ (level 1) hoặc mục chính không có con.
+    -- Mục chính CÓ con (level 0 ngay trước 1 level 1) là nhóm → không tính vào tiến độ.
+    SELECT COUNT(*) FILTER (WHERE is_leaf)                  AS checklist_total,
+           COUNT(*) FILTER (WHERE is_leaf AND is_completed) AS checklist_done
+    FROM (
+      SELECT is_completed,
+             NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
+      FROM task_checklist_items WHERE task_id = t.id
+    ) z
   ) cl ON TRUE
   LEFT JOIN LATERAL (
     SELECT cm.content AS latest_comment, cm.created_at AS latest_comment_at, ucm.name AS latest_comment_by
@@ -335,8 +341,8 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   // Copy checklist template from task type — single INSERT … SELECT (no loop)
   if (taskTypeId) {
     await query(
-      `INSERT INTO task_checklist_items (task_id, step_order, step_text)
-       SELECT $1, step_order, step_text
+      `INSERT INTO task_checklist_items (task_id, step_order, step_text, level)
+       SELECT $1, step_order, step_text, level
        FROM task_type_checklist_templates
        WHERE task_type_id = $2
        ORDER BY step_order`,
@@ -508,7 +514,11 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
 
   const { rows } = await query(
     `SELECT t.*,
-            (SELECT COUNT(*) FROM task_checklist_items ci WHERE ci.task_id = t.id AND ci.is_completed = FALSE) AS unchecked_count
+            (SELECT COUNT(*) FROM (
+               SELECT is_completed,
+                      NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
+               FROM task_checklist_items WHERE task_id = t.id
+             ) z WHERE is_leaf AND NOT is_completed) AS unchecked_count
      FROM tasks t WHERE t.id = $1`,
     [id]
   )
