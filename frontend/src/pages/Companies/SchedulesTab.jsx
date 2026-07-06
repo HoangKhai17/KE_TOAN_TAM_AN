@@ -4,7 +4,7 @@ import {
   CalendarDays, Plus, Eye, Power, Pencil, Trash2, Loader2, AlertTriangle, RefreshCw,
 } from 'lucide-react'
 import * as schedulesApi from '../../api/schedules'
-import { listTaskTypes } from '../../api/taskTypes'
+import { listTaskTypes, getChecklist } from '../../api/taskTypes'
 import { listUserOptions } from '../../api/users'
 import { getNextOccurrences } from '../../utils/recurrencePreview'
 import { useToastStore } from '../../stores/toastStore'
@@ -40,6 +40,7 @@ function emptyForm() {
     recurrenceConfig: { day: 1 },
     deadlineOffsetDays: 0,
     overrideSlaDays: '',
+    excludedStepIds: [],
     notes: '',
   }
 }
@@ -409,6 +410,38 @@ export default function SchedulesTab({ company, isAdmin }) {
   const [form,       setForm]       = useState(emptyForm())
   const [formErrors, setFormErrors] = useState({})
   const [saving,     setSaving]     = useState(false)
+  const [templSteps, setTemplSteps] = useState([])   // checklist mẫu của loại CV đang chọn
+
+  // Nạp checklist mẫu khi mở modal / đổi loại công việc → để chọn bước áp dụng
+  useEffect(() => {
+    if (!modal || !form.taskTypeId) { setTemplSteps([]); return }
+    let cancelled = false
+    getChecklist(form.taskTypeId)
+      .then((steps) => { if (!cancelled) setTemplSteps(steps || []) })
+      .catch(() => { if (!cancelled) setTemplSteps([]) })
+    return () => { cancelled = true }
+  }, [modal, form.taskTypeId])
+
+  // Bật/tắt 1 bước cho công ty này (mục chính kéo theo con; con áp dụng thì mục chính cũng áp dụng)
+  function toggleStep(idx) {
+    const step = templSteps[idx]
+    const excluded = new Set(form.excludedStepIds || [])
+    const wasExcluded = excluded.has(step.id)
+    const affected = [step.id]
+    const isParent = step.level === 0 && templSteps[idx + 1]?.level === 1
+    if (isParent) {
+      for (let j = idx + 1; j < templSteps.length && templSteps[j].level === 1; j++) affected.push(templSteps[j].id)
+    }
+    if (wasExcluded) {
+      if (step.level === 1) {
+        for (let j = idx - 1; j >= 0; j--) { if (templSteps[j].level === 0) { affected.push(templSteps[j].id); break } }
+      }
+      affected.forEach((id) => excluded.delete(id))
+    } else {
+      affected.forEach((id) => excluded.add(id))
+    }
+    setForm((f) => ({ ...f, excludedStepIds: [...excluded] }))
+  }
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -459,6 +492,7 @@ export default function SchedulesTab({ company, isAdmin }) {
       recurrenceConfig:   { ...(sc.recurrenceConfig || {}) },
       deadlineOffsetDays: sc.deadlineOffsetDays ?? 0,
       overrideSlaDays:    sc.overrideSlaDays != null ? String(sc.overrideSlaDays) : '',
+      excludedStepIds:    Array.isArray(sc.excludedStepIds) ? sc.excludedStepIds : [],
       notes:              sc.notes || '',
     })
     setFormErrors({})
@@ -477,6 +511,7 @@ export default function SchedulesTab({ company, isAdmin }) {
         recurrenceConfig:   form.recurrenceConfig,
         deadlineOffsetDays: Number(form.deadlineOffsetDays) || 0,
         overrideSlaDays:    form.overrideSlaDays !== '' ? parseInt(form.overrideSlaDays) : null,
+        excludedStepIds:    form.excludedStepIds || [],
         notes:              form.notes || null,
       }
 
@@ -585,7 +620,7 @@ export default function SchedulesTab({ company, isAdmin }) {
         <div className={s.emptyState}>
           <div className={s.emptyIcon}><CalendarDays size={24} /></div>
           <p className={s.emptyTitle}>Chưa có lịch định kỳ</p>
-          <p className={s.emptyDesc}>Nhấn "Thêm lịch" để cấu hình lịch tự động sinh công việc cho công ty này.</p>
+          <p className={s.emptyDesc}>Nhấn &ldquo;Thêm lịch&rdquo; để cấu hình lịch tự động sinh công việc cho công ty này.</p>
         </div>
       ) : (
         <div className={s.tableWrap}>
@@ -697,7 +732,7 @@ export default function SchedulesTab({ company, isAdmin }) {
                   <select
                     className={`${s.formSelect} ${formErrors.taskTypeId ? s.formInputError : ''}`}
                     value={form.taskTypeId}
-                    onChange={e => setField('taskTypeId', e.target.value)}
+                    onChange={e => setForm(f => ({ ...f, taskTypeId: e.target.value, excludedStepIds: [] }))}
                   >
                     <option value="">-- Chọn loại công việc --</option>
                     {taskTypes.map(tt => (
@@ -712,6 +747,28 @@ export default function SchedulesTab({ company, isAdmin }) {
                 <div className={s.formField}>
                   <div className={s.scEditTypeLabel}>Loại công việc</div>
                   <div className={s.scEditTypeName}>{modal.schedule.taskTypeName}</div>
+                </div>
+              )}
+
+              {/* Chọn bước checklist áp dụng cho công ty này (Phương án A: tập con) */}
+              {templSteps.length > 0 && (
+                <div className={s.formField}>
+                  <label className={s.formLabel}>Bước checklist áp dụng</label>
+                  <div className={s.scStepPickHint}>
+                    Bỏ tick những bước công ty này không dùng — task sinh ra sẽ chỉ có các bước được chọn.
+                  </div>
+                  <div className={s.scStepPickList}>
+                    {templSteps.map((st, idx) => {
+                      const isChild = st.level === 1
+                      const checked = !(form.excludedStepIds || []).includes(st.id)
+                      return (
+                        <label key={st.id} className={`${s.scStepPickItem} ${isChild ? s.scStepPickChild : ''}`}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleStep(idx)} />
+                          <span className={isChild ? '' : s.scStepPickMain}>{st.stepText}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
 

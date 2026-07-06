@@ -510,7 +510,7 @@ async function deleteTask(id, user, ipAddress, userAgent) {
 }
 
 async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userAgent, user = null) {
-  const { onHoldReason, force = false } = params
+  const { onHoldReason } = params
 
   const { rows } = await query(
     `SELECT t.*,
@@ -548,14 +548,13 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
     }
   }
 
-  // Block completion if unchecked items remain (unless force)
+  // Yêu cầu 1: CHẶN hoàn thành khi checklist chưa tick đủ (không cho ép/force nữa)
   const unchecked = parseInt(task.unchecked_count, 10)
-  if (newStatus === 'completed' && unchecked > 0 && !force) {
-    const err = Object.assign(
-      new Error(`${unchecked} checklist item(s) are not done. Pass force=true to override.`),
+  if (newStatus === 'completed' && unchecked > 0) {
+    throw Object.assign(
+      new Error(`Còn ${unchecked} mục checklist chưa hoàn thành. Vui lòng tích đủ checklist trước khi hoàn thành công việc.`),
       { status: 409, uncheckedCount: unchecked }
     )
-    throw err
   }
 
   // Soft-block completion when linked client document requests are still pending

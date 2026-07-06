@@ -214,35 +214,6 @@ function OnHoldModal({ task, onConfirm, onClose }) {
   )
 }
 
-// ── ForceConfirmModal ─────────────────────────────────────────────────────────
-
-function ForceConfirmModal({ task, newStatus, onConfirm, onClose }) {
-  const [saving, setSaving] = useState(false)
-
-  async function handleConfirm() {
-    setSaving(true)
-    try { await onConfirm() } finally { setSaving(false) }
-  }
-
-  return (
-    <div className={s.miniOverlay}>
-      <div className={s.miniDialog}>
-        <h4 className={s.miniTitle}>Checklist chưa hoàn thành</h4>
-        <p className={s.miniBody}>
-          Công việc <strong>&ldquo;{task.title}&rdquo;</strong> còn các bước chưa hoàn thành.
-          Bạn vẫn muốn chuyển sang <strong>&ldquo;{STATUS_LABELS[newStatus]}&rdquo;</strong>?
-        </p>
-        <div className={s.miniActions}>
-          <button onClick={onClose} className={s.btnSecondary} disabled={saving}>Huỷ</button>
-          <button onClick={handleConfirm} disabled={saving} className={s.btnPrimary}>
-            {saving ? 'Đang cập nhật...' : 'Vẫn chuyển'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Board card inner ──────────────────────────────────────────────────────────
 
 function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
@@ -1321,7 +1292,6 @@ export default function Tasks() {
   // Modals
   const [showCreate, setShowCreate]         = useState(false)
   const [onHoldTarget, setOnHoldTarget]     = useState(null)
-  const [forceTarget, setForceTarget]       = useState(null)
   const [deleteTarget, setDeleteTarget]     = useState(null)
   const [deleting, setDeleting]             = useState(false)
   const [showBulkDelete, setShowBulkDelete] = useState(false)
@@ -1498,20 +1468,19 @@ export default function Tasks() {
     try {
       const body = { status: newStatus }
       if (extra.reason !== undefined) body.onHoldReason = extra.reason || null
-      if (extra.force)                body.force        = true
 
       const updated = await tasksApi.changeTaskStatus(task.id, body)
       setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
       setStatsKey((k) => k + 1)
       addToast(`Đã chuyển sang "${getLabel('task_status', newStatus, STATUS_LABELS[newStatus])}"`, 'success')
       setOnHoldTarget(null)
-      setForceTarget(null)
     } catch (err) {
       const status = err.response?.status
       const msg    = err.response?.data?.error?.message
       if (status === 409) {
+        // Checklist chưa đủ → chặn hoàn thành (không còn "ép hoàn thành")
         setOnHoldTarget(null)
-        setForceTarget({ task, newStatus, prevExtra: extra })
+        addToast(msg ?? 'Còn mục checklist chưa hoàn thành. Vui lòng tích đủ checklist trước khi hoàn thành.', 'error')
       } else if (status === 422) {
         setOnHoldTarget(null)
         addToast(msg ?? 'Task bị chặn bởi dependency chưa hoàn thành', 'error')
@@ -1701,16 +1670,20 @@ export default function Tasks() {
   }
 
   async function bulkComplete() {
-    let done = 0
+    let done = 0, blocked = 0
     for (const id of selectedIds) {
       const task = tasks.find((t) => t.id === id)
       if (!task || task.status === 'completed') continue
       try {
-        await tasksApi.changeTaskStatus(id, { status: 'completed', force: true })
+        await tasksApi.changeTaskStatus(id, { status: 'completed' })
         done++
-      } catch (_e) { /* skip individual failures */ }
+      } catch (err) {
+        // 409 = còn checklist chưa đủ (không ép hoàn thành nữa)
+        if (err.response?.status === 409) blocked++
+      }
     }
-    if (done > 0) addToast(`Đã hoàn thành ${done} công việc`, 'success')
+    if (done > 0)    addToast(`Đã hoàn thành ${done} công việc`, 'success')
+    if (blocked > 0) addToast(`${blocked} công việc chưa tích đủ checklist nên không thể hoàn thành.`, 'error')
     setSelectedIds(new Set())
     if (done > 0) setPage(1)
   }
@@ -2218,15 +2191,6 @@ export default function Tasks() {
           task={onHoldTarget.task}
           onConfirm={handleStatusChange}
           onClose={() => setOnHoldTarget(null)}
-        />
-      )}
-
-      {forceTarget && (
-        <ForceConfirmModal
-          task={forceTarget.task}
-          newStatus={forceTarget.newStatus}
-          onConfirm={() => handleStatusChange(forceTarget.task, forceTarget.newStatus, { ...forceTarget.prevExtra, force: true })}
-          onClose={() => setForceTarget(null)}
         />
       )}
 

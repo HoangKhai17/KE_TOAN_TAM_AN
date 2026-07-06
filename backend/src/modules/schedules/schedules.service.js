@@ -14,6 +14,7 @@ function toDto(row) {
     recurrenceConfig:   row.recurrence_config,
     deadlineOffsetDays: row.deadline_offset_days,
     overrideSlaDays:    row.override_sla_days ?? null,
+    excludedStepIds:    Array.isArray(row.excluded_step_ids) ? row.excluded_step_ids : [],
     notes:              row.notes ?? null,
     isActive:           row.is_active,
     lastGeneratedAt:    row.last_generated_at ?? null,
@@ -77,7 +78,7 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
 
   const {
     taskTypeId, assignedStaffId, recurrenceType, recurrenceConfig,
-    deadlineOffsetDays = 0, overrideSlaDays, notes,
+    deadlineOffsetDays = 0, overrideSlaDays, excludedStepIds = [], notes,
   } = data
 
   const { rows: [tt] } = await query('SELECT id FROM task_types WHERE id = $1 AND is_active = TRUE', [taskTypeId])
@@ -86,13 +87,15 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
   const { rows: [schedule] } = await query(
     `INSERT INTO customer_task_schedules
        (company_id, task_type_id, assigned_staff_id, recurrence_type, recurrence_config,
-        deadline_offset_days, override_sla_days, notes, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        deadline_offset_days, override_sla_days, excluded_step_ids, notes, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
      RETURNING *`,
     [
       companyId, taskTypeId, assignedStaffId ?? null,
       recurrenceType, JSON.stringify(recurrenceConfig),
-      deadlineOffsetDays, overrideSlaDays ?? null, notes ?? null, actorId,
+      deadlineOffsetDays, overrideSlaDays ?? null,
+      JSON.stringify(Array.isArray(excludedStepIds) ? excludedStepIds : []),
+      notes ?? null, actorId,
     ]
   )
 
@@ -128,6 +131,10 @@ async function updateSchedule(id, data, user, ipAddress, userAgent) {
   if (data.recurrenceConfig !== undefined) {
     params.push(JSON.stringify(data.recurrenceConfig))
     updates.push(`recurrence_config = $${params.length}`)
+  }
+  if (data.excludedStepIds !== undefined) {
+    params.push(JSON.stringify(Array.isArray(data.excludedStepIds) ? data.excludedStepIds : []))
+    updates.push(`excluded_step_ids = $${params.length}`)
   }
 
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })

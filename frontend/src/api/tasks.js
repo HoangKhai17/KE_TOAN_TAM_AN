@@ -55,7 +55,8 @@ export async function addTaskChecklistItem(id, body) {
 
 export async function updateTaskChecklistItem(id, itemId, body) {
   const { data } = await api.patch(`/tasks/${id}/checklist/${itemId}`, body)
-  return data.data.item
+  // Gắn kèm cờ autoCompleted (khi tích đủ checklist → task tự hoàn thành) vào item
+  return { ...data.data.item, autoCompleted: data.data.autoCompleted === true }
 }
 
 export async function deleteTaskChecklistItem(id, itemId) {

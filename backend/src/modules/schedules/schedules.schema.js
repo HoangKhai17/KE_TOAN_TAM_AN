@@ -13,6 +13,7 @@ const createScheduleSchema = z.object({
   recurrenceConfig:   z.record(z.any()).default({}),
   deadlineOffsetDays: z.number().int().min(0).default(0),
   overrideSlaDays:    z.number().int().min(1).optional().nullable(),
+  excludedStepIds:    z.array(z.string().uuid()).optional().default([]),
   notes:              z.string().max(500).optional().nullable(),
 }).superRefine((d, ctx) => {
   try {
@@ -28,6 +29,7 @@ const updateScheduleSchema = z.object({
   recurrenceConfig:   z.record(z.any()).optional(),
   deadlineOffsetDays: z.number().int().min(0).optional(),
   overrideSlaDays:    z.number().int().min(1).optional().nullable(),
+  excludedStepIds:    z.array(z.string().uuid()).optional(),
   notes:              z.string().max(500).optional().nullable(),
 }).superRefine((d, ctx) => {
   if (d.recurrenceType !== undefined && d.recurrenceConfig !== undefined) {

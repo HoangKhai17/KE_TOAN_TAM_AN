@@ -6165,3 +6165,32 @@
   outline-offset: -2px;
   background: #f0f6ff;
 }
+
+/* ── Lịch định kỳ: chọn bước checklist áp dụng (Phương án A) ─────────────────── */
+.scStepPickHint {
+  font-size: var(--fs-xs);
+  color: var(--color-table-muted);
+  margin-bottom: 6px;
+}
+.scStepPickList {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1.5px solid var(--color-border-soft, #e2e8f0);
+  border-radius: 8px;
+  padding: 6px;
+  background: #f8fbff;
+}
+.scStepPickItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  font-size: var(--fs-sm);
+  color: var(--color-text-soft, #475569);
+  cursor: pointer;
+}
+.scStepPickItem:hover { background: #eff6ff; }
+.scStepPickItem input { margin-top: 2px; flex-shrink: 0; cursor: pointer; }
+.scStepPickChild { margin-left: 22px; border-left: 2px solid #dbeafe; }
+.scStepPickMain { font-weight: var(--fw-semibold); color: var(--color-text-strong, #1e293b); }

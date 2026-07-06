@@ -174,7 +174,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
       const status = err.response?.status
       const msg    = err.response?.data?.error?.message
       if (status === 409) {
-        addToast('Checklist chưa hoàn thành — vào chi tiết để ép hoàn thành.', 'warning')
+        addToast(msg ?? 'Còn mục checklist chưa hoàn thành. Vui lòng tích đủ checklist trước khi hoàn thành.', 'error')
       } else if (status === 422) {
         addToast(msg ?? 'Bị chặn bởi dependency chưa xong', 'error')
       } else {
@@ -251,7 +251,11 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
       const newCl = checklist.map((i) => i.id === updated.id ? updated : i)
       setChecklist(newCl)
       syncChecklistCounts(newCl)
-    } catch { addToast('Không thể cập nhật checklist', 'error') }
+      if (updated.autoCompleted) {
+        addToast('Đã tích đủ checklist — công việc tự chuyển sang "Hoàn thành".', 'success')
+        try { applyUpdate(await tasksApi.getTask(taskId)) } catch { /* noop */ }
+      }
+    } catch (err) { addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật checklist', 'error') }
     finally {
       setTogglingIds((p) => { const n = new Set(p); n.delete(item.id); return n })
     }

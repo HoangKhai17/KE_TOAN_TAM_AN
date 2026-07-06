@@ -113,11 +113,14 @@ async function runTaskGenerator() {
 
         // Copy checklist template
         const { rows: steps } = await query(
-          'SELECT step_order, step_text, level FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order',
+          'SELECT id, step_order, step_text, level FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order',
           [schedule.task_type_id]
         )
-        if (steps.length && newTask) {
-          for (const step of steps) {
+        // Phương án A: chỉ copy các bước công ty này áp dụng (bỏ bước trong excluded_step_ids)
+        const excluded = new Set(Array.isArray(schedule.excluded_step_ids) ? schedule.excluded_step_ids : [])
+        const applied = steps.filter((step) => !excluded.has(step.id))
+        if (applied.length && newTask) {
+          for (const step of applied) {
             await query(
               'INSERT INTO task_checklist_items (task_id, step_order, step_text, level) VALUES ($1,$2,$3,$4)',
               [newTask.id, step.step_order, step.step_text, step.level ?? 0]

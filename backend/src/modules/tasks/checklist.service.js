@@ -42,12 +42,36 @@ async function addItem(taskId, { stepText, level = 0 }, actorId) {
   return toDto(item)
 }
 
+// Đếm số mục leaf (mục con, hoặc mục chính không con) CHƯA hoàn thành
+async function countUncheckedLeaves(taskId) {
+  const { rows: [r] } = await query(
+    `SELECT COUNT(*)::int AS n FROM (
+       SELECT is_completed,
+              NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
+       FROM task_checklist_items WHERE task_id = $1
+     ) z WHERE is_leaf AND NOT is_completed`,
+    [taskId]
+  )
+  return r.n
+}
+
 async function updateItem(taskId, itemId, { stepText, isCompleted, level }, actorId) {
   const { rows: [item] } = await query(
     'SELECT * FROM task_checklist_items WHERE id = $1 AND task_id = $2',
     [itemId, taskId]
   )
   if (!item) throw Object.assign(new Error('Checklist item not found'), { status: 404 })
+
+  // Yêu cầu 2: không cho tích checklist khi công việc còn ở trạng thái "Mới" (pending)
+  if (isCompleted === true) {
+    const { rows: [t] } = await query('SELECT status FROM tasks WHERE id = $1', [taskId])
+    if (t?.status === 'pending') {
+      throw Object.assign(
+        new Error('Vui lòng chuyển công việc sang "Đang thực hiện" trước khi tích checklist.'),
+        { status: 422, code: 'TASK_NOT_STARTED' }
+      )
+    }
+  }
 
   const updates = []
   const params = []
@@ -94,4 +118,4 @@ async function deleteItem(taskId, itemId) {
   await query('DELETE FROM task_checklist_items WHERE id = $1', [itemId])
 }
 
-module.exports = { listChecklist, addItem, updateItem, deleteItem }
+module.exports = { listChecklist, addItem, updateItem, deleteItem, countUncheckedLeaves }

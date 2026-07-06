@@ -91,33 +91,6 @@ function OnHoldModal({ onConfirm, onClose }) {
 
 // ── Force complete modal ──────────────────────────────────────────────────────
 
-function ForceModal({ newStatus, onConfirm, onClose }) {
-  const [saving, setSaving] = useState(false)
-  const getLabel = useEnumsStore((st) => st.getLabel)
-
-  async function go() {
-    setSaving(true)
-    try { await onConfirm() } finally { setSaving(false) }
-  }
-
-  return (
-    <div className={s.miniOverlay}>
-      <div className={s.miniDialog}>
-        <h4 className={s.miniTitle}>Checklist chưa xong</h4>
-        <p className={s.miniBody}>
-          Còn các bước chưa hoàn thành. Vẫn chuyển sang <strong>&ldquo;{getLabel('task_status', newStatus, STATUS_LABELS[newStatus])}&rdquo;</strong>?
-        </p>
-        <div className={s.miniActions}>
-          <button onClick={onClose} className={s.btnSecondary} disabled={saving}>Huỷ</button>
-          <button onClick={go} disabled={saving} className={s.btnPrimary}>
-            {saving ? 'Đang lưu...' : 'Vẫn chuyển'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Tab: Description ──────────────────────────────────────────────────────────
 
 function DescriptionTab({ taskId, initialDesc, onSaved }) {
@@ -178,7 +151,7 @@ function DescriptionTab({ taskId, initialDesc, onSaved }) {
 
 // ── Tab: Checklist ────────────────────────────────────────────────────────────
 
-function ChecklistTab({ taskId, onCountChange }) {
+function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
   const addToast = useToastStore((s) => s.toast)
   const [items, setItems]         = useState([])
   const [loading, setLoading]     = useState(true)
@@ -205,8 +178,12 @@ function ChecklistTab({ taskId, onCountChange }) {
     try {
       const updated = await tasksApi.updateTaskChecklistItem(taskId, item.id, { isCompleted: !item.isCompleted })
       setItems((prev) => prev.map((i) => i.id === updated.id ? updated : i))
-    } catch {
-      addToast('Không thể cập nhật bước checklist', 'error')
+      if (updated.autoCompleted) {
+        addToast('Đã tích đủ checklist — công việc tự chuyển sang "Hoàn thành".', 'success')
+        onTaskChanged?.()
+      }
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật bước checklist', 'error')
     } finally {
       setTogglingIds((prev) => { const n = new Set(prev); n.delete(item.id); return n })
     }
@@ -740,7 +717,6 @@ export default function TaskDetail() {
   // Status change modals
   const [onHoldVisible, setOnHoldVisible] = useState(false)
   const [pendingStatus, setPendingStatus] = useState(null)
-  const [forceVisible, setForceVisible]   = useState(false)
   const [cdrBlockMsg, setCdrBlockMsg]     = useState(null)  // non-null = show CDR-block warning
 
   // Inline title edit
@@ -778,25 +754,24 @@ export default function TaskDetail() {
       setOnHoldVisible(true)
       return
     }
-    // Always track the target status so ForceModal knows what to retry
     setPendingStatus(newStatus)
     try {
       const body = { status: newStatus }
       if (extra.reason !== undefined) body.onHoldReason = extra.reason || null
-      if (extra.force)                body.force        = true
 
       const updated = await tasksApi.changeTaskStatus(id, body)
       setTask(updated)
       addToast(`Đã chuyển sang "${getLabel('task_status', newStatus, STATUS_LABELS[newStatus])}"`, 'success')
       setOnHoldVisible(false)
-      setForceVisible(false)
       setPendingStatus(null)
     } catch (err) {
       const httpStatus = err.response?.status
       const msg        = err.response?.data?.error?.message
       if (httpStatus === 409) {
+        // Checklist chưa đủ → không cho hoàn thành (không còn "ép hoàn thành")
         setOnHoldVisible(false)
-        setForceVisible(true)
+        addToast(msg ?? 'Còn mục checklist chưa hoàn thành. Vui lòng tích đủ checklist trước khi hoàn thành.', 'error')
+        setPendingStatus(null)
       } else if (httpStatus === 422) {
         setOnHoldVisible(false)
         const code = err.response?.data?.error?.code
@@ -998,6 +973,7 @@ export default function TaskDetail() {
                 <ChecklistTab
                   taskId={id}
                   onCountChange={(total, done) => { setClTotal(total); setClDone(done) }}
+                  onTaskChanged={() => { tasksApi.getTask(id).then((t) => setTask(t)).catch(() => {}) }}
                 />
               )}
               {activeTab === 'deps' && (
@@ -1131,13 +1107,6 @@ export default function TaskDetail() {
         />
       )}
 
-      {forceVisible && pendingStatus && (
-        <ForceModal
-          newStatus={pendingStatus}
-          onConfirm={() => changeStatus(pendingStatus, { force: true })}
-          onClose={() => { setForceVisible(false); setPendingStatus(null) }}
-        />
-      )}
 
       {cdrBlockMsg && (
         <div className={s.miniOverlay}>

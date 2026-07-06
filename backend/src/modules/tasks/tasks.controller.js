@@ -91,7 +91,20 @@ async function updateChecklistItem(req, res, next) {
   try {
     await svc.assertTaskAccess(req.params.id, req.user)
     const item = await checklistSvc.updateItem(req.params.id, req.params.itemId, req.body, req.user.id)
-    res.json({ success: true, data: { item } })
+
+    // Yêu cầu 3: khi tích đủ checklist → tự chuyển task sang "Hoàn thành"
+    // (trạng thái hoàn thành trước/trễ hạn là dẫn xuất từ completed_at vs due_date)
+    let autoCompleted = false
+    if (req.body.isCompleted === true) {
+      const remaining = await checklistSvc.countUncheckedLeaves(req.params.id)
+      if (remaining === 0) {
+        try {
+          await svc.changeTaskStatus(req.params.id, 'completed', {}, req.user.id, req.ip, req.headers['user-agent'], req.user)
+          autoCompleted = true
+        } catch { /* không tự hoàn thành được (vd còn yêu cầu KH chờ / transition không hợp lệ) → giữ nguyên */ }
+      }
+    }
+    res.json({ success: true, data: { item, autoCompleted } })
   } catch (err) { next(err) }
 }
 
