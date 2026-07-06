@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Download, Loader2, LayoutGrid, AlertTriangle, Check, FileSpreadsheet } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Download, Loader2, LayoutGrid, AlertTriangle, Check, FileSpreadsheet, Filter } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
@@ -46,6 +47,130 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+// ── Lọc/sắp xếp header cột (client-side, tái dùng ColumnFilterDropdown) ──────────
+// colDefs: [{ key, label, type: 'text'|'enum'|'dateRange'|'numberRange', get(row) }]
+function useHeaderFilters(rows, colDefs) {
+  const [colFilters, setColFilters] = useState({})
+  const [sortState, setSortState]   = useState({ col: null, dir: 'asc' })
+  const [popup, setPopup]           = useState(null)  // { colKey, top, left }
+
+  const byKey = useMemo(() => Object.fromEntries(colDefs.map((c) => [c.key, c])), [colDefs])
+
+  const getDisplay = useCallback((row, colKey) => {
+    const v = byKey[colKey]?.get(row)
+    return (v == null || v === '') ? '(Trống)' : String(v)
+  }, [byKey])
+
+  const displayed = useMemo(() => {
+    let out = [...rows]
+    for (const [k, fv] of Object.entries(colFilters)) {
+      const c = byKey[k]; if (!c) continue
+      if (c.type === 'enum') {
+        if (fv instanceof Set && fv.size > 0) out = out.filter((r) => fv.has(getDisplay(r, k)))
+      } else if (c.type === 'text') {
+        if (typeof fv === 'string' && fv.trim()) {
+          const q = fv.toLowerCase()
+          out = out.filter((r) => getDisplay(r, k).toLowerCase().includes(q))
+        }
+      } else if (c.type === 'dateRange') {
+        if (fv && (fv.from || fv.to)) out = out.filter((r) => {
+          const raw = c.get(r); if (!raw) return false
+          const d = String(raw).slice(0, 10)
+          if (fv.from && d < fv.from) return false
+          if (fv.to   && d > fv.to)   return false
+          return true
+        })
+      } else if (c.type === 'numberRange') {
+        if (fv && (fv.min !== '' || fv.max !== '')) out = out.filter((r) => {
+          const n = Number(c.get(r)); if (n == null || isNaN(n)) return false
+          if (fv.min !== '' && n < parseFloat(fv.min)) return false
+          if (fv.max !== '' && n > parseFloat(fv.max)) return false
+          return true
+        })
+      }
+    }
+    if (sortState.col && byKey[sortState.col]) {
+      const c = byKey[sortState.col]
+      out = [...out].sort((a, b) => {
+        if (c.type === 'numberRange') {
+          const an = Number(c.get(a)) || 0, bn = Number(c.get(b)) || 0
+          return sortState.dir === 'asc' ? an - bn : bn - an
+        }
+        const as = String(c.get(a) ?? ''), bs = String(c.get(b) ?? '')
+        const cmp = as.localeCompare(bs, 'vi', { numeric: true })
+        return sortState.dir === 'asc' ? cmp : -cmp
+      })
+    }
+    return out
+  }, [rows, colFilters, sortState, byKey, getDisplay])
+
+  function openFilter(colKey, e) {
+    e.stopPropagation()
+    if (popup?.colKey === colKey) { setPopup(null); return }
+    const r = e.currentTarget.getBoundingClientRect()
+    setPopup({ colKey, top: r.bottom + 4, left: r.left })
+  }
+  function handleFilterChange(colKey, val) {
+    setColFilters((p) => { const n = { ...p }; if (val == null) delete n[colKey]; else n[colKey] = val; return n })
+  }
+  function handleSort(col, dir) { setSortState({ col, dir }); setPopup(null) }
+  function hasFilter(colKey) {
+    const f = colFilters[colKey]; if (f == null) return false
+    const t = byKey[colKey]?.type
+    if (t === 'enum')        return f instanceof Set && f.size > 0
+    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
+    if (t === 'dateRange')   return Boolean(f.from || f.to)
+    if (t === 'numberRange') return f.min !== '' || f.max !== ''
+    return false
+  }
+  const typeOf = (colKey) => byKey[colKey]?.type ?? 'text'
+  const activeCount = Object.keys(colFilters).filter(hasFilter).length
+
+  return {
+    displayed, colFilters, sortState, popup, setPopup,
+    openFilter, handleFilterChange, handleSort, hasFilter, getDisplay, typeOf, activeCount,
+  }
+}
+
+// Nút lọc gắn trong 1 ô header. Nhận thêm props (rowSpan/colSpan) qua ...rest.
+function ThFilter({ colKey, hf, children, className, ...rest }) {
+  const active = hf.hasFilter(colKey) || hf.sortState.col === colKey
+  return (
+    <th className={className} {...rest}>
+      <div className={s.thInner}>
+        <span className={s.thLabel}>{children}</span>
+        <button
+          data-colfilter-btn
+          className={`${s.thFilterBtn} ${active ? s.thFilterBtnActive : ''}`}
+          onClick={(e) => hf.openFilter(colKey, e)}
+          title="Lọc / Sắp xếp"
+        >
+          <Filter size={11} />
+        </button>
+      </div>
+    </th>
+  )
+}
+
+// Popup dropdown (render 1 lần / bảng)
+function HeaderFilterPopup({ hf, rows }) {
+  if (!hf.popup) return null
+  return (
+    <ColumnFilterDropdown
+      colKey={hf.popup.colKey}
+      filterType={hf.typeOf(hf.popup.colKey)}
+      allRows={rows}
+      getDisplayLabel={hf.getDisplay}
+      currentFilter={hf.colFilters[hf.popup.colKey] ?? null}
+      sortState={hf.sortState}
+      onSort={hf.handleSort}
+      onFilterChange={hf.handleFilterChange}
+      onClose={() => hf.setPopup(null)}
+      style={{ '--cfd-top': `${hf.popup.top}px`, '--cfd-left': `${hf.popup.left}px` }}
+    />
+  )
+}
+
 // ── Matrix table (Theo quy trình) ───────────────────────────────────────────────
 function MatrixTable({ matrix }) {
   const columns = matrix.columns
@@ -63,6 +188,16 @@ function MatrixTable({ matrix }) {
       groupRuns.push({ group: null, span: 1, start: i })
     }
   }
+
+  // Lọc/sắp xếp trên 3 cột định danh cố định (Tên KH, MST, NV quản lý).
+  const colDefs = useMemo(() => [
+    { key: 'companyName',  label: 'Tên khách hàng', type: 'text', get: (r) => r.companyName },
+    { key: 'taxCode',      label: 'Mã số thuế',     type: 'text', get: (r) => r.taxCode || '' },
+    { key: 'assigneeName', label: 'NV quản lý',     type: 'enum', get: (r) => r.assigneeName || '—' },
+  ], [])
+  const hf = useHeaderFilters(matrix.rows, colDefs)
+  const stepColCount = columns.length
+
   return (
     <div className={s.tableWrap}>
       <table className={s.matrix}>
@@ -70,9 +205,9 @@ function MatrixTable({ matrix }) {
           {hasGroups ? (
             <>
               <tr>
-                <th className={`${s.th} ${s.colName}`} rowSpan={2}>Tên khách hàng</th>
-                <th className={`${s.th} ${s.colTax}`} rowSpan={2}>Mã số thuế</th>
-                <th className={`${s.th} ${s.colStaff}`} rowSpan={2}>NV quản lý</th>
+                <ThFilter colKey="companyName"  hf={hf} rowSpan={2} className={`${s.th} ${s.colName}`}>Tên khách hàng</ThFilter>
+                <ThFilter colKey="taxCode"      hf={hf} rowSpan={2} className={`${s.th} ${s.colTax}`}>Mã số thuế</ThFilter>
+                <ThFilter colKey="assigneeName" hf={hf} rowSpan={2} className={`${s.th} ${s.colStaff}`}>NV quản lý</ThFilter>
                 {groupRuns.map((run, idx) => (
                   run.group
                     ? <th key={idx} colSpan={run.span} className={`${s.th} ${s.thGroup}`}>{run.group}</th>
@@ -87,9 +222,9 @@ function MatrixTable({ matrix }) {
             </>
           ) : (
             <tr>
-              <th className={`${s.th} ${s.colName}`}>Tên khách hàng</th>
-              <th className={`${s.th} ${s.colTax}`}>Mã số thuế</th>
-              <th className={`${s.th} ${s.colStaff}`}>NV quản lý</th>
+              <ThFilter colKey="companyName"  hf={hf} className={`${s.th} ${s.colName}`}>Tên khách hàng</ThFilter>
+              <ThFilter colKey="taxCode"      hf={hf} className={`${s.th} ${s.colTax}`}>Mã số thuế</ThFilter>
+              <ThFilter colKey="assigneeName" hf={hf} className={`${s.th} ${s.colStaff}`}>NV quản lý</ThFilter>
               {columns.map((c) => (
                 <th key={c.stepOrder + c.stepText} className={`${s.th} ${s.thStep}`}>{c.stepText}</th>
               ))}
@@ -97,7 +232,11 @@ function MatrixTable({ matrix }) {
           )}
         </thead>
         <tbody>
-          {matrix.rows.map((r) => (
+          {hf.displayed.length === 0 ? (
+            <tr>
+              <td colSpan={3 + stepColCount} className={s.tdNoMatch}>Không có dòng nào khớp bộ lọc.</td>
+            </tr>
+          ) : hf.displayed.map((r) => (
             <tr key={r.taskId} className={s.tr}>
               <td className={`${s.td} ${s.colName} ${s.tdName}`}>{r.companyName}</td>
               <td className={`${s.td} ${s.colTax} ${s.tdMuted}`}>{r.taxCode || '—'}</td>
@@ -112,6 +251,7 @@ function MatrixTable({ matrix }) {
           ))}
         </tbody>
       </table>
+      <HeaderFilterPopup hf={hf} rows={matrix.rows} />
     </div>
   )
 }
@@ -119,21 +259,39 @@ function MatrixTable({ matrix }) {
 // ── Summary table (Theo công ty / Theo nhân viên) ───────────────────────────────
 function SummaryTable({ data }) {
   const isCompany = data.view === 'company'
+
+  const colDefs = useMemo(() => (isCompany ? [
+    { key: 'taskTypeName', label: 'Quy trình',    type: 'enum',        get: (r) => r.taskTypeName },
+    { key: 'sourceLabel',  label: 'Nguồn',        type: 'enum',        get: (r) => r.sourceLabel },
+    { key: 'assigneeName', label: 'NV phụ trách', type: 'enum',        get: (r) => r.assigneeName || '—' },
+    { key: 'percent',      label: 'Tiến độ',      type: 'numberRange', get: (r) => r.percent ?? 0 },
+    { key: 'statusLabel',  label: 'Trạng thái',   type: 'enum',        get: (r) => r.statusLabel },
+    { key: 'dueDate',      label: 'Hết hạn',      type: 'dateRange',   get: (r) => r.dueDate },
+  ] : [
+    { key: 'companyName',  label: 'Công ty',      type: 'text',        get: (r) => r.companyName },
+    { key: 'sourceLabel',  label: 'Nguồn',        type: 'enum',        get: (r) => r.sourceLabel },
+    { key: 'taskTypeName', label: 'Quy trình',    type: 'enum',        get: (r) => r.taskTypeName },
+    { key: 'percent',      label: 'Tiến độ',      type: 'numberRange', get: (r) => r.percent ?? 0 },
+    { key: 'statusLabel',  label: 'Trạng thái',   type: 'enum',        get: (r) => r.statusLabel },
+    { key: 'dueDate',      label: 'Hết hạn',      type: 'dateRange',   get: (r) => r.dueDate },
+  ]), [isCompany])
+
+  const hf = useHeaderFilters(data.rows, colDefs)
+
   return (
     <div className={s.tableWrap}>
       <table className={s.summary}>
         <thead>
           <tr>
-            <th className={s.th}>{isCompany ? 'Quy trình' : 'Công ty'}</th>
-            <th className={s.th}>Nguồn</th>
-            <th className={s.th}>{isCompany ? 'NV phụ trách' : 'Quy trình'}</th>
-            <th className={s.th}>Tiến độ</th>
-            <th className={s.th}>Trạng thái</th>
-            <th className={s.th}>Hết hạn</th>
+            {colDefs.map((c) => (
+              <ThFilter key={c.key} colKey={c.key} hf={hf} className={s.th}>{c.label}</ThFilter>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {data.rows.map((r) => {
+          {hf.displayed.length === 0 ? (
+            <tr><td colSpan={colDefs.length} className={s.tdNoMatch}>Không có dòng nào khớp bộ lọc.</td></tr>
+          ) : hf.displayed.map((r) => {
             const pct = r.percent ?? 0
             return (
               <tr key={r.taskId} className={s.tr}>
@@ -159,6 +317,7 @@ function SummaryTable({ data }) {
           })}
         </tbody>
       </table>
+      <HeaderFilterPopup hf={hf} rows={data.rows} />
     </div>
   )
 }
@@ -455,9 +614,9 @@ export default function ProgressMatrix() {
             Không có dữ liệu trong {data?.period?.label ?? 'kỳ đã chọn'}.
           </div>
         ) : tab === 'matrix' ? (
-          <MatrixTable matrix={data} />
+          <MatrixTable key={`matrix:${taskTypeId}:${month}:${year}:${sourceFilter}`} matrix={data} />
         ) : (
-          <SummaryTable data={data} />
+          <SummaryTable key={`${tab}:${subjectId}:${month}:${year}:${sourceFilter}`} data={data} />
         )}
 
         {showExport && ready && (
