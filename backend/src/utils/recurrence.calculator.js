@@ -147,4 +147,22 @@ function shouldGenerateToday(recurrenceType, recurrenceConfig, lastGeneratedAt) 
   return { shouldGenerate: nextStr <= today, forDate: next }
 }
 
-module.exports = { getNextOccurrence, getNextOccurrences, shouldGenerateToday }
+// Occurrence gần nhất RƠI VÀO hoặc TRƯỚC `onDate` (= "kỳ hiện tại").
+// Dùng cho chạy tay "Chạy ngay": chỉ cần biết kỳ hiện tại là ngày nào rồi để
+// lớp kiểm tra task-đã-tồn-tại quyết định, KHÔNG phụ thuộc last_generated_at —
+// nhờ vậy xóa task xong bấm chạy lại vẫn tạo lại được. Trả null nếu chưa có kỳ nào tới hạn.
+function getCurrentOccurrence(type, config, onDate = new Date()) {
+  const today = toMidnight(onDate)
+  let cursor = addDays(today, -400) // cửa sổ lùi đủ phủ chu kỳ tối đa (theo năm)
+  let last = null
+  let safety = 1000
+  while (safety-- > 0) {
+    const next = getNextOccurrence(type, config, cursor)
+    if (!next || toMidnight(next) > today) break
+    last = next
+    cursor = next
+  }
+  return last
+}
+
+module.exports = { getNextOccurrence, getNextOccurrences, shouldGenerateToday, getCurrentOccurrence }

@@ -1,6 +1,6 @@
 const { query } = require('../config/db')
 const logger    = require('../config/logger')
-const { shouldGenerateToday, getNextOccurrences } = require('../utils/recurrence.calculator')
+const { shouldGenerateToday, getCurrentOccurrence } = require('../utils/recurrence.calculator')
 const { format, addDays } = require('date-fns')
 
 // Generate period label for a task (T06/2026 for monthly, Q2/2026 for quarterly, etc.)
@@ -27,10 +27,14 @@ function buildPeriodLabel(recurrenceType, dueDate) {
   }
 }
 
-// Main idempotent generator — called by cron and by manual trigger
-async function runTaskGenerator() {
+// Main idempotent generator — called by cron and by manual trigger.
+// options.manual = true → chạy tay "Chạy ngay": nhắm KỲ HIỆN TẠI (occurrence ≤ hôm nay)
+//   và chỉ dựa vào việc task đã tồn tại hay chưa, KHÔNG dựa last_generated_at.
+//   Nhờ vậy xóa task rồi bấm chạy lại sẽ tạo lại được (vẫn không nhân đôi nếu task còn).
+async function runTaskGenerator(options = {}) {
+  const { manual = false } = options
   const startedAt = new Date()
-  logger.info('[Scheduler] Task generator started')
+  logger.info(`[Scheduler] Task generator started${manual ? ' (manual)' : ''}`)
 
   let generated    = 0
   let skipped      = 0
@@ -51,13 +55,24 @@ async function runTaskGenerator() {
 
     for (const schedule of schedules) {
       try {
-        const { shouldGenerate, forDate } = shouldGenerateToday(
-          schedule.recurrence_type,
-          schedule.recurrence_config,
-          schedule.last_generated_at
-        )
+        let forDate
+        if (manual) {
+          // Chạy tay: nhắm kỳ hiện tại (bỏ qua watermark last_generated_at).
+          forDate = getCurrentOccurrence(
+            schedule.recurrence_type,
+            schedule.recurrence_config
+          )
+        } else {
+          // Cron: giữ nguyên hành vi cũ (dựa last_generated_at).
+          const res = shouldGenerateToday(
+            schedule.recurrence_type,
+            schedule.recurrence_config,
+            schedule.last_generated_at
+          )
+          forDate = res.shouldGenerate ? res.forDate : null
+        }
 
-        if (!shouldGenerate || !forDate) {
+        if (!forDate) {
           skipped++
           continue
         }

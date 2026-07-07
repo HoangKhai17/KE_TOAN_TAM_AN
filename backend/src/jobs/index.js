@@ -53,7 +53,7 @@ async function saveLog({ triggeredBy, triggeredByUserId, startedAt, finishedAt,
 async function runAndLog(triggeredBy, triggeredByUserId = null) {
   const startedAt = new Date()
   try {
-    const result = await runTaskGenerator()
+    const result = await runTaskGenerator({ manual: triggeredBy === 'manual' })
     await saveLog({ ...result, triggeredBy, triggeredByUserId, startedAt, finishedAt: new Date() })
     lastRunResult = result
     return result
