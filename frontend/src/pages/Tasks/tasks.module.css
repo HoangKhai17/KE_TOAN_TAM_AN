@@ -1803,6 +1803,28 @@
 }
 
 .checklistItem:hover { background: var(--color-surface-muted); }
+.checklistItem:hover .checklistDrag { opacity: 1; }
+
+/* Tay cầm kéo-thả checklist (TaskDetail) */
+.checklistDrag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 20px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-border-muted);
+  cursor: grab;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+  touch-action: none;
+  padding: 0;
+}
+.checklistDrag:hover { color: var(--color-primary); }
+.checklistDrag:active { cursor: grabbing; }
 
 .checklistCheck {
   width: 16px;
@@ -2436,6 +2458,24 @@
   border-radius: 4px;
 }
 .fmClIndent:hover { color: var(--color-primary, #2563eb); background: #eff6ff; }
+
+/* Tay cầm kéo-thả checklist */
+.fmClDrag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 20px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: grab;
+  border-radius: 4px;
+  touch-action: none;
+}
+.fmClDrag:hover { color: var(--color-primary, #2563eb); background: #eff6ff; }
+.fmClDrag:active { cursor: grabbing; }
 
 .fmClIdx {
   font-size: var(--fs-xs);
@@ -3325,6 +3365,29 @@
 .qvChecklistItem:hover { background: var(--color-surface-muted); }
 
 .qvChecklistItem:hover .qvChecklistDel { opacity: 1; }
+.qvChecklistItem:hover .qvChecklistDrag { opacity: 1; }
+
+/* Tay cầm kéo-thả checklist (QuickView) */
+.qvChecklistDrag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--color-border-muted);
+  cursor: grab;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+  flex-shrink: 0;
+  padding: 0;
+  margin-top: 1px;
+  touch-action: none;
+}
+.qvChecklistDrag:hover { color: var(--color-primary); }
+.qvChecklistDrag:active { cursor: grabbing; }
 
 .qvChecklistText {
   font-size: var(--fs-xs);

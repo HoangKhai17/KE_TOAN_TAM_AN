@@ -1,4 +1,4 @@
-const { query } = require('../../config/db')
+const { query, getClient } = require('../../config/db')
 const activity = require('../../lib/activity')
 
 function toDto(row) {
@@ -109,6 +109,34 @@ async function updateItem(taskId, itemId, { stepText, isCompleted, level }, acto
   return toDto(updated)
 }
 
+// Sắp xếp lại thứ tự checklist (kéo thả). Two-phase vì có UNIQUE(task_id, step_order).
+async function reorderChecklist(taskId, items) {
+  await assertTask(taskId)
+  const client = await getClient()
+  try {
+    await client.query('BEGIN')
+    // Pha 1: dời tạm step_order lên vùng lớn để tránh đụng UNIQUE
+    await client.query(
+      'UPDATE task_checklist_items SET step_order = step_order + 10000 WHERE task_id = $1',
+      [taskId]
+    )
+    // Pha 2: gán thứ tự cuối
+    for (const it of items) {
+      await client.query(
+        'UPDATE task_checklist_items SET step_order = $1 WHERE id = $2 AND task_id = $3',
+        [it.stepOrder, it.id, taskId]
+      )
+    }
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+  return listChecklist(taskId)
+}
+
 async function deleteItem(taskId, itemId) {
   const { rows: [item] } = await query(
     'SELECT id FROM task_checklist_items WHERE id = $1 AND task_id = $2',
@@ -118,4 +146,4 @@ async function deleteItem(taskId, itemId) {
   await query('DELETE FROM task_checklist_items WHERE id = $1', [itemId])
 }
 
-module.exports = { listChecklist, addItem, updateItem, deleteItem, countUncheckedLeaves }
+module.exports = { listChecklist, addItem, updateItem, reorderChecklist, deleteItem, countUncheckedLeaves }

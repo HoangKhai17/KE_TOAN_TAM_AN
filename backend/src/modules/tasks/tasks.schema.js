@@ -46,6 +46,13 @@ const updateChecklistItemSchema = z.object({
   level:       z.number().int().min(0).max(1).optional(),
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })
 
+const reorderChecklistSchema = z.object({
+  items: z.array(z.object({
+    id:        z.string().uuid(),
+    stepOrder: z.number().int().min(1),
+  })).min(1),
+})
+
 // --- Dependencies ---
 const addDependencySchema = z.object({
   dependsOnTaskId: z.string().uuid('Invalid task ID'),
@@ -84,7 +91,7 @@ const addTaskLinkSchema = z.object({
 
 module.exports = {
   createTaskSchema, updateTaskSchema, changeStatusSchema,
-  addChecklistItemSchema, updateChecklistItemSchema,
+  addChecklistItemSchema, updateChecklistItemSchema, reorderChecklistSchema,
   addDependencySchema,
   addCommentSchema, updateCommentSchema,
   addTimeLogSchema,

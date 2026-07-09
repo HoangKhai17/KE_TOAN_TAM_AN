@@ -110,6 +110,14 @@ async function updateChecklistItem(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function reorderChecklist(req, res, next) {
+  try {
+    await svc.assertTaskAccess(req.params.id, req.user)
+    const items = await checklistSvc.reorderChecklist(req.params.id, req.body.items)
+    res.json({ success: true, data: { items } })
+  } catch (err) { next(err) }
+}
+
 async function deleteChecklistItem(req, res, next) {
   try {
     await svc.assertTaskAccess(req.params.id, req.user)
@@ -255,7 +263,7 @@ async function deleteLink(req, res, next) {
 module.exports = {
   listTasks, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog,
   getAvailableYears,
-  listChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem,
+  listChecklist, addChecklistItem, updateChecklistItem, reorderChecklist, deleteChecklistItem,
   listDependencies, addDependency, removeDependency,
   listComments, addComment, updateComment, deleteComment,
   listTimeLogs, addTimeLog, deleteTimeLog,

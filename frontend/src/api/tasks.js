@@ -63,6 +63,12 @@ export async function deleteTaskChecklistItem(id, itemId) {
   await api.delete(`/tasks/${id}/checklist/${itemId}`)
 }
 
+// items: [{ id, stepOrder }] theo thứ tự mới (kéo thả)
+export async function reorderTaskChecklist(id, items) {
+  const { data } = await api.post(`/tasks/${id}/checklist/reorder`, { items })
+  return data.data.items
+}
+
 // ─── Dependencies ─────────────────────────────────────────────────────────────
 
 export async function getTaskDependencies(id) {

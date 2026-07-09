@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   X, ArrowUpRight, Check, Loader2, Plus, ChevronLeft, ChevronRight,
-  Building2, User, Calendar, Clock, AlertTriangle, Flag, FileText, Tag,
+  Building2, User, Calendar, Clock, AlertTriangle, Flag, FileText, Tag, GripVertical,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
+import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { listUserOptions } from '../../api/users'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
@@ -294,6 +295,18 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
     } catch { addToast('Không thể đổi cấp', 'error') }
   }
 
+  async function reorderChecklist(newIds) {
+    const prev = checklist
+    const newCl = newIds.map((id) => prev.find((i) => i.id === id))
+    setChecklist(newCl)   // optimistic
+    try {
+      await tasksApi.reorderTaskChecklist(taskId, newCl.map((it, idx) => ({ id: it.id, stepOrder: idx + 1 })))
+    } catch {
+      setChecklist(prev)  // revert
+      addToast('Không thể sắp xếp checklist', 'error')
+    }
+  }
+
   const overdue     = task ? isTaskOverdue(task) : false
   const transitions = task ? (STATUS_TRANSITIONS[task.status] ?? []) : []
   const { total: clTotal, done: clDone, pct: clPct } = checklistLeafCounts(checklist)
@@ -487,13 +500,19 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                   )}
 
                   <div className={s.qvChecklistList}>
+                    <SortableList ids={checklist.map((i) => i.id)} onReorder={reorderChecklist}>
                     {checklist.map((item, idx) => {
                       const isToggling = togglingIds.has(item.id)
                       const isChild  = item.level === 1
                       const isParent = checklistIsParent(checklist, idx)
                       const parentDone = isParent && checklistParentDone(checklist, idx)
                       return (
-                        <div key={item.id} className={`${s.qvChecklistItem} ${isChild ? s.checklistItemChild : ''}`}>
+                        <SortableItem key={item.id} id={item.id}>
+                        {({ setNodeRef, style, handleProps }) => (
+                        <div ref={setNodeRef} style={style} className={`${s.qvChecklistItem} ${isChild ? s.checklistItemChild : ''}`}>
+                          <button className={s.qvChecklistDrag} title="Kéo để sắp xếp" {...handleProps}>
+                            <GripVertical size={12} />
+                          </button>
                           {isParent ? (
                             <div className={`${s.checklistGroupMark} ${parentDone ? s.checklistGroupMarkDone : ''}`} title="Mục chính — tự xong khi các mục con xong">
                               {parentDone && <Check size={10} color="#fff" />}
@@ -525,8 +544,11 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                             <X size={10} />
                           </button>
                         </div>
+                        )}
+                        </SortableItem>
                       )
                     })}
+                    </SortableList>
                   </div>
 
                   {/* Add checklist item */}

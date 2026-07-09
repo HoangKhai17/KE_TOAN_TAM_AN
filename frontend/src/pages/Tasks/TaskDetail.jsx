@@ -3,9 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, X, Plus, Trash2, Edit2, ChevronLeft, ChevronRight,
   Building2, User, Tag, Clock, Calendar, AlertTriangle,
-  ClipboardList, MessageSquare, History, Timer, Sliders,
+  ClipboardList, MessageSquare, History, Timer, Sliders, GripVertical,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as tasksApi from '../../api/tasks'
@@ -222,6 +223,17 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
     } catch { addToast('Không thể xoá', 'error') }
   }
 
+  async function reorder(newIds) {
+    let prev
+    setItems((cur) => { prev = cur; return newIds.map((id) => cur.find((i) => i.id === id)) })  // optimistic
+    try {
+      await tasksApi.reorderTaskChecklist(taskId, newIds.map((id, idx) => ({ id, stepOrder: idx + 1 })))
+    } catch {
+      setItems(prev)  // revert
+      addToast('Không thể sắp xếp checklist', 'error')
+    }
+  }
+
   if (loading) return <div className={s.loadingBox}><div className={s.spinner} /> Đang tải...</div>
 
   return (
@@ -238,13 +250,19 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
         </div>
       )}
 
+      <SortableList ids={items.map((i) => i.id)} onReorder={reorder}>
       {items.map((item, idx) => {
         const isToggling = togglingIds.has(item.id)
         const isChild  = item.level === 1
         const isParent = checklistIsParent(items, idx)
         const parentDone = isParent && checklistParentDone(items, idx)
         return (
-        <div key={item.id} className={`${s.checklistItem} ${isChild ? s.checklistItemChild : ''}`}>
+        <SortableItem key={item.id} id={item.id}>
+        {({ setNodeRef, style, handleProps }) => (
+        <div ref={setNodeRef} style={style} className={`${s.checklistItem} ${isChild ? s.checklistItemChild : ''}`}>
+          <button className={s.checklistDrag} title="Kéo để sắp xếp" {...handleProps}>
+            <GripVertical size={13} />
+          </button>
           {isParent ? (
             <div
               className={`${s.checklistGroupMark} ${parentDone ? s.checklistGroupMarkDone : ''}`}
@@ -291,8 +309,11 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
             </>
           )}
         </div>
+        )}
+        </SortableItem>
         )
       })}
+      </SortableList>
 
       <div className={s.checklistAddRow}>
         <textarea

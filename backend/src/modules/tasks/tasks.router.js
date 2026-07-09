@@ -4,7 +4,7 @@ const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
 const {
   createTaskSchema, updateTaskSchema, changeStatusSchema,
-  addChecklistItemSchema, updateChecklistItemSchema,
+  addChecklistItemSchema, updateChecklistItemSchema, reorderChecklistSchema,
   addDependencySchema,
   addCommentSchema, updateCommentSchema,
   addTimeLogSchema,
@@ -307,6 +307,7 @@ router.get('/:id/activity', ...auth, ctrl.getActivityLog)
  */
 router.get('/:id/checklist', ...auth, ctrl.listChecklist)
 router.post('/:id/checklist', ...auth, validate(addChecklistItemSchema), ctrl.addChecklistItem)
+router.post('/:id/checklist/reorder', ...auth, validate(reorderChecklistSchema), ctrl.reorderChecklist)
 
 /**
  * @openapi

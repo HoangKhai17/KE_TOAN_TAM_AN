@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Info, Search, ChevronDown, ChevronLeft, ChevronRight, X, Plus, Link2, Trash2 } from 'lucide-react'
+import { Info, Search, ChevronDown, ChevronLeft, ChevronRight, X, Plus, Link2, Trash2, GripVertical } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
+import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { createTask, addTaskChecklistItem, addTaskLink } from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
 import { listUserOptions } from '../../api/users'
@@ -375,31 +376,43 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
 
           {checklistItems.length > 0 && (
             <div className={s.fmClList}>
-              {checklistItems.map((item, idx) => {
-                const isChild = item.level === 1
-                return (
-                <div key={item.id} className={`${s.fmClItem} ${isChild ? s.fmClItemChild : ''}`}>
-                  <button
-                    type="button"
-                    className={s.fmClIndent}
-                    onClick={() => toggleItemLevel(item.id)}
-                    title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}
-                  >
-                    {isChild ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
-                  </button>
-                  <span className={s.fmClIdx}>{isChild ? '•' : `${idx + 1}.`}</span>
-                  <span className={s.fmClText} style={{ whiteSpace: 'pre-wrap' }}>{item.text}</span>
-                  <button
-                    type="button"
-                    className={s.fmClDel}
-                    onClick={() => removeFromChecklist(item.id)}
-                    title="Xóa bước này"
-                  >
-                    <X size={11} />
-                  </button>
-                </div>
-                )
-              })}
+              <SortableList
+                ids={checklistItems.map((i) => i.id)}
+                onReorder={(newIds) => setChecklistItems(newIds.map((id) => checklistItems.find((i) => i.id === id)))}
+              >
+                {checklistItems.map((item, idx) => {
+                  const isChild = item.level === 1
+                  return (
+                  <SortableItem key={item.id} id={item.id}>
+                    {({ setNodeRef, style, handleProps }) => (
+                    <div ref={setNodeRef} style={style} className={`${s.fmClItem} ${isChild ? s.fmClItemChild : ''}`}>
+                      <button type="button" className={s.fmClDrag} title="Kéo để sắp xếp" {...handleProps}>
+                        <GripVertical size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className={s.fmClIndent}
+                        onClick={() => toggleItemLevel(item.id)}
+                        title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}
+                      >
+                        {isChild ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
+                      </button>
+                      <span className={s.fmClIdx}>{isChild ? '•' : `${idx + 1}.`}</span>
+                      <span className={s.fmClText} style={{ whiteSpace: 'pre-wrap' }}>{item.text}</span>
+                      <button
+                        type="button"
+                        className={s.fmClDel}
+                        onClick={() => removeFromChecklist(item.id)}
+                        title="Xóa bước này"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                    )}
+                  </SortableItem>
+                  )
+                })}
+              </SortableList>
             </div>
           )}
 
