@@ -105,7 +105,9 @@ async function runTaskGenerator(options = {}) {
         }
 
         const sla = schedule.override_sla_days ?? schedule.default_sla_days
-        const title = `[${periodLabel}] ${schedule.task_type_name} — ${schedule.company_name}`
+        // Tiêu đề dùng tên viết tắt cho gọn; chưa có short_name thì lấy tên đầy đủ (toán tử 3 ngôi)
+        const companyLabel = schedule.company_short_name?.trim() ? schedule.company_short_name.trim() : schedule.company_name
+        const title = `[${periodLabel}] ${schedule.task_type_name} — ${companyLabel}`
 
         const { rows: [newTask] } = await query(
           `INSERT INTO tasks
