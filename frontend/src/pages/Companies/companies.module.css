@@ -5390,6 +5390,21 @@
   font-style: italic;
 }
 
+/* Textarea nhập text nhiều dòng (Alt/Shift+Enter để xuống dòng như Excel) */
+.ctblTextarea {
+  min-height: 26px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  resize: vertical;
+}
+
+/* Ô đọc: giữ nguyên xuống dòng đã nhập */
+.ctblMultiline {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ── Table footer + pagination ─────────────────────────────────────────────── */
 
 .archTableFooter {

@@ -19,10 +19,7 @@
 BEGIN;
 
 -- 1) Chấm công demo (seed_attendance_demo) — theo user a1000000
-DELETE FROM attendance_logs
-  WHERE attendance_record_id IN (
-    SELECT id FROM attendance_records WHERE user_id::text LIKE 'a1000000-%'
-  );
+DELETE FROM attendance_logs    WHERE user_id::text LIKE 'a1000000-%';
 DELETE FROM attendance_records WHERE user_id::text LIKE 'a1000000-%';
 DELETE FROM overtime_requests  WHERE user_id::text LIKE 'a1000000-%';
 DELETE FROM leave_requests     WHERE user_id::text LIKE 'a1000000-%';

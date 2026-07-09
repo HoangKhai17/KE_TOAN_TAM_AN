@@ -348,6 +348,8 @@ function ColumnFilterDropdown({ col, allRows, currentFilter, sortState, onSort, 
 function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavigate }) {
   const [local, setLocal] = useState(value ?? '')
   const ref = useRef(null)
+  // Text tự do (bao gồm cột không set dataType) → dùng textarea, hỗ trợ xuống dòng + điều hướng mép ô
+  const isTextType = !['number', 'date', 'select', 'computed'].includes(col.dataType)
   useEffect(() => { setLocal(value ?? '') }, [value])
   useEffect(() => {
     if (active && ref.current) {
@@ -357,19 +359,56 @@ function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavig
   }, [active, col.dataType])
 
   function commit(val) {
-    const next = val !== undefined ? val : (col.dataType === 'date' ? local : String(local).trim())
+    const next = val !== undefined ? val : (col.dataType === 'date' ? local : String(local).replace(/[ \t]+$/gm, '').trim())
     if (String(next ?? '') === String(value ?? '')) return
     onSave(next === '' ? null : next)
   }
+  // Con trỏ có đang ở mép ô không → dùng để quyết định phím mũi tên di chuyển ô hay di chuyển trong text
+  const atStart     = (el) => el.selectionStart === 0 && el.selectionEnd === 0
+  const atEnd       = (el) => el.selectionStart === el.value.length && el.selectionEnd === el.value.length
+  const atFirstLine = (el) => el.value.slice(0, el.selectionStart).indexOf('\n') === -1
+  const atLastLine  = (el) => el.value.slice(el.selectionEnd).indexOf('\n') === -1
+
+  function insertNewline(el) {
+    const start = el.selectionStart ?? String(local).length
+    const end   = el.selectionEnd ?? String(local).length
+    const nv = String(local).slice(0, start) + '\n' + String(local).slice(end)
+    setLocal(nv)
+    requestAnimationFrame(() => { try { el.selectionStart = el.selectionEnd = start + 1 } catch { /* ignore */ } })
+  }
+
   function handleKey(e) {
-    if (e.key === 'Enter')       { e.preventDefault(); commit(); onNavigate?.('down') }
-    else if (e.key === 'Tab')    { e.preventDefault(); commit(); onNavigate?.(e.shiftKey ? 'prev' : 'next') }
-    else if (e.key === 'Escape') { setLocal(value ?? ''); onNavigate?.('cancel') }
+    const el = ref.current
+    if (e.key === 'Enter') {
+      // Alt+Enter / Shift+Enter → xuống dòng trong ô (chỉ với text). Enter thường → lưu + xuống ô dưới.
+      if (isTextType && (e.altKey || e.shiftKey)) { e.preventDefault(); insertNewline(el); return }
+      e.preventDefault(); commit(); onNavigate?.('down'); return
+    }
+    if (e.key === 'Tab')    { e.preventDefault(); commit(); onNavigate?.(e.shiftKey ? 'prev' : 'next'); return }
+    if (e.key === 'Escape') { setLocal(value ?? ''); onNavigate?.('cancel'); return }
+
+    // Điều hướng ô bằng phím mũi tên (như Excel).
+    // - text: chỉ nhảy ô khi con trỏ ở mép; giữa text vẫn di chuyển con trỏ.
+    // - date/number: input không cho đọc vị trí con trỏ và tự "nuốt" mũi tên (đổi ngày / tăng-giảm số),
+    //   nên cho mũi tên LUÔN chuyển ô để không bị kẹt (giống Excel: mũi tên = di chuyển ô).
+    const arrowDir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'downCell' }[e.key]
+    if (arrowDir && el) {
+      if (isTextType) {
+        const ok = arrowDir === 'left' ? atStart(el)
+          : arrowDir === 'right' ? atEnd(el)
+          : arrowDir === 'up' ? atFirstLine(el)
+          : atLastLine(el)
+        if (ok) { e.preventDefault(); commit(); onNavigate?.(arrowDir) }
+      } else if (col.dataType === 'date' || col.dataType === 'number') {
+        e.preventDefault(); commit(); onNavigate?.(arrowDir)
+      }
+      // select: giữ mũi tên native (lên/xuống đổi lựa chọn) — dùng Tab/Enter để rời ô.
+    }
   }
 
   if (!canEdit) {
     if (col.dataType === 'select') return <td>{value || <span className={s.archInlineEmpty}>—</span>}</td>
-    return <td>{(value == null || value === '') ? <span className={s.archInlineEmpty}>—</span> : (col.dataType === 'date' ? fmtDate(value) : String(value))}</td>
+    return <td>{(value == null || value === '') ? <span className={s.archInlineEmpty}>—</span> : (col.dataType === 'date' ? fmtDate(value) : <span className={s.ctblMultiline}>{String(value)}</span>)}</td>
   }
 
   if (col.dataType === 'select') {
@@ -388,15 +427,24 @@ function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavig
     <td className={`${s.archInlineTdEditable} ${active ? s.ctblCellActive : ''}`}
       onClick={onActivate}>
       {active ? (
-        <input ref={ref} type={col.dataType === 'number' ? 'number' : col.dataType === 'date' ? 'date' : 'text'}
-          value={local} className={s.archInlineEditInput}
-          onChange={(e) => setLocal(e.target.value)} onBlur={() => commit()}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={handleKey} />
+        isTextType ? (
+          <textarea ref={ref}
+            rows={Math.min(8, Math.max(1, String(local).split('\n').length))}
+            value={local} className={`${s.archInlineEditInput} ${s.ctblTextarea}`}
+            onChange={(e) => setLocal(e.target.value)} onBlur={() => commit()}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={handleKey} />
+        ) : (
+          <input ref={ref} type={col.dataType === 'number' ? 'number' : 'date'}
+            value={local} className={s.archInlineEditInput}
+            onChange={(e) => setLocal(e.target.value)} onBlur={() => commit()}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={handleKey} />
+        )
       ) : (
         (value == null || value === '')
           ? <span className={s.archInlineEmpty}>—</span>
-          : (col.dataType === 'date' ? fmtDate(value) : String(value))
+          : (col.dataType === 'date' ? fmtDate(value) : <span className={s.ctblMultiline}>{String(value)}</span>)
       )}
     </td>
   )
@@ -614,6 +662,11 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       if (rIdx < displayed.length - 1) return goTo(displayed[rIdx + 1].id, colKey)
       return addRowAndFocus(colKey)                           // dòng cuối → thêm dòng mới
     }
+    // ── Điều hướng bằng phím mũi tên (như Excel): thuần lưới, KHÔNG wrap, KHÔNG thêm dòng ──
+    if (dir === 'left'  && cIdx > 0)                     return goTo(rowId, editableCols[cIdx - 1].colKey)
+    if (dir === 'right' && cIdx < editableCols.length - 1) return goTo(rowId, editableCols[cIdx + 1].colKey)
+    if (dir === 'up'    && rIdx > 0)                     return goTo(displayed[rIdx - 1].id, colKey)
+    if (dir === 'downCell' && rIdx < displayed.length - 1) return goTo(displayed[rIdx + 1].id, colKey)
   }
 
   // Sau khi thêm dòng: chuyển đúng trang + mở ô nhập của dòng mới
