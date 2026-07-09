@@ -598,6 +598,9 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
   const queryParams = [newStatus]
 
   if (newStatus === 'completed') setClauses.push('completed_at = NOW()')
+  // Mở lại công việc đã hoàn thành → xoá completed_at để báo cáo năng suất
+  // (đếm theo completed_at) không còn tính nhầm là đã hoàn thành.
+  if (currentStatus === 'completed' && newStatus !== 'completed') setClauses.push('completed_at = NULL')
 
   if (newStatus === 'on_hold') {
     queryParams.push(onHoldReason)

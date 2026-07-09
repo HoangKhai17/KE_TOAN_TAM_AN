@@ -45,6 +45,7 @@ async function runTaskGenerator(options = {}) {
     const { rows: schedules } = await query(
       `SELECT cts.*,
               c.name AS company_name,
+              c.short_name AS company_short_name,
               tt.name AS task_type_name,
               tt.default_sla_days
        FROM customer_task_schedules cts

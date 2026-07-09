@@ -17,7 +17,7 @@ export const STATUS_TRANSITIONS = {
   on_hold:         ['in_progress', 'needs_revision'],
   pending_review:  ['completed', 'needs_revision'],
   needs_revision:  ['in_progress'],
-  completed:       [],
+  completed:       ['in_progress'],   // KH yêu cầu: cho mở lại công việc đã hoàn thành
 }
 
 export const PRIORITY_LABELS = {

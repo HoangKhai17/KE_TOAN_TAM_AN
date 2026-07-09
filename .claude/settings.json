@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -nE \"ChecklistItemSchema|z\\\\\\\\.object|stepText|z\\\\\\\\.array|module.exports\" src/modules/tasks/tasks.schema.js)"
+      "Bash(grep -nE \"ChecklistItemSchema|z\\\\\\\\.object|stepText|z\\\\\\\\.array|module.exports\" src/modules/tasks/tasks.schema.js)",
+      "Bash(grep -rnE \"\\\\\\\\[\\\\\\\\\\\\$\\\\{periodLabel\\\\}\\\\\\\\]|task_type_name.*company_name|company_name.*task_type_name|— \\\\\\\\\\\\$\\\\{.*company\" backend/src)"
     ]
   }
 }
