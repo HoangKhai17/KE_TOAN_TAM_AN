@@ -154,6 +154,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
     if (!text) return
     setChecklistItems((prev) => [...prev, { id: Date.now(), text, level: 0 }])
     setNewItemText('')
+    setFE((p) => (p.checklist ? { ...p, checklist: undefined } : p))
     newItemRef.current?.focus()
   }
 
@@ -186,6 +187,11 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
     if (!form.title.trim()) errs.title = 'Tiêu đề không được để trống'
     if (!form.companyId)    errs.companyId = 'Vui lòng chọn khách hàng'
     if (!form.dueDate)      errs.dueDate = 'Vui lòng nhập ngày hết hạn'
+    // Bắt buộc phải có checklist: hoặc thêm tay ≥1 bước, hoặc chọn loại công việc có sẵn checklist mẫu.
+    const hasTemplateChecklist = (selectedType?.checklistCount ?? 0) > 0
+    if (checklistItems.length === 0 && !hasTemplateChecklist) {
+      errs.checklist = 'Công việc phải có ít nhất 1 bước checklist (thêm bên dưới hoặc chọn loại công việc có sẵn checklist).'
+    }
     if (Object.keys(errs).length) { setFE(errs); return }
     setError(null); setFE({}); setSaving(true)
     try {
@@ -357,7 +363,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
 
         {/* Checklist */}
         <div className={`${s.formGroup} ${s.span2}`}>
-          <label className={s.formLabel}>
+          <label className={`${s.formLabel} ${s.required}`}>
             Checklist công việc
             {checklistItems.length > 0 && (
               <span style={{ fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>
@@ -365,6 +371,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
               </span>
             )}
           </label>
+          {fe.checklist && <p className={s.formError} style={{ marginTop: 0 }}>{fe.checklist}</p>}
 
           {checklistItems.length > 0 && (
             <div className={s.fmClList}>
