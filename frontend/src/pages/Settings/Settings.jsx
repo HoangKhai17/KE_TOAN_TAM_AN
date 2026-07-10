@@ -760,11 +760,13 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
 function DeadlineSection() {
   return (
     <ConfigFormSection
-      description="Cấu hình ngưỡng cảnh báo khi công việc gần đến hoặc đã quá hạn."
+      description="Cấu hình ngưỡng và giờ chạy cảnh báo khi công việc gần đến hoặc đã quá hạn."
       fields={[
         { key: 'deadline_warning_days',   label: 'Cảnh báo trước deadline', suffix: 'ngày', type: 'number', min: 1, max: 30 },
         // Số ngày ân hạn sau hạn chót. 0 = task có hạn hôm qua sẽ chuyển needs_revision ngay hôm nay.
         { key: 'escalation_overdue_days', label: 'Escalate khi quá hạn',    suffix: 'ngày', type: 'number', min: 0, max: 30 },
+        { key: 'deadline_reminder_time',  label: 'Giờ gửi email nhắc deadline',           suffix: 'giờ VN', type: 'time' },
+        { key: 'escalation_run_time',     label: 'Giờ quét quá hạn & gửi email escalation', suffix: 'giờ VN', type: 'time' },
       ]}
     />
   )

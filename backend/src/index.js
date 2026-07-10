@@ -56,7 +56,7 @@ async function start() {
     scheduler.startScheduler(schedulerHour)
 
     // Start notification & escalation cron jobs (Phase 12)
-    scheduler.startNotificationJobs()
+    await scheduler.startNotificationJobs()
 
     // Start auto-backup cron (đọc lịch từ system_configs)
     await require('./modules/backup/backup.service').scheduleBackupCron()

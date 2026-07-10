@@ -1,0 +1,19 @@
+<div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;color:#1e293b">
+  <div style="background:#1e3a8a;padding:18px 28px;border-radius:8px 8px 0 0">
+    <span style="color:#fff;font-size:16px;font-weight:bold">Kế Toán Tâm An</span>
+  </div>
+  <div style="background:#fff;padding:28px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px">
+    
+<h2 style="color:#1e3a8a;margin-top:0;border-bottom:2px solid #dbeafe;padding-bottom:10px">📋 Báo cáo sáng — {{date}}</h2>
+<table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px">
+  <tr><td style="padding:9px 14px;color:#475569;border:1px solid #e2e8f0">Tổng công việc đang xử lý</td><td style="padding:9px 14px;font-weight:700;text-align:right;border:1px solid #e2e8f0">{{total_tasks}}</td></tr>
+  <tr style="background:#fef2f2"><td style="padding:9px 14px;color:#dc2626;border:1px solid #e2e8f0">🔴 Quá hạn</td><td style="padding:9px 14px;font-weight:700;color:#dc2626;text-align:right;border:1px solid #e2e8f0">{{overdue_count}}</td></tr>
+  <tr style="background:#fffbeb"><td style="padding:9px 14px;color:#d97706;border:1px solid #e2e8f0">🟡 Đến hạn hôm nay</td><td style="padding:9px 14px;font-weight:700;color:#d97706;text-align:right;border:1px solid #e2e8f0">{{due_today_count}}</td></tr>
+  <tr><td style="padding:9px 14px;color:#94a3b8;border:1px solid #e2e8f0">⏸ Tạm hoãn</td><td style="padding:9px 14px;font-weight:700;text-align:right;border:1px solid #e2e8f0">{{on_hold_count}}</td></tr>
+</table>
+{{task_list_html}}
+  </div>
+  <p style="text-align:center;font-size:11px;color:#94a3b8;margin-top:12px">
+    Email tự động từ hệ thống Kế Toán Tâm An — vui lòng không trả lời email này.
+  </p>
+</div>

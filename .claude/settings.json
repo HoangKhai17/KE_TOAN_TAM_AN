@@ -13,7 +13,10 @@
       "Bash(sed -n \"/function EscalationSection/,/^}/p\" Settings.jsx)",
       "Bash(grep -viE \"^\\\\S+:\\\\s*//\")",
       "Read(//d/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/src/jobs/**)",
-      "Bash(node -e \"const v='0'; console.log\\(\\\\\"parseInt\\(cfg.value || '3'\\) với value='0' →\\\\\", parseInt\\(v||'3',10\\), \\\\\"\\( '0' là chuỗi truthy nên KHÔNG rơi về mặc định 3 \\)\\\\\"\\)\")"
+      "Bash(node -e \"const v='0'; console.log\\(\\\\\"parseInt\\(cfg.value || '3'\\) với value='0' →\\\\\", parseInt\\(v||'3',10\\), \\\\\"\\( '0' là chuỗi truthy nên KHÔNG rơi về mặc định 3 \\)\\\\\"\\)\")",
+      "Bash(node -c backend/src/jobs/index.js)",
+      "Bash(node -c backend/src/index.js)",
+      "Bash(node -c backend/src/modules/system-configs/system-configs.controller.js)"
     ]
   }
 }

@@ -18,6 +18,13 @@ let lastRunResult = null
 let isRunning     = false
 let currentVnHour = 5  // default: 05:00 Vietnam time
 
+// Cron của 2 job "Cảnh báo deadline" — giữ tham chiếu để đổi giờ mà không cần restart server.
+let deadlineTask   = null
+let escalationTask = null
+
+const DEFAULT_DEADLINE_TIME   = '07:30'
+const DEFAULT_ESCALATION_TIME = '08:00'
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function vnToUtcHour(vnHour) {
@@ -26,6 +33,56 @@ function vnToUtcHour(vnHour) {
 
 function buildCronExpr(vnHour) {
   return `0 ${vnToUtcHour(vnHour)} * * *`
+}
+
+// 'HH:MM' (giờ VN) → cron expr theo UTC. VN lệch số giờ CHẴN nên phút giữ nguyên.
+// Giá trị hỏng/ngoài khoảng → dùng fallback.
+function vnTimeToUtcCron(hhmm, fallback) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm ?? '').trim())
+  const [fh, fm] = fallback.split(':').map(Number)
+  let h = m ? parseInt(m[1], 10) : fh
+  let min = m ? parseInt(m[2], 10) : fm
+  if (!(h >= 0 && h <= 23)) h = fh
+  if (!(min >= 0 && min <= 59)) min = fm
+  const label = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+  return { expr: `${min} ${vnToUtcHour(h)} * * *`, label }
+}
+
+async function loadTimeConfig(key, fallback) {
+  try {
+    const { rows: [row] } = await query('SELECT value FROM system_configs WHERE key = $1', [key])
+    return row?.value?.trim() || fallback
+  } catch {
+    return fallback
+  }
+}
+
+// Lên lịch (hoặc lên lại) 2 job của "Cảnh báo deadline" theo giờ trong system_configs.
+async function scheduleDeadlineJobs() {
+  if (deadlineTask)   { deadlineTask.stop();   deadlineTask = null }
+  if (escalationTask) { escalationTask.stop(); escalationTask = null }
+
+  const dl = vnTimeToUtcCron(await loadTimeConfig('deadline_reminder_time', DEFAULT_DEADLINE_TIME), DEFAULT_DEADLINE_TIME)
+  const es = vnTimeToUtcCron(await loadTimeConfig('escalation_run_time', DEFAULT_ESCALATION_TIME), DEFAULT_ESCALATION_TIME)
+
+  deadlineTask = cron.schedule(dl.expr, async () => {
+    try { await runDeadlineReminder() } catch (err) {
+      logger.error('[Jobs] Deadline reminder failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  escalationTask = cron.schedule(es.expr, async () => {
+    try { await runOverdueEscalation() } catch (err) {
+      logger.error('[Jobs] Overdue escalation failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  logger.info(`[Jobs] Deadline reminder @ ${dl.label} VN · Overdue escalation @ ${es.label} VN`)
+}
+
+// Gọi khi admin đổi giờ trong Settings → áp dụng ngay, không cần restart server.
+async function restartDeadlineJobs() {
+  await scheduleDeadlineJobs()
 }
 
 async function saveLog({ triggeredBy, triggeredByUserId, startedAt, finishedAt,
@@ -162,7 +219,7 @@ async function clearLogs() {
 // All times are UTC. Vietnam is UTC+7.
 // 07:00 VN = 00:00 UTC | 07:30 VN = 00:30 UTC | 08:00 VN = 01:00 UTC
 
-function startNotificationJobs() {
+async function startNotificationJobs() {
   // Morning Summary — 07:00 VN
   cron.schedule('0 0 * * *', async () => {
     try { await runMorningSummary() } catch (err) {
@@ -170,19 +227,8 @@ function startNotificationJobs() {
     }
   }, { timezone: 'UTC' })
 
-  // Deadline Reminder — 07:30 VN
-  cron.schedule('30 0 * * *', async () => {
-    try { await runDeadlineReminder() } catch (err) {
-      logger.error('[Jobs] Deadline reminder failed', { error: err.message })
-    }
-  }, { timezone: 'UTC' })
-
-  // Overdue Escalation — 08:00 VN
-  cron.schedule('0 1 * * *', async () => {
-    try { await runOverdueEscalation() } catch (err) {
-      logger.error('[Jobs] Overdue escalation failed', { error: err.message })
-    }
-  }, { timezone: 'UTC' })
+  // Deadline Reminder + Overdue Escalation — giờ đọc từ system_configs (Settings → Cảnh báo deadline)
+  await scheduleDeadlineJobs()
 
   // On-Hold Reminder — 08:05 VN (after escalation)
   cron.schedule('5 1 * * *', async () => {
@@ -213,7 +259,10 @@ function startNotificationJobs() {
     }
   }, { timezone: 'UTC' })
 
-  logger.info('[Jobs] Notification cron jobs scheduled (07:00/07:30/08:00/08:05/08:30 VN + 08:00 birthday + 06:30 VN admin attendance)')
+  logger.info('[Jobs] Notification cron jobs scheduled (07:00 morning · 08:05 on-hold · 08:30 client-doc · 08:00 birthday · 06:30 admin attendance — giờ VN)')
 }
 
-module.exports = { startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs, deleteLog, clearLogs, startNotificationJobs }
+module.exports = {
+  startScheduler, restartWithNewHour, getStatus, triggerNow, getLogs, deleteLog, clearLogs,
+  startNotificationJobs, restartDeadlineJobs,
+}
