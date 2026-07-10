@@ -16,7 +16,16 @@
       "Bash(node -e \"const v='0'; console.log\\(\\\\\"parseInt\\(cfg.value || '3'\\) với value='0' →\\\\\", parseInt\\(v||'3',10\\), \\\\\"\\( '0' là chuỗi truthy nên KHÔNG rơi về mặc định 3 \\)\\\\\"\\)\")",
       "Bash(node -c backend/src/jobs/index.js)",
       "Bash(node -c backend/src/index.js)",
-      "Bash(node -c backend/src/modules/system-configs/system-configs.controller.js)"
+      "Bash(node -c backend/src/modules/system-configs/system-configs.controller.js)",
+      "Bash(node -c backend/src/jobs/overdueEscalation.job.js)",
+      "Bash(node -c backend/src/utils/emailTemplates.js)",
+      "Bash(node -c backup/test-escalation-digest.js)",
+      "Bash(awk '{print $5, \"bytes\"}')",
+      "Bash(cd \"d:/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN/frontend\" && npx vite build 2>&1 | tail -2 && cd .. && echo && echo \"=== xác nhận không còn file test tạm ===\" && ls backup/*.js 2>/dev/null || echo \"backup/ sạch\")",
+      "Read(//d/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/**)",
+      "Bash(awk '/^async function listTasks/,0' tasks.service.js)",
+      "Bash(awk '/if \\\\\\(staffScopeId\\\\\\)/,/^  }/' tasks.service.js)",
+      "Bash(node -c backend/src/modules/tasks/tasks.service.js)"
     ]
   }
 }

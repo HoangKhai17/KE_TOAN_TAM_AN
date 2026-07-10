@@ -59,13 +59,12 @@ const TEMPLATES = [
     key: 'email_tpl_escalation',
     label: 'Escalation',
     icon: '🚨',
-    desc: 'Gửi cho admin khi có công việc quá hạn và tự động escalate',
+    desc: 'Email TỔNG HỢP gửi cho admin: 1 email/ngày, liệt kê mọi công việc quá hạn đã tự động escalate',
     vars: [
       { name: '{{admin_name}}',     desc: 'Tên quản trị viên' },
-      { name: '{{task_title}}',     desc: 'Tiêu đề công việc' },
-      { name: '{{assignee_name}}',  desc: 'Tên nhân viên được giao' },
-      { name: '{{company_name}}',   desc: 'Tên khách hàng' },
-      { name: '{{due_date}}',       desc: 'Ngày hết hạn' },
+      { name: '{{date}}',           desc: 'Ngày gửi báo cáo' },
+      { name: '{{task_count}}',     desc: 'Số công việc quá hạn' },
+      { name: '{{task_rows_html}}', desc: 'Các dòng <tr> của bảng (4 cột: Công việc · Khách hàng · Nhân viên · Quá hạn từ) — tự động sinh' },
     ],
   },
   {

@@ -31,12 +31,23 @@ const DEFAULTS = {
 </table>
 {{task_list_html}}`),
 
+  // Email TỔNG HỢP: mỗi admin nhận đúng 1 email/ngày, liệt kê toàn bộ task quá hạn.
   email_tpl_escalation: WRAPPER(`
-<h2 style="color:#dc2626;margin-top:0">🚨 Escalation: Công việc quá hạn</h2>
+<h2 style="color:#dc2626;margin-top:0">🚨 Escalation: {{task_count}} công việc quá hạn</h2>
 <p>Xin chào <strong>{{admin_name}}</strong>,</p>
-<p>Công việc <strong style="color:#1e3a8a">"{{task_title}}"</strong> được giao cho <strong>{{assignee_name}}</strong> ({{company_name}}) đã <strong style="color:#dc2626">quá hạn từ ngày {{due_date}}</strong>.</p>
-<p>Trạng thái đã tự động chuyển sang <strong style="background:#fef2f2;padding:2px 8px;border-radius:4px;color:#dc2626">"Cần xem lại"</strong>.</p>
-<p style="color:#64748b;font-size:13px">Vui lòng kiểm tra và xử lý kịp thời.</p>`),
+<p>Tính đến ngày <strong>{{date}}</strong>, hệ thống ghi nhận <strong style="color:#dc2626">{{task_count}} công việc quá hạn</strong>. Tất cả đã được tự động chuyển sang trạng thái <strong style="background:#fef2f2;padding:2px 8px;border-radius:4px;color:#dc2626">"Cần xem lại"</strong>.</p>
+<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:13px">
+  <thead>
+    <tr style="background:#fef2f2">
+      <th style="padding:9px 12px;text-align:left;border:1px solid #fecaca;color:#991b1b">Công việc</th>
+      <th style="padding:9px 12px;text-align:left;border:1px solid #fecaca;color:#991b1b">Khách hàng</th>
+      <th style="padding:9px 12px;text-align:left;border:1px solid #fecaca;color:#991b1b">Nhân viên</th>
+      <th style="padding:9px 12px;text-align:left;border:1px solid #fecaca;color:#991b1b">Quá hạn từ</th>
+    </tr>
+  </thead>
+  <tbody>{{task_rows_html}}</tbody>
+</table>
+<p style="color:#64748b;font-size:13px">Vui lòng đăng nhập hệ thống để kiểm tra và xử lý kịp thời.</p>`),
 }
 
 DEFAULTS.email_tpl_company_assignment = WRAPPER(`

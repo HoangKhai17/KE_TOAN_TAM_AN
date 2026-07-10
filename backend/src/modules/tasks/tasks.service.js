@@ -143,7 +143,7 @@ async function assertTaskAccess(taskId, user) {
 async function listTasks(filters = {}) {
   const {
     page = 1, limit = 20,
-    companyId, assignedTo, status, priority, source,
+    companyId, assignedTo, createdBy, status, priority, source,
     dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
     sortBy = 'created_at', sortDir = 'desc',
     audience = 'internal',
@@ -217,6 +217,13 @@ async function listTasks(filters = {}) {
     const arr = Array.isArray(effectiveAssignedTo) ? effectiveAssignedTo : [effectiveAssignedTo]
     baseParams.push(arr)
     baseConditions.push(`t.assigned_to = ANY($${baseParams.length}::uuid[])`)
+  }
+  // Lọc theo NGƯỜI TẠO task (vd: admin xem tiến độ những việc chính mình tạo & giao cho staff).
+  // Vẫn cộng dồn với staffScopeId nên không nới rộng phạm vi xem của nhân sự.
+  if (createdBy && (!Array.isArray(createdBy) || createdBy.length > 0)) {
+    const arr = Array.isArray(createdBy) ? createdBy : [createdBy]
+    baseParams.push(arr)
+    baseConditions.push(`t.created_by = ANY($${baseParams.length}::uuid[])`)
   }
   // Phạm vi nhân sự: việc ĐƯỢC GIAO cho mình HOẶC việc thuộc công ty mình PHỤ TRÁCH
   // (companies.assigned_staff_id). Nhờ vậy nhân sự quản lý công ty vẫn thấy việc đã
