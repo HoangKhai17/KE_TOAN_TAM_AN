@@ -7,7 +7,13 @@
       "Bash(node -c backup/demo-scheduler.js)",
       "Bash(node -c backup/demo-triggernow.js)",
       "Bash(rm -f backup/demo-triggernow.js)",
-      "Bash(TZ=Asia/Ho_Chi_Minh node -e ' *)"
+      "Bash(TZ=Asia/Ho_Chi_Minh node -e ' *)",
+      "Bash(grep -viE \"^\\\\S+:.*//\")",
+      "Bash(sed -n \"/function DeadlineSection/,/^}/p\" Settings.jsx)",
+      "Bash(sed -n \"/function EscalationSection/,/^}/p\" Settings.jsx)",
+      "Bash(grep -viE \"^\\\\S+:\\\\s*//\")",
+      "Read(//d/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/src/jobs/**)",
+      "Bash(node -e \"const v='0'; console.log\\(\\\\\"parseInt\\(cfg.value || '3'\\) với value='0' →\\\\\", parseInt\\(v||'3',10\\), \\\\\"\\( '0' là chuỗi truthy nên KHÔNG rơi về mặc định 3 \\)\\\\\"\\)\")"
     ]
   }
 }
