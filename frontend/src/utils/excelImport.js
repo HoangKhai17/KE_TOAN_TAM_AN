@@ -7,13 +7,23 @@ const MAX_IMPORT_BYTES = 5 * 1024 * 1024 // 5MB
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
+const DAY_MS = 86400000
+
+// SheetJS (cellDates:true) dựng Date từ mốc 1899-12-30 tính theo giờ LOCAL.
+// Ở múi giờ có LMT lịch sử lệch (VN: Sài Gòn +7:06:30), Date trả về bị lệch vài
+// giây/phút SO VỚI nửa đêm local → getDate() rơi về HÔM TRƯỚC (06/08/1990 → 05/08).
+// Khắc phục: quy về giờ tường (wall clock) rồi LÀM TRÒN về nửa đêm gần nhất.
+// Chịu được lệch ±12h nên đúng ở cả múi giờ dương lẫn âm.
+function sheetDateToIso(d) {
+  const wallMs = d.getTime() - d.getTimezoneOffset() * 60000
+  return new Date(Math.round(wallMs / DAY_MS) * DAY_MS).toISOString().slice(0, 10)
+}
+
 function fmtDateIso(d) {
   if (!d) return null
   if (d instanceof Date) {
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
+    if (isNaN(d.getTime())) return null
+    return sheetDateToIso(d)
   }
   const s = String(d).trim()
   // Already ISO
