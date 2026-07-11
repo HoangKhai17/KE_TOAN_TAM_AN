@@ -37,6 +37,11 @@ async function deleteColumn(req, res, next) {
   try { await svc.deleteColumn(req.params.colId); res.status(204).end() }
   catch (e) { next(e) }
 }
+async function reorderDefs(req, res, next) {
+  try { res.json({ success: true, data: { defs: await svc.reorderDefs(req.body.orderedIds || []) } }) }
+  catch (e) { next(e) }
+}
+
 async function reorderColumns(req, res, next) {
   try { res.json({ success: true, data: { def: await svc.reorderColumns(req.params.id, req.body.orderedIds || []) } }) }
   catch (e) { next(e) }
@@ -107,7 +112,7 @@ async function deleteCompanyColumn(req, res, next) {
 }
 
 module.exports = {
-  listDefs, getDef, createDef, updateDef, deleteDef,
+  listDefs, getDef, createDef, updateDef, deleteDef, reorderDefs,
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listRows, createRow, updateRow, deleteRow, reorderRows, batchRows, upsertRows,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,

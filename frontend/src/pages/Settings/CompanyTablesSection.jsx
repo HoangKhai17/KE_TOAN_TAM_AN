@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Loader2, Columns, Power, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, Columns, Power, ChevronUp, ChevronDown, GripVertical } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
+import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { useToastStore } from '../../stores/toastStore'
 import * as api from '../../api/companyTables'
 import s from './settings.module.css'
@@ -224,6 +225,17 @@ export default function CompanyTablesSection() {
     try { await api.deleteColumn(col.id); reload() }
     catch { addToast('Không thể xóa cột', 'error') }
   }
+  // Kéo-thả đổi thứ tự BẢNG → đổi luôn thứ tự tab trong Chi tiết khách hàng
+  async function reorderDefs(newIds) {
+    const prev = defs
+    setDefs(newIds.map((id) => prev.find((d) => d.id === id)))   // optimistic
+    try { await api.reorderDefs(newIds) }
+    catch {
+      setDefs(prev)                                              // revert
+      addToast('Không thể đổi thứ tự bảng', 'error')
+    }
+  }
+
   async function moveColumn(idx, dir) {
     const cols = selDef?.columns ?? []
     const j = idx + dir
@@ -246,11 +258,19 @@ export default function CompanyTablesSection() {
 
       {loading ? <div><Loader2 size={16} className={s.spin} /> Đang tải...</div> : (
         <table className={s.settingsTable}>
-          <thead><tr><th>Tab</th><th>Key</th><th>Số cột</th><th>Hiện</th><th></th></tr></thead>
+          <thead><tr><th style={{ width: 34 }}></th><th>Tab</th><th>Key</th><th>Số cột</th><th>Hiện</th><th></th></tr></thead>
           <tbody>
-            {defs.length === 0 && <tr><td colSpan={5} style={{ color: 'var(--color-muted)' }}>Chưa có bảng nào.</td></tr>}
+            {defs.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--color-muted)' }}>Chưa có bảng nào.</td></tr>}
+            <SortableList ids={defs.map((d) => d.id)} onReorder={reorderDefs}>
             {defs.map((d) => (
-              <tr key={d.id} style={selected === d.id ? { background: 'var(--color-primary-bg)' } : undefined}>
+              <SortableItem key={d.id} id={d.id}>
+              {({ setNodeRef, style, handleProps }) => (
+              <tr ref={setNodeRef} style={{ ...style, ...(selected === d.id ? { background: 'var(--color-primary-bg)' } : null) }}>
+                <td>
+                  <button className={s.btnOutline} title="Kéo để đổi thứ tự tab" style={{ cursor: 'grab', padding: 4 }} {...handleProps}>
+                    <GripVertical size={13} color="var(--color-muted)" />
+                  </button>
+                </td>
                 <td>{d.name}{d.isSystem && <span style={{ marginLeft: 6, fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)' }}>(hệ thống)</span>}</td>
                 <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-xs)' }}>{d.tableKey}</td>
                 <td>{d.columns?.length ?? 0}</td>
@@ -267,7 +287,10 @@ export default function CompanyTablesSection() {
                   </div>
                 </td>
               </tr>
+              )}
+              </SortableItem>
             ))}
+            </SortableList>
           </tbody>
         </table>
       )}

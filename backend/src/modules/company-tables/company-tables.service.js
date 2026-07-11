@@ -185,6 +185,15 @@ async function deleteColumn(colId) {
   if (!rowCount) { const e = new Error('Không tìm thấy cột'); e.status = 404; throw e }
 }
 
+// Đổi thứ tự các BẢNG (quyết định thứ tự tab hiển thị trong Chi tiết khách hàng)
+async function reorderDefs(orderedIds) {
+  for (let idx = 0; idx < orderedIds.length; idx++) {
+    await query('UPDATE company_table_defs SET sort_order = $1, updated_at = NOW() WHERE id = $2',
+      [idx, orderedIds[idx]])
+  }
+  return listDefs({})
+}
+
 async function reorderColumns(defId, orderedIds) {
   for (let idx = 0; idx < orderedIds.length; idx++) {
     await query('UPDATE company_table_columns SET sort_order = $1 WHERE id = $2 AND def_id = $3',
@@ -399,7 +408,7 @@ async function upsertRows(defId, companyId, user, matchKey, rowsData) {
 }
 
 module.exports = {
-  listDefs, getDef, createDef, updateDef, deleteDef,
+  listDefs, getDef, createDef, updateDef, deleteDef, reorderDefs,
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,
   listRows, createRow, updateRow, deleteRow, reorderRows, batchCreateRows, upsertRows,

@@ -11,6 +11,8 @@ const router = Router()
 router.get('/defs',      ...auth,  ctrl.listDefs)
 router.get('/defs/:id',  ...auth,  ctrl.getDef)
 router.post('/defs',     ...admin, ctrl.createDef)
+// PHẢI đặt trước '/defs/:id', nếu không 'reorder' sẽ bị bắt làm :id
+router.patch('/defs/reorder', ...admin, ctrl.reorderDefs)
 router.patch('/defs/:id', ...admin, ctrl.updateDef)
 router.delete('/defs/:id', ...admin, ctrl.deleteDef)
 

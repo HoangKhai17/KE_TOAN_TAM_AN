@@ -31,6 +31,12 @@ export async function updateColumn(colId, body) {
 export async function deleteColumn(colId) {
   await api.delete(`/company-tables/columns/${colId}`)
 }
+// Đổi thứ tự BẢNG → quyết định thứ tự tab trong Chi tiết khách hàng
+export async function reorderDefs(orderedIds) {
+  const { data } = await api.patch('/company-tables/defs/reorder', { orderedIds })
+  return data.data.defs
+}
+
 export async function reorderColumns(defId, orderedIds) {
   const { data } = await api.patch(`/company-tables/defs/${defId}/columns/reorder`, { orderedIds })
   return data.data.def
