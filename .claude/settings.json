@@ -28,7 +28,8 @@
       "Bash(node -c backend/src/modules/tasks/tasks.service.js)",
       "Bash(awk '/\\\\.appMain \\\\{/,/\\\\}/' components/layout/layout.module.css)",
       "Bash(awk 'NR>=1168 && NR<=1180' tasks.module.css)",
-      "Bash(awk -F: '{print $1}')"
+      "Bash(awk -F: '{print $1}')",
+      "Bash(grep -nE \"const \\\\[tasks, setTasks\\\\]|setTasks\\\\\\(|rows=\\\\{|tasks=\\\\{|\\\\.map\\\\\\(\\\\\\(t\\\\\\)\" Tasks.jsx)"
     ]
   }
 }

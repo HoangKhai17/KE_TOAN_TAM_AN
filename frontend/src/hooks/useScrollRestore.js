@@ -2,84 +2,125 @@ import { useEffect, useRef } from 'react'
 
 // ── Ghi nhớ & khôi phục vị trí cuộn cho các trang danh sách ─────────────────────
 //
-// Dùng chung cho MỌI trang cuộn trong khung <main id="app-scroll-root"> của AppLayout
-// (Tasks, Client Requests, Internal Assignments, Companies…).
+// Lưu CẢ 2 TRỤC (dọc + ngang) của một khung cuộn, khôi phục khi quay lại trang
+// (vào chi tiết rồi back, hoặc đổi menu rồi quay lại).
 //
-// Cách hoạt động:
-//   • Trong khi người dùng cuộn → lưu scrollTop (debounce) vào sessionStorage.
-//   • Khi quay lại trang (vào detail rồi back, HOẶC đổi menu khác rồi quay lại) →
-//     khôi phục đúng vị trí, MỘT lần, sau khi danh sách đã render xong (ready=true).
-//   • sessionStorage nên vị trí sống suốt phiên tab, tự xoá khi đóng tab / mở tab mới.
+// Cách thêm cho trang mới:
+//   // cuộn dọc — khung chung <main id="app-scroll-root"> của AppLayout
+//   useScrollRestore('client-requests', { ready: !!data })
+//   // cuộn ngang — khung riêng của bảng (gắn data-scroll-x="..." vào div overflow-x)
+//   useScrollRestore('client-requests:x', {
+//     ready: !!data,
+//     getEl: () => document.querySelector('[data-scroll-x="client-requests"]'),
+//   })
 //
-// Cách thêm cho một trang mới (1 dòng):
-//   useScrollRestore('client-requests', { ready: !isLoading })
-//
-// Tham số:
-//   id       — khoá duy nhất cho từng danh sách (vd 'tasks', 'client-requests').
-//   ready    — chỉ khôi phục khi nội dung đã render (data tải xong) để cuộn đúng chỗ.
-//   enabled  — tắt tạm nếu cần (mặc định true).
-//   getEl    — (tuỳ chọn) hàm trả về phần tử cuộn khác, cho trang có khung cuộn riêng.
+// Vì sao phải THỬ LẠI khi khôi phục:
+//   Danh sách thường render từ state (rỗng ở lần render đầu) rồi mới có dòng.
+//   Nếu đặt scrollTop lúc nội dung chưa đủ cao → bị kẹp về 0 → "lúc được lúc không".
+//   Nên ở đây thử lại từng khung hình cho tới khi nội dung đủ cao/rộng mới đặt.
 
 const SCROLL_ROOT_ID = 'app-scroll-root'
+const MAX_FRAMES = 60 // ~1s: đủ cho danh sách render xong, rồi bỏ cuộc
+
 const storageKey = (id) => `scrollpos:${id}`
 const defaultGetEl = () => document.getElementById(SCROLL_ROOT_ID)
 
+function readSaved(id) {
+  try {
+    const raw = sessionStorage.getItem(storageKey(id))
+    if (!raw) return null
+    const v = JSON.parse(raw)
+    if (typeof v === 'number') return { x: 0, y: v } // tương thích định dạng cũ (chỉ số dọc)
+    if (v && typeof v === 'object') return { x: Number(v.x) || 0, y: Number(v.y) || 0 }
+    return null
+  } catch { return null }
+}
+
 export default function useScrollRestore(id, { ready = true, enabled = true, getEl = defaultGetEl } = {}) {
   const restoredRef = useRef(false)
+  const getElRef = useRef(getEl)
+  getElRef.current = getEl
 
-  // Lưu vị trí khi cuộn (debounce 150ms cho nhẹ) — chạy ngoài React state nên không re-render.
-  // QUAN TRỌNG: khi rời trang phải FLUSH ngay vị trí cuối, nếu không thao tác nhanh
-  // (cuộn xong bấm task <150ms) sẽ mất lần lưu chưa kịp → quay lại bị lệch/đầu trang.
+  // ── LƯU ──────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!enabled || !id) return
-    const el = getEl()
-    if (!el) return
 
-    // Ghi vị trí mới nhất ngay khi cuộn (chỉ gán số, rẻ). KHÔNG đọc lại el.scrollTop
-    // lúc cleanup vì DOM có thể đã bị gỡ (→ 0). Persist thì debounce cho nhẹ.
-    // Khởi tạo từ GIÁ TRỊ ĐÃ LƯU (không phải 0): nếu vào-ra siêu nhanh trước khi restore
-    // kịp chạy, cleanup chỉ ghi lại chính nó, không xoá mất vị trí tốt.
-    let latestTop
-    try { latestTop = Number(sessionStorage.getItem(storageKey(id))) || el.scrollTop } catch { latestTop = el.scrollTop }
-    const persist = () => {
-      try { sessionStorage.setItem(storageKey(id), String(latestTop)) } catch { /* storage đầy/riêng tư → bỏ qua */ }
-    }
-
+    let el = null
     let timer = null
+    let raf = null
+    let frames = 0
+    // Khởi tạo từ giá trị ĐÃ LƯU (không phải 0): nếu vào-ra siêu nhanh trước khi
+    // kịp cuộn/khôi phục, lúc rời trang chỉ ghi lại chính nó, không xoá mất vị trí tốt.
+    let latest = readSaved(id) ?? { x: 0, y: 0 }
+
+    const persist = () => {
+      try { sessionStorage.setItem(storageKey(id), JSON.stringify(latest)) } catch { /* storage đầy/riêng tư */ }
+    }
+    // Đọc vị trí NGAY khi cuộn (chỉ gán số, rẻ). Không đọc lại DOM lúc cleanup vì
+    // node có thể đã bị gỡ → scrollTop trả 0 → sẽ lưu nhầm 0.
     const onScroll = () => {
-      latestTop = el.scrollTop
+      if (!el) return
+      latest = { x: el.scrollLeft, y: el.scrollTop }
       if (timer) clearTimeout(timer)
       timer = setTimeout(persist, 150)
     }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    // Bảo hiểm thêm: lưu ngay khi tab ẩn.
     const onHide = () => { if (document.visibilityState === 'hidden') persist() }
+
+    // Khung cuộn có thể chưa tồn tại ở render đầu (vd bảng render sau khi có data) → chờ.
+    const attach = () => {
+      el = getElRef.current()
+      if (!el) {
+        if (++frames < MAX_FRAMES) raf = requestAnimationFrame(attach)
+        return
+      }
+      el.addEventListener('scroll', onScroll, { passive: true })
+    }
+    attach()
     document.addEventListener('visibilitychange', onHide)
 
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       if (timer) clearTimeout(timer)
-      persist() // ← flush vị trí cuối cùng khi rời trang (fix "lưu không kịp")
-      el.removeEventListener('scroll', onScroll)
+      persist() // flush vị trí cuối cùng khi rời trang (không đợi debounce)
+      if (el) el.removeEventListener('scroll', onScroll)
       document.removeEventListener('visibilitychange', onHide)
     }
-  }, [id, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, enabled])
 
-  // Khôi phục MỘT lần, sau khi nội dung sẵn sàng.
+  // ── KHÔI PHỤC (một lần, có thử lại) ──────────────────────────────────────────
   useEffect(() => {
     if (!enabled || !id || restoredRef.current || !ready) return
-    const el = getEl()
-    if (!el) return
 
-    let saved = 0
-    try { saved = Number(sessionStorage.getItem(storageKey(id))) || 0 } catch { saved = 0 }
+    const saved = readSaved(id)
+    if (!saved || (saved.x <= 0 && saved.y <= 0)) { restoredRef.current = true; return }
 
-    if (saved > 0) {
-      // Chờ 2 khung hình để các dòng kịp layout xong (scrollHeight đúng) rồi mới đặt vị trí.
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        const node = getEl()
-        if (node) node.scrollTop = saved
-      }))
+    let raf = null
+    let frames = 0
+
+    const attempt = () => {
+      const el = getElRef.current()
+      if (!el) {
+        if (++frames < MAX_FRAMES) { raf = requestAnimationFrame(attempt); return }
+        restoredRef.current = true
+        return
+      }
+
+      const maxY = el.scrollHeight - el.clientHeight
+      const maxX = el.scrollWidth - el.clientWidth
+      const reachable = saved.y <= maxY + 1 && saved.x <= maxX + 1
+
+      // Nội dung chưa đủ cao/rộng để tới vị trí đã lưu → danh sách còn đang render → chờ khung sau.
+      if (!reachable && ++frames < MAX_FRAMES) {
+        raf = requestAnimationFrame(attempt)
+        return
+      }
+
+      if (saved.y > 0) el.scrollTop = saved.y
+      if (saved.x > 0) el.scrollLeft = saved.x
+      restoredRef.current = true
     }
-    restoredRef.current = true
-  }, [id, ready, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    raf = requestAnimationFrame(attempt)
+    return () => { if (raf) cancelAnimationFrame(raf) }
+  }, [id, ready, enabled])
 }

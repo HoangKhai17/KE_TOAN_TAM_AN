@@ -846,7 +846,8 @@ function ListView({
 
   return (
     <div className={s.tableWrap}>
-      <div className={s.tableScrollX}>
+      {/* data-scroll-x: mốc ổn định để useScrollRestore nhớ vị trí cuộn NGANG của bảng */}
+      <div className={s.tableScrollX} data-scroll-x="tasks">
         <table className={s.table}>
           <thead className={s.thead}>
             <tr>
@@ -1295,19 +1296,30 @@ export default function Tasks() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounce search
+  // Debounce search → về trang 1. So sánh GIÁ TRỊ (không dùng cờ "lần đầu") để mount
+  // không làm mất trang vừa khôi phục, và an toàn với StrictMode (dev chạy effect 2 lần).
+  const appliedSearchRef = useRef(search) // `search` đã init sẵn từ sessionStorage
   useEffect(() => {
-    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 350)
+    if (searchInput === appliedSearchRef.current) return
+    const t = setTimeout(() => {
+      appliedSearchRef.current = searchInput
+      setSearch(searchInput)
+      setPage(1)
+    }, 350)
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // Reset page on filter changes
-  // Đổi bộ lọc → về trang 1. Nhưng BỎ QUA lần chạy đầu (mount) để giữ trang đã khôi phục.
-  const filterMountRef = useRef(true)
+  // Đổi bộ lọc → về trang 1 (cũng so sánh giá trị, không dùng cờ "lần đầu").
+  const filterKey = JSON.stringify([
+    statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo,
+    pageSize, companyFilter, staffFilter, creatorFilter, sortValue,
+  ])
+  const appliedFilterKeyRef = useRef(filterKey)
   useEffect(() => {
-    if (filterMountRef.current) { filterMountRef.current = false; return }
+    if (filterKey === appliedFilterKeyRef.current) return
+    appliedFilterKeyRef.current = filterKey
     setPage(1)
-  }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter, creatorFilter, sortValue])
+  }, [filterKey])
 
   // Load enums + years (companies/staff đã chuyển sang React Query hooks)
   useEffect(() => {
@@ -1423,9 +1435,15 @@ export default function Tasks() {
   })
   const loading = listQuery.isFetching
 
-  // Nhớ & khôi phục vị trí cuộn: vào detail rồi back, hoặc đổi menu rồi quay lại,
-  // đều về đúng chỗ. Chỉ khôi phục khi danh sách đã có dữ liệu (render đúng chiều cao).
-  useScrollRestore('tasks', { ready: !!listQuery.data })
+  // Nhớ & khôi phục vị trí cuộn: vào detail rồi back, hoặc đổi menu rồi quay lại, đều về đúng chỗ.
+  // ready = ĐÃ CÓ DÒNG THẬT trên bảng (không phải chỉ "có data"), vì bảng render từ state `tasks`
+  // — nếu khôi phục lúc bảng còn rỗng thì scrollTop bị kẹp về 0.
+  const rowsReady = tasks.length > 0
+  useScrollRestore('tasks', { ready: rowsReady })                       // cuộn dọc (khung .appMain)
+  useScrollRestore('tasks:x', {                                          // cuộn ngang (bảng nhiều cột)
+    ready: rowsReady,
+    getEl: () => document.querySelector('[data-scroll-x="tasks"]'),
+  })
 
   // Sync kết quả query → local state (để optimistic update qua setTasks vẫn hoạt động)
   useEffect(() => {
