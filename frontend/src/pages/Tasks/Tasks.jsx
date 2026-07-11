@@ -29,6 +29,7 @@ import {
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
+import useScrollRestore from '../../hooks/useScrollRestore'
 import s from './tasks.module.css'
 
 // ── Sort options ──────────────────────────────────────────────────────────────
@@ -1259,7 +1260,7 @@ export default function Tasks() {
 
   // Pagination
   const [pageSize, setPageSize] = useState(initF.pageSize ?? 20)
-  const [page, setPage]         = useState(1)
+  const [page, setPage]         = useState(() => (Number.isInteger(initF.page) && initF.page > 0 ? initF.page : 1))
 
   // Data (local mirror — được sync từ React Query để optimistic update vẫn hoạt động)
   const [tasks, setTasks]           = useState([])
@@ -1301,7 +1302,10 @@ export default function Tasks() {
   }, [searchInput])
 
   // Reset page on filter changes
+  // Đổi bộ lọc → về trang 1. Nhưng BỎ QUA lần chạy đầu (mount) để giữ trang đã khôi phục.
+  const filterMountRef = useRef(true)
   useEffect(() => {
+    if (filterMountRef.current) { filterMountRef.current = false; return }
     setPage(1)
   }, [statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo, pageSize, companyFilter, staffFilter, creatorFilter, sortValue])
 
@@ -1350,10 +1354,10 @@ export default function Tasks() {
     saveFilters({
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
       sortValue, searchInput, companyFilter, staffFilter, creatorFilter,
-      statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize,
+      statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page,
       colFilters: serializeColFilters(colFilters), sortColState, filterCollapsed,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, creatorFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, colFilters, sortColState, filterCollapsed])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, creatorFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1418,6 +1422,10 @@ export default function Tasks() {
     staleTime: 15_000,
   })
   const loading = listQuery.isFetching
+
+  // Nhớ & khôi phục vị trí cuộn: vào detail rồi back, hoặc đổi menu rồi quay lại,
+  // đều về đúng chỗ. Chỉ khôi phục khi danh sách đã có dữ liệu (render đúng chiều cao).
+  useScrollRestore('tasks', { ready: !!listQuery.data })
 
   // Sync kết quả query → local state (để optimistic update qua setTasks vẫn hoạt động)
   useEffect(() => {

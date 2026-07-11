@@ -25,7 +25,10 @@
       "Read(//d/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/**)",
       "Bash(awk '/^async function listTasks/,0' tasks.service.js)",
       "Bash(awk '/if \\\\\\(staffScopeId\\\\\\)/,/^  }/' tasks.service.js)",
-      "Bash(node -c backend/src/modules/tasks/tasks.service.js)"
+      "Bash(node -c backend/src/modules/tasks/tasks.service.js)",
+      "Bash(awk '/\\\\.appMain \\\\{/,/\\\\}/' components/layout/layout.module.css)",
+      "Bash(awk 'NR>=1168 && NR<=1180' tasks.module.css)",
+      "Bash(awk -F: '{print $1}')"
     ]
   }
 }

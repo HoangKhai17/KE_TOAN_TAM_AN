@@ -27,7 +27,8 @@ export default function AppLayout({ children }) {
           onMenuToggle={() => setSidebarOpen((v) => !v)}
         />
 
-        <main className={s.appMain}>
+        {/* id ổn định để useScrollRestore tìm được khung cuộn chung của mọi trang */}
+        <main id="app-scroll-root" className={s.appMain}>
           {children}
         </main>
 
