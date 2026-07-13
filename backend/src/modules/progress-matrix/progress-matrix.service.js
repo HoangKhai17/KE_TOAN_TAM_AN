@@ -53,24 +53,13 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
   if (!ttRows[0]) throw Object.assign(new Error('Loại công việc không tồn tại'), { status: 404 })
   const taskType = ttRows[0]
 
-  // Cột = các bước checklist của quy trình (kèm level để phân cấp)
+  // Nhãn cột lấy từ mẫu HIỆN TẠI (chỉ để hiển thị); dữ liệu khớp theo id nên đổi tên không sai.
   const { rows: templ } = await query(
-    `SELECT step_order, step_text, level FROM task_type_checklist_templates
+    `SELECT id, step_order, step_text, level FROM task_type_checklist_templates
      WHERE task_type_id = $1 ORDER BY step_order, id`,
     [taskTypeId],
   )
-  // Cột hiển thị = các bước "leaf" (mục phụ, hoặc mục chính không con). Mục chính CÓ con → nhóm.
-  // group = tên mục chính (nếu là mục phụ) để dựng header 2 tầng.
-  const cols = []
-  for (let i = 0; i < templ.length; i++) {
-    const isParent = templ[i].level === 0 && templ[i + 1]?.level === 1
-    if (isParent) continue
-    let group = null
-    if (templ[i].level === 1) {
-      for (let j = i - 1; j >= 0; j--) { if (templ[j].level === 0) { group = templ[j].step_text; break } }
-    }
-    cols.push({ step_order: templ[i].step_order, step_text: templ[i].step_text, group })
-  }
+  const templById = new Map(templ.map((t) => [t.id, t]))
 
   // Hàng = phiếu của quy trình có kỳ rơi vào tháng (1 phiếu mới nhất / công ty)
   const params = [taskTypeId, periodStart]
@@ -78,9 +67,10 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
   if (forceAssignedTo) { params.push(forceAssignedTo); staffCond += ` AND t.assigned_to = $${params.length}` }
   const srcArr = parseSources(source)
   if (srcArr) { params.push(srcArr); staffCond += ` AND t.source = ANY($${params.length})` }
+  // 1 dòng = 1 PHIẾU (đợt). Quy trình lặp (5 ngày/lần…) → 1 công ty có nhiều đợt/tháng, hiện đủ.
   const { rows: tasks } = await query(`
-    SELECT DISTINCT ON (t.company_id)
-           t.id, t.company_id, t.assigned_to,
+    SELECT t.id, t.company_id, t.assigned_to,
+           t.start_date, t.due_date, t.period_label,
            c.name AS company_name, c.tax_code,
            u.name AS assignee_name
     FROM tasks t
@@ -90,45 +80,96 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
       AND COALESCE(t.start_date, t.due_date) >= $2::date
       AND COALESCE(t.start_date, t.due_date) <  ($2::date + INTERVAL '1 month')
       ${staffCond}
-    ORDER BY t.company_id, t.created_at DESC
+    ORDER BY c.name, COALESCE(t.due_date, t.start_date), t.created_at
   `, params)
 
-  // Checklist items của các phiếu trên
-  const itemsByTask = new Map()
+  // Gom checklist items của các phiếu — KHỚP THEO source_step_id (không theo chữ).
+  const itemsByTask = new Map()   // task_id -> Map(source_step_id -> item)
+  const customByTask = new Map()  // task_id -> { total, done }  (bước user tự thêm: source_step_id null)
+  const stepAgg = new Map()       // source_step_id -> { sourceStepId, stepOrder, text, parentId }
+  const parentIds = new Set()     // source_step_id nào từng làm CHA của bước khác
+
   if (tasks.length) {
     const taskIds = tasks.map((t) => t.id)
     const { rows: items } = await query(
-      `SELECT task_id, step_text, is_completed, completed_at
+      `SELECT task_id, source_step_id, source_parent_id, level, step_text, step_order, is_completed, completed_at
        FROM task_checklist_items WHERE task_id = ANY($1)`,
       [taskIds],
     )
     for (const it of items) {
+      // Bước tự thêm (không thuộc mẫu) → gộp vào badge "bước riêng", không thành cột.
+      if (it.source_step_id == null) {
+        const c = customByTask.get(it.task_id) || { total: 0, done: 0 }
+        c.total++; if (it.is_completed) c.done++
+        customByTask.set(it.task_id, c)
+        continue
+      }
       if (!itemsByTask.has(it.task_id)) itemsByTask.set(it.task_id, new Map())
-      itemsByTask.get(it.task_id).set(it.step_text, it)
+      itemsByTask.get(it.task_id).set(it.source_step_id, it)
+
+      if (!stepAgg.has(it.source_step_id)) {
+        const t = templById.get(it.source_step_id)
+        stepAgg.set(it.source_step_id, {
+          sourceStepId: it.source_step_id,
+          stepOrder:    t?.step_order ?? it.step_order ?? 0,
+          text:         t?.step_text ?? it.step_text,   // đổi tên mẫu → hiện tên mới; mẫu bị xoá → giữ tên lúc tạo
+          parentId:     it.source_parent_id ?? null,
+        })
+      }
+      if (it.source_parent_id != null) parentIds.add(it.source_parent_id)
     }
   }
 
+  const labelOf = (id) => stepAgg.get(id)?.text ?? templById.get(id)?.step_text ?? null
+
+  // Cột hiển thị = các bước LEAF (không đóng vai CHA của bước nào trong kỳ này).
+  const cols = [...stepAgg.values()]
+    .filter((s) => !parentIds.has(s.sourceStepId))
+    .sort((a, b) => a.stepOrder - b.stepOrder)
+    .map((s) => ({
+      sourceStepId: s.sourceStepId,
+      stepOrder:    s.stepOrder,
+      stepText:     s.text,
+      group:        s.parentId ? labelOf(s.parentId) : null,   // nhãn nhóm cha
+      groupId:      s.parentId ?? null,
+    }))
+
   const rows = tasks
     .map((t) => {
-      const itemMap = itemsByTask.get(t.id) || new Map()
+      const map  = itemsByTask.get(t.id) || new Map()
+      const cust = customByTask.get(t.id) || { total: 0, done: 0 }
       return {
         companyId:    t.company_id,
         companyName:  t.company_name,
         taxCode:      t.tax_code,
         assigneeName: t.assignee_name,
         taskId:       t.id,
+        startDate:    t.start_date,
+        dueDate:      t.due_date,
+        periodLabel:  t.period_label,
+        // present=false → task này KHÔNG có bước đó (tô xám, khác với "có nhưng chưa xong")
         cells: cols.map((col) => {
-          const it = itemMap.get(col.step_text)
-          return { stepText: col.step_text, done: it ? it.is_completed : false, completedAt: it?.completed_at ?? null }
+          const it = map.get(col.sourceStepId)
+          return {
+            sourceStepId: col.sourceStepId,
+            stepText:     col.stepText,
+            present:      !!it,
+            done:         it ? it.is_completed : false,
+            completedAt:  it?.completed_at ?? null,
+          }
         }),
+        custom: { total: cust.total, done: cust.done },   // badge "+N bước riêng (x/N)"
       }
     })
-    .sort((a, b) => String(a.companyName).localeCompare(String(b.companyName), 'vi'))
+    .sort((a, b) =>
+      String(a.companyName).localeCompare(String(b.companyName), 'vi')
+      || String(a.dueDate ?? a.startDate ?? '').localeCompare(String(b.dueDate ?? b.startDate ?? '')),
+    )
 
   return {
     taskType: { id: taskType.id, name: taskType.name, groupName: taskType.group_name },
     period:   { month: m, year: y, label: `Tháng ${m}/${y}` },
-    columns:  cols.map((c) => ({ stepOrder: c.step_order, stepText: c.step_text, group: c.group ?? null })),
+    columns:  cols,
     rows,
   }
 }
@@ -304,7 +345,11 @@ async function exportMatrix(matrix, includeSet) {
   const ws = wb.addWorksheet('Tiến độ')
 
   // Cột định danh (Tên KH luôn có; MST / NV quản lý tùy chọn)
-  const idCols = [{ header: 'Tên khách hàng', get: (r) => r.companyName }]
+  const fmtD = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '')
+  const idCols = [
+    { header: 'Tên khách hàng', get: (r) => r.companyName },
+    { header: 'Đợt (hạn)',      get: (r) => fmtD(r.dueDate) || fmtD(r.startDate) },
+  ]
   if (has('taxCode'))  idCols.push({ header: 'Mã số thuế', get: (r) => r.taxCode || '' })
   if (has('assignee')) idCols.push({ header: 'NV quản lý', get: (r) => r.assigneeName || '' })
   const idCount = idCols.length

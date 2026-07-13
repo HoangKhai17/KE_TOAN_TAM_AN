@@ -196,10 +196,29 @@
 .tr:hover .td { background: var(--color-bg-soft); }
 .tdName { font-weight: var(--fw-semibold); }
 .tdMuted { color: var(--color-muted); }
+.colPeriod { width: 92px; white-space: nowrap; text-align: center; }
 .tdCell { text-align: center; }
 .cellDone { background: var(--color-success-bg-soft); }
 .tr:hover .cellDone { background: var(--color-success-bg); }
 .checkIcon { color: var(--color-success); vertical-align: middle; }
+
+/* Ô "phiếu này không có bước đó" — tô xám, khác hẳn "có nhưng chưa xong" (ô trắng) */
+.cellAbsent { background: repeating-linear-gradient(135deg, var(--color-surface-muted), var(--color-surface-muted) 5px, transparent 5px, transparent 10px); }
+.absentDash { color: var(--color-border-muted); font-weight: 700; }
+
+/* Badge số bước phát sinh riêng của phiếu */
+.customBadge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: #a16207;
+  background: #fef9c3;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  white-space: nowrap;
+}
 
 /* Sticky left columns (3 cột cố định) */
 .colName  { position: sticky; left: 0;     width: 220px; min-width: 220px; z-index: 3; }

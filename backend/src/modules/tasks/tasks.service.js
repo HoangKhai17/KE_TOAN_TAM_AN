@@ -367,14 +367,21 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     ]
   )
 
-  // Copy checklist template from task type — single INSERT … SELECT (no loop)
+  // Copy checklist template from task type — mang theo source_step_id + source_parent_id (đóng băng cha-con).
+  // source_parent_id = id bước level-0 gần nhất PHÍA TRƯỚC (nếu bước hiện tại là con).
   if (taskTypeId) {
     await query(
-      `INSERT INTO task_checklist_items (task_id, step_order, step_text, level)
-       SELECT $1, step_order, step_text, level
-       FROM task_type_checklist_templates
-       WHERE task_type_id = $2
-       ORDER BY step_order`,
+      `INSERT INTO task_checklist_items
+         (task_id, step_order, step_text, level, source_step_id, source_parent_id)
+       SELECT $1, t.step_order, t.step_text, t.level, t.id,
+              CASE WHEN t.level = 1 THEN (
+                SELECT p.id FROM task_type_checklist_templates p
+                WHERE p.task_type_id = t.task_type_id AND p.level = 0 AND p.step_order < t.step_order
+                ORDER BY p.step_order DESC LIMIT 1
+              ) END
+       FROM task_type_checklist_templates t
+       WHERE t.task_type_id = $2
+       ORDER BY t.step_order`,
       [task.id, taskTypeId]
     )
   }

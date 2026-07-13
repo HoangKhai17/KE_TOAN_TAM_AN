@@ -206,6 +206,7 @@ function MatrixTable({ matrix }) {
             <>
               <tr>
                 <ThFilter colKey="companyName"  hf={hf} rowSpan={2} className={`${s.th} ${s.colName}`}>Tên khách hàng</ThFilter>
+                <th rowSpan={2} className={`${s.th} ${s.colPeriod}`}>Đợt (hạn)</th>
                 <ThFilter colKey="taxCode"      hf={hf} rowSpan={2} className={`${s.th} ${s.colTax}`}>Mã số thuế</ThFilter>
                 <ThFilter colKey="assigneeName" hf={hf} rowSpan={2} className={`${s.th} ${s.colStaff}`}>NV quản lý</ThFilter>
                 {groupRuns.map((run, idx) => (
@@ -223,6 +224,7 @@ function MatrixTable({ matrix }) {
           ) : (
             <tr>
               <ThFilter colKey="companyName"  hf={hf} className={`${s.th} ${s.colName}`}>Tên khách hàng</ThFilter>
+              <th className={`${s.th} ${s.colPeriod}`}>Đợt (hạn)</th>
               <ThFilter colKey="taxCode"      hf={hf} className={`${s.th} ${s.colTax}`}>Mã số thuế</ThFilter>
               <ThFilter colKey="assigneeName" hf={hf} className={`${s.th} ${s.colStaff}`}>NV quản lý</ThFilter>
               {columns.map((c) => (
@@ -234,17 +236,33 @@ function MatrixTable({ matrix }) {
         <tbody>
           {hf.displayed.length === 0 ? (
             <tr>
-              <td colSpan={3 + stepColCount} className={s.tdNoMatch}>Không có dòng nào khớp bộ lọc.</td>
+              <td colSpan={4 + stepColCount} className={s.tdNoMatch}>Không có dòng nào khớp bộ lọc.</td>
             </tr>
           ) : hf.displayed.map((r) => (
             <tr key={r.taskId} className={s.tr}>
-              <td className={`${s.td} ${s.colName} ${s.tdName}`}>{r.companyName}</td>
+              <td className={`${s.td} ${s.colName} ${s.tdName}`}>
+                {r.companyName}
+                {r.custom?.total > 0 && (
+                  <span className={s.customBadge} title="Bước phát sinh trên phiếu này (không thuộc quy trình mẫu)">
+                    +{r.custom.total} riêng ({r.custom.done}/{r.custom.total})
+                  </span>
+                )}
+              </td>
+              <td className={`${s.td} ${s.colPeriod} ${s.tdMuted}`}
+                title={r.periodLabel ? `Kỳ: ${r.periodLabel}${r.startDate ? ` · Bắt đầu: ${fmtDate(r.startDate)}` : ''}` : undefined}>
+                {fmtDate(r.dueDate) || fmtDate(r.startDate) || '—'}
+              </td>
               <td className={`${s.td} ${s.colTax} ${s.tdMuted}`}>{r.taxCode || '—'}</td>
               <td className={`${s.td} ${s.colStaff}`}>{r.assigneeName || '—'}</td>
               {r.cells.map((cell, i) => (
-                <td key={i} className={`${s.td} ${s.tdCell} ${cell.done ? s.cellDone : ''}`}
-                  title={cell.done && cell.completedAt ? `Hoàn thành: ${fmtDate(cell.completedAt)}` : undefined}>
-                  {cell.done && <Check size={14} className={s.checkIcon} />}
+                <td key={i}
+                  className={`${s.td} ${s.tdCell} ${cell.present === false ? s.cellAbsent : cell.done ? s.cellDone : ''}`}
+                  title={
+                    cell.present === false ? 'Phiếu này không có bước đó'
+                    : cell.done && cell.completedAt ? `Hoàn thành: ${fmtDate(cell.completedAt)}`
+                    : undefined
+                  }>
+                  {cell.present === false ? <span className={s.absentDash}>–</span> : cell.done && <Check size={14} className={s.checkIcon} />}
                 </td>
               ))}
             </tr>
