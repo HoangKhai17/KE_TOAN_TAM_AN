@@ -19,7 +19,16 @@ function toLinkDto(row) {
   return {
     id:          row.id,
     title:       row.title,
-    url:         row.url,
+    url:         row.url ?? null,
+    // Mục dạng FILE: url = null, thay bằng thông tin file đính kèm
+    file: row.attachment_id
+      ? {
+          id:        row.attachment_id,
+          fileName:  row.att_file_name,
+          mimeType:  row.att_mime_type,
+          sizeBytes: Number(row.att_size_bytes),
+        }
+      : null,
     description: row.description ?? null,
     category:    row.category_id
       ? { id: row.category_id, name: row.category_name ?? null, color: row.category_color ?? null }
@@ -106,10 +115,12 @@ async function listLinks({ categoryId, search, page = 1, limit = 20 } = {}) {
             u.name  AS creator_name,
             dc.name AS category_name,
             dc.color AS category_color,
+            a.file_name AS att_file_name, a.mime_type AS att_mime_type, a.size_bytes AS att_size_bytes,
             COUNT(*) OVER() AS _total
      FROM internal_doc_links dl
      LEFT JOIN users u  ON u.id  = dl.created_by
      LEFT JOIN internal_doc_categories dc ON dc.id = dl.category_id
+     LEFT JOIN attachments a ON a.id = dl.attachment_id
      ${where}
      ORDER BY dc.sort_order NULLS LAST, dc.name NULLS LAST, dl.created_at DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -123,17 +134,20 @@ async function listLinks({ categoryId, search, page = 1, limit = 20 } = {}) {
   }
 }
 
-async function createLink({ categoryId, title, url, description }, actorId) {
+// Một mục = LINK (url) HOẶC FILE (attachmentId) — ràng buộc CHECK ở DB đảm bảo đúng 1 trong 2.
+async function createLink({ categoryId, title, url, description, attachmentId }, actorId) {
   const { rows: [row] } = await query(
-    `INSERT INTO internal_doc_links (category_id, title, url, description, created_by)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [categoryId ?? null, title, url, description ?? null, actorId]
+    `INSERT INTO internal_doc_links (category_id, title, url, description, attachment_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [categoryId ?? null, title, url ?? null, description ?? null, attachmentId ?? null, actorId]
   )
   const { rows: [full] } = await query(
-    `SELECT dl.*, u.name AS creator_name, dc.name AS category_name, dc.color AS category_color
+    `SELECT dl.*, u.name AS creator_name, dc.name AS category_name, dc.color AS category_color,
+            a.file_name AS att_file_name, a.mime_type AS att_mime_type, a.size_bytes AS att_size_bytes
      FROM internal_doc_links dl
      LEFT JOIN users u  ON u.id  = dl.created_by
      LEFT JOIN internal_doc_categories dc ON dc.id = dl.category_id
+     LEFT JOIN attachments a ON a.id = dl.attachment_id
      WHERE dl.id = $1`,
     [row.id]
   )
@@ -160,10 +174,12 @@ async function updateLink(id, { categoryId, title, url, description }, actorId, 
   }
 
   const { rows: [full] } = await query(
-    `SELECT dl.*, u.name AS creator_name, dc.name AS category_name, dc.color AS category_color
+    `SELECT dl.*, u.name AS creator_name, dc.name AS category_name, dc.color AS category_color,
+            a.file_name AS att_file_name, a.mime_type AS att_mime_type, a.size_bytes AS att_size_bytes
      FROM internal_doc_links dl
      LEFT JOIN users u  ON u.id  = dl.created_by
      LEFT JOIN internal_doc_categories dc ON dc.id = dl.category_id
+     LEFT JOIN attachments a ON a.id = dl.attachment_id
      WHERE dl.id = $1`,
     [id]
   )
@@ -177,6 +193,12 @@ async function deleteLink(id, actorId, isAdmin) {
     throw Object.assign(new Error('Không có quyền xóa link này'), { status: 403 })
   }
   await query('DELETE FROM internal_doc_links WHERE id = $1', [id])
+
+  // Mục dạng FILE → xoá luôn bản ghi attachment + file trên đĩa, không để lại rác
+  if (row.attachment_id) {
+    const attachments = require('../attachments/attachments.service')
+    await attachments.remove(row.attachment_id, { id: actorId, role: isAdmin ? 'admin' : 'staff' })
+  }
 }
 
 module.exports = {

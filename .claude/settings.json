@@ -33,7 +33,17 @@
       "Bash(node -c backend/src/modules/company-tables/company-tables.service.js)",
       "Bash(node -c backend/src/modules/company-tables/company-tables.controller.js)",
       "Bash(node -c backend/src/modules/company-tables/company-tables.router.js)",
-      "Bash(cd \"d:/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN/frontend\" && npx vite build 2>&1 | tail -2 && cd .. && echo && echo \"=== route reorder đặt trước /defs/:id chưa? ===\" && grep -nE \"router.\\(patch|post|get\\).*defs\" backend/src/modules/company-tables/company-tables.router.js)"
+      "Bash(cd \"d:/WorkSpace_ADA_Bamboo/PROJECT_BBOTECH/KE_TOAN_TAM_AN/frontend\" && npx vite build 2>&1 | tail -2 && cd .. && echo && echo \"=== route reorder đặt trước /defs/:id chưa? ===\" && grep -nE \"router.\\(patch|post|get\\).*defs\" backend/src/modules/company-tables/company-tables.router.js)",
+      "Bash(grep -nE \"^volumes:|^  [a-z_]+:$|:/app/|:/var/lib\" docker-compose.prod.yml)",
+      "Bash(node -c backend/src/lib/storage.js)",
+      "Bash(node -c backend/src/modules/attachments/attachments.service.js)",
+      "Bash(node -c backend/src/modules/attachments/attachments.router.js)",
+      "Bash(node -c backend/src/modules/attachments/attachments.registry.js)",
+      "Bash(node -c backup/test-attachments.js)",
+      "Bash(sed -n \"/function toLinkDto/,/^}/p\" internalDocLinks.service.js)",
+      "Bash(sed -n \"/async function deleteLink/,/^}/p\" internalDocLinks.service.js)",
+      "Bash(sed -n \"/const createLinkSchema/,/}\\)/p\" internalDocLinks.schema.js)",
+      "Bash(python3 -)"
     ]
   }
 }

@@ -15,11 +15,16 @@ const updateCategorySchema = z.object({
   sortOrder: z.number().int().min(0).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Không có gì để cập nhật' })
 
+// Một mục là LINK (url) HOẶC FILE (attachmentId) — phải có đúng một trong hai.
 const createLinkSchema = z.object({
-  categoryId:  z.string().uuid().optional().nullable(),
-  title:       z.string().min(1, 'Tiêu đề không được để trống').max(200),
-  url:         z.string().url('URL không hợp lệ').max(2000),
-  description: z.string().max(1000).optional().nullable(),
+  categoryId:   z.string().uuid().optional().nullable(),
+  title:        z.string().min(1, 'Tiêu đề không được để trống').max(200),
+  url:          z.string().url('URL không hợp lệ').max(2000).optional().nullable(),
+  attachmentId: z.string().uuid().optional().nullable(),
+  description:  z.string().max(1000).optional().nullable(),
+}).refine((d) => !!d.url !== !!d.attachmentId, {
+  message: 'Phải nhập URL hoặc chọn file (không được cả hai, không được bỏ trống)',
+  path: ['url'],
 })
 
 const updateLinkSchema = z.object({

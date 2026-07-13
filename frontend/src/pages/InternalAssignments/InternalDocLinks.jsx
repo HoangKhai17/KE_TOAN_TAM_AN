@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Link2, Plus, Search, Pencil, Trash2, ExternalLink,
   FolderOpen, Loader2, X, Check, FolderPlus,
+  Link as LinkIcon, Upload, File as FileIcon, Download,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as api from '../../api/internalDocLinks'
+import * as attApi from '../../api/attachments'
 import InternalNavTabs from './InternalNavTabs'
 import s from './InternalDocLinks.module.css'
 
@@ -104,12 +106,17 @@ function CategoryModal({ initial, onClose, onSave }) {
 // ── LinkModal ─────────────────────────────────────────────────────────────────
 
 function LinkModal({ initial, categories, onClose, onSave }) {
+  const isEdit = !!initial
   const [form,   setForm]   = useState({
     title:       initial?.title       ?? '',
     url:         initial?.url         ?? '',
     description: initial?.description ?? '',
     categoryId:  initial?.category?.id ?? '',
   })
+  // 'link' = dán URL · 'file' = tải file lên. Sửa mục cũ thì giữ nguyên loại của nó.
+  const [mode, setMode] = useState(initial?.file ? 'file' : 'link')
+  const [file, setFile] = useState(null)
+  const [progress, setProgress] = useState(0)
   const [saving, setSaving] = useState(false)
   const [errs,   setErrs]   = useState({})
   const inputRef = useRef(null)
@@ -118,12 +125,32 @@ function LinkModal({ initial, categories, onClose, onSave }) {
 
   function set(field, val) { setForm((p) => ({ ...p, [field]: val })); setErrs((p) => ({ ...p, [field]: '' })) }
 
+  function pickFile(f) {
+    setErrs((p) => ({ ...p, file: '' }))
+    if (!f) { setFile(null); return }
+    const ext = f.name.split('.').pop()?.toLowerCase()
+    if (!attApi.ALLOWED_EXTS.includes(ext)) {
+      setErrs((p) => ({ ...p, file: `Định dạng ".${ext}" không được phép. Chỉ nhận: ${attApi.ALLOWED_EXTS.join(', ')}.` }))
+      setFile(null); return
+    }
+    if (f.size > attApi.MAX_FILE_BYTES) {
+      setErrs((p) => ({ ...p, file: `File ${attApi.formatSize(f.size)} vượt quá 5MB.` }))
+      setFile(null); return
+    }
+    setFile(f)
+    if (!form.title.trim()) set('title', f.name.replace(/\.[^.]+$/, '')) // gợi ý tiêu đề từ tên file
+  }
+
   async function handleSave() {
     const e = {}
     if (!form.title.trim()) e.title = 'Tiêu đề không được để trống'
-    if (!form.url.trim())   e.url   = 'URL không được để trống'
-    else {
-      try { new URL(form.url) } catch { e.url = 'URL không hợp lệ' }
+    if (mode === 'link') {
+      if (!form.url.trim()) e.url = 'URL không được để trống'
+      else { try { new URL(form.url) } catch { e.url = 'URL không hợp lệ' } }
+    } else if (!isEdit) {
+      if (!file) e.file = 'Vui lòng chọn file'
+      // File được lưu theo danh mục → bắt buộc chọn danh mục
+      if (!form.categoryId) e.categoryId = 'Vui lòng chọn danh mục cho file'
     }
     if (Object.keys(e).length) { setErrs(e); return }
 
@@ -131,14 +158,14 @@ function LinkModal({ initial, categories, onClose, onSave }) {
     try {
       await onSave({
         title:       form.title.trim(),
-        url:         form.url.trim(),
         description: form.description.trim() || null,
         categoryId:  form.categoryId || null,
-      })
+        ...(mode === 'link' ? { url: form.url.trim() } : {}),
+      }, mode === 'file' ? { file, onProgress: setProgress } : null)
       onClose()
     } catch (err) {
       setErrs({ global: err?.response?.data?.error?.message ?? 'Không thể lưu' })
-    } finally { setSaving(false) }
+    } finally { setSaving(false); setProgress(0) }
   }
 
   return (
@@ -163,6 +190,57 @@ function LinkModal({ initial, categories, onClose, onSave }) {
             {errs.title && <span className={s.formErr}>{errs.title}</span>}
           </div>
 
+          {/* Chọn loại: dán Link hay tải File lên (mục đã tạo thì không đổi loại) */}
+          {!isEdit && (
+            <div className={s.formGroup}>
+              <label className={s.formLabel}>Loại tài liệu</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className={mode === 'link' ? s.btnPrimary : s.btnGhost}
+                  onClick={() => { setMode('link'); setErrs({}) }}>
+                  <LinkIcon size={13} /> Link
+                </button>
+                <button type="button" className={mode === 'file' ? s.btnPrimary : s.btnGhost}
+                  onClick={() => { setMode('file'); setErrs({}) }}>
+                  <Upload size={13} /> Tải file lên
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === 'file' ? (
+            <div className={s.formGroup}>
+              <label className={s.formLabel}>File {!isEdit && '*'}</label>
+              {isEdit && initial?.file ? (
+                <div style={{ fontSize: 13, color: 'var(--color-muted)' }}>
+                  {initial.file.fileName} · {attApi.formatSize(initial.file.sizeBytes)}
+                  <div style={{ marginTop: 4 }}>Không thể thay file — hãy xoá mục này và tạo lại.</div>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="file"
+                    accept={attApi.ACCEPT_ATTR}
+                    className={s.formInput}
+                    onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+                  />
+                  <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>
+                    Tối đa 5MB · {attApi.ALLOWED_EXTS.join(', ')} — không nhận video/âm thanh
+                  </span>
+                  {file && (
+                    <div style={{ marginTop: 6, fontSize: 12 }}>
+                      <FileIcon size={12} style={{ verticalAlign: 'middle' }} /> {file.name} · {attApi.formatSize(file.size)}
+                    </div>
+                  )}
+                  {saving && progress > 0 && (
+                    <div style={{ marginTop: 6, height: 4, background: 'var(--color-border-soft)', borderRadius: 2 }}>
+                      <div style={{ width: `${progress}%`, height: '100%', background: 'var(--color-primary)', borderRadius: 2, transition: 'width .15s' }} />
+                    </div>
+                  )}
+                </>
+              )}
+              {errs.file && <span className={s.formErr}>{errs.file}</span>}
+            </div>
+          ) : (
           <div className={s.formGroup}>
             <label className={s.formLabel}>URL *</label>
             <input
@@ -173,6 +251,7 @@ function LinkModal({ initial, categories, onClose, onSave }) {
             />
             {errs.url && <span className={s.formErr}>{errs.url}</span>}
           </div>
+          )}
 
           <div className={s.formGroup}>
             <label className={s.formLabel}>Danh mục</label>
@@ -186,6 +265,7 @@ function LinkModal({ initial, categories, onClose, onSave }) {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            {errs.categoryId && <span className={s.formErr}>{errs.categoryId}</span>}
           </div>
 
           <div className={s.formGroup}>
@@ -214,14 +294,27 @@ function LinkModal({ initial, categories, onClose, onSave }) {
 
 function LinkCard({ link, canEdit, onEdit, onDelete }) {
   const domain = getDomain(link.url)
+  const isFile = !!link.file
   return (
     <div className={s.card}>
       <div className={s.cardMain}>
         <div className={s.cardInfo}>
           <div className={s.cardTitleRow}>
-            <Link2 size={13} className={s.cardLinkIcon} />
+            {isFile ? <FileIcon size={13} className={s.cardLinkIcon} /> : <Link2 size={13} className={s.cardLinkIcon} />}
             <span className={s.cardTitle}>{link.title}</span>
           </div>
+          {isFile ? (
+            <button
+              type="button"
+              className={s.cardUrl}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); attApi.downloadFile(link.file.id, link.file.fileName) }}
+              title="Tải xuống"
+            >
+              {link.file.fileName} · {attApi.formatSize(link.file.sizeBytes)}
+              <Download size={11} />
+            </button>
+          ) : (
           <a
             href={link.url}
             target="_blank"
@@ -232,6 +325,7 @@ function LinkCard({ link, canEdit, onEdit, onDelete }) {
             {domain || link.url}
             <ExternalLink size={11} />
           </a>
+          )}
           {link.description && (
             <p className={s.cardDesc}>{link.description}</p>
           )}
@@ -245,15 +339,25 @@ function LinkCard({ link, canEdit, onEdit, onDelete }) {
           </div>
         </div>
         <div className={s.cardActions}>
-          <a
-            href={link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={s.btnOpen}
-            title="Mở tài liệu"
-          >
-            <ExternalLink size={12} /> Mở
-          </a>
+          {isFile ? (
+            <button
+              className={s.btnOpen}
+              onClick={() => attApi.downloadFile(link.file.id, link.file.fileName)}
+              title="Tải xuống"
+            >
+              <Download size={12} /> Tải
+            </button>
+          ) : (
+            <a
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={s.btnOpen}
+              title="Mở tài liệu"
+            >
+              <ExternalLink size={12} /> Mở
+            </a>
+          )}
           {canEdit && (
             <>
               <button className={s.btnIcon} onClick={() => onEdit(link)} title="Sửa">
@@ -387,13 +491,32 @@ export default function InternalDocLinks() {
 
   // ── Link actions ──────────────────────────────────────────────────────────
 
-  async function handleSaveLink(body) {
+  // upload = { file, onProgress } khi người dùng chọn chế độ "Tải file lên"
+  async function handleSaveLink(body, upload) {
     if (editLink) {
-      await api.updateLink(editLink.id, body)
+      await api.updateLink(editLink.id, body)   // sửa mục: chỉ đổi tiêu đề/mô tả/danh mục/URL
       addToast('Đã cập nhật tài liệu', 'success')
-    } else {
-      await api.createLink(body)
-      addToast('Đã thêm tài liệu', 'success')
+      refresh()
+      return
+    }
+
+    let attachmentId = null
+    if (upload?.file) {
+      // File gắn vào DANH MỤC → phải chọn danh mục trước
+      const file = await attApi.uploadFile('internal_doc', body.categoryId, upload.file, {
+        title: body.title,
+        onProgress: upload.onProgress,
+      })
+      attachmentId = file.id
+    }
+
+    try {
+      await api.createLink({ ...body, attachmentId })
+      addToast(attachmentId ? 'Đã tải file lên' : 'Đã thêm tài liệu', 'success')
+    } catch (err) {
+      // Tạo mục lỗi → xoá file vừa tải để không bỏ lại rác
+      if (attachmentId) await attApi.deleteFile(attachmentId).catch(() => {})
+      throw err
     }
     refresh()
   }

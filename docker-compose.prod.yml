@@ -28,6 +28,7 @@ services:
       - NODE_ENV=production
     volumes:
       - ./backup:/app/backup
+      - ./uploads:/app/uploads   # file đính kèm — PHẢI có, nếu không file mất mỗi lần deploy
     networks:
       - internal
     dns:

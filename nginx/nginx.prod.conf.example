@@ -1,0 +1,107 @@
+# ============================================================================
+#  MẪU nginx.prod.conf — dùng để ĐỐI CHIẾU với bản đang chạy trên server.
+#
+#  ⚠️ File thật (nginx/nginx.prod.conf) KHÔNG nằm trong git, chỉ có trên server
+#     (docker-compose.prod.yml mount: ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro).
+#     Đừng đổi tên file này thành .conf rồi commit — sẽ đè mất cấu hình SSL thật.
+#
+#  ĐIỂM BẮT BUỘC PHẢI THÊM để upload file chạy được:
+#     client_max_body_size 20m;
+#  Không có dòng này → nginx mặc định chỉ nhận 1MB → upload file >1MB trả lỗi 413
+#  và request KHÔNG BAO GIỜ tới được backend (log backend sẽ sạch trơn, rất khó đoán).
+#  Để 20m (không phải 5m) vì multipart còn phần bao bọc, và để dư cho sau này.
+# ============================================================================
+
+user  nginx;
+worker_processes  auto;
+
+events {
+  worker_connections  1024;
+}
+
+http {
+  include       /etc/nginx/mime.types;
+  default_type  application/octet-stream;
+
+  sendfile        on;
+  keepalive_timeout  65;
+
+  gzip on;
+  gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
+  gzip_min_length 1024;
+
+  # ⬇⬇⬇ DÒNG QUAN TRỌNG NHẤT CHO TÍNH NĂNG UPLOAD ⬇⬇⬇
+  client_max_body_size 20m;
+  # ⬆⬆⬆ Đặt ở cấp http để áp cho mọi server/location ⬆⬆⬆
+
+  # ── HTTP → HTTPS ──────────────────────────────────────────────────────────
+  server {
+    listen 80;
+    server_name _;
+
+    # Chừa đường cho Let's Encrypt gia hạn chứng chỉ
+    location /.well-known/acme-challenge/ {
+      root /var/www/certbot;
+    }
+
+    location / {
+      return 301 https://$host$request_uri;
+    }
+  }
+
+  # ── HTTPS ─────────────────────────────────────────────────────────────────
+  server {
+    listen 443 ssl;
+    http2 on;
+    server_name  YOUR_DOMAIN;          # ← thay bằng domain thật
+
+    ssl_certificate     /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    root /usr/share/nginx/html;        # frontend dist (volume nginx_static)
+    index index.html;
+
+    # Socket.io (realtime)
+    location /socket.io/ {
+      proxy_pass         http://backend:3000;
+      proxy_http_version 1.1;
+      proxy_set_header   Upgrade $http_upgrade;
+      proxy_set_header   Connection "upgrade";
+      proxy_set_header   Host $host;
+      proxy_set_header   X-Real-IP $remote_addr;
+      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    # API
+    location /api/ {
+      proxy_pass         http://backend:3000;
+      proxy_http_version 1.1;
+      proxy_set_header   Host $host;
+      proxy_set_header   X-Real-IP $remote_addr;
+      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header   X-Forwarded-Proto $scheme;
+
+      # Upload/tải file có thể lâu hơn request thường
+      proxy_read_timeout    300s;
+      proxy_send_timeout    300s;
+      proxy_request_buffering off;   # stream thẳng lên backend, không dồn vào RAM/đĩa nginx
+    }
+
+    # ⚠️ TUYỆT ĐỐI KHÔNG thêm `location /uploads` để serve tĩnh thư mục file.
+    #    Làm vậy là AI CÓ LINK CŨNG TẢI ĐƯỢC, kể cả người ngoài.
+    #    File chỉ được phục vụ qua API /api/attachments/download/:id (bắt buộc đăng nhập).
+
+    # Frontend SPA
+    location / {
+      try_files $uri $uri/ /index.html;
+
+      location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+      }
+    }
+  }
+}

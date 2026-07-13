@@ -24,6 +24,7 @@ services:
       - ./backend/migrations:/app/migrations
       - ./backend/seeds:/app/seeds
       - ./backup:/app/backup
+      - ./uploads:/app/uploads   # file đính kèm — PHẢI có, nếu không file mất mỗi lần rebuild
     depends_on:
       postgres:
         condition: service_healthy

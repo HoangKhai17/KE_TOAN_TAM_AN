@@ -218,6 +218,7 @@ function createApp() {
   // Phase 18 — Internal Assignments (Phiếu giao việc nội bộ)
   app.use('/api/internal-assignments', require('./modules/internal-assignments/internalAssignments.router'))
   app.use('/api/internal-doc-links',   require('./modules/internal-doc-links/internalDocLinks.router'))
+  app.use('/api/attachments',          require('./modules/attachments/attachments.router'))
 
   // Phase 17 — Client Document Requests
   app.use('/api/client-requests',        require('./modules/client-requests/clientRequests.router'))
