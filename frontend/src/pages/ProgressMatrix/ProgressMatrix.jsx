@@ -228,7 +228,14 @@ function MatrixTable({ matrix }) {
               <ThFilter colKey="taxCode"      hf={hf} className={`${s.th} ${s.colTax}`}>Mã số thuế</ThFilter>
               <ThFilter colKey="assigneeName" hf={hf} className={`${s.th} ${s.colStaff}`}>NV quản lý</ThFilter>
               {columns.map((c) => (
-                <th key={c.stepOrder + c.stepText} className={`${s.th} ${s.thStep}`}>{c.stepText}</th>
+                <th key={c.stepOrder + c.stepText} className={`${s.th} ${s.thStep}`}>
+                  {c.stepText}
+                  {c.isGroup && c.childCount > 0 && (
+                    <span className={s.groupBadge} title={`Gồm ${c.childCount} mục con: ${(c.childNames || []).join(' · ')}`}>
+                      {' '}({c.childCount} mục)
+                    </span>
+                  )}
+                </th>
               ))}
             </tr>
           )}
@@ -254,17 +261,24 @@ function MatrixTable({ matrix }) {
               </td>
               <td className={`${s.td} ${s.colTax} ${s.tdMuted}`}>{r.taxCode || '—'}</td>
               <td className={`${s.td} ${s.colStaff}`}>{r.assigneeName || '—'}</td>
-              {r.cells.map((cell, i) => (
-                <td key={i}
-                  className={`${s.td} ${s.tdCell} ${cell.present === false ? s.cellAbsent : cell.done ? s.cellDone : ''}`}
-                  title={
-                    cell.present === false ? 'Phiếu này không có bước đó'
-                    : cell.done && cell.completedAt ? `Hoàn thành: ${fmtDate(cell.completedAt)}`
-                    : undefined
-                  }>
-                  {cell.present === false ? <span className={s.absentDash}>–</span> : cell.done && <Check size={14} className={s.checkIcon} />}
-                </td>
-              ))}
+              {r.cells.map((cell, i) => {
+                const partial = cell.isGroup && cell.present && !cell.done   // cha làm dở → "x/N"
+                return (
+                  <td key={i}
+                    className={`${s.td} ${s.tdCell} ${cell.present === false ? s.cellAbsent : cell.done ? s.cellDone : partial ? s.cellPartial : ''}`}
+                    title={
+                      cell.present === false ? 'Phiếu này không có bước đó'
+                      : cell.isGroup ? `Hoàn thành ${cell.doneCount}/${cell.total} mục con`
+                      : cell.done && cell.completedAt ? `Hoàn thành: ${fmtDate(cell.completedAt)}`
+                      : undefined
+                    }>
+                    {cell.present === false ? <span className={s.absentDash}>–</span>
+                      : cell.done ? <Check size={14} className={s.checkIcon} />
+                      : partial ? <span className={s.fracText}>{cell.doneCount}/{cell.total}</span>
+                      : null}
+                  </td>
+                )
+              })}
             </tr>
           ))}
         </tbody>
@@ -359,7 +373,7 @@ function ExportModal({ view, filters, data, onClose }) {
     setExporting(true)
     try {
       const body = { view, month: filters.month, year: filters.year, source: filters.source, columns: [...selected] }
-      if (view === 'matrix') body.taskTypeId = filters.taskTypeId
+      if (view === 'matrix') { body.taskTypeId = filters.taskTypeId; body.collapse = filters.collapse }
       if (view === 'company') body.companyId = filters.companyId
       if (view === 'staff') body.staffId = filters.staffId
       const { blob, filename } = await exportReport(body)
@@ -457,6 +471,7 @@ export default function ProgressMatrix() {
   const [tab, setTab] = useState('matrix')
   const [month, setMonth] = useState(CUR_MONTH)
   const [year, setYear] = useState(CUR_YEAR)
+  const [showChildren, setShowChildren] = useState(true)   // "Hiện mục con": bật = đầy đủ; tắt = gộp về cha
   // Dữ liệu tham chiếu — React Query (cache + gộp request dùng chung giữa các trang)
   const { data: taskTypes = [] } = useProgressTaskTypes()
   const { data: yearsData = [] } = useProgressYears()
@@ -501,7 +516,7 @@ export default function ProgressMatrix() {
     setLoading(true)
     const src = sourceFilter || undefined
     const fetcher = tab === 'matrix'
-      ? getMatrix({ taskTypeId, month, year, source: src })
+      ? getMatrix({ taskTypeId, month, year, source: src, collapse: !showChildren })
       : tab === 'company'
         ? getByCompany({ companyId, month, year, source: src })
         : getByStaff({ staffId: staffId || undefined, month, year, source: src })
@@ -510,7 +525,7 @@ export default function ProgressMatrix() {
       .catch(() => { if (!cancelled) { setData(null); addToast('Không tải được dữ liệu', 'error') } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [tab, taskTypeId, companyId, staffId, month, year, sourceFilter, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, taskTypeId, companyId, staffId, month, year, sourceFilter, showChildren, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped = useMemo(() => {
     const map = new Map()
@@ -529,7 +544,7 @@ export default function ProgressMatrix() {
       ? `TIẾN ĐỘ CÔNG VIỆC — ${data.subject.name} — ${data.period.label}`
       : `TIẾN ĐỘ CÔNG VIỆC — NV ${data.subject.name} — ${data.period.label}`
 
-  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, source: sourceFilter || undefined }
+  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, source: sourceFilter || undefined, collapse: !showChildren }
 
   return (
     <AppLayout>
@@ -608,6 +623,15 @@ export default function ProgressMatrix() {
               {availableYears.map((y) => <option key={y} value={y}>Năm {y}</option>)}
             </select>
           </div>
+          {tab === 'matrix' && (
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Hiển thị</label>
+              <label className={s.toggleChildren} title="Tắt để gộp các mục con vào mục cha (hiển thị x/N)">
+                <input type="checkbox" checked={showChildren} onChange={(e) => setShowChildren(e.target.checked)} />
+                <span>Hiện mục con</span>
+              </label>
+            </div>
+          )}
         </div>
 
         {/* Title line */}

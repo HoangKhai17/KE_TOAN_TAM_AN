@@ -198,6 +198,18 @@
 .tdMuted { color: var(--color-muted); }
 .colPeriod { width: 92px; white-space: nowrap; text-align: center; }
 .tdCell { text-align: center; }
+
+/* Công tắc "Hiện mục con" */
+.toggleChildren { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); cursor: pointer; height: 34px; user-select: none; }
+.toggleChildren input { width: 15px; height: 15px; cursor: pointer; }
+
+/* Badge "(N mục)" trên header cột cha (chế độ gộp) */
+.groupBadge { font-size: var(--fs-2xs); font-weight: var(--fw-normal); color: #bfdbfe; }
+
+/* Ô cha làm dở → hiện x/N trên nền vàng nhạt */
+.cellPartial { background: #fef9c3; }
+.tr:hover .cellPartial { background: #fef08a; }
+.fracText { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: #a16207; }
 .cellDone { background: var(--color-success-bg-soft); }
 .tr:hover .cellDone { background: var(--color-success-bg); }
 .checkIcon { color: var(--color-success); vertical-align: middle; }

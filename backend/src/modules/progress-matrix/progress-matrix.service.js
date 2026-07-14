@@ -39,7 +39,7 @@ async function listYears() {
 }
 
 // Ma trận tiến độ cho (taskTypeId, month, year). forceAssignedTo: staff chỉ thấy phiếu của mình.
-async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
+async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, collapse = false }) {
   const m = parseInt(month, 10)
   const y = parseInt(year, 10)
   if (!taskTypeId || !m || !y) {
@@ -122,17 +122,76 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
 
   const labelOf = (id) => stepAgg.get(id)?.text ?? templById.get(id)?.step_text ?? null
 
-  // Cột hiển thị = các bước LEAF (không đóng vai CHA của bước nào trong kỳ này).
-  const cols = [...stepAgg.values()]
-    .filter((s) => !parentIds.has(s.sourceStepId))
-    .sort((a, b) => a.stepOrder - b.stepOrder)
-    .map((s) => ({
-      sourceStepId: s.sourceStepId,
-      stepOrder:    s.stepOrder,
-      stepText:     s.text,
-      group:        s.parentId ? labelOf(s.parentId) : null,   // nhãn nhóm cha
-      groupId:      s.parentId ?? null,
-    }))
+  // Map cha → danh sách con (source_step_id) để tính "x/N" và badge "(N mục)".
+  const childrenByParent = new Map()
+  for (const s of stepAgg.values()) {
+    if (s.parentId != null) {
+      if (!childrenByParent.has(s.parentId)) childrenByParent.set(s.parentId, new Set())
+      childrenByParent.get(s.parentId).add(s.sourceStepId)
+    }
+  }
+
+  let cols
+  if (collapse) {
+    // CHẾ ĐỘ GỘP: cột = mục cấp trên cùng (parentId == null) = cha (có con) + leaf lẻ. Ẩn con.
+    cols = [...stepAgg.values()]
+      .filter((s) => s.parentId == null)
+      .sort((a, b) => a.stepOrder - b.stepOrder)
+      .map((s) => {
+        const isGroup  = parentIds.has(s.sourceStepId)
+        const childIds = isGroup
+          ? [...childrenByParent.get(s.sourceStepId)].map((id) => stepAgg.get(id)).sort((a, b) => a.stepOrder - b.stepOrder)
+          : []
+        return {
+          sourceStepId: s.sourceStepId,
+          stepOrder:    s.stepOrder,
+          stepText:     s.text,
+          group:        null, groupId: null,
+          isGroup,
+          childCount:   childIds.length,
+          childNames:   childIds.map((c) => c.text),   // cho tooltip "Gồm: …"
+        }
+      })
+  } else {
+    // CHẾ ĐỘ ĐẦY ĐỦ (mặc định): cột = các bước LEAF; cha là header nhóm.
+    cols = [...stepAgg.values()]
+      .filter((s) => !parentIds.has(s.sourceStepId))
+      .sort((a, b) => a.stepOrder - b.stepOrder)
+      .map((s) => ({
+        sourceStepId: s.sourceStepId,
+        stepOrder:    s.stepOrder,
+        stepText:     s.text,
+        group:        s.parentId ? labelOf(s.parentId) : null,
+        groupId:      s.parentId ?? null,
+        isGroup:      false,
+        childCount:   0,
+        childNames:   [],
+      }))
+  }
+
+  const cellFor = (col, map) => {
+    if (col.isGroup) {
+      // Ô cha (chế độ gộp): tiến độ suy từ CON của phiếu đó. Con của cha = source_parent_id trỏ tới cha.
+      let total = 0, doneCount = 0
+      for (const cid of (childrenByParent.get(col.sourceStepId) || [])) {
+        const it = map.get(cid)
+        if (it) { total++; if (it.is_completed) doneCount++ }
+      }
+      return {
+        sourceStepId: col.sourceStepId, stepText: col.stepText, isGroup: true,
+        present: total > 0, total, doneCount,
+        done: total > 0 && doneCount === total,   // xong hết con → ✓
+        completedAt: null,
+      }
+    }
+    const it = map.get(col.sourceStepId)
+    return {
+      sourceStepId: col.sourceStepId, stepText: col.stepText, isGroup: false,
+      present: !!it, done: it ? it.is_completed : false,
+      total: it ? 1 : 0, doneCount: it && it.is_completed ? 1 : 0,
+      completedAt: it?.completed_at ?? null,
+    }
+  }
 
   const rows = tasks
     .map((t) => {
@@ -147,18 +206,8 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
         startDate:    t.start_date,
         dueDate:      t.due_date,
         periodLabel:  t.period_label,
-        // present=false → task này KHÔNG có bước đó (tô xám, khác với "có nhưng chưa xong")
-        cells: cols.map((col) => {
-          const it = map.get(col.sourceStepId)
-          return {
-            sourceStepId: col.sourceStepId,
-            stepText:     col.stepText,
-            present:      !!it,
-            done:         it ? it.is_completed : false,
-            completedAt:  it?.completed_at ?? null,
-          }
-        }),
-        custom: { total: cust.total, done: cust.done },   // badge "+N bước riêng (x/N)"
+        cells: cols.map((col) => cellFor(col, map)),
+        custom: { total: cust.total, done: cust.done },
       }
     })
     .sort((a, b) =>
@@ -171,6 +220,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo }) {
     period:   { month: m, year: y, label: `Tháng ${m}/${y}` },
     columns:  cols,
     rows,
+    collapse: !!collapse,
   }
 }
 
@@ -357,6 +407,14 @@ async function exportMatrix(matrix, includeSet) {
   const stepCols  = matrix.columns
   const totalCols = idCount + stepCols.length
   const hasGroups = stepCols.some((c) => c.group)
+  // Nhãn header cột: chế độ gộp → thêm "(N mục)" cho cột cha để rõ đây là nhóm gộp.
+  const colHeader = (c) => (c.isGroup && c.childCount ? `${c.stepText} (${c.childCount} mục)` : c.stepText)
+  // Giá trị ô Excel: cha xong hết → 'x'; xong một phần → 'x/N'; không có → ''; leaf → 'x'/''.
+  const cellText = (c) => {
+    if (c.present === false) return ''
+    if (c.isGroup) return c.done ? 'x' : `${c.doneCount}/${c.total}`
+    return c.done ? 'x' : ''
+  }
 
   // Dòng 1: tiêu đề
   ws.mergeCells(1, 1, 1, totalCols)
@@ -401,7 +459,7 @@ async function exportMatrix(matrix, includeSet) {
     dataStartRow = 4
   } else {
     const headerRow = ws.getRow(2)
-    headerRow.values = [...idCols.map((c) => c.header), ...stepCols.map((c) => c.stepText)]
+    headerRow.values = [...idCols.map((c) => c.header), ...stepCols.map(colHeader)]
     for (let cc = 1; cc <= totalCols; cc++) headerStyle(ws.getCell(2, cc))
     headerRow.height = 46
     dataStartRow = 3
@@ -411,7 +469,7 @@ async function exportMatrix(matrix, includeSet) {
   let rIdx = dataStartRow
   for (const r of matrix.rows) {
     const row = ws.getRow(rIdx++)
-    row.values = [...idCols.map((c) => c.get(r)), ...r.cells.map((c) => (c.done ? 'x' : ''))]
+    row.values = [...idCols.map((c) => c.get(r)), ...r.cells.map(cellText)]
   }
 
   applyGrid(ws, totalCols, idCount)
@@ -495,7 +553,7 @@ async function buildSummaryExcel(data, includeSet) {
 }
 
 // Entry export thống nhất 3 view + chọn cột → { buffer, nameBase }
-async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, month, year, source, columns, forceAssignedTo }) {
+async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, month, year, source, columns, collapse = false, forceAssignedTo }) {
   const includeSet = Array.isArray(columns) && columns.length ? new Set(columns) : null
   if (view === 'company') {
     const data = await byCompany({ companyId, month, year, source, forceAssignedTo })
@@ -505,7 +563,7 @@ async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, m
     const data = await byStaff({ staffId, month, year, source, forceAssignedTo })
     return { buffer: await buildSummaryExcel(data, includeSet), nameBase: `nhan-vien-${slug(data.subject.name)}`, period: data.period }
   }
-  const mx = await getMatrix({ taskTypeId, month, year, source, forceAssignedTo })
+  const mx = await getMatrix({ taskTypeId, month, year, source, collapse, forceAssignedTo })
   return { buffer: await exportMatrix(mx, includeSet), nameBase: slug(mx.taskType.name), period: mx.period }
 }
 
