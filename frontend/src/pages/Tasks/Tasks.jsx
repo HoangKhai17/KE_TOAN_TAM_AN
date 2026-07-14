@@ -24,7 +24,7 @@ import {
   TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS,
   isTaskOverdue, fmtDate, progressPct,
-  completionKind, taskStatusLabel, canEditDueDate,
+  completionKind, taskStatusLabel, canEditDueDate, dateLockReason,
   calcDays, calcPlannedDays,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -1080,13 +1080,16 @@ function ListView({
                       >
                         <ArrowUpRight size={13} />
                       </button>
-                      <button
-                        className={s.btnActionDelete}
-                        onClick={() => onDelete(t)}
-                        title="Xóa công việc"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {/* Chỉ admin mới thấy nút xoá (onDelete = null với nhân viên) */}
+                      {onDelete && (
+                        <button
+                          className={s.btnActionDelete}
+                          onClick={() => onDelete(t)}
+                          title="Xóa công việc"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -2117,12 +2120,14 @@ export default function Tasks() {
             <button className={s.btnGhost} onClick={bulkComplete}>
               <Check size={13} /> Hoàn thành tất cả
             </button>
-            <button
-              className={`${s.btnGhost} ${s.btnDangerText}`}
-              onClick={() => setShowBulkDelete(true)}
-            >
-              <Trash2 size={13} /> Xóa đã chọn
-            </button>
+            {isAdmin && (
+              <button
+                className={`${s.btnGhost} ${s.btnDangerText}`}
+                onClick={() => setShowBulkDelete(true)}
+              >
+                <Trash2 size={13} /> Xóa đã chọn
+              </button>
+            )}
             <button className={s.btnGhost} onClick={() => setSelectedIds(new Set())}>
               Bỏ chọn
             </button>
@@ -2154,7 +2159,7 @@ export default function Tasks() {
             onStatusChange={handleStatusChange}
             onPriorityChange={handlePriorityChange}
             onDueDateChange={handleDueDateChange}
-            onDelete={setDeleteTarget}
+            onDelete={isAdmin ? setDeleteTarget : null}
             isAdmin={isAdmin}
             sortColState={sortColState}
             hasColFilter={hasColFilter}
@@ -2188,7 +2193,7 @@ export default function Tasks() {
             onOpen={openTask}
             onQuickView={setQuickViewId}
             isAdmin={isAdmin}
-            onDelete={setDeleteTarget}
+            onDelete={isAdmin ? setDeleteTarget : null}
           />
         )}
 
@@ -2200,7 +2205,7 @@ export default function Tasks() {
             onOpen={openTask}
             onQuickView={setQuickViewId}
             isAdmin={isAdmin}
-            onDelete={setDeleteTarget}
+            onDelete={isAdmin ? setDeleteTarget : null}
             getLabel={getLabel}
           />
         )}

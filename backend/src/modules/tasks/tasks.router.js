@@ -184,7 +184,8 @@ router.patch('/:id', ...auth, validate(updateTaskSchema), ctrl.updateTask)
  *       204: { description: Deleted }
  *       404: { description: Not found }
  */
-router.delete('/:id', ...auth, ctrl.deleteTask)
+// KH yêu cầu: CHỈ Quản trị viên được xoá công việc (nhân viên không được xoá).
+router.delete('/:id', ...admin, ctrl.deleteTask)
 
 /**
  * @openapi

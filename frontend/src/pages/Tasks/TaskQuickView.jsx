@@ -10,7 +10,7 @@ import { listUserOptions } from '../../api/users'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
-  fmtDate, isTaskOverdue, completionKind, taskStatusLabel, canEditDueDate,
+  fmtDate, isTaskOverdue, completionKind, taskStatusLabel, canEditStartDate, canEditDueDate, dateLockReason,
   checklistLeafCounts, checklistIsParent, checklistParentDone,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -441,10 +441,16 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
 
                 <div className={s.qvRow}>
                   <span className={s.qvLabel}><Calendar size={11} /> Bắt đầu</span>
-                  <QvDateField
-                    value={toDateValue(task.startDate || task.createdAt)}
-                    onChange={(e) => changeStartDate(e.target.value)}
-                  />
+                  {canEditStartDate(task, isAdmin) ? (
+                    <QvDateField
+                      value={toDateValue(task.startDate || task.createdAt)}
+                      onChange={(e) => changeStartDate(e.target.value)}
+                    />
+                  ) : (
+                    <span className={s.qvValue} title={dateLockReason(task, isAdmin, 'start')}>
+                      {task.startDate ? fmtDate(task.startDate) : '—'}
+                    </span>
+                  )}
                 </div>
 
                 <div className={s.qvRow}>
@@ -456,7 +462,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                       isError={overdue}
                     />
                   ) : (
-                    <span className={s.qvValue} title="Chỉ Quản trị viên được sửa (công việc này không phải từ lịch định kỳ)">
+                    <span className={s.qvValue} title={dateLockReason(task, isAdmin, 'due')}>
                       {task.dueDate ? fmtDate(task.dueDate) : '—'}
                     </span>
                   )}

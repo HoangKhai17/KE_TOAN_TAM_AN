@@ -62,6 +62,9 @@ function toDto(row) {
     taskTypeId:             row.task_type_id ?? null,
     taskTypeName:           row.task_type_name ?? null,
     customerTaskScheduleId: row.customer_task_schedule_id ?? null,
+    // Có giá trị = nhân viên đã dùng lượt chỉnh của NGÀY ĐÓ → khoá riêng ngày đó
+    staffStartAdjustedAt:   row.staff_start_adjusted_at ?? null,
+    staffDueAdjustedAt:     row.staff_due_adjusted_at ?? null,
     assignedTo:             row.assigned_to ?? null,
     assignedToName:         row.assigned_to_name ?? null,
     assignedBy:             row.assigned_by ?? null,
@@ -433,6 +436,10 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
   const { rows: [current] } = await query('SELECT * FROM tasks WHERE id = $1', [id])
   if (!current) throw Object.assign(new Error('Task not found'), { status: 404 })
 
+  // Mỗi ngày một lượt riêng — chỉnh ngày này không khoá ngày kia
+  let staffAdjustStart = false
+  let staffAdjustDue   = false
+
   // Validate source against active enum options (metadata-driven)
   if (data.source !== undefined && data.source !== null) {
     const validSources = await enums.getValues('task_source')
@@ -449,17 +456,53 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
       throw Object.assign(new Error('Bạn không có quyền chỉnh sửa công việc này'), { status: 403 })
     }
     delete fieldMap.assignedTo
-    // Nhân viên KHÔNG được sửa Ngày hết hạn với task nguồn thường (chỉ admin).
-    // NGOẠI LỆ: task sinh từ lịch định kỳ (customer_task_schedule_id) thì staff được sửa.
+
+    // ── Quy tắc NGÀY với nhân viên ───────────────────────────────────────────
+    // 1) Chỉ sửa được nếu task sinh từ LỊCH ĐỊNH KỲ (customer_task_schedule_id).
+    // 2) Mỗi ngày có lượt RIÊNG, mỗi ngày được chỉnh ĐÚNG 1 LẦN:
+    //    - Ngày bắt đầu  → staff_start_adjusted_at
+    //    - Ngày hết hạn  → staff_due_adjusted_at
+    //    Chỉnh ngày này KHÔNG khoá ngày kia.
+    // Admin không bị giới hạn (và không đóng dấu cờ nào).
     const fromRecurring = current.customer_task_schedule_id != null
+    const changingStart = data.startDate !== undefined && toDateStr(data.startDate) !== toDateStr(current.start_date)
+    const changingDue   = data.dueDate   !== undefined && toDateStr(data.dueDate)   !== toDateStr(current.due_date)
+
     if (!fromRecurring) {
-      if (data.dueDate !== undefined && toDateStr(data.dueDate) !== toDateStr(current.due_date)) {
+      if (changingStart || changingDue) {
         throw Object.assign(
-          new Error('Nhân viên không được sửa Ngày hết hạn. Vui lòng báo Quản trị viên để điều chỉnh.'),
-          { status: 403 }
+          new Error('Nhân viên không được sửa Ngày bắt đầu / Ngày hết hạn của công việc này (không thuộc lịch định kỳ). Vui lòng báo Quản trị viên.'),
+          { status: 403 },
         )
       }
+      delete fieldMap.startDate
       delete fieldMap.dueDate
+    } else {
+      // Ngày bắt đầu — lượt riêng
+      if (changingStart) {
+        if (current.staff_start_adjusted_at != null) {
+          throw Object.assign(
+            new Error('Bạn đã điều chỉnh Ngày bắt đầu 1 lần cho công việc này. Vui lòng báo Quản trị viên nếu cần đổi thêm.'),
+            { status: 403 },
+          )
+        }
+        staffAdjustStart = true
+      } else if (current.staff_start_adjusted_at != null) {
+        delete fieldMap.startDate   // đã dùng lượt → khoá, không ghi đè
+      }
+
+      // Ngày hết hạn — lượt riêng, độc lập với ngày bắt đầu
+      if (changingDue) {
+        if (current.staff_due_adjusted_at != null) {
+          throw Object.assign(
+            new Error('Bạn đã điều chỉnh Ngày hết hạn 1 lần cho công việc này. Vui lòng báo Quản trị viên nếu cần đổi thêm.'),
+            { status: 403 },
+          )
+        }
+        staffAdjustDue = true
+      } else if (current.staff_due_adjusted_at != null) {
+        delete fieldMap.dueDate
+      }
     }
   }
 
@@ -485,6 +528,10 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     }
   }
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
+
+  // Staff vừa dùng lượt chỉnh của TỪNG ngày → khoá riêng ngày đó
+  if (staffAdjustStart) updates.push('staff_start_adjusted_at = NOW()')
+  if (staffAdjustDue)   updates.push('staff_due_adjusted_at = NOW()')
 
   params.push(id)
   await query(
@@ -529,13 +576,12 @@ async function deleteTask(id, user, ipAddress, userAgent) {
   const { rows: [task] } = await query('SELECT id, title, company_id FROM tasks WHERE id = $1', [id])
   if (!task) throw Object.assign(new Error('Task not found'), { status: 404 })
 
-  if (user.role === 'staff') {
-    const { rows: [company] } = await query(
-      'SELECT assigned_staff_id FROM companies WHERE id = $1',
-      [task.company_id],
+  // CHỈ admin được xoá công việc (lớp phòng thủ thứ 2 — router đã chặn bằng requireRole).
+  if (user.role !== 'admin') {
+    throw Object.assign(
+      new Error('Chỉ Quản trị viên được xoá công việc. Vui lòng liên hệ Quản trị viên.'),
+      { status: 403 },
     )
-    if (!company || company.assigned_staff_id !== actorId)
-      throw Object.assign(new Error('Forbidden'), { status: 403 })
   }
 
   await query('DELETE FROM tasks WHERE id = $1', [id])

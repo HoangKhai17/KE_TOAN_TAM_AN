@@ -118,10 +118,34 @@ export function checklistParentDone(items, index) {
   return hasChild
 }
 
-// Ai được sửa Ngày hết hạn: admin luôn được; staff chỉ được với task sinh từ LỊCH ĐỊNH KỲ
-// (customerTaskScheduleId != null). Task nguồn khác (thủ công...) staff không sửa được.
+// Ai được sửa NGÀY:
+//  · Admin: luôn được, không giới hạn số lần.
+//  · Nhân viên: CHỈ với task sinh từ LỊCH ĐỊNH KỲ (customerTaskScheduleId != null),
+//    và mỗi ngày có LƯỢT RIÊNG — mỗi ngày chỉnh được ĐÚNG 1 LẦN.
+//    Chỉnh Ngày bắt đầu KHÔNG khoá Ngày hết hạn, và ngược lại.
+function canEditDateField(task, isAdmin, adjustedAt) {
+  if (isAdmin) return true
+  if (task?.customerTaskScheduleId == null) return false
+  return !adjustedAt
+}
+
+export function canEditStartDate(task, isAdmin) {
+  return canEditDateField(task, isAdmin, task?.staffStartAdjustedAt)
+}
+
 export function canEditDueDate(task, isAdmin) {
-  return !!isAdmin || (task?.customerTaskScheduleId != null)
+  return canEditDateField(task, isAdmin, task?.staffDueAdjustedAt)
+}
+
+// Lý do bị khoá — tooltip cho nhân viên hiểu vì sao không sửa được. field: 'start' | 'due'
+export function dateLockReason(task, isAdmin, field = 'due') {
+  const editable = field === 'start' ? canEditStartDate(task, isAdmin) : canEditDueDate(task, isAdmin)
+  if (editable) return null
+  if (task?.customerTaskScheduleId == null) {
+    return 'Chỉ Quản trị viên được sửa ngày (công việc này không thuộc lịch định kỳ).'
+  }
+  const label = field === 'start' ? 'Ngày bắt đầu' : 'Ngày hết hạn'
+  return `Bạn đã điều chỉnh ${label} 1 lần cho công việc này. Vui lòng báo Quản trị viên nếu cần đổi thêm.`
 }
 
 // Class CSS badge cho trạng thái (hoàn thành trễ hạn dùng biến thể riêng)

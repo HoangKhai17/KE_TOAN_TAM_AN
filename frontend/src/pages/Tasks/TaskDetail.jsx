@@ -13,7 +13,7 @@ import * as tasksApi from '../../api/tasks'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
-  fmtDate, fmtDateTime, isTaskOverdue, completionKind, taskStatusLabel, canEditDueDate,
+  fmtDate, fmtDateTime, isTaskOverdue, completionKind, taskStatusLabel, canEditDueDate, dateLockReason,
   checklistLeafCounts, checklistIsParent, checklistParentDone,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
