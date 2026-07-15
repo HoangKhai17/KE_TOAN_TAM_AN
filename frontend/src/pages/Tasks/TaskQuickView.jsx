@@ -332,7 +332,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                 <StatusBadge task={task} />
                 <PriorityBadge priority={task.priority} />
                 {overdue && (
-                  <span className={s.overdueTag}><AlertTriangle size={10} /> Quá hạn</span>
+                  <span className={s.overdueTag}><AlertTriangle size={10} /> Trễ hạn</span>
                 )}
               </div>
             )}

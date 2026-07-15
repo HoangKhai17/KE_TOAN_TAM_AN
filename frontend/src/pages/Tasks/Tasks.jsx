@@ -2004,9 +2004,9 @@ export default function Tasks() {
                 className={`${s.filterToggle} ${isOverdue ? s.filterToggleActive : ''}`}
                 onClick={() => { setIsOverdue((p) => !p); setPage(1) }}
                 disabled={scheduleToday}
-                title={scheduleToday ? '"Hôm nay" đã bao gồm việc quá hạn' : undefined}
+                title={scheduleToday ? '"Hôm nay" đã bao gồm việc trễ hạn' : undefined}
               >
-                {isOverdue ? '✓ ' : ''}Quá hạn
+                {isOverdue ? '✓ ' : ''}Trễ hạn
               </button>
             </div>
 
@@ -2066,7 +2066,7 @@ export default function Tasks() {
               )}
               {isOverdue && (
                 <span className={`${s.filterChip} ${s.filterChipDanger}`}>
-                  Quá hạn
+                  Trễ hạn
                   <button className={s.filterChipRemove} onClick={() => { setIsOverdue(false); setPage(1) }}>×</button>
                 </span>
               )}
@@ -2108,7 +2108,7 @@ export default function Tasks() {
             <span className={s.statDivider} />
             <div className={s.statItem}>
               <span className={`${s.statValue} ${s.statRed}`}>{stats.needs_revision ?? 0}</span>
-              <span className={s.statLabel}>Xem lại</span>
+              <span className={s.statLabel}>Trễ hạn</span>
             </div>
             <span className={s.statDivider} />
             <div className={s.statItem}>

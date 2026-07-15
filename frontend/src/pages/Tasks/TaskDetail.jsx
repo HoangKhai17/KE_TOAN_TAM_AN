@@ -893,7 +893,7 @@ export default function TaskDetail() {
                 <StatusBadge task={task} />
                 <PriorityBadge priority={task.priority} />
                 {overdue && (
-                  <span className={s.overdueTag}><AlertTriangle size={10} /> Quá hạn</span>
+                  <span className={s.overdueTag}><AlertTriangle size={10} /> Trễ hạn</span>
                 )}
                 {task.source && (
                   <span className={`${s.sourceBadge} ${task.source === 'auto' ? s.sourceAuto : s.sourceManual}`}>
@@ -1053,7 +1053,7 @@ export default function TaskDetail() {
 
               {overdue && (
                 <div className={s.overdueWrap}>
-                  <span className={s.overdueTag}><AlertTriangle size={10} /> Quá hạn</span>
+                  <span className={s.overdueTag}><AlertTriangle size={10} /> Trễ hạn</span>
                 </div>
               )}
             </div>
