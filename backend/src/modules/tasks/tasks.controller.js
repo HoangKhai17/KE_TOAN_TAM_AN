@@ -23,6 +23,21 @@ async function listTasks(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function exportTasksExcel(req, res, next) {
+  try {
+    // Frontend gửi cột + dữ liệu đã render đúng như bảng → backend chỉ định dạng.
+    const { sheetName, columns = [], rows = [] } = req.body ?? {}
+    if (!Array.isArray(columns) || !columns.length) {
+      return res.status(400).json({ success: false, error: { message: 'Thiếu danh sách cột' } })
+    }
+    const buffer = await svc.buildTasksExcel({ sheetName, columns, rows: Array.isArray(rows) ? rows : [] })
+    const filename = `cong-viec-${new Date().toISOString().slice(0, 10)}.xlsx`
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(Buffer.from(await buffer))
+  } catch (err) { next(err) }
+}
+
 async function getTask(req, res, next) {
   try {
     const task = await svc.getTaskById(req.params.id, req.user)
@@ -262,7 +277,7 @@ async function deleteLink(req, res, next) {
 
 module.exports = {
   listTasks, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog,
-  getAvailableYears,
+  getAvailableYears, exportTasksExcel,
   listChecklist, addChecklistItem, updateChecklistItem, reorderChecklist, deleteChecklistItem,
   listDependencies, addDependency, removeDependency,
   listComments, addComment, updateComment, deleteComment,

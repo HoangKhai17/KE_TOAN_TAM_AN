@@ -12,6 +12,12 @@ export async function getTaskYears() {
   return data.data.years  // number[]
 }
 
+// Xuất Excel: gửi cột + dữ liệu đã render (đúng như bảng) → nhận file Blob
+export async function exportTasksExcel(body) {
+  const { data } = await api.post('/tasks/export', body, { responseType: 'blob', timeout: 120000 })
+  return data
+}
+
 export async function getTask(id) {
   const { data } = await api.get(`/tasks/${id}`)
   return data.data.task

@@ -8,7 +8,7 @@ import {
 import {
   Plus, Search, RotateCcw, List, Columns, Layers,
   ChevronRight, ChevronDown, Filter, ClipboardList, Check,
-  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal,
+  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal, FileDown,
 } from 'lucide-react'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
@@ -19,10 +19,11 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
 import TaskFormModal from './TaskFormModal'
 import TaskQuickView from './TaskQuickView'
+import Modal from '../../components/ui/Modal'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import {
   TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
-  PRIORITY_LABELS, PRIORITY_CSS,
+  PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
   isTaskOverdue, fmtDate, progressPct,
   completionKind, taskStatusLabel, canEditDueDate, dateLockReason,
   calcDays, calcPlannedDays,
@@ -1277,6 +1278,7 @@ export default function Tasks() {
 
   // Modals
   const [showCreate, setShowCreate]         = useState(false)
+  const [showExport, setShowExport]         = useState(false)
   const [onHoldTarget, setOnHoldTarget]     = useState(null)
   const [deleteTarget, setDeleteTarget]     = useState(null)
   const [deleting, setDeleting]             = useState(false)
@@ -1644,6 +1646,8 @@ export default function Tasks() {
     return result
   }, [tasks, colFilters, sortColState, colDisplayLabel])
 
+  const totalCount = displayed.length
+
   // Client pagination for the list view
   const clientTotalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
   const safePage = Math.min(page, clientTotalPages)
@@ -1802,6 +1806,10 @@ export default function Tasks() {
               title={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
             >
               {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+
+            <button className={s.btnSecondary} onClick={() => setShowExport(true)} disabled={!totalCount}>
+              <FileDown size={14} /> Xuất Excel
             </button>
 
             <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
@@ -2221,6 +2229,13 @@ export default function Tasks() {
         />
       )}
 
+      {showExport && (
+        <TaskExportModal
+          rows={displayed}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
       {onHoldTarget && (
         <OnHoldModal
           task={onHoldTarget.task}
@@ -2277,5 +2292,132 @@ export default function Tasks() {
         </div>
       )}
     </AppLayout>
+  )
+}
+
+// ── TaskExportModal ─────────────────────────────────────────────────────────────
+// Sinh dữ liệu bằng CHÍNH các hàm render của bảng (getLabel enum, calcDays…) rồi gửi
+// backend chỉ để định dạng → file xuất khớp 100% với bảng, KHÔNG map cứng, KHÔNG lệch.
+const EXPORT_COLUMNS = [
+  { key: 'title',          label: 'Tiêu đề',            group: 'Cột trong bảng', value: (r) => r.title ?? '' },
+  { key: 'companyShort',   label: 'Tên viết tắt',       group: 'Cột trong bảng', value: (r) => r.companyShortName || r.companyName || '' },
+  { key: 'startDate',      label: 'Ngày bắt đầu',       group: 'Cột trong bảng', value: (r) => fmtDate(r.startDate || r.createdAt) },
+  { key: 'dueDate',        label: 'Hết hạn',            group: 'Cột trong bảng', value: (r) => (r.dueDate ? fmtDate(r.dueDate) : '') },
+  { key: 'days',           label: 'Số ngày hoàn thành', group: 'Cột trong bảng', value: (r) => { const d = calcDays(r); return d == null ? '' : d } },
+  { key: 'plannedDays',    label: 'Số ngày kế hoạch',   group: 'Cột trong bảng', value: (r) => { const d = calcPlannedDays(r); return d == null ? '' : d } },
+  { key: 'source',         label: 'Nguồn tạo',          group: 'Cột trong bảng', value: (r, gl) => gl('task_source', r.source, r.source === 'auto' ? 'Tự động' : 'Thủ công') },
+  { key: 'createdAt',      label: 'Ngày tạo',           group: 'Cột trong bảng', value: (r) => fmtDate(r.createdAt) },
+  { key: 'status',         label: 'Trạng thái',         group: 'Cột trong bảng', value: (r, gl) => taskStatusLabel(r, gl) },
+  { key: 'priority',       label: 'Ưu tiên',            group: 'Cột trong bảng', value: (r, gl) => gl('task_priority', r.priority, PRIORITY_LABELS[r.priority] ?? r.priority) },
+  { key: 'progress',       label: 'Tiến độ',            group: 'Cột trong bảng', value: (r) => { const p = progressPct(r); return p != null ? `${p}%` : '' } },
+  { key: 'assignedToName', label: 'Giao cho',           group: 'Cột trong bảng', value: (r) => r.assignedToName || '' },
+  { key: 'latestComment',  label: 'Bình luận mới nhất', group: 'Cột trong bảng', value: (r) => r.latestComment || '' },
+  { key: 'companyName',    label: 'Khách hàng (đầy đủ)', group: 'Thông tin bổ sung', value: (r) => r.companyName || '' },
+  { key: 'taskTypeName',   label: 'Loại công việc',      group: 'Thông tin bổ sung', value: (r) => r.taskTypeName || '' },
+  { key: 'createdByName',  label: 'Người tạo',           group: 'Thông tin bổ sung', value: (r) => r.createdByName || '' },
+  { key: 'completedAt',    label: 'Ngày hoàn thành',     group: 'Thông tin bổ sung', value: (r) => fmtDate(r.completedAt) },
+  { key: 'slaDays',        label: 'SLA (ngày)',          group: 'Thông tin bổ sung', value: (r) => r.slaDays ?? '' },
+  { key: 'periodLabel',    label: 'Kỳ',                  group: 'Thông tin bổ sung', value: (r) => r.periodLabel || '' },
+  { key: 'description',    label: 'Mô tả',               group: 'Thông tin bổ sung', value: (r) => r.description || '' },
+]
+const EXPORT_GROUPS = ['Cột trong bảng', 'Thông tin bổ sung']
+
+function TaskExportModal({ rows, onClose }) {
+  const addToast = useToastStore((st) => st.toast)
+  const getLabel = useEnumsStore((st) => st.getLabel)
+  const [selected, setSelected]   = useState(() => new Set(EXPORT_COLUMNS.filter((c) => c.group === 'Cột trong bảng').map((c) => c.key)))
+  const [exporting, setExporting] = useState(false)
+  const total = rows.length
+
+  const groups = EXPORT_GROUPS.map((g) => ({ label: g, fields: EXPORT_COLUMNS.filter((c) => c.group === g) }))
+  const isGroupAll = (g) => g.fields.every((f) => selected.has(f.key))
+  const toggleGroup = (g) => setSelected((prev) => {
+    const next = new Set(prev); const on = g.fields.every((f) => prev.has(f.key))
+    g.fields.forEach((f) => (on ? next.delete(f.key) : next.add(f.key))); return next
+  })
+  const toggleField = (k) => setSelected((prev) => {
+    const next = new Set(prev); next.has(k) ? next.delete(k) : next.add(k); return next
+  })
+
+  const selectedCols = EXPORT_COLUMNS.filter((c) => selected.has(c.key))
+
+  async function handleExport() {
+    if (!selectedCols.length) { addToast('Vui lòng chọn ít nhất một cột', 'error'); return }
+    setExporting(true)
+    try {
+      const body = {
+        sheetName: 'Cong viec',
+        columns: selectedCols.map((c) => c.label),
+        rows: rows.map((r) => selectedCols.map((c) => { const v = c.value(r, getLabel); return v == null ? '' : v })),
+      }
+      const blob = await tasksApi.exportTasksExcel(body)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `cong-viec-${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click(); URL.revokeObjectURL(url)
+      addToast(`Đã xuất ${total} công việc`, 'success')
+      onClose()
+    } catch {
+      addToast('Xuất Excel thất bại', 'error')
+    } finally { setExporting(false) }
+  }
+
+  return (
+    <Modal title="Xuất Excel — Công việc" onClose={onClose} wide>
+      <div className={s.exportModalBody}>
+        <div className={s.exportSidebar}>
+          <div className={s.exportSidebarTitle}>Chọn cột xuất</div>
+          {groups.map((g) => (
+            <div key={g.label} className={s.exportGroup}>
+              <label className={s.exportGroupLabel}>
+                <input type="checkbox" checked={isGroupAll(g)} onChange={() => toggleGroup(g)} />
+                <span>{g.label}</span>
+              </label>
+              {g.fields.map((f) => (
+                <label key={f.key} className={s.exportFieldItem}>
+                  <input type="checkbox" checked={selected.has(f.key)} onChange={() => toggleField(f.key)} />
+                  <span>{f.label}</span>
+                </label>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <div className={s.exportPreviewPane}>
+          <div className={s.exportPreviewTitle}>Xem trước ({total} công việc)</div>
+          <div className={s.exportPreviewWrap}>
+            {selectedCols.length === 0 ? (
+              <div className={s.exportPreviewEmpty}>Chưa chọn cột nào</div>
+            ) : total === 0 ? (
+              <div className={s.exportPreviewEmpty}>Không có công việc nào để xuất</div>
+            ) : (
+              <table className={s.exportPreviewTable}>
+                <thead><tr>{selectedCols.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.taskId || r.id}>
+                      {selectedCols.map((c) => {
+                        const v = c.value(r, getLabel)
+                        return <td key={c.key}>{v === '' || v == null ? '—' : String(v)}</td>
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className={s.exportFooter}>
+        <span className={s.exportCount}>{selectedCols.length} cột · {total} công việc</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className={s.btnSecondary} onClick={onClose} disabled={exporting}>Hủy</button>
+          <button className={s.btnPrimary} onClick={handleExport} disabled={exporting || !selectedCols.length || total === 0}>
+            {exporting ? <><Loader2 size={13} className={s.spinIcon} /> Đang xuất...</> : <><FileDown size={13} /> Xuất Excel</>}
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

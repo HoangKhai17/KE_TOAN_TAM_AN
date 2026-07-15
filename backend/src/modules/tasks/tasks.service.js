@@ -84,6 +84,7 @@ function toDto(row) {
     latestCommentAt:        row.latest_comment_at ?? null,
     latestCommentBy:        row.latest_comment_by ?? null,
     createdBy:              row.created_by,
+    createdByName:          row.created_by_name ?? null,
     createdAt:              row.created_at,
     updatedAt:              row.updated_at,
   }
@@ -96,6 +97,7 @@ const TASK_SELECT = `
          c.assigned_staff_id AS company_assigned_staff_id,
          tt.name  AS task_type_name,
          ua.name  AS assigned_to_name,
+         uc.name  AS created_by_name,
          cl.checklist_total,
          cl.checklist_done,
          lc.latest_comment,
@@ -105,6 +107,7 @@ const TASK_SELECT = `
   LEFT JOIN companies  c  ON c.id  = t.company_id
   LEFT JOIN task_types tt ON tt.id = t.task_type_id
   LEFT JOIN users      ua ON ua.id = t.assigned_to
+  LEFT JOIN users      uc ON uc.id = t.created_by
   LEFT JOIN LATERAL (
     -- Chỉ đếm mục "leaf": mục phụ (level 1) hoặc mục chính không có con.
     -- Mục chính CÓ con (level 0 ngay trước 1 level 1) là nhóm → không tính vào tiến độ.
@@ -789,8 +792,42 @@ async function getAvailableYears() {
   return rows.map((r) => r.year)
 }
 
+// ── Xuất Excel: frontend gửi sẵn cột + dữ liệu (đã render đúng như bảng),
+// backend chỉ định dạng ra file. Không map/tính lại → KHÔNG lệch với giao diện.
+function buildTasksExcel({ sheetName = 'Cong viec', columns = [], rows = [] }) {
+  const ExcelJS = require('exceljs')
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet(String(sheetName).slice(0, 31) || 'Cong viec')
+
+  const header = ws.addRow(columns)
+  header.eachCell((c) => {
+    c.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }
+    c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+  })
+  ws.getRow(1).height = 30
+
+  rows.forEach((r, idx) => {
+    const row = ws.addRow(r)
+    const even = idx % 2 === 0
+    row.eachCell((c) => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: even ? 'FFFFFFFF' : 'FFF8FAFC' } }
+      c.alignment = { vertical: 'middle', wrapText: true }
+      c.border = { top: { style: 'hair', color: { argb: 'FFE2E8F0' } }, bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } }
+    })
+    row.height = 20
+  })
+
+  columns.forEach((label, i) => {
+    const maxLen = Math.max(String(label).length + 4, ...rows.map((r) => String(r[i] ?? '').length))
+    ws.getColumn(i + 1).width = Math.min(Math.max(maxLen + 2, 12), 55)
+  })
+  ws.views = [{ state: 'frozen', ySplit: 1 }]
+  return wb.xlsx.writeBuffer()
+}
+
 module.exports = {
   listTasks, getTaskById, createTask, updateTask, deleteTask,
   changeTaskStatus, getActivityLog, getAvailableYears,
-  assertTaskAccess,
+  assertTaskAccess, buildTasksExcel,
 }

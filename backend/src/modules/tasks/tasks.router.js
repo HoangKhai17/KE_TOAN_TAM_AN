@@ -92,7 +92,8 @@ const admin = [authenticate, requireRole('admin')]
  */
 router.get('/', ...auth, ctrl.listTasks)
 
-// IMPORTANT: must be before /:id to prevent 'meta' being matched as an ID
+// IMPORTANT: phải đặt trước /:id để 'export' / 'meta' không bị bắt làm ID
+router.post('/export', ...auth, ctrl.exportTasksExcel)
 router.get('/meta/years', ...auth, ctrl.getAvailableYears)
 
 /**
