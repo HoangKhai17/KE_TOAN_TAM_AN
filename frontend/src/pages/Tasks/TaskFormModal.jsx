@@ -8,6 +8,7 @@ import { listUserOptions } from '../../api/users'
 import { listTaskTypes } from '../../api/taskTypes'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { PRIORITY_LABELS } from './taskUtils'
+import CollaboratorPicker from './CollaboratorPicker'
 import s from './tasks.module.css'
 
 // ── Searchable company picker ─────────────────────────────────────────────────
@@ -115,7 +116,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   const [form, setForm] = useState({
     title: '', companyId: initialCompanyId || '', taskTypeId: '', assignedToId: '',
     startDate: todayISO, dueDate: '', priority: 'medium', slaDays: '', description: '',
-    source: 'manual',
+    source: 'manual', collaboratorIds: [],
   })
   const [companies, setCompanies] = useState([])
   const [users,     setUsers]     = useState([])
@@ -227,6 +228,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         slaDays:     form.slaDays ? Number(form.slaDays) : null,
         description: form.description.trim() || null,
         source:      form.source || 'manual',
+        collaboratorIds: form.collaboratorIds.filter((id) => id && id !== form.assignedToId),
       })
       for (const item of checklistItems) {
         await addTaskChecklistItem(task.id, { stepText: item.text, level: item.level ?? 0 })
@@ -303,13 +305,36 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           )}
         </div>
 
-        {/* Assigned to */}
+        {/* Assigned to (owner) */}
         <div className={s.formGroup}>
           <label className={s.formLabel}>Giao cho</label>
-          <select value={form.assignedToId} onChange={set('assignedToId')} className={s.formSelect}>
+          <select
+            value={form.assignedToId}
+            onChange={(e) => setForm((p) => ({
+              ...p,
+              assignedToId: e.target.value,
+              // Owner không đồng thời là người hỗ trợ → loại khỏi danh sách nếu trùng
+              collaboratorIds: p.collaboratorIds.filter((id) => id !== e.target.value),
+            }))}
+            className={s.formSelect}
+          >
             <option value="">-- Chưa phân công --</option>
             {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
+        </div>
+
+        {/* Collaborators (người hỗ trợ) */}
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Người hỗ trợ</label>
+          <CollaboratorPicker
+            options={users}
+            value={form.collaboratorIds}
+            onChange={(ids) => setForm((p) => ({ ...p, collaboratorIds: ids }))}
+            excludeId={form.assignedToId}
+          />
+          <p style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 3 }}>
+            Đồng nghiệp cùng xem &amp; xử lý công việc này (ngoài người phụ trách chính)
+          </p>
         </div>
 
         {/* Priority */}

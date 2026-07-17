@@ -58,12 +58,15 @@ async function getTraditionalCharts(userId, role, from, to) {
       ? query(`SELECT COALESCE(tt.group_name, 'Khác') AS name, COUNT(*) AS value FROM tasks t LEFT JOIN task_types tt ON tt.id = t.task_type_id WHERE t.assigned_to = $1 AND t.created_at::date BETWEEN $2 AND $3 GROUP BY COALESCE(tt.group_name, 'Khác') ORDER BY COUNT(*) DESC LIMIT 8`, [userId, from, to])
       : query(`SELECT COALESCE(tt.group_name, 'Khác') AS name, COUNT(*) AS value FROM tasks t LEFT JOIN task_types tt ON tt.id = t.task_type_id WHERE t.created_at::date BETWEEN $1 AND $2 GROUP BY COALESCE(tt.group_name, 'Khác') ORDER BY COUNT(*) DESC LIMIT 8`, [from, to]),
 
+    // Danh sách "Việc quá hạn" (actionable) — bao gồm cả việc nhân sự được nhờ HỖ TRỢ.
+    // Lưu ý: KPI overdueTasks phía trên vẫn tính theo owner (assigned_to) — cố ý không đổi.
     isStaff
-      ? query(`SELECT t.id, t.title, t.due_date, t.created_at, t.status, t.priority, c.name AS company_name, u.name AS assigned_to_name, (CURRENT_DATE - t.due_date)::int AS days_overdue FROM tasks t LEFT JOIN companies c ON c.id = t.company_id LEFT JOIN users u ON u.id = t.assigned_to WHERE t.assigned_to = $1 AND t.due_date < CURRENT_DATE AND t.status != 'completed' ORDER BY t.due_date ASC LIMIT 10`, [userId])
+      ? query(`SELECT t.id, t.title, t.due_date, t.created_at, t.status, t.priority, c.name AS company_name, u.name AS assigned_to_name, (CURRENT_DATE - t.due_date)::int AS days_overdue FROM tasks t LEFT JOIN companies c ON c.id = t.company_id LEFT JOIN users u ON u.id = t.assigned_to WHERE (t.assigned_to = $1 OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = $1)) AND t.due_date < CURRENT_DATE AND t.status != 'completed' ORDER BY t.due_date ASC LIMIT 10`, [userId])
       : query(`SELECT t.id, t.title, t.due_date, t.created_at, t.status, t.priority, c.name AS company_name, u.name AS assigned_to_name, (CURRENT_DATE - t.due_date)::int AS days_overdue FROM tasks t LEFT JOIN companies c ON c.id = t.company_id LEFT JOIN users u ON u.id = t.assigned_to WHERE t.due_date < CURRENT_DATE AND t.status != 'completed' ORDER BY t.due_date ASC LIMIT 10`),
 
+    // Danh sách "Lịch làm việc hôm nay" (actionable) — bao gồm cả việc được nhờ HỖ TRỢ.
     isStaff
-      ? query(`SELECT t.id, t.title, t.due_date, t.created_at, t.status, t.priority, c.name AS company_name, u.name AS assigned_to_name FROM tasks t LEFT JOIN companies c ON c.id = t.company_id LEFT JOIN users u ON u.id = t.assigned_to WHERE t.assigned_to = $1 AND t.due_date = CURRENT_DATE AND t.status != 'completed' ORDER BY t.priority DESC LIMIT 20`, [userId])
+      ? query(`SELECT t.id, t.title, t.due_date, t.created_at, t.status, t.priority, c.name AS company_name, u.name AS assigned_to_name FROM tasks t LEFT JOIN companies c ON c.id = t.company_id LEFT JOIN users u ON u.id = t.assigned_to WHERE (t.assigned_to = $1 OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = $1)) AND t.due_date = CURRENT_DATE AND t.status != 'completed' ORDER BY t.priority DESC LIMIT 20`, [userId])
       : query(`SELECT t.id, t.title, t.due_date, t.created_at, t.status, t.priority, c.name AS company_name, u.name AS assigned_to_name FROM tasks t LEFT JOIN companies c ON c.id = t.company_id LEFT JOIN users u ON u.id = t.assigned_to WHERE t.due_date = CURRENT_DATE AND t.status != 'completed' ORDER BY t.priority DESC LIMIT 20`),
   ])
 

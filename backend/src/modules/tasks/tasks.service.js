@@ -21,6 +21,7 @@ function cdrToTaskDto(cdr) {
     assignedTo:     cdr.requestedBy,
     assignedToName: cdr.requestedByName,
     assignedBy:     null,
+    collaborators:  [],
     status:         cdr.status,
     priority:       null,
     source:         'client_request',
@@ -59,6 +60,7 @@ function toDto(row) {
     companyId:              row.company_id,
     companyName:            row.company_name ?? null,
     companyShortName:       row.company_short_name ?? null,
+    companyAssignedStaffId: row.company_assigned_staff_id ?? null,
     taskTypeId:             row.task_type_id ?? null,
     taskTypeName:           row.task_type_name ?? null,
     customerTaskScheduleId: row.customer_task_schedule_id ?? null,
@@ -68,6 +70,7 @@ function toDto(row) {
     assignedTo:             row.assigned_to ?? null,
     assignedToName:         row.assigned_to_name ?? null,
     assignedBy:             row.assigned_by ?? null,
+    collaborators:          Array.isArray(row.collaborators) ? row.collaborators : [],
     status:                 row.status,
     priority:               row.priority,
     source:                 row.source,
@@ -102,12 +105,19 @@ const TASK_SELECT = `
          cl.checklist_done,
          lc.latest_comment,
          lc.latest_comment_at,
-         lc.latest_comment_by
+         lc.latest_comment_by,
+         COALESCE(collab.list, '[]'::json) AS collaborators
   FROM tasks t
   LEFT JOIN companies  c  ON c.id  = t.company_id
   LEFT JOIN task_types tt ON tt.id = t.task_type_id
   LEFT JOIN users      ua ON ua.id = t.assigned_to
   LEFT JOIN users      uc ON uc.id = t.created_by
+  LEFT JOIN LATERAL (
+    -- Người hỗ trợ (collaborators) — owner vẫn nằm ở t.assigned_to, KHÔNG gộp vào đây.
+    SELECT json_agg(json_build_object('id', u2.id, 'name', u2.name) ORDER BY u2.name) AS list
+    FROM task_collaborators tc JOIN users u2 ON u2.id = tc.user_id
+    WHERE tc.task_id = t.id
+  ) collab ON TRUE
   LEFT JOIN LATERAL (
     -- Chỉ đếm mục "leaf": mục phụ (level 1) hoặc mục chính không có con.
     -- Mục chính CÓ con (level 0 ngay trước 1 level 1) là nhóm → không tính vào tiến độ.
@@ -126,24 +136,79 @@ const TASK_SELECT = `
     ORDER BY cm.created_at DESC LIMIT 1
   ) lc ON TRUE`
 
-// Nhân sự được truy cập 1 task khi: được GIAO (assigned_to) HOẶC là nhân sự PHỤ TRÁCH
-// công ty của task (companies.assigned_staff_id). Trả về false nếu không đủ quyền.
+// Nhân sự được truy cập 1 task khi: được GIAO (assigned_to), là nhân sự PHỤ TRÁCH
+// công ty của task (companies.assigned_staff_id), HOẶC là NGƯỜI HỖ TRỢ task đó
+// (task_collaborators). Nhận cả cờ `is_collaborator` (query rời) lẫn mảng
+// `collaborators` (từ TASK_SELECT). Trả về false nếu không đủ quyền.
 function staffOwnsOrManagesRow(row, staffId) {
-  return row.assigned_to === staffId || row.company_assigned_staff_id === staffId
+  return row.assigned_to === staffId
+    || row.company_assigned_staff_id === staffId
+    || row.is_collaborator === true
+    || (Array.isArray(row.collaborators) && row.collaborators.some((c) => c && c.id === staffId))
 }
 
 async function assertTaskAccess(taskId, user) {
   if (!user || user.role !== 'staff') return
   const { rows: [task] } = await query(
-    `SELECT t.assigned_to, c.assigned_staff_id AS company_assigned_staff_id
+    `SELECT t.assigned_to,
+            c.assigned_staff_id AS company_assigned_staff_id,
+            EXISTS (SELECT 1 FROM task_collaborators tc
+                    WHERE tc.task_id = t.id AND tc.user_id = $2) AS is_collaborator
      FROM tasks t LEFT JOIN companies c ON c.id = t.company_id
      WHERE t.id = $1`,
-    [taskId]
+    [taskId, user.id]
   )
   if (!task) throw Object.assign(new Error('Task not found'), { status: 404 })
   if (!staffOwnsOrManagesRow(task, user.id)) {
     throw Object.assign(new Error('Bạn không có quyền thực hiện thao tác này'), { status: 403 })
   }
+}
+
+// Đồng bộ danh sách người hỗ trợ cho 1 task (diff insert/delete).
+// - Loại bỏ trùng, loại bỏ OWNER khỏi danh sách (owner không phải collaborator).
+// - Trả về { toAdd, toRemove } (mảng userId) để phía gọi gửi thông báo.
+async function syncCollaborators(taskId, collaboratorIds, ownerId, actorId) {
+  const desired = [...new Set((collaboratorIds || []).filter(Boolean))]
+    .filter((id) => id !== ownerId)
+  const desiredSet = new Set(desired)
+
+  const { rows: currentRows } = await query(
+    'SELECT user_id FROM task_collaborators WHERE task_id = $1', [taskId]
+  )
+  const current = new Set(currentRows.map((r) => r.user_id))
+
+  const toAdd    = desired.filter((id) => !current.has(id))
+  const toRemove = [...current].filter((id) => !desiredSet.has(id))
+
+  for (const uid of toAdd) {
+    await query(
+      `INSERT INTO task_collaborators (task_id, user_id, added_by)
+       VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [taskId, uid, actorId]
+    )
+  }
+  if (toRemove.length) {
+    await query(
+      'DELETE FROM task_collaborators WHERE task_id = $1 AND user_id = ANY($2::uuid[])',
+      [taskId, toRemove]
+    )
+  }
+  return { toAdd, toRemove }
+}
+
+// Gửi thông báo khi thêm/gỡ người hỗ trợ (bỏ qua chính người thao tác).
+async function notifyCollaboratorChanges({ toAdd, toRemove }, task, actorId) {
+  const jobs = []
+  const label = `"${task.title}" — ${task.companyName || ''}`
+  for (const uid of toAdd) {
+    if (uid === actorId) continue
+    jobs.push(createAndEmit(uid, 'task_assigned', 'Bạn được thêm hỗ trợ công việc', label, task.id))
+  }
+  for (const uid of toRemove) {
+    if (uid === actorId) continue
+    jobs.push(createAndEmit(uid, 'task_status_changed', 'Bạn không còn hỗ trợ công việc', `${label} — bạn đã được gỡ khỏi danh sách hỗ trợ`, task.id))
+  }
+  await Promise.all(jobs)
 }
 
 async function listTasks(filters = {}) {
@@ -231,14 +296,17 @@ async function listTasks(filters = {}) {
     baseParams.push(arr)
     baseConditions.push(`t.created_by = ANY($${baseParams.length}::uuid[])`)
   }
-  // Phạm vi nhân sự: việc ĐƯỢC GIAO cho mình HOẶC việc thuộc công ty mình PHỤ TRÁCH
-  // (companies.assigned_staff_id). Nhờ vậy nhân sự quản lý công ty vẫn thấy việc đã
-  // nhờ đồng nghiệp khác hỗ trợ (giao cho người khác) trong công ty của mình.
+  // Phạm vi nhân sự: việc ĐƯỢC GIAO cho mình, việc thuộc công ty mình PHỤ TRÁCH
+  // (companies.assigned_staff_id), HOẶC việc mình được nhờ HỖ TRỢ (task_collaborators).
+  // Nhờ vậy nhân sự quản lý công ty vẫn thấy việc đã nhờ đồng nghiệp khác hỗ trợ, và
+  // người hỗ trợ cũng thấy được việc mình tham gia dù không phải người phụ trách.
   if (staffScopeId) {
     baseParams.push(staffScopeId)
     const p = baseParams.length
     baseConditions.push(
-      `(t.assigned_to = $${p} OR t.company_id IN (SELECT id FROM companies WHERE assigned_staff_id = $${p}))`
+      `(t.assigned_to = $${p}
+        OR t.company_id IN (SELECT id FROM companies WHERE assigned_staff_id = $${p})
+        OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = $${p}))`
     )
   }
   if (source) {
@@ -338,7 +406,7 @@ async function getTaskById(id, user = null) {
 }
 
 async function createTask(data, actorId, ipAddress, userAgent) {
-  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays } = data
+  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, collaboratorIds } = data
 
   const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
@@ -399,6 +467,12 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     meta: { title, companyId }, ipAddress, userAgent,
   })
 
+  // Người hỗ trợ ban đầu (nếu có) — owner = assignedTo, tự loại khỏi danh sách hỗ trợ.
+  let collabChanges = { toAdd: [], toRemove: [] }
+  if (Array.isArray(collaboratorIds) && collaboratorIds.length) {
+    collabChanges = await syncCollaborators(task.id, collaboratorIds, assignedTo ?? null, actorId)
+  }
+
   const result = await getTaskById(task.id)
 
   // Notify assignee if set and different from actor
@@ -409,6 +483,9 @@ async function createTask(data, actorId, ipAddress, userAgent) {
       `"${result.title}" — ${result.companyName || ''}`,
       task.id,
     )
+  }
+  if (collabChanges.toAdd.length || collabChanges.toRemove.length) {
+    await notifyCollaboratorChanges(collabChanges, result, actorId)
   }
 
   emitData('data:task', { action: 'created', id: task.id, companyId, actorId })
@@ -443,6 +520,11 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
   let staffAdjustStart = false
   let staffAdjustDue   = false
 
+  // Ai được sửa DANH SÁCH người hỗ trợ: admin, owner, hoặc người phụ trách công ty.
+  // Người hỗ trợ (collaborator thuần) KHÔNG tự thêm/bớt người hỗ trợ khác.
+  let managesCompany  = false
+  let isCollaborator  = false
+
   // Validate source against active enum options (metadata-driven)
   if (data.source !== undefined && data.source !== null) {
     const validSources = await enums.getValues('task_source')
@@ -452,10 +534,15 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
   }
 
   if (user?.role === 'staff') {
-    // Được chỉnh sửa nếu: được giao việc HOẶC là nhân sự phụ trách công ty của việc.
+    // Được chỉnh sửa nếu: được giao việc, là nhân sự phụ trách công ty của việc,
+    // HOẶC là người được nhờ HỖ TRỢ (task_collaborators) — quyền như owner.
     const { rows: [co] } = await query('SELECT assigned_staff_id FROM companies WHERE id = $1', [current.company_id])
-    const managesCompany = !!co && co.assigned_staff_id === actorId
-    if (current.assigned_to !== actorId && !managesCompany) {
+    managesCompany = !!co && co.assigned_staff_id === actorId
+    const { rows: [collabRow] } = await query(
+      'SELECT 1 FROM task_collaborators WHERE task_id = $1 AND user_id = $2', [id, actorId]
+    )
+    isCollaborator = !!collabRow
+    if (current.assigned_to !== actorId && !managesCompany && !isCollaborator) {
       throw Object.assign(new Error('Bạn không có quyền chỉnh sửa công việc này'), { status: 403 })
     }
     delete fieldMap.assignedTo
@@ -530,17 +617,39 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
       updates.push(`${col} = $${params.length}`)
     }
   }
-  if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
+  // Quyền sửa DANH SÁCH người hỗ trợ: admin (hoặc gọi nội bộ), owner, hoặc phụ trách công ty.
+  const canManageCollaborators =
+    user?.role !== 'staff' || current.assigned_to === actorId || managesCompany
+  const wantsCollabUpdate = canManageCollaborators && data.collaboratorIds !== undefined
+
+  if (!updates.length && !wantsCollabUpdate) {
+    throw Object.assign(new Error('No fields to update'), { status: 400 })
+  }
 
   // Staff vừa dùng lượt chỉnh của TỪNG ngày → khoá riêng ngày đó
   if (staffAdjustStart) updates.push('staff_start_adjusted_at = NOW()')
   if (staffAdjustDue)   updates.push('staff_due_adjusted_at = NOW()')
 
-  params.push(id)
-  await query(
-    `UPDATE tasks SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`,
-    params
-  )
+  if (updates.length) {
+    params.push(id)
+    await query(
+      `UPDATE tasks SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`,
+      params
+    )
+  }
+
+  // Đồng bộ người hỗ trợ (nếu có gửi collaboratorIds và đủ quyền quản lý danh sách)
+  let collabChanges = { toAdd: [], toRemove: [] }
+  if (wantsCollabUpdate) {
+    collabChanges = await syncCollaborators(id, data.collaboratorIds, current.assigned_to, actorId)
+    if (collabChanges.toAdd.length || collabChanges.toRemove.length) {
+      await activity.logActivity(
+        id, actorId, 'collaborators_changed',
+        collabChanges.toRemove.length, collabChanges.toAdd.length,
+        { added: collabChanges.toAdd, removed: collabChanges.toRemove }
+      )
+    }
+  }
 
   await audit.log({
     userId: actorId, action: 'task.updated',
@@ -569,6 +678,10 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     ))
   }
   await Promise.all(notifyPromises)
+
+  if (collabChanges.toAdd.length || collabChanges.toRemove.length) {
+    await notifyCollaboratorChanges(collabChanges, result, actorId)
+  }
 
   emitData('data:task', { action: 'updated', id, companyId: result.companyId, actorId })
   return result
@@ -603,13 +716,15 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
   const { rows } = await query(
     `SELECT t.*,
             c.assigned_staff_id AS company_assigned_staff_id,
+            EXISTS (SELECT 1 FROM task_collaborators tc
+                    WHERE tc.task_id = t.id AND tc.user_id = $2) AS is_collaborator,
             (SELECT COUNT(*) FROM (
                SELECT is_completed,
                       NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
                FROM task_checklist_items WHERE task_id = t.id
              ) z WHERE is_leaf AND NOT is_completed) AS unchecked_count
      FROM tasks t LEFT JOIN companies c ON c.id = t.company_id WHERE t.id = $1`,
-    [id]
+    [id, user?.id ?? null]
   )
   const task = rows[0]
   if (!task) throw Object.assign(new Error('Task not found'), { status: 404 })
@@ -697,6 +812,17 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
   if (result.assignedTo && result.assignedTo !== actorId) {
     notifyPromises.push(createAndEmit(
       result.assignedTo, 'task_status_changed',
+      `Công việc cập nhật: ${toLabel}`,
+      `"${result.title}" chuyển từ ${fromLabel} → ${toLabel}`,
+      id,
+    ))
+  }
+
+  // Notify người HỖ TRỢ về đổi trạng thái (trừ người thao tác & owner đã báo ở trên)
+  for (const c of result.collaborators || []) {
+    if (!c?.id || c.id === actorId || c.id === result.assignedTo) continue
+    notifyPromises.push(createAndEmit(
+      c.id, 'task_status_changed',
       `Công việc cập nhật: ${toLabel}`,
       `"${result.title}" chuyển từ ${fromLabel} → ${toLabel}`,
       id,

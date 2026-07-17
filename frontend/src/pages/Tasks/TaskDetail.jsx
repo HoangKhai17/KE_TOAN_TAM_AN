@@ -20,6 +20,7 @@ import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
 import TaskLinksSection from './TaskLinksSection'
 import CommentsTab from './TaskComments'
+import TaskCollaborators from './TaskCollaborators'
 import s from './tasks.module.css'
 
 // ── Status action CSS map ─────────────────────────────────────────────────────
@@ -920,6 +921,13 @@ export default function TaskDetail() {
                 <span>{task.assignedToName}</span>
               </div>
             )}
+            <TaskCollaborators
+              task={task}
+              canManage={isAdmin
+                || currentUser?.id === task.assignedTo
+                || currentUser?.id === task.companyAssignedStaffId}
+              onChange={setTask}
+            />
             {task.taskTypeName && (
               <div className={s.detailMetaItem}>
                 <Tag size={12} className={s.detailMetaIcon} />

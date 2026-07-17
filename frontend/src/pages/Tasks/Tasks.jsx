@@ -1058,7 +1058,24 @@ function ListView({
                         <div className={s.assignedCell}>
                           <div className={s.avatarXs}>{t.assignedToName[0]?.toUpperCase()}</div>
                           <span>{t.assignedToName}</span>
+                          {t.collaborators?.length > 0 && (
+                            <span
+                              title={`Hỗ trợ: ${t.collaborators.map((c) => c.name).join(', ')}`}
+                              style={{ marginLeft: 4, padding: '0 6px', borderRadius: 10, fontSize: 11,
+                                       background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', whiteSpace: 'nowrap' }}
+                            >
+                              +{t.collaborators.length} hỗ trợ
+                            </span>
+                          )}
                         </div>
+                      ) : t.collaborators?.length > 0 ? (
+                        <span
+                          title={`Hỗ trợ: ${t.collaborators.map((c) => c.name).join(', ')}`}
+                          style={{ padding: '0 6px', borderRadius: 10, fontSize: 11,
+                                   background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', whiteSpace: 'nowrap' }}
+                        >
+                          +{t.collaborators.length} hỗ trợ
+                        </span>
                       ) : (
                         <span className={s.mutedDash}>—</span>
                       )}

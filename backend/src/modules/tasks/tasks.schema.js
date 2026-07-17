@@ -15,6 +15,8 @@ const createTaskSchema = z.object({
   priority:    z.enum(TASK_PRIORITIES).default('medium'),
   slaDays:     z.number().int().min(1).optional().nullable(),
   source:      z.string().min(1).max(40).optional().nullable(),
+  // Người hỗ trợ (khác owner = assignedTo). Tùy chọn, có thể rỗng.
+  collaboratorIds: z.array(z.string().uuid()).optional(),
 })
 
 const updateTaskSchema = z.object({
@@ -26,6 +28,8 @@ const updateTaskSchema = z.object({
   priority:    z.enum(TASK_PRIORITIES).optional(),
   slaDays:     z.number().int().min(1).optional().nullable(),
   source:      z.string().min(1).max(40).optional().nullable(),
+  // Danh sách người hỗ trợ mới (thay thế toàn bộ). [] = gỡ hết người hỗ trợ.
+  collaboratorIds: z.array(z.string().uuid()).optional(),
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })
 
 const changeStatusSchema = z.object({

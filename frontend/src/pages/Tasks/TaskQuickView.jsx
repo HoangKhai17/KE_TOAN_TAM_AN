@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   X, ArrowUpRight, Check, Loader2, Plus, ChevronLeft, ChevronRight,
-  Building2, User, Calendar, Clock, AlertTriangle, Flag, FileText, Tag, GripVertical,
+  Building2, User, Users, Calendar, Clock, AlertTriangle, Flag, FileText, Tag, GripVertical,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
@@ -18,6 +18,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
 import TaskLinksSection from './TaskLinksSection'
 import TaskComments from './TaskComments'
+import CollaboratorPicker from './CollaboratorPicker'
 import s from './tasks.module.css'
 
 // Convert any ISO string to local yyyy-MM-dd.
@@ -112,7 +113,8 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   const addToast  = useToastStore((st) => st.toast)
   const getLabel  = useEnumsStore((st) => st.getLabel)
   const getOptions = useEnumsStore((st) => st.getOptions)
-  const isAdmin   = useAuthStore((st) => st.user?.role === 'admin')
+  const isAdmin       = useAuthStore((st) => st.user?.role === 'admin')
+  const currentUserId = useAuthStore((st) => st.user?.id)
 
   const [task,        setTask]        = useState(null)
   const [loading,     setLoading]     = useState(true)
@@ -223,6 +225,15 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
       const name = staffList.find((u) => u.id === assignedTo)?.name
       addToast(name ? `Đã giao cho ${name}` : 'Đã bỏ phân công', 'success')
     } catch { addToast('Không thể đổi người phụ trách', 'error') }
+  }
+
+  async function changeCollaborators(ids) {
+    try {
+      const updated = await tasksApi.updateTask(taskId, {
+        collaboratorIds: ids.filter((x) => x && x !== task.assignedTo),
+      })
+      applyUpdate(updated)
+    } catch { addToast('Không thể cập nhật người hỗ trợ', 'error') }
   }
 
   async function saveDescription() {
@@ -407,6 +418,26 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
+                </div>
+
+                <div className={s.qvRow}>
+                  <span className={s.qvLabel}><Users size={11} /> Hỗ trợ</span>
+                  {(isAdmin || currentUserId === task.assignedTo || currentUserId === task.companyAssignedStaffId) ? (
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <CollaboratorPicker
+                        options={staffList}
+                        value={(task.collaborators || []).map((c) => c.id)}
+                        onChange={changeCollaborators}
+                        excludeId={task.assignedTo}
+                      />
+                    </div>
+                  ) : (
+                    <span className={s.qvValue}>
+                      {(task.collaborators || []).length
+                        ? task.collaborators.map((c) => c.name).join(', ')
+                        : '—'}
+                    </span>
+                  )}
                 </div>
 
                 <div className={s.qvRow}>
