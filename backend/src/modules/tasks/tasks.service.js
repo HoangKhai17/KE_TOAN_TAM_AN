@@ -218,13 +218,23 @@ async function listTasks(filters = {}) {
     dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
     sortBy = 'created_at', sortDir = 'desc',
     audience = 'internal',
-    forceAssignedTo, staffScopeId,
+    forceAssignedTo, staffScopeId, collaboratorIds,
   } = filters
+
+  // Lọc "CV hỗ trợ": chỉ giữ task mà 1 trong các user chỉ định là NGƯỜI HỖ TRỢ.
+  const collabArr = collaboratorIds == null
+    ? null
+    : (Array.isArray(collaboratorIds) ? collaboratorIds : [collaboratorIds]).filter(Boolean)
+  const hasCollabFilter = Array.isArray(collabArr) && collabArr.length > 0
 
   const effectiveAssignedTo = forceAssignedTo ?? assignedTo
 
-  // audience=client_request: return CDRs mapped to task-like shape
+  // audience=client_request: return CDRs mapped to task-like shape.
+  // Yêu cầu KH không có "người hỗ trợ" → khi lọc "CV hỗ trợ" thì trả rỗng.
   if (audience === 'client_request') {
+    if (hasCollabFilter) {
+      return { tasks: [], pagination: { page: parseInt(page, 10), limit: parseInt(limit, 10), total: 0, totalPages: 0 }, statusCounts: {} }
+    }
     const cdrFilters = {
       page: parseInt(page, 10),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
@@ -245,15 +255,18 @@ async function listTasks(filters = {}) {
     }
   }
 
-  // audience=all: fetch tasks + CDRs, merge and paginate in memory
+  // audience=all: fetch tasks + CDRs, merge and paginate in memory.
+  // Khi lọc "CV hỗ trợ" → chỉ lấy task nội bộ (CDR không có người hỗ trợ).
   if (audience === 'all') {
     const [tasksResult, cdrsResult] = await Promise.all([
       listTasks({ ...filters, audience: 'internal', page: 1, limit: 1000 }),
-      listClientRequests({
-        companyId, requestedBy: effectiveAssignedTo ?? staffScopeId, periodLabel,
-        deadlineDateFrom: dueDateFrom, deadlineDateTo: dueDateTo,
-        page: 1, limit: 1000,
-      }),
+      hasCollabFilter
+        ? Promise.resolve({ items: [] })
+        : listClientRequests({
+            companyId, requestedBy: effectiveAssignedTo ?? staffScopeId, periodLabel,
+            deadlineDateFrom: dueDateFrom, deadlineDateTo: dueDateTo,
+            page: 1, limit: 1000,
+          }),
     ])
 
     const allItems = [
@@ -307,6 +320,14 @@ async function listTasks(filters = {}) {
       `(t.assigned_to = $${p}
         OR t.company_id IN (SELECT id FROM companies WHERE assigned_staff_id = $${p})
         OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = $${p}))`
+    )
+  }
+  // Lọc "CV hỗ trợ": chỉ task mà 1 trong các user chỉ định là NGƯỜI HỖ TRỢ.
+  // (Admin: multi-select nhiều nhân viên · Nhân viên: chính mình.)
+  if (hasCollabFilter) {
+    baseParams.push(collabArr)
+    baseConditions.push(
+      `EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = ANY($${baseParams.length}::uuid[]))`
     )
   }
   if (source) {

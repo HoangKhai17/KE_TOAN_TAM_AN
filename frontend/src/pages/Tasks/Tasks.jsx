@@ -1330,6 +1330,8 @@ export default function Tasks() {
   const [companyFilter, setCompanyFilter]   = useState(() => Array.isArray(initF.companyFilter) ? initF.companyFilter : [])
   const [staffFilter, setStaffFilter]       = useState(() => Array.isArray(initF.staffFilter)   ? initF.staffFilter   : [])
   const [creatorFilter, setCreatorFilter]   = useState(() => Array.isArray(initF.creatorFilter) ? initF.creatorFilter : [])
+  // "CV hỗ trợ": mảng userId là NGƯỜI HỖ TRỢ. Admin = multi-select nhân viên; nhân viên = chính mình (toggle).
+  const [supportFilter, setSupportFilter]   = useState(() => Array.isArray(initF.supportFilter) ? initF.supportFilter : [])
   const [statusFilter, setStatusFilter]     = useState(initF.statusFilter   ?? [])
   const [priorityFilter, setPriorityFilter] = useState(initF.priorityFilter ?? [])
   const [sourceFilter, setSourceFilter]     = useState(initF.sourceFilter   ?? [])
@@ -1421,7 +1423,7 @@ export default function Tasks() {
   // Đổi bộ lọc → về trang 1 (cũng so sánh giá trị, không dùng cờ "lần đầu").
   const filterKey = JSON.stringify([
     statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo,
-    pageSize, companyFilter, staffFilter, creatorFilter, sortValue,
+    pageSize, companyFilter, staffFilter, creatorFilter, supportFilter, sortValue,
   ])
   const appliedFilterKeyRef = useRef(filterKey)
   useEffect(() => {
@@ -1474,11 +1476,11 @@ export default function Tasks() {
   useEffect(() => {
     saveFilters({
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
-      sortValue, searchInput, companyFilter, staffFilter, creatorFilter,
+      sortValue, searchInput, companyFilter, staffFilter, creatorFilter, supportFilter,
       statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page,
       colFilters: serializeColFilters(colFilters), sortColState, filterCollapsed,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, creatorFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1490,6 +1492,7 @@ export default function Tasks() {
       // việc thuộc công ty mình phụ trách). Ép assignedTo sẽ che mất việc đã nhờ đồng nghiệp hỗ trợ.
       assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : undefined,
       createdBy:   creatorFilter.length ? creatorFilter : undefined,
+      collaboratorIds: supportFilter.length ? supportFilter : undefined,
       scheduleToday: scheduleToday ? true : undefined,
       dueDateFrom: scheduleToday ? undefined : (dueDateFrom || undefined),
       dueDateTo:   scheduleToday ? undefined : (dueDateTo   || undefined),
@@ -1507,7 +1510,7 @@ export default function Tasks() {
       }
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, creatorFilter, dueDateFrom, dueDateTo, scheduleToday, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, companyFilter, staffFilter, creatorFilter, supportFilter, dueDateFrom, dueDateTo, scheduleToday, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tasks list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
   // Tải "working set" (tối đa 500) rồi lọc/sắp/phân trang phía client (docs/018).
@@ -1520,6 +1523,7 @@ export default function Tasks() {
       // việc thuộc công ty mình phụ trách). Ép assignedTo sẽ che mất việc đã nhờ đồng nghiệp hỗ trợ.
       assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : undefined,
       createdBy:   creatorFilter.length ? creatorFilter : undefined,
+      collaboratorIds: supportFilter.length ? supportFilter : undefined,
       status:      statusFilter.length   > 0 ? statusFilter   : undefined,
       priority:    priorityFilter.length > 0 ? priorityFilter : undefined,
       source:      sourceFilter.length   > 0 ? sourceFilter   : undefined,
@@ -1534,7 +1538,7 @@ export default function Tasks() {
       sortBy,
       sortDir,
     }
-  }, [search, companyFilter, staffFilter, creatorFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id])
+  }, [search, companyFilter, staffFilter, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id])
 
   const listQuery = useQuery({
     queryKey: ['tasks', 'list', listParams],
@@ -1675,7 +1679,7 @@ export default function Tasks() {
 
   function resetFilters() {
     setSearchInput(''); setSearch('')
-    setCompanyFilter([]); setStaffFilter([]); setCreatorFilter([])
+    setCompanyFilter([]); setStaffFilter([]); setCreatorFilter([]); setSupportFilter([])
     setStatusFilter([]); setPriorityFilter([])
     setSourceFilter([]); setIsOverdue(false); setScheduleToday(false)
     setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
@@ -1810,6 +1814,7 @@ export default function Tasks() {
 
   const activeFilterCount = [search].filter(Boolean).length
     + companyFilter.length + staffFilter.length + creatorFilter.length
+    + (isAdmin ? supportFilter.length : (supportFilter.length ? 1 : 0))
     + statusFilter.length + priorityFilter.length + sourceFilter.length
     + (isOverdue ? 1 : 0) + (scheduleToday ? 1 : 0)
 
@@ -2075,6 +2080,27 @@ export default function Tasks() {
               />
             </div>
 
+            {/* CV HỖ TRỢ — admin: multi-select nhân viên; nhân viên: toggle "việc mình hỗ trợ" */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>CV hỗ trợ</label>
+              {isAdmin ? (
+                <MultiSelect
+                  placeholder="Tất cả"
+                  options={staffList.map((u) => ({ key: u.id, label: u.name }))}
+                  selected={supportFilter}
+                  onChange={(v) => { setSupportFilter(v); setPage(1) }}
+                />
+              ) : (
+                <button
+                  className={`${s.filterToggle} ${supportFilter.length ? s.filterToggleActive : ''}`}
+                  onClick={() => { setSupportFilter((p) => (p.length ? [] : [currentUser?.id].filter(Boolean))); setPage(1) }}
+                  title="Chỉ hiện công việc mình đang hỗ trợ đồng nghiệp"
+                >
+                  {supportFilter.length ? '✓ ' : ''}Việc tôi hỗ trợ
+                </button>
+              )}
+            </div>
+
             {/* TRẠNG THÁI — multi-select */}
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Trạng thái</label>
@@ -2120,7 +2146,7 @@ export default function Tasks() {
           )}
 
           {/* ── Active filter chips ── */}
-          {(yearFilter || monthFilter || staffFilter.length > 0 || creatorFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || scheduleToday || search) && (
+          {(yearFilter || monthFilter || staffFilter.length > 0 || creatorFilter.length > 0 || supportFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || scheduleToday || search) && (
             <div className={s.filterChipsRow}>
               {(yearFilter || monthFilter) && (
                 <span className={s.filterChip}>
@@ -2146,6 +2172,19 @@ export default function Tasks() {
                   <button className={s.filterChipRemove} onClick={() => { setCreatorFilter((p) => p.filter((x) => x !== cid)); setPage(1) }}>×</button>
                 </span>
               ))}
+              {supportFilter.length > 0 && (
+                isAdmin ? supportFilter.map((sid) => (
+                  <span key={`support-${sid}`} className={s.filterChip}>
+                    Hỗ trợ: {staffList.find((u) => u.id === sid)?.name ?? '?'}
+                    <button className={s.filterChipRemove} onClick={() => { setSupportFilter((p) => p.filter((x) => x !== sid)); setPage(1) }}>×</button>
+                  </span>
+                )) : (
+                  <span className={s.filterChip}>
+                    Việc tôi hỗ trợ
+                    <button className={s.filterChipRemove} onClick={() => { setSupportFilter([]); setPage(1) }}>×</button>
+                  </span>
+                )
+              )}
               {statusFilter.map((st) => (
                 <span key={st} className={s.filterChip}>
                   {getLabel('task_status', st, STATUS_LABELS[st])}
