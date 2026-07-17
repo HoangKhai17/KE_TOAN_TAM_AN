@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { Fragment, useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   DndContext, DragOverlay,
@@ -65,6 +65,14 @@ const STATUS_SELECT_CLASS = {
   pending_review: s.qeStatusPendingReview,
   needs_revision: s.qeStatusNeedsRevision,
   completed: s.qeStatusCompleted,
+}
+
+// Màu con số ở hàng thống kê — chỉ là style, nhãn luôn lấy từ enum task_status
+const STAT_VALUE_CLASS = {
+  in_progress: s.statOrange,
+  pending_review: s.statPurple,
+  needs_revision: s.statRed,
+  completed: s.statGreen,
 }
 
 const PRIORITY_SELECT_CLASS = {
@@ -1391,7 +1399,7 @@ export default function Tasks() {
       dueDateTo:   scheduleToday ? undefined : (dueDateTo   || undefined),
       limit: 1, page: 1,
     }
-    const statusKeys = ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed']
+    const statusKeys = TASK_STATUSES
     Promise.all([
       tasksApi.listTasks(base),
       ...statusKeys.map((st) => tasksApi.listTasks({ ...base, status: st })),
@@ -1653,6 +1661,17 @@ export default function Tasks() {
   const safePage = Math.min(page, clientTotalPages)
   const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
   const clientPagination = { total: displayed.length, totalPages: clientTotalPages, page: safePage }
+
+  // Trạng thái: 1 nguồn nhãn duy nhất cho cả bộ lọc và hàng thống kê
+  const statusOptions = getOptions('task_status').length > 0
+    ? getOptions('task_status')
+    : TASK_STATUSES.map((k) => ({ key: k, label: STATUS_LABELS[k] }))
+
+  // Click vào 1 ô thống kê = bật/tắt trạng thái đó trong bộ lọc "Trạng thái"
+  function toggleStatusFilter(key) {
+    setStatusFilter((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+    setPage(1)
+  }
 
   // Source options for the Kanban-by-source view
   const sourceOptions = getOptions('task_source').length > 0
@@ -1945,11 +1964,7 @@ export default function Tasks() {
               <label className={s.filterLabel}>Trạng thái</label>
               <MultiSelect
                 placeholder="Tất cả trạng thái"
-                options={
-                  getOptions('task_status').length > 0
-                    ? getOptions('task_status')
-                    : TASK_STATUSES.map((k) => ({ key: k, label: STATUS_LABELS[k] }))
-                }
+                options={statusOptions}
                 selected={statusFilter}
                 onChange={(v) => { setStatusFilter(v); setPage(1) }}
               />
@@ -2081,42 +2096,41 @@ export default function Tasks() {
 
           {/* ── Stats row ── */}
           <div className={s.statsRow}>
-            <div className={s.statItem}>
+            {/* Tổng — click để bỏ lọc trạng thái */}
+            <button
+              type="button"
+              className={`${s.statItem} ${statusFilter.length === 0 ? s.statItemActive : ''}`}
+              onClick={() => { setStatusFilter([]); setPage(1) }}
+              title="Xem tất cả trạng thái"
+            >
               <span className={s.statValue}>{stats.total}</span>
               <span className={s.statLabel}>Tổng</span>
-            </div>
-            <span className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={s.statValue}>{stats.pending ?? 0}</span>
-              <span className={s.statLabel}>Chờ xử lý</span>
-            </div>
-            <span className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={`${s.statValue} ${s.statOrange}`}>{stats.in_progress ?? 0}</span>
-              <span className={s.statLabel}>Đang thực hiện</span>
-            </div>
-            <span className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={s.statValue}>{stats.on_hold ?? 0}</span>
-              <span className={s.statLabel}>Tạm hoãn</span>
-            </div>
-            <span className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={`${s.statValue} ${s.statPurple}`}>{stats.pending_review ?? 0}</span>
-              <span className={s.statLabel}>Chờ duyệt</span>
-            </div>
-            <span className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={`${s.statValue} ${s.statRed}`}>{stats.needs_revision ?? 0}</span>
-              <span className={s.statLabel}>Trễ hạn</span>
-            </div>
-            <span className={s.statDivider} />
-            <div className={s.statItem}>
-              <span className={`${s.statValue} ${s.statGreen}`}>{stats.completed ?? 0}</span>
-              <span className={s.statLabel}>
-                Hoàn thành{stats.total > 0 ? ` · ${Math.round((stats.completed ?? 0) / stats.total * 100)}%` : ''}
-              </span>
-            </div>
+            </button>
+
+            {statusOptions.map((opt) => {
+              const active = statusFilter.includes(opt.key)
+              return (
+                <Fragment key={opt.key}>
+                  <span className={s.statDivider} />
+                  <button
+                    type="button"
+                    className={`${s.statItem} ${active ? s.statItemActive : ''}`}
+                    onClick={() => toggleStatusFilter(opt.key)}
+                    title={active ? `Bỏ lọc: ${opt.label}` : `Lọc theo: ${opt.label}`}
+                  >
+                    <span className={`${s.statValue} ${STAT_VALUE_CLASS[opt.key] ?? ''}`}>
+                      {stats[opt.key] ?? 0}
+                    </span>
+                    <span className={s.statLabel}>
+                      {opt.label}
+                      {opt.key === 'completed' && stats.total > 0
+                        ? ` · ${Math.round((stats.completed ?? 0) / stats.total * 100)}%`
+                        : ''}
+                    </span>
+                  </button>
+                </Fragment>
+              )
+            })}
           </div>
         </div>
 

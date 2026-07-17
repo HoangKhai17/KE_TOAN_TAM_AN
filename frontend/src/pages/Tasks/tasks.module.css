@@ -3148,11 +3148,32 @@
   flex-wrap: wrap;
 }
 
+/* Ô thống kê = nút bật/tắt trạng thái tương ứng trong bộ lọc "Trạng thái" */
 .statItem {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  padding: 2px 14px 2px 0;
+  padding: 3px 10px;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.statItem:hover {
+  background: var(--color-bg-soft);
+}
+
+.statItemActive,
+.statItemActive:hover {
+  background: var(--color-primary-bg);
+}
+
+.statItemActive .statLabel {
+  color: var(--color-primary-dark);
+  font-weight: var(--fw-semibold);
 }
 
 .statValue {
