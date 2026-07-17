@@ -653,6 +653,85 @@ function FilterDateField({ value, onChange }) {
   )
 }
 
+// ── PeriodPicker: gộp Năm + Tháng + Từ ngày + Đến ngày vào 1 control "Kỳ" ─────
+// Bọc UI ngoài, vẫn map xuống đúng 4 state cũ → không đổi logic query/backend.
+
+function PeriodPicker({ year, month, from, to, availableYears, disabled, onYear, onMonth, onFrom, onTo, onPreset }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onOutside(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onOutside)
+    return () => document.removeEventListener('mousedown', onOutside)
+  }, [open])
+
+  let label = 'Tất cả thời gian'
+  if (disabled)            label = "Theo “Hôm nay”"
+  else if (month && year)  label = `T${month}/${year}`
+  else if (year)           label = `Năm ${year}`
+  else if (from || to)     label = `${from ? fmtDate(from) : '…'} – ${to ? fmtDate(to) : '…'}`
+
+  const PRESETS = [['Tháng này', 'tm'], ['Tháng trước', 'lm'], ['Năm nay', 'ty'], ['Tất cả', 'all']]
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div
+        className={`${s.cpTrigger} ${s.companyPickerTriggerCompact}`}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        style={disabled ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+        title={disabled ? '“Hôm nay” không dùng bộ lọc theo kỳ' : undefined}
+      >
+        <span className={`${s.cpTriggerText} ${(month || year || from || to) ? s.companyPickerSelected : s.companyPickerPlaceholder}`}>{label}</span>
+        <ChevronDown size={11} className={`${s.iconMuted} ${s.chevronRotate} ${open ? s.chevronOpen : ''}`} />
+      </div>
+
+      {open && !disabled && (
+        <div className={s.cpDropdown} style={{ width: 300, padding: 10 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            {PRESETS.map(([lbl, key]) => (
+              <button
+                key={key}
+                type="button"
+                className={s.filterToggle}
+                style={{ height: 28, fontSize: 12, padding: '0 10px' }}
+                onClick={() => { onPreset(key); setOpen(false) }}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label className={s.filterLabel}>Năm</label>
+              <select value={year} onChange={(e) => onYear(e.target.value)} className={s.filterSelect}>
+                <option value="">Tất cả năm</option>
+                {availableYears.map((y) => <option key={y} value={String(y)}>Năm {y}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label className={s.filterLabel}>Tháng</label>
+              <select value={month} onChange={(e) => onMonth(e.target.value)} className={s.filterSelect} disabled={!year}>
+                <option value="">Cả năm</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={String(m)}>Tháng {m}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 11, color: 'var(--color-muted)', margin: '6px 0 4px' }}>Hoặc khoảng ngày tùy chọn:</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <FilterDateField value={from} onChange={onFrom} />
+            <span style={{ color: 'var(--color-muted)' }}>–</span>
+            <FilterDateField value={to} onChange={onTo} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── FilterCompanyPicker: searchable company dropdown for filter bar ───────────
 
 function FilterCompanyPicker({ companies, value, onChange }) {
@@ -1501,6 +1580,28 @@ export default function Tasks() {
     setDueDateTo(to)
   }
 
+  // Đặt "Kỳ" trọn gói (năm + tháng + khoảng ngày dẫn xuất) trong 1 lần
+  function setPeriod(year, month) {
+    setYearFilter(year)
+    setMonthFilter(month)
+    const { from, to } = yearMonthToDates(year, month)
+    setDueDateFrom(from)
+    setDueDateTo(to)
+    setPage(1)
+  }
+
+  function applyPeriodPreset(key) {
+    if (key === 'tm')  return setPeriod(CUR_YEAR, CUR_MONTH)
+    if (key === 'ty')  return setPeriod(CUR_YEAR, '')
+    if (key === 'all') return setPeriod('', '')
+    if (key === 'lm') {           // tháng trước
+      let y = parseInt(CUR_YEAR, 10)
+      let m = parseInt(CUR_MONTH, 10) - 1
+      if (m < 1) { m = 12; y -= 1 }
+      return setPeriod(String(y), String(m))
+    }
+  }
+
   // ── Other handlers ────────────────────────────────────────────────────────────
 
   async function handleStatusChange(task, newStatus, extra = {}) {
@@ -1871,51 +1972,49 @@ export default function Tasks() {
                 )}
               </span>
             </button>
-            <button className={s.filterReset} onClick={resetFilters}>
-              <RotateCcw size={11} /> Đặt lại
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+              {/* Toggle nhanh — chuyển từ grid lên header cho gọn */}
+              <button
+                className={`${s.filterToggle} ${scheduleToday ? s.filterToggleActive : ''}`}
+                style={{ height: 28 }}
+                onClick={() => { setScheduleToday((p) => !p); setPage(1) }}
+                title="Lịch làm việc hôm nay: việc chưa hoàn thành đã bắt đầu (đến hạn hôm nay, quá hạn trước đó, đang trong giai đoạn làm)"
+              >
+                {scheduleToday ? '✓ ' : ''}Hôm nay
+              </button>
+              <button
+                className={`${s.filterToggle} ${isOverdue ? s.filterToggleActive : ''}`}
+                style={{ height: 28 }}
+                onClick={() => { setIsOverdue((p) => !p); setPage(1) }}
+                disabled={scheduleToday}
+                title={scheduleToday ? '"Hôm nay" đã bao gồm việc trễ hạn' : undefined}
+              >
+                {isOverdue ? '✓ ' : ''}Trễ hạn
+              </button>
+              <button className={s.filterReset} onClick={resetFilters}>
+                <RotateCcw size={11} /> Đặt lại
+              </button>
+            </div>
           </div>
 
           {!filterCollapsed && (
           <div className={s.filterGrid}>
 
-            {/* NĂM */}
+            {/* KỲ — gộp Năm + Tháng + Từ ngày + Đến ngày */}
             <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Năm</label>
-              <select value={yearFilter} onChange={(e) => handleYearChange(e.target.value)} className={s.filterSelect} disabled={scheduleToday} title={scheduleToday ? '"Hôm nay" không dùng bộ lọc theo tháng' : undefined}>
-                <option value="">Tất cả năm</option>
-                {availableYears.map((y) => (
-                  <option key={y} value={String(y)}>Năm {y}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* THÁNG */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Tháng</label>
-              <select value={monthFilter} onChange={(e) => handleMonthChange(e.target.value)} className={s.filterSelect} disabled={!yearFilter || scheduleToday}>
-                <option value="">Cả năm</option>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                  <option key={m} value={String(m)}>Tháng {m}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* TỪ NGÀY */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Từ ngày</label>
-              <FilterDateField
-                value={dueDateFrom}
-                onChange={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
-              />
-            </div>
-
-            {/* ĐẾN NGÀY */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Đến ngày</label>
-              <FilterDateField
-                value={dueDateTo}
-                onChange={(e) => { setDueDateTo(e.target.value); setPage(1) }}
+              <label className={s.filterLabel}>Kỳ</label>
+              <PeriodPicker
+                year={yearFilter}
+                month={monthFilter}
+                from={dueDateFrom}
+                to={dueDateTo}
+                availableYears={availableYears}
+                disabled={scheduleToday}
+                onYear={handleYearChange}
+                onMonth={handleMonthChange}
+                onFrom={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
+                onTo={(e) => { setDueDateTo(e.target.value); setPage(1) }}
+                onPreset={applyPeriodPreset}
               />
             </div>
 
@@ -2015,31 +2114,6 @@ export default function Tasks() {
                 selected={sourceFilter}
                 onChange={(v) => { setSourceFilter(v); setPage(1) }}
               />
-            </div>
-
-            {/* HÔM NAY — lịch làm việc hàng ngày (việc chưa xong đã tới lượt: đến hạn/quá hạn/đang làm) */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>&nbsp;</label>
-              <button
-                className={`${s.filterToggle} ${scheduleToday ? s.filterToggleActive : ''}`}
-                onClick={() => { setScheduleToday((p) => !p); setPage(1) }}
-                title="Lịch làm việc hôm nay: việc chưa hoàn thành đã bắt đầu (đến hạn hôm nay, quá hạn trước đó, đang trong giai đoạn làm)"
-              >
-                {scheduleToday ? '✓ ' : ''}Hôm nay
-              </button>
-            </div>
-
-            {/* QUÁ HẠN */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>&nbsp;</label>
-              <button
-                className={`${s.filterToggle} ${isOverdue ? s.filterToggleActive : ''}`}
-                onClick={() => { setIsOverdue((p) => !p); setPage(1) }}
-                disabled={scheduleToday}
-                title={scheduleToday ? '"Hôm nay" đã bao gồm việc trễ hạn' : undefined}
-              >
-                {isOverdue ? '✓ ' : ''}Trễ hạn
-              </button>
             </div>
 
           </div>
