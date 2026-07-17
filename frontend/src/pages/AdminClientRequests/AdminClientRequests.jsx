@@ -14,6 +14,7 @@ import * as cdrApi from '../../api/clientRequests'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import CollaboratorPicker from '../Tasks/CollaboratorPicker'
 import s from './adminClientRequests.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -119,7 +120,7 @@ function RowBtn({ onClick, title, disabled, className, children }) {
 
 // ── CdrFormModal ──────────────────────────────────────────────────────────────
 
-function CdrFormModal({ companies, initial, onClose, onSaved }) {
+function CdrFormModal({ companies, staffList = [], ownerId, initial, onClose, onSaved }) {
   const [form, setForm] = useState({
     companyId:    initial?.companyId ?? '',
     documentName: initial?.documentName ?? '',
@@ -127,7 +128,10 @@ function CdrFormModal({ companies, initial, onClose, onSaved }) {
     deadlineDate: initial?.deadlineDate ? initial.deadlineDate.slice(0, 10) : '',
     periodLabel:  initial?.periodLabel ?? '',
     contactEmail: initial?.contactEmail ?? '',
+    collaboratorIds: initial?.collaborators?.map((c) => c.id) ?? [],
   })
+  // Owner (requested_by) không đồng thời là người hỗ trợ
+  const excludeOwnerId = initial?.requestedBy ?? ownerId
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState('')
 
@@ -147,6 +151,7 @@ function CdrFormModal({ companies, initial, onClose, onSaved }) {
           deadlineDate: form.deadlineDate || null,
           periodLabel:  form.periodLabel.trim() || null,
           contactEmail: form.contactEmail.trim() || null,
+          collaboratorIds: form.collaboratorIds.filter((id) => id && id !== excludeOwnerId),
         })
       } else {
         saved = await cdrApi.createClientRequest({
@@ -156,6 +161,7 @@ function CdrFormModal({ companies, initial, onClose, onSaved }) {
           deadlineDate:  form.deadlineDate || null,
           periodLabel:   form.periodLabel.trim() || null,
           remindedEmail: form.contactEmail.trim() || null,
+          collaboratorIds: form.collaboratorIds.filter((id) => id && id !== excludeOwnerId),
         })
       }
       onSaved(saved)
@@ -212,6 +218,19 @@ function CdrFormModal({ companies, initial, onClose, onSaved }) {
           <label className={s.formLabel}>Email khách hàng</label>
           <input type="email" value={form.contactEmail} onChange={(e) => set('contactEmail', e.target.value)}
             className={s.formInput} placeholder="Để gửi nhắc nhở qua email" />
+        </div>
+
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Người hỗ trợ</label>
+          <CollaboratorPicker
+            options={staffList}
+            value={form.collaboratorIds}
+            onChange={(ids) => set('collaboratorIds', ids)}
+            excludeId={excludeOwnerId}
+          />
+          <p style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 3 }}>
+            Đồng nghiệp cùng theo dõi &amp; xử lý yêu cầu này (ngoài người phụ trách chính)
+          </p>
         </div>
 
         <div className={s.formGroup}>
@@ -782,6 +801,8 @@ export default function AdminClientRequests() {
   const [statusFilter, setStatusFilter]       = useState(() => Array.isArray(initF.statusFilter)  ? initF.statusFilter  : [])
   const [companyFilter, setCompanyFilter]     = useState(() => Array.isArray(initF.companyFilter) ? initF.companyFilter : [])
   const [staffFilter, setStaffFilter]         = useState(() => Array.isArray(initF.staffFilter)   ? initF.staffFilter   : [])
+  // "CV hỗ trợ": mảng userId là NGƯỜI HỖ TRỢ. Admin = multi-select NV; nhân viên = chính mình (toggle).
+  const [supportFilter, setSupportFilter]     = useState(() => Array.isArray(initF.supportFilter) ? initF.supportFilter : [])
 
   // Column-header filter (docs/018) — client-side over the loaded set
   const [colFilters, setColFilters]     = useState({})
@@ -830,7 +851,10 @@ export default function AdminClientRequests() {
     setStatsLoading(true)
     cdrApi.getCdrStats({
       companyId:        companyFilter   || undefined,
-      requestedBy:      !isAdmin ? currentUser?.id : (staffFilter || undefined),
+      // Nhân viên: phạm vi = CDR mình tạo HOẶC mình hỗ trợ (staffScopeId). Admin: lọc theo NV (requestedBy).
+      requestedBy:      isAdmin ? (staffFilter || undefined) : undefined,
+      staffScopeId:     !isAdmin ? currentUser?.id : undefined,
+      collaboratorIds:  supportFilter.length ? supportFilter.join(',') : undefined,
       search:           debouncedSearch || undefined,
       deadlineDateFrom: deadlineFrom    || undefined,
       deadlineDateTo:   deadlineTo      || undefined,
@@ -849,7 +873,7 @@ export default function AdminClientRequests() {
       if (!cancelled) { setStats({}); setStatsLoading(false) }
     })
     return () => { cancelled = true }
-  }, [companyFilter, staffFilter, debouncedSearch, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [companyFilter, staffFilter, supportFilter, debouncedSearch, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounce search
   useEffect(() => {
@@ -858,7 +882,7 @@ export default function AdminClientRequests() {
   }, [searchQuery])
 
   // Reset page on filter change
-  useEffect(() => { setPage(1) }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, deadlineFrom, deadlineTo, pageSize])
+  useEffect(() => { setPage(1) }, [statusFilter, companyFilter, staffFilter, supportFilter, debouncedSearch, sortFilter, deadlineFrom, deadlineTo, pageSize])
 
   // Refresh when another user makes a CDR change (broadcast via socket)
   useEffect(() => {
@@ -874,9 +898,9 @@ export default function AdminClientRequests() {
   useEffect(() => {
     saveFilters({
       view, yearFilter, monthFilter, deadlineFrom, deadlineTo,
-      sortFilter, searchQuery, companyFilter, staffFilter, statusFilter, pageSize,
+      sortFilter, searchQuery, companyFilter, staffFilter, supportFilter, statusFilter, pageSize,
     })
-  }, [view, yearFilter, monthFilter, deadlineFrom, deadlineTo, sortFilter, searchQuery, companyFilter, staffFilter, statusFilter, pageSize])
+  }, [view, yearFilter, monthFilter, deadlineFrom, deadlineTo, sortFilter, searchQuery, companyFilter, staffFilter, supportFilter, statusFilter, pageSize])
 
   // ── CDR list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
   // Tải working set 1 lần; lọc/sắp/phân trang phía client (docs/018).
@@ -885,7 +909,10 @@ export default function AdminClientRequests() {
     return {
       status:           statusFilter.length  ? statusFilter.join(',')  : undefined,
       companyId:        companyFilter.length ? companyFilter.join(',') : undefined,
-      requestedBy:      !isAdmin ? currentUser?.id : (staffFilter.length ? staffFilter.join(',') : undefined),
+      // Nhân viên: phạm vi = CDR mình tạo HOẶC mình hỗ trợ (staffScopeId). Admin: lọc theo NV (requestedBy).
+      requestedBy:      isAdmin ? (staffFilter.length ? staffFilter.join(',') : undefined) : undefined,
+      staffScopeId:     !isAdmin ? currentUser?.id : undefined,
+      collaboratorIds:  supportFilter.length ? supportFilter.join(',') : undefined,
       search:           debouncedSearch || undefined,
       deadlineDateFrom: deadlineFrom  || undefined,
       deadlineDateTo:   deadlineTo    || undefined,
@@ -894,7 +921,7 @@ export default function AdminClientRequests() {
       sortBy,
       sortDir,
     }
-  }, [statusFilter, companyFilter, staffFilter, debouncedSearch, sortFilter, isAdmin, currentUser?.id, deadlineFrom, deadlineTo])
+  }, [statusFilter, companyFilter, staffFilter, supportFilter, debouncedSearch, sortFilter, isAdmin, currentUser?.id, deadlineFrom, deadlineTo])
 
   const listQuery = useQuery({
     queryKey: ['cdr', 'list', listParams],
@@ -1019,7 +1046,7 @@ export default function AdminClientRequests() {
   }
 
   function resetFilters() {
-    setStatusFilter([]); setCompanyFilter([]); setStaffFilter([])
+    setStatusFilter([]); setCompanyFilter([]); setStaffFilter([]); setSupportFilter([])
     setColFilters({}); setSortColState({ col: null, dir: 'asc' })
     setSearchQuery(''); setSortFilter('deadline_date:asc'); setPage(1)
     setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
@@ -1232,6 +1259,33 @@ export default function AdminClientRequests() {
               </div>
             )}
 
+            {/* CV hỗ trợ — admin: multi-select NV; nhân viên: toggle "việc mình hỗ trợ" */}
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>CV hỗ trợ</label>
+              {isAdmin ? (
+                <FilterMultiPicker
+                  options={staffList}
+                  value={supportFilter}
+                  onChange={(v) => { setSupportFilter(v); setPage(1) }}
+                  searchPlaceholder="Tìm nhân viên..."
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setSupportFilter((p) => (p.length ? [] : [currentUser?.id].filter(Boolean))); setPage(1) }}
+                  title="Chỉ hiện yêu cầu KH mình đang hỗ trợ đồng nghiệp"
+                  style={{
+                    height: 32, padding: '0 12px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                    border: `1px solid ${supportFilter.length ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                    background: supportFilter.length ? 'var(--color-primary-bg)' : '#fff',
+                    color: supportFilter.length ? 'var(--color-primary-dark)' : 'var(--color-text)',
+                  }}
+                >
+                  {supportFilter.length ? '✓ ' : ''}Việc tôi hỗ trợ
+                </button>
+              )}
+            </div>
+
             {/* Từ khoá */}
             <div className={`${s.filterGroup} ${s.filterGroupGrow}`}>
               <label className={s.filterLabel}>Từ khoá</label>
@@ -1269,7 +1323,7 @@ export default function AdminClientRequests() {
           </div>
 
           {/* Active filter chips */}
-          {(yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH || companyFilter.length > 0 || staffFilter.length > 0 || debouncedSearch) && (
+          {(yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH || companyFilter.length > 0 || staffFilter.length > 0 || supportFilter.length > 0 || debouncedSearch) && (
             <div className={s.filterChipsRow}>
               {(yearFilter || monthFilter) && (yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH) && (
                 <span className={s.filterChip}>
@@ -1289,6 +1343,19 @@ export default function AdminClientRequests() {
                   <button className={s.filterChipRemove} onClick={() => setStaffFilter((p) => p.filter((x) => x !== sid))}>×</button>
                 </span>
               ))}
+              {supportFilter.length > 0 && (
+                isAdmin ? supportFilter.map((sid) => (
+                  <span key={`support-${sid}`} className={s.filterChip}>
+                    Hỗ trợ: {staffList.find((u) => u.id === sid)?.name ?? '?'}
+                    <button className={s.filterChipRemove} onClick={() => setSupportFilter((p) => p.filter((x) => x !== sid))}>×</button>
+                  </span>
+                )) : (
+                  <span className={s.filterChip}>
+                    Việc tôi hỗ trợ
+                    <button className={s.filterChipRemove} onClick={() => setSupportFilter([])}>×</button>
+                  </span>
+                )
+              )}
               {debouncedSearch && (
                 <span className={s.filterChip}>
                   &ldquo;{debouncedSearch}&rdquo;
@@ -1388,7 +1455,18 @@ export default function AdminClientRequests() {
                     return (
                       <tr key={item.id} className={`${s.tr} ${isOverdue ? s.trOverdue : ''}`}>
                         <td className={s.td}>
-                          <div className={s.docTitle}>{item.documentName}</div>
+                          <div className={s.docTitle}>
+                            {item.documentName}
+                            {item.collaborators?.length > 0 && (
+                              <span
+                                title={`Hỗ trợ: ${item.collaborators.map((c) => c.name).join(', ')}`}
+                                style={{ marginLeft: 6, padding: '0 6px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                                         background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', whiteSpace: 'nowrap' }}
+                              >
+                                +{item.collaborators.length} hỗ trợ
+                              </span>
+                            )}
+                          </div>
                           {item.description && <div className={s.docDesc}>{item.description}</div>}
                         </td>
 
@@ -1554,6 +1632,8 @@ export default function AdminClientRequests() {
       {(showCreate || editTarget) && (
         <CdrFormModal
           companies={companies}
+          staffList={staffList}
+          ownerId={currentUser?.id}
           initial={editTarget}
           onClose={() => { setShowCreate(false); setEditTarget(null) }}
           onSaved={(saved) => {

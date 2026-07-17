@@ -21,7 +21,7 @@ function cdrToTaskDto(cdr) {
     assignedTo:     cdr.requestedBy,
     assignedToName: cdr.requestedByName,
     assignedBy:     null,
-    collaborators:  [],
+    collaborators:  Array.isArray(cdr.collaborators) ? cdr.collaborators : [],
     status:         cdr.status,
     priority:       null,
     source:         'client_request',
@@ -230,22 +230,21 @@ async function listTasks(filters = {}) {
   const effectiveAssignedTo = forceAssignedTo ?? assignedTo
 
   // audience=client_request: return CDRs mapped to task-like shape.
-  // Yêu cầu KH không có "người hỗ trợ" → khi lọc "CV hỗ trợ" thì trả rỗng.
   if (audience === 'client_request') {
-    if (hasCollabFilter) {
-      return { tasks: [], pagination: { page: parseInt(page, 10), limit: parseInt(limit, 10), total: 0, totalPages: 0 }, statusCounts: {} }
-    }
     const cdrFilters = {
       page: parseInt(page, 10),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
       companyId,
-      requestedBy:      effectiveAssignedTo ?? staffScopeId,
       periodLabel,
       deadlineDateFrom: dueDateFrom,
       deadlineDateTo:   dueDateTo,
       sortBy: sortBy === 'due_date' ? 'deadline_date' : sortBy === 'priority' ? 'created_at' : sortBy,
       sortDir,
     }
+    // Owner-filter (accountability) khi admin lọc theo nhân viên; else phạm vi staff = tạo HOẶC hỗ trợ.
+    if (effectiveAssignedTo) cdrFilters.requestedBy = effectiveAssignedTo
+    else if (staffScopeId)   cdrFilters.staffScopeId = staffScopeId
+    if (hasCollabFilter)     cdrFilters.collaboratorIds = collabArr
     if (isOverdue === 'true' || isOverdue === true) cdrFilters.status = ['overdue', 'pending']
     const result = await listClientRequests(cdrFilters)
     return {
@@ -256,17 +255,19 @@ async function listTasks(filters = {}) {
   }
 
   // audience=all: fetch tasks + CDRs, merge and paginate in memory.
-  // Khi lọc "CV hỗ trợ" → chỉ lấy task nội bộ (CDR không có người hỗ trợ).
   if (audience === 'all') {
+    const cdrScope = {}
+    if (effectiveAssignedTo) cdrScope.requestedBy = effectiveAssignedTo
+    else if (staffScopeId)   cdrScope.staffScopeId = staffScopeId
+    if (hasCollabFilter)     cdrScope.collaboratorIds = collabArr
     const [tasksResult, cdrsResult] = await Promise.all([
       listTasks({ ...filters, audience: 'internal', page: 1, limit: 1000 }),
-      hasCollabFilter
-        ? Promise.resolve({ items: [] })
-        : listClientRequests({
-            companyId, requestedBy: effectiveAssignedTo ?? staffScopeId, periodLabel,
-            deadlineDateFrom: dueDateFrom, deadlineDateTo: dueDateTo,
-            page: 1, limit: 1000,
-          }),
+      listClientRequests({
+        companyId, periodLabel,
+        deadlineDateFrom: dueDateFrom, deadlineDateTo: dueDateTo,
+        ...cdrScope,
+        page: 1, limit: 1000,
+      }),
     ])
 
     const allItems = [

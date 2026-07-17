@@ -30,7 +30,7 @@ async function createClientRequest(req, res, next) {
 
 async function updateClientRequest(req, res, next) {
   try {
-    const item = await svc.updateClientRequest(req.params.id, req.body)
+    const item = await svc.updateClientRequest(req.params.id, req.body, req.user.id)
     res.json({ success: true, data: { item } })
   } catch (err) { next(err) }
 }

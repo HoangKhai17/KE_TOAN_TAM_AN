@@ -10,6 +10,7 @@ const createClientRequestSchema = z.object({
   deadlineDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),
   remindedEmail: z.string().email().max(150).optional().nullable(),
   notes:        z.string().max(2000).optional().nullable(),
+  collaboratorIds: z.array(z.string().uuid()).optional(),
 })
 
 const updateClientRequestSchema = z.object({
@@ -20,6 +21,7 @@ const updateClientRequestSchema = z.object({
   taskId:       z.string().uuid().optional().nullable(),
   remindedEmail: z.string().email().max(150).optional().nullable(),
   notes:        z.string().max(2000).optional().nullable(),
+  collaboratorIds: z.array(z.string().uuid()).optional(),
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })
 
 const remindSchema = z.object({

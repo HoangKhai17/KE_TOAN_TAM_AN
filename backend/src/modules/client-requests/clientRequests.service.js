@@ -40,9 +40,54 @@ function toDto(row) {
     tokenSubmittedAt:   row.token_submitted_at ?? null,
     tokenSubmittedData: row.token_submitted_data ?? null,
     notes:              row.notes ?? null,
+    collaborators:      Array.isArray(row.collaborators) ? row.collaborators : [],
     createdAt:          row.created_at,
     updatedAt:          row.updated_at,
   }
+}
+
+// ── Người hỗ trợ (collaborators) cho CDR ────────────────────────────────────────
+// Diff insert/delete; loại trùng + loại OWNER (requested_by). Trả { toAdd, toRemove }.
+async function syncCdrCollaborators(requestId, collaboratorIds, ownerId, actorId) {
+  const desired = [...new Set((collaboratorIds || []).filter(Boolean))].filter((id) => id !== ownerId)
+  const desiredSet = new Set(desired)
+
+  const { rows: cur } = await query(
+    'SELECT user_id FROM client_request_collaborators WHERE request_id = $1', [requestId]
+  )
+  const current = new Set(cur.map((r) => r.user_id))
+
+  const toAdd    = desired.filter((id) => !current.has(id))
+  const toRemove = [...current].filter((id) => !desiredSet.has(id))
+
+  for (const uid of toAdd) {
+    await query(
+      `INSERT INTO client_request_collaborators (request_id, user_id, added_by)
+       VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [requestId, uid, actorId]
+    )
+  }
+  if (toRemove.length) {
+    await query(
+      'DELETE FROM client_request_collaborators WHERE request_id = $1 AND user_id = ANY($2::uuid[])',
+      [requestId, toRemove]
+    )
+  }
+  return { toAdd, toRemove }
+}
+
+async function notifyCdrCollaboratorChanges({ toAdd, toRemove }, item, actorId) {
+  const jobs = []
+  const label = `"${item.documentName}" — ${item.companyName || ''}`
+  for (const uid of toAdd) {
+    if (uid === actorId) continue
+    jobs.push(createAndEmit(uid, 'task_assigned', 'Bạn được thêm hỗ trợ yêu cầu KH', label, item.taskId ?? null))
+  }
+  for (const uid of toRemove) {
+    if (uid === actorId) continue
+    jobs.push(createAndEmit(uid, 'task_status_changed', 'Bạn không còn hỗ trợ yêu cầu KH', `${label} — bạn đã được gỡ khỏi danh sách hỗ trợ`, item.taskId ?? null))
+  }
+  await Promise.all(jobs)
 }
 
 const CDR_COLS = `
@@ -50,7 +95,12 @@ const CDR_COLS = `
   t.title  AS task_title,
   c.name   AS company_name,
   rb.name  AS requested_by_name,
-  rcv.name AS received_by_name`
+  rcv.name AS received_by_name,
+  COALESCE((
+    SELECT json_agg(json_build_object('id', ucc.id, 'name', ucc.name) ORDER BY ucc.name)
+    FROM client_request_collaborators crc JOIN users ucc ON ucc.id = crc.user_id
+    WHERE crc.request_id = cdr.id
+  ), '[]'::json) AS collaborators`
 
 const CDR_FROM = `
   FROM client_document_requests cdr
@@ -67,11 +117,29 @@ async function listClientRequests(filters = {}) {
     companyId, taskId, requestedBy, status, deadlineDateFrom, deadlineDateTo,
     search,
     sortBy = 'created_at', sortDir = 'desc',
+    staffScopeId, collaboratorIds,
   } = filters
 
   const offset = (page - 1) * limit
   const conditions = ['1=1']
   const params = []
+
+  // Phạm vi nhân sự: CDR mình tạo (requested_by) HOẶC mình được nhờ HỖ TRỢ.
+  if (staffScopeId) {
+    params.push(staffScopeId)
+    const p = params.length
+    conditions.push(
+      `(cdr.requested_by = $${p} OR EXISTS (SELECT 1 FROM client_request_collaborators crc WHERE crc.request_id = cdr.id AND crc.user_id = $${p}))`
+    )
+  }
+  // Lọc "CV hỗ trợ": chỉ CDR mà 1 trong các user chỉ định là NGƯỜI HỖ TRỢ.
+  const collabArr = collaboratorIds == null
+    ? null
+    : (Array.isArray(collaboratorIds) ? collaboratorIds : String(collaboratorIds).split(',').map((x) => x.trim()).filter(Boolean))
+  if (collabArr && collabArr.length) {
+    params.push(collabArr)
+    conditions.push(`EXISTS (SELECT 1 FROM client_request_collaborators crc WHERE crc.request_id = cdr.id AND crc.user_id = ANY($${params.length}::uuid[]))`)
+  }
 
   if (companyId) {
     const arr = Array.isArray(companyId) ? companyId : String(companyId).split(',').map((x) => x.trim()).filter(Boolean)
@@ -146,6 +214,7 @@ async function createClientRequest(data, requestedBy) {
   const {
     companyId, taskId = null, documentName, description = null,
     periodLabel = null, deadlineDate = null, remindedEmail = null, notes = null,
+    collaboratorIds,
   } = data
 
   const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
@@ -166,12 +235,21 @@ async function createClientRequest(data, requestedBy) {
      periodLabel ?? null, deadlineDate ?? null, remindedEmail ?? null, notes ?? null]
   )
 
+  // Người hỗ trợ ban đầu (nếu có) — owner = requestedBy, tự loại khỏi danh sách.
+  if (Array.isArray(collaboratorIds) && collaboratorIds.length) {
+    const changes = await syncCdrCollaborators(row.id, collaboratorIds, requestedBy, requestedBy)
+    const withCollab = await getById(row.id)
+    await notifyCdrCollaboratorChanges(changes, withCollab, requestedBy)
+    emitData('data:cdr', { action: 'created', id: withCollab.id })
+    return withCollab
+  }
+
   const item = await getById(row.id)
   emitData('data:cdr', { action: 'created', id: item.id })
   return item
 }
 
-async function updateClientRequest(id, data) {
+async function updateClientRequest(id, data, actorId = null) {
   const fieldMap = {
     documentName:  'document_name',
     description:   'description',
@@ -193,19 +271,33 @@ async function updateClientRequest(id, data) {
     }
   }
 
-  if (!fields.length) throw Object.assign(new Error('No fields to update'), { status: 422 })
+  const wantsCollab = data.collaboratorIds !== undefined
+  if (!fields.length && !wantsCollab) throw Object.assign(new Error('No fields to update'), { status: 422 })
 
-  params.push(new Date())
-  fields.push(`updated_at = $${params.length}`)
-  params.push(id)
+  // Cần owner (requested_by) để loại khỏi danh sách hỗ trợ + xác nhận tồn tại
+  const { rows: [existing] } = await query('SELECT requested_by FROM client_document_requests WHERE id = $1', [id])
+  if (!existing) throw Object.assign(new Error('Client request not found'), { status: 404 })
 
-  const { rowCount } = await query(
-    `UPDATE client_document_requests SET ${fields.join(', ')} WHERE id = $${params.length}`,
-    params
-  )
-  if (!rowCount) throw Object.assign(new Error('Client request not found'), { status: 404 })
+  if (fields.length) {
+    params.push(new Date())
+    fields.push(`updated_at = $${params.length}`)
+    params.push(id)
+    await query(
+      `UPDATE client_document_requests SET ${fields.join(', ')} WHERE id = $${params.length}`,
+      params
+    )
+  }
+
+  // Đồng bộ người hỗ trợ (nếu client gửi collaboratorIds)
+  let changes = { toAdd: [], toRemove: [] }
+  if (wantsCollab) {
+    changes = await syncCdrCollaborators(id, data.collaboratorIds, existing.requested_by, actorId ?? existing.requested_by)
+  }
 
   const item = await getById(id)
+  if (changes.toAdd.length || changes.toRemove.length) {
+    await notifyCdrCollaboratorChanges(changes, item, actorId ?? existing.requested_by)
+  }
   emitData('data:cdr', { action: 'updated', id })
   return item
 }
@@ -550,12 +642,25 @@ async function countPendingByTask(taskId) {
 }
 
 async function getStats(filters = {}) {
-  const { companyId, requestedBy, search, deadlineDateFrom, deadlineDateTo } = filters
+  const { companyId, requestedBy, search, deadlineDateFrom, deadlineDateTo, staffScopeId, collaboratorIds } = filters
   const conditions = ['1=1']
   const params = []
 
   if (companyId)   { params.push(companyId);  conditions.push(`company_id = $${params.length}`) }
   if (requestedBy) { params.push(requestedBy); conditions.push(`requested_by = $${params.length}`) }
+  // Phạm vi nhân sự (danh sách + tile số đếm phải khớp): CDR mình tạo HOẶC mình hỗ trợ.
+  if (staffScopeId) {
+    params.push(staffScopeId)
+    const p = params.length
+    conditions.push(`(requested_by = $${p} OR EXISTS (SELECT 1 FROM client_request_collaborators crc WHERE crc.request_id = client_document_requests.id AND crc.user_id = $${p}))`)
+  }
+  const collabArr = collaboratorIds == null
+    ? null
+    : (Array.isArray(collaboratorIds) ? collaboratorIds : String(collaboratorIds).split(',').map((x) => x.trim()).filter(Boolean))
+  if (collabArr && collabArr.length) {
+    params.push(collabArr)
+    conditions.push(`EXISTS (SELECT 1 FROM client_request_collaborators crc WHERE crc.request_id = client_document_requests.id AND crc.user_id = ANY($${params.length}::uuid[]))`)
+  }
   if (search) {
     params.push(`%${search}%`)
     conditions.push(`(document_name ILIKE $${params.length} OR reminded_email ILIKE $${params.length})`)
