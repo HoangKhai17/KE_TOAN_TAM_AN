@@ -128,6 +128,9 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   const [checklistItems, setChecklistItems] = useState([])
   const [newItemText,    setNewItemText]    = useState('')
   const newItemRef = useRef(null)
+  // Sửa tại chỗ một bước đã thêm (nhấp vào nội dung để sửa)
+  const [editingId, setEditingId] = useState(null)
+  const [editText,  setEditText]  = useState('')
 
   // Links
   const [linkItems,    setLinkItems]    = useState([])
@@ -161,10 +164,27 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
 
   function removeFromChecklist(id) {
     setChecklistItems((prev) => prev.filter((item) => item.id !== id))
+    if (editingId === id) cancelEdit()
   }
 
   function toggleItemLevel(id) {
     setChecklistItems((prev) => prev.map((item) => item.id === id ? { ...item, level: item.level === 1 ? 0 : 1 } : item))
+  }
+
+  // ── Sửa nội dung một bước đã thêm ───────────────────────────────────────────
+  function startEdit(item) {
+    setEditingId(item.id)
+    setEditText(item.text)
+  }
+  function cancelEdit() {
+    setEditingId(null)
+    setEditText('')
+  }
+  function saveEdit() {
+    const text = editText.trim()
+    if (!text) { cancelEdit(); return }   // để trống → giữ nguyên nội dung cũ
+    setChecklistItems((prev) => prev.map((item) => item.id === editingId ? { ...item, text } : item))
+    cancelEdit()
   }
 
   function addLink() {
@@ -398,7 +418,30 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
                         {isChild ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
                       </button>
                       <span className={s.fmClIdx}>{isChild ? '•' : `${idx + 1}.`}</span>
-                      <span className={s.fmClText} style={{ whiteSpace: 'pre-wrap' }}>{item.text}</span>
+                      {editingId === item.id ? (
+                        <textarea
+                          autoFocus
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onBlur={saveEdit}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); saveEdit() }
+                            if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                          }}
+                          className={s.fmClInput}
+                          rows={2}
+                          style={{ resize: 'vertical', whiteSpace: 'pre-wrap' }}
+                        />
+                      ) : (
+                        <span
+                          className={s.fmClText}
+                          style={{ whiteSpace: 'pre-wrap', cursor: 'text' }}
+                          onClick={() => startEdit(item)}
+                          title="Nhấp để sửa"
+                        >
+                          {item.text}
+                        </span>
+                      )}
                       <button
                         type="button"
                         className={s.fmClDel}
