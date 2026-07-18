@@ -27,6 +27,13 @@ function buildPeriodLabel(recurrenceType, dueDate) {
   }
 }
 
+// Tiêu đề task tự sinh: CHỈ gồm kỳ + tên mẫu công việc.
+// Trước đây ghép thêm tên viết tắt/tên công ty nên tiêu đề rất dài, trong khi
+// mọi chỗ hiển thị task đều đã có cột công ty riêng — ghép vào là thừa.
+function buildTaskTitle(periodLabel, taskTypeName) {
+  return `[${periodLabel}] ${taskTypeName}`
+}
+
 // Main idempotent generator — called by cron and by manual trigger.
 // options.manual = true → chạy tay "Chạy ngay": nhắm KỲ HIỆN TẠI (occurrence ≤ hôm nay)
 //   và chỉ dựa vào việc task đã tồn tại hay chưa, KHÔNG dựa last_generated_at.
@@ -45,7 +52,6 @@ async function runTaskGenerator(options = {}) {
     const { rows: schedules } = await query(
       `SELECT cts.*,
               c.name AS company_name,
-              c.short_name AS company_short_name,
               tt.name AS task_type_name,
               tt.default_sla_days
        FROM customer_task_schedules cts
@@ -105,9 +111,7 @@ async function runTaskGenerator(options = {}) {
         }
 
         const sla = schedule.override_sla_days ?? schedule.default_sla_days
-        // Tiêu đề dùng tên viết tắt cho gọn; chưa có short_name thì lấy tên đầy đủ (toán tử 3 ngôi)
-        const companyLabel = schedule.company_short_name?.trim() ? schedule.company_short_name.trim() : schedule.company_name
-        const title = `[${periodLabel}] ${schedule.task_type_name} — ${companyLabel}`
+        const title = buildTaskTitle(periodLabel, schedule.task_type_name)
 
         const { rows: [newTask] } = await query(
           `INSERT INTO tasks
@@ -191,4 +195,7 @@ async function runTaskGenerator(options = {}) {
   return summary
 }
 
-module.exports = { runTaskGenerator }
+// buildPeriodLabel/buildTaskTitle được xuất ra để kiểm thử ĐƯỢC MÀ KHÔNG phải
+// gọi runTaskGenerator — hàm đó quét toàn bộ lịch của mọi công ty và ghi task
+// thật, không dùng để test được.
+module.exports = { runTaskGenerator, buildPeriodLabel, buildTaskTitle }
