@@ -6327,3 +6327,24 @@
 .colMenuItem input { cursor: pointer; }
 .colMenuItemFixed { opacity: 0.6; cursor: default; }
 .colMenuItemFixed:hover { background: none; }
+
+/* ── Nút kéo-thả + ghim ưu tiên trong ô Tên công ty ───────────────────────────── */
+.coDragHandle,
+.coPinBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--color-muted);
+}
+.coDragHandle { cursor: grab; }
+.coDragHandle:active { cursor: grabbing; }
+.coDragHandle:hover,
+.coPinBtn:hover { background: var(--color-surface-muted, #f1f5f9); }

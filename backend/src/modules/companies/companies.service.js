@@ -57,13 +57,16 @@ function toDto(row) {
     taskCompletedCount: parseInt(row.task_completed_count ?? 0, 10),
     taskOnTimeCount:    parseInt(row.task_on_time_count ?? 0, 10),
     customFields:     Array.isArray(row.custom_fields) ? row.custom_fields : [],
+    // Tùy chọn RIÊNG của người đang đăng nhập (bảng company_user_prefs)
+    isPinned:         row.is_pinned === true,
+    sortPosition:     row.sort_position ?? null,
     createdBy:        row.created_by,
     createdAt:        row.created_at,
     updatedAt:        row.updated_at,
   }
 }
 
-async function listCompanies({ page = 1, limit = 20, status, businessType, assignedStaffId, search, forceStaffId } = {}) {
+async function listCompanies({ page = 1, limit = 20, status, businessType, assignedStaffId, search, forceStaffId, currentUserId } = {}) {
   const offset = (page - 1) * limit
   const conditions = ['1=1']
   const filterParams = []
@@ -100,18 +103,26 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
 
   const where = conditions.join(' AND ')
 
+  // Tham số cho JOIN tùy chọn riêng của user (đẩy sau các filter để không lệch chỉ số $n).
+  // currentUserId = null → không khớp dòng nào → danh sách về đúng thứ tự mặc định cũ.
+  filterParams.push(currentUserId ?? null)
+  const cupIdx = filterParams.length
+
   // P1: single query with COUNT(*) OVER() — eliminates the separate COUNT query
   const dataParams = [...filterParams, limit, offset]
   const { rows } = await query(
     `SELECT c.*,
             COUNT(*) OVER() AS _total,
             u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
+            cup.is_pinned,
+            cup.position AS sort_position,
             tc.task_open_count,
             tc.task_overdue_count,
             tc.task_completed_count,
             tc.task_on_time_count
      FROM companies c
      LEFT JOIN users u ON u.id = c.assigned_staff_id
+     LEFT JOIN company_user_prefs cup ON cup.company_id = c.id AND cup.user_id = $${cupIdx}
      LEFT JOIN LATERAL (
        SELECT COUNT(*) FILTER (WHERE tk.status != 'completed')                                                                                          AS task_open_count,
               COUNT(*) FILTER (WHERE tk.status != 'completed' AND tk.due_date < CURRENT_DATE)                                                          AS task_overdue_count,
@@ -120,7 +131,11 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
        FROM tasks tk WHERE tk.company_id = c.id
      ) tc ON TRUE
      WHERE ${where}
-     ORDER BY c.created_at DESC
+     ORDER BY COALESCE(cup.is_pinned, FALSE) DESC,  -- công ty được ghim luôn lên đầu
+              -- NULLS FIRST: công ty CHƯA có thứ tự (vd KH vừa thêm) nổi lên ĐẦU
+              -- để user kéo ngay vào vị trí mong muốn, thay vì phải tìm ở cuối danh sách.
+              cup.position ASC NULLS FIRST,
+              c.created_at DESC                     -- trong cùng nhóm: mới nhất trước
      LIMIT $${filterParams.length + 1} OFFSET $${filterParams.length + 2}`,
     dataParams
   )
@@ -130,6 +145,48 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
     companies: rows.map(toDto),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   }
+}
+
+// ── Tùy chọn danh sách theo từng user: thứ tự kéo-thả + ghim ưu tiên ──────────
+
+// Lưu thứ tự kéo-thả. orderedIds = mảng companyId theo đúng thứ tự user muốn.
+// Ghi position = 0,1,2... cho riêng user đó; công ty không nằm trong mảng giữ nguyên.
+async function setCompanyOrder(userId, orderedIds = []) {
+  const ids = [...new Set((orderedIds || []).filter(Boolean))]
+  if (!ids.length) return { updated: 0 }
+
+  // Chỉ nhận công ty có thật (tránh rác do client gửi id sai)
+  const { rows: valid } = await query(
+    'SELECT id FROM companies WHERE id = ANY($1::uuid[])', [ids]
+  )
+  const validSet = new Set(valid.map((r) => r.id))
+  const finalIds = ids.filter((id) => validSet.has(id))
+
+  for (let i = 0; i < finalIds.length; i++) {
+    await query(
+      `INSERT INTO company_user_prefs (user_id, company_id, position, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (user_id, company_id)
+       DO UPDATE SET position = EXCLUDED.position, updated_at = NOW()`,
+      [userId, finalIds[i], i]
+    )
+  }
+  return { updated: finalIds.length }
+}
+
+// Ghim / bỏ ghim 1 công ty cho riêng user đang đăng nhập.
+async function setCompanyPin(userId, companyId, isPinned) {
+  const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
+  if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
+
+  await query(
+    `INSERT INTO company_user_prefs (user_id, company_id, is_pinned, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (user_id, company_id)
+     DO UPDATE SET is_pinned = EXCLUDED.is_pinned, updated_at = NOW()`,
+    [userId, companyId, !!isPinned]
+  )
+  return { companyId, isPinned: !!isPinned }
 }
 
 async function getCompanyById(id, user = null) {
@@ -616,6 +673,8 @@ async function deleteNote(companyId, noteId, user) {
 
 module.exports = {
   listCompanies,
+  setCompanyOrder,
+  setCompanyPin,
   getCompanyById,
   createCompany,
   updateCompany,

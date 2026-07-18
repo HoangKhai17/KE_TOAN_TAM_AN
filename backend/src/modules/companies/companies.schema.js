@@ -49,9 +49,21 @@ const assignStaffSchema = z.object({
   notes:     z.string().optional().nullable(),
 })
 
+// Thứ tự kéo-thả riêng của mỗi user: mảng companyId theo đúng thứ tự mong muốn
+const setCompanyOrderSchema = z.object({
+  orderedIds: z.array(z.string().uuid('Invalid company ID')).min(1),
+})
+
+// Ghim / bỏ ghim công ty (ưu tiên) cho riêng user
+const setCompanyPinSchema = z.object({
+  isPinned: z.boolean(),
+})
+
 module.exports = {
   createCompanySchema,
   updateCompanySchema,
   updateCompanyStatusSchema,
   assignStaffSchema,
+  setCompanyOrderSchema,
+  setCompanyPinSchema,
 }

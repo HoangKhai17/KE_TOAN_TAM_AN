@@ -2,7 +2,10 @@ const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
 const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
-const { createCompanySchema, updateCompanySchema, assignStaffSchema } = require('./companies.schema')
+const {
+  createCompanySchema, updateCompanySchema, assignStaffSchema,
+  setCompanyOrderSchema, setCompanyPinSchema,
+} = require('./companies.schema')
 const ctrl = require('./companies.controller')
 
 const router = Router()
@@ -107,6 +110,11 @@ router.post('/export', ...auth, ctrl.exportCompanies)
 
 // Overview: xem tổng hợp dữ liệu trên hệ thống (JSON) — cùng RBAC như export
 router.post('/overview', ...auth, ctrl.overviewCompanies)
+
+// ── Tùy chọn danh sách RIÊNG của mỗi user: thứ tự kéo-thả + ghim ưu tiên ──────
+// LƯU Ý: '/order' phải khai báo TRƯỚC '/:id', nếu không sẽ bị khớp thành id='order'.
+router.patch('/order',    ...auth, validate(setCompanyOrderSchema), ctrl.setCompanyOrder)
+router.patch('/:id/pin',  ...auth, validate(setCompanyPinSchema),   ctrl.setCompanyPin)
 
 /**
  * @openapi

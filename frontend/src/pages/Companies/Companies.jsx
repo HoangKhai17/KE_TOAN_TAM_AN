@@ -5,8 +5,9 @@ import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2,
   Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X, Filter, Download, LayoutGrid, Table2,
-  SlidersHorizontal,
+  SlidersHorizontal, GripVertical, Star, ArrowUpDown,
 } from 'lucide-react'
+import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import CompanyExportModal from './CompanyExportModal'
@@ -435,6 +436,9 @@ export default function Companies() {
   // Column-header filter / sort (client-side, per docs/018)
   const [colFilters, setColFilters]   = useState(() => deserializeColFilters(readSaved().colFilters))
   const [sortState, setSortState]     = useState(() => readSaved().sortState ?? { col: null, dir: 'asc' })
+  // Chế độ "Thứ tự của tôi" (kéo-thả) + bộ lọc chỉ xem công ty đã ghim
+  const [myOrderMode, setMyOrderMode] = useState(() => readSaved().myOrderMode ?? false)
+  const [pinnedOnly,  setPinnedOnly]  = useState(() => readSaved().pinnedOnly  ?? false)
   const [filterPopup, setFilterPopup] = useState(null)
 
   const [showCreate, setShowCreate]   = useState(false)
@@ -459,8 +463,9 @@ export default function Companies() {
     sessionStorage.setItem(FILTER_KEY, JSON.stringify({
       search, statusFilter, btFilter, staffFilter, page, limit,
       colFilters: serializeColFilters(colFilters), sortState,
+      myOrderMode, pinnedOnly,
     }))
-  }, [search, statusFilter, btFilter, staffFilter, page, limit, colFilters, sortState])
+  }, [search, statusFilter, btFilter, staffFilter, page, limit, colFilters, sortState, myOrderMode, pinnedOnly])
 
   // Debounce search
   useEffect(() => {
@@ -560,6 +565,9 @@ export default function Companies() {
     }
     if (sortState.col) {
       result.sort((a, b) => {
+        // Công ty ƯU TIÊN (đã ghim) luôn nổi lên đầu, kể cả khi đang sắp theo cột.
+        // Trong cùng nhóm ghim/không ghim mới so theo cột được chọn.
+        if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1
         const ak = getCompanySortKey(a, sortState.col)
         const bk = getCompanySortKey(b, sortState.col)
         if (typeof ak === 'number' && typeof bk === 'number') {
@@ -569,8 +577,42 @@ export default function Companies() {
         return sortState.dir === 'asc' ? cmp : -cmp
       })
     }
+    if (pinnedOnly) result = result.filter((row) => row.isPinned)
     return result
-  }, [companies, colFilters, sortState])
+  }, [companies, colFilters, sortState, pinnedOnly])
+
+  // ── Thứ tự của tôi (kéo-thả) + Ghim ưu tiên ──────────────────────────────────
+  async function handleReorder(newIds) {
+    // Cập nhật lạc quan để kéo xong thấy ngay, rồi mới gọi API
+    const byId = new Map(companies.map((c) => [c.id, c]))
+    const reordered = newIds.map((id) => byId.get(id)).filter(Boolean)
+    const rest = companies.filter((c) => !newIds.includes(c.id))
+    setCompanies([...reordered, ...rest])
+    try {
+      await companiesApi.setCompanyOrder(newIds)
+      // BẮT BUỘC: đồng bộ lại cache React Query sau khi lưu thành công.
+      // Nếu không, rời trang rồi quay lại sẽ đọc cache CŨ (staleTime 15s) và
+      // thứ tự vừa kéo trông như bị "mất" — dù server đã lưu đúng.
+      queryClient.invalidateQueries({ queryKey: ['companies', 'list'] })
+    } catch {
+      addToast('Không lưu được thứ tự, vui lòng thử lại', 'error')
+      queryClient.invalidateQueries({ queryKey: ['companies', 'list'] })
+    }
+  }
+
+  async function handleTogglePin(company) {
+    const next = !company.isPinned
+    setCompanies((prev) => prev.map((c) => c.id === company.id ? { ...c, isPinned: next } : c))
+    try {
+      await companiesApi.setCompanyPin(company.id, next)
+      // Đồng bộ cache như handleReorder — tránh mất trạng thái ghim khi quay lại trang
+      queryClient.invalidateQueries({ queryKey: ['companies', 'list'] })
+      addToast(next ? `Đã ghim "${company.name}"` : `Đã bỏ ghim "${company.name}"`, 'success')
+    } catch {
+      setCompanies((prev) => prev.map((c) => c.id === company.id ? { ...c, isPinned: !next } : c))
+      addToast('Không cập nhật được ưu tiên', 'error')
+    }
+  }
 
   // ── Cột hiển thị (ẩn/hiện) ───────────────────────────────────────────────────
   const [hiddenCols, setHiddenCols] = useState(loadHiddenCols)
@@ -597,7 +639,8 @@ export default function Companies() {
   const clientTotal      = displayed.length
   const clientTotalPages = Math.max(1, Math.ceil(clientTotal / limit))
   const safePage         = Math.min(page, clientTotalPages)
-  const pageRows         = displayed.slice((safePage - 1) * limit, safePage * limit)
+  // Chế độ kéo-thả: hiện TOÀN BỘ danh sách để kéo tự do (không thể kéo qua trang khác)
+  const pageRows         = myOrderMode ? displayed : displayed.slice((safePage - 1) * limit, safePage * limit)
 
   const allPageSelected  = pageRows.length > 0 && pageRows.every((c) => selectedIds.has(c.id))
   const selectedCompanies = companies.filter((c) => selectedIds.has(c.id))
@@ -631,6 +674,11 @@ export default function Companies() {
     return false
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
+
+  // Chỉ cho kéo-thả khi đang xem ĐẦY ĐỦ danh sách: không lọc cột, không sắp theo cột,
+  // và không bật lọc "Ưu tiên". Nếu kéo khi đang lọc, ta chỉ đánh số lại phần đang hiện
+  // → đụng độ vị trí với các công ty bị ẩn, làm loạn thứ tự.
+  const canDrag = myOrderMode && colFilterCount === 0 && sortState.col === null && !pinnedOnly
   const hasColSortActive = sortState.col !== null
 
   function FilterTh({ colKey, className, children }) {
@@ -712,6 +760,26 @@ export default function Companies() {
             >
               <LayoutGrid size={14} /> Tổng quan
             </button>
+            {/* Chỉ xem công ty đã ghim ưu tiên */}
+            <button
+              className={s.btnOutline}
+              onClick={() => { setPinnedOnly((v) => !v); setPage(1) }}
+              title="Chỉ hiện công ty đã đánh dấu ưu tiên"
+              style={pinnedOnly ? { borderColor: '#f59e0b', color: '#b45309', background: '#fffbeb' } : undefined}
+            >
+              <Star size={14} fill={pinnedOnly ? '#f59e0b' : 'none'} /> Ưu tiên
+            </button>
+
+            {/* Bật/tắt chế độ tự sắp thứ tự bằng kéo-thả */}
+            <button
+              className={s.btnOutline}
+              onClick={() => { setMyOrderMode((v) => !v); setPage(1) }}
+              title="Tự sắp xếp thứ tự danh sách bằng cách kéo-thả (thứ tự riêng của bạn)"
+              style={myOrderMode ? { borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'var(--color-primary-bg)' } : undefined}
+            >
+              <ArrowUpDown size={14} /> Thứ tự của tôi
+            </button>
+
             {/* Cột hiển thị — ẩn/hiện cột, lưu vào sessionStorage */}
             <div className={s.colMenuWrap} ref={colMenuRef}>
               <button
@@ -952,19 +1020,33 @@ export default function Companies() {
                       </td>
                     </tr>
                   ) : (
-                    pageRows.map((c) => (
-                      <CompanyRow
-                        key={c.id}
-                        company={c}
-                        isAdmin={isAdmin}
-                        selected={selectedIds.has(c.id)}
-                        onToggleSelect={() => toggleSelect(c.id)}
-                        hiddenCols={hiddenCols}
-                        onClick={() => navigate(`/companies/${c.id}`)}
-                        onOpenTables={() => navigate(`/companies/${c.id}/bang-du-lieu`)}
-                        onDelete={(e) => { e.stopPropagation(); setDeleteTarget(c) }}
-                      />
-                    ))
+                    <SortableList
+                      ids={pageRows.map((c) => c.id)}
+                      onReorder={handleReorder}
+                      disabled={!canDrag}
+                    >
+                      {pageRows.map((c) => (
+                        <SortableItem key={c.id} id={c.id} disabled={!canDrag}>
+                          {({ setNodeRef, style, handleProps }) => (
+                            <CompanyRow
+                              company={c}
+                              isAdmin={isAdmin}
+                              selected={selectedIds.has(c.id)}
+                              onToggleSelect={() => toggleSelect(c.id)}
+                              hiddenCols={hiddenCols}
+                              canDrag={canDrag}
+                              setNodeRef={setNodeRef}
+                              dragStyle={style}
+                              handleProps={handleProps}
+                              onTogglePin={() => handleTogglePin(c)}
+                              onClick={() => navigate(`/companies/${c.id}`)}
+                              onOpenTables={() => navigate(`/companies/${c.id}/bang-du-lieu`)}
+                              onDelete={(e) => { e.stopPropagation(); setDeleteTarget(c) }}
+                            />
+                          )}
+                        </SortableItem>
+                      ))}
+                    </SortableList>
                   )}
                 </tbody>
               </table>
@@ -1071,13 +1153,16 @@ export default function Companies() {
 
 // ── CompanyRow ─────────────────────────────────────────────────────────────────
 
-function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpenTables, onDelete, hiddenCols }) {
+function CompanyRow({
+  company, isAdmin, selected, onToggleSelect, onClick, onOpenTables, onDelete, hiddenCols,
+  canDrag, setNodeRef, dragStyle, handleProps, onTogglePin,
+}) {
   const staff    = company.assignedStaff
   const getLabel = useEnumsStore((st) => st.getLabel)
   const vis      = (key) => !hiddenCols?.has(key)
 
   return (
-    <tr onClick={onClick} className={selected ? s.coRowSelected : ''}>
+    <tr ref={setNodeRef} style={dragStyle} onClick={onClick} className={selected ? s.coRowSelected : ''}>
       {isAdmin && (
         <td className={s.coCheckTd} onClick={(e) => e.stopPropagation()}>
           <input type="checkbox" checked={selected} onChange={onToggleSelect} />
@@ -1085,6 +1170,27 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpe
       )}
       <td className={s.coStickyName}>
         <div className={s.companyCell}>
+          {canDrag && (
+            <button
+              className={s.coDragHandle}
+              title="Kéo để đổi vị trí"
+              onClick={(e) => e.stopPropagation()}
+              {...handleProps}
+            >
+              <GripVertical size={14} />
+            </button>
+          )}
+          <button
+            className={s.coPinBtn}
+            title={company.isPinned ? 'Bỏ đánh dấu ưu tiên' : 'Đánh dấu ưu tiên'}
+            onClick={(e) => { e.stopPropagation(); onTogglePin() }}
+          >
+            <Star
+              size={14}
+              fill={company.isPinned ? '#f59e0b' : 'none'}
+              color={company.isPinned ? '#f59e0b' : 'var(--color-muted)'}
+            />
+          </button>
           {company.avatarUrl ? (
             <img
               src={company.avatarUrl}

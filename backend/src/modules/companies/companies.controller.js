@@ -13,7 +13,25 @@ async function listCompanies(req, res, next) {
       assignedStaffId: parseMulti(assignedStaffId),
       search,
       forceStaffId: req.user.role === 'staff' ? req.user.id : undefined,
+      // Tùy chọn thứ tự / ghim là RIÊNG của người đang đăng nhập
+      currentUserId: req.user.id,
     })
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
+// Lưu thứ tự kéo-thả của riêng user đang đăng nhập
+async function setCompanyOrder(req, res, next) {
+  try {
+    const result = await svc.setCompanyOrder(req.user.id, req.body.orderedIds)
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
+// Ghim / bỏ ghim công ty cho riêng user đang đăng nhập
+async function setCompanyPin(req, res, next) {
+  try {
+    const result = await svc.setCompanyPin(req.user.id, req.params.id, req.body.isPinned)
     res.json({ success: true, data: result })
   } catch (err) { next(err) }
 }
@@ -167,4 +185,4 @@ async function overviewCompanies(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listCompanies, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote, exportCompanies, overviewCompanies }
+module.exports = { listCompanies, setCompanyOrder, setCompanyPin, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote, exportCompanies, overviewCompanies }

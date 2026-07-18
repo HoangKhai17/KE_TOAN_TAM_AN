@@ -78,3 +78,15 @@ export async function updateNote(companyId, noteId, body) {
 export async function deleteNote(companyId, noteId) {
   await api.delete(`/companies/${companyId}/notes/${noteId}`)
 }
+
+// ── Tùy chọn danh sách riêng của mỗi user: thứ tự kéo-thả + ghim ưu tiên ──────
+
+export async function setCompanyOrder(orderedIds) {
+  const { data } = await api.patch('/companies/order', { orderedIds })
+  return data.data
+}
+
+export async function setCompanyPin(companyId, isPinned) {
+  const { data } = await api.patch(`/companies/${companyId}/pin`, { isPinned })
+  return data.data
+}
