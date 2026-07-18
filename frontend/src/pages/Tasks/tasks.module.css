@@ -2645,7 +2645,11 @@
   color: var(--color-text);
   cursor: pointer;
   transition: border-color 0.13s;
-  width: 130px;
+  /* Trước đây fix cứng 130px → cột "Hết hạn" luôn chiếm đúng bấy nhiêu, đẩy tổng
+     bề rộng bảng vượt khung và bóp cột Tiêu đề xuống còn vài ký tự mỗi dòng.
+     Nay ô ngày co theo cột, chỉ giữ mức tối thiểu đủ đọc dd/mm/yyyy. */
+  width: 100%;
+  min-width: 104px;
 }
 
 .qeDate:focus {

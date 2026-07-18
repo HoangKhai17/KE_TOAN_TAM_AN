@@ -2423,8 +2423,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 10px 14px 0;
+  /* Dãy chip trạng thái nằm cùng hàng này nên cho phép xuống hàng khi màn hẹp */
+  flex-wrap: wrap;
 }
+
+/* Tiêu đề "Bộ lọc" và nút "Đặt lại" giữ nguyên bề rộng, phần trống ở giữa
+   nhường hết cho dãy chip trạng thái */
+.cTaskFilterHead > .cTaskStatusRow { flex: 1; }
 
 .cTaskFilterTitle {
   display: flex;
@@ -2445,20 +2452,29 @@
   border: 1px solid #bfdbfe;
 }
 
+/* Trước đây là chữ trơn không viền không nền nên gần như chìm hẳn vào khung,
+   phải rê chuột vào mới biết là nút. Nay hiện rõ ở trạng thái thường bằng
+   màu chủ đạo; rê vào mới chuyển đỏ để báo đây là thao tác xoá bộ lọc. */
 .cTaskFilterReset {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-size: var(--fs-xs);
-  color: var(--color-muted);
-  background: none;
-  border: none;
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-primary-soft);
   cursor: pointer;
-  padding: 3px 6px;
+  padding: 4px 10px;
   border-radius: var(--radius-sm);
-  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.cTaskFilterReset:hover { background: #fef2f2; color: #dc2626; }
+.cTaskFilterReset:hover {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
 
 .cTaskFilterGrid {
   display: flex;
@@ -2533,14 +2549,14 @@
 .cTaskOverdueBtnActive { background: #dc2626 !important; border-color: #dc2626 !important; color: #fff !important; }
 
 /* Status chips row */
+/* Nằm chung hàng với tiêu đề "Bộ lọc" → bỏ đường kẻ và khoảng đệm của một
+   hàng riêng, nếu không sẽ lòi ra một vạch ngang giữa khung. */
 .cTaskStatusRow {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  padding: 0 14px 10px;
-  border-top: 1px solid var(--color-border-soft);
-  padding-top: 8px;
+  padding: 0;
 }
 
 .cTaskStatusChip {
@@ -3860,12 +3876,18 @@
 }
 .cTaskRow { cursor: pointer; }
 .cTaskRowOverdue { border-left: 3px solid var(--color-danger-light); }
+/* Cột Tiêu đề ăn hết chỗ trống còn lại; các cột khác co theo nội dung.
+   Chữ dài thì cắt bằng dấu … chứ KHÔNG xuống dòng và KHÔNG nong cột.
+   Giống hệt cách danh sách Công việc đang làm (.taskTitle bên tasks.module.css). */
+.cTaskTitleCell { width: 100%; }
+
 .cTaskTitle {
   font-weight: var(--fw-semibold);
   font-size: var(--fs-md);
   color: var(--color-text);
-  word-break: break-word;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cTaskTitleOverdue { color: var(--color-danger); }
 .cTaskDateCell {
@@ -3874,7 +3896,14 @@
   white-space: nowrap;
 }
 .cTaskDueOverdue { color: var(--color-danger); font-weight: var(--fw-bold); }
-.cTaskAssigneeCell { font-size: var(--fs-md); color: var(--color-text-soft); }
+/* "Giao cho": tên dài cũng nằm gọn 1 dòng, cắt bằng … thay vì xuống 2–3 dòng */
+.cTaskAssigneeCell {
+  font-size: var(--fs-md);
+  color: var(--color-text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cTaskProgress { display: flex; align-items: center; gap: 5px; }
 .cTaskProgressBar {
   flex: 1;

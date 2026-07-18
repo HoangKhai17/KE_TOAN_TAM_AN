@@ -19,6 +19,7 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
 import TaskFormModal from './TaskFormModal'
 import TaskQuickView from './TaskQuickView'
+import PeriodPicker from './PeriodPicker'
 import Modal from '../../components/ui/Modal'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import {
@@ -626,106 +627,6 @@ function MultiSelect({ placeholder, options, selected, onChange }) {
               <span>{o.label}</span>
             </label>
           ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── FilterDateField: shows dd/MM/yyyy text, hidden native picker ──────────────
-
-function FilterDateField({ value, onChange }) {
-  const ref = useRef(null)
-  return (
-    <div className={s.filterDateField} onClick={() => ref.current?.showPicker?.()}>
-      <span className={value ? s.filterDateFieldText : `${s.filterDateFieldText} ${s.filterDateFieldPlaceholder}`}>
-        {value ? fmtDate(value) : 'dd/mm/yyyy'}
-      </span>
-      <input
-        ref={ref}
-        type="date"
-        value={value}
-        onChange={onChange}
-        tabIndex={-1}
-        className={s.filterDateFieldInput}
-      />
-    </div>
-  )
-}
-
-// ── PeriodPicker: gộp Năm + Tháng + Từ ngày + Đến ngày vào 1 control "Kỳ" ─────
-// Bọc UI ngoài, vẫn map xuống đúng 4 state cũ → không đổi logic query/backend.
-
-function PeriodPicker({ year, month, from, to, availableYears, disabled, onYear, onMonth, onFrom, onTo, onPreset }) {
-  const [open, setOpen] = useState(false)
-  const wrapRef = useRef(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onOutside(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', onOutside)
-    return () => document.removeEventListener('mousedown', onOutside)
-  }, [open])
-
-  let label = 'Tất cả thời gian'
-  if (disabled)            label = "Theo “Hôm nay”"
-  else if (month && year)  label = `T${month}/${year}`
-  else if (year)           label = `Năm ${year}`
-  else if (from || to)     label = `${from ? fmtDate(from) : '…'} – ${to ? fmtDate(to) : '…'}`
-
-  const PRESETS = [['Tháng này', 'tm'], ['Tháng trước', 'lm'], ['Năm nay', 'ty'], ['Tất cả', 'all']]
-
-  return (
-    <div ref={wrapRef} style={{ position: 'relative' }}>
-      <div
-        className={`${s.cpTrigger} ${s.companyPickerTriggerCompact}`}
-        onClick={() => !disabled && setOpen((o) => !o)}
-        style={disabled ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
-        title={disabled ? '“Hôm nay” không dùng bộ lọc theo kỳ' : undefined}
-      >
-        <span className={`${s.cpTriggerText} ${(month || year || from || to) ? s.companyPickerSelected : s.companyPickerPlaceholder}`}>{label}</span>
-        <ChevronDown size={11} className={`${s.iconMuted} ${s.chevronRotate} ${open ? s.chevronOpen : ''}`} />
-      </div>
-
-      {open && !disabled && (
-        <div className={s.cpDropdown} style={{ width: 300, padding: 10 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-            {PRESETS.map(([lbl, key]) => (
-              <button
-                key={key}
-                type="button"
-                className={s.filterToggle}
-                style={{ height: 28, fontSize: 12, padding: '0 10px' }}
-                onClick={() => { onPreset(key); setOpen(false) }}
-              >
-                {lbl}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <label className={s.filterLabel}>Năm</label>
-              <select value={year} onChange={(e) => onYear(e.target.value)} className={s.filterSelect}>
-                <option value="">Tất cả năm</option>
-                {availableYears.map((y) => <option key={y} value={String(y)}>Năm {y}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <label className={s.filterLabel}>Tháng</label>
-              <select value={month} onChange={(e) => onMonth(e.target.value)} className={s.filterSelect} disabled={!year}>
-                <option value="">Cả năm</option>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={String(m)}>Tháng {m}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div style={{ fontSize: 11, color: 'var(--color-muted)', margin: '6px 0 4px' }}>Hoặc khoảng ngày tùy chọn:</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <FilterDateField value={from} onChange={onFrom} />
-            <span style={{ color: 'var(--color-muted)' }}>–</span>
-            <FilterDateField value={to} onChange={onTo} />
-          </div>
         </div>
       )}
     </div>
@@ -2020,6 +1921,7 @@ export default function Tasks() {
                 onFrom={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
                 onTo={(e) => { setDueDateTo(e.target.value); setPage(1) }}
                 onPreset={applyPeriodPreset}
+                disabledTitle="“Hôm nay” không dùng bộ lọc theo kỳ"
               />
             </div>
 

@@ -49,6 +49,33 @@ export function fmtDateTime(iso) {
   try { return format(parseISO(iso), 'HH:mm dd/MM/yyyy') } catch { return iso }
 }
 
+// ── Kỳ lọc → khoảng ngày thật ────────────────────────────────────────────────
+// Một nguồn duy nhất cho việc quy đổi "Năm/Tháng" ra ngày đầu–ngày cuối.
+// Trước đây mỗi trang tự chép một bản; lệch nhau là chỗ hiển thị nói một đằng,
+// truy vấn gửi xuống server một nẻo.
+export function yearMonthToDates(year, month) {
+  if (!year) return { from: '', to: '' }
+  if (!month) return { from: `${year}-01-01`, to: `${year}-12-31` }
+  const m = parseInt(month, 10)
+  const lastDay = new Date(parseInt(year, 10), m, 0).getDate()
+  const mm = String(m).padStart(2, '0')
+  return { from: `${year}-${mm}-01`, to: `${year}-${mm}-${String(lastDay).padStart(2, '0')}` }
+}
+
+// Khoảng ngày ĐANG THỰC SỰ áp dụng: khoảng tự chọn được ưu tiên, không có thì
+// suy ra từ Năm/Tháng. Dùng cho CẢ phần hiển thị lẫn tham số gửi lên server.
+export function resolvePeriodRange({ year, month, from, to }) {
+  if (from || to) return { from: from || '', to: to || '' }
+  return yearMonthToDates(year, month)
+}
+
+// Nhãn đọc được của khoảng ngày, vd "01/07/2026 – 31/07/2026"
+export function periodRangeLabel(range) {
+  const { from, to } = range
+  if (!from && !to) return 'Tất cả thời gian'
+  return `${from ? fmtDate(from) : '…'} – ${to ? fmtDate(to) : '…'}`
+}
+
 export function progressPct(task) {
   if (!task.checklistTotal) return null
   return Math.round((task.checklistDone / task.checklistTotal) * 100)

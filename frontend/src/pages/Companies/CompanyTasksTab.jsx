@@ -14,10 +14,13 @@ import { useToastStore } from '../../stores/toastStore'
 import * as tasksApi from '../../api/tasks'
 import TaskFormModal from '../Tasks/TaskFormModal'
 import TaskQuickView from '../Tasks/TaskQuickView'
+import PeriodPicker from '../Tasks/PeriodPicker'
 import {
+  TASK_STATUSES,
   STATUS_LABELS, STATUS_CSS, PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
   STATUS_TRANSITIONS, isTaskOverdue, fmtDate as fmtTaskDate, progressPct,
   completionKind, taskStatusLabel, canEditDueDate, calcDays, calcPlannedDays,
+  resolvePeriodRange, periodRangeLabel,
 } from '../Tasks/taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
 import ts from '../Tasks/tasks.module.css'
@@ -561,6 +564,9 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const [isOverdue, setIsOverdue]           = useState(initCt.isOverdue     ?? false)
   const [monthFilter, setMonthFilter]       = useState(initCt.monthFilter   ?? CUR_MONTH)
   const [yearFilter, setYearFilter]         = useState(initCt.yearFilter    ?? CUR_YEAR)
+  // Khoảng ngày tự chọn — có giá trị thì được ưu tiên hơn Năm/Tháng
+  const [dueDateFrom, setDueDateFrom]       = useState(initCt.dueDateFrom   ?? '')
+  const [dueDateTo, setDueDateTo]           = useState(initCt.dueDateTo     ?? '')
 
   // Bulk selection
   const [selectedIds, setSelectedIds]       = useState(new Set())
@@ -599,15 +605,15 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   }, [searchInput])
 
   // Reset to page 1 when filters or limit change
-  useEffect(() => { setPage(1) }, [statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, colFilters, sortState, limit])
+  useEffect(() => { setPage(1) }, [statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, dueDateFrom, dueDateTo, colFilters, sortState, limit])
 
   // Persist filters/view to sessionStorage (survives F5). colFilters holds Sets → skipped.
   useEffect(() => {
     saveCtState(company.id, {
       view, limit, searchInput, statusFilter, priorityFilter, sourceFilter,
-      isOverdue, monthFilter, yearFilter, sortState, hiddenCols: [...hiddenCols],
+      isOverdue, monthFilter, yearFilter, dueDateFrom, dueDateTo, sortState, hiddenCols: [...hiddenCols],
     })
-  }, [company.id, view, limit, searchInput, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, sortState, hiddenCols])
+  }, [company.id, view, limit, searchInput, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, dueDateFrom, dueDateTo, sortState, hiddenCols])
 
   useEffect(() => {
     loadEnums()
@@ -619,18 +625,17 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Khoảng ngày gửi lên server — dùng ĐÚNG hàm mà bộ lọc dùng để hiển thị,
+  // nên những gì người dùng đọc thấy luôn khớp dữ liệu thực sự được lọc.
+  const activeRange = resolvePeriodRange({
+    year: yearFilter, month: monthFilter, from: dueDateFrom, to: dueDateTo,
+  })
+
   function getDateRange() {
-    const y = yearFilter  ? parseInt(yearFilter, 10)  : null
-    const m = monthFilter ? parseInt(monthFilter, 10) : null
-    if (y && m) {
-      const lastDay = new Date(y, m, 0).getDate()
-      return {
-        dueDateFrom: `${y}-${String(m).padStart(2, '0')}-01`,
-        dueDateTo:   `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
-      }
+    return {
+      dueDateFrom: activeRange.from || undefined,
+      dueDateTo:   activeRange.to   || undefined,
     }
-    if (y) return { dueDateFrom: `${y}-01-01`, dueDateTo: `${y}-12-31` }
-    return {}
   }
 
   const load = useCallback(() => {
@@ -661,7 +666,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [company.id, search, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [company.id, search, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, dueDateFrom, dueDateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const cancel = load()
@@ -684,10 +689,30 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     }
   }
 
+  // Chọn Năm/Tháng thì bỏ khoảng ngày tự chọn — để hai cách lọc không chọi nhau
+  function clearRange() { setDueDateFrom(''); setDueDateTo('') }
+
+  // Đặt nhanh "Kỳ" — cùng bộ lựa chọn với trang Công việc để hai nơi thao tác giống nhau
+  function applyPeriodPreset(key) {
+    const now = new Date()
+    clearRange()
+    if (key === 'tm') {
+      setYearFilter(String(now.getFullYear())); setMonthFilter(String(now.getMonth() + 1))
+    } else if (key === 'lm') {
+      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      setYearFilter(String(d.getFullYear())); setMonthFilter(String(d.getMonth() + 1))
+    } else if (key === 'ty') {
+      setYearFilter(String(now.getFullYear())); setMonthFilter('')
+    } else {
+      setYearFilter(''); setMonthFilter('')
+    }
+    setPage(1)
+  }
+
   function resetFilters() {
     setSearchInput(''); setSearch('')
     setStatusFilter([]); setPriorityFilter([]); setSourceFilter([]); setIsOverdue(false)
-    setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR)
+    setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR); clearRange()
     setColFilters({}); setSortState({ col: null, dir: 'asc' })
     setPage(1)
   }
@@ -850,6 +875,14 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const sourceOptions = getOptions('task_source').length > 0
     ? getOptions('task_source')
     : [{ key: 'manual', label: 'Thủ công' }, { key: 'auto', label: 'Tự động' }]
+
+  // Danh sách trạng thái dùng CHUNG cho ô lọc "Trạng thái" và dãy chip đếm.
+  // Ưu tiên danh mục do quản trị cấu hình; không có thì lấy enum gốc trong mã.
+  const statusOptions = getOptions('task_status').length > 0
+    ? getOptions('task_status')
+    : TASK_STATUSES.map((k) => ({ key: k, label: STATUS_LABELS[k] }))
+
+  const statusChipOptions = [{ key: '', label: 'Tất cả' }, ...statusOptions]
   const allPageSelected = pageRows.length > 0 && pageRows.every((t) => selectedIds.has(t.id))
 
   function openFilter(colKey, e) {
@@ -993,12 +1026,54 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               <span className={s.cTaskFilterBadge}>{activeFilters} đang bật</span>
             )}
           </div>
+          {/* Dãy chip đếm theo trạng thái nằm NGAY TRÊN HÀNG TIÊU ĐỀ của khung
+              bộ lọc — chỗ này vốn bỏ trống, nhét vào đây thì không tốn thêm
+              hàng nào. Nhãn lấy từ danh mục trạng thái của hệ thống
+              (getOptions('task_status')), không viết cứng trong mã. */}
+          <div className={s.cTaskStatusRow}>
+            {statusChipOptions.map(({ key, label }) => {
+              const count = key === '' ? pagination.total : (statusCounts[key] ?? 0)
+              const isActive = key === '' ? statusFilter.length === 0 : statusFilter.includes(key)
+              return (
+                <button
+                  key={key}
+                  className={`${s.cTaskStatusChip} ${isActive ? `${s.cTaskStatusChipActive} ${COMPANY_TASK_STATUS_TONE[key] ?? ''}` : ''}`}
+                  onClick={() => {
+                    if (key === '') setStatusFilter([])
+                    else setStatusFilter((arr) => arr.includes(key) ? arr.filter((k) => k !== key) : [...arr, key])
+                    setPage(1)
+                  }}
+                >
+                  <span>{label}</span>
+                  <span className={`${s.cTaskStatusChipCount} ${isActive ? s.cTaskStatusChipCountActive : ''}`}>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+
           <button className={s.cTaskFilterReset} onClick={resetFilters}>
             <RotateCcw size={11} /> Đặt lại
           </button>
         </div>
 
         <div className={s.cTaskFilterGrid}>
+          {/* Kỳ — gộp Năm + Tháng vào 1 control, dùng chung với trang Công việc */}
+          <div className={s.cTaskFilterGroup}>
+            <label className={s.cTaskFilterLabel}>Kỳ</label>
+            <PeriodPicker
+              year={yearFilter}
+              month={monthFilter}
+              from={dueDateFrom}
+              to={dueDateTo}
+              availableYears={availableYears}
+              onYear={(v) => { setYearFilter(v); if (!v) setMonthFilter(''); clearRange(); setPage(1) }}
+              onMonth={(v) => { setMonthFilter(v); clearRange(); setPage(1) }}
+              onFrom={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
+              onTo={(e) => { setDueDateTo(e.target.value); setPage(1) }}
+              onPreset={applyPeriodPreset}
+            />
+          </div>
+
           {/* Tìm kiếm */}
           <div className={`${s.cTaskFilterGroup} ${s.cTaskFilterGroupGrow}`}>
             <label className={s.cTaskFilterLabel}>Từ khoá</label>
@@ -1014,36 +1089,12 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             </div>
           </div>
 
-          {/* Tháng */}
-          <div className={s.cTaskFilterGroup}>
-            <label className={s.cTaskFilterLabel}>Tháng</label>
-            <select value={monthFilter} onChange={(e) => { setMonthFilter(e.target.value); setPage(1) }} className={s.cTaskFilterSelect}>
-              <option value="">Tất cả</option>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>Tháng {m}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Năm */}
-          <div className={s.cTaskFilterGroup}>
-            <label className={s.cTaskFilterLabel}>Năm</label>
-            <select value={yearFilter} onChange={(e) => { setYearFilter(e.target.value); setPage(1) }} className={s.cTaskFilterSelect}>
-              <option value="">Tất cả</option>
-              {availableYears.map((y) => (
-                <option key={y} value={y}>Năm {y}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Trạng thái — multi-select */}
           <div className={s.cTaskFilterGroup}>
             <label className={s.cTaskFilterLabel}>Trạng thái</label>
             <TaskMultiSelect
               placeholder="Tất cả"
-              options={getOptions('task_status').length > 0
-                ? getOptions('task_status')
-                : ['pending', 'in_progress', 'on_hold', 'pending_review', 'needs_revision', 'completed'].map((k) => ({ key: k, label: STATUS_LABELS[k] }))}
+              options={statusOptions}
               selected={statusFilter}
               onChange={(v) => { setStatusFilter(v); setPage(1) }}
             />
@@ -1075,14 +1126,14 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             />
           </div>
 
-          {/* Quá hạn */}
+          {/* Trễ hạn — gọi đúng tên như trang Công việc */}
           <div className={`${s.cTaskFilterGroup} ${s.filterGroupEnd}`}>
             <label className={s.cTaskFilterLabel}>&nbsp;</label>
             <button
               className={`${s.cTaskOverdueBtn} ${isOverdue ? s.cTaskOverdueBtnActive : ''}`}
               onClick={() => { setIsOverdue((v) => !v); setPage(1) }}
             >
-              Quá hạn
+              {isOverdue ? '✓ ' : ''}Trễ hạn
             </button>
           </div>
         </div>
@@ -1090,12 +1141,20 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         {/* Active filter chips */}
         <div className={`${s.filterChips} ${s.filterChipsCompact}`}>
           {/* Period chip — always show current period */}
-          <span className={`${s.filterChip} ${(monthFilter !== CUR_MONTH || yearFilter !== CUR_YEAR) ? '' : s.filterChipMuted}`}>
-            Kỳ: {monthFilter ? `T${monthFilter}/` : ''}{yearFilter || '—'}
-            {(monthFilter !== CUR_MONTH || yearFilter !== CUR_YEAR) && (
-              <button className={s.filterChipRemove} onClick={() => { setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR); setPage(1) }}>×</button>
-            )}
-          </span>
+          {(() => {
+            const isDefault = monthFilter === CUR_MONTH && yearFilter === CUR_YEAR && !dueDateFrom && !dueDateTo
+            return (
+              <span className={`${s.filterChip} ${isDefault ? s.filterChipMuted : ''}`} title={periodRangeLabel(activeRange)}>
+                Kỳ: {periodRangeLabel(activeRange)}
+                {!isDefault && (
+                  <button
+                    className={s.filterChipRemove}
+                    onClick={() => { setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR); clearRange(); setPage(1) }}
+                  >×</button>
+                )}
+              </span>
+            )
+          })()}
           {priorityFilter.map((p) => (
             <span key={p} className={s.filterChip}>
               Ưu tiên: {getLabel('task_priority', p, PRIORITY_LABELS[p] ?? p)}
@@ -1110,7 +1169,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           ))}
           {isOverdue && (
             <span className={`${s.filterChip} ${s.filterChipDanger}`}>
-              Quá hạn
+              Trễ hạn
               <button className={s.filterChipRemove} onClick={() => { setIsOverdue(false); setPage(1) }}>×</button>
             </span>
           )}
@@ -1122,35 +1181,6 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           )}
         </div>
 
-        {/* Status count chips */}
-        <div className={s.cTaskStatusRow}>
-          {[
-            { key: '',              label: 'Tất cả',       color: 'var(--color-primary-dark)', bg: 'var(--color-primary-bg)', border: 'var(--color-status-progress-bg)' },
-            { key: 'pending',       label: STATUS_LABELS.pending,         color: 'var(--color-warning-text)', bg: 'var(--color-accent-bg-soft)', border: 'var(--color-warning-border)' },
-            { key: 'in_progress',   label: STATUS_LABELS.in_progress,     color: 'var(--color-primary-deep)', bg: 'var(--color-primary-bg)', border: 'var(--color-primary-soft)' },
-            { key: 'on_hold',       label: STATUS_LABELS.on_hold,         color: 'var(--color-muted)', bg: 'var(--color-bg-soft)', border: 'var(--color-border)' },
-            { key: 'pending_review',label: STATUS_LABELS.pending_review,  color: 'var(--color-purple-bright)', bg: 'var(--color-purple-bg-soft)', border: 'var(--color-purple-border)' },
-            { key: 'needs_revision',label: STATUS_LABELS.needs_revision,  color: 'var(--color-accent-dark)', bg: 'var(--color-warning-bg)', border: 'var(--color-warning-bg-strong)' },
-            { key: 'completed',     label: STATUS_LABELS.completed,       color: 'var(--color-success-text)', bg: 'var(--color-success-surface)', border: 'var(--color-success-border)' },
-          ].map(({ key, label }) => {
-            const count = key === '' ? pagination.total : (statusCounts[key] ?? 0)
-            const isActive = key === '' ? statusFilter.length === 0 : statusFilter.includes(key)
-            return (
-              <button
-                key={key}
-                className={`${s.cTaskStatusChip} ${isActive ? `${s.cTaskStatusChipActive} ${COMPANY_TASK_STATUS_TONE[key] ?? ''}` : ''}`}
-                onClick={() => {
-                  if (key === '') setStatusFilter([])
-                  else setStatusFilter((arr) => arr.includes(key) ? arr.filter((k) => k !== key) : [...arr, key])
-                  setPage(1)
-                }}
-              >
-                <span>{label}</span>
-                <span className={`${s.cTaskStatusChipCount} ${isActive ? s.cTaskStatusChipCountActive : ''}`}>{count}</span>
-              </button>
-            )
-          })}
-        </div>
       </div>
 
       {/* Bulk action bar (list view) */}
@@ -1262,8 +1292,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                     </td>
 
                     {/* Tiêu đề (cố định) */}
-                    <td>
-                      <div className={`${s.cTaskTitle} ${overdue ? s.cTaskTitleOverdue : ''}`}>
+                    <td className={s.cTaskTitleCell}>
+                      <div className={`${s.cTaskTitle} ${overdue ? s.cTaskTitleOverdue : ''}`} title={task.title}>
                         {task.title}
                       </div>
                     </td>
@@ -1375,7 +1405,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
 
                     {/* Giao cho */}
                     {vis('assignedToName') && (
-                      <td className={s.cTaskAssigneeCell}>
+                      <td className={s.cTaskAssigneeCell} title={task.assignedToName ?? ''}>
                         {task.assignedToName ?? '—'}
                       </td>
                     )}

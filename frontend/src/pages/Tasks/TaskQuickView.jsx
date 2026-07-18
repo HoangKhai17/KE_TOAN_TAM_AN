@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  X, ArrowUpRight, Check, Loader2, Plus, ChevronLeft, ChevronRight,
+  X, ArrowUpRight, Check, Loader2, Plus, ChevronLeft, ChevronRight, Edit2,
   Building2, User, Users, Calendar, Clock, AlertTriangle, Flag, FileText, Tag, GripVertical,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
@@ -127,6 +127,10 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   const [newItemText, setNewItemText] = useState('')
   const [addingItem,  setAddingItem]  = useState(false)
   const newItemRef = useRef(null)
+
+  // Checklist — sửa nội dung tại chỗ
+  const [editItemId,   setEditItemId]   = useState(null)
+  const [editItemText, setEditItemText] = useState('')
 
   // Description inline edit
   const [descDraft,  setDescDraft]  = useState('')
@@ -304,6 +308,21 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
       setChecklist(newCl)
       syncChecklistCounts(newCl)
     } catch { addToast('Không thể đổi cấp', 'error') }
+  }
+
+  // Sửa nội dung mục checklist ngay tại quick view — trước đây chỉ tích/thêm/xoá
+  // được, muốn sửa chữ phải mở hẳn trang chi tiết.
+  async function saveChecklistText(id) {
+    const text = editItemText.trim()
+    if (!text) return
+    try {
+      const updated = await tasksApi.updateTaskChecklistItem(taskId, id, { stepText: text })
+      const newCl = checklist.map((i) => i.id === updated.id ? updated : i)
+      setChecklist(newCl)
+      setEditItemId(null)
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật mục checklist', 'error')
+    }
   }
 
   async function reorderChecklist(newIds) {
@@ -563,23 +582,60 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                               {item.isCompleted && <Check size={10} color="#fff" />}
                             </div>
                           )}
-                          <span className={`${s.qvChecklistText} ${isParent ? s.checklistTextParent : ''} ${(!isParent && item.isCompleted) ? s.qvChecklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>
-                            {item.stepText}
-                          </span>
-                          <button
-                            className={s.qvChecklistDel}
-                            onClick={() => toggleChecklistLevel(item)}
-                            title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}
-                          >
-                            {isChild ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
-                          </button>
-                          <button
-                            className={s.qvChecklistDel}
-                            onClick={() => removeChecklistItem(item.id)}
-                            title="Xóa"
-                          >
-                            <X size={10} />
-                          </button>
+                          {editItemId === item.id ? (
+                            <>
+                              <textarea
+                                value={editItemText}
+                                onChange={(e) => setEditItemText(e.target.value)}
+                                className={s.checklistTextInput}
+                                autoFocus
+                                rows={2}
+                                style={{ resize: 'vertical', whiteSpace: 'pre-wrap' }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); saveChecklistText(item.id) }
+                                  if (e.key === 'Escape') setEditItemId(null)
+                                }}
+                              />
+                              <button className={s.qvChecklistDel} onClick={() => saveChecklistText(item.id)} title="Lưu">
+                                <Check size={11} />
+                              </button>
+                              <button className={s.qvChecklistDel} onClick={() => setEditItemId(null)} title="Huỷ">
+                                <X size={10} />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span
+                                className={`${s.qvChecklistText} ${isParent ? s.checklistTextParent : ''} ${(!isParent && item.isCompleted) ? s.qvChecklistTextDone : ''}`}
+                                style={{ whiteSpace: 'pre-wrap', cursor: 'text' }}
+                                onDoubleClick={() => { setEditItemId(item.id); setEditItemText(item.stepText) }}
+                                title="Nhấp đúp để sửa"
+                              >
+                                {item.stepText}
+                              </span>
+                              <button
+                                className={s.qvChecklistDel}
+                                onClick={() => { setEditItemId(item.id); setEditItemText(item.stepText) }}
+                                title="Sửa nội dung"
+                              >
+                                <Edit2 size={10} />
+                              </button>
+                              <button
+                                className={s.qvChecklistDel}
+                                onClick={() => toggleChecklistLevel(item)}
+                                title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}
+                              >
+                                {isChild ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
+                              </button>
+                              <button
+                                className={s.qvChecklistDel}
+                                onClick={() => removeChecklistItem(item.id)}
+                                title="Xóa"
+                              >
+                                <X size={10} />
+                              </button>
+                            </>
+                          )}
                         </div>
                         )}
                         </SortableItem>

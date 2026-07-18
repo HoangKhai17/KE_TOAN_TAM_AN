@@ -43,7 +43,12 @@
       "Bash(sed -n \"/function toLinkDto/,/^}/p\" internalDocLinks.service.js)",
       "Bash(sed -n \"/async function deleteLink/,/^}/p\" internalDocLinks.service.js)",
       "Bash(sed -n \"/const createLinkSchema/,/}\\)/p\" internalDocLinks.schema.js)",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(node -e ' *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(python -)",
+      "Bash(echo \"lint-exit=$?\")",
+      "Bash(echo \"lint=$?\")"
     ]
   }
 }
