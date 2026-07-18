@@ -582,34 +582,43 @@ export default function Companies() {
   }, [companies, colFilters, sortState, pinnedOnly])
 
   // ── Thứ tự của tôi (kéo-thả) + Ghim ưu tiên ──────────────────────────────────
+
+  // Ghi danh sách mới vào CẢ state hiển thị LẪN cache React Query.
+  // Dùng setQueryData thay vì invalidateQueries: không phát sinh request mới nên
+  // không hiện skeleton → kéo-thả mượt, không giật. Cache cũng khớp ngay nên rời
+  // trang rồi quay lại vẫn đúng thứ tự.
+  const applyCompanies = useCallback((next) => {
+    setCompanies(next)
+    queryClient.setQueryData(['companies', 'list', listParams], (old) => (
+      old ? { ...old, companies: next } : old
+    ))
+  }, [queryClient, listParams])
+
   async function handleReorder(newIds) {
-    // Cập nhật lạc quan để kéo xong thấy ngay, rồi mới gọi API
+    const prevList = companies
     const byId = new Map(companies.map((c) => [c.id, c]))
     const reordered = newIds.map((id) => byId.get(id)).filter(Boolean)
     const rest = companies.filter((c) => !newIds.includes(c.id))
-    setCompanies([...reordered, ...rest])
+    applyCompanies([...reordered, ...rest])
     try {
       await companiesApi.setCompanyOrder(newIds)
-      // BẮT BUỘC: đồng bộ lại cache React Query sau khi lưu thành công.
-      // Nếu không, rời trang rồi quay lại sẽ đọc cache CŨ (staleTime 15s) và
-      // thứ tự vừa kéo trông như bị "mất" — dù server đã lưu đúng.
-      queryClient.invalidateQueries({ queryKey: ['companies', 'list'] })
     } catch {
+      applyCompanies(prevList)   // hoàn tác đúng danh sách trước đó
       addToast('Không lưu được thứ tự, vui lòng thử lại', 'error')
-      queryClient.invalidateQueries({ queryKey: ['companies', 'list'] })
     }
   }
 
   async function handleTogglePin(company) {
     const next = !company.isPinned
-    setCompanies((prev) => prev.map((c) => c.id === company.id ? { ...c, isPinned: next } : c))
+    const prevList = companies
+    // Cập nhật cờ ghim rồi đưa nhóm đã ghim lên đầu (filter giữ nguyên thứ tự tương đối)
+    const updated = companies.map((c) => c.id === company.id ? { ...c, isPinned: next } : c)
+    applyCompanies([...updated.filter((c) => c.isPinned), ...updated.filter((c) => !c.isPinned)])
     try {
       await companiesApi.setCompanyPin(company.id, next)
-      // Đồng bộ cache như handleReorder — tránh mất trạng thái ghim khi quay lại trang
-      queryClient.invalidateQueries({ queryKey: ['companies', 'list'] })
       addToast(next ? `Đã ghim "${company.name}"` : `Đã bỏ ghim "${company.name}"`, 'success')
     } catch {
-      setCompanies((prev) => prev.map((c) => c.id === company.id ? { ...c, isPinned: !next } : c))
+      applyCompanies(prevList)
       addToast('Không cập nhật được ưu tiên', 'error')
     }
   }
@@ -679,6 +688,42 @@ export default function Companies() {
   // và không bật lọc "Ưu tiên". Nếu kéo khi đang lọc, ta chỉ đánh số lại phần đang hiện
   // → đụng độ vị trí với các công ty bị ẩn, làm loạn thứ tự.
   const canDrag = myOrderMode && colFilterCount === 0 && sortState.col === null && !pinnedOnly
+
+  // Bật "Thứ tự của tôi": nếu đang có thứ chặn kéo-thả thì BÁO RÕ và tự gỡ giúp,
+  // tránh việc người dùng bật lên rồi không hiểu sao kéo không được.
+  function handleToggleOrderMode() {
+    if (!myOrderMode) {
+      const blockers = []
+      if (pinnedOnly)         blockers.push('bộ lọc "Ưu tiên"')
+      if (colFilterCount > 0) blockers.push('bộ lọc cột')
+      if (sortState.col)      blockers.push('sắp xếp theo cột')
+      if (blockers.length > 0) {
+        addToast(
+          `Đã tắt ${blockers.join(' và ')} để bạn kéo-thả trên toàn bộ danh sách. ` +
+          'Thứ tự chỉ sắp được khi xem đầy đủ khách hàng.',
+          'info', 5000,
+        )
+        setPinnedOnly(false)
+        setColFilters({})
+        setSortState({ col: null, dir: 'asc' })
+      }
+    }
+    setMyOrderMode((v) => !v)
+    setPage(1)
+  }
+
+  // Bật lọc "Ưu tiên" trong lúc đang ở chế độ kéo-thả → báo cho biết tạm không kéo được
+  function handleTogglePinnedOnly() {
+    const next = !pinnedOnly
+    if (next && myOrderMode) {
+      addToast(
+        'Đang lọc "Ưu tiên" nên tạm thời không kéo-thả được. Tắt bộ lọc để sắp xếp lại thứ tự.',
+        'warning', 5000,
+      )
+    }
+    setPinnedOnly(next)
+    setPage(1)
+  }
   const hasColSortActive = sortState.col !== null
 
   function FilterTh({ colKey, className, children }) {
@@ -763,7 +808,7 @@ export default function Companies() {
             {/* Chỉ xem công ty đã ghim ưu tiên */}
             <button
               className={s.btnOutline}
-              onClick={() => { setPinnedOnly((v) => !v); setPage(1) }}
+              onClick={handleTogglePinnedOnly}
               title="Chỉ hiện công ty đã đánh dấu ưu tiên"
               style={pinnedOnly ? { borderColor: '#f59e0b', color: '#b45309', background: '#fffbeb' } : undefined}
             >
@@ -773,7 +818,7 @@ export default function Companies() {
             {/* Bật/tắt chế độ tự sắp thứ tự bằng kéo-thả */}
             <button
               className={s.btnOutline}
-              onClick={() => { setMyOrderMode((v) => !v); setPage(1) }}
+              onClick={handleToggleOrderMode}
               title="Tự sắp xếp thứ tự danh sách bằng cách kéo-thả (thứ tự riêng của bạn)"
               style={myOrderMode ? { borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'var(--color-primary-bg)' } : undefined}
             >
