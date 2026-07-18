@@ -4,7 +4,7 @@ import { invalidateRefCompanies, useStaffOptions } from '../../hooks/useReferenc
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2,
-  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X, Filter, Download, LayoutGrid,
+  Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X, Filter, Download, LayoutGrid, Table2,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -873,6 +873,7 @@ export default function Companies() {
                         selected={selectedIds.has(c.id)}
                         onToggleSelect={() => toggleSelect(c.id)}
                         onClick={() => navigate(`/companies/${c.id}`)}
+                        onOpenTables={() => navigate(`/companies/${c.id}/bang-du-lieu`)}
                         onDelete={(e) => { e.stopPropagation(); setDeleteTarget(c) }}
                       />
                     ))
@@ -982,7 +983,7 @@ export default function Companies() {
 
 // ── CompanyRow ─────────────────────────────────────────────────────────────────
 
-function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onDelete }) {
+function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpenTables, onDelete }) {
   const staff    = company.assignedStaff
   const getLabel = useEnumsStore((st) => st.getLabel)
 
@@ -1079,9 +1080,16 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onDel
             </button>
           )}
           <button
+            className={s.rowActionBtn}
+            onClick={(e) => { e.stopPropagation(); onOpenTables() }}
+            title="Mở Bảng dữ liệu của khách hàng này"
+          >
+            <Table2 size={14} />
+          </button>
+          <button
             className={`${s.rowActionBtn} ${s.rowActionView}`}
             onClick={(e) => { e.stopPropagation(); onClick() }}
-            title="Xem chi tiết"
+            title="Xem chi tiết (Hồ sơ)"
           >
             <Eye size={14} />
           </button>

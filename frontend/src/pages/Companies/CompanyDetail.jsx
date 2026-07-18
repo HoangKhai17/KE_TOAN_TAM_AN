@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { invalidateRefCompanies } from '../../hooks/useReferenceData'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Building2, Pencil, AlertTriangle, ChevronRight,
   Hash, Calendar, Briefcase,
@@ -90,17 +90,45 @@ const COMPANY_TASK_STATUS_TONE = {
   completed: s.cTaskStatusCompleted,
 }
 
-// ── sessionStorage: remember the active tab per company (survives F5) ───────────
+// ── 2 chế độ của trang chi tiết KH ─────────────────────────────────────────────
+// /companies/:id/ho-so/:tabId        → tab nghiệp vụ (TABS)
+// /companies/:id/bang-du-lieu/:defId → bảng tùy biến
+const MODE_PROFILE = 'ho-so'
+const MODE_TABLES  = 'bang-du-lieu'
+
+// Nút chuyển chế độ (segmented) — style nội tuyến để không phải sửa CSS module
+function modeBtnStyle(active) {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    height: 34, padding: '0 14px', borderRadius: 8, cursor: 'pointer',
+    fontSize: 13, fontWeight: 600, transition: 'all .15s',
+    border: `1px solid ${active ? 'var(--color-primary)' : 'var(--color-border)'}`,
+    background: active ? 'var(--color-primary)' : '#fff',
+    color: active ? '#fff' : 'var(--color-text)',
+  }
+}
+
+// ── sessionStorage: nhớ vị trí gần nhất theo công ty (để route trần điều hướng lại) ──
 const ACTIVE_TAB_KEY = (cid) => `company_detail_tab:${cid}`
-function loadActiveTab(cid) {
-  try { return sessionStorage.getItem(ACTIVE_TAB_KEY(cid)) || 'overview' }
-  catch { return 'overview' }
+
+// Trả về hậu tố đường dẫn dạng "ho-so/tasks" | "bang-du-lieu/<defId>".
+// Tương thích ngược giá trị cũ đã lưu ('overview', 'ct_<id>').
+function loadActivePath(cid) {
+  try {
+    const v = sessionStorage.getItem(ACTIVE_TAB_KEY(cid))
+    if (!v) return `${MODE_PROFILE}/overview`
+    if (v.includes('/')) return v                                  // định dạng mới
+    if (v.startsWith('ct_')) return `${MODE_TABLES}/${v.slice(3)}`  // cũ: bảng tùy biến
+    return `${MODE_PROFILE}/${v}`                                   // cũ: tab nghiệp vụ
+  } catch { return `${MODE_PROFILE}/overview` }
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function CompanyDetail() {
-  const { id }      = useParams()
+  const { id, mode, tabId } = useParams()
+  const navigate    = useNavigate()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((st) => st.user)
   const isAdmin     = currentUser?.role === 'admin'
@@ -108,8 +136,39 @@ export default function CompanyDetail() {
   const getLabel  = useEnumsStore((st) => st.getLabel)
   const loadEnums = useEnumsStore((st) => st.load)
 
-  const [activeTab, setActiveTab] = useState(() => loadActiveTab(id))
   const [customDefs, setCustomDefs] = useState([])
+  const isTablesMode = mode === MODE_TABLES
+
+  // activeTab suy ra từ URL (URL là nguồn sự thật, không dùng state nữa)
+  const activeTab = useMemo(() => {
+    if (isTablesMode) {
+      if (tabId) return `ct_${tabId}`
+      return customDefs.length ? `ct_${customDefs[0].id}` : ''
+    }
+    if (tabId && TABS.some((t) => t.id === tabId)) return tabId
+    return 'overview'
+  }, [isTablesMode, tabId, customDefs])
+
+  // Điều hướng tab (thay cho setActiveTab cũ)
+  const goProfileTab = useCallback((tid) => navigate(`/companies/${id}/${MODE_PROFILE}/${tid}`), [navigate, id])
+  const goTableTab   = useCallback((defId) => navigate(`/companies/${id}/${MODE_TABLES}/${defId}`), [navigate, id])
+
+  // Nhớ tab cuối của TỪNG chế độ → chuyển qua lại không mất chỗ đang xem
+  const lastProfileTabRef = useRef('overview')
+  const lastTableIdRef    = useRef(null)
+  useEffect(() => {
+    if (!mode) return
+    if (isTablesMode) { if (tabId) lastTableIdRef.current = tabId }
+    else if (activeTab) lastProfileTabRef.current = activeTab
+  }, [mode, isTablesMode, tabId, activeTab])
+
+  const goProfileMode = useCallback(() => {
+    navigate(`/companies/${id}/${MODE_PROFILE}/${lastProfileTabRef.current || 'overview'}`)
+  }, [navigate, id])
+  const goTablesMode = useCallback(() => {
+    const target = lastTableIdRef.current ?? customDefs[0]?.id
+    navigate(target ? `/companies/${id}/${MODE_TABLES}/${target}` : `/companies/${id}/${MODE_TABLES}`)
+  }, [navigate, id, customDefs])
 
   // ── Kéo ngang dải tab bằng chuột (desktop không có scroll ngang) ──────────────
   const tabBarRef = useRef(null)
@@ -133,10 +192,33 @@ export default function CompanyDetail() {
     if (dragRef.current.moved) { e.preventDefault(); e.stopPropagation(); dragRef.current.moved = false }
   }
 
-  // Persist the active tab so a page reload (F5) returns to the same tab
+  // Route trần /companies/:id → chuyển hướng về vị trí dùng gần nhất.
+  // Đồng thời hỗ trợ link cũ dạng /companies/:id?tab=client-requests (trước đây không chạy).
   useEffect(() => {
-    try { sessionStorage.setItem(ACTIVE_TAB_KEY(id), activeTab) } catch { /* ignore */ }
-  }, [activeTab, id])
+    if (mode) return
+    const legacyTab = searchParams.get('tab')
+    if (legacyTab && TABS.some((t) => t.id === legacyTab)) {
+      navigate(`/companies/${id}/${MODE_PROFILE}/${legacyTab}`, { replace: true })
+      return
+    }
+    navigate(`/companies/${id}/${loadActivePath(id)}`, { replace: true })
+  }, [mode, id, searchParams, navigate])
+
+  // Vào chế độ bảng nhưng chưa chỉ định bảng → chọn bảng đầu tiên cho URL rõ ràng
+  useEffect(() => {
+    if (isTablesMode && !tabId && customDefs.length) {
+      navigate(`/companies/${id}/${MODE_TABLES}/${customDefs[0].id}`, { replace: true })
+    }
+  }, [isTablesMode, tabId, customDefs, id, navigate])
+
+  // Nhớ vị trí gần nhất (để lần sau vào /companies/:id quay lại đúng chỗ)
+  useEffect(() => {
+    if (!mode) return
+    const suffix = isTablesMode
+      ? `${MODE_TABLES}/${tabId ?? customDefs[0]?.id ?? ''}`
+      : `${MODE_PROFILE}/${activeTab}`
+    try { sessionStorage.setItem(ACTIVE_TAB_KEY(id), suffix) } catch { /* ignore */ }
+  }, [mode, isTablesMode, tabId, activeTab, customDefs, id])
 
   const refetchCustomDefs = useCallback(() => {
     companyTablesApi.listDefs({ activeOnly: true }).then(setCustomDefs).catch(() => {})
@@ -302,7 +384,9 @@ export default function CompanyDetail() {
           </div>
         </div>
 
-        <div className={s.heroRight}>
+        <div className={s.heroRight} style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+          {/* Hàng 1: chỉ số + hành động */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
           <div className={s.heroMetricGroup}>
             <div className={s.heroMetric}>
               <div className={`${s.heroMetricValue} ${s.heroMetricValueBlue}`}>
@@ -341,10 +425,28 @@ export default function CompanyDetail() {
               )}
             </div>
           )}
+          </div>
+
+          {/* Hàng 2: chuyển chế độ Hồ sơ ↔ Bảng dữ liệu (cùng canh phải với hàng 1) */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <button onClick={goProfileMode} style={modeBtnStyle(!isTablesMode)}>
+              <Building2 size={13} /> Hồ sơ
+            </button>
+            <button onClick={goTablesMode} style={modeBtnStyle(isTablesMode)}>
+              <Table2 size={13} /> Bảng dữ liệu
+              {customDefs.length > 0 && (
+                <span style={{
+                  marginLeft: 2, padding: '0 6px', borderRadius: 9, fontSize: 11, fontWeight: 700,
+                  background: isTablesMode ? 'rgba(255,255,255,0.25)' : 'var(--color-primary-bg)',
+                  color: isTablesMode ? '#fff' : 'var(--color-primary-dark)',
+                }}>{customDefs.length}</span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Tab bar — cuộn ngang: kéo chuột trên dải tab hoặc kéo thanh cuộn */}
+      {/* Tab bar của chế độ hiện tại — cuộn ngang: kéo chuột hoặc kéo thanh cuộn */}
       <div
         className={s.tabBar}
         ref={tabBarRef}
@@ -354,11 +456,11 @@ export default function CompanyDetail() {
         onMouseLeave={endTabBarDrag}
         onClickCapture={onTabBarClickCapture}
       >
-        {TABS.map(({ id: tid, label, icon: Icon }) => (
+        {!isTablesMode && TABS.map(({ id: tid, label, icon: Icon }) => (
           <button
             key={tid}
             className={`${s.tabBtn} ${activeTab === tid ? s.tabBtnActive : ''}`}
-            onClick={() => setActiveTab(tid)}
+            onClick={() => goProfileTab(tid)}
           >
             <Icon size={13} />
             {label}
@@ -370,16 +472,21 @@ export default function CompanyDetail() {
             )}
           </button>
         ))}
-        {customDefs.map((d) => (
+        {isTablesMode && customDefs.map((d) => (
           <button
             key={`ct_${d.id}`}
             className={`${s.tabBtn} ${activeTab === `ct_${d.id}` ? s.tabBtnActive : ''}`}
-            onClick={() => setActiveTab(`ct_${d.id}`)}
+            onClick={() => goTableTab(d.id)}
           >
             <Table2 size={13} />
             {d.name}
           </button>
         ))}
+        {isTablesMode && customDefs.length === 0 && (
+          <span style={{ padding: '8px 4px', fontSize: 13, color: 'var(--color-muted)' }}>
+            Chưa có bảng tùy biến nào. Quản trị viên có thể tạo trong Cài đặt.
+          </span>
+        )}
       </div>
 
       {/* Tab content */}

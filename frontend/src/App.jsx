@@ -133,8 +133,18 @@ function AppRoutes() {
         path="/companies/overview"
         element={<ProtectedRoute><CompanyOverview /></ProtectedRoute>}
       />
+      {/* Chi tiết KH — 2 chế độ: /ho-so (tab nghiệp vụ) và /bang-du-lieu (bảng tùy biến).
+          Route trần /companies/:id sẽ tự chuyển hướng về tab dùng gần nhất. */}
       <Route
         path="/companies/:id"
+        element={<ProtectedRoute><CompanyDetail /></ProtectedRoute>}
+      />
+      <Route
+        path="/companies/:id/:mode"
+        element={<ProtectedRoute><CompanyDetail /></ProtectedRoute>}
+      />
+      <Route
+        path="/companies/:id/:mode/:tabId"
         element={<ProtectedRoute><CompanyDetail /></ProtectedRoute>}
       />
 
