@@ -188,8 +188,8 @@ export default function ProcessesTab({ company }) {
               placeholder="VD: Kê khai thuế GTGT hàng tháng"
               className={s.formInput}
             />
-            <div className={s.formActions}>
-              <button className={s.btnSecondary} onClick={() => setShowCreate(false)} disabled={busy}>Huỷ</button>
+            <div className={s.modalActions}>
+              <button className={s.btnOutline} onClick={() => setShowCreate(false)} disabled={busy}>Huỷ</button>
               <button className={s.btnPrimary} onClick={handleCreate} disabled={busy || !newName.trim()}>Tạo</button>
             </div>
           </div>
@@ -206,8 +206,8 @@ export default function ProcessesTab({ company }) {
               onKeyDown={(e) => { if (e.key === 'Enter') handleRename() }}
               className={s.formInput}
             />
-            <div className={s.formActions}>
-              <button className={s.btnSecondary} onClick={() => setRenameTarget(null)} disabled={busy}>Huỷ</button>
+            <div className={s.modalActions}>
+              <button className={s.btnOutline} onClick={() => setRenameTarget(null)} disabled={busy}>Huỷ</button>
               <button className={s.btnPrimary} onClick={handleRename} disabled={busy}>Lưu</button>
             </div>
           </div>
@@ -219,8 +219,8 @@ export default function ProcessesTab({ company }) {
         <Modal title="Xoá quy trình" onClose={() => setDeleteTarget(null)}>
           <div className={s.modalStack}>
             <p>Xoá quy trình <strong>{deleteTarget.name}</strong>? Toàn bộ các bước và mũi tên trong sơ đồ sẽ mất.</p>
-            <div className={s.formActions}>
-              <button className={s.btnSecondary} onClick={() => setDeleteTarget(null)} disabled={busy}>Huỷ</button>
+            <div className={s.modalActions}>
+              <button className={s.btnOutline} onClick={() => setDeleteTarget(null)} disabled={busy}>Huỷ</button>
               <button className={s.btnDanger} onClick={handleDelete} disabled={busy}>Xoá</button>
             </div>
           </div>

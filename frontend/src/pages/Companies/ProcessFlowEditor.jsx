@@ -1,13 +1,19 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import {
-  ReactFlow, Background, Controls, MiniMap, Panel,
+  ReactFlow, Background, BackgroundVariant, Controls, MiniMap, Panel,
   useNodesState, useEdgesState, addEdge, MarkerType, ReactFlowProvider, useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import {
   Save, X, Undo2, Copy, ClipboardPaste, Maximize2, Minimize2, ArrowLeftRight,
-  Hand, MousePointer2, Focus,
+  Hand, MousePointer2, Focus, Grid3x3,
 } from 'lucide-react'
+
+// Bước lưới: hình sẽ "hít" vào bội số của giá trị này → các hình tự căn đều nhau
+const GRID = 16
+
+// Thang cỡ chữ — lên tới 100px để làm tiêu đề lớn trên sơ đồ
+const FONT_SIZES = [11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 72, 84, 100]
 import { useToastStore } from '../../stores/toastStore'
 import * as api from '../../api/companyProcesses'
 import { nodeTypes, SHAPES, LINE_SHAPES } from './ProcessNodes'
@@ -105,6 +111,13 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
   // Bật "Chọn" khi cần khoanh vùng nhiều hình — hoặc chỉ cần giữ Shift là khoanh được.
   const [selectMode, setSelectMode] = useState(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
+  // Lưới căn hình — nhớ lựa chọn giữa các lần mở
+  const [showGrid, setShowGrid] = useState(() => {
+    try { return sessionStorage.getItem('process_grid') !== 'off' } catch { return true }
+  })
+  useEffect(() => {
+    try { sessionStorage.setItem('process_grid', showGrid ? 'on' : 'off') } catch { /* ignore */ }
+  }, [showGrid])
   const { fitView } = useReactFlow()
 
   // Giữ SPACE = tạm chuyển sang di chuyển canvas (chuẩn như Figma/draw.io)
@@ -152,15 +165,55 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
     historyRef.current = []
   }, [process.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const snapshot = useCallback(() => {
-    historyRef.current.push({ nodes: structuredClone(nodes), edges: structuredClone(edges) })
-    if (historyRef.current.length > 40) historyRef.current.shift()
-  }, [nodes, edges])
+  // ── Lịch sử hoàn tác: GHI TỰ ĐỘNG mọi thay đổi ─────────────────────────────
+  // Trước đây chỉ ghi ở 3 chỗ (thêm hình / nối / dán) nên di chuyển, kéo giãn,
+  // xoá bằng Delete, sửa chữ, đổi màu… đều không hoàn tác được.
+  // Nay theo dõi luôn nodes+edges: thao tác lắng xuống 350ms thì chốt 1 mốc.
+  const baselineRef  = useRef(null)   // trạng thái ổn định gần nhất
+  const restoringRef = useRef(false)  // đang khôi phục → không ghi thành mốc mới
+
+  // Chỉ giữ các trường cần thiết — KHÔNG structuredClone cả node vì bên trong
+  // React Flow có dữ liệu nội bộ, clone dễ lỗi.
+  const cloneGraph = useCallback((nds, eds) => ({
+    nodes: nds.map((n) => ({
+      id: n.id, type: n.type,
+      position: { ...n.position },
+      width: n.width, height: n.height,
+      data: JSON.parse(JSON.stringify({ ...n.data })),
+    })),
+    edges: eds.map((e) => ({ ...e, data: { ...(e.data || {}) } })),
+  }), [])
+
+  useEffect(() => {
+    if (editing) { baselineRef.current = cloneGraph(nodes, edges); historyRef.current = [] }
+  }, [editing]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!editing) return undefined
+    if (restoringRef.current) {
+      restoringRef.current = false
+      baselineRef.current = cloneGraph(nodes, edges)
+      return undefined
+    }
+    const t = setTimeout(() => {
+      const prev = baselineRef.current
+      const cur  = cloneGraph(nodes, edges)
+      if (prev && JSON.stringify(prev) !== JSON.stringify(cur)) {
+        historyRef.current.push(prev)
+        if (historyRef.current.length > 50) historyRef.current.shift()
+        baselineRef.current = cur
+      }
+    }, 350)
+    return () => clearTimeout(t)
+  }, [nodes, edges, editing, cloneGraph])
 
   const undo = useCallback(() => {
     const prev = historyRef.current.pop()
     if (!prev) { addToast('Không còn thao tác để hoàn tác', 'info'); return }
-    setNodes(prev.nodes); setEdges(prev.edges); setDirty(true)
+    restoringRef.current = true
+    setNodes(prev.nodes.map((n) => ({ ...n, data: { ...n.data, _editable: true } })))
+    setEdges(prev.edges)
+    setDirty(true)
   }, [setNodes, setEdges, addToast])
 
   const onConnect = useCallback((params) => {
@@ -210,20 +263,41 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
     addToast(`Đã dán ${copies.length} hình`, 'success')
   }, [setNodes, snapshot, addToast])
 
-  // ── Phím tắt: Ctrl+C / Ctrl+V / Ctrl+Z / Esc thoát toàn màn hình ────────────
+  // Bật/tắt đậm–nghiêng cho MỌI hình đang chọn (đường kẻ/mũi tên không có chữ nên bỏ qua)
+  const toggleTextStyle = useCallback((key) => {
+    const sel = nodes.filter((n) => n.selected && !LINE_SHAPES.has(n.type))
+    if (!sel.length) return
+    // Nếu tất cả đang bật thì tắt hết, ngược lại bật hết
+    const allOn = sel.every((n) => n.data.style?.[key])
+    setNodes((nds) => nds.map((n) => (n.selected && !LINE_SHAPES.has(n.type))
+      ? { ...n, data: { ...n.data, style: { ...(n.data.style || {}), [key]: !allOn } } }
+      : n))
+    setDirty(true)
+  }, [nodes, setNodes])
+
+  // ── Phím tắt: Ctrl+B/I/C/V/Z ───────────────────────────────────────────────
   useEffect(() => {
     if (!editing) return
     function onKey(e) {
-      const typing = ['INPUT', 'TEXTAREA'].includes(e.target?.tagName)
-      if (typing) return
       const ctrl = e.ctrlKey || e.metaKey
-      if (ctrl && e.key.toLowerCase() === 'c') { e.preventDefault(); copySelection() }
-      else if (ctrl && e.key.toLowerCase() === 'v') { e.preventDefault(); pasteClipboard() }
-      else if (ctrl && e.key.toLowerCase() === 'z') { e.preventDefault(); undo() }
+      const k = e.key.toLowerCase()
+
+      // Ctrl+B / Ctrl+I áp cho cả hình đang chọn — CHO PHÉP cả khi đang gõ chữ trong hình,
+      // vì đậm/nghiêng áp cho toàn bộ hình chứ không riêng đoạn chữ bôi đen.
+      if (ctrl && (k === 'b' || k === 'i')) {
+        e.preventDefault()
+        toggleTextStyle(k === 'b' ? 'bold' : 'italic')
+        return
+      }
+
+      if (['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) return
+      if (ctrl && k === 'c') { e.preventDefault(); copySelection() }
+      else if (ctrl && k === 'v') { e.preventDefault(); pasteClipboard() }
+      else if (ctrl && k === 'z') { e.preventDefault(); undo() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [editing, copySelection, pasteClipboard, undo])
+  }, [editing, copySelection, pasteClipboard, undo, toggleTextStyle])
 
   useEffect(() => {
     function onEsc(e) { if (e.key === 'Escape' && full) setFull(false) }
@@ -323,11 +397,23 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
         zoomOnDoubleClick={false}
         minZoom={0.15}
         maxZoom={3}
-        style={{ cursor: panWithLeftDrag ? 'grab' : 'default' }}
+        /* Hít vào lưới: khi kéo, hình tự bám vào mốc 16px → các hình thẳng hàng, đều nhau */
+        snapToGrid={editing && showGrid}
+        snapGrid={[GRID, GRID]}
+        style={{ cursor: panWithLeftDrag ? 'grab' : 'default', background: '#ffffff' }}
         fitView
         proOptions={{ hideAttribution: true }}
       >
-        <Background gap={16} color="#e2e8f0" />
+        {/* Chế độ XEM: nền trắng trơn cho dễ đọc.
+            Chế độ SỬA: lưới ô vuông để căn hình cho đều (kết hợp snapToGrid bên dưới). */}
+        {editing && showGrid ? (
+          <>
+            <Background id="g-nho" variant={BackgroundVariant.Lines} gap={GRID} color="#eef2f7" />
+            <Background id="g-lon" variant={BackgroundVariant.Lines} gap={GRID * 5} color="#dbe3ec" />
+          </>
+        ) : (
+          <Background color="#ffffff" style={{ background: '#ffffff' }} />
+        )}
         <Controls showInteractive={false} />
         {/* Bản đồ thu nhỏ — kéo/bấm vào đây để nhảy nhanh tới vùng cần sửa */}
         <MiniMap pannable zoomable style={{ height: full ? 120 : 90 }} />
@@ -348,6 +434,12 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
                 style={btn({ width: 32, justifyContent: 'center', height: 28,
                   ...(selectMode ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-primary-dark)' } : {}) })}
               ><MousePointer2 size={14} /></button>
+              <button
+                onClick={() => setShowGrid((v) => !v)}
+                title={showGrid ? 'Tắt lưới (hình di chuyển tự do)' : 'Bật lưới — hình tự căn thẳng hàng, đều nhau'}
+                style={btn({ width: 32, justifyContent: 'center', height: 28,
+                  ...(showGrid ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-primary-dark)' } : {}) })}
+              ><Grid3x3 size={14} /></button>
             </>
           )}
           <button onClick={() => fitView({ duration: 400, padding: 0.15 })}
@@ -419,12 +511,12 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
                   <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
                     <select value={st.fontSize || 13} onChange={(e) => set({ fontSize: Number(e.target.value) })}
                       style={{ flex: 1, height: 26, fontSize: 12, border: '1px solid var(--color-border)', borderRadius: 5 }}>
-                      {[11, 12, 13, 15, 18, 22, 28].map((s) => <option key={s} value={s}>{s}px</option>)}
+                      {FONT_SIZES.map((s) => <option key={s} value={s}>{s}px</option>)}
                     </select>
-                    <button onClick={() => set({ bold: !st.bold })}
+                    <button onClick={() => set({ bold: !st.bold })} title="In đậm (Ctrl+B)"
                       style={btn({ width: 30, justifyContent: 'center', fontWeight: 800, height: 26,
                         ...(st.bold ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)' } : {}) })}>B</button>
-                    <button onClick={() => set({ italic: !st.italic })}
+                    <button onClick={() => set({ italic: !st.italic })} title="In nghiêng (Ctrl+I)"
                       style={btn({ width: 30, justifyContent: 'center', fontStyle: 'italic', height: 26,
                         ...(st.italic ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)' } : {}) })}>I</button>
                   </div>
@@ -530,7 +622,7 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
           {editing
             ? (spaceHeld
                 ? '✋ Đang giữ Space — kéo để di chuyển canvas'
-                : 'Kéo nền = di chuyển · Shift+kéo = khoanh chọn · Space = tạm di chuyển · nhấp đúp sửa chữ · Delete xoá · Ctrl+C/V · Ctrl+Z')
+                : 'Kéo nền = di chuyển · Shift+kéo = khoanh chọn · Space = tạm di chuyển · nhấp đúp sửa chữ · Delete xoá · Ctrl+C/V · Ctrl+Z · Ctrl+B/I đậm-nghiêng')
             : 'Kéo nền để di chuyển · cuộn để phóng to'}
         </Panel>
       </ReactFlow>
