@@ -6,7 +6,7 @@ import {
   Building2, Pencil, AlertTriangle, ChevronRight,
   Hash, Calendar, Briefcase, Loader2, Trash2, Table2,
   // Icon của TABS (dải tab Hồ sơ)
-  BarChart2, ListTodo, ClipboardList, CalendarDays, Lock, FileText, StickyNote,
+  BarChart2, ListTodo, ClipboardList, CalendarDays, Lock, FileText, StickyNote, Workflow,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -22,6 +22,7 @@ import ClientRequestsTab from './ClientRequestsTab'
 import CustomTableTab from './CustomTableTab'
 import OverviewTab from './CompanyOverviewTab'
 import CompanyTasksTab from './CompanyTasksTab'
+import ProcessesTab from './ProcessesTab'
 import * as companyTablesApi from '../../api/companyTables'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -34,6 +35,7 @@ const TABS = [
   { id: 'overview',          label: 'Tổng quan',         icon: BarChart2 },
   { id: 'tasks',             label: 'Công việc',          icon: ListTodo },
   { id: 'client-requests',   label: 'Yêu cầu KH',        icon: ClipboardList },
+  { id: 'processes',         label: 'Quy trình',          icon: Workflow },
   { id: 'schedules',         label: 'Lịch định kỳ',       icon: CalendarDays },
   { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
   { id: 'documents',         label: 'Tài liệu',           icon: FileText },
@@ -459,6 +461,9 @@ export default function CompanyDetail() {
       )}
       {activeTab === 'client-requests' && (
         <ClientRequestsTab company={company} />
+      )}
+      {activeTab === 'processes' && (
+        <ProcessesTab company={company} />
       )}
       {activeTab === 'schedules' && (
         <SchedulesTab company={company} isAdmin={isAdmin} />

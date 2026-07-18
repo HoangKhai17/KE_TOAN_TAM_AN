@@ -170,6 +170,7 @@ function createApp() {
   app.use('/api/companies',  require('./modules/companies/companies.router'))
   app.use('/api/task-types', require('./modules/task-types/task-types.router'))
   app.use('/api/companies/:companyId/schedules',    require('./modules/schedules/company-schedules.router'))
+  app.use('/api/companies/:companyId/processes',    require('./modules/company-processes/companyProcesses.router'))
   app.use('/api/schedules',  require('./modules/schedules/schedules.router'))
   app.use('/api/tasks',          require('./modules/tasks/tasks.router'))
   app.use('/api/system-configs', require('./modules/system-configs/system-configs.router'))

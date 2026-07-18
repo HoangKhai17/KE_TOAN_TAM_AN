@@ -30,10 +30,15 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('/react/') || id.includes('/react-dom/')) return 'vendor'
-            if (id.includes('/react-router-dom/')) return 'router'
-            if (id.includes('/@tanstack/react-query/')) return 'query'
-            if (id.includes('/recharts/')) return 'charts'
+            // Dùng regex neo vào 'node_modules/<tên gói>/' — KHÔNG dùng includes('/react/')
+            // vì sẽ khớp nhầm cả '@xyflow/react', kéo thư viện vẽ sơ đồ vào chunk vendor
+            // (vendor tải ngay từ đầu) → mất tác dụng lazy load.
+            if (/node_modules\/(react|react-dom)\//.test(id)) return 'vendor'
+            if (/node_modules\/react-router-dom\//.test(id)) return 'router'
+            if (/node_modules\/@tanstack\/react-query\//.test(id)) return 'query'
+            if (/node_modules\/recharts\//.test(id)) return 'charts'
+            // @xyflow/react cố tình KHÔNG gán chunk → Rollup tự gộp vào chunk
+            // động của ProcessFlowEditor, chỉ tải khi mở tab Quy trình.
           }
         },
       },
