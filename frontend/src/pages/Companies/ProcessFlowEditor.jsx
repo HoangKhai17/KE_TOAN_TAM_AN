@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   ReactFlow, Background, Controls, MiniMap, Panel,
-  useNodesState, useEdgesState, addEdge, MarkerType, ReactFlowProvider,
+  useNodesState, useEdgesState, addEdge, MarkerType, ReactFlowProvider, useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import {
   Save, X, Undo2, Copy, ClipboardPaste, Maximize2, Minimize2, ArrowLeftRight,
+  Hand, MousePointer2, Focus,
 } from 'lucide-react'
 import { useToastStore } from '../../stores/toastStore'
 import * as api from '../../api/companyProcesses'
@@ -100,6 +101,28 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
   const [saving, setSaving] = useState(false)
   const [full, setFull]     = useState(false)
   const [selEdge, setSelEdge] = useState(null)
+  // MẶC ĐỊNH là di chuyển canvas bằng chuột trái (dễ dùng nhất).
+  // Bật "Chọn" khi cần khoanh vùng nhiều hình — hoặc chỉ cần giữ Shift là khoanh được.
+  const [selectMode, setSelectMode] = useState(false)
+  const [spaceHeld, setSpaceHeld] = useState(false)
+  const { fitView } = useReactFlow()
+
+  // Giữ SPACE = tạm chuyển sang di chuyển canvas (chuẩn như Figma/draw.io)
+  useEffect(() => {
+    function down(e) {
+      if (e.code !== 'Space') return
+      if (['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) return
+      e.preventDefault()      // chặn Space cuộn trang
+      setSpaceHeld(true)
+    }
+    function up(e) { if (e.code === 'Space') setSpaceHeld(false) }
+    document.addEventListener('keydown', down)
+    document.addEventListener('keyup', up)
+    return () => { document.removeEventListener('keydown', down); document.removeEventListener('keyup', up) }
+  }, [])
+
+  // Kéo chuột trái để di chuyển: luôn bật, TRỪ khi đang ở chế độ Chọn (và không giữ Space)
+  const panWithLeftDrag = !editing || !selectMode || spaceHeld
 
   // Hình đang được chọn (để chỉnh định dạng: màu, cỡ chữ, xoay…)
   const selNode = nodes.find((n) => n.selected) || null
@@ -288,15 +311,49 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
         nodesConnectable={editing}
         elementsSelectable={editing}
         deleteKeyCode={editing ? ['Delete', 'Backspace'] : null}
-        multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
-        selectionOnDrag={editing}
-        panOnDrag={editing ? [1, 2] : true}
+        /* ĐIỀU HƯỚNG CANVAS — trước đây chỉ kéo được bằng chuột giữa/phải nên rất khó dùng.
+           Nay: kéo chuột TRÁI trên nền = di chuyển; giữ Shift + kéo = khoanh chọn nhiều hình;
+           giữ Space = tạm thời di chuyển; luôn kéo được bằng chuột giữa/phải. */
+        panOnDrag={panWithLeftDrag ? [0, 1, 2] : [1, 2]}
+        selectionOnDrag={editing && !panWithLeftDrag}
+        selectionKeyCode={['Shift']}
+        multiSelectionKeyCode={['Control', 'Meta']}
+        panOnScroll={false}
+        zoomOnScroll
+        zoomOnDoubleClick={false}
+        minZoom={0.15}
+        maxZoom={3}
+        style={{ cursor: panWithLeftDrag ? 'grab' : 'default' }}
         fitView
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={16} color="#e2e8f0" />
         <Controls showInteractive={false} />
-        {!full && <MiniMap pannable zoomable style={{ height: 80 }} />}
+        {/* Bản đồ thu nhỏ — kéo/bấm vào đây để nhảy nhanh tới vùng cần sửa */}
+        <MiniMap pannable zoomable style={{ height: full ? 120 : 90 }} />
+
+        {/* Công cụ điều hướng: Bàn tay ↔ Chọn, và Vừa khung */}
+        <Panel position="bottom-left" style={{ display: 'flex', gap: 6, marginLeft: 44 }}>
+          {editing && (
+            <>
+              <button
+                onClick={() => setSelectMode(false)}
+                title="Bàn tay — kéo chuột trái để di chuyển canvas (mặc định). Hoặc giữ Space bất cứ lúc nào."
+                style={btn({ width: 32, justifyContent: 'center', height: 28,
+                  ...(!selectMode ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-primary-dark)' } : {}) })}
+              ><Hand size={14} /></button>
+              <button
+                onClick={() => setSelectMode(true)}
+                title="Chọn — kéo chuột trái để khoanh chọn nhiều hình (hoặc giữ Shift + kéo)"
+                style={btn({ width: 32, justifyContent: 'center', height: 28,
+                  ...(selectMode ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-primary-dark)' } : {}) })}
+              ><MousePointer2 size={14} /></button>
+            </>
+          )}
+          <button onClick={() => fitView({ duration: 400, padding: 0.15 })}
+            title="Thu toàn bộ sơ đồ vừa khung nhìn"
+            style={btn({ height: 28 })}><Focus size={13} /> Vừa khung</button>
+        </Panel>
 
         {/* Thanh công cụ */}
         <Panel position="top-left" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '75%' }}>
@@ -471,8 +528,10 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
 
         <Panel position="bottom-center" style={{ fontSize: 11, color: 'var(--color-muted)' }}>
           {editing
-            ? 'Nhấp đúp vào hình để sửa chữ · kéo mép để co giãn · Delete xoá · Ctrl+C/V chép-dán · Ctrl+Z hoàn tác'
-            : 'Cuộn để phóng to · kéo nền để di chuyển'}
+            ? (spaceHeld
+                ? '✋ Đang giữ Space — kéo để di chuyển canvas'
+                : 'Kéo nền = di chuyển · Shift+kéo = khoanh chọn · Space = tạm di chuyển · nhấp đúp sửa chữ · Delete xoá · Ctrl+C/V · Ctrl+Z')
+            : 'Kéo nền để di chuyển · cuộn để phóng to'}
         </Panel>
       </ReactFlow>
     </div>
