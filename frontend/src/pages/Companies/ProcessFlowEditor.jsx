@@ -19,7 +19,7 @@ const FONT_SIZES = [11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 72, 
 import { useToastStore } from '../../stores/toastStore'
 import * as api from '../../api/companyProcesses'
 import { nodeTypes, SHAPES, LINE_SHAPES } from './ProcessNodes'
-import { pointsFromLegacy } from './lineGeometry'
+import { pointsFromLegacy, normalizePoints } from './lineGeometry'
 
 // crypto.randomUUID() CHỈ có trong ngữ cảnh bảo mật (HTTPS/localhost). Server chạy
 // HTTP theo IP → phải có dự phòng, nếu không thêm hình sẽ lỗi trên server.
@@ -67,14 +67,35 @@ const LABEL_STYLE = {
   labelBgBorderRadius: 4,
 }
 
-const toFlowNodes = (nodes, editable) => nodes.map((n) => ({
-  id: n.id,
-  type: SHAPES[n.nodeType] ? n.nodeType : 'rectangle',
-  position: { x: n.posX, y: n.posY },
-  width:  n.width  ?? SHAPES[n.nodeType]?.w ?? 160,
-  height: n.height ?? SHAPES[n.nodeType]?.h ?? 70,
-  data: { title: n.title, actor: n.actor, note: n.note, code: n.code, style: n.style || {}, _editable: editable },
-}))
+const toFlowNodes = (nodes, editable) => nodes.map((n) => {
+  const type = SHAPES[n.nodeType] ? n.nodeType : 'rectangle'
+  let style  = n.style || {}
+  let width  = n.width  ?? SHAPES[type]?.w ?? 160
+  let height = n.height ?? SHAPES[type]?.h ?? 70
+  let position = { x: n.posX, y: n.posY }
+
+  // Đường kẻ / mũi tên: quy đổi dữ liệu cũ (khung + hướng) sang mô hình điểm
+  // NGAY LÚC ĐỌC, rồi dồn khung có chừa lề. Nếu không, 2 đầu đường nằm sát mép
+  // khung khiến chấm tay nắm thò hẳn ra ngoài, rất khó bấm trúng.
+  if (LINE_SHAPES.has(type)) {
+    const pts = Array.isArray(style.points) && style.points.length >= 2
+      ? style.points
+      : pointsFromLegacy(style, width, height)
+    const box = normalizePoints(pts)
+    style = { ...style, points: box.points }
+    width = box.width; height = box.height
+    position = { x: position.x + box.dx, y: position.y + box.dy }
+  }
+
+  return {
+    id: n.id,
+    type,
+    position,
+    width,
+    height,
+    data: { title: n.title, actor: n.actor, note: n.note, code: n.code, style, _editable: editable },
+  }
+})
 
 const toFlowEdges = (edges) => edges.map((e) => ({
   id: e.id,

@@ -45,6 +45,8 @@
 | C4 | Kéo cho mũi tên chỉ **sang trái** | Làm được *(lỗi cũ: chỉ trái→phải)* |
 | C5 | Kéo cho mũi tên chỉ **lên trên** | Làm được *(lỗi cũ: chỉ trên→dưới)* |
 | C6 | Kéo ở mức phóng to 300% và 15% | Điểm chạy **khớp con trỏ**, không nhanh/chậm hơn |
+| C6b | Kéo **chậm, đi đường vòng** rồi mới thả | Điểm bám sát con trỏ suốt quãng đường, **không trôi/bay đi** *(lỗi cũ: dồn khung mỗi frame → trôi ~80px chỉ sau 5 frame)* |
+| C6c | Kéo đầu đường ra xa rồi thả | Khung tự nở ôm lấy đường, phần còn lại **đứng yên** |
 | C7 | Bấm **"Đảo chiều"** | Đường đứng yên, chỉ đầu mũi tên nhảy sang đầu kia |
 | C8 | Dáng **cong** → bấm **"Lật phía"** | Cong lên ↔ cong xuống *(lỗi cũ: chỉ cong một phía)* |
 | C9 | Dáng **gấp khúc** → bấm **"Lật phía"** | Bẻ lên ↔ bẻ xuống *(lỗi cũ: chỉ bẻ một kiểu)* |

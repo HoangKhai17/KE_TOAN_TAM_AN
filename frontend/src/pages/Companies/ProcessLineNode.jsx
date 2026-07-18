@@ -45,10 +45,21 @@ export const makeLineNode = (withArrow) => function LineNode({ id, data, selecte
   const w = Math.max(width  ?? 200, 1)
   const h = Math.max(height ?? PAD * 2, 1)
 
-  // Ghi lại các điểm: dồn về gốc rồi dịch node bù đúng bấy nhiêu để nhìn thấy
-  // đường đứng yên. Đi qua updateNode nên React Flow phát 'replace' →
-  // editor bắt được và bật cờ "có thay đổi".
-  const commit = useCallback((nextPoints) => {
+  // Đổi điểm mà KHÔNG đụng tới khung — dùng trong lúc đang kéo.
+  // (Đi qua updateNode nên React Flow phát 'replace' → editor bật cờ "có thay đổi".)
+  const setPoints = useCallback((nextPoints) => {
+    rf.updateNode(id, (node) => ({
+      data: { ...node.data, style: { ...(node.data.style || {}), points: nextPoints } },
+    }))
+  }, [id, rf])
+
+  // Dồn khung ôm sát các điểm, dịch vị trí node bù lại đúng bấy nhiêu để nhìn
+  // thấy đường đứng yên. CHỈ gọi khi THẢ TAY.
+  //
+  // Trước đây gọi ngay trong lúc kéo → mỗi frame vừa dời khung vừa đặt lại
+  // điểm, trong khi mốc `origin` vẫn ở hệ toạ độ cũ; độ lệch cộng dồn qua từng
+  // frame làm đường chạy mất kiểm soát, kéo như không ăn.
+  const commitBox = useCallback((nextPoints) => {
     const n = normalizePoints(nextPoints)
     rf.updateNode(id, (node) => ({
       position: { x: node.position.x + n.dx, y: node.position.y + n.dy },
@@ -67,6 +78,7 @@ export const makeLineNode = (withArrow) => function LineNode({ id, data, selecte
     const startX = e.clientX, startY = e.clientY
     const origin = points.map((p) => [...p])
     const zoom = rf.getZoom() || 1
+    let latest = origin
     let moved = false
 
     function move(ev) {
@@ -74,30 +86,31 @@ export const makeLineNode = (withArrow) => function LineNode({ id, data, selecte
       const dy = (ev.clientY - startY) / zoom
       if (!moved && Math.hypot(dx, dy) < 2) return   // lọc rung tay khi chỉ định nhấp
       moved = true
-      const next = origin.map((p) => [...p])
-      next[index] = [origin[index][0] + dx, origin[index][1] + dy]
-      commit(next)
+      latest = origin.map((p) => [...p])
+      latest[index] = [origin[index][0] + dx, origin[index][1] + dy]
+      setPoints(latest)
     }
     function up() {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      if (moved) commitBox(latest)     // chỉ dồn khung khi thật sự có kéo
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
-  }, [editable, points, rf, commit])
+  }, [editable, points, rf, setPoints, commitBox])
 
   const addPoint = useCallback((e) => {
     if (!editable || !svgRef.current) return
     e.stopPropagation()
-    commit(insertPoint(points, localPoint(e, svgRef.current)))
-  }, [editable, points, commit])
+    commitBox(insertPoint(points, localPoint(e, svgRef.current)))
+  }, [editable, points, commitBox])
 
   const dropPoint = useCallback((index) => (e) => {
     if (!editable) return
     e.stopPropagation()
     if (points.length <= 2) return      // đường phải còn ít nhất 2 đầu
-    commit(removePoint(points, index))
-  }, [editable, points, commit])
+    commitBox(removePoint(points, index))
+  }, [editable, points, commitBox])
 
   const d = buildPath(points, shape, bend)
   const mId = `ah-${id}`
@@ -134,25 +147,26 @@ export const makeLineNode = (withArrow) => function LineNode({ id, data, selecte
           onDoubleClick={addPoint}
         />
 
-        {/* Tay nắm từng điểm — chỉ hiện khi đang sửa và đã chọn đường */}
+        {/* Tay nắm từng điểm — chỉ hiện khi đang sửa và đã chọn đường.
+            2 đầu tô đặc (đổi độ dài & hướng), điểm gãy giữa để rỗng. */}
         {editable && selected && points.map(([x, y], i) => {
           const isEnd = i === 0 || i === points.length - 1
           return (
-            <circle
-              key={i}
-              cx={x} cy={y} r={6}
-              fill={isEnd ? stroke : '#fff'}
-              stroke={isEnd ? '#fff' : stroke}
-              strokeWidth={2}
-              className="nodrag nopan"
-              style={{ cursor: 'grab' }}
-              onPointerDown={dragPoint(i)}
-              onDoubleClick={dropPoint(i)}
-            >
+            <g key={i} className="nodrag nopan" style={{ cursor: 'grab' }}
+              onPointerDown={dragPoint(i)} onDoubleClick={dropPoint(i)}>
+              {/* vòng bắt chuột rộng hơn hẳn phần nhìn thấy cho dễ trúng */}
+              <circle cx={x} cy={y} r={14} fill="transparent" />
+              <circle cx={x} cy={y} r={isEnd ? 7 : 6}
+                fill={isEnd ? stroke : '#fff'}
+                stroke={isEnd ? '#fff' : stroke}
+                strokeWidth={2}
+                style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.35))' }} />
               <title>
-                {isEnd ? 'Kéo để đổi hướng và độ dài' : 'Kéo để bẻ khúc · nhấp đúp để xoá điểm'}
+                {isEnd
+                  ? 'Kéo để đổi độ dài và hướng'
+                  : 'Kéo để bẻ khúc · nhấp đúp để xoá điểm'}
               </title>
-            </circle>
+            </g>
           )
         })}
       </svg>
