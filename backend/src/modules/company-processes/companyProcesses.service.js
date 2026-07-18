@@ -28,6 +28,9 @@ function nodeToDto(row) {
     note:     row.note ?? null,
     posX:     Number(row.pos_x),
     posY:     Number(row.pos_y),
+    width:    row.width  != null ? Number(row.width)  : null,
+    height:   row.height != null ? Number(row.height) : null,
+    style:    row.style ?? null,
   }
 }
 
@@ -38,6 +41,7 @@ function edgeToDto(row) {
     toNodeId:     row.to_node_id,
     label:        row.label ?? null,
     edgeKind:     row.edge_kind,
+    dashed:       row.dashed === true,
     sourceHandle: row.source_handle ?? null,
     targetHandle: row.target_handle ?? null,
     position:     row.position ?? null,
@@ -199,14 +203,19 @@ async function saveGraph(companyId, processId, { nodes = [], edges = [], expecte
     // ③ Upsert nút
     for (const n of nodes) {
       await client.query(
-        `INSERT INTO company_process_nodes (id, process_id, code, title, node_type, actor, note, pos_x, pos_y)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        `INSERT INTO company_process_nodes
+           (id, process_id, code, title, node_type, actor, note, pos_x, pos_y, width, height, style)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
          ON CONFLICT (id) DO UPDATE SET
            code = EXCLUDED.code, title = EXCLUDED.title, node_type = EXCLUDED.node_type,
            actor = EXCLUDED.actor, note = EXCLUDED.note,
-           pos_x = EXCLUDED.pos_x, pos_y = EXCLUDED.pos_y, updated_at = NOW()`,
-        [n.id, processId, n.code ?? null, n.title, n.nodeType ?? 'step',
-         n.actor ?? null, n.note ?? null, n.posX ?? 0, n.posY ?? 0],
+           pos_x = EXCLUDED.pos_x, pos_y = EXCLUDED.pos_y,
+           width = EXCLUDED.width, height = EXCLUDED.height,
+           style = EXCLUDED.style, updated_at = NOW()`,
+        [n.id, processId, n.code ?? null, n.title ?? '', n.nodeType ?? 'rectangle',
+         n.actor ?? null, n.note ?? null, n.posX ?? 0, n.posY ?? 0,
+         n.width ?? null, n.height ?? null,
+         n.style ? JSON.stringify(n.style) : null],
       )
     }
 
@@ -215,16 +224,17 @@ async function saveGraph(companyId, processId, { nodes = [], edges = [], expecte
       const e = edges[i]
       await client.query(
         `INSERT INTO company_process_edges
-           (id, process_id, from_node_id, to_node_id, label, edge_kind, source_handle, target_handle, position)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           (id, process_id, from_node_id, to_node_id, label, edge_kind, dashed,
+            source_handle, target_handle, position)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          ON CONFLICT (id) DO UPDATE SET
            from_node_id = EXCLUDED.from_node_id, to_node_id = EXCLUDED.to_node_id,
-           label = EXCLUDED.label, edge_kind = EXCLUDED.edge_kind,
+           label = EXCLUDED.label, edge_kind = EXCLUDED.edge_kind, dashed = EXCLUDED.dashed,
            source_handle = EXCLUDED.source_handle, target_handle = EXCLUDED.target_handle,
            position = EXCLUDED.position`,
         [e.id, processId, e.fromNodeId, e.toNodeId, e.label ?? null,
-         e.edgeKind ?? 'normal', e.sourceHandle ?? null, e.targetHandle ?? null,
-         e.position ?? i],
+         e.edgeKind ?? 'arrow', e.dashed === true,
+         e.sourceHandle ?? null, e.targetHandle ?? null, e.position ?? i],
       )
     }
 

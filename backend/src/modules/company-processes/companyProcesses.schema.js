@@ -1,8 +1,14 @@
 'use strict'
 const { z } = require('zod')
 
-const NODE_TYPES = ['start', 'step', 'decision', 'end', 'document']
-const EDGE_KINDS = ['normal', 'back']
+// Hình hình học để người dùng vẽ tự do (không còn bó theo "loại bước nghiệp vụ").
+// 'line' và 'arrow' là hình ĐỘC LẬP đặt tự do trên canvas — khác với đường nối 2 hình.
+const NODE_TYPES = [
+  'rectangle', 'square', 'circle', 'triangle', 'parallelogram', 'diamond', 'text',
+  'line', 'arrow',
+]
+// Kiểu đường nối: mũi tên 1 chiều · 2 chiều · đường kẻ không mũi tên
+const EDGE_KINDS = ['arrow', 'double', 'line']
 
 const createProcessSchema = z.object({
   name:        z.string().min(1, 'Tên quy trình không được để trống').max(200),
@@ -19,12 +25,18 @@ const updateProcessSchema = z.object({
 const nodeSchema = z.object({
   id:       z.string().uuid(),
   code:     z.string().max(20).optional().nullable(),
-  title:    z.string().min(1, 'Bước phải có tên').max(300),
-  nodeType: z.enum(NODE_TYPES).default('step'),
+  // KHÔNG bắt buộc có chữ: đường kẻ, mũi tên và hình trang trí vốn không có nhãn.
+  // (Trước đây min(1) khiến CẢ sơ đồ không lưu được khi có 1 hình chưa ghi chữ.)
+  title:    z.string().max(300).default(''),
+  nodeType: z.enum(NODE_TYPES).default('rectangle'),
   actor:    z.string().max(100).optional().nullable(),
   note:     z.string().max(2000).optional().nullable(),
   posX:     z.number(),
   posY:     z.number(),
+  width:    z.number().optional().nullable(),
+  height:   z.number().optional().nullable(),
+  // Kiểu hiển thị riêng của hình: { dashed: true } … (mở rộng sau không cần migration)
+  style:    z.object({ dashed: z.boolean().optional() }).passthrough().optional().nullable(),
 })
 
 const edgeSchema = z.object({
@@ -32,7 +44,8 @@ const edgeSchema = z.object({
   fromNodeId:   z.string().uuid(),
   toNodeId:     z.string().uuid(),
   label:        z.string().max(200).optional().nullable(),
-  edgeKind:     z.enum(EDGE_KINDS).default('normal'),
+  edgeKind:     z.enum(EDGE_KINDS).default('arrow'),
+  dashed:       z.boolean().optional(),
   sourceHandle: z.string().max(50).optional().nullable(),
   targetHandle: z.string().max(50).optional().nullable(),
   position:     z.number().int().optional().nullable(),

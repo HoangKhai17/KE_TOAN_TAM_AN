@@ -1,135 +1,189 @@
-import { Handle, Position } from '@xyflow/react'
+import { useState, useRef, useEffect } from 'react'
+import { Handle, Position, NodeResizer, useReactFlow } from '@xyflow/react'
 
-// 5 loại nút của sơ đồ quy trình. Mỗi loại một HÌNH DẠNG riêng để nhìn là hiểu:
-//   start/end = viên thuốc · step = chữ nhật · decision = hình thoi · document = góc gấp
+// Bộ HÌNH HÌNH HỌC để vẽ tự do. Không ràng buộc ý nghĩa nghiệp vụ —
+// người dùng tự quyết hình nào mang nghĩa gì.
 
-const BASE = {
-  padding: '10px 14px',
-  minWidth: 150,
-  maxWidth: 240,
-  fontSize: 13,
-  lineHeight: 1.35,
-  textAlign: 'center',
-  border: '2px solid',
-  background: '#fff',
-  wordBreak: 'break-word',
+export const SHAPES = {
+  rectangle:     { label: 'Chữ nhật',   w: 160, h: 70 },
+  square:        { label: 'Vuông',      w: 110, h: 110 },
+  circle:        { label: 'Tròn',       w: 120, h: 120 },
+  triangle:      { label: 'Tam giác',   w: 130, h: 110 },
+  parallelogram: { label: 'Bình hành',  w: 170, h: 75 },
+  diamond:       { label: 'Thoi',       w: 150, h: 110 },
+  text:          { label: 'Chữ',        w: 140, h: 40 },
+  // Hình vẽ độc lập (không phải đường nối 2 hình)
+  line:          { label: 'Đường kẻ',   w: 180, h: 8 },
+  arrow:         { label: 'Mũi tên',    w: 180, h: 8 },
 }
 
-const TONE = {
-  start:    { borderColor: '#10b981', background: '#ecfdf5', color: '#065f46' },
-  end:      { borderColor: '#ef4444', background: '#fef2f2', color: '#991b1b' },
-  step:     { borderColor: '#3b82f6', background: '#eff6ff', color: '#1e40af' },
-  decision: { borderColor: '#f59e0b', background: '#fffbeb', color: '#92400e' },
-  document: { borderColor: '#8b5cf6', background: '#f5f3ff', color: '#5b21b6' },
+// Hình chỉ là nét vẽ — không có nền, không nhập chữ
+export const LINE_SHAPES = new Set(['line', 'arrow'])
+
+// Cổng nối ở CẢ 4 CẠNH, mỗi cạnh vừa nhận vừa phát →
+// nối được theo mọi hướng, kể cả vòng ngược lại bước trước.
+const DOT = { width: 9, height: 9, background: '#2563eb', border: '2px solid #fff' }
+const SIDES = [
+  ['top', Position.Top], ['right', Position.Right],
+  ['bottom', Position.Bottom], ['left', Position.Left],
+]
+
+function Ports({ visible }) {
+  const style = visible ? DOT : { ...DOT, opacity: 0 }
+  return SIDES.map(([id, pos]) => (
+    <span key={id}>
+      <Handle id={`s-${id}`} type="source" position={pos} style={style} />
+      <Handle id={`t-${id}`} type="target" position={pos} style={{ ...style, pointerEvents: 'none' }} />
+    </span>
+  ))
 }
 
-// Cổng nối: NHẬN ở trái/trên, PHÁT ở phải/dưới.
-// Nhờ có cổng dưới/trên nên mũi tên "quay ngược về bước trước" vẽ gọn, không cắt ngang sơ đồ.
-function Ports() {
-  const dot = { width: 9, height: 9, background: '#64748b', border: '2px solid #fff' }
+// Nhãn: nhấp đúp để sửa NGAY trên hình, không phải mở bảng bên cạnh
+function Label({ id, data, editable }) {
+  const { updateNodeData } = useReactFlow()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(data.title || '')
+  const ref = useRef(null)
+
+  useEffect(() => { setDraft(data.title || '') }, [data.title])
+  useEffect(() => { if (editing) ref.current?.focus() }, [editing])
+
+  function commit() {
+    setEditing(false)
+    if (draft !== data.title) updateNodeData(id, { title: draft })
+  }
+
+  if (editing) {
+    return (
+      <textarea
+        ref={ref}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit() }
+          if (e.key === 'Escape') { setDraft(data.title || ''); setEditing(false) }
+          e.stopPropagation()   // đừng để phím Delete xoá hình khi đang gõ
+        }}
+        className="nodrag"
+        style={{
+          width: '90%', border: 'none', outline: 'none', background: 'transparent',
+          textAlign: 'center', font: 'inherit', color: 'inherit', resize: 'none',
+        }}
+      />
+    )
+  }
+
+  return (
+    <div
+      onDoubleClick={() => editable && setEditing(true)}
+      style={{ cursor: editable ? 'text' : 'default', width: '100%', wordBreak: 'break-word' }}
+      title={editable ? 'Nhấp đúp để sửa chữ' : undefined}
+    >
+      {data.title || <span style={{ opacity: 0.4 }}>Nhấp đúp để nhập</span>}
+    </div>
+  )
+}
+
+// Khung chung: viền + nền + căn giữa chữ. clip quyết định hình dạng.
+// Mọi định dạng (màu, cỡ chữ, đậm/nghiêng) lấy từ data.style — lưu trong JSONB.
+function Shape({ id, data, selected, editable, clip, radius, extraStyle }) {
+  const st     = data.style || {}
+  const stroke = st.borderColor || '#2563eb'
+  const bg     = st.bgColor === 'transparent' ? 'transparent' : (st.bgColor || '#eff6ff')
   return (
     <>
-      <Handle id="t-left" type="target" position={Position.Left}   style={dot} />
-      <Handle id="t-top"  type="target" position={Position.Top}    style={dot} />
-      <Handle id="s-right"  type="source" position={Position.Right}  style={dot} />
-      <Handle id="s-bottom" type="source" position={Position.Bottom} style={dot} />
+      <NodeResizer
+        isVisible={editable && selected}
+        minWidth={40}
+        minHeight={30}
+        lineStyle={{ borderColor: stroke }}
+        handleStyle={{ width: 8, height: 8, borderRadius: 2, background: '#fff', border: `2px solid ${stroke}` }}
+      />
+      <div
+        style={{
+          width: '100%', height: '100%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 10, lineHeight: 1.3, textAlign: 'center',
+          fontSize:   st.fontSize || 13,
+          fontWeight: st.bold ? 700 : 400,
+          fontStyle:  st.italic ? 'italic' : 'normal',
+          color:      st.textColor || '#0f172a',
+          background: bg,
+          border: clip ? 'none' : `2px solid ${stroke}`,
+          outline: selected && clip ? `2px solid ${stroke}` : 'none',
+          borderRadius: radius, clipPath: clip,
+          boxShadow: selected && !clip ? `0 0 0 3px ${stroke}33` : 'none',
+          ...extraStyle,
+        }}
+      >
+        <Ports visible={editable} />
+        <Label id={id} data={data} editable={editable} />
+      </div>
     </>
   )
 }
 
-function Body({ data }) {
+const mk = (opts) => function ShapeNode({ id, data, selected }) {
+  return <Shape id={id} data={data} selected={selected} editable={data._editable} {...opts} />
+}
+
+// ── Đường kẻ & mũi tên (hình vẽ độc lập) ─────────────────────────────────────
+// Đường LUÔN nằm ngang chính giữa khung → thẳng tuyệt đối, không bị xiên.
+// Muốn dọc/chéo thì dùng góc xoay (style.rotation) chứ không kéo lệch khung.
+const mkLine = (withArrow) => function LineNode({ id, data, selected, width, height }) {
+  const w = Math.max(width ?? SHAPES.line.w, 1)
+  const h = Math.max(height ?? SHAPES.line.h, 1)
+  const st     = data.style || {}
+  const stroke = st.borderColor || '#334155'
+  const thick  = st.thickness || 2
+  const rot    = st.rotation || 0
+  const mId    = `ah-${id}`
+  const midY   = h / 2
   return (
     <>
-      {data.code && (
-        <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.65, marginBottom: 2 }}>{data.code}</div>
-      )}
-      <div style={{ fontWeight: 600 }}>{data.title || '(chưa đặt tên)'}</div>
-      {data.actor && (
-        <div style={{ fontSize: 11, opacity: 0.8, marginTop: 3 }}>👤 {data.actor}</div>
-      )}
-      {data.note && (
-        <div style={{ fontSize: 10, opacity: 0.65, marginTop: 2, fontStyle: 'italic' }}>
-          {data.note.length > 40 ? `${data.note.slice(0, 40)}…` : data.note}
-        </div>
+      <NodeResizer
+        isVisible={data._editable && selected}
+        minWidth={20} minHeight={6}
+        lineStyle={{ borderColor: stroke }}
+        handleStyle={{ width: 8, height: 8, borderRadius: 2, background: '#fff', border: `2px solid ${stroke}` }}
+      />
+      <div style={{ width: '100%', height: '100%', transform: `rotate(${rot}deg)`, transformOrigin: 'center' }}>
+        {/* overflow visible để đầu mũi tên không bị cắt ở mép khung */}
+        <svg width={w} height={h} style={{ overflow: 'visible', display: 'block' }}>
+          {withArrow && (
+            <defs>
+              <marker id={mId} markerWidth="10" markerHeight="10" refX="9" refY="3"
+                orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill={stroke} />
+              </marker>
+            </defs>
+          )}
+          <line
+            x1={0} y1={midY} x2={w} y2={midY}
+            stroke={stroke} strokeWidth={thick}
+            strokeDasharray={st.dashed ? '7 5' : undefined}
+            markerEnd={withArrow ? `url(#${mId})` : undefined}
+          />
+          {/* vùng bắt chuột rộng hơn để dễ chọn đường mảnh */}
+          <line x1={0} y1={midY} x2={w} y2={midY} stroke="transparent" strokeWidth={16} />
+        </svg>
+      </div>
+      {selected && data._editable && (
+        <div style={{ position: 'absolute', inset: -4, border: `1px dashed ${stroke}`, pointerEvents: 'none' }} />
       )}
     </>
-  )
-}
-
-const ring = (selected) => (selected ? { boxShadow: '0 0 0 3px rgba(37,99,235,0.35)' } : null)
-
-function StepNode({ data, selected }) {
-  return (
-    <div style={{ ...BASE, ...TONE.step, borderRadius: 8, ...ring(selected) }}>
-      <Ports /><Body data={data} />
-    </div>
-  )
-}
-
-function StartNode({ data, selected }) {
-  return (
-    <div style={{ ...BASE, ...TONE.start, borderRadius: 999, ...ring(selected) }}>
-      <Ports /><Body data={data} />
-    </div>
-  )
-}
-
-function EndNode({ data, selected }) {
-  return (
-    <div style={{ ...BASE, ...TONE.end, borderRadius: 999, ...ring(selected) }}>
-      <Ports /><Body data={data} />
-    </div>
-  )
-}
-
-// Hình thoi — dùng clip-path để chữ vẫn nằm ngang (dễ đọc hơn cách xoay 45°)
-function DecisionNode({ data, selected }) {
-  return (
-    <div
-      style={{
-        ...BASE,
-        ...TONE.decision,
-        minWidth: 190,
-        padding: '26px 30px',
-        clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-        border: 'none',
-        outline: selected ? '3px solid rgba(245,158,11,0.55)' : 'none',
-        background: '#fef3c7',
-        color: TONE.decision.color,
-      }}
-    >
-      <Ports /><Body data={data} />
-    </div>
-  )
-}
-
-// Tài liệu — góc trên phải gấp lại
-function DocumentNode({ data, selected }) {
-  return (
-    <div
-      style={{
-        ...BASE, ...TONE.document, borderRadius: 6,
-        clipPath: 'polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%)',
-        ...ring(selected),
-      }}
-    >
-      <Ports /><Body data={data} />
-    </div>
   )
 }
 
 export const nodeTypes = {
-  start:    StartNode,
-  step:     StepNode,
-  decision: DecisionNode,
-  end:      EndNode,
-  document: DocumentNode,
-}
-
-export const NODE_TYPE_LABELS = {
-  start:    'Bắt đầu',
-  step:     'Bước xử lý',
-  decision: 'Quyết định',
-  end:      'Kết thúc',
-  document: 'Tài liệu',
+  rectangle:     mk({ radius: 8 }),
+  square:        mk({ radius: 6 }),
+  circle:        mk({ radius: '50%' }),
+  triangle:      mk({ clip: 'polygon(50% 0%, 100% 100%, 0% 100%)', extraStyle: { paddingTop: 34 } }),
+  parallelogram: mk({ clip: 'polygon(18% 0%, 100% 0%, 82% 100%, 0% 100%)' }),
+  diamond:       mk({ clip: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }),
+  text:          mk({ radius: 0, extraStyle: { background: 'transparent', border: 'none', boxShadow: 'none' } }),
+  line:          mkLine(false),
+  arrow:         mkLine(true),
 }
