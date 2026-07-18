@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Building2,
   Loader2, RotateCcw, Trash2, AlertTriangle, Eye, Camera, X, Filter, Download, LayoutGrid, Table2,
+  SlidersHorizontal,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -202,8 +203,33 @@ function MultiSelectFilter({ options, value, onChange, placeholder = 'Tất cả
 
 // ── Column-header filter machinery (per docs/018) ─────────────────────────────
 
+// ── Cột hiển thị (ẩn/hiện) — cùng cơ chế với trang Công việc ──────────────────
+// `fixed: true` = cột bắt buộc, không cho ẩn.
+const CO_COLUMNS = [
+  { key: 'name',              label: 'Tên công ty', fixed: true },
+  { key: 'shortName',         label: 'Tên viết tắt' },
+  { key: 'taxCode',           label: 'MST' },
+  { key: 'businessType',      label: 'Loại hình' },
+  { key: 'industry',          label: 'Ngành nghề' },
+  { key: 'contactName',       label: 'Người liên hệ' },
+  { key: 'assignedStaffName', label: 'Phụ trách' },
+  { key: 'taskOpenCount',     label: 'Việc mở' },
+  { key: 'taskOverdueCount',  label: 'Quá hạn' },
+  { key: 'serviceStartDate',  label: 'Ngày bắt đầu HĐ' },
+  { key: 'status',            label: 'Hợp đồng' },
+]
+
+const CO_COLS_KEY = 'companies_hidden_cols'
+function loadHiddenCols() {
+  try { const a = JSON.parse(sessionStorage.getItem(CO_COLS_KEY)); return new Set(Array.isArray(a) ? a : []) }
+  catch { return new Set() }
+}
+function saveHiddenCols(set) {
+  try { sessionStorage.setItem(CO_COLS_KEY, JSON.stringify([...set])) } catch { /* ignore */ }
+}
+
 function getCompanyColumnFilterType(colKey) {
-  if (colKey === 'assignedStaffName' || colKey === 'status') return 'enum'
+  if (colKey === 'assignedStaffName' || colKey === 'status' || colKey === 'businessType') return 'enum'
   if (colKey === 'taskOpenCount' || colKey === 'taskOverdueCount') return 'numberRange'
   return 'text'
 }
@@ -217,6 +243,9 @@ function getCompanyDisplayLabel(row, colKey) {
     case 'status':           return STATUS_LABELS[row.status] ?? row.status
     case 'taskOpenCount':    return String(row.taskOpenCount ?? 0)
     case 'taskOverdueCount': return String(row.taskOverdueCount ?? 0)
+    case 'businessType':     return BUSINESS_TYPE_LABELS[row.businessType] ?? row.businessType ?? '(Trống)'
+    case 'industry':         return row.industry || '(Trống)'
+    case 'serviceStartDate': return fmtDate(row.serviceStartDate) || '(Trống)'
     default: {
       const v = row[colKey]
       return v != null && v !== '' ? String(v) : '(Trống)'
@@ -230,6 +259,9 @@ function getCompanySortKey(row, colKey) {
     case 'taskOverdueCount': return Number(row.taskOverdueCount ?? 0)
     case 'assignedStaffName': return (row.assignedStaff?.name ?? '').toLowerCase()
     case 'status':           return STATUS_LABELS[row.status] ?? ''
+    case 'businessType':     return (BUSINESS_TYPE_LABELS[row.businessType] ?? row.businessType ?? '').toLowerCase()
+    // Sắp theo ISO (YYYY-MM-DD) để đúng thứ tự thời gian, không theo chuỗi dd/mm/yyyy
+    case 'serviceStartDate': return row.serviceStartDate ?? ''
     default:                 return String(row[colKey] ?? '').toLowerCase()
   }
 }
@@ -540,6 +572,28 @@ export default function Companies() {
     return result
   }, [companies, colFilters, sortState])
 
+  // ── Cột hiển thị (ẩn/hiện) ───────────────────────────────────────────────────
+  const [hiddenCols, setHiddenCols] = useState(loadHiddenCols)
+  useEffect(() => { saveHiddenCols(hiddenCols) }, [hiddenCols])
+  function toggleColVisible(key) {
+    setHiddenCols((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+  const vis = (key) => !hiddenCols.has(key)
+
+  const [showColMenu, setShowColMenu] = useState(false)
+  const colMenuRef = useRef(null)
+  useEffect(() => {
+    if (!showColMenu) return
+    function onDoc(e) { if (colMenuRef.current && !colMenuRef.current.contains(e.target)) setShowColMenu(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [showColMenu])
+
+  // Số cột đang hiển thị (cho colSpan của dòng trống/đang tải)
+  const visibleColCount = (isAdmin ? 1 : 0)
+    + CO_COLUMNS.filter((c) => c.fixed || vis(c.key)).length
+    + 1  // cột Hành động
+
   const clientTotal      = displayed.length
   const clientTotalPages = Math.max(1, Math.ceil(clientTotal / limit))
   const safePage         = Math.min(page, clientTotalPages)
@@ -658,6 +712,36 @@ export default function Companies() {
             >
               <LayoutGrid size={14} /> Tổng quan
             </button>
+            {/* Cột hiển thị — ẩn/hiện cột, lưu vào sessionStorage */}
+            <div className={s.colMenuWrap} ref={colMenuRef}>
+              <button
+                className={s.btnOutline}
+                onClick={() => setShowColMenu((v) => !v)}
+                title="Chọn cột hiển thị"
+              >
+                <SlidersHorizontal size={14} /> Cột hiển thị
+              </button>
+              {showColMenu && (
+                <div className={s.colMenu}>
+                  <div className={s.colMenuHead}>
+                    <span>Cột hiển thị</span>
+                    <button className={s.colMenuReset} onClick={() => setHiddenCols(new Set())}>Hiện tất cả</button>
+                  </div>
+                  {CO_COLUMNS.map((c) => (
+                    <label key={c.key} className={`${s.colMenuItem} ${c.fixed ? s.colMenuItemFixed : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={c.fixed || vis(c.key)}
+                        disabled={c.fixed}
+                        onChange={() => toggleColVisible(c.key)}
+                      />
+                      <span>{c.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Staff cũng được xuất — chỉ gồm công ty mình phụ trách (backend đã chốt quyền) */}
             <button className={s.btnOutline} onClick={() => setShowExport(true)} disabled={companies.length === 0}>
               <Download size={14} /> Xuất Excel
@@ -823,7 +907,7 @@ export default function Companies() {
             </div>
           ) : (
             <div className={s.tableScroll}>
-              <table className={s.table}>
+              <table className={`${s.table} ${s.coListTable} ${isAdmin ? s.coListTableAdmin : ''}`}>
                 <thead>
                   <tr>
                     {isAdmin && (
@@ -836,14 +920,17 @@ export default function Companies() {
                         />
                       </th>
                     )}
-                    <FilterTh colKey="name">Tên công ty</FilterTh>
-                    <FilterTh colKey="shortName" className={s.tableCellVisible}>Tên viết tắt</FilterTh>
-                    <FilterTh colKey="taxCode" className={s.tableCellVisible}>MST</FilterTh>
-                    <FilterTh colKey="contactName" className={s.tableContactHead}>Người liên hệ</FilterTh>
-                    <FilterTh colKey="assignedStaffName" className={s.tableCellVisible}>Phụ trách</FilterTh>
-                    <FilterTh colKey="taskOpenCount" className={s.tableMetricOpenHead}>Việc mở</FilterTh>
-                    <FilterTh colKey="taskOverdueCount" className={s.tableMetricOverdueHead}>Quá hạn</FilterTh>
-                    <FilterTh colKey="status">Hợp đồng</FilterTh>
+                    <FilterTh colKey="name" className={s.coStickyName}>Tên công ty</FilterTh>
+                    {vis('shortName') && <FilterTh colKey="shortName" className={s.tableCellVisible}>Tên viết tắt</FilterTh>}
+                    {vis('taxCode') && <FilterTh colKey="taxCode" className={s.tableCellVisible}>MST</FilterTh>}
+                    {vis('businessType') && <FilterTh colKey="businessType" className={s.tableCellVisible}>Loại hình</FilterTh>}
+                    {vis('industry') && <FilterTh colKey="industry" className={s.tableCellVisible}>Ngành nghề</FilterTh>}
+                    {vis('contactName') && <FilterTh colKey="contactName" className={s.tableContactHead}>Người liên hệ</FilterTh>}
+                    {vis('assignedStaffName') && <FilterTh colKey="assignedStaffName" className={s.tableCellVisible}>Phụ trách</FilterTh>}
+                    {vis('taskOpenCount') && <FilterTh colKey="taskOpenCount" className={s.tableMetricOpenHead}>Việc mở</FilterTh>}
+                    {vis('taskOverdueCount') && <FilterTh colKey="taskOverdueCount" className={s.tableMetricOverdueHead}>Quá hạn</FilterTh>}
+                    {vis('serviceStartDate') && <FilterTh colKey="serviceStartDate" className={s.tableCellVisible}>Ngày bắt đầu HĐ</FilterTh>}
+                    {vis('status') && <FilterTh colKey="status">Hợp đồng</FilterTh>}
                     <th className={s.actionsHead}>Hành động</th>
                   </tr>
                 </thead>
@@ -852,7 +939,7 @@ export default function Companies() {
                     Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} isAdmin={isAdmin} />)
                   ) : displayed.length === 0 ? (
                     <tr>
-                      <td colSpan={isAdmin ? 10 : 9}>
+                      <td colSpan={visibleColCount}>
                         <div className={s.emptyState}>
                           <div className={s.emptyIcon}><Building2 size={26} /></div>
                           <p className={s.emptyTitle}>Không tìm thấy doanh nghiệp</p>
@@ -872,6 +959,7 @@ export default function Companies() {
                         isAdmin={isAdmin}
                         selected={selectedIds.has(c.id)}
                         onToggleSelect={() => toggleSelect(c.id)}
+                        hiddenCols={hiddenCols}
                         onClick={() => navigate(`/companies/${c.id}`)}
                         onOpenTables={() => navigate(`/companies/${c.id}/bang-du-lieu`)}
                         onDelete={(e) => { e.stopPropagation(); setDeleteTarget(c) }}
@@ -983,9 +1071,10 @@ export default function Companies() {
 
 // ── CompanyRow ─────────────────────────────────────────────────────────────────
 
-function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpenTables, onDelete }) {
+function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpenTables, onDelete, hiddenCols }) {
   const staff    = company.assignedStaff
   const getLabel = useEnumsStore((st) => st.getLabel)
+  const vis      = (key) => !hiddenCols?.has(key)
 
   return (
     <tr onClick={onClick} className={selected ? s.coRowSelected : ''}>
@@ -994,7 +1083,7 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpe
           <input type="checkbox" checked={selected} onChange={onToggleSelect} />
         </td>
       )}
-      <td>
+      <td className={s.coStickyName}>
         <div className={s.companyCell}>
           {company.avatarUrl ? (
             <img
@@ -1011,23 +1100,37 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpe
             {getInitials(company.name)}
           </div>
           <div className={s.companyInfo}>
-            <div className={s.companyName}>{company.name}</div>
-            {(company.industry || company.businessType) && (
-              <div className={s.companyMeta}>
-                {company.industry || getLabel('business_type', company.businessType, BUSINESS_TYPE_LABELS[company.businessType])}
-              </div>
-            )}
+            <div className={s.companyName} title={company.name}>{company.name}</div>
           </div>
         </div>
       </td>
+      {vis('shortName') && (
       <td className={s.tableCellVisible}>
         {company.shortName
           ? <span className={s.shortNameCell}>{company.shortName}</span>
           : <span className={s.muted}>—</span>}
       </td>
+      )}
+      {vis('taxCode') && (
       <td className={s.tableCellVisible}>
         <span className={s.muted}>{company.taxCode || '—'}</span>
       </td>
+      )}
+      {vis('businessType') && (
+      <td className={s.tableCellVisible}>
+        {company.businessType
+          ? getLabel('business_type', company.businessType, BUSINESS_TYPE_LABELS[company.businessType] ?? company.businessType)
+          : <span className={s.muted}>—</span>}
+      </td>
+      )}
+      {vis('industry') && (
+      <td className={s.tableCellVisible}>
+        {company.industry
+          ? <span className={s.industryCell} title={company.industry}>{company.industry}</span>
+          : <span className={s.muted}>—</span>}
+      </td>
+      )}
+      {vis('contactName') && (
       <td className={s.tableCellVisible}>
         {company.contactName ? (
           <div>
@@ -1038,6 +1141,8 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpe
           <span className={s.muted}>—</span>
         )}
       </td>
+      )}
+      {vis('assignedStaffName') && (
       <td>
         {staff ? (
           <div className={s.staffCell}>
@@ -1053,6 +1158,8 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpe
           <span className={s.unassigned}>Chưa phân công</span>
         )}
       </td>
+      )}
+      {vis('taskOpenCount') && (
       <td className={s.tableMetricCell}>
         {company.taskOpenCount > 0 ? (
           <span className={s.metricOpen}>{company.taskOpenCount}</span>
@@ -1060,6 +1167,8 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpe
           <span className={s.metricZero}>0</span>
         )}
       </td>
+      )}
+      {vis('taskOverdueCount') && (
       <td className={s.tableMetricCell}>
         {company.taskOverdueCount > 0 ? (
           <span className={s.pillOverdue}>{company.taskOverdueCount}</span>
@@ -1067,7 +1176,13 @@ function CompanyRow({ company, isAdmin, selected, onToggleSelect, onClick, onOpe
           <span className={s.metricZero}>0</span>
         )}
       </td>
-      <td><StatusPill status={company.status} /></td>
+      )}
+      {vis('serviceStartDate') && (
+      <td className={s.tableCellVisible}>
+        <span className={s.muted}>{fmtDate(company.serviceStartDate) || '—'}</span>
+      </td>
+      )}
+      {vis('status') && <td><StatusPill status={company.status} /></td>}
       <td>
         <div className={s.rowActions}>
           {isAdmin && (

@@ -6209,3 +6209,121 @@
 .scStepPickItem input { margin-top: 2px; flex-shrink: 0; cursor: pointer; }
 .scStepPickChild { margin-left: 22px; border-left: 2px solid #dbeafe; }
 .scStepPickMain { font-weight: var(--fw-semibold); color: var(--color-text-strong, #1e293b); }
+
+/* ── Bảng DANH SÁCH khách hàng: ưu tiên CUỘN NGANG, không bóp cột ──────────────
+   Bảng này có 13 cột. Trước đây .table{width:100%} ép mọi cột co lại nên chữ
+   xuống dòng lộn xộn ("Công ty / TNHH", "Thương mại: / bán củi, / trấu viên").
+   Nay mỗi ô giữ trên 1 dòng, cột tự giãn theo nội dung, tràn thì .tableScroll
+   (overflow-x:auto) cuộn ngang. KHÔNG fix cứng width từng cột.
+
+   LƯU Ý: phải khoanh vùng bằng .coListTable — class .table dùng chung cho 6 bảng
+   khác trong module (Tổng quan, Công việc, Lịch định kỳ, Bảng tùy biến, Yêu cầu KH),
+   nếu đặt thẳng lên .table sẽ phá layout các bảng đó. */
+.coListTable { min-width: 1180px; }
+
+.coListTable td { white-space: nowrap; }
+
+/* Trước đây phải ngắt từ vì cột bị bóp — nay bỏ để tên nằm trọn 1 dòng */
+.coListTable .companyName,
+.coListTable .shortNameCell,
+.coListTable .staffName { word-break: normal; }
+
+/* Hai cột nhiều chữ: giới hạn MỀM + ellipsis, giữ tooltip (title) khi bị cắt */
+.coListTable .companyName {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.coListTable .industryCell {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+/* ── Ghim (freeze) cột Tên công ty khi cuộn ngang ──────────────────────────────
+   Nền của ô ghim phải ĐỤC, nếu không nội dung cuộn bên dưới sẽ lộ xuyên qua.
+   Dùng background:inherit + đặt nền ở <tr> để hover/chọn dòng tự đồng bộ. */
+.coListTable tbody tr { background: #fff; }
+.coListTable tbody tr:hover { background: #f0f9ff; }
+.coListTable tbody tr.coRowSelected { background: var(--color-primary-bg); }
+
+.coListTable .coCheckTh,
+.coListTable .coCheckTd {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: inherit;
+}
+
+/* Không có cột chọn (nhân viên) → Tên công ty ghim sát mép trái */
+.coListTable .coStickyName {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: inherit;
+}
+
+/* Có cột chọn (admin) → lùi đúng bề rộng ô chọn (38px, box-sizing: border-box) */
+.coListTableAdmin .coStickyName { left: 38px; }
+
+/* Header ghim phải nằm TRÊN ô ghim của thân bảng */
+.coListTable thead .coCheckTh,
+.coListTable thead .coStickyName { z-index: 3; }
+
+/* Không thêm viền/đổ bóng ở mép cột ghim — để bảng liền mạch, không bị tách layout. */
+
+/* ── Menu "Cột hiển thị" (đồng bộ giao diện với trang Công việc) ──────────────── */
+.colMenuWrap { position: relative; }
+
+.colMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 210px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14);
+  padding: 6px;
+}
+
+.colMenuHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 8px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--color-text-muted, #64748b);
+  border-bottom: 1px solid var(--color-border-muted, #eef2f7);
+  margin-bottom: 4px;
+}
+
+.colMenuReset {
+  border: none;
+  background: none;
+  color: var(--color-primary, #2563eb);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.colMenuReset:hover { text-decoration: underline; }
+
+.colMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: var(--fs-sm);
+  color: var(--color-text, #0f172a);
+  cursor: pointer;
+}
+.colMenuItem:hover { background: var(--color-surface-muted, #f1f5f9); }
+.colMenuItem input { cursor: pointer; }
+.colMenuItemFixed { opacity: 0.6; cursor: default; }
+.colMenuItemFixed:hover { background: none; }
