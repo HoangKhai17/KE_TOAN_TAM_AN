@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Handle, Position, NodeResizer, useReactFlow } from '@xyflow/react'
+import { makeLineNode } from './ProcessLineNode'
+import { defaultPoints } from './lineGeometry'
 
 // Bộ HÌNH HÌNH HỌC để vẽ tự do. Không ràng buộc ý nghĩa nghiệp vụ —
 // người dùng tự quyết hình nào mang nghĩa gì.
@@ -12,9 +14,10 @@ export const SHAPES = {
   parallelogram: { label: 'Bình hành',  w: 170, h: 75 },
   diamond:       { label: 'Thoi',       w: 150, h: 110 },
   text:          { label: 'Chữ',        w: 140, h: 40 },
-  // Hình vẽ độc lập (không phải đường nối 2 hình)
-  line:          { label: 'Đường kẻ',   w: 180, h: 8 },
-  arrow:         { label: 'Mũi tên',    w: 180, h: 8 },
+  // Hình vẽ độc lập (không phải đường nối 2 hình). Khung = hộp ôm các điểm + lề,
+  // do lineGeometry tính ra — không phải kích thước người dùng kéo giãn.
+  line:          { label: 'Đường kẻ',   w: 204, h: 24, points: defaultPoints },
+  arrow:         { label: 'Mũi tên',    w: 204, h: 24, points: defaultPoints },
 }
 
 // Hình chỉ là nét vẽ — không có nền, không nhập chữ
@@ -128,71 +131,6 @@ const mk = (opts) => function ShapeNode({ id, data, selected }) {
   return <Shape id={id} data={data} selected={selected} editable={data._editable} {...opts} />
 }
 
-// ── Đường kẻ & mũi tên (hình vẽ độc lập) ─────────────────────────────────────
-// Đường được vẽ NGAY BÊN TRONG khung bao, KHÔNG dùng CSS rotate.
-// Lý do: rotate chỉ xoay phần nhìn thấy, còn khung bao và tay nắm kéo giãn của
-// React Flow vẫn nằm ngang → nhìn một đằng kéo một nẻo. Vẽ trong khung thì
-// tay nắm luôn khớp với đường thật.
-
-// Giá trị cũ (style.rotation) quy đổi sang hướng để sơ đồ đã vẽ không bị lệch
-function orientationOf(st) {
-  if (st.orientation) return st.orientation
-  const r = ((st.rotation || 0) % 180 + 180) % 180
-  if (r > 67 && r < 113) return 'vertical'
-  if (r >= 23 && r <= 67) return 'diag-down'
-  if (r >= 113 && r <= 157) return 'diag-up'
-  return 'horizontal'
-}
-
-const mkLine = (withArrow) => function LineNode({ id, data, selected, width, height }) {
-  const w = Math.max(width ?? SHAPES.line.w, 1)
-  const h = Math.max(height ?? SHAPES.line.h, 1)
-  const st     = data.style || {}
-  const stroke = st.borderColor || '#334155'
-  const thick  = st.thickness || 2
-  const mId    = `ah-${id}`
-
-  // Toạ độ 2 đầu đường — luôn nằm gọn trong khung bao
-  const o = orientationOf(st)
-  let x1 = 0, y1 = h / 2, x2 = w, y2 = h / 2          // ngang (mặc định)
-  if (o === 'vertical')       { x1 = w / 2; y1 = 0; x2 = w / 2; y2 = h }
-  else if (o === 'diag-down') { x1 = 0; y1 = 0;     x2 = w;     y2 = h }
-  else if (o === 'diag-up')   { x1 = 0; y1 = h;     x2 = w;     y2 = 0 }
-
-  return (
-    <>
-      <NodeResizer
-        isVisible={data._editable && selected}
-        minWidth={16} minHeight={16}
-        lineStyle={{ borderColor: stroke }}
-        handleStyle={{ width: 8, height: 8, borderRadius: 2, background: '#fff', border: `2px solid ${stroke}` }}
-      />
-      {/* overflow visible để đầu mũi tên không bị cắt ở mép khung */}
-      <svg width={w} height={h} style={{ overflow: 'visible', display: 'block' }}>
-        {withArrow && (
-          <defs>
-            <marker id={mId} markerWidth="10" markerHeight="10" refX="9" refY="3"
-              orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,6 L9,3 z" fill={stroke} />
-            </marker>
-          </defs>
-        )}
-        <line
-          x1={x1} y1={y1} x2={x2} y2={y2}
-          stroke={stroke} strokeWidth={thick}
-          strokeDasharray={st.dashed ? '7 5' : undefined}
-          markerEnd={withArrow ? `url(#${mId})` : undefined}
-        />
-        {/* vùng bắt chuột rộng hơn để dễ chọn đường mảnh */}
-        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={16} />
-      </svg>
-      {selected && data._editable && (
-        <div style={{ position: 'absolute', inset: -4, border: `1px dashed ${stroke}`, pointerEvents: 'none' }} />
-      )}
-    </>
-  )
-}
-
 export const nodeTypes = {
   rectangle:     mk({ radius: 8 }),
   square:        mk({ radius: 6 }),
@@ -201,6 +139,6 @@ export const nodeTypes = {
   parallelogram: mk({ clip: 'polygon(18% 0%, 100% 0%, 82% 100%, 0% 100%)' }),
   diamond:       mk({ clip: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }),
   text:          mk({ radius: 0, extraStyle: { background: 'transparent', border: 'none', boxShadow: 'none' } }),
-  line:          mkLine(false),
-  arrow:         mkLine(true),
+  line:          makeLineNode(false),
+  arrow:         makeLineNode(true),
 }

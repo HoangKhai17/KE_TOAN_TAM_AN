@@ -7,8 +7,10 @@ const NODE_TYPES = [
   'rectangle', 'square', 'circle', 'triangle', 'parallelogram', 'diamond', 'text',
   'line', 'arrow',
 ]
-// Kiểu đường nối: mũi tên 1 chiều · 2 chiều · đường kẻ không mũi tên
+// Đầu mũi tên: 1 chiều · 2 chiều · không mũi tên
 const EDGE_KINDS = ['arrow', 'double', 'line']
+// Dáng đường nối: thẳng · cong · gấp khúc vuông góc
+const EDGE_SHAPES = ['straight', 'curved', 'elbow']
 
 const createProcessSchema = z.object({
   name:        z.string().min(1, 'Tên quy trình không được để trống').max(200),
@@ -45,6 +47,7 @@ const edgeSchema = z.object({
   toNodeId:     z.string().uuid(),
   label:        z.string().max(200).optional().nullable(),
   edgeKind:     z.enum(EDGE_KINDS).default('arrow'),
+  edgeShape:    z.enum(EDGE_SHAPES).default('curved'),
   dashed:       z.boolean().optional(),
   sourceHandle: z.string().max(50).optional().nullable(),
   targetHandle: z.string().max(50).optional().nullable(),
@@ -88,4 +91,5 @@ module.exports = {
   saveGraphSchema,
   NODE_TYPES,
   EDGE_KINDS,
+  EDGE_SHAPES,
 }

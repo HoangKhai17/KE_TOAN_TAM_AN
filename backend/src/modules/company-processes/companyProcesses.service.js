@@ -41,6 +41,7 @@ function edgeToDto(row) {
     toNodeId:     row.to_node_id,
     label:        row.label ?? null,
     edgeKind:     row.edge_kind,
+    edgeShape:    row.edge_shape || 'curved',
     dashed:       row.dashed === true,
     sourceHandle: row.source_handle ?? null,
     targetHandle: row.target_handle ?? null,
@@ -224,16 +225,17 @@ async function saveGraph(companyId, processId, { nodes = [], edges = [], expecte
       const e = edges[i]
       await client.query(
         `INSERT INTO company_process_edges
-           (id, process_id, from_node_id, to_node_id, label, edge_kind, dashed,
+           (id, process_id, from_node_id, to_node_id, label, edge_kind, edge_shape, dashed,
             source_handle, target_handle, position)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
          ON CONFLICT (id) DO UPDATE SET
            from_node_id = EXCLUDED.from_node_id, to_node_id = EXCLUDED.to_node_id,
-           label = EXCLUDED.label, edge_kind = EXCLUDED.edge_kind, dashed = EXCLUDED.dashed,
+           label = EXCLUDED.label, edge_kind = EXCLUDED.edge_kind,
+           edge_shape = EXCLUDED.edge_shape, dashed = EXCLUDED.dashed,
            source_handle = EXCLUDED.source_handle, target_handle = EXCLUDED.target_handle,
            position = EXCLUDED.position`,
         [e.id, processId, e.fromNodeId, e.toNodeId, e.label ?? null,
-         e.edgeKind ?? 'arrow', e.dashed === true,
+         e.edgeKind ?? 'arrow', e.edgeShape ?? 'curved', e.dashed === true,
          e.sourceHandle ?? null, e.targetHandle ?? null, e.position ?? i],
       )
     }

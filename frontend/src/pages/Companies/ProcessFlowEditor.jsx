@@ -6,7 +6,8 @@ import {
 import '@xyflow/react/dist/style.css'
 import {
   Save, X, Undo2, Copy, ClipboardPaste, Maximize2, Minimize2, ArrowLeftRight,
-  Hand, MousePointer2, Focus, Grid3x3,
+  Hand, MousePointer2, Focus, Grid3x3, Pencil,
+  RectangleHorizontal, Square, Circle, Triangle, Diamond, Type, Minus, ArrowRight,
 } from 'lucide-react'
 
 // Bước lưới: hình sẽ "hít" vào bội số của giá trị này → các hình tự căn đều nhau
@@ -14,9 +15,11 @@ const GRID = 16
 
 // Thang cỡ chữ — lên tới 100px để làm tiêu đề lớn trên sơ đồ
 const FONT_SIZES = [11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 72, 84, 100]
+
 import { useToastStore } from '../../stores/toastStore'
 import * as api from '../../api/companyProcesses'
 import { nodeTypes, SHAPES, LINE_SHAPES } from './ProcessNodes'
+import { pointsFromLegacy } from './lineGeometry'
 
 // crypto.randomUUID() CHỈ có trong ngữ cảnh bảo mật (HTTPS/localhost). Server chạy
 // HTTP theo IP → phải có dự phòng, nếu không thêm hình sẽ lỗi trên server.
@@ -34,8 +37,23 @@ function newId() {
 
 const ARROW = { type: MarkerType.ArrowClosed, color: '#64748b', width: 18, height: 18 }
 
-function edgeVisual(kind, dashed) {
+// Dáng đường nối → kiểu edge của React Flow
+const EDGE_TYPE = {
+  straight: 'straight',    // đường thẳng nối trực tiếp
+  curved:   'default',     // đường cong (bezier) — mặc định
+  elbow:    'smoothstep',  // gấp khúc vuông góc, bo góc nhẹ
+}
+
+// Icon 3 dáng đường cho bảng chỉnh đường nối
+const EDGE_SHAPE_OPTS = [
+  { key: 'straight', label: 'Đường thẳng', path: 'M3 13 L23 3' },
+  { key: 'curved',   label: 'Đường cong',  path: 'M3 13 C3 3, 23 13, 23 3' },
+  { key: 'elbow',    label: 'Gấp khúc',    path: 'M3 13 L13 13 L13 3 L23 3' },
+]
+
+function edgeVisual(kind, dashed, shape) {
   return {
+    type: EDGE_TYPE[shape] || 'default',
     style: { stroke: '#64748b', strokeWidth: 2, strokeDasharray: dashed ? '6 4' : undefined },
     markerEnd:   kind === 'line' ? undefined : ARROW,
     markerStart: kind === 'double' ? ARROW : undefined,   // 2 chiều
@@ -65,8 +83,8 @@ const toFlowEdges = (edges) => edges.map((e) => ({
   sourceHandle: e.sourceHandle || undefined,
   targetHandle: e.targetHandle || undefined,
   label: e.label || undefined,
-  data: { edgeKind: e.edgeKind || 'arrow', dashed: !!e.dashed },
-  ...edgeVisual(e.edgeKind || 'arrow', !!e.dashed),
+  data: { edgeKind: e.edgeKind || 'arrow', dashed: !!e.dashed, edgeShape: e.edgeShape || 'curved' },
+  ...edgeVisual(e.edgeKind || 'arrow', !!e.dashed, e.edgeShape || 'curved'),
   ...LABEL_STYLE,
 }))
 
@@ -90,6 +108,7 @@ const toApiEdges = (fe) => fe.map((e, i) => ({
   toNodeId: e.target,
   label: e.label || null,
   edgeKind: e.data?.edgeKind || 'arrow',
+  edgeShape: e.data?.edgeShape || 'curved',
   dashed: !!e.data?.dashed,
   sourceHandle: e.sourceHandle || null,
   targetHandle: e.targetHandle || null,
@@ -141,15 +160,53 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
   const selNode = nodes.find((n) => n.selected) || null
   const selIsLine = selNode ? LINE_SHAPES.has(selNode.type) : false
 
+  // Đánh dấu "có thay đổi" cho cả những sửa đổi đi THẲNG qua React Flow —
+  // sửa chữ trong hình (updateNodeData → 'replace') và kéo giãn kích thước
+  // (NodeResizer → 'dimensions' kèm cờ resizing). Trước đây hai thao tác này
+  // không bật cờ nên nút Lưu vẫn xám và Ctrl+S im lặng → sửa xong mất trắng.
+  // Bỏ qua 'select' và 'dimensions' lúc React Flow tự đo hình khi mới mở,
+  // nếu không sơ đồ vừa tải đã bị coi là đang sửa dở.
+  const isRealChange = useCallback((c) => (
+    c.type === 'replace' || c.type === 'remove' || c.type === 'add'
+    || (c.type === 'dimensions' && c.resizing)
+    || (c.type === 'position' && c.dragging === false)
+  ), [])
+
+  const handleNodesChange = useCallback((changes) => {
+    onNodesChange(changes)
+    if (changes.some(isRealChange)) setDirty(true)
+  }, [onNodesChange, isRealChange])
+
+  const handleEdgesChange = useCallback((changes) => {
+    onEdgesChange(changes)
+    if (changes.some(isRealChange)) setDirty(true)
+  }, [onEdgesChange, isRealChange])
+
   function patchNodeStyle(nodeId, patch) {
     setNodes((nds) => nds.map((n) => n.id === nodeId
       ? { ...n, data: { ...n.data, style: { ...(n.data.style || {}), ...patch } } }
       : n))
     setDirty(true)
   }
+
+  // Đảo chiều mũi tên = đảo THỨ TỰ các điểm. Đường nằm y nguyên chỗ cũ, chỉ đầu
+  // mũi tên nhảy sang đầu kia — nhờ vậy chiều và phía cong chỉnh độc lập nhau.
+  function reverseLine(node) {
+    setNodes((nds) => nds.map((n) => {
+      if (n.id !== node.id) return n
+      const st = n.data.style || {}
+      const pts = Array.isArray(st.points) && st.points.length >= 2
+        ? st.points
+        : pointsFromLegacy(st, n.width, n.height)
+      return { ...n, data: { ...n.data, style: { ...st, points: [...pts].reverse() } } }
+    }))
+    setDirty(true)
+  }
+
   const updatedAtRef = useRef(process.updatedAt)
   const historyRef   = useRef([])
-  const clipboardRef = useRef([])
+  const clipboardRef = useRef(null)
+  const pasteCountRef = useRef(0)
   const wrapRef      = useRef(null)
 
   // Cờ _editable nằm trong data để hình biết có cho sửa chữ / hiện cổng nối không
@@ -217,24 +274,31 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
   }, [setNodes, setEdges, addToast])
 
   const onConnect = useCallback((params) => {
-    snapshot()
     setEdges((eds) => addEdge({
       ...params, id: newId(),
-      data: { edgeKind: 'arrow', dashed: false },
-      ...edgeVisual('arrow', false), ...LABEL_STYLE,
+      data: { edgeKind: 'arrow', dashed: false, edgeShape: 'curved' },
+      ...edgeVisual('arrow', false, 'curved'), ...LABEL_STYLE,
     }, eds))
     setDirty(true)
-  }, [setEdges, snapshot])
+  }, [setEdges])
+
+  // Giữ tham chiếu mới nhất để phím tắt 1–9 luôn gọi đúng hàm (tránh closure cũ)
+  const addShapeRef = useRef(null)
+  addShapeRef.current = addShape
 
   function addShape(type) {
-    snapshot()
-    const { w, h } = SHAPES[type]
+    const { w, h, points } = SHAPES[type]
     const k = nodes.length
     setNodes((nds) => [...nds, {
       id: newId(), type,
       position: { x: 60 + (k * 40) % 360, y: 60 + Math.floor(k / 9) * 120 + (k * 25) % 200 },
       width: w, height: h,
-      data: { title: '', actor: '', note: '', code: '', _editable: true },
+      // Đường kẻ / mũi tên sinh kèm 2 đầu mút để kéo được ngay, không phải
+      // chờ quy đổi từ dữ liệu cũ
+      data: {
+        title: '', actor: '', note: '', code: '', _editable: true,
+        ...(points ? { style: { points: points() } } : {}),
+      },
     }])
     setDirty(true)
   }
@@ -243,25 +307,56 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
   const copySelection = useCallback(() => {
     const sel = nodes.filter((n) => n.selected)
     if (!sel.length) { addToast('Chưa chọn hình nào để sao chép', 'info'); return }
-    clipboardRef.current = structuredClone(sel)
-    addToast(`Đã sao chép ${sel.length} hình`, 'success')
-  }, [nodes, addToast])
+    const ids = new Set(sel.map((n) => n.id))
+    // Chép LUÔN mũi tên nằm trọn trong vùng chọn (cả 2 đầu đều được chọn) —
+    // trước đây chỉ chép hình nên dán ra bị mất hết liên kết.
+    const innerEdges = edges.filter((e) => ids.has(e.source) && ids.has(e.target))
+    clipboardRef.current = {
+      // Chỉ giữ trường cần — tránh clone dữ liệu nội bộ của React Flow
+      nodes: sel.map((n) => ({
+        srcId: n.id, type: n.type,
+        position: { ...n.position }, width: n.width, height: n.height,
+        data: JSON.parse(JSON.stringify({ ...n.data })),
+      })),
+      edges: innerEdges.map((e) => ({ ...e, data: { ...(e.data || {}) } })),
+    }
+    pasteCountRef.current = 0
+    addToast(
+      `Đã chép ${sel.length} hình${innerEdges.length ? ` + ${innerEdges.length} mũi tên` : ''}`,
+      'success',
+    )
+  }, [nodes, edges, addToast])
 
   const pasteClipboard = useCallback(() => {
     const clip = clipboardRef.current
-    if (!clip.length) { addToast('Chưa có gì để dán', 'info'); return }
-    snapshot()
-    const copies = clip.map((n) => ({
-      ...n,
-      id: newId(),
-      position: { x: n.position.x + 40, y: n.position.y + 40 },
-      selected: true,
-      data: { ...n.data, _editable: true },
+    if (!clip?.nodes?.length) { addToast('Chưa có gì để dán', 'info'); return }
+    // Mỗi lần dán lệch thêm một nấc, tránh các bản dán chồng khít lên nhau
+    pasteCountRef.current += 1
+    const off = 40 * pasteCountRef.current
+
+    const idMap = new Map()
+    const newNodes = clip.nodes.map((n) => {
+      const id = newId()
+      idMap.set(n.srcId, id)
+      return {
+        id, type: n.type,
+        position: { x: n.position.x + off, y: n.position.y + off },
+        width: n.width, height: n.height,
+        data: { ...n.data, _editable: true },
+        selected: true,
+      }
+    })
+    const newEdges = clip.edges.map((e) => ({
+      ...e, id: newId(),
+      source: idMap.get(e.source), target: idMap.get(e.target),
+      selected: false,
     }))
-    setNodes((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...copies])
+
+    setNodes((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...newNodes])
+    if (newEdges.length) setEdges((eds) => [...eds, ...newEdges])
     setDirty(true)
-    addToast(`Đã dán ${copies.length} hình`, 'success')
-  }, [setNodes, snapshot, addToast])
+    addToast(`Đã dán ${newNodes.length} hình`, 'success')
+  }, [setNodes, setEdges, addToast])
 
   // Bật/tắt đậm–nghiêng cho MỌI hình đang chọn (đường kẻ/mũi tên không có chữ nên bỏ qua)
   const toggleTextStyle = useCallback((key) => {
@@ -282,6 +377,14 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
       const ctrl = e.ctrlKey || e.metaKey
       const k = e.key.toLowerCase()
 
+      // Ctrl+S = Lưu. Luôn chặn hộp thoại "Lưu trang" của trình duyệt, kể cả khi
+      // chưa có thay đổi — nếu không người dùng sẽ bị bung hộp thoại lạ.
+      if (ctrl && k === 's') {
+        e.preventDefault()
+        saveRef.current?.()
+        return
+      }
+
       // Ctrl+B / Ctrl+I áp cho cả hình đang chọn — CHO PHÉP cả khi đang gõ chữ trong hình,
       // vì đậm/nghiêng áp cho toàn bộ hình chứ không riêng đoạn chữ bôi đen.
       if (ctrl && (k === 'b' || k === 'i')) {
@@ -294,6 +397,11 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
       if (ctrl && k === 'c') { e.preventDefault(); copySelection() }
       else if (ctrl && k === 'v') { e.preventDefault(); pasteClipboard() }
       else if (ctrl && k === 'z') { e.preventDefault(); undo() }
+      // Phím 1–9: thêm nhanh hình tương ứng (số nhỏ hiện trên từng nút)
+      else if (!ctrl && /^[1-9]$/.test(e.key)) {
+        const type = Object.keys(SHAPES)[Number(e.key) - 1]
+        if (type) { e.preventDefault(); addShapeRef.current(type) }
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -309,13 +417,14 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
   function patchEdge(id, patch) {
     setEdges((eds) => eds.map((e) => {
       if (e.id !== id) return e
-      const kind   = patch.edgeKind ?? e.data?.edgeKind ?? 'arrow'
-      const dashed = patch.dashed   ?? e.data?.dashed   ?? false
+      const kind   = patch.edgeKind  ?? e.data?.edgeKind  ?? 'arrow'
+      const dashed = patch.dashed    ?? e.data?.dashed    ?? false
+      const shape  = patch.edgeShape ?? e.data?.edgeShape ?? 'curved'
       const next = {
         ...e,
         label: patch.label !== undefined ? (patch.label || undefined) : e.label,
-        data: { ...e.data, edgeKind: kind, dashed },
-        ...edgeVisual(kind, dashed), ...LABEL_STYLE,
+        data: { ...e.data, edgeKind: kind, dashed, edgeShape: shape },
+        ...edgeVisual(kind, dashed, shape), ...LABEL_STYLE,
       }
       // Đổi chiều = hoán đổi đầu-cuối (kèm cổng nối để mũi tên không nhảy lung tung)
       if (patch.reverse) {
@@ -327,6 +436,13 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
       return next
     }))
     setDirty(true)
+  }
+
+  // Giữ tham chiếu mới nhất cho phím tắt Ctrl+S (tránh lưu nhầm dữ liệu cũ do closure)
+  const saveRef = useRef(null)
+  saveRef.current = () => {
+    if (saving || !dirty) return   // chưa đổi gì hoặc đang lưu → bỏ qua
+    save()
   }
 
   async function save() {
@@ -372,8 +488,8 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={editing ? onNodesChange : undefined}
-        onEdgesChange={editing ? onEdgesChange : undefined}
+        onNodesChange={editing ? handleNodesChange : undefined}
+        onEdgesChange={editing ? handleEdgesChange : undefined}
         onConnect={editing ? onConnect : undefined}
         onEdgeClick={(_, e) => setSelEdge(e)}
         onPaneClick={() => setSelEdge(null)}
@@ -418,69 +534,73 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
         {/* Bản đồ thu nhỏ — kéo/bấm vào đây để nhảy nhanh tới vùng cần sửa */}
         <MiniMap pannable zoomable style={{ height: full ? 120 : 90 }} />
 
-        {/* Công cụ điều hướng: Bàn tay ↔ Chọn, và Vừa khung */}
-        <Panel position="bottom-left" style={{ display: 'flex', gap: 6, marginLeft: 44 }}>
-          {editing && (
-            <>
-              <button
-                onClick={() => setSelectMode(false)}
-                title="Bàn tay — kéo chuột trái để di chuyển canvas (mặc định). Hoặc giữ Space bất cứ lúc nào."
-                style={btn({ width: 32, justifyContent: 'center', height: 28,
-                  ...(!selectMode ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-primary-dark)' } : {}) })}
-              ><Hand size={14} /></button>
-              <button
-                onClick={() => setSelectMode(true)}
-                title="Chọn — kéo chuột trái để khoanh chọn nhiều hình (hoặc giữ Shift + kéo)"
-                style={btn({ width: 32, justifyContent: 'center', height: 28,
-                  ...(selectMode ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-primary-dark)' } : {}) })}
-              ><MousePointer2 size={14} /></button>
-              <button
-                onClick={() => setShowGrid((v) => !v)}
-                title={showGrid ? 'Tắt lưới (hình di chuyển tự do)' : 'Bật lưới — hình tự căn thẳng hàng, đều nhau'}
-                style={btn({ width: 32, justifyContent: 'center', height: 28,
-                  ...(showGrid ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-primary-dark)' } : {}) })}
-              ><Grid3x3 size={14} /></button>
-            </>
-          )}
-          <button onClick={() => fitView({ duration: 400, padding: 0.15 })}
-            title="Thu toàn bộ sơ đồ vừa khung nhìn"
-            style={btn({ height: 28 })}><Focus size={13} /> Vừa khung</button>
+        {/* Điều hướng canvas — cùng kiểu khung với thanh công cụ */}
+        <Panel position="bottom-left" style={{ marginLeft: 44 }}>
+          <div style={BAR}>
+            {editing && (
+              <>
+                <TBtn onClick={() => setSelectMode(false)} tone={!selectMode ? 'active' : undefined}
+                  title="Bàn tay — kéo chuột trái để di chuyển canvas (hoặc giữ Space)">
+                  <Hand size={16} />
+                </TBtn>
+                <TBtn onClick={() => setSelectMode(true)} tone={selectMode ? 'active' : undefined}
+                  title="Chọn — kéo để khoanh chọn nhiều hình (hoặc giữ Shift + kéo)">
+                  <MousePointer2 size={16} />
+                </TBtn>
+                <TBtn onClick={() => setShowGrid((v) => !v)} tone={showGrid ? 'active' : undefined}
+                  title={showGrid ? 'Tắt lưới — hình di chuyển tự do' : 'Bật lưới — hình tự căn thẳng hàng'}>
+                  <Grid3x3 size={16} />
+                </TBtn>
+                <Sep />
+              </>
+            )}
+            <TBtn onClick={() => fitView({ duration: 400, padding: 0.15 })}
+              title="Thu toàn bộ sơ đồ vừa khung nhìn">
+              <Focus size={16} />
+            </TBtn>
+          </div>
         </Panel>
 
-        {/* Thanh công cụ */}
-        <Panel position="top-left" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxWidth: '75%' }}>
-          {!editing ? (
-            <>
-              {canEdit && (
-                <button style={btn({ background: 'var(--color-primary)', color: '#fff', borderColor: 'transparent' })}
-                  onClick={() => setEditing(true)}>✏ Chỉnh sửa</button>
-              )}
-              <button style={btn()} onClick={() => setFull((v) => !v)}>
-                {full ? <Minimize2 size={12} /> : <Maximize2 size={12} />} {full ? 'Thu nhỏ' : 'Toàn màn hình'}
-              </button>
-            </>
-          ) : (
-            <>
-              {Object.entries(SHAPES).map(([type, cfg]) => (
-                <button key={type} style={btn()} onClick={() => addShape(type)} title={`Thêm ${cfg.label}`}>
-                  <ShapeIcon type={type} /> {cfg.label}
-                </button>
-              ))}
-              <span style={{ width: 1, background: 'var(--color-border)', margin: '0 2px' }} />
-              <button style={btn()} onClick={copySelection} title="Ctrl+C"><Copy size={12} /> Chép</button>
-              <button style={btn()} onClick={pasteClipboard} title="Ctrl+V"><ClipboardPaste size={12} /> Dán</button>
-              <button style={btn()} onClick={undo} title="Ctrl+Z"><Undo2 size={12} /> Hoàn tác</button>
-              <button style={btn()} onClick={() => setFull((v) => !v)}>
-                {full ? <Minimize2 size={12} /> : <Maximize2 size={12} />} {full ? 'Thu nhỏ' : 'Toàn màn hình'}
-              </button>
-              <span style={{ width: 1, background: 'var(--color-border)', margin: '0 2px' }} />
-              <button style={btn({ background: dirty ? '#16a34a' : '#94a3b8', color: '#fff', borderColor: 'transparent' })}
-                onClick={save} disabled={saving || !dirty}>
-                <Save size={12} /> {saving ? 'Đang lưu…' : 'Lưu'}
-              </button>
-              <button style={btn()} onClick={cancelEdit}><X size={12} /> Huỷ</button>
-            </>
-          )}
+        {/* Thanh công cụ — GỘP 1 KHUNG, chỉ icon; tên hiện khi rê chuột */}
+        <Panel position="top-left">
+          <div style={BAR}>
+            {!editing ? (
+              <>
+                {canEdit && (
+                  <TBtn onClick={() => setEditing(true)} title="Chỉnh sửa sơ đồ" tone="primary">
+                    <Pencil size={16} />
+                  </TBtn>
+                )}
+                <TBtn onClick={() => setFull((v) => !v)} title={full ? 'Thu nhỏ' : 'Toàn màn hình'}>
+                  {full ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                </TBtn>
+              </>
+            ) : (
+              <>
+                {Object.entries(SHAPES).map(([type, cfg], i) => (
+                  <TBtn key={type} onClick={() => addShape(type)}
+                    title={`${cfg.label}  (phím ${i + 1})`} badge={i + 1}>
+                    <ShapeIcon type={type} />
+                  </TBtn>
+                ))}
+
+                <Sep />
+                <TBtn onClick={copySelection}  title="Chép  (Ctrl+C)"><Copy size={16} /></TBtn>
+                <TBtn onClick={pasteClipboard} title="Dán  (Ctrl+V)"><ClipboardPaste size={16} /></TBtn>
+                <TBtn onClick={undo}           title="Hoàn tác  (Ctrl+Z)"><Undo2 size={16} /></TBtn>
+                <TBtn onClick={() => setFull((v) => !v)} title={full ? 'Thu nhỏ' : 'Toàn màn hình'}>
+                  {full ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                </TBtn>
+
+                <Sep />
+                <TBtn onClick={save} disabled={saving || !dirty}
+                  title={dirty ? 'Lưu sơ đồ  (Ctrl+S)' : 'Chưa có thay đổi nào'} tone={dirty ? 'save' : 'muted'}>
+                  <Save size={16} />
+                </TBtn>
+                <TBtn onClick={cancelEdit} title="Huỷ thay đổi" tone="danger"><X size={16} /></TBtn>
+              </>
+            )}
+          </div>
         </Panel>
 
         {/* Bảng ĐỊNH DẠNG hình đang chọn */}
@@ -559,21 +679,40 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
                     ))}
                   </div>
 
-                  <Lbl>Góc xoay — đường luôn THẲNG</Lbl>
+                  <Lbl>Dáng đường</Lbl>
                   <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                    {[0, 45, 90, 135].map((d) => (
-                      <button key={d} onClick={() => set({ rotation: d })}
-                        style={btn({ flex: 1, fontSize: 11, height: 26, justifyContent: 'center',
-                          ...((st.rotation || 0) === d ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)' } : {}) })}>
-                        {d}°
+                    {EDGE_SHAPE_OPTS.map(({ key, path, label }) => (
+                      <button key={key} onClick={() => set({ lineShape: key })} title={label}
+                        style={btn({ flex: 1, height: 28, padding: 0, justifyContent: 'center',
+                          ...((st.lineShape || 'straight') === key
+                            ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)' } : {}) })}>
+                        <svg width="26" height="16" viewBox="0 0 26 16" fill="none"
+                          stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d={path} />
+                        </svg>
                       </button>
                     ))}
                   </div>
-                  <input type="range" min="0" max="359" value={st.rotation || 0}
-                    onChange={(e) => set({ rotation: Number(e.target.value) })}
-                    style={{ width: '100%' }} />
-                  <div style={{ fontSize: 11, color: 'var(--color-muted)', textAlign: 'center' }}>
-                    {st.rotation || 0}° · kéo mép để đổi độ dài
+
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                    <button onClick={() => reverseLine(selNode)}
+                      title="Đổi đầu mũi tên sang đầu kia"
+                      style={btn({ flex: 1, fontSize: 11, height: 26, justifyContent: 'center' })}>
+                      <ArrowLeftRight size={12} /> Đảo chiều
+                    </button>
+                    <button onClick={() => set({ bend: st.bend === -1 ? 1 : -1 })}
+                      disabled={(st.lineShape || 'straight') === 'straight'}
+                      title="Lật phía cong / phía bẻ khúc sang bên kia"
+                      style={btn({ flex: 1, fontSize: 11, height: 26, justifyContent: 'center',
+                        ...((st.lineShape || 'straight') === 'straight'
+                          ? { opacity: 0.45, cursor: 'not-allowed' } : {}) })}>
+                      ⇅ Lật phía
+                    </button>
+                  </div>
+
+                  <div style={{ fontSize: 11, color: 'var(--color-muted)', lineHeight: 1.45 }}>
+                    Kéo <b>chấm tròn ở 2 đầu</b> để đặt đường theo góc và chiều bất kỳ.<br />
+                    Nhấp đúp lên đường để <b>thêm điểm gãy</b>, nhấp đúp lên chấm để <b>xoá</b>.
                   </div>
                 </>
               )}
@@ -595,6 +734,25 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
               style={{ width: '100%', marginBottom: 8, padding: '6px 8px', fontSize: 12,
                        border: '1px solid var(--color-border)', borderRadius: 6 }}
             />
+            <Lbl>Dáng đường</Lbl>
+            <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+              {EDGE_SHAPE_OPTS.map(({ key, path, label }) => (
+                <button key={key} onClick={() => patchEdge(selEdge.id, { edgeShape: key })} title={label}
+                  style={btn({
+                    flex: 1, height: 28, padding: 0, justifyContent: 'center',
+                    ...((selEdge.data?.edgeShape || 'curved') === key
+                      ? { background: 'var(--color-primary-bg)', borderColor: 'var(--color-primary)' }
+                      : {}),
+                  })}>
+                  <svg width="26" height="16" viewBox="0 0 26 16" fill="none"
+                    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d={path} />
+                  </svg>
+                </button>
+              ))}
+            </div>
+
+            <Lbl>Đầu mũi tên</Lbl>
             <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
               {[['arrow', '→ 1 chiều'], ['double', '↔ 2 chiều'], ['line', '— Không mũi tên']].map(([k, lb]) => (
                 <button key={k} onClick={() => patchEdge(selEdge.id, { edgeKind: k })}
@@ -622,13 +780,59 @@ function EditorInner({ companyId, process, initialNodes, initialEdges, canEdit, 
           {editing
             ? (spaceHeld
                 ? '✋ Đang giữ Space — kéo để di chuyển canvas'
-                : 'Kéo nền = di chuyển · Shift+kéo = khoanh chọn · Space = tạm di chuyển · nhấp đúp sửa chữ · Delete xoá · Ctrl+C/V · Ctrl+Z · Ctrl+B/I đậm-nghiêng')
+                : 'Kéo nền = di chuyển · Shift+kéo = khoanh chọn · Space = tạm di chuyển · nhấp đúp sửa chữ · phím 1-9 thêm hình · Delete xoá · Ctrl+C/V · Ctrl+Z · Ctrl+B/I · Ctrl+S lưu')
             : 'Kéo nền để di chuyển · cuộn để phóng to'}
         </Panel>
       </ReactFlow>
     </div>
   )
 }
+
+// ── Thanh công cụ: 1 khung bo tròn, các nút chỉ có icon ──────────────────────
+const BAR = {
+  display: 'flex', alignItems: 'center', gap: 2,
+  padding: 4, borderRadius: 10, background: '#fff',
+  border: '1px solid #e5e7eb', boxShadow: '0 2px 10px rgba(15,23,42,0.10)',
+}
+
+const TONE_STYLE = {
+  primary: { background: 'var(--color-primary)', color: '#fff' },
+  save:    { background: '#16a34a', color: '#fff' },
+  muted:   { background: 'transparent', color: '#94a3b8' },
+  danger:  { color: '#dc2626' },
+  active:  { background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' },
+}
+
+function TBtn({ children, title, onClick, disabled, tone, badge }) {
+  return (
+    <button
+      type="button" title={title} onClick={onClick} disabled={disabled}
+      style={{
+        position: 'relative',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: 32, height: 32, padding: 0, flexShrink: 0,
+        border: 'none', borderRadius: 8, background: 'transparent',
+        color: '#334155', cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.45 : 1, transition: 'background .12s',
+        ...(tone ? TONE_STYLE[tone] : null),
+      }}
+      onMouseEnter={(e) => { if (!tone && !disabled) e.currentTarget.style.background = '#f1f5f9' }}
+      onMouseLeave={(e) => { if (!tone && !disabled) e.currentTarget.style.background = 'transparent' }}
+    >
+      {children}
+      {badge != null && (
+        <span style={{
+          position: 'absolute', right: 2, bottom: 1,
+          fontSize: 8, fontWeight: 700, lineHeight: 1, color: '#94a3b8', pointerEvents: 'none',
+        }}>{badge}</span>
+      )}
+    </button>
+  )
+}
+
+const Sep = () => (
+  <span style={{ width: 1, height: 20, background: '#e5e7eb', margin: '0 4px', flexShrink: 0 }} />
+)
 
 // Nhãn nhỏ + hàng ô màu trong bảng định dạng
 const Lbl = ({ children }) => (
@@ -638,22 +842,24 @@ const Row = ({ children }) => (
   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>{children}</div>
 )
 
-// Icon xem trước hình trên nút thêm
-function ShapeIcon({ type }) {
-  const base = { width: 12, height: 12, border: '1.6px solid currentColor', flexShrink: 0 }
-  const map = {
-    rectangle:     { ...base, borderRadius: 2 },
-    square:        { ...base, width: 11, height: 11 },
-    circle:        { ...base, borderRadius: '50%' },
-    triangle:      { ...base, border: 'none', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '11px solid currentColor' },
-    parallelogram: { ...base, transform: 'skewX(-18deg)' },
-    diamond:       { ...base, transform: 'rotate(45deg)', width: 9, height: 9 },
-    text:          null,
+// Icon của từng hình trên thanh công cụ (chỉ icon, tên hiện khi rê chuột)
+function ShapeIcon({ type, size = 16 }) {
+  const p = { size, strokeWidth: 1.9 }
+  switch (type) {
+    case 'rectangle': return <RectangleHorizontal {...p} />
+    case 'square':    return <Square {...p} />
+    case 'circle':    return <Circle {...p} />
+    case 'triangle':  return <Triangle {...p} />
+    case 'diamond':   return <Diamond {...p} />
+    case 'text':      return <Type {...p} />
+    case 'line':      return <Minus {...p} />
+    case 'arrow':     return <ArrowRight {...p} />
+    // Bình hành: lucide không có sẵn → dùng ô vuông làm nghiêng
+    case 'parallelogram':
+      return <span style={{ width: size - 2, height: size - 5, border: '1.9px solid currentColor',
+                            transform: 'skewX(-20deg)', flexShrink: 0 }} />
+    default: return <Square {...p} />
   }
-  if (type === 'text') return <span style={{ fontWeight: 800, fontSize: 12 }}>T</span>
-  if (type === 'line')  return <span style={{ width: 13, height: 0, borderTop: '2px solid currentColor', flexShrink: 0 }} />
-  if (type === 'arrow') return <span style={{ fontWeight: 800, fontSize: 13, lineHeight: 1 }}>→</span>
-  return <span style={map[type]} />
 }
 
 export default function ProcessFlowEditor(props) {

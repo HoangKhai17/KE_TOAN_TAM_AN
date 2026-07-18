@@ -58,6 +58,7 @@ Bộ tài liệu này bao gồm:
 | 18 | [018_COLUMN_HEADER_FILTER.md](./018_COLUMN_HEADER_FILTER.md) | Cơ chế bộ lọc trên header cột kiểu Excel — state, helpers, dropdown, CSS | ✅ Hoàn thành |
 | 19 | [019_GENERIC_COMPANY_TABLES.md](./019_GENERIC_COMPANY_TABLES.md) | Bảng báo cáo tùy biến do admin tạo (Pha 1–3) — schema động, computed, migrate tab bespoke | 📝 Đề xuất thiết kế |
 | 21 | [021_DON_RAC_HE_THONG.md](./021_DON_RAC_HE_THONG.md) | Dọn rác & retention — refresh_tokens, audit_logs, notifications; job cleanup, cảnh báo phân trang | 📝 Đề xuất — chưa triển khai |
+| 22 | [022_TEST_SO_DO_QUY_TRINH.md](./022_TEST_SO_DO_QUY_TRINH.md) | Kịch bản kiểm thử canvas sơ đồ quy trình — hình, đường kẻ, định dạng, hoàn tác, điều hướng, phân quyền | ✅ Dùng để test tay |
 
 **Chưa bao gồm** (sẽ bổ sung giai đoạn sau):
 - UI/UX Wireframe chi tiết
