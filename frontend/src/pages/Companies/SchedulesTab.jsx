@@ -24,6 +24,49 @@ const RECURRENCE_TYPES = [
   { value: 'custom_dates',       label: 'Ngày chỉ định' },
   { value: 'once',               label: 'Một lần' },
 ]
+
+// Kỳ nghiệp vụ có thể LỆCH so với ngày làm việc: bảng lương tháng 6 thì làm
+// trong tháng 7 → nhãn kỳ phải là T06 dù task sinh tháng 7.
+// Lưu trong recurrenceConfig.period_offset, mặc định 0 (không lệch).
+// Đơn vị lệch khớp với ĐỘ MỊN CỦA NHÃN KỲ, không phải chu kỳ lặp.
+// Lịch hàng tuần có nhãn theo tháng (T07/2026) nên lệch cũng tính theo tháng.
+const PERIOD_UNIT = {
+  daily: 'ngày', quarterly: 'quý', yearly: 'năm',
+}
+const periodUnit = (type) => PERIOD_UNIT[type] || 'tháng'
+
+function periodOffsetOptions(type) {
+  const dv = periodUnit(type)
+  return [
+    { value: -3, label: `Lùi 3 ${dv}` },
+    { value: -2, label: `Lùi 2 ${dv}` },
+    { value: -1, label: `Lùi 1 ${dv}` },
+    { value: 0,  label: 'Cùng kỳ (mặc định)' },
+    { value: 1,  label: `Tiến 1 ${dv}` },
+    { value: 2,  label: `Tiến 2 ${dv}` },
+    { value: 3,  label: `Tiến 3 ${dv}` },
+  ]
+}
+
+// Xem trước nhãn kỳ sẽ sinh ra, tính trên NGÀY HÔM NAY cho dễ hình dung
+function previewPeriodLabel(type, offset) {
+  const d = new Date()
+  const off = Number(offset) || 0
+  if (off) {
+    if (type === 'daily')          d.setDate(d.getDate() + off)
+    else if (type === 'quarterly') d.setMonth(d.getMonth() + off * 3)
+    else if (type === 'yearly')    d.setFullYear(d.getFullYear() + off)
+    else { d.setDate(1); d.setMonth(d.getMonth() + off) }
+  }
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yy = d.getFullYear()
+  if (type === 'daily' || type === 'once' || type === 'custom_dates') return `${dd}/${mm}/${yy}`
+  if (type === 'quarterly') return `Q${Math.ceil((d.getMonth() + 1) / 3)}/${yy}`
+  if (type === 'yearly')    return `${yy}`
+  return `T${mm}/${yy}`
+}
+
 const RECURRENCE_LABELS = Object.fromEntries(RECURRENCE_TYPES.map(r => [r.value, r.label]))
 
 const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
@@ -644,7 +687,15 @@ export default function SchedulesTab({ company, isAdmin }) {
                     </td>
                     <td>
                       <div className={s.scRecurrenceLabel}>{RECURRENCE_LABELS[sc.recurrenceType]}</div>
-                      <div className={s.scRecurrenceDesc}>{describeRecurrence(sc.recurrenceType, sc.recurrenceConfig)}</div>
+                      <div className={s.scRecurrenceDesc}>
+                        {describeRecurrence(sc.recurrenceType, sc.recurrenceConfig)}
+                        {!!sc.recurrenceConfig?.period_offset && (
+                          <span className={s.scDeadlineTag} style={{ marginLeft: 6 }}>
+                            kỳ {sc.recurrenceConfig.period_offset < 0 ? 'lùi' : 'tiến'}{' '}
+                            {Math.abs(sc.recurrenceConfig.period_offset)} {periodUnit(sc.recurrenceType)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>
                       {sc.assignedStaffName
@@ -795,7 +846,18 @@ export default function SchedulesTab({ company, isAdmin }) {
                   value={form.recurrenceType}
                   onChange={e => {
                     const t = e.target.value
-                    setForm(f => ({ ...f, recurrenceType: t, recurrenceConfig: defaultConfig(t) }))
+                    // Giữ lại độ lệch kỳ khi đổi loại lịch — nó độc lập với
+                    // cấu hình riêng của từng loại (ngày/thứ/tháng…)
+                    setForm(f => ({
+                      ...f,
+                      recurrenceType: t,
+                      recurrenceConfig: {
+                        ...defaultConfig(t),
+                        ...(f.recurrenceConfig?.period_offset
+                          ? { period_offset: f.recurrenceConfig.period_offset }
+                          : {}),
+                      },
+                    }))
                     setFormErrors(fe => { const n = { ...fe }; delete n.recurrenceConfig; delete n.submit; return n })
                   }}
                 >
@@ -819,6 +881,29 @@ export default function SchedulesTab({ company, isAdmin }) {
                 {formErrors.recurrenceConfig && (
                   <div className={s.formError}>{formErrors.recurrenceConfig}</div>
                 )}
+              </div>
+
+              {/* Kỳ nghiệp vụ — lệch bao nhiêu so với ngày làm việc */}
+              <div className={s.formField}>
+                <label className={s.formLabel}>Kỳ nghiệp vụ của công việc</label>
+                <select
+                  className={s.formInput}
+                  value={form.recurrenceConfig?.period_offset ?? 0}
+                  onChange={e => setField('recurrenceConfig', {
+                    ...(form.recurrenceConfig || {}),
+                    period_offset: parseInt(e.target.value, 10) || 0,
+                  })}
+                >
+                  {periodOffsetOptions(form.recurrenceType).map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <div className={s.formHint}>
+                  Tên công việc sinh hôm nay sẽ là{' '}
+                  <b>[{previewPeriodLabel(form.recurrenceType, form.recurrenceConfig?.period_offset)}]</b>
+                  {' '}— dùng khi kỳ nghiệp vụ khác tháng làm việc (vd bảng lương tháng 6 làm trong tháng 7).
+                  Ngày bắt đầu và hạn chót KHÔNG đổi.
+                </div>
               </div>
 
               {/* Deadline offset + override SLA */}

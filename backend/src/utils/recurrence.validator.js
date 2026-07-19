@@ -3,6 +3,15 @@ function validateRecurrenceConfig(type, config) {
     throw new Error('recurrenceConfig must be an object')
   }
 
+  // Độ lệch kỳ nghiệp vụ so với ngày làm việc — dùng chung cho MỌI loại lịch.
+  // Ví dụ bảng lương tháng 6 làm trong tháng 7 → period_offset = -1.
+  // Giới hạn ±12 để chặn nhập nhầm (vd gõ 2026 thay vì -1) làm nhãn kỳ lệch hẳn.
+  if (config.period_offset !== undefined && config.period_offset !== null) {
+    if (!Number.isInteger(config.period_offset) || Math.abs(config.period_offset) > 12) {
+      throw new Error('period_offset phải là số nguyên trong khoảng -12 đến 12')
+    }
+  }
+
   switch (type) {
     case 'daily':
       if (!Number.isInteger(config.every_n_days) || config.every_n_days < 1)

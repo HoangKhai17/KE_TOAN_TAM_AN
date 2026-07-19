@@ -1,31 +1,8 @@
 const { query } = require('../config/db')
 const logger    = require('../config/logger')
 const { shouldGenerateToday, getCurrentOccurrence } = require('../utils/recurrence.calculator')
+const { buildPeriodLabel, docPeriodOffset } = require('../utils/periodLabel')
 const { format, addDays } = require('date-fns')
-
-// Generate period label for a task (T06/2026 for monthly, Q2/2026 for quarterly, etc.)
-function buildPeriodLabel(recurrenceType, dueDate) {
-  const d = new Date(dueDate)
-  const month = d.getMonth() + 1
-  const year  = d.getFullYear()
-
-  switch (recurrenceType) {
-    case 'daily':
-      return `${String(d.getDate()).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`
-    case 'weekly':
-      return `T${String(month).padStart(2, '0')}/${year}`
-    case 'monthly_by_date':
-    case 'monthly_by_weekday':
-    case 'monthly_last_day':
-      return `T${String(month).padStart(2, '0')}/${year}`
-    case 'quarterly':
-      return `Q${Math.ceil(month / 3)}/${year}`
-    case 'yearly':
-      return `${year}`
-    default:
-      return `${String(month).padStart(2, '0')}/${year}`
-  }
-}
 
 // Tiêu đề task tự sinh: CHỈ gồm kỳ + tên mẫu công việc.
 // Trước đây ghép thêm tên viết tắt/tên công ty nên tiêu đề rất dài, trong khi
@@ -92,7 +69,10 @@ async function runTaskGenerator(options = {}) {
         )
 
         // Idempotency check: don't create a duplicate task for same schedule + period
-        const periodLabel = buildPeriodLabel(schedule.recurrence_type, forDate)
+        // Nhãn kỳ có thể lệch so với ngày làm việc (vd bảng lương T6 làm trong T7)
+        // — độ lệch khai báo riêng cho từng lịch của từng công ty.
+        const periodLabel = buildPeriodLabel(
+          schedule.recurrence_type, forDate, docPeriodOffset(schedule.recurrence_config))
         const { rows: [existing] } = await query(
           `SELECT id FROM tasks
            WHERE customer_task_schedule_id = $1
