@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Plus, Pencil, ChevronDown, ChevronRight, ChevronLeft, Loader2,
   GripVertical, Trash2, Check, X, Tag, AlignLeft,
-  Power, RefreshCw,
+  Power, RefreshCw, Wand2,
 } from 'lucide-react'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -20,6 +20,7 @@ import {
   addCustomField, deleteCustomField,
 } from '../../api/taskTypes'
 import SyncTasksModal from './SyncTasksModal'
+import RenameTitlesModal from './RenameTitlesModal.TEMP'   // TEMP — xoá sau khi chạy xong
 import s from './settings.module.css'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -60,6 +61,7 @@ export default function TaskTypesSection() {
   const [grouped, setGrouped] = useState({})
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal]     = useState(false)
+  const [showRename, setShowRename]   = useState(false)   // TEMP — xoá cùng nút đổi tên
   const [editing, setEditing]         = useState(null)
   const [expandedId, setExpandedId]   = useState(null)
   const [detailCache, setDetailCache] = useState({})
@@ -133,6 +135,15 @@ export default function TaskTypesSection() {
         <p className={s.taskTypeDescription}>
           Định nghĩa loại công việc, nhóm, checklist mẫu và trường tùy chỉnh.
         </p>
+        {/* TEMP — dọn tiêu đề công việc tự sinh cũ, xoá nút này sau khi chạy xong trên server */}
+        <button
+          className={s.btnOutline}
+          style={{ marginRight: 8 }}
+          onClick={() => setShowRename(true)}
+          title="Bỏ tên công ty khỏi tiêu đề công việc tự sinh đã tạo trước đây"
+        >
+          <Wand2 size={13} /> Chạy thay đổi tên
+        </button>
         <button className={s.btnAddSmall} onClick={() => { setEditing(null); setShowModal(true) }}>
           <Plus size={13} /> Thêm loại
         </button>
@@ -192,6 +203,9 @@ export default function TaskTypesSection() {
           onSaved={() => { setShowModal(false); load() }}
         />
       )}
+
+      {/* TEMP — xoá cùng nút "Chạy thay đổi tên" */}
+      {showRename && <RenameTitlesModal onClose={() => setShowRename(false)} />}
     </div>
   )
 }

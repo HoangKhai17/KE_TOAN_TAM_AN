@@ -58,7 +58,8 @@
       "Bash(node -e \"require\\('./task-types.controller.js'\\); console.log\\('controller nạp OK'\\)\")",
       "Bash(docker exec *)",
       "Bash(docker restart *)",
-      "Bash(grep -n \"console.log..\\\\\\\\\\\\\\\\n.\\\\[12\\\\]\" sync_test.js)"
+      "Bash(grep -n \"console.log..\\\\\\\\\\\\\\\\n.\\\\[12\\\\]\" sync_test.js)",
+      "Bash(git check-ignore *)"
     ],
     "additionalDirectories": [
       "\\tmp"

@@ -382,4 +382,9 @@ router.delete('/:id/fields/:fieldId', ...admin, ctrl.deleteCustomField)
 router.get('/:id/sync-tasks/preview', ...admin, ctrl.previewSyncTasks)
 router.post('/:id/sync-tasks', ...admin, ctrl.applySyncTasks)
 
+/* ─── TEMP: dọn tên công việc tự sinh cũ (bỏ tên công ty khỏi tiêu đề).
+   Chỉ dùng một lần trên server rồi XOÁ 2 dòng này. ─── */
+router.get('/rename-auto-titles/preview', ...admin, ctrl.previewRenameTitles)
+router.post('/rename-auto-titles', ...admin, ctrl.applyRenameTitles)
+
 module.exports = router
