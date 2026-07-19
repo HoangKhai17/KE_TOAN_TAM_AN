@@ -73,3 +73,22 @@ export async function updateCustomField(id, fieldId, body) {
 export async function deleteCustomField(id, fieldId) {
   await api.delete(`/task-types/${id}/fields/${fieldId}`)
 }
+
+// ── Đồng bộ công việc đã phát sinh theo mẫu ──────────────────────────────────
+// preview KHÔNG ghi gì; apply mới thực sự cập nhật.
+export async function previewSyncTasks(id, { includeCompleted = true, theoLoaiTru = false } = {}) {
+  const { data } = await api.get(`/task-types/${id}/sync-tasks/preview`, {
+    params: { includeCompleted: includeCompleted ? '1' : '0', theoLoaiTru: theoLoaiTru ? '1' : '0' },
+  })
+  return data.data
+}
+
+// taskIds = danh sách công việc muốn đồng bộ; bỏ trống = tất cả.
+// LƯU Ý: body phải là object, KHÔNG được là null — axios sẽ gửi chuỗi "null"
+// và body-parser (strict) từ chối với lỗi 400.
+export async function applySyncTasks(id, { includeCompleted = true, taskIds, theoLoaiTru = false } = {}) {
+  const { data } = await api.post(`/task-types/${id}/sync-tasks`,
+    taskIds?.length ? { taskIds } : {},
+    { params: { includeCompleted: includeCompleted ? '1' : '0', theoLoaiTru: theoLoaiTru ? '1' : '0' } })
+  return data.data
+}

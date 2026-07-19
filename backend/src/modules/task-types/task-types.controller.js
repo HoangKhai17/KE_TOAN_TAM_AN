@@ -1,4 +1,5 @@
 const svc = require('./task-types.service')
+const syncSvc = require('./taskTypes.sync.service')
 
 async function listTaskTypes(req, res, next) {
   try {
@@ -108,8 +109,34 @@ async function deleteCustomField(req, res, next) {
   } catch (err) { next(err) }
 }
 
+
+// Xem trước / thực hiện đồng bộ công việc đã phát sinh theo mẫu hiện tại.
+// Mặc định là XEM TRƯỚC — chỉ ghi khi ?apply=1, để không ai lỡ tay đổi hàng loạt.
+async function previewSyncTasks(req, res, next) {
+  try {
+    const includeCompleted = req.query.includeCompleted !== '0'
+    const theoLoaiTru = req.query.theoLoaiTru === '1'
+    const result = await syncSvc.syncTasksFromTemplate(req.params.id, { dryRun: true, includeCompleted, theoLoaiTru })
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
+async function applySyncTasks(req, res, next) {
+  try {
+    const includeCompleted = req.query.includeCompleted !== '0'
+    const taskIds = Array.isArray(req.body?.taskIds) ? req.body.taskIds : undefined
+    const theoLoaiTru = req.query.theoLoaiTru === '1'
+    const result = await syncSvc.syncAndAudit(
+      req.params.id, { includeCompleted, taskIds, theoLoaiTru },
+      req.user.id, req.ip, req.headers['user-agent']
+    )
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   getChecklist, addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
   getCustomFields, addCustomField, updateCustomField, deleteCustomField,
+  previewSyncTasks, applySyncTasks,
 }

@@ -53,7 +53,15 @@
       "Bash(docker stop *)",
       "Bash(echo \"=== exit=$? ===\")",
       "Bash(docker start *)",
-      "Bash(echo \"restore exit=$?\")"
+      "Bash(echo \"restore exit=$?\")",
+      "Bash(xargs grep -n \"ADD COLUMN\\\\|COMMENT\")",
+      "Bash(node -e \"require\\('./task-types.controller.js'\\); console.log\\('controller nạp OK'\\)\")",
+      "Bash(docker exec *)",
+      "Bash(docker restart *)",
+      "Bash(grep -n \"console.log..\\\\\\\\\\\\\\\\n.\\\\[12\\\\]\" sync_test.js)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

@@ -2288,3 +2288,150 @@
   font-weight: 600;
 }
 
+
+/* ── Đồng bộ công việc theo mẫu ───────────────────────────────────────────── */
+
+.syncLoading {
+  display: flex; align-items: center; gap: 8px;
+  padding: 28px 4px; color: var(--color-muted); font-size: var(--fs-sm);
+}
+
+.syncSummary {
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-primary-soft);
+  border-radius: var(--radius-md);
+  padding: 10px 12px; margin-bottom: 10px;
+}
+.syncSummaryRow { font-size: var(--fs-sm); color: var(--color-text); margin-bottom: 8px; }
+.syncStats { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.syncStat {
+  font-size: var(--fs-xs); padding: 3px 9px; border-radius: var(--radius-pill);
+  background: #fff; border: 1px solid var(--color-border); color: var(--color-text-soft);
+}
+.syncStat_blue  { border-color: var(--color-primary-soft); color: var(--color-primary); }
+.syncStat_green { border-color: #86efac; color: var(--color-success-dark); background: #f0fdf4; }
+.syncStat_amber { border-color: #fdba74; color: #c2410c; background: #fff7ed; }
+.syncStat_grey  { color: var(--color-muted); }
+
+/* Cam kết an toàn — nhắc rõ là không xoá gì, vì đây là nỗi lo lớn nhất khi
+   bấm một nút cập nhật hàng loạt lên dữ liệu thật */
+.syncSafety {
+  display: flex; gap: 8px; align-items: flex-start;
+  background: #f0fdf4; border: 1px solid #86efac; border-radius: var(--radius-md);
+  padding: 9px 11px; margin-bottom: 10px;
+  font-size: var(--fs-xs); color: var(--color-success-dark); line-height: 1.5;
+}
+
+.syncOption {
+  display: flex; gap: 8px; align-items: flex-start; cursor: pointer;
+  font-size: var(--fs-xs); color: var(--color-text-soft);
+  padding: 8px 10px; margin-bottom: 12px; line-height: 1.5;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+}
+
+.syncEmpty {
+  display: flex; align-items: center; gap: 8px; justify-content: center;
+  padding: 24px; color: var(--color-success-dark); font-size: var(--fs-sm);
+  background: #f0fdf4; border-radius: var(--radius-md); margin-bottom: 12px;
+}
+
+.syncListHead {
+  font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+  color: var(--color-muted); margin-bottom: 6px;
+}
+.syncList {
+  max-height: 46vh; overflow-y: auto;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+
+.syncItem { border-bottom: 1px solid var(--color-border-soft); }
+.syncItem:last-child { border-bottom: none; }
+
+.syncItemHead {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 8px 10px; background: none; border: none; cursor: pointer;
+  text-align: left; font-size: var(--fs-xs); color: var(--color-text);
+}
+.syncItemHead:hover { background: var(--color-bg-soft); }
+.syncItemCty { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-semibold); }
+.syncItemKy  { color: var(--color-muted); flex-shrink: 0; }
+.syncTagDone {
+  flex-shrink: 0; font-size: 10px; padding: 1px 6px; border-radius: var(--radius-pill);
+  background: #f0fdf4; color: var(--color-success-dark); border: 1px solid #86efac;
+}
+.syncItemCounts { display: flex; gap: 6px; flex-shrink: 0; }
+.syncItemCounts em { font-style: normal; font-size: 11px; color: var(--color-primary); }
+.syncAdd  { color: var(--color-success-dark) !important; }
+.syncKeep { color: var(--color-muted) !important; }
+
+.syncItemBody { padding: 4px 10px 12px 28px; background: var(--color-bg-soft); }
+
+.syncBlock { margin-bottom: 10px; }
+.syncBlockTitle {
+  font-size: 11px; font-weight: var(--fw-semibold); color: var(--color-muted);
+  text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px;
+}
+
+.syncRow { padding: 4px 0; border-bottom: 1px dashed var(--color-border-soft); }
+.syncRow:last-child { border-bottom: none; }
+.syncRowPlain { font-size: var(--fs-xs); color: var(--color-text-soft); }
+.syncRowPlain i { color: var(--color-muted); font-size: 11px; }
+
+.syncDiffOld {
+  font-size: var(--fs-xs); color: #b91c1c; background: #fef2f2;
+  padding: 2px 6px; border-radius: 3px; margin-bottom: 2px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.syncDiffNew {
+  font-size: var(--fs-xs); color: var(--color-success-dark); background: #f0fdf4;
+  padding: 2px 6px; border-radius: 3px;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.syncRowMeta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 3px; font-size: 11px; }
+.syncTicked   { display: inline-flex; align-items: center; gap: 3px; color: var(--color-success-dark); }
+.syncUnticked { color: var(--color-muted); }
+.syncMatch    { color: var(--color-muted); font-style: italic; }
+
+.syncRowKeep {
+  display: flex; align-items: center; gap: 5px;
+  font-size: var(--fs-xs); color: var(--color-text-soft);
+  padding: 3px 6px; background: #fffbeb; border-left: 2px solid #fdba74;
+  margin-bottom: 2px; word-break: break-word;
+}
+.syncDot { color: var(--color-muted); }
+
+.syncNote {
+  font-size: 11px; color: var(--color-muted); font-style: italic;
+  padding: 4px 0 6px;
+}
+
+.syncWarn {
+  display: flex; align-items: center; gap: 5px; justify-content: flex-end;
+  font-size: 11px; color: var(--color-muted); margin-top: 6px;
+}
+
+.ttSyncBar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 0 0 10px; margin-bottom: 10px;
+  border-bottom: 1px dashed var(--color-border);
+}
+.ttSyncHint { font-size: 11px; color: var(--color-muted); }
+
+/* Chọn từng công việc để đồng bộ thử vài cái trước */
+.syncListHead {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.syncPickBtns { display: flex; gap: 6px; }
+.syncPickBtns button {
+  background: none; border: none; cursor: pointer; padding: 2px 6px;
+  font-size: 11px; color: var(--color-primary); border-radius: 3px;
+}
+.syncPickBtns button:hover { background: var(--color-primary-bg); }
+
+.syncItemRow { display: flex; align-items: center; gap: 8px; padding-left: 10px; }
+.syncCheck { flex-shrink: 0; cursor: pointer; }
+.syncCheck:disabled { cursor: not-allowed; opacity: 0.4; }
+.syncItemRow .syncItemHead { padding-left: 0; }

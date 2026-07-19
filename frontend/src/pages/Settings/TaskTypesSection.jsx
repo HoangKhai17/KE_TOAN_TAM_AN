@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Plus, Pencil, ChevronDown, ChevronRight, ChevronLeft, Loader2,
   GripVertical, Trash2, Check, X, Tag, AlignLeft,
-  Power,
+  Power, RefreshCw,
 } from 'lucide-react'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -19,6 +19,7 @@ import {
   addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
   addCustomField, deleteCustomField,
 } from '../../api/taskTypes'
+import SyncTasksModal from './SyncTasksModal'
 import s from './settings.module.css'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -198,6 +199,7 @@ export default function TaskTypesSection() {
 // ── Task Type Row ─────────────────────────────────────────────────────────────
 
 function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit, onToggle, onDelete, onDetailRefresh }) {
+  const [showSync, setShowSync] = useState(false)
   return (
     <div className={`${s.ttRow} ${isExpanded ? s.ttRowExpanded : ''}`}>
       {/* Row header */}
@@ -248,6 +250,17 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
               <Loader2 size={14} className={s.spin} /> Đang tải…
             </div>
           ) : detail ? (
+            <>
+            {/* Mẫu đổi tên / sửa bước thì công việc ĐÃ phát sinh không tự đổi theo
+                (tiêu đề và checklist bị đóng băng lúc tạo). Nút này quét lại cho khớp. */}
+            <div className={s.ttSyncBar}>
+              <button className={s.btnOutline} onClick={() => setShowSync(true)}>
+                <RefreshCw size={13} /> Đồng bộ công việc đã phát sinh theo mẫu này
+              </button>
+              <span className={s.ttSyncHint}>
+                Cập nhật tiêu đề &amp; checklist của công việc cũ · xem trước trước khi ghi
+              </span>
+            </div>
             <div className={s.ttDetailSplit}>
               <ChecklistPanel
                 taskTypeId={tt.id}
@@ -260,8 +273,17 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
                 onRefresh={onDetailRefresh}
               />
             </div>
+            </>
           ) : null}
         </div>
+      )}
+
+      {showSync && (
+        <SyncTasksModal
+          taskType={tt}
+          onClose={() => setShowSync(false)}
+          onDone={onDetailRefresh}
+        />
       )}
     </div>
   )

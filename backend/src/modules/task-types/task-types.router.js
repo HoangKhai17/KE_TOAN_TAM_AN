@@ -376,4 +376,10 @@ router.patch('/:id/fields/:fieldId', ...admin, validate(updateCustomFieldSchema)
  */
 router.delete('/:id/fields/:fieldId', ...admin, ctrl.deleteCustomField)
 
+/* Đồng bộ công việc đã phát sinh theo mẫu (chỉ admin).
+   GET  = xem trước (không ghi gì)   ·   POST = thực hiện
+   Tách 2 phương thức để không thể lỡ tay ghi bằng một cú GET. */
+router.get('/:id/sync-tasks/preview', ...admin, ctrl.previewSyncTasks)
+router.post('/:id/sync-tasks', ...admin, ctrl.applySyncTasks)
+
 module.exports = router
