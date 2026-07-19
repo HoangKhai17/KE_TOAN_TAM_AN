@@ -92,15 +92,3 @@ export async function applySyncTasks(id, { includeCompleted = true, taskIds, the
     { params: { includeCompleted: includeCompleted ? '1' : '0', theoLoaiTru: theoLoaiTru ? '1' : '0' } })
   return data.data
 }
-
-// ─── TEMP: dọn tiêu đề công việc tự sinh cũ. XOÁ CẢ KHỐI NÀY sau khi chạy xong ───
-export async function previewRenameTitles() {
-  const { data } = await api.get('/task-types/rename-auto-titles/preview')
-  return data.data
-}
-
-export async function applyRenameTitles() {
-  const { data } = await api.post('/task-types/rename-auto-titles', {})
-  return data.data
-}
-// ─── hết khối TEMP ───

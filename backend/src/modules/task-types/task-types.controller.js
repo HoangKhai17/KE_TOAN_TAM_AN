@@ -1,6 +1,5 @@
 const svc = require('./task-types.service')
 const syncSvc = require('./taskTypes.sync.service')
-const renameTemp = require('./renameAutoTitles.TEMP.service')   // TEMP — xoá sau khi chạy xong
 
 async function listTaskTypes(req, res, next) {
   try {
@@ -135,27 +134,9 @@ async function applySyncTasks(req, res, next) {
   } catch (err) { next(err) }
 }
 
-
-// ─── TEMP: dọn tên công việc tự sinh cũ. XOÁ CẢ KHỐI NÀY sau khi chạy trên server ───
-async function previewRenameTitles(req, res, next) {
-  try {
-    const result = await renameTemp.tinhThayDoi()
-    res.json({ success: true, data: result })
-  } catch (err) { next(err) }
-}
-
-async function applyRenameTitles(req, res, next) {
-  try {
-    const result = await renameTemp.ghiThayDoi()
-    res.json({ success: true, data: result })
-  } catch (err) { next(err) }
-}
-// ─── hết khối TEMP ───
-
 module.exports = {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   getChecklist, addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
   getCustomFields, addCustomField, updateCustomField, deleteCustomField,
   previewSyncTasks, applySyncTasks,
-  previewRenameTitles, applyRenameTitles,   // TEMP
 }
