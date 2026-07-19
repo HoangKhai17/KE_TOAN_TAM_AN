@@ -87,6 +87,10 @@ async function runOverdueEscalation() {
     //     không task nào mới → không email, dù đang tồn đọng rất nhiều.
     // Đúng nghiệp vụ: email là DANH SÁCH VIỆC ADMIN CẦN XỬ LÝ, tức mọi task đang
     // "Cần xem lại" mà đã quá hạn.
+    // Điều kiện `due_date < CURRENT_DATE` là BẮT BUỘC, không được bỏ:
+    // trạng thái needs_revision còn nhận cả task do admin trả về làm lại, những
+    // task đó hạn vẫn còn (thậm chí tạo hôm nay, hạn hôm nay). Đưa chúng vào
+    // email "quá hạn" là báo sai. Chỉ task ĐÃ QUA hạn mới thuộc diện escalation.
     const { rows: canXuLy } = await query(
       `SELECT t.id, t.title, t.due_date,
               (CURRENT_DATE - t.due_date) AS days_overdue,
@@ -102,7 +106,7 @@ async function runOverdueEscalation() {
     )
 
     if (canXuLy.length === 0) {
-      logger.info('[OverdueEscalation] Không còn task "Cần xem lại" quá hạn — không gửi email')
+      logger.info('[OverdueEscalation] Không còn task nào ở trạng thái "Cần xem lại" — không gửi email')
       return { processed: escalated.length, emailsSent: 0 }
     }
 
@@ -111,7 +115,15 @@ async function runOverdueEscalation() {
 
     const today = new Date().toLocaleDateString('vi-VN')
     const taskRowsHtml = canXuLy.map((t) => {
-      const dueStr = new Date(t.due_date).toLocaleDateString('vi-VN')
+      // Task bị trả về mà hạn CÒN thì days_overdue âm → hiện "còn N ngày" thay vì
+      // "quá hạn N ngày", tránh ghi sai trong email.
+      const dueStr = t.due_date ? new Date(t.due_date).toLocaleDateString('vi-VN') : '—'
+      const conHan = t.due_date == null || t.days_overdue <= 0
+      const nhanHan = t.due_date == null
+        ? '<span style="color:#94a3b8;font-weight:400">chưa đặt hạn</span>'
+        : conHan
+          ? `<span style="color:#94a3b8;font-weight:400">(còn ${Math.abs(t.days_overdue)} ngày)</span>`
+          : `<span style="color:#94a3b8;font-weight:400">(quá ${t.days_overdue} ngày)</span>`
       const moi = idMoi.has(t.id)
         ? '<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:1px 6px;border-radius:9999px;margin-left:6px">MỚI</span>'
         : ''
@@ -119,7 +131,7 @@ async function runOverdueEscalation() {
         <td style="padding:8px 12px;border:1px solid #e2e8f0">${escapeHtml(t.title)}${moi}</td>
         <td style="padding:8px 12px;border:1px solid #e2e8f0">${escapeHtml(t.company_name) || '—'}</td>
         <td style="padding:8px 12px;border:1px solid #e2e8f0">${escapeHtml(t.user_name) || '—'}</td>
-        <td style="padding:8px 12px;border:1px solid #e2e8f0;white-space:nowrap;color:#dc2626;font-weight:600">${dueStr} <span style="color:#94a3b8;font-weight:400">(${t.days_overdue} ngày)</span></td>
+        <td style="padding:8px 12px;border:1px solid #e2e8f0;white-space:nowrap;font-weight:600;color:${conHan ? '#64748b' : '#dc2626'}">${dueStr} ${nhanHan}</td>
       </tr>`
     }).join('')
 
@@ -151,14 +163,14 @@ async function runOverdueEscalation() {
         to: admin.email,
         subject: `[Escalation] ${canXuLy.length} công việc quá hạn — ${today}`,
         html,
-        text: `Có ${canXuLy.length} công việc đang "Cần xem lại" và đã quá hạn`
+        text: `Có ${canXuLy.length} công việc đang ở trạng thái "Cần xem lại"`
           + (escalated.length ? ` (trong đó ${escalated.length} mới chuyển hôm nay)` : '')
           + '. Vui lòng đăng nhập hệ thống để xử lý.',
       })
       if (ok) sent++
     }
 
-    logger.info(`[OverdueEscalation] Đổi trạng thái ${escalated.length} task mới · email liệt kê ${canXuLy.length} task quá hạn · gửi ${sent}/${sentTo.size} email`)
+    logger.info(`[OverdueEscalation] Đổi trạng thái ${escalated.length} task mới · email liệt kê ${canXuLy.length} task cần xử lý · gửi ${sent}/${sentTo.size} email`)
     return { processed: escalated.length, listed: canXuLy.length, emailsSent: sent }
   } catch (err) {
     logger.error('[OverdueEscalation] Job failed', { error: err.message })
