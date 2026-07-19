@@ -59,7 +59,8 @@
       "Bash(docker exec *)",
       "Bash(docker restart *)",
       "Bash(grep -n \"console.log..\\\\\\\\\\\\\\\\n.\\\\[12\\\\]\" sync_test.js)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(grep -n \"tbody>\\\\${rowsHtml}\" deadlineReminder.job.js)"
     ],
     "additionalDirectories": [
       "\\tmp"
