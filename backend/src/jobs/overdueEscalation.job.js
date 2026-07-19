@@ -32,7 +32,10 @@ async function runOverdueEscalation() {
     )
 
     logger.info(`[OverdueEscalation] Found ${tasks.length} overdue tasks to escalate`)
-    if (tasks.length === 0) return { processed: 0, emailsSent: 0 }
+    // KHÔNG thoát sớm khi không có task mới: email vẫn phải gửi danh sách task
+    // "Cần xem lại" còn tồn đọng. Trước đây thoát ở đây nên ngày nào không có
+    // task mới rơi vào diện quá hạn là admin không nhận được gì, dù đang tồn
+    // hàng chục task quá hạn.
 
     const { rows: admins } = await query(
       "SELECT id, name, email FROM users WHERE role = 'admin' AND status = 'active'"
@@ -72,19 +75,53 @@ async function runOverdueEscalation() {
       escalated.push({ ...task, dueStr })
     }
 
-    if (escalated.length === 0) {
-      logger.info('[OverdueEscalation] Không task nào được escalate (đã đổi trạng thái trước đó)')
-      return { processed: 0, emailsSent: 0 }
+    // ── Danh sách cho EMAIL: TOÀN BỘ task đang "Cần xem lại" và đã quá hạn ───
+    //
+    // KHÔNG dùng `escalated` (lô vừa bị đổi trạng thái ở trên). Lý do:
+    //   · `pending`/`in_progress` là việc nhân sự ĐANG LÀM — không thuộc diện
+    //     escalation, chúng chỉ là điều kiện để quét ra rồi đổi trạng thái.
+    //   · Task đã chuyển `needs_revision` từ những ngày trước sẽ không bao giờ
+    //     lọt vào lượt quét sau (vì lượt quét chỉ lấy pending/in_progress), nên
+    //     nếu lấy `escalated` làm nội dung email thì admin chỉ thấy vài task mới
+    //     rơi vào diện quá hạn, còn hàng chục task tồn đọng thì biến mất. Có ngày
+    //     không task nào mới → không email, dù đang tồn đọng rất nhiều.
+    // Đúng nghiệp vụ: email là DANH SÁCH VIỆC ADMIN CẦN XỬ LÝ, tức mọi task đang
+    // "Cần xem lại" mà đã quá hạn.
+    const { rows: canXuLy } = await query(
+      `SELECT t.id, t.title, t.due_date,
+              (CURRENT_DATE - t.due_date) AS days_overdue,
+              u.name AS user_name,
+              c.name AS company_name
+         FROM tasks t
+         LEFT JOIN users u ON u.id = t.assigned_to
+         LEFT JOIN companies c ON c.id = t.company_id
+        WHERE t.status = 'needs_revision'
+          AND t.due_date IS NOT NULL
+          AND t.due_date::date < CURRENT_DATE
+        ORDER BY t.due_date ASC`
+    )
+
+    if (canXuLy.length === 0) {
+      logger.info('[OverdueEscalation] Không còn task "Cần xem lại" quá hạn — không gửi email')
+      return { processed: escalated.length, emailsSent: 0 }
     }
 
-    // ── MỘT email tổng hợp cho mỗi admin (thay vì 1 email / task) ────────────
+    // Đánh dấu task VỪA bị đổi trạng thái hôm nay để admin thấy cái gì mới
+    const idMoi = new Set(escalated.map((t) => t.id))
+
     const today = new Date().toLocaleDateString('vi-VN')
-    const taskRowsHtml = escalated.map((t) => `<tr>
-        <td style="padding:8px 12px;border:1px solid #e2e8f0">${escapeHtml(t.title)}</td>
+    const taskRowsHtml = canXuLy.map((t) => {
+      const dueStr = new Date(t.due_date).toLocaleDateString('vi-VN')
+      const moi = idMoi.has(t.id)
+        ? '<span style="background:#fef3c7;color:#92400e;font-size:11px;padding:1px 6px;border-radius:9999px;margin-left:6px">MỚI</span>'
+        : ''
+      return `<tr>
+        <td style="padding:8px 12px;border:1px solid #e2e8f0">${escapeHtml(t.title)}${moi}</td>
         <td style="padding:8px 12px;border:1px solid #e2e8f0">${escapeHtml(t.company_name) || '—'}</td>
         <td style="padding:8px 12px;border:1px solid #e2e8f0">${escapeHtml(t.user_name) || '—'}</td>
-        <td style="padding:8px 12px;border:1px solid #e2e8f0;white-space:nowrap;color:#dc2626;font-weight:600">${t.dueStr} <span style="color:#94a3b8;font-weight:400">(${t.days_overdue} ngày)</span></td>
-      </tr>`).join('')
+        <td style="padding:8px 12px;border:1px solid #e2e8f0;white-space:nowrap;color:#dc2626;font-weight:600">${dueStr} <span style="color:#94a3b8;font-weight:400">(${t.days_overdue} ngày)</span></td>
+      </tr>`
+    }).join('')
 
     // Template đã lưu trong Settings có thể là bản CŨ (1 email / task, dùng {{task_title}}…).
     // Bản tổng hợp bắt buộc có {{task_rows_html}} — thiếu thì dùng mặc định để email không bị hỏng.
@@ -106,21 +143,23 @@ async function runOverdueEscalation() {
       const html = renderTemplate(tpl, {
         admin_name:     admin.name,
         date:           today,
-        task_count:     escalated.length,
+        task_count:     canXuLy.length,
         task_rows_html: taskRowsHtml,
       })
 
       const ok = await sendMail({
         to: admin.email,
-        subject: `[Escalation] ${escalated.length} công việc quá hạn — ${today}`,
+        subject: `[Escalation] ${canXuLy.length} công việc quá hạn — ${today}`,
         html,
-        text: `Có ${escalated.length} công việc quá hạn đã tự động chuyển sang "Cần xem lại". Vui lòng đăng nhập hệ thống để xử lý.`,
+        text: `Có ${canXuLy.length} công việc đang "Cần xem lại" và đã quá hạn`
+          + (escalated.length ? ` (trong đó ${escalated.length} mới chuyển hôm nay)` : '')
+          + '. Vui lòng đăng nhập hệ thống để xử lý.',
       })
       if (ok) sent++
     }
 
-    logger.info(`[OverdueEscalation] Escalated ${escalated.length} task(s) · gửi ${sent}/${sentTo.size} email tổng hợp`)
-    return { processed: escalated.length, emailsSent: sent }
+    logger.info(`[OverdueEscalation] Đổi trạng thái ${escalated.length} task mới · email liệt kê ${canXuLy.length} task quá hạn · gửi ${sent}/${sentTo.size} email`)
+    return { processed: escalated.length, listed: canXuLy.length, emailsSent: sent }
   } catch (err) {
     logger.error('[OverdueEscalation] Job failed', { error: err.message })
     throw err
