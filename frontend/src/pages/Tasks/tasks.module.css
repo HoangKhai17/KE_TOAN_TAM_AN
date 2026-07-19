@@ -3259,6 +3259,29 @@
   -webkit-box-orient: vertical;
 }
 
+/* Ô sửa tiêu đề tại chỗ — giữ đúng cỡ chữ/độ đậm của tiêu đề để lúc bấm vào sửa
+   chữ không bị nhảy cỡ, chỉ thêm viền cho biết đang ở chế độ nhập */
+.qvTitleInput {
+  width: 100%;
+  font-family: inherit;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
+  color: var(--color-text-strong);
+  line-height: 1.4;
+  padding: 3px 8px;
+  border: 1px solid var(--color-primary-soft);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.qvTitleInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(11, 79, 138, 0.1);
+}
+
+.qvTitleInput:disabled { opacity: 0.6; cursor: wait; }
+
 .qvHeaderActions {
   display: flex;
   align-items: center;

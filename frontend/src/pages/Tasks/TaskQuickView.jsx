@@ -132,6 +132,11 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   const [editItemId,   setEditItemId]   = useState(null)
   const [editItemText, setEditItemText] = useState('')
 
+  // Tiêu đề — sửa tại chỗ
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft,   setTitleDraft]   = useState('')
+  const [savingTitle,  setSavingTitle]  = useState(false)
+
   // Description inline edit
   const [descDraft,  setDescDraft]  = useState('')
   const [descDirty,  setDescDirty]  = useState(false)
@@ -169,6 +174,23 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   function applyUpdate(updated) {
     setTask(updated)
     onUpdated?.(updated)
+  }
+
+  // Lưu tiêu đề sửa tại chỗ. Bỏ trống hoặc không đổi gì thì trả về nguyên trạng,
+  // tránh gọi API thừa và tránh lưu mất tiêu đề.
+  async function saveTitle() {
+    const trimmed = titleDraft.trim()
+    setEditingTitle(false)
+    if (!trimmed || trimmed === task?.title) { setTitleDraft(task?.title ?? ''); return }
+    setSavingTitle(true)
+    try {
+      const updated = await tasksApi.updateTask(taskId, { title: trimmed })
+      applyUpdate(updated)          // đẩy ra danh sách bên ngoài để đổi theo ngay
+      addToast('Đã lưu tiêu đề', 'success')
+    } catch (err) {
+      setTitleDraft(task?.title ?? '')
+      addToast(err.response?.data?.error?.message ?? 'Không thể lưu tiêu đề', 'error')
+    } finally { setSavingTitle(false) }
   }
 
   async function changeStatus(newStatus) {
@@ -355,7 +377,43 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             {loading
               ? <div style={{ height: 20, width: '55%', background: '#f1f5f9', borderRadius: 4 }} />
-              : <h2 className={s.qvTitle}>{task?.title}</h2>
+              : editingTitle
+                ? (
+                  // Sửa tiêu đề ngay tại quick view — trước đây phải mở trang chi tiết
+                  <input
+                    type="text"
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onBlur={saveTitle}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.target.blur()
+                      if (e.key === 'Escape') { setTitleDraft(task.title); setEditingTitle(false) }
+                    }}
+                    className={s.qvTitleInput}
+                    disabled={savingTitle}
+                    autoFocus
+                  />
+                )
+                : (
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                    <h2
+                      className={s.qvTitle}
+                      style={{ cursor: 'text' }}
+                      title="Nhấp đúp để sửa tiêu đề"
+                      onDoubleClick={() => { setTitleDraft(task?.title ?? ''); setEditingTitle(true) }}
+                    >
+                      {task?.title}
+                    </h2>
+                    <button
+                      className={s.qvChecklistDel}
+                      style={{ flexShrink: 0, marginTop: 2 }}
+                      title="Sửa tiêu đề"
+                      onClick={() => { setTitleDraft(task?.title ?? ''); setEditingTitle(true) }}
+                    >
+                      <Edit2 size={11} />
+                    </button>
+                  </div>
+                )
             }
             {task && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>

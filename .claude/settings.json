@@ -48,7 +48,12 @@
       "Bash(echo \"exit=$?\")",
       "Bash(python -)",
       "Bash(echo \"lint-exit=$?\")",
-      "Bash(echo \"lint=$?\")"
+      "Bash(echo \"lint=$?\")",
+      "Bash(awk '{print $4}')",
+      "Bash(docker stop *)",
+      "Bash(echo \"=== exit=$? ===\")",
+      "Bash(docker start *)",
+      "Bash(echo \"restore exit=$?\")"
     ]
   }
 }
