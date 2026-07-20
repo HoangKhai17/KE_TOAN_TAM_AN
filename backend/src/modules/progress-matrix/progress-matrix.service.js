@@ -409,12 +409,21 @@ async function exportMatrix(matrix, includeSet) {
   const hasGroups = stepCols.some((c) => c.group)
   // Nhãn header cột: chế độ gộp → thêm "(N mục)" cho cột cha để rõ đây là nhóm gộp.
   const colHeader = (c) => (c.isGroup && c.childCount ? `${c.stepText} (${c.childCount} mục)` : c.stepText)
-  // Giá trị ô Excel: cha xong hết → 'x'; xong một phần → 'x/N'; không có → ''; leaf → 'x'/''.
+  // Giá trị ô Excel — khớp đúng với những gì thấy trên màn hình:
+  //   không áp dụng (bước bị lịch của khách loại trừ) → '–' + nền xám
+  //   đã xong → '✓'   ·   xong một phần → '2/5'   ·   chưa làm → để trống
+  // Trước đây ô "không áp dụng" trả '' nên trong Excel trông y hệt ô "chưa làm",
+  // làm mất hẳn thông tin: một bên là KHÔNG PHẢI LÀM, một bên là CHƯA LÀM.
   const cellText = (c) => {
-    if (c.present === false) return ''
-    if (c.isGroup) return c.done ? 'x' : `${c.doneCount}/${c.total}`
-    return c.done ? 'x' : ''
+    if (c.present === false) return '–'
+    if (c.isGroup) return c.done ? '✓' : `${c.doneCount}/${c.total}`
+    return c.done ? '✓' : ''
   }
+
+  // Nền xám cho ô không áp dụng — tương ứng vùng sọc chéo trên giao diện.
+  // Dùng nền ĐẶC thay vì kiểu sọc của Excel vì sọc hiển thị không đồng nhất
+  // giữa Excel, LibreOffice và Google Sheets.
+  const FILL_KHONG_AP_DUNG = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
 
   // Dòng 1: tiêu đề
   ws.mergeCells(1, 1, 1, totalCols)
@@ -470,6 +479,15 @@ async function exportMatrix(matrix, includeSet) {
   for (const r of matrix.rows) {
     const row = ws.getRow(rIdx++)
     row.values = [...idCols.map((c) => c.get(r)), ...r.cells.map(cellText)]
+    // Tô nền các ô không áp dụng. Phải làm SAU khi gán row.values vì gán mảng
+    // sẽ tạo lại ô và xoá style đã đặt trước đó.
+    r.cells.forEach((c, i) => {
+      if (c.present === false) {
+        const o = row.getCell(idCount + 1 + i)
+        o.fill = FILL_KHONG_AP_DUNG
+        o.font = { color: { argb: 'FF94A3B8' } }
+      }
+    })
   }
 
   applyGrid(ws, totalCols, idCount)
