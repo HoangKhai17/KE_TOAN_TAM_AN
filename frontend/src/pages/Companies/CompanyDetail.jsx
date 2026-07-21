@@ -49,17 +49,6 @@ const MODE_PROFILE = 'ho-so'
 const MODE_TABLES  = 'bang-du-lieu'
 
 // Nút chuyển chế độ (segmented) — style nội tuyến để không phải sửa CSS module
-function modeBtnStyle(active) {
-  return {
-    display: 'inline-flex', alignItems: 'center', gap: 6,
-    height: 34, padding: '0 14px', borderRadius: 8, cursor: 'pointer',
-    fontSize: 13, fontWeight: 600, transition: 'all .15s',
-    border: `1px solid ${active ? 'var(--color-primary)' : 'var(--color-border)'}`,
-    background: active ? 'var(--color-primary)' : '#fff',
-    color: active ? '#fff' : 'var(--color-text)',
-  }
-}
-
 // ── sessionStorage: nhớ vị trí gần nhất theo công ty (để route trần điều hướng lại) ──
 const ACTIVE_TAB_KEY = (cid) => `company_detail_tab:${cid}`
 
@@ -381,17 +370,19 @@ export default function CompanyDetail() {
 
           {/* Hàng 2: chuyển chế độ Hồ sơ ↔ Bảng dữ liệu (cùng canh phải với hàng 1) */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            <button onClick={goProfileMode} style={modeBtnStyle(!isTablesMode)}>
-              <Building2 size={13} /> Hồ sơ
+            <button
+              onClick={goProfileMode}
+              className={`${s.modeBtn} ${!isTablesMode ? s.modeBtnActive : ''}`}
+            >
+              <Building2 size={14} /> Hồ sơ
             </button>
-            <button onClick={goTablesMode} style={modeBtnStyle(isTablesMode)}>
-              <Table2 size={13} /> Bảng dữ liệu
+            <button
+              onClick={goTablesMode}
+              className={`${s.modeBtn} ${s.modeBtnTables} ${isTablesMode ? s.modeBtnTablesActive : ''}`}
+            >
+              <Table2 size={14} /> Bảng dữ liệu
               {customDefs.length > 0 && (
-                <span style={{
-                  marginLeft: 2, padding: '0 6px', borderRadius: 9, fontSize: 11, fontWeight: 700,
-                  background: isTablesMode ? 'rgba(255,255,255,0.25)' : 'var(--color-primary-bg)',
-                  color: isTablesMode ? '#fff' : 'var(--color-primary-dark)',
-                }}>{customDefs.length}</span>
+                <span className={s.modeBtnCount}>{customDefs.length}</span>
               )}
             </button>
           </div>

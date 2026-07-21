@@ -6395,3 +6395,61 @@
 /* Lựa chọn con thụt vào để thấy rõ quan hệ với nhóm */
 .msGroupChild { padding-left: 26px; }
 .msGroupChild input:disabled { cursor: not-allowed; }
+
+/* ── Chuyển chế độ Hồ sơ ↔ Bảng dữ liệu (đầu trang chi tiết công ty) ────────
+   Cùng cỡ với .btnOutline (Chỉnh sửa / Kết thúc HĐ) để hàng nút nhìn đều nhau. */
+.modeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-family: 'Montserrat', sans-serif;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+}
+.modeBtn:hover { background: #f3f4f6; }
+
+/* Hồ sơ — đang chọn: xanh dương chủ đạo */
+.modeBtnActive {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 2px 8px -2px rgba(11, 79, 138, 0.45);
+}
+.modeBtnActive:hover { background: var(--color-primary-deep); }
+
+/* Bảng dữ liệu — LUÔN nền xanh lá để phân biệt rõ với nút Hồ sơ (xanh dương).
+   Đang chọn thì đậm hơn + đổ bóng; chưa chọn thì nhạt bớt cho đỡ hút mắt. */
+.modeBtnTables {
+  background: var(--color-success-light);
+  border-color: var(--color-success-light);
+  color: #fff;
+}
+.modeBtnTables:hover { background: var(--color-success); border-color: var(--color-success); }
+
+.modeBtnTablesActive {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #fff;
+  box-shadow: 0 2px 8px -2px rgba(5, 150, 105, 0.45);
+}
+.modeBtnTablesActive:hover { background: var(--color-success-dark); border-color: var(--color-success-dark); }
+
+/* Số bảng dữ liệu — nền mờ trắng, hợp với nền xanh lá của nút */
+.modeBtnCount {
+  margin-left: 2px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
