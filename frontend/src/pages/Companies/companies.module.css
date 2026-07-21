@@ -6453,3 +6453,72 @@
   background: rgba(255, 255, 255, 0.25);
   color: #fff;
 }
+
+/* ── Tài liệu công ty: chọn nguồn Link / File ─────────────────────────────── */
+.docKindSwitch { display: flex; gap: 6px; }
+.docKindBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  flex: 1; justify-content: center;
+  height: 36px; padding: 0 12px;
+  border: 1.5px solid var(--color-border); border-radius: 8px;
+  background: #fff; color: var(--color-text-soft);
+  font-family: inherit; font-size: var(--fs-md); font-weight: 600;
+  cursor: pointer; transition: all 0.12s;
+}
+.docKindBtn:hover { background: var(--color-bg-soft); }
+.docKindBtnActive {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary-dark);
+}
+
+/* File đã chọn trong hộp thoại thêm */
+.docFilePicked {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 6px;
+  font-size: var(--fs-xs); color: var(--color-success-dark);
+  background: var(--color-success-surface);
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-sm); padding: 4px 8px;
+}
+
+/* Kích thước file hiện cạnh tên trong bảng */
+.docFileSize { margin-left: 6px; font-size: var(--fs-2xs); color: var(--color-muted); }
+
+/* Khối thông tin file trong form sửa (không cho đổi file) */
+.docEditFileInfo {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: var(--fs-xs); color: var(--color-text-soft);
+  background: var(--color-bg-soft); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); padding: 7px 10px;
+}
+.docEditFileInfo span { color: var(--color-muted); font-style: italic; }
+
+/* Thanh công cụ tab Tài liệu: nút thêm + bộ lọc danh mục trên CÙNG một hàng.
+   Trước đây tách 2 hàng nên hàng nút bỏ trống gần hết chiều ngang. */
+.docToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.docToolbarDivider {
+  width: 1px;
+  height: 22px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+/* Đẩy "Xoá lọc" và số lượng về sát mép phải */
+.docToolbarRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}

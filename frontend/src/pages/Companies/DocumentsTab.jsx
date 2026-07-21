@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Link2, Plus, Trash2, ExternalLink, Loader2,
   Filter, RotateCcw, FolderOpen, AlertTriangle,
-  Pencil, Check, X,
+  Pencil, Check, X, Upload, FileText, Download,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as documentsApi from '../../api/documents'
+import * as attApi from '../../api/attachments'
 import s from './companies.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -33,6 +34,9 @@ function isValidUrl(str) {
 // ── AddLinkModal ───────────────────────────────────────────────────────────────
 
 function AddLinkModal({ onSave, onClose, saving }) {
+  // Tài liệu là LINK hoặc FILE — không phải cả hai (khớp ràng buộc phía CSDL)
+  const [kieu, setKieu]         = useState('link')   // 'link' | 'file'
+  const [file, setFile]         = useState(null)
   const [name, setName]         = useState('')
   const [url, setUrl]           = useState('')
   const [category, setCategory] = useState('khac')
@@ -46,11 +50,32 @@ function AddLinkModal({ onSave, onClose, saving }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [saving, onClose])
 
+  function chonFile(f) {
+    if (!f) { setFile(null); return }
+    const ext = f.name.split('.').pop()?.toLowerCase() ?? ''
+    if (!attApi.ALLOWED_EXTS.includes(ext)) {
+      setErrors((p) => ({ ...p, file: `Định dạng ".${ext}" không được phép. Chỉ nhận: ${attApi.ALLOWED_EXTS.join(', ')}.` }))
+      return
+    }
+    if (f.size > attApi.MAX_FILE_BYTES) {
+      setErrors((p) => ({ ...p, file: `File ${attApi.formatSize(f.size)} vượt quá 5MB.` }))
+      return
+    }
+    setErrors((p) => ({ ...p, file: '' }))
+    setFile(f)
+    // Chưa đặt tên thì lấy luôn tên file cho đỡ phải gõ
+    if (!name.trim()) setName(f.name.replace(/\.[^.]+$/, ''))
+  }
+
   function validate() {
     const e = {}
     if (!name.trim()) e.name = 'Tên tài liệu không được để trống'
-    if (!url.trim()) e.url = 'URL không được để trống'
-    else if (!isValidUrl(url.trim())) e.url = 'URL không hợp lệ — phải bắt đầu bằng http:// hoặc https://'
+    if (kieu === 'link') {
+      if (!url.trim()) e.url = 'URL không được để trống'
+      else if (!isValidUrl(url.trim())) e.url = 'URL không hợp lệ — phải bắt đầu bằng http:// hoặc https://'
+    } else if (!file) {
+      e.file = 'Chưa chọn file'
+    }
     return e
   }
 
@@ -58,7 +83,12 @@ function AddLinkModal({ onSave, onClose, saving }) {
     e.preventDefault()
     const e2 = validate()
     if (Object.keys(e2).length) { setErrors(e2); return }
-    onSave({ name: name.trim(), url: url.trim(), category, description: description.trim() || undefined })
+    onSave({
+      name: name.trim(),
+      category,
+      description: description.trim() || undefined,
+      ...(kieu === 'link' ? { url: url.trim() } : { file }),
+    })
   }
 
   return (
@@ -72,7 +102,7 @@ function AddLinkModal({ onSave, onClose, saving }) {
               <Link2 size={16} />
             </div>
             <div>
-              <h3 className={s.docModalTitle}>Thêm link tài liệu</h3>
+              <h3 className={s.docModalTitle}>Thêm tài liệu</h3>
               <p className={s.docModalSubtitle}>Dán link Google Drive, Dropbox, OneDrive hoặc bất kỳ URL chia sẻ nào</p>
             </div>
           </div>
@@ -115,22 +145,67 @@ function AddLinkModal({ onSave, onClose, saving }) {
               </div>
             </div>
 
-            {/* Row 2: URL */}
+            {/* Row 2: chọn kiểu — Link hoặc File */}
             <div className={s.docModalField}>
-              <label className={s.docModalLabel}>
-                Đường dẫn (URL) <span className={s.docModalRequired}>*</span>
-              </label>
-              <input
-                className={`${s.docModalInput} ${errors.url ? s.docModalInputErr : ''}`}
-                placeholder="https://docs.google.com/... hoặc link chia sẻ cloud khác"
-                value={url}
-                onChange={(e) => { setUrl(e.target.value); setErrors((p) => ({ ...p, url: '' })) }}
-              />
-              {errors.url
-                ? <span className={s.docModalErr}>{errors.url}</span>
-                : <span className={s.docModalHint}>Chỉ chấp nhận URL bắt đầu bằng https:// hoặc http://</span>
-              }
+              <label className={s.docModalLabel}>Nguồn tài liệu</label>
+              <div className={s.docKindSwitch}>
+                <button
+                  type="button"
+                  className={`${s.docKindBtn} ${kieu === 'link' ? s.docKindBtnActive : ''}`}
+                  onClick={() => { setKieu('link'); setErrors((p) => ({ ...p, file: '' })) }}
+                >
+                  <Link2 size={13} /> Đường dẫn
+                </button>
+                <button
+                  type="button"
+                  className={`${s.docKindBtn} ${kieu === 'file' ? s.docKindBtnActive : ''}`}
+                  onClick={() => { setKieu('file'); setErrors((p) => ({ ...p, url: '' })) }}
+                >
+                  <Upload size={13} /> Tải file lên
+                </button>
+              </div>
             </div>
+
+            {kieu === 'link' ? (
+              <div className={s.docModalField}>
+                <label className={s.docModalLabel}>
+                  Đường dẫn (URL) <span className={s.docModalRequired}>*</span>
+                </label>
+                <input
+                  className={`${s.docModalInput} ${errors.url ? s.docModalInputErr : ''}`}
+                  placeholder="https://docs.google.com/... hoặc link chia sẻ cloud khác"
+                  value={url}
+                  onChange={(e) => { setUrl(e.target.value); setErrors((p) => ({ ...p, url: '' })) }}
+                />
+                {errors.url
+                  ? <span className={s.docModalErr}>{errors.url}</span>
+                  : <span className={s.docModalHint}>Chỉ chấp nhận URL bắt đầu bằng https:// hoặc http://</span>
+                }
+              </div>
+            ) : (
+              <div className={s.docModalField}>
+                <label className={s.docModalLabel}>
+                  Chọn file <span className={s.docModalRequired}>*</span>
+                </label>
+                <input
+                  type="file"
+                  className={`${s.docModalInput} ${errors.file ? s.docModalInputErr : ''}`}
+                  accept={attApi.ACCEPT_ATTR}
+                  onChange={(e) => chonFile(e.target.files?.[0] ?? null)}
+                />
+                {file && (
+                  <span className={s.docFilePicked}>
+                    <FileText size={12} /> {file.name} · {attApi.formatSize(file.size)}
+                  </span>
+                )}
+                {errors.file
+                  ? <span className={s.docModalErr}>{errors.file}</span>
+                  : <span className={s.docModalHint}>
+                      Tối đa 5MB · {attApi.ALLOWED_EXTS.join(', ')} — không nhận video/âm thanh
+                    </span>
+                }
+              </div>
+            )}
 
             {/* Row 3: Mô tả */}
             <div className={s.docModalField}>
@@ -162,7 +237,7 @@ function AddLinkModal({ onSave, onClose, saving }) {
             disabled={saving}
           >
             {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />}
-            {saving ? 'Đang lưu...' : 'Lưu link tài liệu'}
+            {saving ? 'Đang lưu...' : 'Lưu tài liệu'}
           </button>
         </div>
 
@@ -174,8 +249,11 @@ function AddLinkModal({ onSave, onClose, saving }) {
 // ── EditLinkForm ───────────────────────────────────────────────────────────────
 
 function EditLinkForm({ doc, onSave, onCancel, saving }) {
+  // Tài liệu dạng FILE không có URL để sửa — chỉ đổi được tên, danh mục, mô tả.
+  // Muốn thay file thì xoá rồi tải lên lại.
+  const laFile = !!doc.file
   const [name, setName]         = useState(doc.name)
-  const [url, setUrl]           = useState(doc.url)
+  const [url, setUrl]           = useState(doc.url ?? '')
   const [category, setCategory] = useState(doc.category)
   const [description, setDesc]  = useState(doc.description ?? '')
   const [errors, setErrors]     = useState({})
@@ -183,8 +261,10 @@ function EditLinkForm({ doc, onSave, onCancel, saving }) {
   function validate() {
     const e = {}
     if (!name.trim()) e.name = 'Tên không được để trống'
-    if (!url.trim()) e.url = 'URL không được để trống'
-    else if (!isValidUrl(url.trim())) e.url = 'URL không hợp lệ'
+    if (!laFile) {
+      if (!url.trim()) e.url = 'URL không được để trống'
+      else if (!isValidUrl(url.trim())) e.url = 'URL không hợp lệ'
+    }
     return e
   }
 
@@ -192,7 +272,10 @@ function EditLinkForm({ doc, onSave, onCancel, saving }) {
     e.preventDefault()
     const e2 = validate()
     if (Object.keys(e2).length) { setErrors(e2); return }
-    onSave({ name: name.trim(), url: url.trim(), category, description: description.trim() || null })
+    onSave({
+      name: name.trim(), category, description: description.trim() || null,
+      ...(laFile ? {} : { url: url.trim() }),
+    })
   }
 
   return (
@@ -219,13 +302,26 @@ function EditLinkForm({ doc, onSave, onCancel, saving }) {
             </select>
           </div>
           <div className={s.addLinkFormFull}>
-            <label className={s.addLinkFormLabel}>URL <span>*</span></label>
-            <input
-              className={`${s.addLinkFormInput} ${errors.url ? s.addLinkFormInputError : ''}`}
-              value={url}
-              onChange={(e) => { setUrl(e.target.value); setErrors((p) => ({ ...p, url: '' })) }}
-            />
-            {errors.url && <p className={s.addLinkFormError}>{errors.url}</p>}
+            {laFile ? (
+              <>
+                <label className={s.addLinkFormLabel}>File đính kèm</label>
+                <div className={s.docEditFileInfo}>
+                  <FileText size={12} />
+                  {doc.file.fileName} · {attApi.formatSize(doc.file.sizeBytes)}
+                  <span>— muốn thay file thì xoá tài liệu rồi tải lên lại</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <label className={s.addLinkFormLabel}>URL <span>*</span></label>
+                <input
+                  className={`${s.addLinkFormInput} ${errors.url ? s.addLinkFormInputError : ''}`}
+                  value={url}
+                  onChange={(e) => { setUrl(e.target.value); setErrors((p) => ({ ...p, url: '' })) }}
+                />
+                {errors.url && <p className={s.addLinkFormError}>{errors.url}</p>}
+              </>
+            )}
           </div>
           <div className={s.addLinkFormFull}>
             <label className={s.addLinkFormLabel}>Mô tả</label>
@@ -287,13 +383,21 @@ export default function DocumentsTab({ company }) {
   async function handleAdd(data) {
     setSaving(true)
     try {
-      await documentsApi.addDocumentLink(company.id, data)
-      addToast(`Đã thêm link "${data.name}"`, 'success')
+      const { file, ...rest } = data
+      let payload = rest
+      if (file) {
+        // Tải file lên TRƯỚC, lấy id rồi mới tạo bản ghi tài liệu — nếu tải lỗi
+        // thì không để lại dòng tài liệu rỗng trong danh sách.
+        const up = await attApi.uploadFile('company', company.id, file, { title: rest.name })
+        payload = { ...rest, attachmentId: up.id }
+      }
+      await documentsApi.addDocumentLink(company.id, payload)
+      addToast(`Đã thêm ${file ? 'file' : 'link'} "${data.name}"`, 'success')
       setShowAddModal(false)
       setPage(1)
       load()
     } catch (err) {
-      addToast(err.response?.data?.error?.message ?? 'Không thể thêm link', 'error')
+      addToast(err.response?.data?.error?.message ?? 'Không thể thêm tài liệu', 'error')
     } finally {
       setSaving(false)
     }
@@ -332,19 +436,16 @@ export default function DocumentsTab({ company }) {
   return (
     <div>
 
-      {/* ── Header row: add button + count ── */}
-      <div className={s.docHeaderRow}>
+      {/* ── Một hàng duy nhất: nút thêm + bộ lọc danh mục ──
+           Trước đây tách 2 hàng, hàng nút bỏ trống gần hết chiều ngang. */}
+      <div className={s.docToolbar}>
         <button className={s.addLinkBtn} onClick={() => setShowAddModal(true)}>
           <Plus size={14} />
-          Thêm link tài liệu
+          Thêm tài liệu
         </button>
-        {!loading && pagination.total > 0 && (
-          <span className={s.docCountBadge}>{pagination.total} tài liệu</span>
-        )}
-      </div>
 
-      {/* ── Category filter bar ── */}
-      <div className={s.docFilterBar}>
+        <span className={s.docToolbarDivider} />
+
         <Filter size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
         <span className={s.docFilterLabel}>Danh mục:</span>
         <div className={s.docFilterChips}>
@@ -358,11 +459,17 @@ export default function DocumentsTab({ company }) {
             </button>
           ))}
         </div>
-        {category && (
-          <button className={s.docFilterReset} onClick={() => { setCategory(''); setPage(1) }}>
-            <RotateCcw size={11} /> Xoá lọc
-          </button>
-        )}
+
+        <div className={s.docToolbarRight}>
+          {category && (
+            <button className={s.docFilterReset} onClick={() => { setCategory(''); setPage(1) }}>
+              <RotateCcw size={11} /> Xoá lọc
+            </button>
+          )}
+          {!loading && pagination.total > 0 && (
+            <span className={s.docCountBadge}>{pagination.total} tài liệu</span>
+          )}
+        </div>
       </div>
 
       {/* ── Document table ── */}
@@ -437,16 +544,28 @@ export default function DocumentsTab({ company }) {
 
                   {/* Đường dẫn */}
                   <td>
-                    <a
-                      href={doc.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={s.docUrlLink}
-                      title={doc.url}
-                    >
-                      <ExternalLink size={11} className={s.docUrlIcon} />
-                      <span className={s.docUrlText}>{doc.url}</span>
-                    </a>
+                    {doc.file ? (
+                      <button
+                        className={s.docUrlLink}
+                        title={`Tải xuống ${doc.file.fileName}`}
+                        onClick={() => attApi.downloadFile(doc.file.id, doc.file.fileName)}
+                      >
+                        <FileText size={11} className={s.docUrlIcon} />
+                        <span className={s.docUrlText}>{doc.file.fileName}</span>
+                        <span className={s.docFileSize}>{attApi.formatSize(doc.file.sizeBytes)}</span>
+                      </button>
+                    ) : (
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={s.docUrlLink}
+                        title={doc.url}
+                      >
+                        <ExternalLink size={11} className={s.docUrlIcon} />
+                        <span className={s.docUrlText}>{doc.url}</span>
+                      </a>
+                    )}
                   </td>
 
                   {/* Ngày thêm */}
@@ -458,13 +577,23 @@ export default function DocumentsTab({ company }) {
                   {/* Thao tác */}
                   <td>
                     <div className={s.docActions}>
-                      <button
-                        className={s.docActionBtn}
-                        title="Mở link"
-                        onClick={() => window.open(doc.url, '_blank', 'noopener,noreferrer')}
-                      >
-                        <ExternalLink size={13} />
-                      </button>
+                      {doc.file ? (
+                        <button
+                          className={s.docActionBtn}
+                          title="Tải xuống"
+                          onClick={() => attApi.downloadFile(doc.file.id, doc.file.fileName)}
+                        >
+                          <Download size={13} />
+                        </button>
+                      ) : (
+                        <button
+                          className={s.docActionBtn}
+                          title="Mở link"
+                          onClick={() => window.open(doc.url, '_blank', 'noopener,noreferrer')}
+                        >
+                          <ExternalLink size={13} />
+                        </button>
+                      )}
                       <button
                         className={s.docActionBtn}
                         title="Chỉnh sửa"
@@ -520,7 +649,7 @@ export default function DocumentsTab({ company }) {
             <div className={s.terminateWarn} style={{ background: 'var(--color-danger-bg-soft)', borderColor: 'var(--color-danger-border)' }}>
               <AlertTriangle size={16} style={{ flexShrink: 0, color: 'var(--color-danger)' }} />
               <span style={{ fontSize: 'var(--fs-md)' }}>
-                Xoá link tài liệu <strong>"{deleteTarget.name}"</strong>?
+                Xoá tài liệu <strong>&ldquo;{deleteTarget.name}&rdquo;</strong>?
                 Hành động này không thể hoàn tác.
               </span>
             </div>

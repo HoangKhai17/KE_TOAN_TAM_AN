@@ -5,11 +5,21 @@ export async function listDocuments(companyId, params = {}) {
   return data.data  // { documents, pagination }
 }
 
-export async function addDocumentLink(companyId, { name, url, category = 'khac', description, taskId } = {}) {
+// Tài liệu là LINK hoặc FILE:
+//   link → truyền `url`
+//   file → tải lên qua /attachments/company/:companyId trước, rồi truyền `attachmentId`
+export async function addDocumentLink(
+  companyId,
+  { name, url, attachmentId, category = 'khac', description, taskId } = {},
+) {
   const { data } = await api.post(`/companies/${companyId}/documents`, {
-    name, url, category,
-    description: description || undefined,
-    taskId:      taskId      || undefined,
+    name, category,
+    // Chỉ gửi ĐÚNG MỘT trong hai — backend có ràng buộc phải có url hoặc file,
+    // không được cả hai. Gửi kèm cả hai (kể cả undefined) là hỏng validate.
+    url:          attachmentId ? undefined : url,
+    attachmentId: attachmentId || undefined,
+    description:  description  || undefined,
+    taskId:       taskId       || undefined,
   })
   return data.data.document
 }

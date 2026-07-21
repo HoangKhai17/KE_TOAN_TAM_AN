@@ -41,10 +41,15 @@ router.get('/:module/:entityId', ...auth, requireUuid('entityId'), async (req, r
 })
 
 // Tải file lên. storage.single() đã lo: whitelist đuôi + MIME, giới hạn 5MB, magic bytes.
-router.post('/:module/:entityId', ...auth, requireUuid('entityId'), (req, res, next) => {
+router.post('/:module/:entityId', ...auth, requireUuid('entityId'), async (req, res, next) => {
   try {
     const mod = getModule(req.params.module)
-    if (!mod.canWrite(req.user)) {
+    // canWrite nhận CẢ entityId và có thể là hàm async: quyền ghi của module
+    // 'company' phải tra CSDL xem nhân sự có phụ trách công ty đó không.
+    // (Trước đây chỉ gọi canWrite(user) và không await — đủ cho internal_doc vì
+    // nó luôn trả true, nhưng sẽ bỏ lọt quyền với module có kiểm tra thật.)
+    const duocGhi = await mod.canWrite(req.user, req.params.entityId)
+    if (!duocGhi) {
       return next(Object.assign(new Error('Bạn không có quyền tải file lên'), { status: 403 }))
     }
     next()

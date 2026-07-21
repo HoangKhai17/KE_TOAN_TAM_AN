@@ -1,6 +1,7 @@
 const { query }  = require('../../config/db')
 const audit      = require('../../lib/audit')
 const activity   = require('../../lib/activity')
+const attachments = require('../attachments/attachments.service')
 
 function toDto(row) {
   return {
@@ -8,8 +9,17 @@ function toDto(row) {
     companyId:   row.company_id,
     taskId:      row.task_id ?? null,
     name:        row.name,
-    url:         row.url,
+    url:         row.url ?? null,
     category:    row.category,
+    // Tài liệu là LINK hoặc FILE. Với file thì url = null và có khối `file`
+    // để giao diện hiện tên/kích thước và nút tải xuống.
+    attachmentId: row.attachment_id ?? null,
+    file: row.attachment_id ? {
+      id:         row.attachment_id,
+      fileName:   row.file_name ?? null,
+      sizeBytes:  row.size_bytes != null ? Number(row.size_bytes) : null,
+      mimeType:   row.mime_type ?? null,
+    } : null,
     description: row.description ?? null,
     addedBy:     row.uploaded_by,
     addedByName: row.uploader_name ?? null,
@@ -50,9 +60,11 @@ async function listDocuments(companyId, { taskId, category, search, page = 1, li
     params
   )
   const { rows } = await query(
-    `SELECT d.*, u.name AS uploader_name
+    `SELECT d.*, u.name AS uploader_name,
+            a.file_name, a.size_bytes, a.mime_type
      FROM documents d
      JOIN users u ON u.id = d.uploaded_by
+     LEFT JOIN attachments a ON a.id = d.attachment_id
      WHERE ${where}
      ORDER BY d.created_at DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -65,7 +77,7 @@ async function listDocuments(companyId, { taskId, category, search, page = 1, li
   }
 }
 
-async function addDocumentLink(companyId, { name, url, category = 'khac', description, taskId }, actorId, ipAddress, userAgent) {
+async function addDocumentLink(companyId, { name, url, attachmentId, category = 'khac', description, taskId }, actorId, ipAddress, userAgent) {
   const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
 
@@ -77,10 +89,22 @@ async function addDocumentLink(companyId, { name, url, category = 'khac', descri
     if (!task) throw Object.assign(new Error('Task not found or does not belong to this company'), { status: 404 })
   }
 
+  // Tài liệu là LINK hoặc FILE, không phải cả hai (ràng buộc documents_url_or_file).
+  // Với file: kiểm tra bản ghi đính kèm đúng là của công ty này — chặn việc gắn
+  // nhầm (hoặc cố ý gắn) file của công ty khác vào đây.
+  if (attachmentId) {
+    const { rows: [att] } = await query(
+      "SELECT id FROM attachments WHERE id = $1 AND module = 'company' AND entity_id = $2",
+      [attachmentId, companyId]
+    )
+    if (!att) throw Object.assign(new Error('File đính kèm không hợp lệ'), { status: 400 })
+  }
+
   const { rows: [doc] } = await query(
-    `INSERT INTO documents (company_id, task_id, name, url, category, description, uploaded_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [companyId, taskId || null, name, url, category, description || null, actorId]
+    `INSERT INTO documents (company_id, task_id, name, url, attachment_id, category, description, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [companyId, taskId || null, name, attachmentId ? null : url, attachmentId || null,
+     category, description || null, actorId]
   )
 
   if (taskId) {
@@ -95,7 +119,11 @@ async function addDocumentLink(companyId, { name, url, category = 'khac', descri
   })
 
   const { rows: [full] } = await query(
-    'SELECT d.*, u.name AS uploader_name FROM documents d JOIN users u ON u.id = d.uploaded_by WHERE d.id = $1',
+    `SELECT d.*, u.name AS uploader_name, a.file_name, a.size_bytes, a.mime_type
+       FROM documents d
+       JOIN users u ON u.id = d.uploaded_by
+       LEFT JOIN attachments a ON a.id = d.attachment_id
+      WHERE d.id = $1`,
     [doc.id]
   )
   return toDto(full)
@@ -126,7 +154,11 @@ async function updateDocumentLink(companyId, documentId, updates, actorId) {
   )
 
   const { rows: [full] } = await query(
-    'SELECT d.*, u.name AS uploader_name FROM documents d JOIN users u ON u.id = d.uploaded_by WHERE d.id = $1',
+    `SELECT d.*, u.name AS uploader_name, a.file_name, a.size_bytes, a.mime_type
+       FROM documents d
+       JOIN users u ON u.id = d.uploaded_by
+       LEFT JOIN attachments a ON a.id = d.attachment_id
+      WHERE d.id = $1`,
     [updated.id]
   )
   return toDto(full)
@@ -152,7 +184,11 @@ async function attachToTask(companyId, documentId, { taskId }, actorId) {
   activity.logActivity(taskId, actorId, 'file_uploaded', null, doc.name, { documentId })
 
   const { rows: [full] } = await query(
-    'SELECT d.*, u.name AS uploader_name FROM documents d JOIN users u ON u.id = d.uploaded_by WHERE d.id = $1',
+    `SELECT d.*, u.name AS uploader_name, a.file_name, a.size_bytes, a.mime_type
+       FROM documents d
+       JOIN users u ON u.id = d.uploaded_by
+       LEFT JOIN attachments a ON a.id = d.attachment_id
+      WHERE d.id = $1`,
     [updated.id]
   )
   return toDto(full)
@@ -166,6 +202,19 @@ async function deleteDocument(companyId, documentId, actorId, ipAddress, userAge
   if (!doc) throw Object.assign(new Error('Document not found'), { status: 404 })
 
   await query('DELETE FROM documents WHERE id = $1', [documentId])
+
+  // Tài liệu là FILE → xoá luôn bản ghi đính kèm và file trên đĩa, tránh để lại
+  // file mồ côi không ai truy cập được nhưng vẫn chiếm chỗ.
+  if (doc.attachment_id) {
+    try {
+      await attachments.remove(doc.attachment_id, { id: actorId, role: 'admin' })
+    } catch (err) {
+      // Không chặn việc xoá tài liệu chỉ vì dọn file thất bại
+      require('../../config/logger').warn('[Documents] Không xoá được file đính kèm', {
+        attachmentId: doc.attachment_id, error: err.message,
+      })
+    }
+  }
 
   await audit.log({
     userId: actorId, action: 'document.deleted',

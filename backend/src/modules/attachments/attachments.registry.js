@@ -24,14 +24,27 @@ const MODULES = {
     canDelete: (att, user) => isAdmin(user) || att.uploaded_by === user.id,
   },
 
-  // Ví dụ mở rộng sau này — LƯU Ý canRead phải giới hạn theo phạm vi của staff,
-  // nếu để `() => true` là mở toang file của mọi công ty:
-  // task: {
-  //   entityTable: 'tasks',
-  //   canRead:  async (att, user) => isAdmin(user) || (await staffOwnsTask(att.entity_id, user.id)),
-  //   canWrite: async (user, entityId) => ...,
-  //   canDelete: (att, user) => isAdmin(user) || att.uploaded_by === user.id,
-  // },
+  // Tài liệu của KHÁCH HÀNG — file gắn vào một công ty.
+  // KHÁC hẳn internal_doc: đây là hồ sơ riêng của từng khách, KHÔNG được để
+  // canRead: () => true, nếu không mọi nhân sự đều tải được tài liệu của mọi
+  // công ty chỉ bằng cách biết id file.
+  // Phạm vi bám đúng RBAC đang áp cho Companies/Tasks: admin xem hết, nhân viên
+  // chỉ xem công ty MÌNH PHỤ TRÁCH. Xoá thì CHỈ admin — khớp với
+  // DELETE /companies/:id/documents/:id vốn đã là adminOnly.
+  company: {
+    entityTable: 'companies',
+    canRead:   async (att, user) => isAdmin(user) || phuTrachCongTy(att.entity_id, user?.id),
+    canWrite:  async (user, entityId) => isAdmin(user) || phuTrachCongTy(entityId, user?.id),
+    canDelete: (_att, user) => isAdmin(user),
+  },
+}
+
+// Nhân sự có phụ trách công ty này không
+async function phuTrachCongTy(companyId, userId) {
+  if (!companyId || !userId) return false
+  const { rows } = await query(
+    'SELECT 1 FROM companies WHERE id = $1 AND assigned_staff_id = $2', [companyId, userId])
+  return rows.length > 0
 }
 
 function getModule(name) {
