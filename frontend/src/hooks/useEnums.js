@@ -35,6 +35,19 @@ export const useEnumsStore = create((set, get) => ({
     return e[typeKey].options.filter((o) => o.isActive)
   },
 
+  // Nhóm lựa chọn của danh mục (rỗng nếu danh mục không bật tính năng nhóm)
+  getGroups: (typeKey) => {
+    const e = get().enums
+    return e?.[typeKey]?.groups ?? []
+  },
+
+  // Nhãn của một nhóm
+  getGroupLabel: (typeKey, groupKey, fallback) => {
+    const e = get().enums
+    const g = e?.[typeKey]?.groups?.find((x) => x.key === groupKey)
+    return g?.label ?? fallback ?? groupKey
+  },
+
   // Returns label string; falls back to fallback or the key itself
   getLabel: (typeKey, optionKey, fallback) => {
     const e = get().enums

@@ -1,5 +1,6 @@
 const { query, getClient } = require('../../config/db')
 const audit = require('../../lib/audit')
+const enums = require('../../lib/enums')
 const { createAndEmit, emitData } = require('../../lib/notify')
 const { sendMail } = require('../../utils/mailer')
 const { getTemplate, renderTemplate } = require('../../utils/emailTemplates')
@@ -66,7 +67,7 @@ function toDto(row) {
   }
 }
 
-async function listCompanies({ page = 1, limit = 20, status, businessType, assignedStaffId, search, forceStaffId, currentUserId } = {}) {
+async function listCompanies({ page = 1, limit = 20, status, businessType, businessGroup, assignedStaffId, search, forceStaffId, currentUserId } = {}) {
   const offset = (page - 1) * limit
   const conditions = ['1=1']
   const filterParams = []
@@ -80,11 +81,21 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, assig
     conditions.push(`c.status IN (${statusArr.map((_, i) => `$${start + i}`).join(', ')})`)
   }
 
+  // Loại hình: nhận cả MÃ LOẠI HÌNH lẫn MÃ NHÓM. Nhóm được dịch ra danh sách loại
+  // hình rồi gộp chung — câu SQL vẫn là IN (...) như cũ, không đổi cách lọc.
+  // Chọn nhóm "Doanh nghiệp" = chọn TNHH + CP + DN tư nhân.
   const btArr = toArr(businessType)
-  if (btArr.length > 0) {
+  const bgArr = toArr(businessGroup)
+  const tuNhom = bgArr.length ? await enums.expandGroupKeys('business_type', bgArr) : []
+  const btAll = [...new Set([...btArr, ...tuNhom])]
+  if (btAll.length > 0) {
     const start = filterParams.length + 1
-    btArr.forEach((b) => filterParams.push(b))
-    conditions.push(`c.business_type IN (${btArr.map((_, i) => `$${start + i}`).join(', ')})`)
+    btAll.forEach((b) => filterParams.push(b))
+    conditions.push(`c.business_type IN (${btAll.map((_, i) => `$${start + i}`).join(', ')})`)
+  } else if (bgArr.length > 0) {
+    // Chọn nhóm nhưng nhóm đó chưa có loại hình nào → không khớp công ty nào,
+    // KHÔNG được bỏ qua bộ lọc (nếu bỏ qua sẽ trả về toàn bộ danh sách, sai hẳn).
+    conditions.push('FALSE')
   }
 
   // forceStaffId (staff role) overrides assignedStaffId from query string

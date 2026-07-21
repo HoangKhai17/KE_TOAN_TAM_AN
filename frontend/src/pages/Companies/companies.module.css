@@ -6377,3 +6377,21 @@
 .coDragHandle:active { cursor: grabbing; }
 .coDragHandle:hover,
 .coPinBtn:hover { background: var(--color-surface-muted, #f1f5f9); }
+
+/* Nhóm lựa chọn trong bộ lọc nhiều lựa chọn (vd Loại hình: Doanh nghiệp / Hộ kinh doanh) */
+.msGroup { border-bottom: 1px solid var(--color-border-soft); }
+.msGroup:last-child { border-bottom: none; }
+
+.msGroupHead {
+  font-weight: var(--fw-semibold);
+  background: var(--color-bg-soft);
+}
+.msGroupCount {
+  margin-left: auto;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-normal);
+  color: var(--color-muted);
+}
+/* Lựa chọn con thụt vào để thấy rõ quan hệ với nhóm */
+.msGroupChild { padding-left: 26px; }
+.msGroupChild input:disabled { cursor: not-allowed; }

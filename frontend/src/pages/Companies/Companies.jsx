@@ -150,7 +150,16 @@ export function StatusPill({ status }) {
 
 // ── MultiSelectFilter ──────────────────────────────────────────────────────────
 
-function MultiSelectFilter({ options, value, onChange, placeholder = 'Tất cả' }) {
+// Giá trị nhóm được đánh dấu bằng tiền tố 'g:' để phân biệt với mã lựa chọn.
+// Nhờ vậy bộ lọc lưu ĐÚNG cái người dùng chọn: chọn nhóm thì lưu nhóm, sau này
+// quản trị thêm loại hình mới vào nhóm đó thì bộ lọc tự bao gồm luôn — nếu lưu
+// thành danh sách mã thì sẽ bị đóng băng ở các mã tại thời điểm chọn.
+const GROUP_PREFIX = 'g:'
+export const isGroupValue = (v) => String(v).startsWith(GROUP_PREFIX)
+export const groupValue   = (k) => GROUP_PREFIX + k
+export const stripGroup   = (v) => String(v).slice(GROUP_PREFIX.length)
+
+function MultiSelectFilter({ options, groups, value, onChange, placeholder = 'Tất cả' }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
@@ -170,11 +179,29 @@ function MultiSelectFilter({ options, value, onChange, placeholder = 'Tất cả
     onChange([...next])
   }
 
+  const nhanCua = (v) => (isGroupValue(v)
+    ? (groups?.find((g) => g.key === stripGroup(v))?.label ?? stripGroup(v))
+    : (options.find((o) => o.value === v)?.label ?? v))
+
   const displayText = value.length === 0
     ? placeholder
-    : value.length === 1
-      ? (options.find((o) => o.value === value[0])?.label ?? value[0])
-      : `${value.length} đã chọn`
+    : value.length === 1 ? nhanCua(value[0]) : `${value.length} đã chọn`
+
+  // Chọn NHÓM thì bỏ tick các lựa chọn con đang chọn lẻ, tránh trùng ý nghĩa
+  function toggleGroup(gk) {
+    const gv = groupValue(gk)
+    const conCuaNhom = new Set(options.filter((o) => o.groupKey === gk).map((o) => o.value))
+    const next = new Set(value)
+    if (next.has(gv)) next.delete(gv)
+    else {
+      next.add(gv)
+      for (const c of conCuaNhom) next.delete(c)
+    }
+    onChange([...next])
+  }
+
+  const coNhom = Array.isArray(groups) && groups.length > 0
+  const khongNhom = coNhom ? options.filter((o) => !o.groupKey) : options
 
   return (
     <div className={s.msWrap} ref={wrapRef}>
@@ -188,7 +215,36 @@ function MultiSelectFilter({ options, value, onChange, placeholder = 'Tất cả
       </button>
       {open && (
         <div className={s.msDropdown}>
-          {options.map(({ value: v, label }) => (
+          {coNhom && groups.map((g) => {
+            const gv = groupValue(g.key)
+            const con = options.filter((o) => o.groupKey === g.key)
+            const chonNhom = selected.has(gv)
+            return (
+              <div key={g.key} className={s.msGroup}>
+                <label className={`${s.msOption} ${s.msGroupHead} ${chonNhom ? s.msOptionChecked : ''}`}>
+                  <input type="checkbox" checked={chonNhom} onChange={() => toggleGroup(g.key)} />
+                  <span>{g.label}</span>
+                  <span className={s.msGroupCount}>{con.length}</span>
+                </label>
+                {con.map(({ value: v, label }) => (
+                  <label
+                    key={v}
+                    className={`${s.msOption} ${s.msGroupChild} ${(selected.has(v) || chonNhom) ? s.msOptionChecked : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(v) || chonNhom}
+                      disabled={chonNhom}
+                      title={chonNhom ? 'Đang chọn cả nhóm' : undefined}
+                      onChange={() => toggle(v)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            )
+          })}
+          {khongNhom.map(({ value: v, label }) => (
             <label key={v} className={`${s.msOption} ${selected.has(v) ? s.msOptionChecked : ''}`}>
               <input type="checkbox" checked={selected.has(v)} onChange={() => toggle(v)} />
               <span>{label}</span>
@@ -417,6 +473,8 @@ export default function Companies() {
   const addToast  = useToastStore((st) => st.toast)
   const getOptions = useEnumsStore((st) => st.getOptions)
   const getLabel   = useEnumsStore((st) => st.getLabel)
+  const getGroups  = useEnumsStore((st) => st.getGroups)
+  const getGroupLabel = useEnumsStore((st) => st.getGroupLabel)
   const loadEnums  = useEnumsStore((st) => st.load)
 
   // Danh sách công ty — local mirror, sync từ React Query (giữ optimistic create/delete)
@@ -492,7 +550,9 @@ export default function Companies() {
     page: 1,
     limit: 1000,
     status:          statusFilter.length > 0 ? statusFilter.join(',') : undefined,
-    businessType:    btFilter.length     > 0 ? btFilter.join(',')     : undefined,
+    // btFilter chứa lẫn mã loại hình và mã nhóm (tiền tố 'g:') → tách làm 2 tham số
+    businessType:    btFilter.filter((v) => !isGroupValue(v)).join(',') || undefined,
+    businessGroup:   btFilter.filter(isGroupValue).map(stripGroup).join(',') || undefined,
     search:          search || undefined,
     assignedStaffId: isAdmin ? (staffFilter.length > 0 ? staffFilter.join(',') : undefined) : currentUser?.id,
   }), [statusFilter, btFilter, staffFilter, search, isAdmin, currentUser?.id])
@@ -909,8 +969,9 @@ export default function Companies() {
               <label className={s.filterFieldLabel}>Loại hình</label>
               <MultiSelectFilter
                 options={getOptions('business_type').length > 0
-                  ? getOptions('business_type').map((o) => ({ value: o.key, label: o.label }))
+                  ? getOptions('business_type').map((o) => ({ value: o.key, label: o.label, groupKey: o.groupKey }))
                   : BUSINESS_TYPE_OPTIONS}
+                groups={getGroups('business_type')}
                 value={btFilter}
                 onChange={setBtFilter}
                 placeholder="Tất cả"
@@ -950,7 +1011,9 @@ export default function Companies() {
                 ))}
                 {btFilter.map((v) => (
                   <span key={v} className={s.filterChip}>
-                    {getLabel('business_type', v, BUSINESS_TYPE_LABELS[v])}
+                    {isGroupValue(v)
+                      ? `Nhóm: ${getGroupLabel('business_type', stripGroup(v))}`
+                      : getLabel('business_type', v, BUSINESS_TYPE_LABELS[v])}
                     <button className={s.filterChipRemove} onClick={() => setBtFilter((p) => p.filter((x) => x !== v))}>×</button>
                   </span>
                 ))}

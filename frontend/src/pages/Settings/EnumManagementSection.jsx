@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { Pencil, Save, X, Loader2, ChevronRight, Plus, Power, Trash2 } from 'lucide-react'
-import { fetchAllEnums, updateEnumOptionLabel, addEnumOption, toggleEnumOption, deleteEnumOption } from '../../api/enums'
+import { Pencil, Save, X, Loader2, ChevronRight, Plus, Power, Trash2, FolderPlus } from 'lucide-react'
+import {
+  fetchAllEnums, updateEnumOptionLabel, addEnumOption, toggleEnumOption, deleteEnumOption,
+  addEnumGroup, updateEnumGroup, deleteEnumGroup, setEnumOptionGroup,
+} from '../../api/enums'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
 import s from './settings.module.css'
@@ -19,6 +22,14 @@ export default function EnumManagementSection() {
   const [editVal, setEditVal]   = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const editRef = useRef(null)
+
+  // Nhóm lựa chọn — chỉ danh mục có hasGroups mới dùng
+  const [showAddGroup, setShowAddGroup] = useState(false)
+  const [newGroupKey, setNewGroupKey]   = useState('')
+  const [newGroupLabel, setNewGroupLabel] = useState('')
+  const [savingGroup, setSavingGroup]   = useState(false)
+  const [editGroupKey, setEditGroupKey] = useState(null)
+  const [editGroupVal, setEditGroupVal] = useState('')
 
   // Add new option state
   const [showAdd, setShowAdd]       = useState(false)
@@ -180,6 +191,62 @@ export default function EnumManagementSection() {
   if (!allEnums) return null
 
   const typeKeys   = Object.keys(allEnums)
+  async function taiLai() {
+    const data = await fetchAllEnums()
+    setAllEnums(data)
+    invalidate(); await reloadStore()
+  }
+
+  async function themNhom() {
+    const key = newGroupKey.trim(); const label = newGroupLabel.trim()
+    if (!key || !label) return
+    setSavingGroup(true)
+    try {
+      await addEnumGroup(activeType, key, label)
+      await taiLai()
+      setNewGroupKey(''); setNewGroupLabel(''); setShowAddGroup(false)
+      addToast('Đã thêm nhóm', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thêm được nhóm', 'error')
+    } finally { setSavingGroup(false) }
+  }
+
+  async function luuTenNhom(groupKey, nhanCu) {
+    const label = editGroupVal.trim()
+    setEditGroupKey(null)
+    if (!label || label === nhanCu) return
+    try {
+      await updateEnumGroup(activeType, groupKey, label)
+      await taiLai()
+      addToast('Đã đổi tên nhóm', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không đổi được tên nhóm', 'error')
+    }
+  }
+
+  async function xoaNhom(groupKey, nhan) {
+    // Xoá nhóm KHÔNG xoá lựa chọn — chúng chỉ trở về trạng thái chưa gán nhóm
+    if (!window.confirm(`Xoá nhóm "${nhan}"?
+
+Các lựa chọn trong nhóm KHÔNG bị xoá, chỉ trở về trạng thái chưa gán nhóm.`)) return
+    try {
+      await deleteEnumGroup(activeType, groupKey)
+      await taiLai()
+      addToast('Đã xoá nhóm', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không xoá được nhóm', 'error')
+    }
+  }
+
+  async function ganNhom(optionKey, groupKey) {
+    try {
+      await setEnumOptionGroup(activeType, optionKey, groupKey || null)
+      await taiLai()
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không gán được nhóm', 'error')
+    }
+  }
+
   const activeData = allEnums[activeType]
 
   return (
@@ -275,11 +342,104 @@ export default function EnumManagementSection() {
                 </form>
               )}
 
+              {/* Quản lý nhóm — chỉ hiện với danh mục đã bật tính năng nhóm.
+                  Nhóm dùng để lọc gọn, vd Loại hình: TNHH/CP/DN tư nhân đều là "Doanh nghiệp". */}
+              {activeData.hasGroups && (
+                <div className={s.enumGroupBox}>
+                  <div className={s.enumGroupHead}>
+                    <span>Nhóm lựa chọn ({(activeData.groups ?? []).length})</span>
+                    <button className={s.btnOutline} style={{ height: 28 }} onClick={() => setShowAddGroup((v) => !v)}>
+                      <FolderPlus size={12} /> Thêm nhóm
+                    </button>
+                  </div>
+
+                  <div className={s.enumGroupList}>
+                    {(activeData.groups ?? []).length === 0 && (
+                      <span className={s.enumGroupEmpty}>Chưa có nhóm nào.</span>
+                    )}
+                    {(activeData.groups ?? []).map((g) => {
+                      const soCon = activeData.options.filter((o) => o.groupKey === g.key).length
+                      if (editGroupKey === g.key) {
+                        return (
+                          <span key={g.key} className={`${s.enumGroupChip} ${s.enumGroupChipEdit}`}>
+                            <input
+                              autoFocus
+                              className={s.enumGroupChipInput}
+                              value={editGroupVal}
+                              onChange={(e) => setEditGroupVal(e.target.value)}
+                              onBlur={() => luuTenNhom(g.key, g.label)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter')  e.currentTarget.blur()
+                                if (e.key === 'Escape') setEditGroupKey(null)
+                              }}
+                            />
+                            <button title="Lưu" onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => luuTenNhom(g.key, g.label)}><Save size={11} /></button>
+                          </span>
+                        )
+                      }
+                      return (
+                        <span key={g.key} className={s.enumGroupChip}>
+                          <span className={s.enumGroupChipName}>{g.label}</span>
+                          <em title={`${soCon} lựa chọn thuộc nhóm này`}>{soCon}</em>
+                          <button title="Đổi tên nhóm"
+                            onClick={() => { setEditGroupKey(g.key); setEditGroupVal(g.label) }}>
+                            <Pencil size={11} />
+                          </button>
+                          <button className={s.enumGroupChipDel} title="Xoá nhóm"
+                            onClick={() => xoaNhom(g.key, g.label)}>
+                            <Trash2 size={11} />
+                          </button>
+                        </span>
+                      )
+                    })}
+                  </div>
+
+                  {showAddGroup && (
+                    <div className={s.enumGroupAdd}>
+                      <div className={s.enumGroupAddField}>
+                        <label>Mã nhóm</label>
+                        <input
+                          className={s.enumGroupInput}
+                          placeholder="doanh_nghiep"
+                          value={newGroupKey}
+                          onChange={(e) => setNewGroupKey(e.target.value.replace(/[^a-z0-9_]/gi, '_').toLowerCase())}
+                        />
+                      </div>
+                      <div className={`${s.enumGroupAddField} ${s.enumGroupAddGrow}`}>
+                        <label>Tên hiển thị</label>
+                        <input
+                          className={s.enumGroupInput}
+                          placeholder="Doanh nghiệp"
+                          value={newGroupLabel}
+                          onChange={(e) => setNewGroupLabel(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') themNhom() }}
+                        />
+                      </div>
+                      <div className={s.enumGroupAddBtns}>
+                        <button className={s.btnSave} onClick={themNhom}
+                          disabled={savingGroup || !newGroupKey.trim() || !newGroupLabel.trim()}>
+                          {savingGroup ? <Loader2 size={12} className={s.spin} /> : <Save size={12} />} Lưu
+                        </button>
+                        <button className={s.btnOutline} onClick={() => setShowAddGroup(false)} disabled={savingGroup}>
+                          Huỷ
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <p className={s.enumGroupHint}>
+                    Gán nhóm cho từng lựa chọn ở cột <b>Nhóm</b> bên dưới. Xoá nhóm không làm mất lựa chọn.
+                  </p>
+                </div>
+              )}
+
               <table className={s.settingsTable}>
                 <thead>
                   <tr>
                     <th style={{ width: 160 }}>Mã kỹ thuật</th>
                     <th>Nhãn hiển thị</th>
+                    {activeData.hasGroups && <th style={{ width: 170 }}>Nhóm</th>}
                     <th style={{ width: 70, textAlign: 'center' }}>Thứ tự</th>
                     <th style={{ width: 90, textAlign: 'center' }}>Trạng thái</th>
                     <th style={{ width: 70 }} />
@@ -317,6 +477,21 @@ export default function EnumManagementSection() {
                           <span className={s.semiBold}>{opt.label}</span>
                         )}
                       </td>
+                      {activeData.hasGroups && (
+                        <td>
+                          <select
+                            className={s.formInput}
+                            style={{ height: 30, fontSize: 12 }}
+                            value={opt.groupKey ?? ''}
+                            onChange={(e) => ganNhom(opt.key, e.target.value)}
+                          >
+                            <option value="">— Chưa gán nhóm —</option>
+                            {(activeData.groups ?? []).map((g) => (
+                              <option key={g.key} value={g.key}>{g.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
                       <td style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 12 }}>
                         {opt.sortOrder}
                       </td>

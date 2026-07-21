@@ -138,4 +138,86 @@ async function deleteOption(typeKey, optionKey) {
   return { deleted: true }
 }
 
-module.exports = { listAllEnums, listEnumType, updateOptionLabel, addOption, toggleOption, deleteOption }
+
+// ── NHÓM LỰA CHỌN ────────────────────────────────────────────────────────────
+// Gom nhiều lựa chọn thành một nhóm để lọc gọn (vd Loại hình: TNHH/CP/DN tư nhân
+// đều thuộc "Doanh nghiệp"). Chỉ dùng cho danh mục có has_groups = TRUE.
+
+async function _typeIdCoNhom(typeKey) {
+  const { rows } = await query(
+    'SELECT id, has_groups FROM enum_types WHERE type_key = $1', [typeKey])
+  if (rows.length === 0) return null
+  if (!rows[0].has_groups) {
+    throw Object.assign(
+      new Error('Danh mục này chưa bật tính năng nhóm'), { status: 400 })
+  }
+  return rows[0].id
+}
+
+async function addGroup(typeKey, groupKey, label) {
+  const typeId = await _typeIdCoNhom(typeKey)
+  if (!typeId) return null
+  const { rows: maxRows } = await query(
+    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM enum_option_groups WHERE type_id = $1', [typeId])
+  const { rows } = await query(`
+    INSERT INTO enum_option_groups (type_id, group_key, label, sort_order)
+    VALUES ($1, $2, $3, $4)
+    RETURNING group_key, label, sort_order
+  `, [typeId, groupKey, label, maxRows[0].next])
+  enumsLib.invalidate()
+  return { key: rows[0].group_key, label: rows[0].label, sortOrder: rows[0].sort_order }
+}
+
+async function updateGroup(typeKey, groupKey, label) {
+  const typeId = await _typeIdCoNhom(typeKey)
+  if (!typeId) return null
+  const { rows } = await query(`
+    UPDATE enum_option_groups SET label = $1
+    WHERE type_id = $2 AND group_key = $3
+    RETURNING group_key, label, sort_order
+  `, [label, typeId, groupKey])
+  if (rows.length === 0) return null
+  enumsLib.invalidate()
+  return { key: rows[0].group_key, label: rows[0].label, sortOrder: rows[0].sort_order }
+}
+
+// Xoá nhóm KHÔNG xoá lựa chọn — khoá ngoại ON DELETE SET NULL đưa chúng về
+// trạng thái "chưa gán nhóm". Nhóm chỉ là cách gom lại để lọc.
+async function deleteGroup(typeKey, groupKey) {
+  const typeId = await _typeIdCoNhom(typeKey)
+  if (!typeId) return null
+  const { rows } = await query(
+    'DELETE FROM enum_option_groups WHERE type_id = $1 AND group_key = $2 RETURNING id',
+    [typeId, groupKey])
+  if (rows.length === 0) return null
+  enumsLib.invalidate()
+  return true
+}
+
+// Gán lựa chọn vào nhóm. groupKey = null → bỏ khỏi nhóm.
+async function setOptionGroup(typeKey, optionKey, groupKey) {
+  const typeId = await _typeIdCoNhom(typeKey)
+  if (!typeId) return null
+
+  let groupId = null
+  if (groupKey) {
+    const { rows: g } = await query(
+      'SELECT id FROM enum_option_groups WHERE type_id = $1 AND group_key = $2', [typeId, groupKey])
+    if (g.length === 0) {
+      throw Object.assign(new Error('Không tìm thấy nhóm'), { status: 404 })
+    }
+    groupId = g[0].id
+  }
+
+  const { rows } = await query(`
+    UPDATE enum_options SET group_id = $1
+    WHERE type_id = $2 AND option_key = $3
+    RETURNING option_key
+  `, [groupId, typeId, optionKey])
+  if (rows.length === 0) return null
+  enumsLib.invalidate()
+  return { key: rows[0].option_key, groupKey: groupKey ?? null }
+}
+
+module.exports = {
+  addGroup, updateGroup, deleteGroup, setOptionGroup, listAllEnums, listEnumType, updateOptionLabel, addOption, toggleOption, deleteOption }

@@ -134,4 +134,10 @@ router.post('/:typeKey/options/:optionKey/toggle', ...admin, ctrl.toggleOption)
  */
 router.delete('/:typeKey/options/:optionKey', ...admin, ctrl.deleteOption)
 
+/* ─── Nhóm lựa chọn (chỉ danh mục có has_groups) ─── */
+router.post('/:typeKey/groups', ...admin, ctrl.addGroup)
+router.patch('/:typeKey/groups/:groupKey', ...admin, ctrl.updateGroup)
+router.delete('/:typeKey/groups/:groupKey', ...admin, ctrl.deleteGroup)
+router.patch('/:typeKey/options/:optionKey/group', ...admin, ctrl.setOptionGroup)
+
 module.exports = router

@@ -3,13 +3,14 @@ const exportSvc = require('./company-export.service')
 
 async function listCompanies(req, res, next) {
   try {
-    const { page = '1', limit = '20', status, businessType, assignedStaffId, search } = req.query
+    const { page = '1', limit = '20', status, businessType, businessGroup, assignedStaffId, search } = req.query
     const parseMulti = (v) => v ? (Array.isArray(v) ? v.filter(Boolean) : v.split(',').filter(Boolean)) : []
     const result = await svc.listCompanies({
       page: Math.max(1, parseInt(page, 10)),
       limit: Math.min(1000, Math.max(1, parseInt(limit, 10))),
       status: parseMulti(status),
       businessType: parseMulti(businessType),
+      businessGroup: parseMulti(businessGroup),
       assignedStaffId: parseMulti(assignedStaffId),
       search,
       forceStaffId: req.user.role === 'staff' ? req.user.id : undefined,
