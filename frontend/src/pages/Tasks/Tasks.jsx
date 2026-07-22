@@ -37,6 +37,9 @@ import s from './tasks.module.css'
 // ── Sort options ──────────────────────────────────────────────────────────────
 
 const SORT_OPTIONS = [
+  // Mặc định: gom theo việc CẦN XỬ LÝ TRƯỚC — trễ hạn lên đầu, đã xong xuống cuối.
+  // Trong cùng một nhóm thì hạn gần nhất lên trước.
+  { value: 'work_priority:asc', label: 'Ưu tiên xử lý (mặc định)' },
   { value: 'due_date:asc',    label: 'Hết hạn sớm nhất' },
   { value: 'due_date:desc',   label: 'Hết hạn muộn nhất' },
   { value: 'created_at:desc', label: 'Mới nhất' },
@@ -1155,7 +1158,10 @@ const CUR_YEAR  = String(new Date().getFullYear())
 const CUR_MONTH = String(new Date().getMonth() + 1)
 const INIT_DATES = yearMonthToDates(CUR_YEAR, CUR_MONTH)
 
-const FILTER_KEY = 'tasks_filter_v1'
+// Nâng lên v2 khi ĐỔI MẶC ĐỊNH sắp xếp (sang 'Ưu tiên xử lý'). Phiên cũ đã lưu
+// 'created_at:desc' trong sessionStorage nên nếu giữ nguyên khoá thì người dùng
+// sẽ không bao giờ thấy mặc định mới — cứ tưởng thay đổi không có tác dụng.
+const FILTER_KEY = 'tasks_filter_v2'
 
 function loadSavedFilters() {
   try { return JSON.parse(sessionStorage.getItem(FILTER_KEY)) ?? {} }
@@ -1223,7 +1229,7 @@ export default function Tasks() {
   const [dueDateTo,   setDueDateTo]   = useState(initF.dueDateTo   ?? INIT_DATES.to)
 
   // Sort — default: newest first
-  const [sortValue, setSortValue] = useState(initF.sortValue ?? 'created_at:desc')
+  const [sortValue, setSortValue] = useState(initF.sortValue ?? 'work_priority:asc')
 
   // Other filters (status/priority/source are multi-select arrays)
   const [searchInput, setSearchInput]       = useState(initF.searchInput    ?? '')
@@ -1586,7 +1592,7 @@ export default function Tasks() {
     setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
     setDueDateFrom(INIT_DATES.from)
     setDueDateTo(INIT_DATES.to)
-    setSortValue('created_at:desc')
+    setSortValue('work_priority:asc')
     setColFilters({}); setSortColState({ col: null, dir: 'asc' })
     setView('list'); setPageSize(20)
     setPage(1)

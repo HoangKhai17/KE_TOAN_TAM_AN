@@ -60,7 +60,8 @@
       "Bash(docker restart *)",
       "Bash(grep -n \"console.log..\\\\\\\\\\\\\\\\n.\\\\[12\\\\]\" sync_test.js)",
       "Bash(git check-ignore *)",
-      "Bash(grep -n \"tbody>\\\\${rowsHtml}\" deadlineReminder.job.js)"
+      "Bash(grep -n \"tbody>\\\\${rowsHtml}\" deadlineReminder.job.js)",
+      "Bash(grep -n \"status:   \\\\`CASE\" tasks.service.js)"
     ],
     "additionalDirectories": [
       "\\tmp"

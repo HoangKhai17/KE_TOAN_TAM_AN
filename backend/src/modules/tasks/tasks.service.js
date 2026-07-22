@@ -394,8 +394,36 @@ async function listTasks(filters = {}) {
     updated_at: 't.updated_at',
     priority: `CASE t.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END`,
     status:   `CASE t.status WHEN 'pending' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'on_hold' THEN 3 WHEN 'pending_review' THEN 4 WHEN 'needs_revision' THEN 5 WHEN 'completed' THEN 6 ELSE 7 END`,
+    // Gom nhóm theo VIỆC CẦN XỬ LÝ TRƯỚC — khác với `status` (thứ tự vòng đời).
+    // Trễ hạn lên đầu, việc đã xong đẩy xuống cuối, để mở danh sách là thấy ngay
+    // cái gì cần làm.
+    work_priority: `CASE t.status
+      WHEN 'needs_revision' THEN 1
+      WHEN 'in_progress'    THEN 2
+      WHEN 'pending'        THEN 3
+      WHEN 'pending_review' THEN 4
+      WHEN 'on_hold'        THEN 5
+      WHEN 'completed'      THEN 6
+      ELSE 7 END`,
   }
-  const orderBy = `${SORT_COLS[sortBy] || 't.created_at'} ${sortDir === 'asc' ? 'ASC' : 'DESC'}`
+  const huong = sortDir === 'asc' ? 'ASC' : 'DESC'
+
+  // Tiêu chí PHỤ khi giá trị chính bằng nhau. Hai việc:
+  //   1. Trong cùng nhóm trạng thái, đưa việc KHẨN CẤP lên trước — để thấy ngay
+  //      cái nào vừa trễ hạn vừa gấp.
+  //   2. Cho thứ tự ỔN ĐỊNH: không có tiêu chí phụ thì các dòng bằng nhau sẽ
+  //      đảo lộn ngẫu nhiên mỗi lần tải lại (Postgres không đảm bảo thứ tự).
+  // Không lặp lại chính cột đang sắp — vd sắp theo priority thì bỏ vế priority.
+  const phu = []
+  if (sortBy !== 'priority') phu.push(`${SORT_COLS.priority} ASC`)
+  if (sortBy !== 'due_date') phu.push('t.due_date ASC NULLS LAST')
+  if (sortBy !== 'created_at') phu.push('t.created_at DESC')
+
+  // Chỉ nhóm-hoá mới cần chuỗi tiêu chí phụ; sắp theo ngày thì bản thân nó đã đủ mịn.
+  const canPhu = ['work_priority', 'status', 'priority'].includes(sortBy)
+  const orderBy = canPhu
+    ? [`${SORT_COLS[sortBy]} ${huong}`, ...phu].join(', ')
+    : `${SORT_COLS[sortBy] || 't.created_at'} ${huong}`
 
   const [countRes, statusCountsRes, { rows }] = await Promise.all([
     query(`SELECT COUNT(*) FROM tasks t WHERE ${where}`, params),
