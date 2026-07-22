@@ -428,15 +428,15 @@ const TASK_COLUMNS = [
   { key: 'companyShort',   label: 'Tên viết tắt' },
   { key: 'startDate',      label: 'Ngày bắt đầu' },
   { key: 'dueDate',        label: 'Hết hạn' },
-  { key: 'days',           label: 'Số ngày hoàn thành' },
-  { key: 'plannedDays',    label: 'Số ngày kế hoạch' },
+  { key: 'days',           label: 'Ngày HT' },
+  { key: 'plannedDays',    label: 'Ngày KH' },
   { key: 'source',         label: 'Nguồn tạo' },
   { key: 'createdAt',      label: 'Ngày tạo' },
   { key: 'status',         label: 'Trạng thái' },
   { key: 'priority',       label: 'Ưu tiên' },
   { key: 'progress',       label: 'Tiến độ' },
   { key: 'assignedToName', label: 'Giao cho' },
-  { key: 'latestComment',  label: 'Bình luận mới nhất' },
+  { key: 'latestComment',  label: 'Bình luận mới' },
 ]
 
 const TASK_COLS_KEY = 'tasks_hidden_cols_v1'
@@ -854,15 +854,15 @@ function ListView({
               {vis('companyShort') && <Th colKey="companyShort">Tên viết tắt</Th>}
               {vis('startDate')    && <Th colKey="startDate">Ngày bắt đầu</Th>}
               {vis('dueDate')      && <Th colKey="dueDate">Hết hạn</Th>}
-              {vis('days')         && <Th colKey="days">Số ngày hoàn thành</Th>}
-              {vis('plannedDays')  && <Th colKey="plannedDays">Số ngày kế hoạch</Th>}
+              {vis('days')         && <Th colKey="days">Ngày HT</Th>}
+              {vis('plannedDays')  && <Th colKey="plannedDays">Ngày KH</Th>}
               {vis('source')       && <Th colKey="source">Nguồn tạo</Th>}
               {vis('createdAt')    && <Th colKey="createdAt">Ngày tạo</Th>}
               {vis('status')       && <Th colKey="status">Trạng thái</Th>}
               {vis('priority')     && <Th colKey="priority">Ưu tiên</Th>}
               {vis('progress')     && <Th colKey="progress">Tiến độ</Th>}
               {vis('assignedToName') && <Th colKey="assignedToName">Giao cho</Th>}
-              {vis('latestComment') && <Th colKey="latestComment">Bình luận mới nhất</Th>}
+              {vis('latestComment') && <Th colKey="latestComment">Bình luận mới</Th>}
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
             </tr>
           </thead>
