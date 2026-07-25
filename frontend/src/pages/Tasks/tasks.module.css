@@ -600,7 +600,8 @@
 .progressBar {
   flex: 1;
   height: 5px;
-  min-width: 40px;
+  min-width: 26px;          /* thanh ngắn hơn để cột Tiến độ gọn, nhường chỗ cho Tiêu đề */
+  max-width: 46px;
   background: var(--color-border-muted);
   border-radius: var(--radius-pill);
   overflow: hidden;
@@ -635,12 +636,17 @@
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fs-sm);
+  /* fixed: cột lấy đúng bề rộng đặt ở header, cột Tiêu đề (không đặt width) co giãn
+     lấy phần còn lại → bảng luôn vừa khung, không phình theo tiêu đề dài. */
+  table-layout: fixed;
+  /* Padding ngang ô hẹp hơn mặc định (16px) để dồn chỗ cho nhiều cột vừa 1 màn 1920. */
+  --table-col-px: 11px;
 }
 
 .thead { background: linear-gradient(180deg, #f0f6ff 0%, #dbeafe 100%); }
 
 .th {
-  padding: var(--table-head-py) var(--table-cell-px);
+  padding: var(--table-head-py) var(--table-col-px);
   text-align: left;
   font-size: var(--fs-2xs);
   font-weight: 800;
@@ -674,9 +680,12 @@
 .trOverdue  { border-left: 3px solid var(--color-danger); }
 
 .td {
-  padding: 10px var(--table-cell-px);
+  padding: 10px var(--table-col-px);
   vertical-align: middle;
   color: var(--color-text);
+  /* Cột bề rộng cố định (table-layout: fixed) → nội dung dài phải cắt gọn trong ô,
+     không tràn đè sang cột kế. Select/date là popup native nên không bị cắt. */
+  overflow: hidden;
 }
 
 .tdCheck {
@@ -701,7 +710,10 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 280px;
+  /* inline-block + max-width 100% → cắt "…" vừa trong cột cố định (Tên viết tắt, Nguồn tạo) */
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
 }
 
 .dueDateNormal { color: var(--color-text-soft); font-size: var(--fs-xs); }
@@ -714,6 +726,15 @@
   gap: 6px;
   font-size: var(--fs-xs);
   white-space: nowrap;
+  min-width: 0;              /* cho phép tên co lại để cắt "…" trong cột cố định */
+}
+
+/* Tên người được giao — cắt gọn nếu dài, tránh đè sang cột kế */
+.assignedName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .avatarXs {
@@ -731,6 +752,15 @@
 }
 
 .sourceIcon { opacity: 0.6; font-size: var(--fs-2xs); }
+
+/* Cột gộp "Ngày HT / KH": hai badge cạnh nhau, ngăn bằng dấu / */
+.dayCountCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.dayCountSep { color: var(--color-muted); font-size: var(--fs-2xs); }
 
 /* ── Bulk action bar ─────────────────────────────────────────── */
 
@@ -2617,6 +2647,8 @@
 .qeSelect {
   height: 26px;
   padding: 0 6px;
+  width: 100%;              /* lấp đầy cột cố định, không tự phình theo option dài nhất */
+  max-width: 100%;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: #fff;
@@ -2649,7 +2681,7 @@
      bề rộng bảng vượt khung và bóp cột Tiêu đề xuống còn vài ký tự mỗi dòng.
      Nay ô ngày co theo cột, chỉ giữ mức tối thiểu đủ đọc dd/mm/yyyy. */
   width: 100%;
-  min-width: 104px;
+  min-width: 88px;
 }
 
 .qeDate:focus {
@@ -4070,7 +4102,8 @@
 
 /* ── Column-header filter button (docs/018) ── */
 .thFilterInner { display: flex; align-items: center; gap: 4px; }
-.thFilterLabel { flex: 1; }
+/* Nhãn cột cắt "…" nếu lỡ dài hơn bề rộng cột (lưới an toàn cho table-layout: fixed) */
+.thFilterLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .thFilterBtn {
   display: inline-flex;
   align-items: center;
@@ -4156,7 +4189,8 @@
   display: flex;
   gap: 4px;
   align-items: baseline;
-  max-width: 280px;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
 }
 .latestCommentBy {

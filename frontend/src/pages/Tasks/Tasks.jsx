@@ -97,6 +97,14 @@ const COL_DOT = {
   completed:      s.dotCompleted,
 }
 
+// Rút gọn tên hiển thị: chỉ lấy 2 từ CUỐI (vd "Nguyễn Hoàng Thị B" → "Thị B",
+// "Nguyễn Văn A" → "Văn A"). CHỈ dùng cho hiển thị trên bảng — xuất Excel giữ tên đầy đủ.
+function shortName(name) {
+  if (!name) return name
+  const parts = String(name).trim().split(/\s+/)
+  return parts.length <= 2 ? parts.join(' ') : parts.slice(-2).join(' ')
+}
+
 // ── List due-date field: shows dd/MM/yyyy text, hidden native picker on click ──
 
 function ListDateField({ value, onChange, isOverdue }) {
@@ -426,10 +434,9 @@ function taskColFilterType(colKey) { return TASK_LIST_COL_TYPE[colKey] ?? 'text'
 const TASK_COLUMNS = [
   { key: 'title',          label: 'Tiêu đề',            fixed: true },
   { key: 'companyShort',   label: 'Tên viết tắt' },
-  { key: 'startDate',      label: 'Ngày bắt đầu' },
+  { key: 'startDate',      label: 'Bắt đầu' },
   { key: 'dueDate',        label: 'Hết hạn' },
-  { key: 'days',           label: 'Ngày HT' },
-  { key: 'plannedDays',    label: 'Ngày KH' },
+  { key: 'dayCount',       label: 'Ngày HT / KH' },
   { key: 'source',         label: 'Nguồn tạo' },
   { key: 'createdAt',      label: 'Ngày tạo' },
   { key: 'status',         label: 'Trạng thái' },
@@ -807,20 +814,22 @@ function ListView({
   const visibleDataCols = TASK_COLUMNS.filter((c) => c.fixed || vis(c.key)).length
   const colSpanAll = visibleDataCols + 2   // + checkbox + actions
 
-  function Th({ colKey, children }) {
+  function Th({ colKey, children, w, noFilter }) {
     const active = hasColFilter(colKey) || sortColState?.col === colKey
     return (
-      <th className={s.th}>
+      <th className={s.th} style={w ? { width: w } : undefined}>
         <div className={s.thFilterInner}>
           <span className={s.thFilterLabel}>{children}</span>
-          <button
-            data-colfilter-btn
-            className={`${s.thFilterBtn} ${active ? s.thFilterBtnActive : ''}`}
-            onClick={(e) => onOpenColFilter(colKey, e)}
-            title="Lọc / Sắp xếp"
-          >
-            <Filter size={10} />
-          </button>
+          {!noFilter && (
+            <button
+              data-colfilter-btn
+              className={`${s.thFilterBtn} ${active ? s.thFilterBtnActive : ''}`}
+              onClick={(e) => onOpenColFilter(colKey, e)}
+              title="Lọc / Sắp xếp"
+            >
+              <Filter size={10} />
+            </button>
+          )}
         </div>
       </th>
     )
@@ -850,19 +859,19 @@ function ListView({
                   onChange={(e) => onSelectAll(e.target.checked)}
                 />
               </th>
+              {/* Tiêu đề: KHÔNG đặt width → co giãn lấy phần còn lại (table-layout: fixed) */}
               <Th colKey="title">Tiêu đề</Th>
-              {vis('companyShort') && <Th colKey="companyShort">Tên viết tắt</Th>}
-              {vis('startDate')    && <Th colKey="startDate">Ngày bắt đầu</Th>}
-              {vis('dueDate')      && <Th colKey="dueDate">Hết hạn</Th>}
-              {vis('days')         && <Th colKey="days">Ngày HT</Th>}
-              {vis('plannedDays')  && <Th colKey="plannedDays">Ngày KH</Th>}
-              {vis('source')       && <Th colKey="source">Nguồn tạo</Th>}
-              {vis('createdAt')    && <Th colKey="createdAt">Ngày tạo</Th>}
-              {vis('status')       && <Th colKey="status">Trạng thái</Th>}
-              {vis('priority')     && <Th colKey="priority">Ưu tiên</Th>}
-              {vis('progress')     && <Th colKey="progress">Tiến độ</Th>}
-              {vis('assignedToName') && <Th colKey="assignedToName">Giao cho</Th>}
-              {vis('latestComment') && <Th colKey="latestComment">Bình luận mới</Th>}
+              {vis('companyShort') && <Th colKey="companyShort" w={124}>Tên viết tắt</Th>}
+              {vis('startDate')    && <Th colKey="startDate" w={104}>Bắt đầu</Th>}
+              {vis('dueDate')      && <Th colKey="dueDate" w={102}>Hết hạn</Th>}
+              {vis('dayCount')     && <Th colKey="dayCount" w={108} noFilter>Ngày HT / KH</Th>}
+              {vis('source')       && <Th colKey="source" w={116}>Nguồn tạo</Th>}
+              {vis('createdAt')    && <Th colKey="createdAt" w={122}>Ngày tạo</Th>}
+              {vis('status')       && <Th colKey="status" w={132}>Trạng thái</Th>}
+              {vis('priority')     && <Th colKey="priority" w={106}>Ưu tiên</Th>}
+              {vis('progress')     && <Th colKey="progress" w={84}>Tiến độ</Th>}
+              {vis('assignedToName') && <Th colKey="assignedToName" w={116}>Giao cho</Th>}
+              {vis('latestComment') && <Th colKey="latestComment" w={160}>Bình luận mới</Th>}
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
             </tr>
           </thead>
@@ -944,23 +953,19 @@ function ListView({
                     </td>
                   )}
 
-                  {/* Số ngày hoàn thành (thực tế) */}
-                  {vis('days') && (
+                  {/* Ngày HT / KH — gộp: số ngày hoàn thành thực tế (xám/xanh lá) và
+                      số ngày kế hoạch (xanh dương), ngăn bằng dấu "/" cho gọn cột */}
+                  {vis('dayCount') && (
                     <td className={s.td}>
-                      {days !== null ? (
-                        <span className={`${s.daysBadge} ${t.status === 'completed' ? s.daysBadgeDone : ''}`}>
-                          {days}d
-                        </span>
-                      ) : <span className={s.mutedDash}>—</span>}
-                    </td>
-                  )}
-
-                  {/* Số ngày kế hoạch (hết hạn − bắt đầu) */}
-                  {vis('plannedDays') && (
-                    <td className={s.td}>
-                      {planned !== null ? (
-                        <span className={`${s.daysBadge} ${s.daysBadgePlan}`}>{planned}d</span>
-                      ) : <span className={s.mutedDash}>—</span>}
+                      <span className={s.dayCountCell}>
+                        {days !== null
+                          ? <span className={`${s.daysBadge} ${t.status === 'completed' ? s.daysBadgeDone : ''}`}>{days}d</span>
+                          : <span className={s.mutedDash}>—</span>}
+                        <span className={s.dayCountSep}>/</span>
+                        {planned !== null
+                          ? <span className={`${s.daysBadge} ${s.daysBadgePlan}`}>{planned}d</span>
+                          : <span className={s.mutedDash}>—</span>}
+                      </span>
                     </td>
                   )}
 
@@ -1039,8 +1044,7 @@ function ListView({
                     <td className={s.td}>
                       {t.assignedToName ? (
                         <div className={s.assignedCell}>
-                          <div className={s.avatarXs}>{t.assignedToName[0]?.toUpperCase()}</div>
-                          <span>{t.assignedToName}</span>
+                          <span className={s.assignedName} title={t.assignedToName}>{shortName(t.assignedToName)}</span>
                           {t.collaborators?.length > 0 && (
                             <span
                               title={`Hỗ trợ: ${t.collaborators.map((c) => c.name).join(', ')}`}
@@ -1070,7 +1074,7 @@ function ListView({
                     <td className={s.td}>
                       {t.latestComment ? (
                         <div className={s.latestCommentCell} title={`${t.latestCommentBy ?? ''}: ${t.latestComment}`}>
-                          {t.latestCommentBy && <span className={s.latestCommentBy}>{t.latestCommentBy}:</span>}
+                          {t.latestCommentBy && <span className={s.latestCommentBy}>{shortName(t.latestCommentBy)}:</span>}
                           <span className={s.latestCommentText}>{t.latestComment}</span>
                         </div>
                       ) : (
