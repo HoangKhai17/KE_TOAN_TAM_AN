@@ -33,12 +33,12 @@ import s from './companies.module.css'
 
 const TABS = [
   { id: 'overview',          label: 'Tổng quan',         icon: BarChart2 },
-  { id: 'tasks',             label: 'Công việc',          icon: ListTodo },
-  { id: 'client-requests',   label: 'Yêu cầu KH',        icon: ClipboardList },
+  { id: 'documents',         label: 'Tài liệu',           icon: FileText },
+  { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
   { id: 'processes',         label: 'Quy trình',          icon: Workflow },
   { id: 'schedules',         label: 'Lịch định kỳ',       icon: CalendarDays },
-  { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
-  { id: 'documents',         label: 'Tài liệu',           icon: FileText },
+  { id: 'tasks',             label: 'Công việc',          icon: ListTodo },
+  { id: 'client-requests',   label: 'Yêu cầu KH',        icon: ClipboardList },
   { id: 'notes',             label: 'Ghi chú',            icon: StickyNote },
 ]
 
