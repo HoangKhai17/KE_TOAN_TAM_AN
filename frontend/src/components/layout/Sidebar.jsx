@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, CheckSquare,
@@ -39,10 +40,16 @@ function getInitials(name) {
   return name.split(' ').slice(-2).map((w) => w[0]).join('').toUpperCase()
 }
 
+// `open` (từ AppLayout) = trạng thái GHIM: bấm nút thì mở luôn.
+// Chưa ghim thì sidebar thu gọn (chỉ icon) để tối ưu diện tích; RÊ CHUỘT vào là
+// tạm bung ra đầy đủ, rời chuột thì thu lại. Cả hai đều đẩy nội dung như thường.
 export default function Sidebar({ open, onToggle }) {
   const navigate = useNavigate()
   const { user, logout: clearAuth } = useAuthStore()
   const isAdmin = user?.role === 'admin'
+
+  const [hovering, setHovering] = useState(false)
+  const expanded = open || hovering          // đang ghim HOẶC đang rê chuột
 
   async function handleLogout() {
     try { await logout() } catch { /* ignore */ }
@@ -60,7 +67,11 @@ export default function Sidebar({ open, onToggle }) {
     .filter((group) => group.items.length > 0)
 
   return (
-    <aside className={`${s.sidebar} ${open ? s.sidebarExpanded : s.sidebarCollapsed}`}>
+    <aside
+      className={`${s.sidebar} ${expanded ? s.sidebarExpanded : s.sidebarCollapsed}`}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
 
       {/* ── Logo / toggle ── */}
       <div className={s.sidebarLogo}>
@@ -68,7 +79,7 @@ export default function Sidebar({ open, onToggle }) {
           <div className={s.sidebarLogoMark}>
             <img src="/logo_taman.png" alt="Logo Kế Toán Tâm An" />
           </div>
-          {open && (
+          {expanded && (
             <div>
               <div className={s.sidebarTitle}>Kế Toán Tâm An</div>
               <div className={s.sidebarSubtitle}>Nội bộ</div>
@@ -78,7 +89,8 @@ export default function Sidebar({ open, onToggle }) {
         <button
           className={s.sidebarToggle}
           onClick={onToggle}
-          aria-label={open ? 'Thu sidebar' : 'Mở sidebar'}
+          aria-label={open ? 'Bỏ ghim sidebar' : 'Ghim mở sidebar'}
+          title={open ? 'Bỏ ghim — thu gọn lại' : 'Ghim mở sidebar'}
         >
           {open ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
         </button>
@@ -88,13 +100,13 @@ export default function Sidebar({ open, onToggle }) {
       <nav className={s.sidebarNav}>
         {visibleGroups.map((group) => (
           <div key={group.label} className={s.sidebarSection}>
-            {open && <div className={s.sidebarSectionLabel}>{group.label}</div>}
+            {expanded && <div className={s.sidebarSectionLabel}>{group.label}</div>}
             {group.items.map(({ to, label, icon: Icon, end: endProp }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={endProp}
-                title={!open ? label : undefined}
+                title={!expanded ? label : undefined}
                 className={({ isActive }) =>
                   `${s.navItem} ${isActive ? s.navItemActive : ''}`
                 }
@@ -102,7 +114,7 @@ export default function Sidebar({ open, onToggle }) {
                 <span className={s.navIcon}>
                   <Icon size={17} />
                 </span>
-                <span className={`${s.navLabel} ${!open ? s.navLabelHidden : ''}`}>
+                <span className={`${s.navLabel} ${!expanded ? s.navLabelHidden : ''}`}>
                   {label}
                 </span>
               </NavLink>
@@ -119,7 +131,7 @@ export default function Sidebar({ open, onToggle }) {
               ? <img src={user.avatarUrl} alt={user?.name} className={s.avatarImg} />
               : getInitials(user?.name)}
           </div>
-          {open && (
+          {expanded && (
             <div className={s.sidebarUserInfo}>
               <div className={s.sidebarUserName}>{user?.name || '—'}</div>
               <div className={s.sidebarUserRole}>{user?.role || ''}</div>
@@ -128,11 +140,11 @@ export default function Sidebar({ open, onToggle }) {
         </div>
         <button
           onClick={handleLogout}
-          title={!open ? 'Đăng xuất' : undefined}
-          className={`${s.sidebarLogout} ${!open ? s.sidebarLogoutCollapsed : ''}`}
+          title={!expanded ? 'Đăng xuất' : undefined}
+          className={`${s.sidebarLogout} ${!expanded ? s.sidebarLogoutCollapsed : ''}`}
         >
           <LogOut size={14} />
-          {open && 'Đăng xuất'}
+          {expanded && 'Đăng xuất'}
         </button>
       </div>
     </aside>

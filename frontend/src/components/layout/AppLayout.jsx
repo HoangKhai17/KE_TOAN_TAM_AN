@@ -4,11 +4,13 @@ import Header from './Header'
 import Footer from './Footer'
 import s from './layout.module.css'
 
-// Lưu trạng thái đóng/mở sidebar vào sessionStorage → giữ khi F5 / chuyển trang
+// Trạng thái GHIM sidebar (mở luôn) — lưu sessionStorage, giữ khi F5 / chuyển trang.
+// MẶC ĐỊNH là THU GỌN (false) để tối đa diện tích thao tác; rê chuột vào sidebar
+// sẽ tạm bung ra, không cần ghim.
 const SIDEBAR_KEY = 'sidebar_open'
 function loadSidebarOpen() {
-  try { const v = sessionStorage.getItem(SIDEBAR_KEY); return v === null ? true : v === 'true' }
-  catch { return true }
+  try { return sessionStorage.getItem(SIDEBAR_KEY) === 'true' }
+  catch { return false }
 }
 
 export default function AppLayout({ children }) {
