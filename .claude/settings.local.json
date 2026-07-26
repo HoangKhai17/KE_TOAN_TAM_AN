@@ -279,7 +279,10 @@
       "Bash(grep -nA8 -E \"^\\\\.heroAvatarWrap |^\\\\.heroAvatarImg |^\\\\.heroInitials \" companies.module.css)",
       "Bash(sed -i '369,500d' CompanyOverviewTab.jsx)",
       "Bash(sed -i '165,277d' CompanyOverviewTab.jsx)",
-      "Bash(grep -nA6 \"activeTab === 'overview'\" CompanyDetail.jsx)"
+      "Bash(grep -nA6 \"activeTab === 'overview'\" CompanyDetail.jsx)",
+      "Bash(grep -nA3 \"export.*updateCompany\\\\|updateCompany\" frontend/src/api/companies.js)",
+      "Bash(grep -nA40 \"async function updateCompany\\\\|updateCompany =\" src/modules/companies/companies.service.js)",
+      "Bash(curl -s http://localhost:8080/api/companies/__TRACKED_VAR__ -H 'Authorization: Bearer __TRACKED_VAR__')"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

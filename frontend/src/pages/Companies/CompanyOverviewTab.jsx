@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
-  Building2, User, UserPlus, Loader2, Users, SlidersHorizontal,
+  Building2, UserPlus, Loader2, Users, SlidersHorizontal, Pencil,
+  Plus, Trash2, Check, X,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useToastStore } from '../../stores/toastStore'
@@ -22,36 +23,115 @@ function staffAvatarSrc(staff) {
 
 const FALLBACK_AVATAR = `https://ui-avatars.com/api/?name=&size=88&background=e2e8f0&color=94a3b8`
 
-function InfoField({ label, value, fullWidth }) {
+// ── EditableField: hiển thị + sửa TẠI CHỖ (click → input → lưu, không popup) ──────
+// Định nghĩa ở cấp cao nhất (không lồng) để input không mất focus khi gõ.
+function EditableField({ companyId, field, value, label, type = 'text', options = [], canEdit, onSaved, fullWidth }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState('')
+  const [saving, setSaving]   = useState(false)
+  const inputRef  = useRef(null)
+  const cancelRef = useRef(false)
+
+  function begin() {
+    if (!canEdit || saving) return
+    setDraft(type === 'date' ? (value ? String(value).slice(0, 10) : '') : (value ?? ''))
+    cancelRef.current = false
+    setEditing(true)
+    setTimeout(() => inputRef.current?.focus(), 20)
+  }
+
+  async function commit(override) {
+    if (cancelRef.current) { cancelRef.current = false; setEditing(false); return }
+    const raw = override !== undefined ? override : draft
+    const newVal = (typeof raw === 'string' ? raw.trim() : raw) || null
+    if ((value ?? null) === newVal) { setEditing(false); return }
+    setSaving(true)
+    try {
+      const updated = await companiesApi.updateCompany(companyId, { [field]: newVal })
+      onSaved?.(updated)
+      setEditing(false)
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không lưu được thay đổi', 'error')
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Enter' && type !== 'textarea') { e.preventDefault(); inputRef.current?.blur() }
+    else if (e.key === 'Escape') { cancelRef.current = true; inputRef.current?.blur() }
+  }
+
+  if (!editing) {
+    let display = value
+    if (type === 'select') display = options.find((o) => o.value === value)?.label ?? value
+    else if (type === 'date') display = value ? fmtDate(value) : null
+    return (
+      <div className={`${s.editRow} ${fullWidth ? s.infoGridFull : ''}`}>
+        <div className={s.infoLabel}>{label}</div>
+        <div
+          className={`${s.editValue} ${canEdit ? s.editValueOn : ''} ${display ? '' : s.editValueEmpty}`}
+          onClick={begin}
+          title={canEdit ? 'Nhấp để sửa' : undefined}
+        >
+          <span className={s.editValueText}>{display || '—'}</span>
+          {canEdit && <Pencil size={11} className={s.editPencil} />}
+        </div>
+      </div>
+    )
+  }
+
+  const common = { ref: inputRef, className: s.editInput, value: draft, disabled: saving, onKeyDown }
   return (
-    <div className={fullWidth ? s.infoGridFull : ''}>
+    <div className={`${s.editRow} ${fullWidth ? s.infoGridFull : ''}`}>
       <div className={s.infoLabel}>{label}</div>
-      {value
-        ? <div className={s.infoValue}>{value}</div>
-        : <div className={s.infoValueEmpty}>—</div>
-      }
+      <div className={s.editInputWrap}>
+        {type === 'select' ? (
+          <select {...common}
+            onChange={(e) => { setDraft(e.target.value); commit(e.target.value) }}
+            onBlur={() => { if (!saving) setEditing(false) }}
+          >
+            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        ) : type === 'textarea' ? (
+          <textarea {...common} rows={2} onChange={(e) => setDraft(e.target.value)} onBlur={() => commit()} />
+        ) : (
+          <input {...common}
+            type={type === 'date' ? 'date' : type === 'tel' ? 'tel' : type === 'email' ? 'email' : 'text'}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => commit()}
+          />
+        )}
+        {saving && <Loader2 size={13} className={s.spin} />}
+      </div>
     </div>
   )
 }
 
 // ── OverviewTab ────────────────────────────────────────────────────────────────
 
-function OverviewTab({ company }) {
+function OverviewTab({ company, canEdit, onCompanyUpdated }) {
   // Một cột full-width: các section trải hết bề ngang layout
   return (
     <div className={s.overviewSingle}>
-      <BusinessInfoCard company={company} />
+      <CustomerInfoCard company={company} canEdit={canEdit} onSaved={onCompanyUpdated} />
       <CompanyLocationsCard companyId={company.id} />
-      <ContactCard company={company} />
-      <CustomFieldsCard company={company} />
+      <CustomFieldsCard company={company} canEdit={canEdit} onSaved={onCompanyUpdated} />
     </div>
   )
 }
 
-// ── BusinessInfoCard ───────────────────────────────────────────────────────────
+// ── CustomerInfoCard: 3 cột, mọi trường sửa inline ───────────────────────────────
 
-function BusinessInfoCard({ company }) {
-  const getLabel = useEnumsStore((st) => st.getLabel)
+function CustomerInfoCard({ company, canEdit, onSaved }) {
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const btOptions = getOptions('business_type').length > 0
+    ? getOptions('business_type').map((o) => ({ value: o.key, label: o.label }))
+    : Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => ({ value, label }))
+  const common = { companyId: company.id, canEdit, onSaved }
+
   return (
     <div className={s.infoCard}>
       <div className={s.infoCardHeader}>
@@ -59,69 +139,40 @@ function BusinessInfoCard({ company }) {
           <div className={`${s.infoCardTitleIcon} ${s.infoCardIconBlue}`}>
             <Building2 size={14} />
           </div>
-          Thông tin doanh nghiệp
+          Thông tin khách hàng
         </div>
       </div>
       <div className={s.infoCardBody}>
-        <div className={s.infoGrid}>
-          <InfoField label="Tên công ty"        value={company.name} />
-          <InfoField label="Tên viết tắt"       value={company.shortName} />
-          <InfoField label="Mã số thuế"         value={company.taxCode} />
-          <InfoField label="Loại hình"          value={getLabel('business_type', company.businessType, BUSINESS_TYPE_LABELS[company.businessType] ?? company.businessType)} />
-          <InfoField label="Ngành nghề"         value={company.industry} />
-          <InfoField label="Địa chỉ"            value={company.address} fullWidth />
-          <InfoField label="Ngày bắt đầu HĐ"   value={fmtDate(company.serviceStartDate)} />
-          <InfoField label="Số TK ngân hàng"   value={company.bankAccount} />
-          <InfoField label="Tên ngân hàng"     value={company.bankName} />
-        </div>
-        {company.notes && (
-          <div className={s.infoNoteWrap}>
-            <div className={s.infoLabel}>Ghi chú</div>
-            <div className={s.infoNote}>{company.notes}</div>
+        <div className={s.customerCols}>
+          {/* Cột 1 — Thông tin khách hàng */}
+          <div className={s.customerCol}>
+            <div className={s.customerColTitle}>Thông tin khách hàng</div>
+            <EditableField {...common} field="name"         label="Tên công ty"  value={company.name} />
+            <EditableField {...common} field="shortName"    label="Tên viết tắt" value={company.shortName} />
+            <EditableField {...common} field="taxCode"      label="Mã số thuế"   value={company.taxCode} />
+            <EditableField {...common} field="businessType" label="Loại hình"    value={company.businessType} type="select" options={btOptions} />
+            <EditableField {...common} field="industry"     label="Ngành nghề"   value={company.industry} />
+            <EditableField {...common} field="address"      label="Địa chỉ"      value={company.address} type="textarea" />
           </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
-// ── ContactCard ────────────────────────────────────────────────────────────────
-
-function ContactCard({ company }) {
-  const hasLegal   = company.legalRepName || company.legalRepPhone
-  const hasContact = company.contactName  || company.contactPhone || company.contactEmail
-  if (!hasLegal && !hasContact) return null
-  return (
-    <div className={s.infoCard}>
-      <div className={s.infoCardHeader}>
-        <div className={s.infoCardTitle}>
-          <div className={`${s.infoCardTitleIcon} ${s.infoCardIconGreen}`}>
-            <User size={14} />
+          {/* Cột 2 — Đại diện pháp lý & người liên hệ */}
+          <div className={s.customerCol}>
+            <div className={s.customerColTitle}>Đại diện pháp lý &amp; người liên hệ</div>
+            <EditableField {...common} field="legalRepName"  label="Họ tên đại diện pháp lý" value={company.legalRepName} />
+            <EditableField {...common} field="legalRepPhone" label="ĐT đại diện"            value={company.legalRepPhone} type="tel" />
+            <EditableField {...common} field="contactName"   label="Họ tên liên hệ"         value={company.contactName} />
+            <EditableField {...common} field="contactPhone"  label="ĐT liên hệ"             value={company.contactPhone} type="tel" />
+            <EditableField {...common} field="contactEmail"  label="Email liên hệ"          value={company.contactEmail} type="email" />
           </div>
-          Liên hệ
-        </div>
-      </div>
-      <div className={s.infoCardBody}>
-        <div className={s.infoContactGrid}>
-          {hasLegal && (
-            <div>
-              <div className={`${s.infoLabel} ${s.infoSubsectionLabel}`}>Đại diện pháp lý</div>
-              <div className={`${s.infoGrid} ${s.infoGridSingle}`}>
-                <InfoField label="Họ tên"    value={company.legalRepName} />
-                <InfoField label="Điện thoại" value={company.legalRepPhone} />
-              </div>
-            </div>
-          )}
-          {hasContact && (
-            <div>
-              <div className={`${s.infoLabel} ${s.infoSubsectionLabel}`}>Người liên hệ</div>
-              <div className={`${s.infoGrid} ${s.infoGridSingle}`}>
-                <InfoField label="Họ tên"    value={company.contactName} />
-                <InfoField label="Điện thoại" value={company.contactPhone} />
-                <InfoField label="Email"     value={company.contactEmail} />
-              </div>
-            </div>
-          )}
+
+          {/* Cột 3 — Hợp đồng & ngân hàng */}
+          <div className={s.customerCol}>
+            <div className={s.customerColTitle}>Hợp đồng &amp; ngân hàng</div>
+            <EditableField {...common} field="serviceStartDate" label="Ngày bắt đầu HĐ" value={company.serviceStartDate} type="date" />
+            <EditableField {...common} field="bankAccount"      label="Số TK ngân hàng" value={company.bankAccount} />
+            <EditableField {...common} field="bankName"         label="Tên ngân hàng"   value={company.bankName} />
+            <EditableField {...common} field="notes"            label="Ghi chú"         value={company.notes} type="textarea" />
+          </div>
         </div>
       </div>
     </div>
@@ -130,8 +181,62 @@ function ContactCard({ company }) {
 
 // ── CustomFieldsCard ───────────────────────────────────────────────────────────
 
-function CustomFieldsCard({ company }) {
-  const fields = (company.customFields ?? []).filter((f) => f.name?.trim())
+// Hàng nhập liệu cho trường bổ sung — cấp cao nhất để không mất focus khi gõ
+function CustomFieldEditRow({ draft, setF, save, cancel, saving }) {
+  return (
+    <tr className={s.locEditRow}>
+      <td><input className={s.locInput} value={draft.name} onChange={setF('name')} placeholder="Tên trường" /></td>
+      <td><input className={s.locInput} value={draft.value} onChange={setF('value')} placeholder="Nội dung" /></td>
+      <td className={s.locCenter}>
+        <div className={s.locRowActions}>
+          <button className={s.locBtnSave} onClick={save} disabled={saving} title="Lưu">
+            {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />}
+          </button>
+          <button className={s.locBtnCancel} onClick={cancel} disabled={saving} title="Huỷ"><X size={13} /></button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+function CustomFieldsCard({ company, canEdit, onSaved }) {
+  const addToast = useToastStore((st) => st.toast)
+  const fields = company.customFields ?? []
+  const [editing, setEditing] = useState(null)   // null | 'new' | <index>
+  const [draft, setDraft]     = useState({ name: '', value: '' })
+  const [saving, setSaving]   = useState(false)
+
+  const setF = (k) => (e) => setDraft((p) => ({ ...p, [k]: e.target.value }))
+  function startAdd()   { setDraft({ name: '', value: '' }); setEditing('new') }
+  function startEdit(i) { setDraft({ name: fields[i].name ?? '', value: fields[i].value ?? '' }); setEditing(i) }
+  function cancel()     { setEditing(null) }
+
+  async function persist(nextFields) {
+    setSaving(true)
+    try {
+      const updated = await companiesApi.updateCompany(company.id, { customFields: nextFields })
+      onSaved?.(updated)
+      setEditing(null)
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không lưu được', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+  async function save() {
+    const name = draft.name.trim()
+    if (!name) { addToast('Vui lòng nhập tên trường', 'error'); return }
+    const item = { name, value: draft.value.trim() }
+    const next = editing === 'new' ? [...fields, item] : fields.map((f, i) => (i === editing ? item : f))
+    await persist(next)
+  }
+  async function remove(i) {
+    if (!window.confirm(`Xoá trường "${fields[i].name}"?`)) return
+    await persist(fields.filter((_, j) => j !== i))
+  }
+
+  const editProps = { draft, setF, save, cancel, saving }
+
   return (
     <div className={s.infoCard}>
       <div className={s.infoCardHeader}>
@@ -141,22 +246,52 @@ function CustomFieldsCard({ company }) {
           </div>
           Thông tin bổ sung
         </div>
+        {canEdit && editing !== 'new' && (
+          <button className={s.locAddBtn} onClick={startAdd}>
+            <Plus size={13} /> Thêm trường
+          </button>
+        )}
       </div>
       <div className={s.infoCardBody}>
-        {fields.length === 0 ? (
-          <div className={s.infoValueEmpty} style={{ fontSize: 'var(--fs-sm)', padding: '4px 0' }}>
-            Chưa có trường tùy chỉnh. Nhấn <strong>Chỉnh sửa</strong> để thêm.
-          </div>
-        ) : (
-          <div className={s.customFieldsViewList}>
-            {fields.map((field, i) => (
-              <div key={i} className={s.customFieldsViewRow}>
-                <span className={s.customFieldsViewLabel}>{field.name}</span>
-                <span className={s.customFieldsViewValue}>{field.value || '—'}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className={s.locTableWrap}>
+          <table className={s.locTable}>
+            <colgroup>
+              <col className={s.cfName} />
+              <col className={s.cfValue} />
+              <col className={s.cfAction} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Tên trường</th>
+                <th>Nội dung</th>
+                <th className={s.locCenter}>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fields.length === 0 && editing !== 'new' ? (
+                <tr><td colSpan={3} className={s.locEmpty}>Chưa có trường bổ sung. Nhấn “Thêm trường”.</td></tr>
+              ) : (
+                fields.map((f, i) => (
+                  editing === i ? <CustomFieldEditRow key={i} {...editProps} /> : (
+                    <tr key={i}>
+                      <td title={f.name}>{f.name || <span className={s.locMuted}>—</span>}</td>
+                      <td title={f.value}>{f.value || <span className={s.locMuted}>—</span>}</td>
+                      <td className={s.locCenter}>
+                        {canEdit && (
+                          <div className={s.locRowActions}>
+                            <button className={s.locBtnEdit} onClick={() => startEdit(i)} title="Sửa"><Pencil size={13} /></button>
+                            <button className={s.locBtnDelete} onClick={() => remove(i)} title="Xoá"><Trash2 size={13} /></button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                ))
+              )}
+              {editing === 'new' && <CustomFieldEditRow {...editProps} />}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

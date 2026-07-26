@@ -170,6 +170,16 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
       <div className={s.infoCardBody}>
         <div className={s.locTableWrap}>
           <table className={s.locTable}>
+            <colgroup>
+              <col className={s.colType} />
+              <col className={s.colName} />
+              <col className={s.colAddr} />
+              <col className={s.colTax} />
+              <col className={s.colAcct} />
+              <col className={s.colStatus} />
+              <col className={s.colPrimary} />
+              <col className={s.colAction} />
+            </colgroup>
             <thead>
               <tr>
                 <th>Loại</th>
@@ -192,9 +202,9 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
                   editingId === r.id ? <LocationEditRow key={r.id} {...editRowProps} /> : (
                     <tr key={r.id}>
                       <td>{getLabel('location_type', r.locationType, r.locationType)}</td>
-                      <td>{r.name || <span className={s.locMuted}>—</span>}</td>
-                      <td>{r.address || <span className={s.locMuted}>—</span>}</td>
-                      <td>{r.taxCode || <span className={s.locMuted}>—</span>}</td>
+                      <td title={r.name || ''}>{r.name || <span className={s.locMuted}>—</span>}</td>
+                      <td title={r.address || ''}>{r.address || <span className={s.locMuted}>—</span>}</td>
+                      <td title={r.taxCode || ''}>{r.taxCode || <span className={s.locMuted}>—</span>}</td>
                       <td>{r.accountingForm ? getLabel('accounting_form', r.accountingForm, r.accountingForm) : <span className={s.locMuted}>—</span>}</td>
                       <td>
                         <span className={`${s.locStatus} ${STATUS_CLASS[r.status] ?? ''}`}>

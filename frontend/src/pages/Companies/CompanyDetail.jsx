@@ -398,7 +398,11 @@ export default function CompanyDetail() {
 
       {/* Tab content */}
       {activeTab === 'overview' && (
-        <OverviewTab company={company} />
+        <OverviewTab
+          company={company}
+          canEdit={isAdmin || company.assignedStaffId === currentUser?.id}
+          onCompanyUpdated={(updated) => patchCompany(() => updated)}
+        />
       )}
       {activeTab === 'tasks' && (
         <CompanyTasksTab

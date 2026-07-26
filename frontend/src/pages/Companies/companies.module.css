@@ -6669,7 +6669,17 @@
 .locAddBtn:hover { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 
 .locTableWrap { overflow-x: auto; }
-.locTable { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
+.locTable { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); table-layout: fixed; }
+
+/* Tỉ lệ cột — Địa chỉ rộng nhất, các cột chọn/ngày hẹp lại */
+.colType    { width: 11%; }
+.colName    { width: 15%; }
+.colAddr    { width: 28%; }
+.colTax     { width: 12%; }
+.colAcct    { width: 12%; }
+.colStatus  { width: 12%; }
+.colPrimary { width: 4%;  }
+.colAction  { width: 6%;  }
 .locTable th {
   text-align: left; padding: 7px 8px;
   font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase;
@@ -6679,6 +6689,7 @@
 .locTable td {
   padding: 7px 8px; border-bottom: 1px solid #f1f5f9;
   color: var(--color-text); vertical-align: middle;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .locTable tbody tr:last-child td { border-bottom: none; }
 .locCenter { text-align: center; }
@@ -6714,3 +6725,46 @@
 .locBtnSave { border-color: #16a34a; color: #16a34a; }
 .locBtnSave:hover:not(:disabled) { background: #16a34a; color: #fff; }
 .locBtnCancel:hover:not(:disabled) { border-color: var(--color-danger); color: var(--color-danger); }
+
+/* ── Section "Thông tin khách hàng": 3 cột + sửa inline ───────────────────────── */
+.customerCols {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 28px;
+}
+@media (max-width: 980px) { .customerCols { grid-template-columns: 1fr; } }
+
+.customerCol { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.customerColTitle {
+  font-size: var(--fs-2xs); font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.4px; color: #64748b;
+  padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid #eef2f7;
+}
+
+.editRow { padding: 4px 0; }
+.editValue {
+  display: flex; align-items: center; gap: 6px; justify-content: space-between;
+  min-height: 26px; margin: 1px -7px 0; padding: 3px 7px;
+  border-radius: 6px; font-size: var(--fs-sm); font-weight: 500;
+  color: var(--color-text-strong);
+}
+.editValueText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editValueOn { cursor: pointer; transition: background 0.12s; }
+.editValueOn:hover { background: #f0f7ff; }
+.editValueOn:hover .editPencil { opacity: 1; }
+.editValueEmpty { color: var(--color-muted); font-weight: 400; }
+.editPencil { opacity: 0; color: var(--color-primary); flex-shrink: 0; transition: opacity 0.12s; }
+
+.editInputWrap { display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+.editInput {
+  width: 100%; min-height: 32px; padding: 5px 8px;
+  border: 1.5px solid var(--color-primary-soft); border-radius: 6px;
+  font-family: inherit; font-size: var(--fs-sm); background: #fff; color: var(--color-text);
+}
+.editInput:focus { outline: none; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12); }
+textarea.editInput { resize: vertical; line-height: 1.4; }
+
+/* Bảng "Thông tin bổ sung" — tỉ lệ cột */
+.cfName   { width: 32%; }
+.cfValue  { width: 56%; }
+.cfAction { width: 12%; }
