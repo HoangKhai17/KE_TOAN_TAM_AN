@@ -7,6 +7,7 @@ import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import * as usersApi from '../../api/users'
 import { BUSINESS_TYPE_LABELS, getInitials } from './Companies'
+import CompanyLocationsCard from './CompanyLocationsCard'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { fmtDate } from './companyUtils'
 import s from './companies.module.css'
@@ -41,6 +42,7 @@ function OverviewTab({ company, isAdmin, onAssigned, refreshTick }) {
       {/* Left column */}
       <div className={s.overviewLeft}>
         <BusinessInfoCard company={company} />
+        <CompanyLocationsCard companyId={company.id} />
         <ContactCard company={company} />
         <CustomFieldsCard company={company} />
         <ActivityCard companyId={company.id} refreshTick={refreshTick} />

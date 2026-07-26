@@ -268,7 +268,13 @@
       "Bash(python -)",
       "Bash(echo \"lint=$?\")",
       "Bash(grep -nB1 \"font-size: var\\(--fs-base\\)\" companies.module.css)",
-      "Bash(grep -n \"coListTable\\\\|className={\\\\`\\\\?\\\\${s.table}\\\\|<table\" Companies.jsx)"
+      "Bash(grep -n \"coListTable\\\\|className={\\\\`\\\\?\\\\${s.table}\\\\|<table\" Companies.jsx)",
+      "Bash(curl -s -X POST http://localhost:8080/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@ketoan-taman.vn\",\"password\":\"Admin@123456\"}')",
+      "Bash(grep -nA3 \"fetchAllEnums\" api/enums.js)",
+      "Bash(curl -s http://localhost:8080/api/enums -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\);process.stdin.on\\('end',\\(\\)=>{const e=JSON.parse\\(s\\).data.enums;['location_type','location_status','accounting_form'].forEach\\(k=>{const t=e[k];console.log\\(k,'| label=',t.label,'| options=',t.options.map\\(o=>o.label\\).join\\(', '\\)\\)}\\)}\\)\")",
+      "Bash(grep -nA6 \"^\\\\.infoCardHeader\" companies.module.css)",
+      "Bash(grep -nA4 \"^\\\\.infoCardBody\" companies.module.css)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

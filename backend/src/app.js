@@ -178,6 +178,9 @@ function createApp() {
   // Phase 9 — Credential Vault (nested under company)
   app.use('/api/companies/:companyId/credentials', require('./modules/credentials/credentials.router'))
 
+  // Địa điểm công ty (company_locations) — nested under company
+  app.use('/api/companies/:companyId/locations', require('./modules/locations/locations.router'))
+
   // Phase 10 — Payroll
   app.use('/api/payroll', require('./modules/payroll/payroll.router'))
 
