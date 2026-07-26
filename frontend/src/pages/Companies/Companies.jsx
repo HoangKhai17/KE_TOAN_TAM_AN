@@ -1596,63 +1596,65 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
         {/* Thông tin doanh nghiệp */}
         <div>
           <div className={s.formGroupLabel}>Thông tin doanh nghiệp</div>
-          <div className={`${s.formGrid2} ${s.formGridSpaced}`}>
-            <div className={s.formFullRow}>
-              <label className={`${s.formLabel} ${s.formLabelReq}`}>Tên công ty</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={set('name')}
-                className={inputCls('name')}
-                placeholder="Công ty TNHH ABC..."
-                autoFocus
+          <div className={s.bizInfoRow}>
+            <div className={s.bizInfoFields}>
+              <div className={s.bizGrid}>
+                <div className={s.cs6}>
+                  <label className={`${s.formLabel} ${s.formLabelReq}`}>Tên công ty</label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={set('name')}
+                    className={inputCls('name')}
+                    placeholder="Công ty TNHH ABC..."
+                    autoFocus
+                  />
+                  {fe.name && <p className={s.formError}>{fe.name}</p>}
+                </div>
+                <div className={s.cs6}>
+                  <label className={s.formLabel}>Tên viết tắt</label>
+                  <input
+                    type="text"
+                    value={form.shortName}
+                    onChange={set('shortName')}
+                    className={inputCls('shortName')}
+                    placeholder="VD: ABC Corp, Cty ABC..."
+                    maxLength={100}
+                  />
+                  {fe.shortName && <p className={s.formError}>{fe.shortName}</p>}
+                </div>
+                <div className={s.cs3}>
+                  <label className={s.formLabel}>Mã số thuế</label>
+                  <input type="text" value={form.taxCode} onChange={set('taxCode')} className={inputCls('taxCode')} placeholder="0123456789" />
+                  {fe.taxCode && <p className={s.formError}>{fe.taxCode}</p>}
+                </div>
+                <div className={s.cs3}>
+                  <label className={s.formLabel}>Loại hình</label>
+                  <select value={form.businessType} onChange={set('businessType')} className={s.formSelect}>
+                    {businessTypeOptions.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className={s.cs6}>
+                  <label className={s.formLabel}>Ngành nghề</label>
+                  <input type="text" value={form.industry} onChange={set('industry')} className={s.formInput} placeholder="Thương mại, sản xuất..." />
+                </div>
+                <div className={s.cs12}>
+                  <label className={s.formLabel}>Địa chỉ</label>
+                  <input type="text" value={form.address} onChange={set('address')} className={s.formInput} placeholder="123 Đường ABC, Quận XYZ, TP.HCM" />
+                </div>
+              </div>
+            </div>
+            <div className={s.bizInfoLogo}>
+              <label className={s.formLabel}>Logo / Ảnh</label>
+              <AvatarUpload
+                value={form.avatarUrl || null}
+                name={form.name || (company?.name ?? '')}
+                onChange={(url) => setForm((p) => ({ ...p, avatarUrl: url }))}
               />
-              {fe.name && <p className={s.formError}>{fe.name}</p>}
+              <p className={s.formHint}>JPEG/PNG/GIF/WebP, ≤1MB</p>
             </div>
-            <div className={s.formFullRow}>
-              <label className={s.formLabel}>Tên viết tắt</label>
-              <input
-                type="text"
-                value={form.shortName}
-                onChange={set('shortName')}
-                className={inputCls('shortName')}
-                placeholder="VD: ABC Corp, Cty ABC..."
-                maxLength={100}
-              />
-              {fe.shortName && <p className={s.formError}>{fe.shortName}</p>}
-            </div>
-          </div>
-          <div className={s.formGrid3}>
-            <div>
-              <label className={s.formLabel}>Mã số thuế</label>
-              <input type="text" value={form.taxCode} onChange={set('taxCode')} className={inputCls('taxCode')} placeholder="0123456789" />
-              {fe.taxCode && <p className={s.formError}>{fe.taxCode}</p>}
-            </div>
-            <div>
-              <label className={s.formLabel}>Loại hình</label>
-              <select value={form.businessType} onChange={set('businessType')} className={s.formSelect}>
-                {businessTypeOptions.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={s.formLabel}>Ngành nghề</label>
-              <input type="text" value={form.industry} onChange={set('industry')} className={s.formInput} placeholder="Thương mại, sản xuất..." />
-            </div>
-          </div>
-          <div className={s.formFieldTop}>
-            <label className={s.formLabel}>Địa chỉ</label>
-            <input type="text" value={form.address} onChange={set('address')} className={s.formInput} placeholder="123 Đường ABC, Quận XYZ, TP.HCM" />
-          </div>
-          <div className={s.formFieldTop}>
-            <label className={s.formLabel}>Logo / Ảnh đại diện</label>
-            <AvatarUpload
-              value={form.avatarUrl || null}
-              name={form.name || (company?.name ?? '')}
-              onChange={(url) => setForm((p) => ({ ...p, avatarUrl: url }))}
-            />
-            <p className={s.formHint}>Chọn file từ máy tính — JPEG, PNG, GIF, WebP (tối đa ~1MB sau nén)</p>
           </div>
         </div>
 
@@ -1715,7 +1717,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
             onChange={set('notes')}
             className={s.formTextarea}
             placeholder="Ghi chú đặc thù nghiệp vụ, yêu cầu đặc biệt..."
-            rows={3}
+            rows={2}
           />
         </div>
 

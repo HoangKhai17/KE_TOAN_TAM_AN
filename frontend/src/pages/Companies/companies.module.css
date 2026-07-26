@@ -1127,6 +1127,40 @@
   .formGrid2, .formGrid3 { grid-template-columns: 1fr; }
 }
 
+/* ── Khối "Thông tin doanh nghiệp": field bên trái + ô logo góc phải trên ── */
+.bizInfoRow {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.bizInfoFields { flex: 1; min-width: 0; }
+
+/* Lưới 12 cột để field co theo độ quan trọng (Tên/Ngành nghề rộng, MST hẹp) */
+.bizGrid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 12px;
+}
+.cs3  { grid-column: span 3; }
+.cs6  { grid-column: span 6; }
+.cs12 { grid-column: span 12; }
+
+/* Ô logo gọn ở góc: xếp dọc, căn giữa (nhãn/ảnh/nút/hint) cho cân đối */
+.bizInfoLogo { width: 168px; flex-shrink: 0; text-align: center; }
+.bizInfoLogo .avatarUploadWrap {
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.bizInfoLogo .avatarUploadActions { align-items: center; }
+
+@media (max-width: 640px) {
+  .bizInfoRow { flex-direction: column; }
+  .bizGrid { grid-template-columns: 1fr; }
+  .cs3, .cs6, .cs12 { grid-column: 1 / -1; }
+  .bizInfoLogo { width: 100%; }
+}
+
 .formField {}
 
 .formLabel {
