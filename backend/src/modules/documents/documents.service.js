@@ -21,6 +21,7 @@ function toDto(row) {
       mimeType:   row.mime_type ?? null,
     } : null,
     description: row.description ?? null,
+    period:      row.period ?? null,
     addedBy:     row.uploaded_by,
     addedByName: row.uploader_name ?? null,
     createdAt:   row.created_at,
@@ -28,7 +29,7 @@ function toDto(row) {
   }
 }
 
-async function listDocuments(companyId, { taskId, category, search, page = 1, limit = 30 } = {}) {
+async function listDocuments(companyId, { taskId, category, search, period, page = 1, limit = 30 } = {}) {
   const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
 
@@ -43,9 +44,18 @@ async function listDocuments(companyId, { taskId, category, search, page = 1, li
       conditions.push(`d.task_id = $${params.length}`)
     }
   }
+  // category/period nhận nhiều giá trị (multi-select) — phân tách bằng dấu phẩy
   if (category) {
-    params.push(category)
-    conditions.push(`d.category = $${params.length}`)
+    const cats = String(category).split(',').map((c) => c.trim()).filter(Boolean)
+    if (cats.length) {
+      params.push(cats)
+      conditions.push(`d.category::text = ANY($${params.length})`)
+    }
+  }
+  if (period && String(period).trim()) {
+    // Lọc theo Kỳ dạng text — khớp MỘT PHẦN (VD gõ "2026" ra cả "T06/2026")
+    params.push(`%${String(period).trim()}%`)
+    conditions.push(`d.period ILIKE $${params.length}`)
   }
   if (search) {
     params.push(`%${search}%`)
@@ -77,7 +87,7 @@ async function listDocuments(companyId, { taskId, category, search, page = 1, li
   }
 }
 
-async function addDocumentLink(companyId, { name, url, attachmentId, category = 'khac', description, taskId }, actorId, ipAddress, userAgent) {
+async function addDocumentLink(companyId, { name, url, attachmentId, category = 'khac', description, taskId, period }, actorId, ipAddress, userAgent) {
   const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
 
@@ -101,10 +111,10 @@ async function addDocumentLink(companyId, { name, url, attachmentId, category = 
   }
 
   const { rows: [doc] } = await query(
-    `INSERT INTO documents (company_id, task_id, name, url, attachment_id, category, description, uploaded_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    `INSERT INTO documents (company_id, task_id, name, url, attachment_id, category, description, period, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
     [companyId, taskId || null, name, attachmentId ? null : url, attachmentId || null,
-     category, description || null, actorId]
+     category, description || null, period || null, actorId]
   )
 
   if (taskId) {
@@ -138,7 +148,7 @@ async function updateDocumentLink(companyId, documentId, updates, actorId) {
 
   const fields = []
   const params = []
-  const allowed = ['name', 'url', 'category', 'description']
+  const allowed = ['name', 'url', 'category', 'description', 'period']
   for (const key of allowed) {
     if (updates[key] !== undefined) {
       params.push(updates[key])

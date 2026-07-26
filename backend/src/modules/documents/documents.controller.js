@@ -2,11 +2,12 @@ const svc = require('./documents.service')
 
 async function listDocuments(req, res, next) {
   try {
-    const { taskId, category, search, page = '1', limit = '30' } = req.query
+    const { taskId, category, search, period, page = '1', limit = '30' } = req.query
     const result = await svc.listDocuments(req.params.companyId, {
       taskId,
       category,
       search,
+      period,
       page:  Math.max(1, parseInt(page, 10)),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10))),
     })

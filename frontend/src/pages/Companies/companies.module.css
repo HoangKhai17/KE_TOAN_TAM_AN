@@ -4191,6 +4191,7 @@
   border-collapse: separate;
   border-spacing: 0;
   font-size: var(--fs-sm);
+  table-layout: fixed;
 }
 
 .docTable thead th {
@@ -4228,7 +4229,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  min-width: 160px;
+  min-width: 0;
 }
 
 .docLinkDot {
@@ -4256,10 +4257,9 @@
   font-size: var(--fs-sm);
   font-weight: 700;
   color: #1e293b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 240px;
+  /* Hiện ĐẦY ĐỦ tên tài liệu — tự xuống dòng nếu quá dài, không cắt "…" */
+  white-space: normal;
+  word-break: break-word;
 }
 
 .docTableDesc {
@@ -4299,7 +4299,7 @@
   gap: 5px;
   color: #2563eb;
   text-decoration: none;
-  max-width: 220px;
+  max-width: 100%;
   transition: color var(--duration-fast);
 }
 
@@ -6768,3 +6768,56 @@ textarea.editInput { resize: vertical; line-height: 1.4; }
 .cfName   { width: 32%; }
 .cfValue  { width: 56%; }
 .cfAction { width: 12%; }
+
+/* ── Tài liệu: bộ lọc gọn 1 hàng ──────────────────────────────────────────────── */
+.docToolbar .msWrap { width: 180px; flex: 0 0 auto; }
+.docPeriodFilter {
+  width: 150px; height: var(--control-h-md); padding: 0 10px;
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-md);
+  font-family: var(--font-sans); font-size: var(--fs-sm); background: #fff;
+  flex: 0 0 auto;
+}
+.docPeriodFilter:focus { outline: none; border-color: var(--color-primary-soft); box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
+
+/* Chia bề rộng cột theo % (table-layout: fixed ở .docTable) — Tài liệu & Đường dẫn rộng */
+.docColName    { width: 34%; }
+.docColCat     { width: 8%; }
+.docColPeriod  { width: 8%; }
+.docColUrl     { width: 20%; }
+.docColDate    { width: 9%; }
+.docColBy      { width: 11%; }
+.docColActions { width: 10%; }
+
+.docTablePeriod { font-size: var(--fs-sm); color: var(--color-text-soft); white-space: nowrap; }
+.docMutedDash   { color: var(--color-muted); }
+
+/* ── Modal xem trước PDF/ảnh ───────────────────────────────────────────────── */
+.docPreviewDialog {
+  width: min(1000px, 94vw);
+  height: min(88vh, 900px);
+  background: #fff;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+.docPreviewHead {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--color-border);
+  background: linear-gradient(180deg, #f8fafc, #eff6ff);
+}
+.docPreviewTitle {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-strong);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.docPreviewHeadBtns { display: inline-flex; gap: 6px; flex-shrink: 0; }
+.docPreviewBody {
+  flex: 1; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #475569;
+}
+.docPreviewFrame { width: 100%; height: 100%; border: none; background: #fff; }
+.docPreviewImg   { max-width: 100%; max-height: 100%; object-fit: contain; }
+.docPreviewMsg   { color: #e2e8f0; font-size: var(--fs-sm); display: flex; align-items: center; gap: 8px; }

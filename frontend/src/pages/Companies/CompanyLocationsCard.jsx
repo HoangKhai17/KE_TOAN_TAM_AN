@@ -158,7 +158,7 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
           <div className={`${s.infoCardTitleIcon} ${s.infoCardIconBlue}`}>
             <MapPin size={14} />
           </div>
-          Địa điểm
+          Địa điểm bổ sung
         </div>
         {canEdit && editingId !== 'new' && (
           <button className={s.locAddBtn} onClick={startAdd}>

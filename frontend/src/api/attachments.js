@@ -54,3 +54,16 @@ export async function downloadFile(id, fileName) {
 export async function deleteFile(id) {
   await api.delete(`/attachments/${id}`)
 }
+
+// Tải file dạng blob (giữ nguyên xác thực JWT) rồi trả về Object URL để XEM TRƯỚC
+// trong app (iframe cho PDF, img cho ảnh). Nhớ revoke sau khi dùng.
+export async function getFileBlobUrl(id) {
+  const res = await api.get(`/attachments/download/${id}`, { responseType: 'blob' })
+  return URL.createObjectURL(res.data)
+}
+
+// Loại xem trước được trực tiếp trên trình duyệt: PDF + ảnh
+export function canPreview(mimeType) {
+  const m = mimeType || ''
+  return m === 'application/pdf' || m.startsWith('image/')
+}

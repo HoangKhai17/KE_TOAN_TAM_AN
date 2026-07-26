@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Link2, Plus, Trash2, ExternalLink, Loader2,
   Filter, RotateCcw, FolderOpen, AlertTriangle,
-  Pencil, Check, X, Upload, FileText, Download,
+  Pencil, Check, X, Upload, FileText, Download, Eye,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
+import { useEnumsStore } from '../../hooks/useEnums'
+import { MultiSelectFilter } from './Companies'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import * as documentsApi from '../../api/documents'
 import * as attApi from '../../api/attachments'
 import s from './companies.module.css'
@@ -31,15 +34,39 @@ function isValidUrl(str) {
   catch { return false }
 }
 
+// ── Header-filter cột (docs/018) — helper cấp module ─────────────────────────────
+function docColType(colKey) {
+  if (colKey === 'category' || colKey === 'addedByName') return 'enum'
+  if (colKey === 'createdAt') return 'dateRange'
+  return 'text'   // name, period (Kỳ) — gõ text tìm theo một phần
+}
+function docColLabel(row, colKey) {
+  switch (colKey) {
+    case 'name':        return row.name || '(Trống)'
+    case 'category':    return CAT_LABEL[row.category] ?? row.category
+    case 'period':      return row.period || '(Trống)'
+    case 'createdAt':   return row.createdAt ? fmtDate(row.createdAt) : '(Trống)'
+    case 'addedByName': return row.addedByName || '(Trống)'
+    default:            return String(row[colKey] ?? '')
+  }
+}
+function docSortKey(row, colKey) {
+  if (colKey === 'createdAt') return row.createdAt ?? ''
+  if (colKey === 'category')  return CAT_LABEL[row.category] ?? row.category ?? ''
+  const v = row[colKey]
+  return v != null ? String(v).toLowerCase() : ''
+}
+
 // ── AddLinkModal ───────────────────────────────────────────────────────────────
 
-function AddLinkModal({ onSave, onClose, saving }) {
+function AddLinkModal({ onSave, onClose, saving, catOptions }) {
   // Tài liệu là LINK hoặc FILE — không phải cả hai (khớp ràng buộc phía CSDL)
   const [kieu, setKieu]         = useState('link')   // 'link' | 'file'
   const [file, setFile]         = useState(null)
   const [name, setName]         = useState('')
   const [url, setUrl]           = useState('')
   const [category, setCategory] = useState('khac')
+  const [period, setPeriod]     = useState('')
   const [description, setDesc]  = useState('')
   const [errors, setErrors]     = useState({})
 
@@ -86,6 +113,7 @@ function AddLinkModal({ onSave, onClose, saving }) {
     onSave({
       name: name.trim(),
       category,
+      period: period.trim() || undefined,
       description: description.trim() || undefined,
       ...(kieu === 'link' ? { url: url.trim() } : { file }),
     })
@@ -138,10 +166,23 @@ function AddLinkModal({ onSave, onClose, saving }) {
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                 >
-                  {CATEGORIES.map((c) => (
-                    <option key={c.key} value={c.key}>{c.label}</option>
+                  {catOptions.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className={s.docModalFieldSm}>
+                <label className={s.docModalLabel}>
+                  Kỳ<span className={s.docModalOptional}> (tuỳ chọn)</span>
+                </label>
+                <input
+                  className={s.docModalInput}
+                  placeholder="VD: 2025, T06/2026"
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value)}
+                  maxLength={30}
+                />
               </div>
             </div>
 
@@ -248,13 +289,14 @@ function AddLinkModal({ onSave, onClose, saving }) {
 
 // ── EditLinkForm ───────────────────────────────────────────────────────────────
 
-function EditLinkForm({ doc, onSave, onCancel, saving }) {
-  // Tài liệu dạng FILE không có URL để sửa — chỉ đổi được tên, danh mục, mô tả.
+function EditLinkForm({ doc, onSave, onCancel, saving, catOptions }) {
+  // Tài liệu dạng FILE không có URL để sửa — chỉ đổi được tên, danh mục, kỳ, mô tả.
   // Muốn thay file thì xoá rồi tải lên lại.
   const laFile = !!doc.file
   const [name, setName]         = useState(doc.name)
   const [url, setUrl]           = useState(doc.url ?? '')
   const [category, setCategory] = useState(doc.category)
+  const [period, setPeriod]     = useState(doc.period ?? '')
   const [description, setDesc]  = useState(doc.description ?? '')
   const [errors, setErrors]     = useState({})
 
@@ -273,7 +315,8 @@ function EditLinkForm({ doc, onSave, onCancel, saving }) {
     const e2 = validate()
     if (Object.keys(e2).length) { setErrors(e2); return }
     onSave({
-      name: name.trim(), category, description: description.trim() || null,
+      name: name.trim(), category, period: period.trim() || null,
+      description: description.trim() || null,
       ...(laFile ? {} : { url: url.trim() }),
     })
   }
@@ -298,8 +341,18 @@ function EditLinkForm({ doc, onSave, onCancel, saving }) {
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
-              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              {catOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
+          </div>
+          <div>
+            <label className={s.addLinkFormLabel}>Kỳ</label>
+            <input
+              className={s.addLinkFormInput}
+              value={period}
+              placeholder="VD: 2025, T06/2026"
+              onChange={(e) => setPeriod(e.target.value)}
+              maxLength={30}
+            />
           </div>
           <div className={s.addLinkFormFull}>
             {laFile ? (
@@ -345,40 +398,205 @@ function EditLinkForm({ doc, onSave, onCancel, saving }) {
   )
 }
 
+// ── PreviewModal: xem trước PDF/ảnh ngay trong app (tải blob giữ auth) ───────────
+
+function PreviewModal({ doc, onClose }) {
+  const [url, setUrl] = useState(null)
+  const [err, setErr] = useState(false)
+  const isImg = (doc.file.mimeType || '').startsWith('image/')
+
+  useEffect(() => {
+    let obj
+    let alive = true
+    attApi.getFileBlobUrl(doc.file.id)
+      .then((u) => { if (alive) { obj = u; setUrl(u) } })
+      .catch(() => { if (alive) setErr(true) })
+    return () => { alive = false; if (obj) URL.revokeObjectURL(obj) }
+  }, [doc])
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className={s.docModalOverlay} onClick={onClose}>
+      <div className={s.docPreviewDialog} onClick={(e) => e.stopPropagation()}>
+        <div className={s.docPreviewHead}>
+          <span className={s.docPreviewTitle}><FileText size={14} /> {doc.name}</span>
+          <div className={s.docPreviewHeadBtns}>
+            <button className={s.docActionBtn} title="Tải xuống" onClick={() => attApi.downloadFile(doc.file.id, doc.file.fileName)}>
+              <Download size={14} />
+            </button>
+            <button className={s.docActionBtn} title="Đóng (Esc)" onClick={onClose}>
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+        <div className={s.docPreviewBody}>
+          {err ? (
+            <div className={s.docPreviewMsg}>Không xem trước được tệp này. Hãy tải xuống để mở.</div>
+          ) : !url ? (
+            <div className={s.docPreviewMsg}><Loader2 size={20} className={s.spin} /></div>
+          ) : isImg ? (
+            <img src={url} alt={doc.name} className={s.docPreviewImg} />
+          ) : (
+            <iframe src={url} title={doc.name} className={s.docPreviewFrame} />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── DocumentsTab ───────────────────────────────────────────────────────────────
 
 export default function DocumentsTab({ company }) {
   const isAdmin  = useAuthStore((st) => st.user?.role === 'admin')
   const addToast = useToastStore((st) => st.toast)
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const getLabel   = useEnumsStore((st) => st.getLabel)
+
+  // Danh mục lấy từ ENUM (document_category), fallback hằng số cũ nếu enum chưa tải
+  const catOptions = getOptions('document_category').length > 0
+    ? getOptions('document_category').map((o) => ({ value: o.key, label: o.label }))
+    : CATEGORIES.map((c) => ({ value: c.key, label: c.label }))
+  const catLabel = (key) => getLabel('document_category', key, CAT_LABEL[key] ?? key)
 
   const [docs, setDocs]             = useState([])
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
   const [loading, setLoading]       = useState(true)
   const [page, setPage]             = useState(1)
-  const [category, setCategory]     = useState('')
+  const [category, setCategory]     = useState([])   // multi-select
+  const [period, setPeriod]         = useState('')   // text (đã áp dụng)
+  const [periodInput, setPeriodInput] = useState('') // ô nhập Kỳ (debounce)
   const [showAddModal, setShowAddModal] = useState(false)
   const [saving, setSaving]         = useState(false)
   const [editingId, setEditingId]   = useState(null)
   const [editSaving, setEditSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting]     = useState(false)
+  const [previewDoc, setPreviewDoc] = useState(null)
+
+  // Header-filter cột (docs/018) — client-side trên tập đã tải
+  const [colFilters, setColFilters]   = useState({})
+  const [sortState, setSortState]     = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup] = useState(null)
+
+  const hasFilter = category.length > 0 || period.trim() !== ''
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    documentsApi.listDocuments(company.id, { category: category || undefined, page, limit: 20 })
+    documentsApi.listDocuments(company.id, {
+      category: category.length ? category.join(',') : undefined,
+      period:   period.trim() || undefined,
+      page, limit: 500,
+    })
       .then(({ documents: d, pagination: p }) => {
         if (!cancelled) { setDocs(d); setPagination(p) }
       })
       .catch(() => { if (!cancelled) setDocs([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [company.id, category, page])
+  }, [company.id, category, period, page])
 
   useEffect(() => {
     const cancel = load()
     return cancel
   }, [load])
+
+  // Gõ Kỳ: debounce 350ms rồi mới áp dụng bộ lọc
+  useEffect(() => {
+    const t = setTimeout(() => setPeriod(periodInput.trim()), 350)
+    return () => clearTimeout(t)
+  }, [periodInput])
+
+  // Đổi bộ lọc thì về trang 1
+  useEffect(() => { setPage(1) }, [category, period])
+
+  // Lọc + sắp xếp theo header cột (client-side, AND nhiều cột) — docs/018
+  const displayed = useMemo(() => {
+    let result = [...docs]
+    for (const [colKey, fv] of Object.entries(colFilters)) {
+      const t = docColType(colKey)
+      if (t === 'enum') {
+        if (fv instanceof Set && fv.size > 0) result = result.filter((r) => fv.has(docColLabel(r, colKey)))
+      } else if (t === 'text') {
+        if (typeof fv === 'string' && fv.trim()) {
+          const q = fv.toLowerCase()
+          result = result.filter((r) => docColLabel(r, colKey).toLowerCase().includes(q))
+        }
+      } else if (t === 'dateRange') {
+        if (fv && (fv.from || fv.to)) {
+          result = result.filter((r) => {
+            if (!r[colKey]) return false
+            const d = String(r[colKey]).substring(0, 10)
+            if (fv.from && d < fv.from) return false
+            if (fv.to && d > fv.to) return false
+            return true
+          })
+        }
+      }
+    }
+    if (sortState.col) {
+      result.sort((a, b) => {
+        const cmp = String(docSortKey(a, sortState.col)).localeCompare(String(docSortKey(b, sortState.col)), 'vi', { numeric: true })
+        return sortState.dir === 'asc' ? cmp : -cmp
+      })
+    }
+    return result
+  }, [docs, colFilters, sortState])
+
+  function hasColFilter(colKey) {
+    const f = colFilters[colKey]
+    if (f == null) return false
+    const t = docColType(colKey)
+    if (t === 'enum')      return f instanceof Set && f.size > 0
+    if (t === 'text')      return typeof f === 'string' && f.trim().length > 0
+    if (t === 'dateRange') return Boolean(f.from || f.to)
+    return false
+  }
+  const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
+
+  function handleColSort(colKey, dir) { setSortState({ col: colKey, dir }); setFilterPopup(null) }
+  function handleColFilterChange(colKey, val) {
+    setColFilters((prev) => {
+      const next = { ...prev }
+      const empty = val == null
+        || (val instanceof Set && val.size === 0)
+        || (typeof val === 'string' && !val.trim())
+      if (empty) delete next[colKey]
+      else next[colKey] = val
+      return next
+    })
+  }
+  function openColFilter(colKey, e) {
+    e.stopPropagation()
+    if (filterPopup?.colKey === colKey) { setFilterPopup(null); return }
+    const r = e.currentTarget.getBoundingClientRect()
+    setFilterPopup({ colKey, top: r.bottom + 4, left: r.left })
+  }
+
+  function FilterTh({ colKey, children }) {
+    const active = hasColFilter(colKey) || sortState.col === colKey
+    return (
+      <th>
+        <div className={s.hdldThInner}>
+          <span className={s.hdldThLabel}>{children}</span>
+          <button
+            data-colfilter-btn
+            className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`}
+            onClick={(e) => openColFilter(colKey, e)}
+            title="Lọc / Sắp xếp"
+          >
+            <Filter size={10} />
+          </button>
+        </div>
+      </th>
+    )
+  }
 
   async function handleAdd(data) {
     setSaving(true)
@@ -448,26 +666,37 @@ export default function DocumentsTab({ company }) {
 
         <Filter size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
         <span className={s.docFilterLabel}>Danh mục:</span>
-        <div className={s.docFilterChips}>
-          {[{ key: '', label: 'Tất cả' }, ...CATEGORIES].map(({ key, label }) => (
-            <button
-              key={key}
-              className={`${s.docCatChip} ${category === key ? s.docCatChipActive : ''}`}
-              onClick={() => { setCategory(key); setPage(1) }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <MultiSelectFilter
+          options={catOptions}
+          value={category}
+          onChange={setCategory}
+          placeholder="Tất cả"
+        />
+
+        <span className={s.docFilterLabel}>Kỳ:</span>
+        <input
+          className={s.docPeriodFilter}
+          value={periodInput}
+          onChange={(e) => setPeriodInput(e.target.value)}
+          placeholder="VD: 2026, T07/2026"
+        />
 
         <div className={s.docToolbarRight}>
-          {category && (
-            <button className={s.docFilterReset} onClick={() => { setCategory(''); setPage(1) }}>
+          {(hasFilter || colFilterCount > 0 || sortState.col) && (
+            <button
+              className={s.docFilterReset}
+              onClick={() => {
+                setCategory([]); setPeriodInput(''); setPeriod('')
+                setColFilters({}); setSortState({ col: null, dir: 'asc' })
+              }}
+            >
               <RotateCcw size={11} /> Xoá lọc
             </button>
           )}
-          {!loading && pagination.total > 0 && (
-            <span className={s.docCountBadge}>{pagination.total} tài liệu</span>
+          {!loading && docs.length > 0 && (
+            <span className={s.docCountBadge}>
+              {displayed.length}{displayed.length < docs.length ? `/${docs.length}` : ''} tài liệu
+            </span>
           )}
         </div>
       </div>
@@ -475,13 +704,23 @@ export default function DocumentsTab({ company }) {
       {/* ── Document table ── */}
       <div className={s.docTableWrap}>
         <table className={s.docTable}>
+          <colgroup>
+            <col className={s.docColName} />
+            <col className={s.docColCat} />
+            <col className={s.docColPeriod} />
+            <col className={s.docColUrl} />
+            <col className={s.docColDate} />
+            <col className={s.docColBy} />
+            <col className={s.docColActions} />
+          </colgroup>
           <thead>
             <tr>
-              <th>Tài liệu</th>
-              <th>Danh mục</th>
+              <FilterTh colKey="name">Tài liệu</FilterTh>
+              <FilterTh colKey="category">Danh mục</FilterTh>
+              <FilterTh colKey="period">Kỳ</FilterTh>
               <th>Đường dẫn</th>
-              <th>Ngày thêm</th>
-              <th>Người thêm</th>
+              <FilterTh colKey="createdAt">Ngày thêm</FilterTh>
+              <FilterTh colKey="addedByName">Người thêm</FilterTh>
               <th className={s.docThActions}>Thao tác</th>
             </tr>
           </thead>
@@ -489,33 +728,34 @@ export default function DocumentsTab({ company }) {
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i} className={s.docTableRow}>
-                  <td colSpan={6} style={{ padding: '14px 16px' }}>
+                  <td colSpan={7} style={{ padding: '14px 16px' }}>
                     <div className={s.docSkeletonBar} style={{ width: `${50 + (i % 3) * 12}%` }} />
                   </td>
                 </tr>
               ))
-            ) : docs.length === 0 ? (
+            ) : displayed.length === 0 ? (
               <tr>
-                <td colSpan={6}>
+                <td colSpan={7}>
                   <div className={s.docEmpty}>
                     <FolderOpen size={36} color="var(--color-border)" />
                     <p>
-                      {category
-                        ? 'Không có tài liệu trong danh mục này'
-                        : 'Chưa có tài liệu nào — nhấn "Thêm link" để bắt đầu'}
+                      {(hasFilter || colFilterCount > 0)
+                        ? 'Không có tài liệu khớp bộ lọc'
+                        : 'Chưa có tài liệu nào — nhấn "Thêm tài liệu" để bắt đầu'}
                     </p>
                   </div>
                 </td>
               </tr>
-            ) : docs.map((doc) => (
+            ) : displayed.map((doc) => (
               editingId === doc.id ? (
                 <tr key={doc.id}>
-                  <td colSpan={6} className={s.docEditTd}>
+                  <td colSpan={7} className={s.docEditTd}>
                     <EditLinkForm
                       doc={doc}
                       onSave={(data) => handleEdit(doc, data)}
                       onCancel={() => setEditingId(null)}
                       saving={editSaving}
+                      catOptions={catOptions}
                     />
                   </td>
                 </tr>
@@ -538,8 +778,13 @@ export default function DocumentsTab({ company }) {
                   {/* Danh mục */}
                   <td>
                     <span className={`${s.docCatBadge} ${s[`docCat_${doc.category}`]}`}>
-                      {CAT_LABEL[doc.category] ?? doc.category}
+                      {catLabel(doc.category)}
                     </span>
+                  </td>
+
+                  {/* Kỳ */}
+                  <td className={s.docTablePeriod}>
+                    {doc.period || <span className={s.docMutedDash}>—</span>}
                   </td>
 
                   {/* Đường dẫn */}
@@ -547,8 +792,10 @@ export default function DocumentsTab({ company }) {
                     {doc.file ? (
                       <button
                         className={s.docUrlLink}
-                        title={`Tải xuống ${doc.file.fileName}`}
-                        onClick={() => attApi.downloadFile(doc.file.id, doc.file.fileName)}
+                        title={attApi.canPreview(doc.file.mimeType) ? `Xem trước ${doc.file.fileName}` : `Tải xuống ${doc.file.fileName}`}
+                        onClick={() => attApi.canPreview(doc.file.mimeType)
+                          ? setPreviewDoc(doc)
+                          : attApi.downloadFile(doc.file.id, doc.file.fileName)}
                       >
                         <FileText size={11} className={s.docUrlIcon} />
                         <span className={s.docUrlText}>{doc.file.fileName}</span>
@@ -577,6 +824,15 @@ export default function DocumentsTab({ company }) {
                   {/* Thao tác */}
                   <td>
                     <div className={s.docActions}>
+                      {doc.file && attApi.canPreview(doc.file.mimeType) && (
+                        <button
+                          className={s.docActionBtn}
+                          title="Xem trước"
+                          onClick={() => setPreviewDoc(doc)}
+                        >
+                          <Eye size={13} />
+                        </button>
+                      )}
                       {doc.file ? (
                         <button
                           className={s.docActionBtn}
@@ -639,6 +895,28 @@ export default function DocumentsTab({ company }) {
           onSave={handleAdd}
           onClose={() => setShowAddModal(false)}
           saving={saving}
+          catOptions={catOptions}
+        />
+      )}
+
+      {/* ── Preview modal (PDF/ảnh) ── */}
+      {previewDoc && (
+        <PreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
+      )}
+
+      {/* ── Header-filter dropdown (docs/018) ── */}
+      {filterPopup && (
+        <ColumnFilterDropdown
+          colKey={filterPopup.colKey}
+          filterType={docColType(filterPopup.colKey)}
+          allRows={docs}
+          getDisplayLabel={docColLabel}
+          currentFilter={colFilters[filterPopup.colKey] ?? null}
+          sortState={sortState}
+          onSort={handleColSort}
+          onFilterChange={handleColFilterChange}
+          onClose={() => setFilterPopup(null)}
+          style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }}
         />
       )}
 

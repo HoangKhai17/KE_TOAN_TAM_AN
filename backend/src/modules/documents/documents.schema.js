@@ -11,6 +11,7 @@ const addLinkSchema = z.object({
   attachmentId: z.string().uuid().optional().nullable(),
   category:     z.enum(ALLOWED_CATEGORIES).default('khac'),
   description:  z.string().max(1000).optional().nullable(),
+  period:       z.string().max(30).optional().nullable(),
   taskId:       z.string().uuid().optional().nullable(),
 }).refine((d) => !!d.url !== !!d.attachmentId, {
   message: 'Phải nhập đường dẫn HOẶC chọn file, không được cả hai và không được để trống',
@@ -22,6 +23,7 @@ const updateLinkSchema = z.object({
   url:         z.string().url('URL không hợp lệ').optional(),
   category:    z.enum(ALLOWED_CATEGORIES).optional(),
   description: z.string().max(1000).optional().nullable(),
+  period:      z.string().max(30).optional().nullable(),
 })
 
 const attachDocumentSchema = z.object({

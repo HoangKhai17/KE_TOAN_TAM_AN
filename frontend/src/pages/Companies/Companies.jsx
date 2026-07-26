@@ -151,7 +151,7 @@ export const isGroupValue = (v) => String(v).startsWith(GROUP_PREFIX)
 export const groupValue   = (k) => GROUP_PREFIX + k
 export const stripGroup   = (v) => String(v).slice(GROUP_PREFIX.length)
 
-function MultiSelectFilter({ options, groups, value, onChange, placeholder = 'Tất cả' }) {
+export function MultiSelectFilter({ options, groups, value, onChange, placeholder = 'Tất cả' }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
