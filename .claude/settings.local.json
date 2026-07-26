@@ -274,7 +274,12 @@
       "Bash(curl -s http://localhost:8080/api/enums -H 'Authorization: Bearer __TRACKED_VAR__')",
       "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\);process.stdin.on\\('end',\\(\\)=>{const e=JSON.parse\\(s\\).data.enums;['location_type','location_status','accounting_form'].forEach\\(k=>{const t=e[k];console.log\\(k,'| label=',t.label,'| options=',t.options.map\\(o=>o.label\\).join\\(', '\\)\\)}\\)}\\)\")",
       "Bash(grep -nA6 \"^\\\\.infoCardHeader\" companies.module.css)",
-      "Bash(grep -nA4 \"^\\\\.infoCardBody\" companies.module.css)"
+      "Bash(grep -nA4 \"^\\\\.infoCardBody\" companies.module.css)",
+      "Bash(grep -nA5 -E \"^\\\\.heroCard |^\\\\.heroLeft |^\\\\.heroRight |^\\\\.heroInfo |^\\\\.heroName |^\\\\.heroActions |^\\\\.heroAvatarWrap |^\\\\.staffCard \" companies.module.css)",
+      "Bash(grep -nA8 -E \"^\\\\.heroAvatarWrap |^\\\\.heroAvatarImg |^\\\\.heroInitials \" companies.module.css)",
+      "Bash(sed -i '369,500d' CompanyOverviewTab.jsx)",
+      "Bash(sed -i '165,277d' CompanyOverviewTab.jsx)",
+      "Bash(grep -nA6 \"activeTab === 'overview'\" CompanyDetail.jsx)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

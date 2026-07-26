@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import {
-  Building2, User, UserPlus, Loader2, Users, BarChart2, Clock, SlidersHorizontal,
+  Building2, User, UserPlus, Loader2, Users, SlidersHorizontal,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import * as usersApi from '../../api/users'
-import { BUSINESS_TYPE_LABELS, getInitials } from './Companies'
+import { BUSINESS_TYPE_LABELS } from './Companies'
 import CompanyLocationsCard from './CompanyLocationsCard'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { fmtDate } from './companyUtils'
@@ -36,24 +36,14 @@ function InfoField({ label, value, fullWidth }) {
 
 // ── OverviewTab ────────────────────────────────────────────────────────────────
 
-function OverviewTab({ company, isAdmin, onAssigned, refreshTick }) {
+function OverviewTab({ company }) {
+  // Một cột full-width: các section trải hết bề ngang layout
   return (
-    <div className={s.overviewGrid}>
-      {/* Left column */}
-      <div className={s.overviewLeft}>
-        <BusinessInfoCard company={company} />
-        <CompanyLocationsCard companyId={company.id} />
-        <ContactCard company={company} />
-        <CustomFieldsCard company={company} />
-        <ActivityCard companyId={company.id} refreshTick={refreshTick} />
-      </div>
-
-      {/* Right column */}
-      <div className={s.overviewRight}>
-        <StaffCard company={company} isAdmin={isAdmin} onAssigned={onAssigned} />
-        <PerformanceCard company={company} />
-        <AssignmentsCard companyId={company.id} isAdmin={isAdmin} onAssigned={onAssigned} refreshTick={refreshTick} />
-      </div>
+    <div className={s.overviewSingle}>
+      <BusinessInfoCard company={company} />
+      <CompanyLocationsCard companyId={company.id} />
+      <ContactCard company={company} />
+      <CustomFieldsCard company={company} />
     </div>
   )
 }
@@ -172,124 +162,48 @@ function CustomFieldsCard({ company }) {
   )
 }
 
-// ── ActivityCard ───────────────────────────────────────────────────────────────
-
-const ACTION_LABELS = {
-  'status_changed':    'Đổi trạng thái',
-  'created':           'Tạo công việc',
-  'assigned':          'Phân công',
-  'due_date_changed':  'Đổi hạn',
-  'priority_changed':  'Đổi ưu tiên',
-  'title_changed':     'Đổi tiêu đề',
-  'comment_added':     'Thêm bình luận',
-  'checklist_added':   'Thêm checklist',
-  'checklist_checked': 'Hoàn thành checklist',
-  'time_logged':       'Ghi giờ làm',
-  'completed':         'Hoàn thành',
-}
-
-function fmtRelative(iso) {
-  if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1)  return 'Vừa xong'
-  if (m < 60) return `${m} phút trước`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h} giờ trước`
-  const d = Math.floor(h / 24)
-  if (d < 30) return `${d} ngày trước`
-  return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-const ACT_PER_PAGE = 10
-
-function ActivityCard({ companyId, refreshTick }) {
-  const [activities, setActivities] = useState([])
-  const [total,      setTotal]      = useState(0)
-  const [page,       setPage]       = useState(1)
-  const [loading,    setLoading]    = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    companiesApi.getActivityLog(companyId, { page, limit: ACT_PER_PAGE })
-      .then(({ activities: a, total: t }) => {
-        if (!cancelled) { setActivities(a); setTotal(t) }
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [companyId, page, refreshTick]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const totalPages = Math.max(1, Math.ceil(total / ACT_PER_PAGE))
-
-  return (
-    <div className={s.infoCard}>
-      <div className={s.infoCardHeader}>
-        <div className={s.infoCardTitle}>
-          <div className={`${s.infoCardTitleIcon} ${s.infoCardIconPurple}`}>
-            <Clock size={14} />
-          </div>
-          Hoạt động gần đây
-          {total > 0 && <span className={s.activityMetaCount}>{total} mục</span>}
-        </div>
-      </div>
-      <div className={`${s.infoCardBody} ${s.infoCardBodyFlush}`}>
-        {loading ? (
-          <div className={`${s.loadingCenter} ${s.loadingShort}`}>
-            <Loader2 size={15} className={s.spin} />
-          </div>
-        ) : activities.length === 0 ? (
-          <div className={s.activityEmpty}>
-            Chưa có hoạt động nào.
-          </div>
-        ) : (
-          <>
-            <ul className={s.activityList}>
-              {activities.map((a, i) => (
-                <li key={a.id} className={`${s.activityItem} ${i < activities.length - 1 ? s.activityItemBorder : ''}`}>
-                  <div className={s.activityDot} />
-                  <div className={s.activityContent}>
-                    <div className={s.activityTitle}>
-                      {ACTION_LABELS[a.action] ?? a.action}
-                      {a.taskTitle && (
-                        <span className={s.activityTaskTitle}> · {a.taskTitle}</span>
-                      )}
-                    </div>
-                    <div className={s.activityMeta}>
-                      {a.actorName} · {fmtRelative(a.createdAt)}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            {totalPages > 1 && (
-              <div className={s.actPagination}>
-                <button
-                  className={s.actPageBtn}
-                  onClick={() => setPage((p) => p - 1)}
-                  disabled={page === 1}
-                >‹</button>
-                <span className={s.actPageInfo}>Trang {page} / {totalPages}</span>
-                <button
-                  className={s.actPageBtn}
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={page === totalPages}
-                >›</button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── StaffCard ──────────────────────────────────────────────────────────────────
 
-function StaffCard({ company, isAdmin, onAssigned }) {
+export function StaffCard({ company, isAdmin, onAssigned, inline = false }) {
   const [showModal, setShowModal] = useState(false)
   const staff = company.assignedStaff
+
+  // Biến thể ngang (dùng trong heroCard) — không bọc card, chỉ hiện tên + nút Đổi
+  if (inline) {
+    return (
+      <div className={s.heroStaff}>
+        <span className={s.heroStaffLabel}><Users size={13} /> Phụ trách</span>
+        {staff ? (
+          <div className={s.heroStaffPerson}>
+            <img
+              src={staffAvatarSrc(staff)}
+              alt={staff.name}
+              className={s.heroStaffAvatar}
+              onError={(e) => { e.target.src = FALLBACK_AVATAR }}
+            />
+            <div className={s.heroStaffText}>
+              <div className={s.heroStaffName}>{staff.name}</div>
+              <div className={s.heroStaffRole}>{staff.jobTitle || staff.email || 'Nhân viên phụ trách'}</div>
+            </div>
+          </div>
+        ) : (
+          <span className={s.heroStaffEmpty}>Chưa phân công</span>
+        )}
+        {isAdmin && (
+          <button className={s.btnNavy} onClick={() => setShowModal(true)}>
+            <UserPlus size={12} /> Đổi
+          </button>
+        )}
+        {showModal && (
+          <AssignStaffModal
+            companyId={company.id}
+            onClose={() => setShowModal(false)}
+            onAssigned={() => { setShowModal(false); onAssigned() }}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className={s.staffCard}>
@@ -333,138 +247,6 @@ function StaffCard({ company, isAdmin, onAssigned }) {
           companyId={company.id}
           onClose={() => setShowModal(false)}
           onAssigned={() => { setShowModal(false); onAssigned() }}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── PerformanceCard ────────────────────────────────────────────────────────────
-
-function PerformanceCard({ company }) {
-  const completed = company.taskCompletedCount ?? 0
-  const onTime    = company.taskOnTimeCount ?? 0
-  const slaRate   = completed > 0 ? Math.round((onTime / completed) * 100) : null
-
-  return (
-    <div className={s.metricCard}>
-      <div className={s.metricCardHeader}>
-        <BarChart2 size={13} className={s.titleInlineIcon} />
-        Hiệu suất
-      </div>
-      <div className={s.metricCardBody}>
-        <div className={s.metricItem}>
-          <div className={`${s.metricItemValue} ${s.metricItemValueNavy}`}>{company.taskOpenCount ?? 0}</div>
-          <div className={s.metricItemLabel}>Đang mở</div>
-        </div>
-        <div className={s.metricItem}>
-          <div className={`${s.metricItemValue} ${(company.taskOverdueCount ?? 0) > 0 ? s.metricItemValueRed : s.metricItemValueGray}`}>
-            {company.taskOverdueCount ?? 0}
-          </div>
-          <div className={s.metricItemLabel}>Quá hạn</div>
-        </div>
-        <div className={s.metricItem}>
-          <div className={`${s.metricItemValue} ${s.metricItemValueGreen}`}>{completed}</div>
-          <div className={s.metricItemLabel}>Hoàn thành</div>
-        </div>
-        <div className={s.metricItem}>
-          <div className={`${s.metricItemValue} ${slaRate === null ? s.metricItemValueGray : slaRate >= 80 ? s.metricItemValueGreen : s.metricItemValueRed}`}>
-            {slaRate === null ? '—' : `${slaRate}%`}
-          </div>
-          <div className={s.metricItemLabel}>Đúng hạn</div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── AssignmentsCard ────────────────────────────────────────────────────────────
-
-function AssignmentsCard({ companyId, isAdmin, onAssigned, refreshTick }) {
-  const [assignments, setAssignments] = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [showModal, setShowModal]     = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    companiesApi
-      .getAssignments(companyId)
-      .then((a) => { if (!cancelled) setAssignments(a) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [companyId, refreshTick])
-
-  function handleAssigned() {
-    setShowModal(false)
-    companiesApi.getAssignments(companyId).then(setAssignments).catch(() => {})
-    onAssigned()
-  }
-
-  return (
-    <div className={s.assignmentsCard}>
-      <div className={s.assignmentsHeader}>
-        <span className={s.assignmentsTitle}>Lịch sử phân công</span>
-        {isAdmin && (
-          <button className={s.btnNavy} onClick={() => setShowModal(true)}>
-            <UserPlus size={12} /> Phân công
-          </button>
-        )}
-      </div>
-
-      {loading ? (
-        <div className={`${s.loadingCenter} ${s.loadingShort}`}>
-          <Loader2 size={16} className={s.spin} /> Đang tải...
-        </div>
-      ) : assignments.length === 0 ? (
-        <div className={`${s.emptyState} ${s.emptyStatePadded}`}>
-          <p className={`${s.emptyDesc} ${s.emptyDescSmall}`}>Chưa có lịch sử phân công.</p>
-        </div>
-      ) : (
-        <div className={s.assignmentsTableWrap}>
-          <table className={s.assignmentsTable}>
-            <thead>
-              <tr>
-                <th>Nhân viên</th>
-                <th>Từ ngày</th>
-                <th>Đến ngày</th>
-                <th>Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assignments.map((a) => (
-                <tr key={a.id}>
-                  <td>
-                    <div className={s.assignmentPersonCell}>
-                      <div className={`${s.staffAvatar} ${s.staffAvatarSmall}`}>
-                        {getInitials(a.staff?.name)}
-                      </div>
-                      <div>
-                        <div className={`${s.semiBold} ${s.textSmall}`}>{a.staff?.name}</div>
-                        {a.staff?.jobTitle && <div className={s.muted}>{a.staff.jobTitle}</div>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className={s.muted}>{fmtDate(a.startDate)}</td>
-                  <td className={s.muted}>{a.endDate ? fmtDate(a.endDate) : 'Hiện tại'}</td>
-                  <td>
-                    {a.isCurrent
-                      ? <span className={s.pillCurrent}>Hiện tại</span>
-                      : <span className={s.pillPast}>Đã kết thúc</span>
-                    }
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {showModal && (
-        <AssignStaffModal
-          companyId={companyId}
-          onClose={() => setShowModal(false)}
-          onAssigned={handleAssigned}
         />
       )}
     </div>

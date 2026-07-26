@@ -4,7 +4,7 @@ import { invalidateRefCompanies } from '../../hooks/useReferenceData'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Building2, Pencil, AlertTriangle, ChevronRight,
-  Hash, Calendar, Briefcase, Loader2, Trash2, Table2,
+  Loader2, Trash2, Table2,
   // Icon của TABS (dải tab Hồ sơ)
   BarChart2, ListTodo, ClipboardList, CalendarDays, Lock, FileText, StickyNote, Workflow,
 } from 'lucide-react'
@@ -13,20 +13,19 @@ import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
-import { BUSINESS_TYPE_LABELS, CompanyFormModal, getInitials, StatusPill } from './Companies'
+import { CompanyFormModal, getInitials } from './Companies'
 import SchedulesTab from './SchedulesTab'
 import CredentialsTab from './CredentialsTab'
 import DocumentsTab from './DocumentsTab'
 import NotesTab from './NotesTab'
 import ClientRequestsTab from './ClientRequestsTab'
 import CustomTableTab from './CustomTableTab'
-import OverviewTab from './CompanyOverviewTab'
+import OverviewTab, { StaffCard } from './CompanyOverviewTab'
 import CompanyTasksTab from './CompanyTasksTab'
 import ProcessesTab from './ProcessesTab'
 import * as companyTablesApi from '../../api/companyTables'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
-import { fmtDate } from './companyUtils'
 import s from './companies.module.css'
 
 // ── Tab config ─────────────────────────────────────────────────────────────────
@@ -74,7 +73,6 @@ export default function CompanyDetail() {
   const currentUser = useAuthStore((st) => st.user)
   const isAdmin     = currentUser?.role === 'admin'
   const addToast  = useToastStore((st) => st.toast)
-  const getLabel  = useEnumsStore((st) => st.getLabel)
   const loadEnums = useEnumsStore((st) => st.load)
 
   const [customDefs, setCustomDefs] = useState([])
@@ -167,7 +165,7 @@ export default function CompanyDetail() {
   useEffect(() => { refetchCustomDefs() }, [refetchCustomDefs])
 
   const [noteCount, setNoteCount]         = useState(0)
-  const [overviewTick, setOverviewTick]   = useState(0)
+  const [, setOverviewTick]   = useState(0)
   const [showEdit, setShowEdit]           = useState(false)
   const [showTerminate, setShowTerminate] = useState(false)
   const [terminating, setTerminating]       = useState(false)
@@ -296,96 +294,62 @@ export default function CompanyDetail() {
           </div>
           <div className={s.heroInfo}>
             <h1 className={s.heroName}>{company.name}</h1>
-            {company.shortName && <div className={s.heroShortName}>{company.shortName}</div>}
-            <div className={s.heroBadges}>
-              <StatusPill status={company.status} />
-              {company.businessType && (
-                <span className={`${s.heroBadge} ${s.heroBadgeType}`}>
-                  {getLabel('business_type', company.businessType, BUSINESS_TYPE_LABELS[company.businessType] ?? company.businessType)}
-                </span>
-              )}
-            </div>
-            <div className={s.heroMeta}>
-              {company.taxCode && (
-                <span className={s.heroMetaItem}>
-                  <Hash size={12} /> MST: {company.taxCode}
-                </span>
-              )}
-              {company.industry && (
-                <span className={s.heroMetaItem}>
-                  <Briefcase size={12} /> {company.industry}
-                </span>
-              )}
-              {company.serviceStartDate && (
-                <span className={s.heroMetaItem}>
-                  <Calendar size={12} /> HĐ từ {fmtDate(company.serviceStartDate)}
-                </span>
+
+            {/* Hàng nút dưới tên: chuyển chế độ + hành động — dồn hết sang trái cho gọn */}
+            <div className={s.heroButtonRow}>
+              <button
+                onClick={goProfileMode}
+                className={`${s.modeBtn} ${!isTablesMode ? s.modeBtnActive : ''}`}
+              >
+                <Building2 size={14} /> Hồ sơ
+              </button>
+              <button
+                onClick={goTablesMode}
+                className={`${s.modeBtn} ${s.modeBtnTables} ${isTablesMode ? s.modeBtnTablesActive : ''}`}
+              >
+                <Table2 size={14} /> Bảng dữ liệu
+                {customDefs.length > 0 && (
+                  <span className={s.modeBtnCount}>{customDefs.length}</span>
+                )}
+              </button>
+
+              {(isAdmin || company.assignedStaffId === currentUser?.id) && (
+                <>
+                  <span className={s.heroBtnDivider} />
+                  <button className={s.btnOutline} onClick={() => setShowEdit(true)}>
+                    <Pencil size={13} /> Chỉnh sửa
+                  </button>
+                  {isAdmin && company.status !== 'terminated' && (
+                    <button className={s.btnDanger} onClick={() => setShowTerminate(true)}>
+                      Kết thúc HĐ
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button
+                      className={s.btnDeleteIcon}
+                      onClick={() => setShowDelete(true)}
+                      title="Xoá công ty"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
         </div>
 
-        <div className={s.heroRight} style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-          {/* Hàng 1: chỉ số + hành động */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-          <div className={s.heroMetricGroup}>
-            <div className={s.heroMetric}>
-              <div className={`${s.heroMetricValue} ${s.heroMetricValueBlue}`}>
-                {company.taskOpenCount ?? 0}
-              </div>
-              <div className={s.heroMetricLabel}>Đang mở</div>
-            </div>
-            {(company.taskOverdueCount ?? 0) > 0 && (
-              <div className={s.heroMetric}>
-                <div className={`${s.heroMetricValue} ${s.heroMetricValueRed}`}>
-                  {company.taskOverdueCount}
-                </div>
-                <div className={s.heroMetricLabel}>Quá hạn</div>
-              </div>
-            )}
-          </div>
-
-          {(isAdmin || company.assignedStaffId === currentUser?.id) && (
-            <div className={s.heroActions}>
-              <button className={s.btnOutline} onClick={() => setShowEdit(true)}>
-                <Pencil size={13} /> Chỉnh sửa
-              </button>
-              {isAdmin && company.status !== 'terminated' && (
-                <button className={s.btnDanger} onClick={() => setShowTerminate(true)}>
-                  Kết thúc HĐ
-                </button>
-              )}
-              {isAdmin && (
-                <button
-                  className={s.btnDeleteIcon}
-                  onClick={() => setShowDelete(true)}
-                  title="Xoá công ty"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          )}
-          </div>
-
-          {/* Hàng 2: chuyển chế độ Hồ sơ ↔ Bảng dữ liệu (cùng canh phải với hàng 1) */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            <button
-              onClick={goProfileMode}
-              className={`${s.modeBtn} ${!isTablesMode ? s.modeBtnActive : ''}`}
-            >
-              <Building2 size={14} /> Hồ sơ
-            </button>
-            <button
-              onClick={goTablesMode}
-              className={`${s.modeBtn} ${s.modeBtnTables} ${isTablesMode ? s.modeBtnTablesActive : ''}`}
-            >
-              <Table2 size={14} /> Bảng dữ liệu
-              {customDefs.length > 0 && (
-                <span className={s.modeBtnCount}>{customDefs.length}</span>
-              )}
-            </button>
-          </div>
+        {/* Bên phải hero: Phụ trách */}
+        <div className={s.heroRight}>
+          <StaffCard
+            company={company}
+            isAdmin={isAdmin}
+            inline
+            onAssigned={() => {
+              queryClient.invalidateQueries({ queryKey: companyKey })
+              setOverviewTick((t) => t + 1)
+            }}
+          />
         </div>
       </div>
 
@@ -434,15 +398,7 @@ export default function CompanyDetail() {
 
       {/* Tab content */}
       {activeTab === 'overview' && (
-        <OverviewTab
-          company={company}
-          isAdmin={isAdmin}
-          refreshTick={overviewTick}
-          onAssigned={() => {
-            queryClient.invalidateQueries({ queryKey: companyKey })
-            setOverviewTick((t) => t + 1)
-          }}
-        />
+        <OverviewTab company={company} />
       )}
       {activeTab === 'tasks' && (
         <CompanyTasksTab
