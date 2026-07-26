@@ -38,7 +38,7 @@
 }
 
 .pageSubtitle {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-medium);
   color: var(--color-muted);
   margin: var(--space-1) 0 0;
@@ -83,6 +83,42 @@
   color: #1e3a8a;
   letter-spacing: 0.6px;
   text-transform: uppercase;
+}
+
+/* Nút lọc nhanh theo nhóm loại hình — đặt cạnh nhãn "Bộ lọc" */
+.filterQuickGroups {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  margin-left: 4px;
+  border-left: 1.5px solid #c7d9f5;
+}
+
+.filterQuickBtn {
+  height: 26px;
+  padding: 0 12px;
+  border: 1.5px solid #bfdbfe;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: #1e3a8a;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.13s;
+}
+
+.filterQuickBtn:hover {
+  border-color: var(--color-primary-soft);
+  background: var(--color-info-bg);
+}
+
+.filterQuickBtnActive,
+.filterQuickBtnActive:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
 }
 
 .filterPanelBadge {
@@ -151,7 +187,7 @@
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-medium);
   color: var(--color-text);
   background: var(--color-surface);
@@ -175,7 +211,7 @@
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
   background-color: var(--color-surface);
@@ -211,7 +247,7 @@
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
   background: var(--color-surface);
@@ -378,7 +414,7 @@
   background: none;
   cursor: pointer;
   color: currentColor;
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   line-height: 1;
   padding: 1px 4px;
   opacity: 0.6;
@@ -444,7 +480,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 
 .table thead tr {
@@ -535,7 +571,7 @@
 }
 
 .companyName {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   color: var(--color-text-strong);
   line-height: 1.35;
@@ -551,7 +587,7 @@
 }
 
 .shortNameCell {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
   word-break: break-word;
@@ -560,7 +596,7 @@
 /* ── Contact cell ────────────────────────────────────────── */
 
 .contactName {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
 }
@@ -590,7 +626,7 @@
 }
 
 .staffName {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
   word-break: break-word;
@@ -609,13 +645,13 @@
 }
 
 .metricOpen {
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   font-weight: var(--fw-semibold);
   color: var(--color-primary);
 }
 
 .metricZero {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-medium);
   color: var(--color-table-muted);
 }
@@ -798,7 +834,7 @@
 }
 
 .emptyDesc {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: var(--color-table-muted);
   margin: 0;
   text-align: center;
@@ -816,7 +852,7 @@
   padding: 56px 24px;
   gap: 12px;
   color: #ef4444;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 
 /* ── Row delete button ───────────────────────────────────── */
@@ -952,7 +988,7 @@
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -979,7 +1015,7 @@
   background: #fff;
   color: #374151;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -1025,7 +1061,7 @@
   background: #fff;
   color: #ef4444;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -1113,7 +1149,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #1f2937;
   background: #fff;
@@ -1138,7 +1174,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #1f2937;
   background-color: #fff;
@@ -1164,7 +1200,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #1f2937;
   background: #fff;
@@ -1199,7 +1235,7 @@
   background: #fef2f2;
   border: 1px solid #fca5a5;
   border-radius: 8px;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: #ef4444;
   font-weight: 600;
 }
@@ -1223,7 +1259,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--color-table-muted);
   margin-bottom: 16px;
@@ -1239,7 +1275,7 @@
 
 .breadcrumbSep {
   color: #d1d5db;
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
 }
 
 .breadcrumbCurrent {
@@ -1569,7 +1605,7 @@
   border: none;
   background: transparent;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #6b7280;
   cursor: pointer;
@@ -1645,7 +1681,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: #0f172a;
 }
@@ -1690,7 +1726,7 @@
 }
 
 .infoValue {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #1f2937;
   line-height: 1.4;
@@ -1698,13 +1734,13 @@
 }
 
 .infoValueEmpty {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #d1d5db;
 }
 
 .infoNote {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #1e3a8a;
   line-height: 1.6;
@@ -1728,7 +1764,7 @@
 .staffCardHeader {
   padding: 14px 20px;
   border-bottom: 1px solid #f0f2f5;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: #1f2937;
   display: flex;
@@ -1758,7 +1794,7 @@
 .staffProfileInfo { flex: 1; min-width: 0; }
 
 .staffProfileName {
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   font-weight: 700;
   color: #111827;
   white-space: nowrap;
@@ -1797,7 +1833,7 @@
 .metricCardHeader {
   padding: 14px 20px;
   border-bottom: 1px solid #f0f2f5;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: #1f2937;
 }
@@ -1849,7 +1885,7 @@
 }
 
 .assignmentsTitle {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: #1f2937;
 }
@@ -1862,7 +1898,7 @@
   width: 100%;
   min-width: 480px;
   border-collapse: collapse;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 
 .assignmentsTable thead tr {
@@ -1954,7 +1990,7 @@
 }
 
 .placeholderDesc {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: var(--color-table-muted);
   margin: 0;
   text-align: center;
@@ -1983,7 +2019,7 @@
   background: #fffbeb;
   border: 1px solid #fde68a;
   border-radius: 8px;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #92400e;
   margin-bottom: 16px;
@@ -1998,7 +2034,7 @@
   height: 240px;
   gap: 10px;
   color: #6b7280;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 
@@ -2049,7 +2085,7 @@
   background: #fef2f2;
   border: 1px solid #fca5a5;
   border-radius: 8px;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: #7f1d1d;
   font-weight: 500;
   line-height: 1.5;
@@ -2088,7 +2124,7 @@
 }
 
 .scHeaderTitle {
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   font-weight: 700;
   color: #1f2937;
 }
@@ -2116,13 +2152,13 @@
 /* ── Table cells ─────────────────────────────────────────── */
 
 .scTypeName {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #111827;
 }
 
 .scRecurrenceLabel {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #374151;
 }
@@ -2135,7 +2171,7 @@
 }
 
 .scStaffName {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #374151;
 }
@@ -2260,7 +2296,7 @@
 }
 
 .scEditTypeName {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #111827;
   padding: 7px 10px;
@@ -2319,7 +2355,7 @@
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: var(--color-text);
   background: var(--color-surface);
   outline: none;
@@ -2337,7 +2373,7 @@
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--color-text-soft);
   background: var(--color-surface);
@@ -2392,7 +2428,7 @@
   border-radius: var(--radius-sm);
   background: #fff;
   color: var(--color-text);
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2604,7 +2640,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #1f2937;
   background: #fff;
@@ -2625,7 +2661,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #1f2937;
   background: #fff;
@@ -2880,7 +2916,7 @@
 }
 
 .credCardTitle {
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   font-weight: 700;
   color: #1e293b;
   display: flex;
@@ -3030,7 +3066,7 @@
 .credRevealPw {
   flex: 1;
   font-family: 'JetBrains Mono', monospace;
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   font-weight: 600;
   color: #1e293b;
   word-break: break-all;
@@ -3082,7 +3118,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 7px;
   font-family: inherit;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: #1e293b;
   background: #fff;
   resize: vertical;
@@ -3149,7 +3185,7 @@
 
 /* HTML content rendered from Quill (replaces old plain-text .noteContent) */
 .noteHtmlContent {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: #1e293b;
   line-height: 1.65;
   word-break: break-word;
@@ -3162,7 +3198,7 @@
 .noteHtmlContent ol  { margin: 4px 0 6px; padding-left: 22px; }
 .noteHtmlContent li  { margin-bottom: 2px; }
 .noteHtmlContent h1  { font-size: var(--fs-lg); font-weight: 700; margin: 0 0 6px; }
-.noteHtmlContent h2  { font-size: var(--fs-base); font-weight: 700; margin: 0 0 6px; }
+.noteHtmlContent h2  { font-size: var(--fs-md); font-weight: 700; margin: 0 0 6px; }
 .noteHtmlContent a   { color: var(--color-primary); text-decoration: underline; }
 .noteHtmlContent strong { font-weight: 700; }
 
@@ -3220,7 +3256,7 @@
   border-radius: 0 0 8px 8px;
   border-color: #e2e8f0;
   font-family: inherit;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   height: calc(88vh - 260px);
   overflow-y: auto;
 }
@@ -3234,7 +3270,7 @@
 .noteEditorWrap :global(.ql-editor.ql-blank::before) {
   color: #94a3b8;
   font-style: normal;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 
 .noteEditorWrap :global(.ql-toolbar button:hover),
@@ -3250,7 +3286,7 @@
 
 /* Keep old .noteContent for any other usages */
 .noteContent {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: #1e293b;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -3402,7 +3438,7 @@
 }
 
 .dropZoneText {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--color-text-soft);
   margin: 0;
@@ -3546,7 +3582,7 @@
 }
 
 .docFileName {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--color-text);
   overflow: hidden;
@@ -3608,7 +3644,7 @@
   gap: 10px;
   padding: 48px 24px;
   color: var(--color-muted-soft);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 
 .docEmpty p { margin: 0; }
@@ -3827,7 +3863,7 @@
   background: rgba(0, 0, 0, 0.16);
   color: var(--color-white);
 }
-.taskCreateBtnCompact { height: var(--control-h-sm); font-size: var(--fs-md); }
+.taskCreateBtnCompact { height: var(--control-h-sm); font-size: var(--fs-sm); }
 .searchFieldWrap { position: relative; }
 .searchFieldIcon {
   position: absolute;
@@ -3867,7 +3903,7 @@
   text-align: center;
   padding: 40px 20px;
   color: var(--color-muted);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 .taskEmptyInlineIcon {
   opacity: 0.3;
@@ -3883,7 +3919,7 @@
 
 .cTaskTitle {
   font-weight: var(--fw-semibold);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
@@ -3891,14 +3927,14 @@
 }
 .cTaskTitleOverdue { color: var(--color-danger); }
 .cTaskDateCell {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: var(--color-text-soft);
   white-space: nowrap;
 }
 .cTaskDueOverdue { color: var(--color-danger); font-weight: var(--fw-bold); }
 /* "Giao cho": tên dài cũng nằm gọn 1 dòng, cắt bằng … thay vì xuống 2–3 dòng */
 .cTaskAssigneeCell {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: var(--color-text-soft);
   white-space: nowrap;
   overflow: hidden;
@@ -3923,7 +3959,7 @@
 .cTaskProgressFillDone { background: var(--color-success-light); }
 .cTaskProgressText,
 .cTaskDash {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: var(--color-muted);
   white-space: nowrap;
 }
@@ -4075,7 +4111,7 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 
 .docTable thead th {
@@ -4138,7 +4174,7 @@
 }
 
 .docTableName {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 700;
   color: #1e293b;
   white-space: nowrap;
@@ -4403,7 +4439,7 @@
   border-radius: 9px;
   background: #fff;
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #1e293b;
   outline: none;
@@ -4440,7 +4476,7 @@
   background-position: right 12px center;
   appearance: none;
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #1e293b;
   outline: none;
@@ -4461,7 +4497,7 @@
   border-radius: 9px;
   background: #fff;
   font-family: var(--font-sans);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: #1e293b;
   outline: none;
@@ -5855,7 +5891,7 @@
   padding: 28px;
   text-align: center;
   color: var(--color-muted);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 
 /* ── Companies list: row checkbox + bulk export bar ── */
@@ -5995,7 +6031,7 @@
   padding: 64px 16px;
   text-align: center;
   color: var(--color-muted);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
 }
 
 /* Chips bật/tắt nhóm */
@@ -6050,7 +6086,7 @@
   border: none;
   background: none;
   color: var(--color-muted);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -6098,7 +6134,7 @@
   border: none;
   outline: none;
   background: none;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   width: 100%;
   color: var(--color-text-strong);
 }
@@ -6108,7 +6144,7 @@
   padding: 40px 16px;
   text-align: center;
   color: var(--color-muted);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   background: #f8fbff;
   border: 1.5px dashed var(--color-border-soft, #dbeafe);
   border-radius: var(--radius-lg);
@@ -6257,16 +6293,33 @@
 .coListTable .shortNameCell,
 .coListTable .staffName { word-break: normal; }
 
-/* Hai cột nhiều chữ: giới hạn MỀM + ellipsis, giữ tooltip (title) khi bị cắt */
+/* Padding ngang hẹp hơn (mặc định 16px) để bảng nhiều cột vừa 1 màn, không cuộn ngang.
+   Chỉ áp cho bảng danh sách công ty (.coListTable), không đụng bảng khác. */
+.coListTable th,
+.coListTable td {
+  padding-left: 11px;
+  padding-right: 11px;
+}
+
+/* Các cột nhiều chữ: giới hạn MỀM + ellipsis, giữ tooltip (title) khi bị cắt */
 .coListTable .companyName {
-  max-width: 340px;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .coListTable .industryCell {
   display: inline-block;
-  max-width: 260px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.coListTable .shortNameCell,
+.coListTable .staffName {
+  display: inline-block;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: middle;
@@ -6409,7 +6462,7 @@
   background: #fff;
   color: #374151;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -6462,7 +6515,7 @@
   height: 36px; padding: 0 12px;
   border: 1.5px solid var(--color-border); border-radius: 8px;
   background: #fff; color: var(--color-text-soft);
-  font-family: inherit; font-size: var(--fs-md); font-weight: 600;
+  font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
   cursor: pointer; transition: all 0.12s;
 }
 .docKindBtn:hover { background: var(--color-bg-soft); }

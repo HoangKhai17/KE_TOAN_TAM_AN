@@ -67,14 +67,6 @@ export function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-function staffAvatarSrc(staff) {
-  if (staff?.avatarUrl) return staff.avatarUrl
-  const encoded = encodeURIComponent(staff?.name || '?')
-  return `https://ui-avatars.com/api/?name=${encoded}&size=56&background=e2e8f0&color=64748b&bold=true&font-size=0.4`
-}
-
-const FALLBACK_AVATAR = `https://ui-avatars.com/api/?name=&size=56&background=e2e8f0&color=94a3b8`
-
 function fmtDate(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -268,11 +260,10 @@ const CO_COLUMNS = [
   { key: 'taxCode',           label: 'MST' },
   { key: 'businessType',      label: 'Loại hình' },
   { key: 'industry',          label: 'Ngành nghề' },
-  { key: 'contactName',       label: 'Người liên hệ' },
   { key: 'assignedStaffName', label: 'Phụ trách' },
   { key: 'taskOpenCount',     label: 'Việc mở' },
   { key: 'taskOverdueCount',  label: 'Quá hạn' },
-  { key: 'serviceStartDate',  label: 'Ngày bắt đầu HĐ' },
+  { key: 'serviceStartDate',  label: 'Ngày bắt đầu' },
   { key: 'status',            label: 'Hợp đồng' },
 ]
 
@@ -295,7 +286,6 @@ function getCompanyDisplayLabel(row, colKey) {
   switch (colKey) {
     case 'name':             return row.name ?? '(Trống)'
     case 'taxCode':          return row.taxCode || '(Trống)'
-    case 'contactName':      return row.contactName || '(Trống)'
     case 'assignedStaffName': return row.assignedStaff?.name || '(Chưa giao)'
     case 'status':           return STATUS_LABELS[row.status] ?? row.status
     case 'taskOpenCount':    return String(row.taskOpenCount ?? 0)
@@ -936,6 +926,27 @@ export default function Companies() {
               {activeFilterCount > 0 && (
                 <span className={s.filterPanelBadge}>{activeFilterCount} đang bật</span>
               )}
+              {/* Lọc nhanh theo NHÓM loại hình — đồng bộ với multi-select "Loại hình" (cùng dùng btFilter) */}
+              {getGroups('business_type').length > 0 && (
+                <div className={s.filterQuickGroups}>
+                  {getGroups('business_type').map((g) => {
+                    const gv = groupValue(g.key)
+                    const active = btFilter.includes(gv)
+                    return (
+                      <button
+                        key={g.key}
+                        type="button"
+                        className={`${s.filterQuickBtn} ${active ? s.filterQuickBtnActive : ''}`}
+                        onClick={() => setBtFilter((prev) =>
+                          prev.includes(gv) ? prev.filter((x) => x !== gv) : [...prev, gv])}
+                        title={`Lọc nhanh theo nhóm: ${g.label}`}
+                      >
+                        {g.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1101,11 +1112,10 @@ export default function Companies() {
                     {vis('taxCode') && <FilterTh colKey="taxCode" className={s.tableCellVisible}>MST</FilterTh>}
                     {vis('businessType') && <FilterTh colKey="businessType" className={s.tableCellVisible}>Loại hình</FilterTh>}
                     {vis('industry') && <FilterTh colKey="industry" className={s.tableCellVisible}>Ngành nghề</FilterTh>}
-                    {vis('contactName') && <FilterTh colKey="contactName" className={s.tableContactHead}>Người liên hệ</FilterTh>}
                     {vis('assignedStaffName') && <FilterTh colKey="assignedStaffName" className={s.tableCellVisible}>Phụ trách</FilterTh>}
                     {vis('taskOpenCount') && <FilterTh colKey="taskOpenCount" className={s.tableMetricOpenHead}>Việc mở</FilterTh>}
                     {vis('taskOverdueCount') && <FilterTh colKey="taskOverdueCount" className={s.tableMetricOverdueHead}>Quá hạn</FilterTh>}
-                    {vis('serviceStartDate') && <FilterTh colKey="serviceStartDate" className={s.tableCellVisible}>Ngày bắt đầu HĐ</FilterTh>}
+                    {vis('serviceStartDate') && <FilterTh colKey="serviceStartDate" className={s.tableCellVisible}>Ngày bắt đầu</FilterTh>}
                     {vis('status') && <FilterTh colKey="status">Hợp đồng</FilterTh>}
                     <th className={s.actionsHead}>Hành động</th>
                   </tr>
@@ -1321,7 +1331,7 @@ function CompanyRow({
       {vis('shortName') && (
       <td className={s.tableCellVisible}>
         {company.shortName
-          ? <span className={s.shortNameCell}>{company.shortName}</span>
+          ? <span className={s.shortNameCell} title={company.shortName}>{company.shortName}</span>
           : <span className={s.muted}>—</span>}
       </td>
       )}
@@ -1344,30 +1354,10 @@ function CompanyRow({
           : <span className={s.muted}>—</span>}
       </td>
       )}
-      {vis('contactName') && (
-      <td className={s.tableCellVisible}>
-        {company.contactName ? (
-          <div>
-            <div className={s.contactName}>{company.contactName}</div>
-            {company.contactPhone && <div className={s.contactPhone}>{company.contactPhone}</div>}
-          </div>
-        ) : (
-          <span className={s.muted}>—</span>
-        )}
-      </td>
-      )}
       {vis('assignedStaffName') && (
       <td>
         {staff ? (
-          <div className={s.staffCell}>
-            <img
-              src={staffAvatarSrc(staff)}
-              alt={staff.name}
-              className={s.staffAvatar}
-              onError={(e) => { e.target.src = FALLBACK_AVATAR }}
-            />
-            <span className={s.staffName}>{staff.name}</span>
-          </div>
+          <span className={s.staffName} title={staff.name}>{staff.name}</span>
         ) : (
           <span className={s.unassigned}>Chưa phân công</span>
         )}
@@ -1445,7 +1435,6 @@ function SkeletonRow({ isAdmin }) {
       </td>
       <td><div className={`${s.skeletonBlock} ${s.skeletonTax}`} /></td>
       <td><div className={`${s.skeletonBlock} ${s.skeletonTax}`} /></td>
-      <td><div className={`${s.skeletonBlock} ${s.skeletonContact}`} /></td>
       <td>
         <div className={s.companyStaffSkeletonRow}>
           <div className={`${s.skeletonCircle} ${s.skeletonStaffAvatar}`} />
@@ -1505,6 +1494,11 @@ function DeleteCompanyModal({ company, deleting, onClose, onConfirm }) {
 
 export function CompanyFormModal({ company, onClose, onSaved }) {
   const isEdit = !!company
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  // Loại hình lấy từ enum động (có thể admin thêm/sửa trong Cài đặt); fallback hằng số cũ.
+  const businessTypeOptions = getOptions('business_type').length > 0
+    ? getOptions('business_type').map((o) => ({ value: o.key, label: o.label }))
+    : Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => ({ value, label }))
   const [form, setForm] = useState({
     name:             company?.name             ?? '',
     shortName:        company?.shortName         ?? '',
@@ -1637,8 +1631,8 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
             <div>
               <label className={s.formLabel}>Loại hình</label>
               <select value={form.businessType} onChange={set('businessType')} className={s.formSelect}>
-                {Object.entries(BUSINESS_TYPE_LABELS).map(([v, l]) => (
-                  <option key={v} value={v}>{l}</option>
+                {businessTypeOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
             </div>

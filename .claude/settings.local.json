@@ -266,7 +266,9 @@
       "Bash(npm audit *)",
       "Bash(node -e 'let d=\"\";process.stdin.on\\(\"data\",c=>d+=c\\).on\\(\"end\",\\(\\)=>{const j=JSON.parse\\(d\\);const v=j.vulnerabilities||{};for\\(const k in v\\){const o=v[k];if\\(o.severity===\"high\"||o.severity===\"critical\"\\){const fix=o.fixAvailable;const fixStr=fix===true?\"fix\":fix&&fix.name?\\(\"→\"+fix.name+\"@\"+fix.version+\\(fix.isSemVerMajor?\" \\(MAJOR\\)\":\"\"\\)\\):\"NO-FIX\";console.log\\(o.severity.toUpperCase\\(\\).padEnd\\(9\\),k.padEnd\\(22\\),fixStr\\)}}}\\)')",
       "Bash(python -)",
-      "Bash(echo \"lint=$?\")"
+      "Bash(echo \"lint=$?\")",
+      "Bash(grep -nB1 \"font-size: var\\(--fs-base\\)\" companies.module.css)",
+      "Bash(grep -n \"coListTable\\\\|className={\\\\`\\\\?\\\\${s.table}\\\\|<table\" Companies.jsx)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",
