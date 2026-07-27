@@ -809,6 +809,11 @@ function ListView({
   hiddenCols,
 }) {
   const getLabel    = useEnumsStore((st) => st.getLabel)
+  const getOptions  = useEnumsStore((st) => st.getOptions)
+  // Mức ưu tiên lấy từ enum động (fallback hằng số cũ) — không hardcode danh sách
+  const priorityOptions = getOptions('task_priority').length > 0
+    ? getOptions('task_priority')
+    : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
   const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.has(t.id))
   const vis = (key) => !hiddenCols?.has(key)
   const visibleDataCols = TASK_COLUMNS.filter((c) => c.fixed || vis(c.key)).length
@@ -1013,9 +1018,9 @@ function ListView({
                         className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[t.priority] ?? ''}`}
                         title="Đổi ưu tiên"
                       >
-                        {['urgent', 'high', 'medium', 'low'].map((p) => (
-                          <option key={p} value={p}>
-                            {getLabel('task_priority', p, PRIORITY_LABELS[p])}
+                        {priorityOptions.map((o) => (
+                          <option key={o.key} value={o.key}>
+                            {getLabel('task_priority', o.key, o.label)}
                           </option>
                         ))}
                       </select>

@@ -525,9 +525,12 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                     className={`${s.qeSelect} ${s.qvFieldSelect}`}
                     style={{ ...(PRIORITY_SELECT_STYLE[task.priority] ?? {}), fontWeight: 600 }}
                   >
-                    {['urgent', 'high', 'medium', 'low'].map((p) => (
-                      <option key={p} value={p}>
-                        {getLabel('task_priority', p, PRIORITY_LABELS[p])}
+                    {(getOptions('task_priority').length > 0
+                      ? getOptions('task_priority')
+                      : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
+                    ).map((o) => (
+                      <option key={o.key} value={o.key}>
+                        {getLabel('task_priority', o.key, o.label)}
                       </option>
                     ))}
                   </select>

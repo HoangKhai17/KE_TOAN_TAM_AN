@@ -287,10 +287,12 @@ function getCompanyDisplayLabel(row, colKey) {
     case 'name':             return row.name ?? '(Trống)'
     case 'taxCode':          return row.taxCode || '(Trống)'
     case 'assignedStaffName': return row.assignedStaff?.name || '(Chưa giao)'
-    case 'status':           return STATUS_LABELS[row.status] ?? row.status
+    case 'status':           return useEnumsStore.getState().getLabel('company_status', row.status, STATUS_LABELS[row.status] ?? row.status)
     case 'taskOpenCount':    return String(row.taskOpenCount ?? 0)
     case 'taskOverdueCount': return String(row.taskOverdueCount ?? 0)
-    case 'businessType':     return BUSINESS_TYPE_LABELS[row.businessType] ?? row.businessType ?? '(Trống)'
+    case 'businessType':     return row.businessType
+                               ? useEnumsStore.getState().getLabel('business_type', row.businessType, BUSINESS_TYPE_LABELS[row.businessType] ?? row.businessType)
+                               : '(Trống)'
     case 'industry':         return row.industry || '(Trống)'
     case 'serviceStartDate': return fmtDate(row.serviceStartDate) || '(Trống)'
     default: {
@@ -305,8 +307,8 @@ function getCompanySortKey(row, colKey) {
     case 'taskOpenCount':    return Number(row.taskOpenCount ?? 0)
     case 'taskOverdueCount': return Number(row.taskOverdueCount ?? 0)
     case 'assignedStaffName': return (row.assignedStaff?.name ?? '').toLowerCase()
-    case 'status':           return STATUS_LABELS[row.status] ?? ''
-    case 'businessType':     return (BUSINESS_TYPE_LABELS[row.businessType] ?? row.businessType ?? '').toLowerCase()
+    case 'status':           return useEnumsStore.getState().getLabel('company_status', row.status, STATUS_LABELS[row.status] ?? row.status ?? '')
+    case 'businessType':     return useEnumsStore.getState().getLabel('business_type', row.businessType, BUSINESS_TYPE_LABELS[row.businessType] ?? row.businessType ?? '').toLowerCase()
     // Sắp theo ISO (YYYY-MM-DD) để đúng thứ tự thời gian, không theo chuỗi dd/mm/yyyy
     case 'serviceStartDate': return row.serviceStartDate ?? ''
     default:                 return String(row[colKey] ?? '').toLowerCase()
