@@ -1,6 +1,5 @@
 const { z } = require('zod')
 
-const BUSINESS_TYPES = ['TNHH', 'CP', 'HKD', 'DN_TU_NHAN', 'KHAC']
 const COMPANY_STATUSES = ['active', 'inactive', 'terminated']
 
 const companyBaseSchema = z.object({
@@ -8,7 +7,8 @@ const companyBaseSchema = z.object({
   shortName:        z.string().max(100).optional().nullable(),
   taxCode:          z.string().max(20).optional().nullable(),
   address:          z.string().optional().nullable(),
-  businessType:     z.enum(BUSINESS_TYPES).default('TNHH'),
+  // Danh mục ĐỘNG: nhận bất kỳ option_key nào admin thêm trong Cài đặt (không hardcode)
+  businessType:     z.string().min(1).max(50).default('TNHH'),
   industry:         z.string().max(150).optional().nullable(),
   legalRepName:     z.string().max(100).optional().nullable(),
   legalRepPhone:    z.string().max(20).optional().nullable(),

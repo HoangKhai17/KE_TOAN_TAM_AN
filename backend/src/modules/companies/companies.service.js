@@ -91,7 +91,10 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, busin
   if (btAll.length > 0) {
     const start = filterParams.length + 1
     btAll.forEach((b) => filterParams.push(b))
-    conditions.push(`c.business_type IN (${btAll.map((_, i) => `$${start + i}`).join(', ')})`)
+    // So sánh dạng TEXT: business_type có thể là loại admin tự thêm (metadata) chưa
+    // có trong enum gốc — nếu ép sang enum gốc sẽ crash "invalid input value". Ép
+    // ::text để giá trị lạ chỉ đơn giản không khớp, không làm sập query.
+    conditions.push(`c.business_type::text IN (${btAll.map((_, i) => `$${start + i}`).join(', ')})`)
   } else if (bgArr.length > 0) {
     // Chọn nhóm nhưng nhóm đó chưa có loại hình nào → không khớp công ty nào,
     // KHÔNG được bỏ qua bộ lọc (nếu bỏ qua sẽ trả về toàn bộ danh sách, sai hẳn).
