@@ -9,7 +9,7 @@ const addLinkSchema = z.object({
   name:         z.string().min(1, 'Tên tài liệu không được để trống').max(300),
   url:          z.string().url('URL không hợp lệ — phải bắt đầu bằng http:// hoặc https://').optional().nullable(),
   attachmentId: z.string().uuid().optional().nullable(),
-  category:     z.enum(ALLOWED_CATEGORIES).default('khac'),
+  category:     z.string().min(1).max(50).default('khac'),   // danh mục động (document_category)
   description:  z.string().max(1000).optional().nullable(),
   period:       z.string().max(30).optional().nullable(),
   taskId:       z.string().uuid().optional().nullable(),
@@ -21,7 +21,7 @@ const addLinkSchema = z.object({
 const updateLinkSchema = z.object({
   name:        z.string().min(1).max(300).optional(),
   url:         z.string().url('URL không hợp lệ').optional(),
-  category:    z.enum(ALLOWED_CATEGORIES).optional(),
+  category:    z.string().min(1).max(50).optional(),   // danh mục động (document_category)
   description: z.string().max(1000).optional().nullable(),
   period:      z.string().max(30).optional().nullable(),
 })

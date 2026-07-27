@@ -13,7 +13,7 @@ async function listNotifications(userId, { page = 1, limit = 20, isRead, type } 
 
   if (type) {
     params.push(type)
-    conditions.push(`n.type = $${params.length}::notification_type`)
+    conditions.push(`n.type = $${params.length}::text`)
   }
 
   const where = `WHERE ${conditions.join(' AND ')}`

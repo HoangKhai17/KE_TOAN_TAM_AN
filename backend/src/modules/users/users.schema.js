@@ -39,7 +39,7 @@ const updateUserSchema = z
   .refine((data) => Object.keys(data).length > 0, { message: 'No fields to update' })
 
 const updateStatusSchema = z.object({
-  status: z.enum(['active', 'on_leave', 'resigned']),
+  status: z.string().min(1).max(50),   // danh mục động (user_status)
 })
 
 const resetPasswordSchema = z.object({

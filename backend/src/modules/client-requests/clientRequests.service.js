@@ -153,7 +153,7 @@ async function listClientRequests(filters = {}) {
   if (status) {
     const arr = Array.isArray(status) ? status : [status]
     params.push(arr)
-    conditions.push(`cdr.status = ANY($${params.length}::client_doc_status[])`)
+    conditions.push(`cdr.status = ANY($${params.length}::text[])`)
   }
   if (deadlineDateFrom && deadlineDateTo) {
     params.push(deadlineDateTo)

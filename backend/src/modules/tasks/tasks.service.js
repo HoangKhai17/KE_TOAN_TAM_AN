@@ -377,12 +377,12 @@ async function listTasks(filters = {}) {
   if (status) {
     const arr = Array.isArray(status) ? status : [status]
     params.push(arr)
-    conditions.push(`t.status = ANY($${params.length}::task_status[])`)
+    conditions.push(`t.status = ANY($${params.length}::text[])`)
   }
   if (priority) {
     const arr = Array.isArray(priority) ? priority : [priority]
     params.push(arr)
-    conditions.push(`t.priority = ANY($${params.length}::task_priority[])`)
+    conditions.push(`t.priority = ANY($${params.length}::text[])`)
   }
 
   const baseWhere = baseConditions.join(' AND ')

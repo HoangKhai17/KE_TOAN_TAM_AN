@@ -40,7 +40,7 @@ const updateCompanySchema = companyBaseSchema.partial().refine(
 )
 
 const updateCompanyStatusSchema = z.object({
-  status: z.enum(COMPANY_STATUSES),
+  status: z.string().min(1).max(50),   // danh mục động (company_status)
 })
 
 const assignStaffSchema = z.object({

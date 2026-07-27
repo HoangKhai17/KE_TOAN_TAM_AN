@@ -12,7 +12,7 @@ const createTaskSchema = z.object({
   startDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional().nullable(),
   // Ngày hết hạn bắt buộc khi tạo (để nhân viên tự tính toán thời gian hoàn thành)
   dueDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày hết hạn không hợp lệ (YYYY-MM-DD)'),
-  priority:    z.enum(TASK_PRIORITIES).default('medium'),
+  priority:    z.string().min(1).max(50).default('medium'),   // danh mục động (task_priority)
   slaDays:     z.number().int().min(1).optional().nullable(),
   source:      z.string().min(1).max(40).optional().nullable(),
   // Người hỗ trợ (khác owner = assignedTo). Tùy chọn, có thể rỗng.
@@ -25,7 +25,7 @@ const updateTaskSchema = z.object({
   assignedTo:  z.string().uuid().optional().nullable(),
   startDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   dueDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  priority:    z.enum(TASK_PRIORITIES).optional(),
+  priority:    z.string().min(1).max(50).optional(),   // danh mục động (task_priority)
   slaDays:     z.number().int().min(1).optional().nullable(),
   source:      z.string().min(1).max(40).optional().nullable(),
   // Danh sách người hỗ trợ mới (thay thế toàn bộ). [] = gỡ hết người hỗ trợ.
