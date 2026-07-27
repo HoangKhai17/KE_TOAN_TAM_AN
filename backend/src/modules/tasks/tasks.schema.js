@@ -33,7 +33,7 @@ const updateTaskSchema = z.object({
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })
 
 const changeStatusSchema = z.object({
-  status:        z.enum(TASK_STATUSES),
+  status:        z.string().min(1).max(50),   // danh mục động (task_status) — any-to-any
   onHoldReason:  z.string().max(500).optional().nullable(),
   force:         z.boolean().default(false),
 })

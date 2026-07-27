@@ -8,7 +8,7 @@ import * as tasksApi from '../../api/tasks'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { listUserOptions } from '../../api/users'
 import {
-  STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
+  TASK_STATUSES, STATUS_LABELS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
   fmtDate, isTaskOverdue, completionKind, taskStatusLabel, canEditStartDate, canEditDueDate, dateLockReason,
   checklistLeafCounts, checklistIsParent, checklistParentDone,
@@ -360,7 +360,11 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   }
 
   const overdue     = task ? isTaskOverdue(task) : false
-  const transitions = task ? (STATUS_TRANSITIONS[task.status] ?? []) : []
+  // Any-to-any: chuyển sang BẤT KỲ trạng thái nào (trừ hiện tại) — danh mục động
+  const statusKeys  = getOptions('task_status').length > 0
+    ? getOptions('task_status').map((o) => o.key)
+    : TASK_STATUSES
+  const transitions = task ? statusKeys.filter((st) => st !== task.status) : []
   const { total: clTotal, done: clDone, pct: clPct } = checklistLeafCounts(checklist)
   const pct         = clTotal ? clPct : null
 

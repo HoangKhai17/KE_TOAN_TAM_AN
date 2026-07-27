@@ -1,7 +1,6 @@
 const { query } = require('../../config/db')
 const audit    = require('../../lib/audit')
 const activity = require('../../lib/activity')
-const { canTransition } = require('./tasks.transitions')
 const { checkBlockers } = require('./dependencies.service')
 const { createAndEmit, emitData } = require('../../lib/notify')
 const { countPendingByTask, listClientRequests } = require('../client-requests/clientRequests.service')
@@ -784,9 +783,12 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
   }
 
   const currentStatus = task.status
-  if (!canTransition(currentStatus, newStatus)) {
+  // Any-to-any: cho chuyển sang BẤT KỲ trạng thái nào trong danh mục động task_status.
+  // Chỉ chặn nếu trạng thái đích không tồn tại trong danh mục (giá trị rác).
+  const validStatuses = await enums.getValues('task_status')
+  if (validStatuses.length > 0 && !validStatuses.includes(newStatus)) {
     throw Object.assign(
-      new Error(`Cannot transition from '${currentStatus}' to '${newStatus}'`),
+      new Error(`Trạng thái '${newStatus}' không hợp lệ`),
       { status: 422 }
     )
   }

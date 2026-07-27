@@ -23,7 +23,7 @@ import PeriodPicker from './PeriodPicker'
 import Modal from '../../components/ui/Modal'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import {
-  TASK_STATUSES, STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
+  TASK_STATUSES, STATUS_LABELS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
   isTaskOverdue, fmtDate, progressPct,
   completionKind, taskStatusLabel, canEditDueDate, dateLockReason,
@@ -135,8 +135,8 @@ function ListDateField({ value, onChange, isOverdue }) {
 function StatusBadge({ status }) {
   const getLabel = useEnumsStore((st) => st.getLabel)
   return (
-    <span className={`${s.statusBadge} ${s[STATUS_CSS[status]]}`}>
-      {getLabel('task_status', status, STATUS_LABELS[status])}
+    <span className={`${s.statusBadge} ${s[STATUS_CSS[status]] ?? ''}`}>
+      {getLabel('task_status', status, STATUS_LABELS[status] ?? status)}
     </span>
   )
 }
@@ -317,8 +317,8 @@ function DroppableColumn({ status, tasks, onOpen, isAdmin, onDelete, onQuickView
   return (
     <div className={s.boardCol}>
       <div className={s.boardColHead}>
-        <span className={`${s.boardColDot} ${COL_DOT[status]}`} />
-        <span className={s.boardColTitle}>{getLabel('task_status', status, STATUS_LABELS[status])}</span>
+        <span className={`${s.boardColDot} ${COL_DOT[status] ?? ''}`} />
+        <span className={s.boardColTitle}>{getLabel('task_status', status, STATUS_LABELS[status] ?? status)}</span>
         <span className={s.boardColCount}>{tasks.length}</span>
       </div>
       <div ref={setNodeRef} className={`${s.boardCards} ${isOver ? s.boardCardsOver : ''}`}>
@@ -339,8 +339,12 @@ function DroppableColumn({ status, tasks, onOpen, isAdmin, onDelete, onQuickView
 
 function BoardView({ tasks, onStatusChange, onOpen, isAdmin, onDelete, onQuickView }) {
   const [activeTask, setActiveTask] = useState(null)
-  const addToast = useToastStore((state) => state.toast)
-  const getLabel = useEnumsStore((st) => st.getLabel)
+  const getOptions = useEnumsStore((st) => st.getOptions)
+
+  // Danh sách trạng thái ĐỘNG (theo thứ tự trong Cài đặt) — fallback hằng số cũ
+  const statusKeys = getOptions('task_status').length > 0
+    ? getOptions('task_status').map((o) => o.key)
+    : TASK_STATUSES
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -348,29 +352,22 @@ function BoardView({ tasks, onStatusChange, onOpen, isAdmin, onDelete, onQuickVi
 
   const byStatus = useMemo(() => {
     const map = {}
-    for (const st of TASK_STATUSES) map[st] = []
-    for (const t of tasks) { if (map[t.status]) map[t.status].push(t) }
+    for (const st of statusKeys) map[st] = []
+    for (const t of tasks) { (map[t.status] ??= []).push(t) }
     return map
-  }, [tasks])
+  }, [tasks, statusKeys])
 
   function handleDragStart({ active }) {
     setActiveTask(tasks.find((t) => t.id === active.id) ?? null)
   }
 
+  // Any-to-any: kéo sang cột trạng thái nào cũng được (cột đều là trạng thái hợp lệ)
   function handleDragEnd({ active, over }) {
     setActiveTask(null)
     if (!over) return
     const src = active.data.current?.status
     const dst = over.id
     if (src === dst) return
-    const validTargets = STATUS_TRANSITIONS[src] ?? []
-    if (!validTargets.includes(dst)) {
-      addToast(
-        `Không thể chuyển từ "${getLabel('task_status', src, STATUS_LABELS[src])}" sang "${getLabel('task_status', dst, STATUS_LABELS[dst])}"`,
-        'error'
-      )
-      return
-    }
     const task = tasks.find((t) => t.id === active.id)
     if (task) onStatusChange(task, dst)
   }
@@ -383,7 +380,7 @@ function BoardView({ tasks, onStatusChange, onOpen, isAdmin, onDelete, onQuickVi
       onDragEnd={handleDragEnd}
     >
       <div className={s.boardWrap}>
-        {TASK_STATUSES.map((status) => (
+        {statusKeys.map((status) => (
           <DroppableColumn
             key={status}
             status={status}
@@ -814,6 +811,10 @@ function ListView({
   const priorityOptions = getOptions('task_priority').length > 0
     ? getOptions('task_priority')
     : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
+  // Trạng thái ĐỘNG cho dropdown sửa nhanh (any-to-any) — fallback hằng số cũ
+  const statusKeys = getOptions('task_status').length > 0
+    ? getOptions('task_status').map((o) => o.key)
+    : TASK_STATUSES
   const allSelected = tasks.length > 0 && tasks.every((t) => selectedIds.has(t.id))
   const vis = (key) => !hiddenCols?.has(key)
   const visibleDataCols = TASK_COLUMNS.filter((c) => c.fixed || vis(c.key)).length
@@ -1000,9 +1001,9 @@ function ListView({
                         <option value={t.status}>
                           {taskStatusLabel(t, getLabel)}
                         </option>
-                        {(STATUS_TRANSITIONS[t.status] ?? []).map((st) => (
+                        {statusKeys.filter((st) => st !== t.status).map((st) => (
                           <option key={st} value={st}>
-                            {getLabel('task_status', st, STATUS_LABELS[st])}
+                            {getLabel('task_status', st, STATUS_LABELS[st] ?? st)}
                           </option>
                         ))}
                       </select>
