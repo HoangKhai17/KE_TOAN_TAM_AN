@@ -31,6 +31,7 @@ function EditableField({ companyId, field, value, label, type = 'text', options 
   const [draft, setDraft]     = useState('')
   const [saving, setSaving]   = useState(false)
   const inputRef  = useRef(null)
+  const dateRef   = useRef(null)
   const cancelRef = useRef(false)
 
   function begin() {
@@ -62,6 +63,37 @@ function EditableField({ companyId, field, value, label, type = 'text', options 
   function onKeyDown(e) {
     if (e.key === 'Enter' && type !== 'textarea') { e.preventDefault(); inputRef.current?.blur() }
     else if (e.key === 'Escape') { cancelRef.current = true; inputRef.current?.blur() }
+  }
+
+  // Ngày: hiển thị CHỮ TRƠN dd/mm/yyyy như các field khác (không viền). Bấm mới mở
+  // lịch native (ẩn) → chọn xong lưu ngay. Tránh input native lộ mm/dd/yyyy.
+  if (type === 'date') {
+    const display = value ? fmtDate(value) : null
+    return (
+      <div className={`${s.editRow} ${fullWidth ? s.infoGridFull : ''}`}>
+        <div className={s.infoLabel}>{label}</div>
+        <div
+          className={`${s.editValue} ${canEdit ? s.editValueOn : ''} ${display ? '' : s.editValueEmpty}`}
+          onClick={() => canEdit && dateRef.current?.showPicker?.()}
+          title={canEdit ? 'Nhấp để chọn ngày' : undefined}
+        >
+          <span className={s.editValueText}>{display || '—'}</span>
+          {canEdit && !saving && <Pencil size={11} className={s.editPencil} />}
+          {saving && <Loader2 size={12} className={s.spin} />}
+          {canEdit && (
+            <input
+              ref={dateRef}
+              type="date"
+              value={value ? String(value).slice(0, 10) : ''}
+              onChange={(e) => commit(e.target.value)}
+              style={{ position: 'absolute', left: 0, bottom: 0, width: 0, height: 0, opacity: 0, pointerEvents: 'none', border: 0, padding: 0 }}
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+          )}
+        </div>
+      </div>
+    )
   }
 
   if (!editing) {
@@ -152,6 +184,7 @@ function CustomerInfoCard({ company, canEdit, onSaved }) {
             <EditableField {...common} field="taxCode"      label="Mã số thuế"   value={company.taxCode} />
             <EditableField {...common} field="businessType" label="Loại hình"    value={company.businessType} type="select" options={btOptions} />
             <EditableField {...common} field="industry"     label="Ngành nghề"   value={company.industry} />
+            <EditableField {...common} field="licenseEstablishedDate" label="Ngày thành lập (Theo GP)" value={company.licenseEstablishedDate} type="date" />
             <EditableField {...common} field="address"      label="Địa chỉ"      value={company.address} type="textarea" />
           </div>
 

@@ -46,6 +46,7 @@ function toDto(row) {
     bankAccount:      row.bank_account ?? null,
     bankName:         row.bank_name ?? null,
     serviceStartDate: row.service_start_date ?? null,
+    licenseEstablishedDate: row.license_established_date ?? null,
     status:           row.status,
     notes:            row.notes ?? null,
     avatarUrl:        row.avatar_url ?? null,
@@ -235,6 +236,7 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
     name, shortName, taxCode, address, businessType = 'TNHH', industry,
     legalRepName, legalRepPhone, contactName, contactPhone, contactEmail,
     bankAccount, bankName, serviceStartDate, notes, assignedStaffId, avatarUrl,
+    licenseEstablishedDate,
     customFields = [],
   } = data
 
@@ -247,8 +249,9 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
     `INSERT INTO companies
        (name, short_name, tax_code, address, business_type, industry, legal_rep_name, legal_rep_phone,
         contact_name, contact_phone, contact_email, bank_account, bank_name,
-        service_start_date, notes, assigned_staff_id, avatar_url, created_by, custom_fields)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+        service_start_date, notes, assigned_staff_id, avatar_url, created_by, custom_fields,
+        license_established_date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
      RETURNING *`,
     [
       name, shortName ?? null, taxCode ?? null, address ?? null, businessType, industry ?? null,
@@ -256,6 +259,7 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
       contactEmail ?? null, bankAccount ?? null, bankName ?? null,
       serviceStartDate ?? null, notes ?? null, assignedStaffId ?? null, avatarUrl ?? null, actorId,
       JSON.stringify(Array.isArray(customFields) ? customFields : []),
+      licenseEstablishedDate ?? null,
     ]
   )
 
@@ -312,6 +316,7 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent, user = nul
     industry: 'industry', legalRepName: 'legal_rep_name', legalRepPhone: 'legal_rep_phone',
     contactName: 'contact_name', contactPhone: 'contact_phone', contactEmail: 'contact_email',
     bankAccount: 'bank_account', bankName: 'bank_name', serviceStartDate: 'service_start_date',
+    licenseEstablishedDate: 'license_established_date',
     notes: 'notes', assignedStaffId: 'assigned_staff_id', avatarUrl: 'avatar_url',
   }
   // Staff cannot reassign themselves or others

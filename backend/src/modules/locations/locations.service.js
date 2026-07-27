@@ -12,6 +12,7 @@ function toDto(row) {
     taxAuthority:   row.tax_authority ?? null,
     status:         row.status,
     startDate:      row.start_date ?? null,
+    licenseEstablishedDate: row.license_established_date ?? null,
     endDate:        row.end_date ?? null,
     contactName:    row.contact_name ?? null,
     contactPhone:   row.contact_phone ?? null,
@@ -70,7 +71,7 @@ async function createLocation(companyId, data, user) {
   const {
     locationType, name, address, taxCode, accountingForm, taxAuthority,
     status = 'active', startDate, endDate, contactName, contactPhone,
-    isPrimary = false, sortOrder = 0, notes,
+    isPrimary = false, sortOrder = 0, notes, licenseEstablishedDate,
   } = data
 
   const client = await getClient()
@@ -87,13 +88,14 @@ async function createLocation(companyId, data, user) {
       `INSERT INTO company_locations
          (company_id, location_type, name, address, tax_code, accounting_form, tax_authority,
           status, start_date, end_date, contact_name, contact_phone, is_primary, sort_order, notes,
-          created_by, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$16)
+          license_established_date, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)
        RETURNING *`,
       [
         companyId, locationType, name ?? null, address ?? null, taxCode ?? null,
         accountingForm ?? null, taxAuthority ?? null, status, startDate ?? null, endDate ?? null,
-        contactName ?? null, contactPhone ?? null, isPrimary, sortOrder, notes ?? null, actorId,
+        contactName ?? null, contactPhone ?? null, isPrimary, sortOrder, notes ?? null,
+        licenseEstablishedDate ?? null, actorId,
       ]
     )
     await client.query('COMMIT')
@@ -136,6 +138,7 @@ async function updateLocation(companyId, id, data, user) {
       taxAuthority:   'tax_authority',
       status:         'status',
       startDate:      'start_date',
+      licenseEstablishedDate: 'license_established_date',
       endDate:        'end_date',
       contactName:    'contact_name',
       contactPhone:   'contact_phone',

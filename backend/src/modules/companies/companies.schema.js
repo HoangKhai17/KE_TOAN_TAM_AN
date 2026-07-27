@@ -18,6 +18,7 @@ const companyBaseSchema = z.object({
   bankAccount:      z.string().max(30).optional().nullable(),
   bankName:         z.string().max(150).optional().nullable(),
   serviceStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD').optional().nullable(),
+  licenseEstablishedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD').optional().nullable(),
   notes:            z.string().optional().nullable(),
   assignedStaffId:  z.string().uuid().optional().nullable(),
   avatarUrl:        z.union([

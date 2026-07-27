@@ -17,6 +17,7 @@ import * as companiesApi from '../../api/companies'
 import * as companyTablesApi from '../../api/companyTables'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
+import DateBox from './DateBox'
 import s from './companies.module.css'
 
 // ── Constants (fallbacks while enum API loads) ─────────────────────────────────
@@ -1516,6 +1517,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     bankAccount:      company?.bankAccount      ?? '',
     bankName:         company?.bankName         ?? '',
     serviceStartDate: company?.serviceStartDate ? company.serviceStartDate.slice(0, 10) : '',
+    licenseEstablishedDate: company?.licenseEstablishedDate ? company.licenseEstablishedDate.slice(0, 10) : '',
     notes:            company?.notes            ?? '',
     avatarUrl:        company?.avatarUrl        ?? '',
   })
@@ -1563,6 +1565,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
         bankAccount:      form.bankAccount.trim()      || null,
         bankName:         form.bankName.trim()         || null,
         serviceStartDate: form.serviceStartDate        || null,
+        licenseEstablishedDate: form.licenseEstablishedDate || null,
         notes:            form.notes.trim()            || null,
         avatarUrl:        form.avatarUrl                || null,
       }
@@ -1640,9 +1643,13 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
                   <label className={s.formLabel}>Ngành nghề</label>
                   <input type="text" value={form.industry} onChange={set('industry')} className={s.formInput} placeholder="Thương mại, sản xuất..." />
                 </div>
-                <div className={s.cs12}>
+                <div className={s.cs8}>
                   <label className={s.formLabel}>Địa chỉ</label>
                   <input type="text" value={form.address} onChange={set('address')} className={s.formInput} placeholder="123 Đường ABC, Quận XYZ, TP.HCM" />
+                </div>
+                <div className={s.cs4}>
+                  <label className={s.formLabel}>Ngày thành lập (Theo GP)</label>
+                  <DateBox value={form.licenseEstablishedDate} onChange={(v) => setForm((p) => ({ ...p, licenseEstablishedDate: v }))} />
                 </div>
               </div>
             </div>
@@ -1696,7 +1703,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
           <div className={s.formGrid3}>
             <div>
               <label className={s.formLabel}>Ngày bắt đầu dịch vụ</label>
-              <input type="date" value={form.serviceStartDate} onChange={set('serviceStartDate')} className={s.formInput} />
+              <DateBox value={form.serviceStartDate} onChange={(v) => setForm((p) => ({ ...p, serviceStartDate: v }))} />
             </div>
             <div>
               <label className={s.formLabel}>Số tài khoản NH</label>

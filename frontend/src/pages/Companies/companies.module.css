@@ -1142,7 +1142,9 @@
   gap: 12px;
 }
 .cs3  { grid-column: span 3; }
+.cs4  { grid-column: span 4; }
 .cs6  { grid-column: span 6; }
+.cs8  { grid-column: span 8; }
 .cs12 { grid-column: span 12; }
 
 /* Ô logo gọn ở góc: xếp dọc, căn giữa (nhãn/ảnh/nút/hint) cho cân đối */
@@ -6672,14 +6674,15 @@
 .locTable { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); table-layout: fixed; }
 
 /* Tỉ lệ cột — Địa chỉ rộng nhất, các cột chọn/ngày hẹp lại */
-.colType    { width: 11%; }
-.colName    { width: 15%; }
-.colAddr    { width: 28%; }
-.colTax     { width: 12%; }
-.colAcct    { width: 12%; }
-.colStatus  { width: 12%; }
-.colPrimary { width: 4%;  }
-.colAction  { width: 6%;  }
+.colType    { width: 10%; }
+.colName    { width: 14%; }
+.colAddr    { width: 18%; }
+.colTax     { width: 11%; }
+.colAcct    { width: 11%; }
+.colStatus  { width: 11%; }
+.colEstDate { width: 12%; }
+.colPrimary { width: 5%;  }
+.colAction  { width: 8%;  }
 .locTable th {
   text-align: left; padding: 7px 8px;
   font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase;
@@ -6821,3 +6824,32 @@ textarea.editInput { resize: vertical; line-height: 1.4; }
 .docPreviewFrame { width: 100%; height: 100%; border: none; background: #fff; }
 .docPreviewImg   { max-width: 100%; max-height: 100%; object-fit: contain; }
 .docPreviewMsg   { color: #e2e8f0; font-size: var(--fs-sm); display: flex; align-items: center; gap: 8px; }
+
+/* ── DateBox: ô ngày hiển thị dd/mm/yyyy (input native ẩn) ────────────────────── */
+.dateBox {
+  position: relative;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 38px; padding: 0 10px;
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-md);
+  background: #fff; cursor: pointer;
+  font-family: inherit; font-size: var(--fs-sm); color: var(--color-text);
+}
+.dateBox:hover { border-color: var(--color-primary-soft); }
+.dateBoxPlaceholder { color: var(--color-muted); }
+.dateBoxIcon { color: var(--color-muted); flex-shrink: 0; }
+/* input native trải kín ô nhưng trong suốt — click vào ô sẽ gọi showPicker() */
+.dateBoxNative {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; border: none; background: transparent; pointer-events: none;
+}
+
+/* DateBox biến thể gọn */
+.editDateBox { width: 100%; min-height: 32px; margin-top: 1px; }
+.locDateBox  { width: 100%; min-height: 28px; padding: 0 7px; font-size: var(--fs-xs); }
+
+/* Field ngày ở Tổng quan: input native ẩn (chỉ để mở lịch), hiển thị là chữ trơn */
+.editValue { position: relative; }
+.editDateHidden {
+  position: absolute; left: 0; bottom: 0; width: 1px; height: 1px;
+  opacity: 0; pointer-events: none; border: none; padding: 0; background: transparent;
+}

@@ -3,12 +3,14 @@ import { MapPin, Plus, Pencil, Trash2, Check, X, Star, Loader2 } from 'lucide-re
 import * as locationsApi from '../../api/locations'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
+import { fmtDate } from './companyUtils'
+import DateBox from './DateBox'
 import s from './companies.module.css'
 
 function emptyDraft() {
   return {
     locationType: '', name: '', address: '', taxCode: '',
-    accountingForm: '', status: 'active', isPrimary: false,
+    accountingForm: '', status: 'active', licenseEstablishedDate: '', isPrimary: false,
   }
 }
 
@@ -20,6 +22,7 @@ function draftFromRow(r) {
     taxCode: r.taxCode ?? '',
     accountingForm: r.accountingForm ?? '',
     status: r.status ?? 'active',
+    licenseEstablishedDate: r.licenseEstablishedDate ? String(r.licenseEstablishedDate).slice(0, 10) : '',
     isPrimary: !!r.isPrimary,
   }
 }
@@ -53,6 +56,9 @@ function LocationEditRow({ draft, setF, save, cancel, saving, typeOpts, statusOp
         <select className={s.locInput} value={draft.status} onChange={setF('status')}>
           {statusOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
+      </td>
+      <td>
+        <DateBox value={draft.licenseEstablishedDate} onChange={(v) => setF('licenseEstablishedDate')({ target: { value: v } })} className={s.locDateBox} />
       </td>
       <td className={s.locCenter}>
         <input type="checkbox" checked={draft.isPrimary} onChange={setF('isPrimary')} title="Đặt làm trụ sở chính" />
@@ -123,6 +129,7 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
         taxCode: draft.taxCode.trim() || null,
         accountingForm: draft.accountingForm || null,
         status: draft.status || 'active',
+        licenseEstablishedDate: draft.licenseEstablishedDate || null,
         isPrimary: draft.isPrimary,
       }
       if (editingId === 'new') await locationsApi.createLocation(companyId, body)
@@ -148,7 +155,7 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
     }
   }
 
-  const colSpan = 8
+  const colSpan = 9
   const editRowProps = { draft, setF, save, cancel, saving, typeOpts, statusOpts, acctOpts }
 
   return (
@@ -177,6 +184,7 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
               <col className={s.colTax} />
               <col className={s.colAcct} />
               <col className={s.colStatus} />
+              <col className={s.colEstDate} />
               <col className={s.colPrimary} />
               <col className={s.colAction} />
             </colgroup>
@@ -188,6 +196,7 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
                 <th>MST</th>
                 <th>Hạch toán</th>
                 <th>Trạng thái</th>
+                <th>Ngày thành lập</th>
                 <th className={s.locCenter}>Trụ sở</th>
                 <th className={s.locCenter}>Thao tác</th>
               </tr>
@@ -211,6 +220,7 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
                           {getLabel('location_status', r.status, r.status)}
                         </span>
                       </td>
+                      <td>{r.licenseEstablishedDate ? fmtDate(r.licenseEstablishedDate) : <span className={s.locMuted}>—</span>}</td>
                       <td className={s.locCenter}>
                         {r.isPrimary ? <Star size={14} className={s.locStar} fill="currentColor" /> : <span className={s.locMuted}>—</span>}
                       </td>
