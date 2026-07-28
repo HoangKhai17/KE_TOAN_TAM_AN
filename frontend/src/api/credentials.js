@@ -19,7 +19,8 @@ export async function deleteCredential(companyId, id) {
   await api.delete(`/companies/${companyId}/credentials/${id}`)
 }
 
-export async function revealCredential(companyId, id) {
-  const { data } = await api.post(`/companies/${companyId}/credentials/${id}/reveal`)
+// Xem mật khẩu: buộc gửi kèm mật khẩu ĐĂNG NHẬP của user để re-auth (server verify)
+export async function revealCredential(companyId, id, password) {
+  const { data } = await api.post(`/companies/${companyId}/credentials/${id}/reveal`, { password })
   return data.data.password
 }

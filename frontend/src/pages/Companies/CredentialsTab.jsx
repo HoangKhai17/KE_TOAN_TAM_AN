@@ -175,19 +175,27 @@ function CredentialForm({ initial, onSubmit, onClose, title }) {
 
 function RevealModal({ companyId, credential, onClose }) {
   const addToast = useToastStore((st) => st.toast)
-  const [password, setPassword] = useState(null)
-  const [loading, setLoading]   = useState(true)
-  const [copied, setCopied]     = useState(false)
+  const [reauth, setReauth]       = useState('')     // mật khẩu ĐĂNG NHẬP của user
+  const [showReauth, setShowReauth] = useState(false)
+  const [password, setPassword]   = useState(null)   // mật khẩu hệ thống sau khi xác thực
+  const [verifying, setVerifying] = useState(false)
+  const [error, setError]         = useState(null)
+  const [copied, setCopied]       = useState(false)
 
-  useEffect(() => {
-    credApi.revealCredential(companyId, credential.id)
-      .then((pw) => { setPassword(pw); setLoading(false) })
-      .catch(() => {
-        addToast('Không thể hiển thị mật khẩu', 'error')
-        onClose()
-      })
-    return () => { setPassword(null) }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  async function handleVerify(e) {
+    e.preventDefault()
+    if (!reauth.trim()) { setError('Vui lòng nhập mật khẩu đăng nhập'); return }
+    setError(null)
+    setVerifying(true)
+    try {
+      const pw = await credApi.revealCredential(companyId, credential.id, reauth)
+      setPassword(pw)
+    } catch (err) {
+      setError(err.response?.data?.error?.message ?? 'Xác thực thất bại')
+    } finally {
+      setVerifying(false)
+    }
+  }
 
   async function handleCopy() {
     try {
@@ -204,27 +212,51 @@ function RevealModal({ companyId, credential, onClose }) {
       <div style={{ padding: '8px 0' }}>
         <div className={s.securityBanner} style={{ marginBottom: 16 }}>
           <Shield size={14} style={{ flexShrink: 0 }} />
-          <span>Lần hiển thị này đã được ghi vào audit log.</span>
+          <span>Xác thực lại danh tính trước khi xem. Mỗi lần xem đều được ghi vào audit log.</span>
         </div>
 
-        {loading ? (
-          <div className={s.credRevealSkeleton} />
+        {password === null ? (
+          // Bước 1 — nhập lại mật khẩu ĐĂNG NHẬP để xác thực
+          <form onSubmit={handleVerify}>
+            <label className={s.formLabel}>Nhập mật khẩu đăng nhập của bạn để xem mật khẩu này</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showReauth ? 'text' : 'password'}
+                value={reauth}
+                onChange={(e) => { setReauth(e.target.value); setError(null) }}
+                placeholder="Mật khẩu đăng nhập"
+                className={s.formInput}
+                style={{ paddingRight: 36 }}
+                autoFocus
+                autoComplete="current-password"
+              />
+              <button type="button" onClick={() => setShowReauth((v) => !v)} className={s.pwToggle} tabIndex={-1}>
+                {showReauth ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            {error && <div className={s.formError} style={{ marginTop: 6 }}>{error}</div>}
+            <div className={s.modalActions} style={{ marginTop: 16 }}>
+              <button type="button" onClick={onClose} className={s.btnOutline} disabled={verifying}>Huỷ</button>
+              <button type="submit" className={s.btnNavy} disabled={verifying}>
+                {verifying ? <Loader2 size={13} className={s.spin} /> : <Eye size={13} />}
+                {verifying ? 'Đang xác thực...' : 'Xác thực & Xem'}
+              </button>
+            </div>
+          </form>
         ) : (
-          <div className={s.credRevealBox}>
-            <code className={s.credRevealPw}>{password}</code>
-            <button
-              className={s.credRevealCopy}
-              onClick={handleCopy}
-              title="Sao chép"
-            >
-              {copied ? <Check size={14} style={{ color: 'var(--color-success-strong)' }} /> : <Copy size={14} />}
-            </button>
-          </div>
+          // Bước 2 — hiển thị mật khẩu hệ thống
+          <>
+            <div className={s.credRevealBox}>
+              <code className={s.credRevealPw}>{password}</code>
+              <button className={s.credRevealCopy} onClick={handleCopy} title="Sao chép">
+                {copied ? <Check size={14} style={{ color: 'var(--color-success-strong)' }} /> : <Copy size={14} />}
+              </button>
+            </div>
+            <div className={s.modalActions} style={{ marginTop: 16 }}>
+              <button onClick={onClose} className={s.btnOutline}>Đóng</button>
+            </div>
+          </>
         )}
-
-        <div className={s.modalActions} style={{ marginTop: 16 }}>
-          <button onClick={onClose} className={s.btnOutline}>Đóng</button>
-        </div>
       </div>
     </Modal>
   )
@@ -322,30 +354,23 @@ export default function CredentialsTab({ company }) {
       </div>
 
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+      <div className={s.credToolbar}>
         <select
           value={filterActive}
           onChange={(e) => setFilterActive(e.target.value)}
-          className={s.formSelect}
-          style={{ height: 32, fontSize: 'var(--fs-md)', width: 'auto', minWidth: 140 }}
+          className={s.credFilterSelect}
         >
           <option value="">Tất cả</option>
           <option value="true">Đang kích hoạt</option>
           <option value="false">Đã tắt</option>
         </select>
-        <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>
-          {!loading && `${creds.length} tài khoản`}
-        </span>
-        <button
-          className={s.btnNavy}
-          style={{ marginLeft: 'auto', height: 32, padding: '0 14px', fontSize: 'var(--fs-md)' }}
-          onClick={() => setShowCreate(true)}
-        >
+        <span className={s.credCount}>{!loading && `${creds.length} tài khoản`}</span>
+        <button className={s.credAddBtn} onClick={() => setShowCreate(true)}>
           <Plus size={13} /> Thêm tài khoản
         </button>
       </div>
 
-      {/* List */}
+      {/* Table */}
       {loading ? (
         <div className={s.loadingCenter}>
           <Loader2 size={18} className={s.spin} style={{ marginRight: 8 }} /> Đang tải...
@@ -353,93 +378,76 @@ export default function CredentialsTab({ company }) {
       ) : creds.length === 0 ? (
         <div className={s.emptyState}>
           <Shield size={32} style={{ color: 'var(--color-muted-soft)', marginBottom: 8 }} />
-          <p style={{ fontSize: 'var(--fs-md)', color: 'var(--color-muted)' }}>Chưa có tài khoản hệ thống nào.</p>
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>Chưa có tài khoản hệ thống nào.</p>
         </div>
       ) : (
-        <div className={s.credList}>
-          {creds.map((cred) => (
-            <div
-              key={cred.id}
-              className={s.credCard}
-              style={!cred.isActive ? { opacity: 0.55 } : {}}
-            >
-              <div className={s.credCardHead}>
-                <div className={s.credCardTitle}>
-                  {cred.systemName}
-                  {!cred.isActive && (
-                    <span className={s.credBadgeOff}>Đã tắt</span>
-                  )}
-                </div>
-                <div className={s.credCardActions}>
-                  {cred.systemUrl && (
-                    <a
-                      href={cred.systemUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={s.iconBtnSm}
-                      title="Mở liên kết"
-                    >
-                      <ExternalLink size={13} />
-                    </a>
-                  )}
-                  {cred.hasPassword && (
-                    <button
-                      className={s.iconBtnSm}
-                      onClick={() => setRevealTarget(cred)}
-                      title="Xem mật khẩu"
-                    >
-                      <Eye size={13} />
-                    </button>
-                  )}
-                  <button
-                    className={s.iconBtnSm}
-                    onClick={() => setEditTarget(cred)}
-                    title="Chỉnh sửa"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    className={`${s.iconBtnSm} ${s.iconBtnDanger}`}
-                    onClick={() => setDeleteTarget(cred)}
-                    title="Xoá"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-
-              {cred.systemUrl && (
-                <div className={s.credCardUrl}>
-                  <ExternalLink size={11} />
-                  <a
-                    href={cred.systemUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {cred.systemUrl}
-                  </a>
-                </div>
-              )}
-
-              <div className={s.credCardMeta}>
-                <span className={s.credCardUsername}>
-                  <strong>Tài khoản:</strong> {cred.username || '—'}
-                </span>
-                <span className={s.credCardPw}>
-                  <strong>Mật khẩu:</strong> {cred.hasPassword ? '•••••••' : '—'}
-                </span>
-              </div>
-
-              {cred.notes && (
-                <p className={s.credCardNotes}>{cred.notes}</p>
-              )}
-
-              <div className={s.credCardFooter}>
-                Cập nhật: {fmtDateTime(cred.updatedAt)}
-              </div>
-            </div>
-          ))}
+        <div className={s.credTableWrap}>
+          <table className={s.credTable}>
+            <colgroup>
+              <col className={s.credColName} />
+              <col className={s.credColUrl} />
+              <col className={s.credColUser} />
+              <col className={s.credColPw} />
+              <col className={s.credColStatus} />
+              <col className={s.credColUpdated} />
+              <col className={s.credColActions} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Hệ thống</th>
+                <th>Đường dẫn</th>
+                <th>Tên đăng nhập</th>
+                <th>Mật khẩu</th>
+                <th>Trạng thái</th>
+                <th>Cập nhật</th>
+                <th className={s.credCenter}>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {creds.map((cred) => (
+                <tr key={cred.id} className={cred.isActive ? '' : s.credRowOff}>
+                  <td>
+                    <div className={s.credName} title={cred.systemName}>{cred.systemName}</div>
+                    {cred.notes && <div className={s.credNoteSub} title={cred.notes}>{cred.notes}</div>}
+                  </td>
+                  <td title={cred.systemUrl || ''}>
+                    {cred.systemUrl ? (
+                      <a href={cred.systemUrl} target="_blank" rel="noopener noreferrer" className={s.credUrlLink}>
+                        <ExternalLink size={11} /> {cred.systemUrl}
+                      </a>
+                    ) : <span className={s.credMuted}>—</span>}
+                  </td>
+                  <td title={cred.username || ''}>{cred.username || <span className={s.credMuted}>—</span>}</td>
+                  <td>
+                    {cred.hasPassword ? (
+                      <span className={s.credPwCell}>
+                        <span className={s.credPwMask}>•••••••</span>
+                        <button className={s.iconBtnSm} onClick={() => setRevealTarget(cred)} title="Xem mật khẩu">
+                          <Eye size={13} />
+                        </button>
+                      </span>
+                    ) : <span className={s.credMuted}>—</span>}
+                  </td>
+                  <td>
+                    <span className={cred.isActive ? s.credStatusOn : s.credStatusOff}>
+                      {cred.isActive ? 'Đang kích hoạt' : 'Đã tắt'}
+                    </span>
+                  </td>
+                  <td className={s.credMuted}>{fmtDateTime(cred.updatedAt)}</td>
+                  <td className={s.credCenter}>
+                    <div className={s.credRowActions}>
+                      <button className={s.iconBtnSm} onClick={() => setEditTarget(cred)} title="Chỉnh sửa">
+                        <Pencil size={13} />
+                      </button>
+                      <button className={`${s.iconBtnSm} ${s.iconBtnDanger}`} onClick={() => setDeleteTarget(cred)} title="Xoá">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

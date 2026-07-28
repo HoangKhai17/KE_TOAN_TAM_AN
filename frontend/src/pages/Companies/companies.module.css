@@ -6853,3 +6853,60 @@ textarea.editInput { resize: vertical; line-height: 1.4; }
   position: absolute; left: 0; bottom: 0; width: 1px; height: 1px;
   opacity: 0; pointer-events: none; border: none; padding: 0; background: transparent;
 }
+
+/* ── Tài khoản hệ thống: toolbar + bảng (đồng bộ font với tab Tài liệu) ───────── */
+.credToolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.credFilterSelect {
+  height: 32px; padding: 0 10px; width: auto; min-width: 150px;
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-md);
+  font-family: inherit; font-size: var(--fs-sm); background: #fff; color: var(--color-text);
+}
+.credCount { font-size: var(--fs-sm); color: var(--color-muted); }
+.credAddBtn {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+  height: 32px; padding: 0 13px; border: none; border-radius: var(--radius-md);
+  background: var(--color-primary); color: #fff;
+  font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer;
+}
+.credAddBtn:hover { background: var(--color-primary-dark); }
+
+.credTableWrap {
+  border: 1.5px solid #dbeafe; border-radius: var(--radius-lg);
+  overflow: hidden; overflow-x: auto;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08), 0 1px 4px rgba(0,0,0,0.04);
+}
+.credTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--fs-sm); table-layout: fixed; }
+.credTable thead th {
+  padding: 10px 14px; text-align: left;
+  font-size: var(--fs-xs); font-weight: 800; color: #1e3a8a;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  background: linear-gradient(180deg, #f0f6ff 0%, #dbeafe 100%);
+  border-bottom: 1.5px solid #93c5fd; white-space: nowrap;
+}
+.credTable td {
+  padding: 9px 14px; border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.credTable tbody tr:last-child td { border-bottom: none; }
+.credTable tbody tr:hover { background: #f0f9ff; }
+.credRowOff { opacity: 0.5; }
+.credCenter { text-align: center; }
+.credMuted { color: var(--color-muted); }
+
+.credName { font-weight: 700; color: #1e293b; overflow: hidden; text-overflow: ellipsis; }
+.credNoteSub { font-size: var(--fs-2xs); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.credUrlLink { color: #2563eb; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.credUrlLink:hover { text-decoration: underline; }
+.credPwCell { display: inline-flex; align-items: center; gap: 8px; }
+.credPwMask { letter-spacing: 2px; color: var(--color-text-soft); }
+.credStatusOn  { display: inline-block; padding: 1px 9px; border-radius: var(--radius-pill); font-size: var(--fs-2xs); font-weight: 600; background: #dcfce7; color: #15803d; white-space: nowrap; }
+.credStatusOff { display: inline-block; padding: 1px 9px; border-radius: var(--radius-pill); font-size: var(--fs-2xs); font-weight: 600; background: #f1f5f9; color: #64748b; white-space: nowrap; }
+.credRowActions { display: inline-flex; gap: 4px; justify-content: center; }
+
+.credColName    { width: 20%; }
+.credColUrl     { width: 22%; }
+.credColUser    { width: 14%; }
+.credColPw      { width: 11%; }
+.credColStatus  { width: 11%; }
+.credColUpdated { width: 13%; }
+.credColActions { width: 9%; }

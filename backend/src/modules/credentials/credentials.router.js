@@ -1,7 +1,7 @@
 const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
 const { validate } = require('../../middleware/validate')
-const { createCredentialSchema, updateCredentialSchema } = require('./credentials.schema')
+const { createCredentialSchema, updateCredentialSchema, revealCredentialSchema } = require('./credentials.schema')
 const ctrl = require('./credentials.controller')
 
 // Mounted at /api/companies/:companyId/credentials
@@ -155,6 +155,6 @@ router.delete('/:id',       ...auth,  ctrl.deleteCredential)
  *                     password: { type: string, example: 'P@ssw0rd123' }
  *       404: { description: Not found }
  */
-router.post('/:id/reveal',  ...auth,  ctrl.revealCredential)
+router.post('/:id/reveal',  ...auth,  validate(revealCredentialSchema), ctrl.revealCredential)
 
 module.exports = router

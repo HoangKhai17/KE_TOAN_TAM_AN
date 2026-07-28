@@ -43,7 +43,7 @@ function docColType(colKey) {
 function docColLabel(row, colKey) {
   switch (colKey) {
     case 'name':        return row.name || '(Trống)'
-    case 'category':    return CAT_LABEL[row.category] ?? row.category
+    case 'category':    return useEnumsStore.getState().getLabel('document_category', row.category, CAT_LABEL[row.category] ?? row.category)
     case 'period':      return row.period || '(Trống)'
     case 'createdAt':   return row.createdAt ? fmtDate(row.createdAt) : '(Trống)'
     case 'addedByName': return row.addedByName || '(Trống)'
@@ -52,7 +52,7 @@ function docColLabel(row, colKey) {
 }
 function docSortKey(row, colKey) {
   if (colKey === 'createdAt') return row.createdAt ?? ''
-  if (colKey === 'category')  return CAT_LABEL[row.category] ?? row.category ?? ''
+  if (colKey === 'category')  return useEnumsStore.getState().getLabel('document_category', row.category, CAT_LABEL[row.category] ?? row.category ?? '')
   const v = row[colKey]
   return v != null ? String(v).toLowerCase() : ''
 }
