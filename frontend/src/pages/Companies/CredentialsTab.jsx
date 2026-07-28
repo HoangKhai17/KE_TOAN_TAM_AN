@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import {
   Plus, Pencil, Trash2, Eye, EyeOff, Copy, Check,
-  Shield, Loader2, ExternalLink,
+  Shield, Loader2, ExternalLink, Download,
 } from 'lucide-react'
 import { useToastStore } from '../../stores/toastStore'
+import { useEnumsStore } from '../../hooks/useEnums'
 import * as credApi from '../../api/credentials'
 import Modal from '../../components/ui/Modal'
 import s from './companies.module.css'
@@ -293,11 +294,46 @@ function DeleteConfirmModal({ credential, onConfirm, onClose }) {
   )
 }
 
+// ── ImportTemplateModal ───────────────────────────────────────────────────────
+// Xác nhận trước khi tạo hàng loạt tài khoản mẫu (danh mục động credential_template)
+
+function ImportTemplateModal({ names, onConfirm, onClose }) {
+  const [importing, setImporting] = useState(false)
+
+  async function go() {
+    setImporting(true)
+    try { await onConfirm() } finally { setImporting(false) }
+  }
+
+  return (
+    <Modal title="Import tài khoản mẫu" onClose={onClose} maxWidth={480}>
+      <div className={s.modalForm}>
+        <p style={{ fontSize: 'var(--fs-base)', color: 'var(--color-text-soft)', marginBottom: 10 }}>
+          Sẽ thêm <strong>{names.length}</strong> dòng tài khoản trống (chỉ có tên hệ thống).
+          Bạn tự bổ sung đường dẫn, tên đăng nhập và mật khẩu sau.
+        </p>
+        <ul className={s.importList}>
+          {names.map((n) => <li key={n}>{n}</li>)}
+        </ul>
+        <div className={s.modalActions}>
+          <button onClick={onClose} className={s.btnOutline} disabled={importing}>Huỷ</button>
+          <button onClick={go} className={s.btnNavy} disabled={importing}>
+            {importing ? <Loader2 size={13} className={s.spin} /> : <Download size={13} />}
+            {importing ? 'Đang thêm...' : 'Import'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ── Main CredentialsTab ───────────────────────────────────────────────────────
 
 export default function CredentialsTab({ company }) {
   const companyId  = company.id
   const addToast   = useToastStore((st) => st.toast)
+  const loadEnums  = useEnumsStore((st) => st.load)
+  const getOptions = useEnumsStore((st) => st.getOptions)
 
   const [creds, setCreds]         = useState([])
   const [loading, setLoading]     = useState(true)
@@ -308,6 +344,12 @@ export default function CredentialsTab({ company }) {
   const [editTarget, setEditTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [revealTarget, setRevealTarget] = useState(null)
+  const [showImport, setShowImport] = useState(false)
+
+  useEffect(() => { loadEnums() }, [loadEnums])
+
+  // Danh sách tên tài khoản mẫu (danh mục động credential_template)
+  const templateNames = getOptions('credential_template').map((o) => o.label)
 
   async function load(isActiveFilter) {
     setLoading(true)
@@ -352,6 +394,19 @@ export default function CredentialsTab({ company }) {
     addToast('Đã xoá tài khoản', 'success')
   }
 
+  // Import mẫu: tạo 1 credential trống cho mỗi tên trong danh mục credential_template
+  async function handleImport() {
+    const created = []
+    for (const name of templateNames) {
+      const cred = await credApi.createCredential(companyId, { systemName: name, isActive: true })
+      created.push(cred)
+    }
+    setCreds((prev) => [...created, ...prev])
+    setShowImport(false)
+    setPage(1)
+    addToast(`Đã thêm ${created.length} tài khoản mẫu`, 'success')
+  }
+
   return (
     <div>
       {/* Header gộp 1 hàng: banner bảo mật + filter + đếm + nút thêm */}
@@ -373,6 +428,11 @@ export default function CredentialsTab({ company }) {
           <option value="false">Đã tắt</option>
         </select>
         <span className={s.credCount}>{!loading && `${creds.length} tài khoản`}</span>
+        {templateNames.length > 0 && (
+          <button className={s.credImportBtn} onClick={() => setShowImport(true)} title="Thêm nhanh các tài khoản hệ thống mặc định">
+            <Download size={13} /> Import mẫu
+          </button>
+        )}
         <button className={s.credAddBtn} onClick={() => setShowCreate(true)}>
           <Plus size={13} /> Thêm tài khoản
         </button>
@@ -501,6 +561,13 @@ export default function CredentialsTab({ company }) {
           companyId={companyId}
           credential={revealTarget}
           onClose={() => setRevealTarget(null)}
+        />
+      )}
+      {showImport && (
+        <ImportTemplateModal
+          names={templateNames}
+          onConfirm={handleImport}
+          onClose={() => setShowImport(false)}
         />
       )}
     </div>
