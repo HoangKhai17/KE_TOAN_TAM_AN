@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
-import { Plus, Trash2, Pencil, Loader2, Workflow } from 'lucide-react'
+import { Plus, Trash2, Pencil, Loader2, Workflow, FileText, AlertTriangle } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
@@ -10,6 +10,13 @@ import s from './companies.module.css'
 // Ai không xem sơ đồ thì không phải tải thêm gì.
 const ProcessFlowEditor = lazy(() => import('./ProcessFlowEditor'))
 
+// Các mục con của tab (swap bằng segmented) — cùng cấp với Quy trình
+const SECTIONS = [
+  { key: 'process',   label: 'Quy trình',          icon: Workflow },
+  { key: 'documents', label: 'Chứng từ phát sinh',  icon: FileText },
+  { key: 'notes',     label: 'Điều cần lưu ý',      icon: AlertTriangle },
+]
+
 export default function ProcessesTab({ company }) {
   const currentUser = useAuthStore((st) => st.user)
   const addToast    = useToastStore((st) => st.toast)
@@ -17,6 +24,7 @@ export default function ProcessesTab({ company }) {
   // Sửa được nếu: admin HOẶC là nhân sự phụ trách công ty này (khớp RBAC của backend)
   const canEdit     = isAdmin || company?.assignedStaffId === currentUser?.id
 
+  const [section, setSection] = useState('process')   // mục con đang xem
   const [processes, setProcesses] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [graph, setGraph]   = useState(null)
@@ -93,90 +101,60 @@ export default function ProcessesTab({ company }) {
     } finally { setBusy(false) }
   }
 
-  if (loading) {
-    return <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải…</div>
-  }
-
   return (
-    <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-      {/* Danh sách quy trình */}
-      <div style={{ width: 230, flexShrink: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-muted)', marginBottom: 8 }}>
-          QUY TRÌNH ({processes.length})
-        </div>
-        {processes.map((p) => (
-          <div
-            key={p.id}
-            onClick={() => setSelectedId(p.id)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', marginBottom: 4,
-              borderRadius: 7, cursor: 'pointer', fontSize: 13,
-              background: selectedId === p.id ? 'var(--color-primary-bg)' : 'transparent',
-              color: selectedId === p.id ? 'var(--color-primary-dark)' : 'var(--color-text)',
-              fontWeight: selectedId === p.id ? 600 : 400,
-            }}
-          >
-            <Workflow size={13} style={{ flexShrink: 0 }} />
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {p.name}
-            </span>
-            {p.nodeCount > 0 && (
-              <span style={{ fontSize: 10, opacity: 0.6 }}>{p.nodeCount}</span>
-            )}
-            {canEdit && (
-              <>
-                <button title="Đổi tên" onClick={(e) => { e.stopPropagation(); setRenameTarget({ id: p.id, name: p.name }) }}
-                  style={iconBtn}><Pencil size={11} /></button>
-                <button title="Xoá" onClick={(e) => { e.stopPropagation(); setDeleteTarget(p) }}
-                  style={{ ...iconBtn, color: '#dc2626' }}><Trash2 size={11} /></button>
-              </>
-            )}
-          </div>
-        ))}
-
-        {canEdit && (
-          <button onClick={() => setShowCreate(true)} className={s.btnOutline} style={{ width: '100%', marginTop: 6 }}>
-            <Plus size={13} /> Thêm quy trình
-          </button>
-        )}
-        {!canEdit && processes.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>Chưa có quy trình nào.</div>
-        )}
+    <div>
+      {/* Segmented: chuyển giữa các mục cùng cấp (Quy trình / Chứng từ / Lưu ý) */}
+      <div className={s.procSeg}>
+        {SECTIONS.map((sec) => {
+          const Icon = sec.icon
+          const active = section === sec.key
+          const badge = sec.key === 'process' && processes.length > 0 ? processes.length : null
+          return (
+            <button
+              key={sec.key}
+              className={`${s.procSegBtn} ${active ? s.procSegBtnActive : ''}`}
+              onClick={() => setSection(sec.key)}
+            >
+              <Icon size={14} />
+              {sec.label}
+              {badge != null && <span className={s.procSegBadge}>{badge}</span>}
+            </button>
+          )
+        })}
       </div>
 
-      {/* Sơ đồ */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {!selectedId ? (
-          <div className={s.placeholderTab}>
-            <div className={s.placeholderIcon}><Workflow size={24} /></div>
-            <p className={s.placeholderTitle}>Chưa có quy trình nào</p>
-            <p className={s.placeholderDesc}>
-              {canEdit
-                ? 'Nhấn "Thêm quy trình" để vẽ sơ đồ quy trình làm việc cho khách hàng này.'
-                : 'Nhân sự phụ trách công ty này chưa tạo sơ đồ quy trình.'}
-            </p>
-          </div>
-        ) : loadingGraph || !graph ? (
-          <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải sơ đồ…</div>
+      {/* Nội dung mục đang chọn */}
+      {section === 'process' && (
+        loading ? (
+          <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải…</div>
         ) : (
-          <Suspense fallback={
-            <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải trình vẽ…</div>
-          }>
-            <ProcessFlowEditor
-              companyId={company.id}
-              process={graph.process}
-              initialNodes={graph.nodes}
-              initialEdges={graph.edges}
-              canEdit={canEdit}
-              onSaved={(res) => {
-                setGraph(res)
-                setProcesses((prev) => prev.map((p) => p.id === res.process.id
-                  ? { ...p, nodeCount: res.nodes.length } : p))
-              }}
-            />
-          </Suspense>
-        )}
-      </div>
+          <ProcessSection
+            company={company} canEdit={canEdit}
+            processes={processes} selectedId={selectedId} setSelectedId={setSelectedId}
+            graph={graph} setGraph={setGraph} loadingGraph={loadingGraph}
+            setProcesses={setProcesses}
+            onCreate={() => setShowCreate(true)}
+            onRename={(p) => setRenameTarget({ id: p.id, name: p.name })}
+            onDelete={(p) => setDeleteTarget(p)}
+          />
+        )
+      )}
+
+      {section === 'documents' && (
+        <div className={s.placeholderTab}>
+          <div className={s.placeholderIcon}><FileText size={24} /></div>
+          <p className={s.placeholderTitle}>Chứng từ phát sinh</p>
+          <p className={s.placeholderDesc}>Sắp có — nơi khai báo những loại chứng từ phát sinh cho khách hàng này.</p>
+        </div>
+      )}
+
+      {section === 'notes' && (
+        <div className={s.placeholderTab}>
+          <div className={s.placeholderIcon}><AlertTriangle size={24} /></div>
+          <p className={s.placeholderTitle}>Điều cần lưu ý</p>
+          <p className={s.placeholderDesc}>Sắp có — nơi ghi những điều cần lưu ý khi làm việc với khách hàng này.</p>
+        </div>
+      )}
 
       {/* Modal tạo mới */}
       {showCreate && (
@@ -230,8 +208,77 @@ export default function ProcessesTab({ company }) {
   )
 }
 
-const iconBtn = {
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  width: 20, height: 20, padding: 0, border: 'none', background: 'none',
-  borderRadius: 4, cursor: 'pointer', color: 'var(--color-muted)', flexShrink: 0,
+// ── Mục Quy trình: chip chọn quy trình (ngang) + canvas full-width ─────────────
+function ProcessSection({
+  company, canEdit, processes, selectedId, setSelectedId,
+  graph, setGraph, loadingGraph, setProcesses, onCreate, onRename, onDelete,
+}) {
+  return (
+    <div>
+      {/* Chip chọn quy trình — thay cho cột trái 230px, trả full chiều ngang cho canvas */}
+      <div className={s.procChipBar}>
+        {processes.map((p) => {
+          const active = selectedId === p.id
+          return (
+            <div
+              key={p.id}
+              className={`${s.procChip} ${active ? s.procChipActive : ''}`}
+              onClick={() => setSelectedId(p.id)}
+            >
+              <Workflow size={13} style={{ flexShrink: 0 }} />
+              <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {p.name}
+              </span>
+              {p.nodeCount > 0 && <span className={s.procChipCount}>{p.nodeCount}</span>}
+              {canEdit && (
+                <span className={s.procChipBtns}>
+                  <button title="Đổi tên" className={s.procChipIcon}
+                    onClick={(e) => { e.stopPropagation(); onRename(p) }}><Pencil size={11} /></button>
+                  <button title="Xoá" className={s.procChipIcon} style={{ color: '#dc2626' }}
+                    onClick={(e) => { e.stopPropagation(); onDelete(p) }}><Trash2 size={11} /></button>
+                </span>
+              )}
+            </div>
+          )
+        })}
+        {canEdit && (
+          <button className={s.procAddChip} onClick={onCreate}>
+            <Plus size={13} /> Thêm quy trình
+          </button>
+        )}
+      </div>
+
+      {/* Canvas / sơ đồ — full chiều ngang */}
+      {!selectedId ? (
+        <div className={s.placeholderTab}>
+          <div className={s.placeholderIcon}><Workflow size={24} /></div>
+          <p className={s.placeholderTitle}>Chưa có quy trình nào</p>
+          <p className={s.placeholderDesc}>
+            {canEdit
+              ? 'Nhấn "Thêm quy trình" để vẽ sơ đồ quy trình làm việc cho khách hàng này.'
+              : 'Nhân sự phụ trách công ty này chưa tạo sơ đồ quy trình.'}
+          </p>
+        </div>
+      ) : loadingGraph || !graph ? (
+        <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải sơ đồ…</div>
+      ) : (
+        <Suspense fallback={
+          <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải trình vẽ…</div>
+        }>
+          <ProcessFlowEditor
+            companyId={company.id}
+            process={graph.process}
+            initialNodes={graph.nodes}
+            initialEdges={graph.edges}
+            canEdit={canEdit}
+            onSaved={(res) => {
+              setGraph(res)
+              setProcesses((prev) => prev.map((p) => p.id === res.process.id
+                ? { ...p, nodeCount: res.nodes.length } : p))
+            }}
+          />
+        </Suspense>
+      )}
+    </div>
+  )
 }
