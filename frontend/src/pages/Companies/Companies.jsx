@@ -1536,8 +1536,6 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     const phoneRe = /^0\d{9}$/
     const errs = {}
     if (!form.name.trim()) errs.name = 'Tên công ty không được để trống'
-    if (form.taxCode.trim() && !/^\d{10}(-\d{3})?$/.test(form.taxCode.trim()))
-      errs.taxCode = 'Mã số thuế phải gồm 10 chữ số (VD: 0123456789)'
     const rawLP = form.legalRepPhone.replace(/[\s.-]/g, '')
     if (rawLP && !phoneRe.test(rawLP))
       errs.legalRepPhone = 'Số điện thoại không đúng định dạng (VD: 0901 234 567)'
