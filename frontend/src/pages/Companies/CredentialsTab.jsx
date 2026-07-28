@@ -10,6 +10,8 @@ import s from './companies.module.css'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 10   // số tài khoản mỗi trang
+
 function fmtDateTime(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('vi-VN', {
@@ -300,6 +302,7 @@ export default function CredentialsTab({ company }) {
   const [creds, setCreds]         = useState([])
   const [loading, setLoading]     = useState(true)
   const [filterActive, setFilterActive] = useState('')
+  const [page, setPage]           = useState(1)
 
   const [showCreate, setShowCreate] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -321,6 +324,12 @@ export default function CredentialsTab({ company }) {
   }
 
   useEffect(() => { load(filterActive) }, [companyId, filterActive]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(1) }, [companyId, filterActive])
+
+  // Phân trang phía client (danh sách theo 1 công ty nên số lượng nhỏ)
+  const totalPages = Math.max(1, Math.ceil(creds.length / PAGE_SIZE))
+  const pageSafe   = Math.min(page, totalPages)
+  const pageCreds  = creds.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
 
   async function handleCreate(body) {
     const cred = await credApi.createCredential(companyId, body)
@@ -345,16 +354,15 @@ export default function CredentialsTab({ company }) {
 
   return (
     <div>
-      <div className={s.securityBanner}>
-        <Shield size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>
-          <strong>Khu vực bảo mật.</strong> Mật khẩu được mã hoá AES-256-GCM server-side.
-          Mỗi lần xem mật khẩu đều được ghi vào audit log.
-        </span>
-      </div>
-
-      {/* Toolbar */}
-      <div className={s.credToolbar}>
+      {/* Header gộp 1 hàng: banner bảo mật + filter + đếm + nút thêm */}
+      <div className={s.credHeader}>
+        <div className={`${s.securityBanner} ${s.credBannerInline}`}>
+          <Shield size={16} style={{ flexShrink: 0 }} />
+          <span>
+            <strong>Khu vực bảo mật.</strong> Mật khẩu được mã hoá AES-256-GCM server-side.
+            Mỗi lần xem mật khẩu đều được ghi vào audit log.
+          </span>
+        </div>
         <select
           value={filterActive}
           onChange={(e) => setFilterActive(e.target.value)}
@@ -404,7 +412,7 @@ export default function CredentialsTab({ company }) {
               </tr>
             </thead>
             <tbody>
-              {creds.map((cred) => (
+              {pageCreds.map((cred) => (
                 <tr key={cred.id} className={cred.isActive ? '' : s.credRowOff}>
                   <td>
                     <div className={s.credName} title={cred.systemName}>{cred.systemName}</div>
@@ -448,6 +456,20 @@ export default function CredentialsTab({ company }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && totalPages > 1 && (
+        <div className={s.paginationBar} style={{ marginTop: 10 }}>
+          <span className={s.paginationInfo}>{creds.length} tài khoản</span>
+          <div className={s.paginationBtns}>
+            <button className={s.paginationBtn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageSafe === 1}>‹</button>
+            <span style={{ fontSize: 'var(--fs-sm)', padding: '0 8px', color: 'var(--color-muted)' }}>
+              {pageSafe} / {totalPages}
+            </span>
+            <button className={s.paginationBtn} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={pageSafe === totalPages}>›</button>
+          </div>
         </div>
       )}
 

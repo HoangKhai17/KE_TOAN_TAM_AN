@@ -6855,15 +6855,18 @@ textarea.editInput { resize: vertical; line-height: 1.4; }
 }
 
 /* ── Tài khoản hệ thống: toolbar + bảng (đồng bộ font với tab Tài liệu) ───────── */
+/* Header gộp 1 hàng: banner bảo mật (co giãn) + filter + đếm + nút thêm */
+.credHeader { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.credBannerInline { flex: 1 1 320px; min-width: 0; margin: 0; align-items: center; }
 .credToolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .credFilterSelect {
-  height: 32px; padding: 0 10px; width: auto; min-width: 150px;
+  height: 32px; padding: 0 10px; width: auto; min-width: 130px;
   border: 1.5px solid var(--color-border); border-radius: var(--radius-md);
   font-family: inherit; font-size: var(--fs-sm); background: #fff; color: var(--color-text);
 }
-.credCount { font-size: var(--fs-sm); color: var(--color-muted); }
+.credCount { font-size: var(--fs-sm); color: var(--color-muted); white-space: nowrap; }
 .credAddBtn {
-  margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
   height: 32px; padding: 0 13px; border: none; border-radius: var(--radius-md);
   background: var(--color-primary); color: #fff;
   font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer;
@@ -6903,10 +6906,11 @@ textarea.editInput { resize: vertical; line-height: 1.4; }
 .credStatusOff { display: inline-block; padding: 1px 9px; border-radius: var(--radius-pill); font-size: var(--fs-2xs); font-weight: 600; background: #f1f5f9; color: #64748b; white-space: nowrap; }
 .credRowActions { display: inline-flex; gap: 4px; justify-content: center; }
 
-.credColName    { width: 20%; }
-.credColUrl     { width: 22%; }
+/* Cột text (Hệ thống, Đường dẫn) rộng hơn vì nội dung dài; các cột ngắn thu hẹp */
+.credColName    { width: 24%; }
+.credColUrl     { width: 30%; }
 .credColUser    { width: 14%; }
-.credColPw      { width: 11%; }
-.credColStatus  { width: 11%; }
-.credColUpdated { width: 13%; }
-.credColActions { width: 9%; }
+.credColPw      { width: 8%; }
+.credColStatus  { width: 8%; }
+.credColUpdated { width: 9%; }
+.credColActions { width: 7%; }
