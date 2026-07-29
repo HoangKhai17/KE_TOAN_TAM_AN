@@ -2736,6 +2736,9 @@
   box-shadow: 0 0 0 3px rgba(15, 52, 94, 0.08);
 }
 
+/* DateBox trong cấu hình lịch lặp (Ngày bắt đầu) — hiển thị dd/mm/yyyy, trải kín ô */
+.scConfigDate { width: 100%; min-height: 34px; }
+
 .scConfigSelect {
   height: 34px;
   padding: 0 28px 0 10px;

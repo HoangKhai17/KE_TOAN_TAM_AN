@@ -10,6 +10,7 @@ import { listHolidays } from '../../api/attendance'
 import { getNextOccurrences } from '../../utils/recurrencePreview'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
+import DateBox from './DateBox'
 import s from './companies.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -262,12 +263,10 @@ function RecurrenceConfigPanel({ type, config, onChange }) {
           </div>
           <div className={s.scConfigRow}>
             <label className={s.scConfigLabel}>Ngày bắt đầu</label>
-            <input
-              type="date"
+            <DateBox
               value={config.start_date ?? ''}
-              className={s.scConfigInput}
-              onChange={e => {
-                const v = e.target.value
+              className={s.scConfigDate}
+              onChange={(v) => {
                 const next = { ...config }
                 if (v) next.start_date = v; else delete next.start_date
                 onChange(next)
@@ -446,7 +445,7 @@ function PreviewPanel({ type, config, holidaySet }) {
       ) : (
         <ol className={s.scPreviewList}>
           {dates.map((d, i) => (
-            <li key={d} className={s.scPreviewItem}>
+            <li key={i} className={s.scPreviewItem}>
               <span className={s.scPreviewIdx}>{i + 1}</span>
               <span className={s.scPreviewDate}>{d}</span>
             </li>
@@ -1026,7 +1025,7 @@ export default function SchedulesTab({ company, isAdmin }) {
               ) : (
                 <ol className={s.scPreviewList}>
                   {previewModal.dates.map((d, i) => (
-                    <li key={d} className={s.scPreviewItem}>
+                    <li key={i} className={s.scPreviewItem}>
                       <span className={s.scPreviewIdx}>{i + 1}</span>
                       <span className={s.scPreviewDate}>{d}</span>
                     </li>
