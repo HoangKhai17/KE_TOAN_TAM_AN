@@ -266,12 +266,7 @@ export default function CompanyDetail() {
 
   return (
     <AppLayout>
-      {/* Breadcrumb */}
-      <div className={s.breadcrumb}>
-        <Link to="/companies" className={s.breadcrumbLink}>Khách hàng</Link>
-        <ChevronRight size={13} className={s.breadcrumbSepIcon} />
-        <span className={s.breadcrumbCurrent}>{company.name}</span>
-      </div>
+      {/* Breadcrumb đã có ở header chung → bỏ ở đây cho gọn layout */}
 
       {/* Hero card */}
       <div className={s.heroCard}>

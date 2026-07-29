@@ -837,11 +837,6 @@ export default function Companies() {
         <div className={s.pageHeader}>
           <div className={s.pageTitleGroup}>
             <h1 className={s.pageTitle}>Khách hàng</h1>
-            <p className={s.pageSubtitle}>
-              {loading ? '...' : isAdmin
-                ? `${pagination.total} doanh nghiệp đang quản lý`
-                : `${pagination.total} công ty tôi phụ trách`}
-            </p>
           </div>
           <div className={s.pageHeaderActions}>
             {/* Xem tổng quan trên hệ thống — cùng phạm vi (đã tick / toàn bộ đang lọc) như xuất Excel */}
