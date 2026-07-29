@@ -6977,3 +6977,6 @@ textarea.editInput { resize: vertical; line-height: 1.4; }
   font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer;
 }
 .procAddChip:hover { border-color: var(--color-primary); background: var(--color-primary-bg); }
+
+/* Thanh nút "Thêm" của mục Chứng từ / Lưu ý (dạng table) */
+.procSectionBar { display: flex; justify-content: flex-end; margin-bottom: 10px; }

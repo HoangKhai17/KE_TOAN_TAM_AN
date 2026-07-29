@@ -4,6 +4,8 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
 import * as api from '../../api/companyProcesses'
+import DocumentTypesSection from './DocumentTypesSection'
+import NotesSection from './NotesSection'
 import s from './companies.module.css'
 
 // LAZY LOAD: React Flow (~60KB) chỉ tải khi người dùng thực sự mở tab này.
@@ -141,19 +143,11 @@ export default function ProcessesTab({ company }) {
       )}
 
       {section === 'documents' && (
-        <div className={s.placeholderTab}>
-          <div className={s.placeholderIcon}><FileText size={24} /></div>
-          <p className={s.placeholderTitle}>Chứng từ phát sinh</p>
-          <p className={s.placeholderDesc}>Sắp có — nơi khai báo những loại chứng từ phát sinh cho khách hàng này.</p>
-        </div>
+        <DocumentTypesSection companyId={company.id} canEdit={canEdit} />
       )}
 
       {section === 'notes' && (
-        <div className={s.placeholderTab}>
-          <div className={s.placeholderIcon}><AlertTriangle size={24} /></div>
-          <p className={s.placeholderTitle}>Điều cần lưu ý</p>
-          <p className={s.placeholderDesc}>Sắp có — nơi ghi những điều cần lưu ý khi làm việc với khách hàng này.</p>
-        </div>
+        <NotesSection companyId={company.id} canEdit={canEdit} />
       )}
 
       {/* Modal tạo mới */}

@@ -181,6 +181,11 @@ function createApp() {
   // Địa điểm công ty (company_locations) — nested under company
   app.use('/api/companies/:companyId/locations', require('./modules/locations/locations.router'))
 
+  // Tab Quy trình — Chứng từ phát sinh & Điều cần lưu ý (nested under company)
+  app.use('/api/companies/:companyId/document-types', require('./modules/document-types/documentTypes.router'))
+  // 'important-notes' (không dùng '/notes' vì đã bị tab Ghi chú nhanh chiếm ở companies router)
+  app.use('/api/companies/:companyId/important-notes', require('./modules/company-notes/companyNotes.router'))
+
   // Phase 10 — Payroll
   app.use('/api/payroll', require('./modules/payroll/payroll.router'))
 
