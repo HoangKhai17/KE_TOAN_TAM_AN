@@ -1,6 +1,8 @@
 const { query } = require('../../config/db')
 const audit = require('../../lib/audit')
 const { getNextOccurrences } = require('../../utils/recurrence.calculator')
+const { rollForwardToWorkday } = require('../../utils/workday.util')
+const { parseISO, format } = require('date-fns')
 
 function toDto(row) {
   return {
@@ -203,7 +205,11 @@ async function previewSchedule(id, count = 10) {
   )
   if (!row) throw Object.assign(new Error('Schedule not found'), { status: 404 })
 
-  return getNextOccurrences(row.recurrence_type, row.recurrence_config, new Date(), count)
+  const occurrences = getNextOccurrences(row.recurrence_type, row.recurrence_config, new Date(), count)
+  // Ngày dự kiến hiển thị = ngày bắt đầu thực tế (đã đẩy khỏi CN/lễ) — khớp với task sinh ra.
+  const { rows: hol } = await query("SELECT to_char(holiday_date, 'YYYY-MM-DD') AS d FROM public_holidays")
+  const holidaySet = new Set(hol.map(r => r.d))
+  return occurrences.map(ds => format(rollForwardToWorkday(parseISO(ds), holidaySet), 'yyyy-MM-dd'))
 }
 
 module.exports = {

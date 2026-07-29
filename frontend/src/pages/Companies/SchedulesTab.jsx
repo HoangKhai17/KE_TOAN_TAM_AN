@@ -6,6 +6,7 @@ import {
 import * as schedulesApi from '../../api/schedules'
 import { listTaskTypes, getChecklist } from '../../api/taskTypes'
 import { listUserOptions } from '../../api/users'
+import { listHolidays } from '../../api/attendance'
 import { getNextOccurrences } from '../../utils/recurrencePreview'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
@@ -249,15 +250,34 @@ function RecurrenceConfigPanel({ type, config, onChange }) {
   switch (type) {
     case 'daily':
       return (
-        <div className={s.scConfigRow}>
-          <label className={s.scConfigLabel}>Mỗi N ngày</label>
-          <input
-            type="number" min="1" max="365"
-            value={config.every_n_days ?? 1}
-            className={s.scConfigInput}
-            onChange={e => onChange({ ...config, every_n_days: Math.max(1, parseInt(e.target.value) || 1) })}
-          />
-        </div>
+        <>
+          <div className={s.scConfigRow}>
+            <label className={s.scConfigLabel}>Mỗi N ngày</label>
+            <input
+              type="number" min="1" max="365"
+              value={config.every_n_days ?? 1}
+              className={s.scConfigInput}
+              onChange={e => onChange({ ...config, every_n_days: Math.max(1, parseInt(e.target.value) || 1) })}
+            />
+          </div>
+          <div className={s.scConfigRow}>
+            <label className={s.scConfigLabel}>Ngày bắt đầu</label>
+            <input
+              type="date"
+              value={config.start_date ?? ''}
+              className={s.scConfigInput}
+              onChange={e => {
+                const v = e.target.value
+                const next = { ...config }
+                if (v) next.start_date = v; else delete next.start_date
+                onChange(next)
+              }}
+            />
+          </div>
+          <div className={s.formHint} style={{ marginTop: -4 }}>
+            Để trống = bắt đầu theo chu kỳ mặc định. Kỳ rơi CN/ngày lễ sẽ tự đẩy sang ngày làm việc kế.
+          </div>
+        </>
       )
 
     case 'weekly':
@@ -407,13 +427,13 @@ function RecurrenceConfigPanel({ type, config, onChange }) {
   }
 }
 
-function PreviewPanel({ type, config }) {
+function PreviewPanel({ type, config, holidaySet }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dates = useMemo(() => {
-    try { return getNextOccurrences(type, config, new Date(), 10) }
+    try { return getNextOccurrences(type, config, new Date(), 10, holidaySet) }
     catch { return [] }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, JSON.stringify(config)])
+  }, [type, JSON.stringify(config), holidaySet])
 
   return (
     <div className={s.scPreviewPanel}>
@@ -447,6 +467,25 @@ export default function SchedulesTab({ company, isAdmin }) {
   const [error,      setError]      = useState(null)
   const [taskTypes,  setTaskTypes]  = useState([])
   const [staff,      setStaff]      = useState([])
+  const [holidaySet, setHolidaySet] = useState(null)  // Set 'yyyy-MM-dd' — để preview đẩy khỏi CN/lễ
+
+  // Nạp ngày lễ (năm nay + năm sau) để preview khớp ngày task sinh thực tế
+  useEffect(() => {
+    let cancelled = false
+    const y = new Date().getFullYear()
+    Promise.all([listHolidays(y), listHolidays(y + 1)])
+      .then(([a, b]) => {
+        if (cancelled) return
+        const set = new Set()
+        for (const h of [...(a || []), ...(b || [])]) {
+          const d = h.holidayDate || h.holiday_date
+          if (d) set.add(String(d).slice(0, 10))
+        }
+        setHolidaySet(set)
+      })
+      .catch(() => { if (!cancelled) setHolidaySet(new Set()) })
+    return () => { cancelled = true }
+  }, [])
 
   // Modal
   const [modal,      setModal]      = useState(null)  // null | { mode, schedule? }
@@ -948,7 +987,7 @@ export default function SchedulesTab({ company, isAdmin }) {
 
             {/* Right: preview */}
             <div className={s.scModalRight}>
-              <PreviewPanel type={form.recurrenceType} config={form.recurrenceConfig} />
+              <PreviewPanel type={form.recurrenceType} config={form.recurrenceConfig} holidaySet={holidaySet} />
             </div>
           </div>
 

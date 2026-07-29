@@ -1,4 +1,4 @@
-const { addDays, addMonths, getDaysInMonth, lastDayOfMonth, getDay, parseISO, format } = require('date-fns')
+const { addDays, addMonths, getDaysInMonth, lastDayOfMonth, getDay, parseISO, format, differenceInCalendarDays } = require('date-fns')
 
 function toMidnight(d) {
   const result = new Date(d)
@@ -25,7 +25,16 @@ function getNextOccurrence(type, config, afterDate) {
 
   switch (type) {
     case 'daily': {
-      return addDays(after, config.every_n_days)
+      const n = config.every_n_days
+      // Nếu có ngày bắt đầu (anchor) → kỳ = start_date + k*N; kỳ đầu = start_date.
+      // Không có → giữ hành vi cũ (cộng N từ mốc tham chiếu).
+      if (config.start_date) {
+        const start = toMidnight(parseISO(config.start_date))
+        if (after < start) return start
+        const k = Math.floor(differenceInCalendarDays(after, start) / n) + 1
+        return addDays(start, k * n)
+      }
+      return addDays(after, n)
     }
 
     case 'weekly': {

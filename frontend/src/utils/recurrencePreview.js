@@ -1,7 +1,18 @@
 import {
   addDays, addMonths, getDaysInMonth, lastDayOfMonth,
-  getDay, parseISO, format,
+  getDay, parseISO, format, differenceInCalendarDays,
 } from 'date-fns'
+
+// Ngày nghỉ = CN (getDay===0) hoặc trùng ngày lễ. Thứ 7 vẫn làm việc.
+function isOffDay(date, holidaySet) {
+  if (getDay(date) === 0) return true
+  return holidaySet ? holidaySet.has(format(date, 'yyyy-MM-dd')) : false
+}
+function rollForwardToWorkday(date, holidaySet) {
+  let d = date, guard = 0
+  while (isOffDay(d, holidaySet) && guard++ < 366) d = addDays(d, 1)
+  return d
+}
 
 function toMidnight(d) {
   const r = new Date(d)
@@ -27,8 +38,16 @@ function getNextOccurrence(type, config, afterDate) {
 
   switch (type) {
     case 'daily': {
-      if (!config.every_n_days || config.every_n_days < 1) return null
-      return addDays(after, config.every_n_days)
+      const n = config.every_n_days
+      if (!n || n < 1) return null
+      // Có ngày bắt đầu (anchor) → kỳ = start_date + k*N; kỳ đầu = start_date.
+      if (config.start_date) {
+        const start = toMidnight(parseISO(config.start_date))
+        if (after < start) return start
+        const k = Math.floor(differenceInCalendarDays(after, start) / n) + 1
+        return addDays(start, k * n)
+      }
+      return addDays(after, n)
     }
 
     case 'weekly': {
@@ -118,7 +137,9 @@ function getNextOccurrence(type, config, afterDate) {
   }
 }
 
-export function getNextOccurrences(type, config, fromDate = new Date(), count = 10) {
+// holidaySet (tùy chọn): Set 'yyyy-MM-dd' → ngày hiển thị được đẩy khỏi CN/lễ
+// để khớp với ngày bắt đầu thực tế của task sinh ra. cursor vẫn đi theo kỳ GỐC.
+export function getNextOccurrences(type, config, fromDate = new Date(), count = 10, holidaySet = null) {
   if (!type || !config) return []
   const results = []
   let cursor = addDays(toMidnight(fromDate), -1)
@@ -127,7 +148,8 @@ export function getNextOccurrences(type, config, fromDate = new Date(), count = 
   while (results.length < count && safety-- > 0) {
     const next = getNextOccurrence(type, config, cursor)
     if (!next) break
-    results.push(format(next, 'yyyy-MM-dd'))
+    const shown = holidaySet ? rollForwardToWorkday(next, holidaySet) : next
+    results.push(format(shown, 'yyyy-MM-dd'))
     cursor = next
   }
   return results

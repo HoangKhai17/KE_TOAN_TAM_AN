@@ -16,6 +16,10 @@ function validateRecurrenceConfig(type, config) {
     case 'daily':
       if (!Number.isInteger(config.every_n_days) || config.every_n_days < 1)
         throw new Error('daily requires every_n_days (integer >= 1)')
+      // start_date (ngày bắt đầu) là TÙY CHỌN; nếu có phải đúng định dạng YYYY-MM-DD.
+      if (config.start_date !== undefined && config.start_date !== null && config.start_date !== '' &&
+          !/^\d{4}-\d{2}-\d{2}$/.test(config.start_date))
+        throw new Error('daily: start_date phải dạng YYYY-MM-DD')
       break
 
     case 'weekly':

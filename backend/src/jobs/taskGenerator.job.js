@@ -2,7 +2,14 @@ const { query } = require('../config/db')
 const logger    = require('../config/logger')
 const { shouldGenerateToday, getCurrentOccurrence } = require('../utils/recurrence.calculator')
 const { buildPeriodLabel, docPeriodOffset } = require('../utils/periodLabel')
+const { rollForwardToWorkday } = require('../utils/workday.util')
 const { format, addDays } = require('date-fns')
+
+// Nạp toàn bộ ngày lễ (public_holidays) 1 lần/lần chạy → Set 'YYYY-MM-DD' (tránh query mỗi task)
+async function loadHolidaySet() {
+  const { rows } = await query("SELECT to_char(holiday_date, 'YYYY-MM-DD') AS d FROM public_holidays")
+  return new Set(rows.map(r => r.d))
+}
 
 // Tiêu đề task tự sinh: CHỈ gồm kỳ + tên mẫu công việc.
 // Trước đây ghép thêm tên viết tắt/tên công ty nên tiêu đề rất dài, trong khi
@@ -26,6 +33,9 @@ async function runTaskGenerator(options = {}) {
   const tasksCreated = []
 
   try {
+    // Ngày nghỉ (CN + lễ) áp cho MỌI lịch: đẩy start/due sang ngày làm việc kế.
+    const holidaySet = await loadHolidaySet()
+
     const { rows: schedules } = await query(
       `SELECT cts.*,
               c.name AS company_name,
@@ -61,10 +71,13 @@ async function runTaskGenerator(options = {}) {
           continue
         }
 
-        // start_date = ngày phát sinh (occurrence) của kỳ; due_date = start + offset hạn chót
-        const startDateStr = format(forDate, 'yyyy-MM-dd')
+        // start_date = ngày phát sinh (occurrence); due_date = occurrence + offset hạn chót.
+        // Nếu rơi vào CN/lễ → ĐẨY tới ngày làm việc kế (cả start lẫn due).
+        // LƯU Ý: period_label vẫn tính từ occurrence GỐC (forDate) — giữ idempotency,
+        //        không lệch chu kỳ kỳ kế, không sinh trùng.
+        const startDateStr = format(rollForwardToWorkday(forDate, holidaySet), 'yyyy-MM-dd')
         const dueDateStr = format(
-          addDays(forDate, schedule.deadline_offset_days || 0),
+          rollForwardToWorkday(addDays(forDate, schedule.deadline_offset_days || 0), holidaySet),
           'yyyy-MM-dd'
         )
 
