@@ -62,7 +62,7 @@ function previewPeriodLabel(type, offset) {
   }
   const dd = String(d.getDate()).padStart(2, '0')
   const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const yy = d.getFullYear()
+  const yy = String(d.getFullYear()).slice(-2)   // năm 2 chữ số (2026 → 26)
   if (type === 'daily' || type === 'weekly' || type === 'once' || type === 'custom_dates') return `${dd}/${mm}/${yy}`
   if (type === 'quarterly') return `Q${Math.ceil((d.getMonth() + 1) / 3)}/${yy}`
   if (type === 'yearly')    return `${yy}`

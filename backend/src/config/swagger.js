@@ -166,7 +166,7 @@ const options = {
             priority:               { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
             source:                 { type: 'string', enum: ['auto', 'manual'] },
             dueDate:                { type: 'string', format: 'date', nullable: true },
-            periodLabel:            { type: 'string', nullable: true, example: 'T05/2026' },
+            periodLabel:            { type: 'string', nullable: true, example: 'T05/26' },
             completedAt:            { type: 'string', format: 'date-time', nullable: true },
             onHoldReason:           { type: 'string', nullable: true },
             slaDays:                { type: 'integer', nullable: true },

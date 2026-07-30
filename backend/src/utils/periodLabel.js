@@ -61,7 +61,7 @@ function dichChuKy(date, recurrenceType, offset) {
 function dinhDangNhan(recurrenceType, d) {
   const ngay  = String(d.getDate()).padStart(2, '0')
   const thang = d.getMonth() + 1
-  const nam   = d.getFullYear()
+  const nam   = String(d.getFullYear()).slice(-2)   // năm 2 chữ số (2026 → 26)
   const T     = `T${String(thang).padStart(2, '0')}/${nam}`
 
   switch (recurrenceType) {
