@@ -27,6 +27,10 @@ function validateRecurrenceConfig(type, config) {
         throw new Error('weekly requires weekdays (non-empty array)')
       if (!config.weekdays.every(d => Number.isInteger(d) && d >= 0 && d <= 6))
         throw new Error('weekly: weekdays elements must be integers 0–6 (0=Sun)')
+      // start_date (ngày bắt đầu) tùy chọn; nếu có phải đúng định dạng YYYY-MM-DD.
+      if (config.start_date !== undefined && config.start_date !== null && config.start_date !== '' &&
+          !/^\d{4}-\d{2}-\d{2}$/.test(config.start_date))
+        throw new Error('weekly: start_date phải dạng YYYY-MM-DD')
       break
 
     case 'monthly_by_date':

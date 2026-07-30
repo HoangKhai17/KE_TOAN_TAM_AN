@@ -35,16 +35,17 @@ function dichChuKy(date, recurrenceType, offset) {
     case 'daily':
       d.setDate(d.getDate() + offset)
       break
+    case 'weekly':
+      // Lịch tuần dùng nhãn theo NGÀY (mỗi thứ trong tuần = 1 kỳ riêng) → lệch theo ngày.
+      d.setDate(d.getDate() + offset)
+      break
     case 'quarterly':
       d.setMonth(d.getMonth() + offset * 3)
       break
     case 'yearly':
       d.setFullYear(d.getFullYear() + offset)
       break
-    // weekly | monthly_* | custom_dates | once → dịch theo THÁNG.
-    // Đơn vị lệch phải khớp với ĐỘ MỊN CỦA NHÃN, không phải chu kỳ lặp: nhãn của
-    // lịch hàng tuần là 'Tmm/yyyy' (theo tháng), nên lệch 1 tuần hầu như không
-    // đổi nhãn — gây hiểu nhầm. Lệch theo tháng mới có tác dụng thật.
+    // monthly_* | custom_dates | once → dịch theo THÁNG (khớp độ mịn nhãn tháng).
     default:
       // setMonth tự xử lý tràn năm. Đặt về ngày 1 trước khi dịch để tránh
       // trường hợp 31/03 lùi 1 tháng thành 03/03 (vì tháng 2 không có ngày 31).
@@ -65,8 +66,11 @@ function dinhDangNhan(recurrenceType, d) {
 
   switch (recurrenceType) {
     case 'daily':
-      return `${ngay}/${String(thang).padStart(2, '0')}/${nam}`
     case 'weekly':
+      // Lịch tuần: chọn THỨ trong tuần (có thể nhiều thứ) → nhãn theo NGÀY để mỗi
+      // occurrence có kỳ riêng, tránh trùng khoá chống-trùng (trước đây dùng nhãn
+      // tháng khiến nhiều thứ trong 1 tháng chỉ sinh được 1 task).
+      return `${ngay}/${String(thang).padStart(2, '0')}/${nam}`
     case 'monthly_by_date':
     case 'monthly_by_weekday':
     case 'monthly_last_day':
@@ -106,7 +110,7 @@ function docPeriodOffset(recurrenceConfig) {
 function moTaOffset(recurrenceType, offset) {
   if (!offset) return 'Cùng kỳ'
   const donVi = {
-    daily: 'ngày', quarterly: 'quý', yearly: 'năm',
+    daily: 'ngày', weekly: 'ngày', quarterly: 'quý', yearly: 'năm',
   }[recurrenceType] || 'tháng'
   return offset < 0 ? `Lùi ${Math.abs(offset)} ${donVi}` : `Tiến ${offset} ${donVi}`
 }

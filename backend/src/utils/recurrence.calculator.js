@@ -39,12 +39,18 @@ function getNextOccurrence(type, config, afterDate) {
 
     case 'weekly': {
       const weekdays = [...config.weekdays].sort((a, b) => a - b)
-      const afterDay = getDay(after)
+      // Ngày bắt đầu (anchor): không sinh kỳ nào TRƯỚC start_date.
+      let base = after
+      if (config.start_date) {
+        const sMinus1 = addDays(toMidnight(parseISO(config.start_date)), -1)
+        if (base < sMinus1) base = sMinus1
+      }
+      const afterDay = getDay(base)
       for (const wd of weekdays) {
-        if (wd > afterDay) return addDays(after, wd - afterDay)
+        if (wd > afterDay) return addDays(base, wd - afterDay)
       }
       // Wrap to next week
-      return addDays(after, 7 - afterDay + weekdays[0])
+      return addDays(base, 7 - afterDay + weekdays[0])
     }
 
     case 'monthly_by_date': {

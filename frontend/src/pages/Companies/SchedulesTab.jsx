@@ -33,7 +33,7 @@ const RECURRENCE_TYPES = [
 // Đơn vị lệch khớp với ĐỘ MỊN CỦA NHÃN KỲ, không phải chu kỳ lặp.
 // Lịch hàng tuần có nhãn theo tháng (T07/2026) nên lệch cũng tính theo tháng.
 const PERIOD_UNIT = {
-  daily: 'ngày', quarterly: 'quý', yearly: 'năm',
+  daily: 'ngày', weekly: 'ngày', quarterly: 'quý', yearly: 'năm',
 }
 const periodUnit = (type) => PERIOD_UNIT[type] || 'tháng'
 
@@ -55,7 +55,7 @@ function previewPeriodLabel(type, offset) {
   const d = new Date()
   const off = Number(offset) || 0
   if (off) {
-    if (type === 'daily')          d.setDate(d.getDate() + off)
+    if (type === 'daily' || type === 'weekly') d.setDate(d.getDate() + off)
     else if (type === 'quarterly') d.setMonth(d.getMonth() + off * 3)
     else if (type === 'yearly')    d.setFullYear(d.getFullYear() + off)
     else { d.setDate(1); d.setMonth(d.getMonth() + off) }
@@ -63,7 +63,7 @@ function previewPeriodLabel(type, offset) {
   const dd = String(d.getDate()).padStart(2, '0')
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const yy = d.getFullYear()
-  if (type === 'daily' || type === 'once' || type === 'custom_dates') return `${dd}/${mm}/${yy}`
+  if (type === 'daily' || type === 'weekly' || type === 'once' || type === 'custom_dates') return `${dd}/${mm}/${yy}`
   if (type === 'quarterly') return `Q${Math.ceil((d.getMonth() + 1) / 3)}/${yy}`
   if (type === 'yearly')    return `${yy}`
   return `T${mm}/${yy}`
@@ -295,31 +295,48 @@ function RecurrenceConfigPanel({ type, config, onChange }) {
 
     case 'weekly':
       return (
-        <div className={s.scConfigRow}>
-          <label className={s.scConfigLabel}>Ngày trong tuần</label>
-          <div className={s.scWeekdays}>
-            {WEEKDAY_LABELS.map((label, i) => {
-              const active = (config.weekdays || []).includes(i)
-              return (
-                <button
-                  key={i} type="button"
-                  className={`${s.scWeekdayBtn} ${active ? s.scWeekdayActive : ''}`}
-                  onClick={() => {
-                    const wd = config.weekdays || []
-                    onChange({
-                      ...config,
-                      weekdays: active
-                        ? wd.filter(d => d !== i)
-                        : [...wd, i].sort((a, b) => a - b),
-                    })
-                  }}
-                >
-                  {label}
-                </button>
-              )
-            })}
+        <>
+          <div className={s.scConfigRow}>
+            <label className={s.scConfigLabel}>Ngày trong tuần</label>
+            <div className={s.scWeekdays}>
+              {WEEKDAY_LABELS.map((label, i) => {
+                const active = (config.weekdays || []).includes(i)
+                return (
+                  <button
+                    key={i} type="button"
+                    className={`${s.scWeekdayBtn} ${active ? s.scWeekdayActive : ''}`}
+                    onClick={() => {
+                      const wd = config.weekdays || []
+                      onChange({
+                        ...config,
+                        weekdays: active
+                          ? wd.filter(d => d !== i)
+                          : [...wd, i].sort((a, b) => a - b),
+                      })
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
+          <div className={s.scConfigRow}>
+            <label className={s.scConfigLabel}>Ngày bắt đầu</label>
+            <DateBox
+              value={config.start_date ?? ''}
+              className={s.scConfigDate}
+              onChange={(v) => {
+                const next = { ...config }
+                if (v) next.start_date = v; else delete next.start_date
+                onChange(next)
+              }}
+            />
+          </div>
+          <div className={s.formHint} style={{ marginTop: 8 }}>
+            Để trống = bắt đầu ngay kỳ tới. Không sinh công việc trước ngày bắt đầu.
+          </div>
+        </>
       )
 
     case 'monthly_by_date':
