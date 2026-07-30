@@ -212,7 +212,51 @@ async function previewSchedule(id, count = 10) {
   return occurrences.map(ds => format(rollForwardToWorkday(parseISO(ds), holidaySet), 'yyyy-MM-dd'))
 }
 
+// ── Luồng 2 — Console tập trung: overview theo LỊCH + đặt trần "ngày N hàng tháng" ─
+
+// Danh sách LỊCH định kỳ đang chạy (kèm công ty, loại CV, phụ trách, trần ngày N).
+// Frontend gộp nhóm theo công ty.
+async function getRecurringOverview() {
+  const { rows } = await query(
+    `SELECT cts.id AS schedule_id, cts.max_due_day, cts.recurrence_type,
+            c.id AS company_id, c.name AS company_name,
+            tt.name AS task_type_name,
+            u.name AS assigned_staff_name
+       FROM customer_task_schedules cts
+       JOIN companies c   ON c.id  = cts.company_id
+       JOIN task_types tt ON tt.id = cts.task_type_id
+       LEFT JOIN users u  ON u.id  = cts.assigned_staff_id
+      WHERE cts.is_active = TRUE AND c.status = 'active'
+      ORDER BY c.name, tt.name`
+  )
+  return rows.map(r => ({
+    scheduleId:        r.schedule_id,
+    companyId:         r.company_id,
+    companyName:       r.company_name,
+    taskTypeName:      r.task_type_name,
+    recurrenceType:    r.recurrence_type,
+    assignedStaffName: r.assigned_staff_name ?? null,
+    maxDueDay:         r.max_due_day ?? null,
+  }))
+}
+
+// Đặt/xoá trần "ngày N hàng tháng" cho 1 LỊCH định kỳ (admin). null/'' = xoá trần.
+async function setScheduleMaxDueDay(scheduleId, maxDueDay) {
+  const day = (maxDueDay === '' || maxDueDay === null || maxDueDay === undefined) ? null : Number(maxDueDay)
+  if (day !== null && (!Number.isInteger(day) || day < 1 || day > 31)) {
+    throw Object.assign(new Error('Ngày trần phải là số nguyên 1–31'), { status: 422 })
+  }
+  const { rows: [row] } = await query(
+    `UPDATE customer_task_schedules SET max_due_day = $2, updated_at = NOW()
+      WHERE id = $1 RETURNING id, max_due_day`,
+    [scheduleId, day]
+  )
+  if (!row) throw Object.assign(new Error('Schedule not found'), { status: 404 })
+  return { scheduleId: row.id, maxDueDay: row.max_due_day ?? null }
+}
+
 module.exports = {
   listSchedules, getScheduleById, createSchedule,
   updateSchedule, deleteSchedule, toggleSchedule, previewSchedule,
+  getRecurringOverview, setScheduleMaxDueDay,
 }

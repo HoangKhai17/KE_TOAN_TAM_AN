@@ -94,14 +94,24 @@ Nguyên tắc chung: **tương thích ngược tuyệt đối** — lịch/task 
   - Không đặt trần → không hạn chế.
 - **Chỉ áp cho Ngày hết hạn** (không đụng Ngày bắt đầu). **Chỉ validate lượt sửa của staff**; **KHÔNG kẹp** ngày auto sinh ra (giữ nguyên nghiệp vụ sinh task; admin tự chỉnh lịch nếu cần).
 
+### Nơi thao tác — CONSOLE tập trung (đã chốt)
+Admin **không vào từng khách hàng**. Trong Settings → section **"Bộ lập lịch tự động"** (đã có) thêm **button "Lịch định kỳ toàn hệ thống"** → mở **popup overview**:
+- Bảng **theo công ty** (mỗi công ty có lịch định kỳ = 1 dòng): Tên công ty · Số lịch định kỳ · Nhân sự phụ trách · **ô ngày "Trần ngày hoàn thành"** (DateBox dd/mm/yyyy) để admin đặt/sửa.
+- Có ô tìm/lọc theo tên công ty. **Admin-only.**
+
+### Logic chặn (đã chốt: CHỈ chặn khi staff sửa tay)
+- Chặn tại gate sẵn có trong `updateTask` (nhánh `changingDue` của **staff**): nếu công ty có `max_task_due_date` và `newDueDate > max` → **403**.
+- **Admin miễn trừ.** **Task auto sinh KHÔNG bị kẹp.** Chỉ áp cho **Ngày hết hạn** (không đụng Ngày bắt đầu).
+- Trần rỗng (null) → không hạn chế. Mốc tuyệt đối → admin tự cập nhật theo thời gian (chấp nhận).
+
 ### File chạm
 - `backend/migrations/NNN_*.sql` — `ALTER TABLE companies ADD COLUMN max_task_due_date DATE;`
-- `backend/src/modules/tasks/tasks.service.js` — thêm kiểm tra trần trong nhánh `changingDue` (staff).
-- `backend/src/modules/companies/companies.service.js` + `companies.schema.js` — đọc/ghi `maxTaskDueDate` (chỉ **admin** được set).
-- Frontend: 1 ô ngày **"Hạn hoàn thành tối đa (KH)"** cho admin — đặt ở **company detail** (Tổng quan) hoặc header tab Lịch định kỳ.
-
-### Edge cases / lưu ý cần bạn xác nhận
-- Task lặp qua nhiều tháng: 1 mốc tuyệt đối (VD 5/8) sẽ **chặn mọi task có hạn vượt 5/8**. Đây là "chốt cứng tạm thời" — admin cần **cập nhật lại mốc** theo thời gian, hoặc ta để null khi hết hiệu lực. → xem "Câu hỏi mở #3".
+- `backend/src/modules/tasks/tasks.service.js` — kiểm tra trần trong nhánh `changingDue` (staff).
+- **Console API (admin-only):**
+  - `GET /api/schedules/overview` — list công ty có lịch định kỳ active + số lịch + phụ trách + `max_task_due_date`.
+  - Set trần: thêm `maxTaskDueDate` vào cập nhật công ty (guard admin) **hoặc** endpoint riêng `PATCH /api/companies/:id/max-due-date`.
+- `backend/src/modules/companies/*` — đọc/ghi `maxTaskDueDate` (chỉ admin).
+- Frontend: `Settings` section "Bộ lập lịch tự động" → button + **popup console** (bảng công ty + DateBox trần ngày).
 
 ---
 
@@ -151,10 +161,8 @@ ALTER TABLE companies ADD COLUMN max_task_due_date DATE;   -- chỉ cho Luồng 
 ## 6. Câu hỏi mở
 - ✅ **Câu 1 (đã chốt)**: 1b bật **cho tất cả lịch** (global, không toggle).
 - ✅ **Câu 2 (đã chốt)**: đẩy **cả ngày bắt đầu + ngày hết hạn**.
-- ⏳ **Câu 3 (Luồng 2)**: mốc tuyệt đối theo KH chặn **mọi** task vượt mốc → admin cập nhật định kỳ? Hay chỉ áp **kỳ hiện tại**?
-- ⏳ **Câu 4 (Luồng 2)**: vị trí ô admin đặt trần — Tổng quan company detail hay header tab Lịch định kỳ?
-
-> Câu 3 & 4 chỉ ảnh hưởng **Luồng 2** → **không chặn Luồng 1**. Làm Luồng 1 trước, chốt 3 & 4 sau.
+- ✅ **Câu 3 (đã chốt)**: trần **chỉ chặn khi staff sửa tay** (admin & auto-gen miễn); mốc tuyệt đối, admin tự cập nhật theo thời gian.
+- ✅ **Câu 4 (đã chốt)**: **KHÔNG** đặt ở company detail. Đặt ở **console tập trung** — button "Lịch định kỳ toàn hệ thống" trong section "Bộ lập lịch tự động", mở popup bảng **theo công ty**.
 
 ---
 
@@ -166,3 +174,16 @@ Gồm **1a + 1b**. Đã xong toàn bộ + backtest PASS (13 unit + integration +
 4. Preview occurrences — roll-forward.
 5. `SchedulesTab.jsx` — ô "Ngày bắt đầu" (daily) + preview phản ánh ngày dời.
 6. Backtest tổng hợp (unit + integration + idempotency + tương thích ngược).
+
+---
+
+## 8. Phạm vi LUỒNG 2 — ✅ ĐÃ THỰC THI & TEST (2026-07-29)
+
+> ⚠️ **REWORK**: bản đầu (migration 108) làm SAI — trần ngày **tuyệt đối theo công ty**. Đã sửa: trần **"ngày N hàng tháng" (1–31) theo TỪNG LỊCH** (mỗi loại công việc khác nhau; task lặp nhiều tháng nên mốc phải lặp hàng tháng). Migration **109** bỏ `companies.max_task_due_date`, thêm `customer_task_schedules.max_due_day`.
+
+Mô hình đúng (đã chạy + test PASS 9/9):
+1. **Migration 109**: DROP `companies.max_task_due_date`; ADD `customer_task_schedules.max_due_day SMALLINT CHECK 1–31` (NULL = không trần).
+2. **Backend chặn** (`tasks.service.js`, nhánh `changingDue` của staff): đọc `max_due_day` của LỊCH (qua `customer_task_schedule_id`); mốc = **ngày N của THÁNG hạn hiện tại** của task (kẹp theo ngày cuối tháng); `newDue > mốc` → 403. Chặn cả nhảy tháng. Admin & auto-gen miễn trừ.
+3. **Console API** (admin-only): `GET /api/schedules/overview` (list LỊCH + công ty + loại CV + `maxDueDay`), `PATCH /api/schedules/overview/:scheduleId` `{maxDueDay}` (1–31 | ''=xoá). Đăng ký TRƯỚC `/:id`.
+4. **Frontend**: `RecurringOverviewModal.jsx` — bảng **lịch gộp nhóm theo công ty**, mỗi lịch 1 ô số 1–31 (lưu khi blur). Button trong TemplatesSection.
+5. **Backtest PASS 9/9**: overview theo lịch; set=5 & đọc lại; staff dời >mốc/nhảy tháng → 403; staff ≤mốc → 200; admin >mốc → 200; maxDueDay=40 → 422; staff overview → 403 RBAC; message "ngày 5 hàng tháng (tối đa 05/08/2026)".

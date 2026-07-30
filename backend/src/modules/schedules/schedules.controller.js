@@ -51,7 +51,23 @@ async function previewSchedule(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Console tập trung (admin)
+async function getRecurringOverview(req, res, next) {
+  try {
+    const overview = await svc.getRecurringOverview()
+    res.json({ success: true, data: { overview } })
+  } catch (err) { next(err) }
+}
+
+async function setScheduleMaxDueDay(req, res, next) {
+  try {
+    const result = await svc.setScheduleMaxDueDay(req.params.scheduleId, req.body.maxDueDay)
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listSchedules, getSchedule, createSchedule,
   updateSchedule, deleteSchedule, toggleSchedule, previewSchedule,
+  getRecurringOverview, setScheduleMaxDueDay,
 }

@@ -273,7 +273,7 @@ function RecurrenceConfigPanel({ type, config, onChange }) {
               }}
             />
           </div>
-          <div className={s.formHint} style={{ marginTop: -4 }}>
+          <div className={s.formHint} style={{ marginTop: 8 }}>
             Để trống = bắt đầu theo chu kỳ mặc định. Kỳ rơi CN/ngày lễ sẽ tự đẩy sang ngày làm việc kế.
           </div>
         </>

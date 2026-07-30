@@ -1,11 +1,19 @@
 const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
+const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
-const { updateScheduleSchema } = require('./schedules.schema')
+const { updateScheduleSchema, setMaxDueDaySchema } = require('./schedules.schema')
 const ctrl = require('./schedules.controller')
 
 const router = Router()
 const auth  = [authenticate]   // quyền theo công ty phụ trách kiểm tra trong service
+const admin = [authenticate, requireRole('admin')]
+
+// ── Console tập trung (admin) — ĐĂNG KÝ TRƯỚC '/:id' để không bị nuốt route ────
+// GET  /schedules/overview                 → danh sách LỊCH định kỳ + trần "ngày N"
+// PATCH /schedules/overview/:scheduleId     → đặt/xoá trần "ngày N hàng tháng" cho lịch
+router.get('/overview', ...admin, ctrl.getRecurringOverview)
+router.patch('/overview/:scheduleId', ...admin, validate(setMaxDueDaySchema), ctrl.setScheduleMaxDueDay)
 
 /**
  * @openapi

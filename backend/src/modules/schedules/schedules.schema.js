@@ -41,4 +41,13 @@ const updateScheduleSchema = z.object({
   }
 })
 
-module.exports = { createScheduleSchema, updateScheduleSchema }
+// Đặt trần "ngày N hàng tháng" cho 1 lịch (Luồng 2). null/'' = xoá trần.
+const setMaxDueDaySchema = z.object({
+  maxDueDay: z.union([
+    z.number().int().min(1).max(31),
+    z.literal(''),
+    z.null(),
+  ]),
+})
+
+module.exports = { createScheduleSchema, updateScheduleSchema, setMaxDueDaySchema }

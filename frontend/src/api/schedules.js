@@ -33,3 +33,15 @@ export async function previewSchedule(id) {
   const { data } = await api.get(`/schedules/${id}/preview`)
   return data.data.dates
 }
+
+// ── Console tập trung (admin) ─────────────────────────────────────────────────
+export async function getRecurringOverview() {
+  const { data } = await api.get('/schedules/overview')
+  return data.data.overview
+}
+
+// maxDueDay: số 1–31 | '' (rỗng = xoá trần) — trần "ngày N hàng tháng" theo lịch
+export async function setScheduleMaxDueDay(scheduleId, maxDueDay) {
+  const { data } = await api.patch(`/schedules/overview/${scheduleId}`, { maxDueDay })
+  return data.data
+}

@@ -632,6 +632,27 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
 
       // Ngày hết hạn — lượt riêng, độc lập với ngày bắt đầu
       if (changingDue) {
+        // Luồng 2 — Trần "ngày N hàng tháng" theo LỊCH định kỳ: mốc = ngày N của
+        // THÁNG hạn hiện tại của task (kẹp theo số ngày trong tháng). Chặn nếu vượt.
+        if (fromRecurring && current.due_date) {
+          const { rows: [sch] } = await query(
+            'SELECT max_due_day FROM customer_task_schedules WHERE id = $1',
+            [current.customer_task_schedule_id],
+          )
+          const capDay = sch && sch.max_due_day
+          if (capDay) {
+            const [y, m] = toDateStr(current.due_date).split('-').map(Number)
+            const lastDay = new Date(y, m, 0).getDate()      // m: 1-based → ngày cuối tháng m
+            const day = Math.min(capDay, lastDay)
+            const ceiling = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+            if (toDateStr(data.dueDate) > ceiling) {
+              throw Object.assign(
+                new Error(`Ngày hết hạn không được vượt quá ngày ${capDay} hàng tháng (tối đa ${String(day).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}) do Quản trị viên đặt cho lịch định kỳ này.`),
+                { status: 403 },
+              )
+            }
+          }
+        }
         if (current.staff_due_adjusted_at != null) {
           throw Object.assign(
             new Error('Bạn đã điều chỉnh Ngày hết hạn 1 lần cho công việc này. Vui lòng báo Quản trị viên nếu cần đổi thêm.'),

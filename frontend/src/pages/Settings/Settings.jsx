@@ -18,6 +18,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
 import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerConfig, deleteSchedulerLog, clearSchedulerLogs } from '../../api/scheduler'
+import RecurringOverviewModal from './RecurringOverviewModal'
 import TaskTypesSection from './TaskTypesSection'
 import CompanyTablesSection from './CompanyTablesSection'
 import EnumManagementSection from './EnumManagementSection'
@@ -795,6 +796,7 @@ function TemplatesSection() {
   const [deletingId,      setDeletingId]      = useState(null)
   const [confirmClearAll, setConfirmClearAll] = useState(false)
   const [clearingAll,     setClearingAll]     = useState(false)
+  const [showOverview,    setShowOverview]    = useState(false)
   const LOGS_PER_PAGE = 10
 
   function fmtDt(iso) {
@@ -918,6 +920,16 @@ function TemplatesSection() {
         Bộ lập lịch tự động tạo công việc từ các lịch định kỳ. Bạn có thể chọn giờ chạy
         và theo dõi lịch sử bên dưới.
       </p>
+
+      {/* Console tập trung: xem lịch định kỳ toàn hệ thống + đặt trần ngày hoàn thành theo KH */}
+      <button
+        className={s.btnSave}
+        style={{ height: 34, padding: '0 14px', fontSize: 12, marginBottom: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        onClick={() => setShowOverview(true)}
+      >
+        <CalendarDays size={14} /> Lịch định kỳ toàn hệ thống
+      </button>
+      {showOverview && <RecurringOverviewModal onClose={() => setShowOverview(false)} />}
 
       {/* ── Cấu hình giờ chạy ─────────────────────────────────────────── */}
       <div className={s.schedulerHourRow}>
