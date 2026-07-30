@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { format } from 'date-fns'
+import { format, parseISO, addDays } from 'date-fns'
 import {
   CalendarDays, Plus, Eye, Power, Pencil, Trash2, Loader2, AlertTriangle, RefreshCw,
 } from 'lucide-react'
@@ -76,6 +76,20 @@ const MONTH_LABELS   = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','
                         'Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+// Hạn dự kiến của kỳ kế tiếp có vượt trần "ngày N hàng tháng" không → báo lỗi realtime.
+function capViolation(type, config, offsetDays, maxDueDay) {
+  if (maxDueDay == null) return null
+  let occs
+  try { occs = getNextOccurrences(type, config, new Date(), 1) } catch { return null }
+  if (!occs || !occs.length) return null
+  const due = addDays(parseISO(occs[0]), Number(offsetDays) || 0)
+  const y = due.getFullYear(), m = due.getMonth() + 1
+  const capDay = Math.min(maxDueDay, new Date(y, m, 0).getDate())
+  const dueStr = format(due, 'yyyy-MM-dd')
+  const ceiling = `${y}-${String(m).padStart(2, '0')}-${String(capDay).padStart(2, '0')}`
+  return dueStr > ceiling ? { dueDisp: format(due, 'dd/MM/yyyy'), maxDueDay } : null
+}
 
 function emptyForm() {
   return {
@@ -584,6 +598,15 @@ export default function SchedulesTab({ company, isAdmin }) {
     const errors = validateForm(form)
     if (Object.keys(errors).length) { setFormErrors(errors); return }
 
+    // Chặn ngay khi nhập: hạn dự kiến không được vượt trần "ngày N" (nếu lịch có cap)
+    if (modal?.schedule?.maxDueDay != null) {
+      const v = capViolation(form.recurrenceType, form.recurrenceConfig, form.deadlineOffsetDays, modal.schedule.maxDueDay)
+      if (v) {
+        setFormErrors({ submit: `Hạn dự kiến ${v.dueDisp} vượt trần ngày ${v.maxDueDay} hàng tháng do Quản trị viên đặt. Giảm Deadline offset.` })
+        return
+      }
+    }
+
     setSaving(true)
     try {
       const payload = {
@@ -960,6 +983,12 @@ export default function SchedulesTab({ company, isAdmin }) {
                     onChange={e => setField('deadlineOffsetDays', e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
                   />
                   <div className={s.formHint}>Số ngày sau ngày kích hoạt</div>
+                  {modal?.schedule?.maxDueDay != null && (() => {
+                    const v = capViolation(form.recurrenceType, form.recurrenceConfig, form.deadlineOffsetDays, modal.schedule.maxDueDay)
+                    return v
+                      ? <div className={s.formError}>⚠ Hạn dự kiến {v.dueDisp} vượt trần ngày {v.maxDueDay} hàng tháng (Admin đặt). Giảm offset.</div>
+                      : <div className={s.formHint} style={{ color: '#b45309' }}>Trần: ngày {modal.schedule.maxDueDay} hàng tháng (Admin đặt) — hạn không được vượt.</div>
+                  })()}
                 </div>
                 <div className={s.formField}>
                   <label className={s.formLabel}>Override SLA (ngày)</label>

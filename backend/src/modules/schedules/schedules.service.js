@@ -1,8 +1,29 @@
 const { query } = require('../../config/db')
 const audit = require('../../lib/audit')
-const { getNextOccurrences } = require('../../utils/recurrence.calculator')
+const { getNextOccurrences, getNextOccurrence } = require('../../utils/recurrence.calculator')
 const { rollForwardToWorkday } = require('../../utils/workday.util')
-const { parseISO, format } = require('date-fns')
+const { parseISO, format, addDays } = require('date-fns')
+
+// Trần "ngày N hàng tháng": kiểm tra HẠN DỰ KIẾN của kỳ kế tiếp có vượt ngày N không.
+// Bắt lỗi ngay khi lưu lịch / đặt trần → auto-gen luôn hợp lệ (không phải kẹp trong generator).
+function assertOffsetWithinCap(recurrenceType, recurrenceConfig, offsetDays, maxDueDay) {
+  if (maxDueDay == null) return
+  const ref = addDays(new Date(new Date().setHours(0, 0, 0, 0)), -1)
+  const occ = getNextOccurrence(recurrenceType, recurrenceConfig, ref)
+  if (!occ) return
+  const due = addDays(occ, offsetDays || 0)
+  const y = due.getFullYear(), m = due.getMonth() + 1
+  const capDay = Math.min(maxDueDay, new Date(y, m, 0).getDate())
+  const dueStr = format(due, 'yyyy-MM-dd')
+  const ceiling = `${y}-${String(m).padStart(2, '0')}-${String(capDay).padStart(2, '0')}`
+  if (dueStr > ceiling) {
+    const [, mm, dd] = ceiling.split('-')
+    throw Object.assign(
+      new Error(`Hạn dự kiến (${format(due, 'dd/MM/yyyy')}) vượt trần ngày ${maxDueDay} hàng tháng (tối đa ${dd}/${mm}). Giảm Deadline offset (hoặc trần ngày) cho phù hợp.`),
+      { status: 422 },
+    )
+  }
+}
 
 function toDto(row) {
   return {
@@ -114,6 +135,17 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
 async function updateSchedule(id, data, user, ipAddress, userAgent) {
   await assertCompanyAccess(await getScheduleCompanyId(id), user)
   const actorId = user.id
+
+  // Trần "ngày N": chặn nếu offset/chu kỳ mới làm hạn dự kiến vượt ngày N của lịch.
+  const { rows: [cur] } = await query('SELECT * FROM customer_task_schedules WHERE id = $1', [id])
+  if (!cur) throw Object.assign(new Error('Schedule not found'), { status: 404 })
+  if (cur.max_due_day != null) {
+    const effType   = data.recurrenceType   ?? cur.recurrence_type
+    const effConfig = data.recurrenceConfig ?? cur.recurrence_config
+    const effOffset = data.deadlineOffsetDays ?? cur.deadline_offset_days
+    assertOffsetWithinCap(effType, effConfig, effOffset, cur.max_due_day)
+  }
+
   const fieldMap = {
     assignedStaffId:    'assigned_staff_id',
     recurrenceType:     'recurrence_type',
@@ -246,6 +278,15 @@ async function setScheduleMaxDueDay(scheduleId, maxDueDay) {
   const day = (maxDueDay === '' || maxDueDay === null || maxDueDay === undefined) ? null : Number(maxDueDay)
   if (day !== null && (!Number.isInteger(day) || day < 1 || day > 31)) {
     throw Object.assign(new Error('Ngày trần phải là số nguyên 1–31'), { status: 422 })
+  }
+  // Đặt trần phải tương thích với deadline offset hiện tại của lịch (bắt lỗi ngay).
+  if (day !== null) {
+    const { rows: [sch] } = await query(
+      'SELECT recurrence_type, recurrence_config, deadline_offset_days FROM customer_task_schedules WHERE id = $1',
+      [scheduleId],
+    )
+    if (!sch) throw Object.assign(new Error('Schedule not found'), { status: 404 })
+    assertOffsetWithinCap(sch.recurrence_type, sch.recurrence_config, sch.deadline_offset_days, day)
   }
   const { rows: [row] } = await query(
     `UPDATE customer_task_schedules SET max_due_day = $2, updated_at = NOW()
