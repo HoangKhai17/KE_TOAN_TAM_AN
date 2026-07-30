@@ -747,6 +747,11 @@ export default function SchedulesTab({ company, isAdmin }) {
                         {sc.overrideSlaDays != null && (
                           <span className={s.scSlaTag}>SLA {sc.overrideSlaDays}d</span>
                         )}
+                        {sc.maxDueDay != null && (
+                          <span className={s.scCapTag} title="Trần ngày hoàn thành do Quản trị viên đặt — không được dời hạn vượt ngày này hàng tháng">
+                            Trần: ngày {sc.maxDueDay}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td>
@@ -1016,6 +1021,12 @@ export default function SchedulesTab({ company, isAdmin }) {
             </div>
           ) : (
             <div className={s.scServerPreview}>
+              {previewModal.schedule.maxDueDay != null && (
+                <div className={s.scCapNotice}>
+                  <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                  <span>Trần ngày hoàn thành: <strong>ngày {previewModal.schedule.maxDueDay} hàng tháng</strong> (Quản trị viên đặt — không được dời hạn vượt ngày này).</span>
+                </div>
+              )}
               <div className={s.scPreviewTitle}>
                 <CalendarDays size={14} />
                 10 lần kích hoạt tiếp theo

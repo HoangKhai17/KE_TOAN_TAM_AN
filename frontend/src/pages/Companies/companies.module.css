@@ -2288,6 +2288,34 @@
   border: 1px solid #bbf7d0;
 }
 
+/* Trần "ngày N hàng tháng" do admin đặt — dấu hiệu nhận biết (amber) */
+.scCapTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  white-space: nowrap;
+}
+
+/* Banner trần ngày trong popup xem trước lịch */
+.scCapNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-size: var(--fs-sm);
+}
+
 /* ── Status badges ───────────────────────────────────────── */
 
 .scStatusBadge {

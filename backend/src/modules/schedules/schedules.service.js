@@ -16,6 +16,7 @@ function toDto(row) {
     recurrenceConfig:   row.recurrence_config,
     deadlineOffsetDays: row.deadline_offset_days,
     overrideSlaDays:    row.override_sla_days ?? null,
+    maxDueDay:          row.max_due_day ?? null,   // trần "ngày N hàng tháng" do admin đặt
     excludedStepIds:    Array.isArray(row.excluded_step_ids) ? row.excluded_step_ids : [],
     notes:              row.notes ?? null,
     isActive:           row.is_active,
