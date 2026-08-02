@@ -104,7 +104,7 @@ export default function ProcessesTab({ company }) {
   }
 
   return (
-    <div>
+    <div className={s.procTab}>
       {/* Segmented: chuyển giữa các mục cùng cấp (Quy trình / Chứng từ / Lưu ý) */}
       <div className={s.procSeg}>
         {SECTIONS.map((sec) => {

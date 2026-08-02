@@ -49,6 +49,33 @@ Tài liệu tạm dùng làm chuẩn khi đồng bộ các trang còn lại vớ
 - Body cell: `padding: 7px 8px`, font bảng `--fs-xs` hoặc nhỏ hơn theo mật độ dữ liệu.
 - Button nhỏ trong bảng: cao khoảng `26px`–`28px`.
 
+### Inline editing kiểu bảng tính
+
+Áp dụng cho các bảng cho phép nhấp trực tiếp vào cell để chỉnh sửa.
+
+- Khi mở ô `input` hoặc `textarea`, gọi `focus()` rồi đặt caret ở cuối bằng
+  `setSelectionRange(value.length, value.length)`. Không dùng `select()` vì thao tác này
+  bôi xanh toàn bộ nội dung và khiến người dùng dễ ghi đè dữ liệu ngoài ý muốn.
+- Chỉ áp dụng `setSelectionRange` cho kiểu text/textarea; không áp dụng cho select,
+  date picker hoặc control không hỗ trợ text selection.
+- Với textarea, dùng `wrap="soft"`, `white-space: pre-wrap`,
+  `overflow-wrap: anywhere` và `word-break: break-word` để chế độ xem và chế độ sửa
+  xuống dòng giống nhau theo đúng chiều rộng cell.
+- Khi textarea được mở hoặc thay đổi, đặt tạm `height: 0`, sau đó cập nhật chiều cao
+  bằng `scrollHeight`. Nhờ vậy caret cuối chuỗi vẫn nằm trong vùng nhìn thấy dù nội dung
+  xuống dòng do wrap, không chỉ do ký tự xuống dòng thủ công.
+- Nên giới hạn `max-height` (chuẩn hiện tại khoảng `108px`) và dùng `overflow-y: auto`
+  để dữ liệu dài không làm hàng phình quá mức; luôn ẩn cuộn ngang.
+- Editor nằm phẳng trong cell: `width: 100%`, `border: 0`, `box-shadow: none`,
+  `background: transparent`, `resize: none`. Cell active chỉ nên có chỉ báo nhẹ như
+  đường màu primary mảnh phía dưới, tránh viền kép làm thay đổi kích thước layout.
+- Khi `blur`, phải lưu dữ liệu rồi đóng trạng thái edit. Khi nhấp ra ngoài card/table,
+  cũng đóng active cell; nếu dùng sự kiện `pointerdown` toàn cục thì trì hoãn đóng một
+  nhịp để `onBlur` kịp commit dữ liệu.
+- Giữ điều hướng bàn phím thống nhất: `Enter`/`Tab` sang ô kế tiếp,
+  `Shift + Tab` quay lại, `Escape` hủy; textarea dùng `Shift + Enter` hoặc
+  `Alt + Enter` nếu cần xuống dòng thủ công.
+
 ## Scope note
 
 Đây là baseline tạm, không phải design-system contract cuối cùng. Khi cập nhật page mới, ưu tiên token trong `frontend/src/styles/tokens.css` và ghi nhận ngoại lệ có lý do.

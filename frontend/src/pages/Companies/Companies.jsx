@@ -1602,7 +1602,7 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
                     ))}
                   </select>
                 </div>
-                <div className={s.cs12}>
+                <div className={s.cs6}>
                   <label className={s.formLabel}>Ngành nghề</label>
                   <input type="text" value={form.industry} onChange={set('industry')} className={s.formInput} placeholder="Thương mại, sản xuất..." />
                 </div>
@@ -1655,24 +1655,22 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
         {/* Hợp đồng */}
         <div>
           <div className={s.formGroupLabel}>Hợp đồng</div>
-          <div className={s.formGrid3}>
+          <div className={s.formGrid2}>
             <div>
               <label className={s.formLabel}>Ngày bắt đầu dịch vụ</label>
               <DateBox value={form.serviceStartDate} onChange={(v) => setForm((p) => ({ ...p, serviceStartDate: v }))} />
             </div>
+            <div>
+              <label className={s.formLabel}>Ghi chú</label>
+              <textarea
+                value={form.notes}
+                onChange={set('notes')}
+                className={s.formTextarea}
+                placeholder="Ghi chú đặc thù nghiệp vụ, yêu cầu đặc biệt..."
+                rows={5}
+              />
+            </div>
           </div>
-        </div>
-
-        {/* Ghi chú */}
-        <div>
-          <div className={s.formGroupLabel}>Ghi chú</div>
-          <textarea
-            value={form.notes}
-            onChange={set('notes')}
-            className={s.formTextarea}
-            placeholder="Ghi chú đặc thù nghiệp vụ, yêu cầu đặc biệt..."
-            rows={2}
-          />
         </div>
 
 

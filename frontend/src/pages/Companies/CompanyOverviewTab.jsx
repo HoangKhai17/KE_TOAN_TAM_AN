@@ -39,7 +39,20 @@ function EditableField({ companyId, field, value, label, type = 'text', options 
     setDraft(type === 'date' ? (value ? String(value).slice(0, 10) : '') : (value ?? ''))
     cancelRef.current = false
     setEditing(true)
-    setTimeout(() => inputRef.current?.focus(), 20)
+    setTimeout(() => {
+      const editor = inputRef.current
+      if (!editor) return
+      editor.focus()
+      if ((type === 'text' || type === 'textarea' || type === 'tel' || type === 'email') && editor.setSelectionRange) {
+        const end = String(editor.value ?? '').length
+        editor.setSelectionRange(end, end)
+      }
+      if (type === 'textarea') {
+        editor.style.height = '0px'
+        editor.style.height = `${editor.scrollHeight}px`
+        editor.scrollTop = editor.scrollHeight
+      }
+    }, 20)
   }
 
   async function commit(override) {
@@ -104,7 +117,7 @@ function EditableField({ companyId, field, value, label, type = 'text', options 
       <div className={`${s.editRow} ${fullWidth ? s.infoGridFull : ''}`}>
         <div className={s.infoLabel}>{label}</div>
         <div
-          className={`${s.editValue} ${type === 'textarea' ? s.editValueMultiline : ''} ${canEdit ? s.editValueOn : ''} ${display ? '' : s.editValueEmpty}`}
+          className={`${s.editValue} ${field === 'name' ? s.editValuePrimary : ''} ${type === 'textarea' ? s.editValueMultiline : ''} ${canEdit ? s.editValueOn : ''} ${display ? '' : s.editValueEmpty}`}
           onClick={begin}
           title={canEdit ? 'Nhấp để sửa' : undefined}
         >
@@ -128,7 +141,13 @@ function EditableField({ companyId, field, value, label, type = 'text', options 
             {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         ) : type === 'textarea' ? (
-          <textarea {...common} rows={2} onChange={(e) => setDraft(e.target.value)} onBlur={() => commit()} />
+          <textarea {...common} rows={1} wrap="soft"
+            onChange={(e) => {
+              setDraft(e.target.value)
+              e.target.style.height = '0px'
+              e.target.style.height = `${e.target.scrollHeight}px`
+            }}
+            onBlur={() => commit()} />
         ) : (
           <input {...common}
             type={type === 'date' ? 'date' : type === 'tel' ? 'tel' : type === 'email' ? 'email' : 'text'}
@@ -255,7 +274,6 @@ function CustomFieldsCard({ company, canEdit, onSaved }) {
     await persist(next)
   }
   async function remove(i) {
-    if (!window.confirm(`Xoá trường "${fields[i].name}"?`)) return
     await persist(fields.filter((_, j) => j !== i))
   }
 

@@ -10,7 +10,7 @@ const createLocationSchema = z.object({
   address:        z.string().max(1000).optional().nullable(),
   taxCode:        z.string().max(20).optional().nullable(),
   accountingForm: z.string().max(50).optional().nullable(),
-  locationFunction: z.string().max(50).optional().nullable(),
+  locationFunction: z.string().max(200).optional().nullable(),   // text tự do (Chức năng)
   taxAuthority:   z.string().max(200).optional().nullable(),
   status:         z.string().max(50).optional(),
   startDate:      dateOpt,
@@ -28,7 +28,7 @@ const updateLocationSchema = z.object({
   address:        z.string().max(1000).optional().nullable(),
   taxCode:        z.string().max(20).optional().nullable(),
   accountingForm: z.string().max(50).optional().nullable(),
-  locationFunction: z.string().max(50).optional().nullable(),
+  locationFunction: z.string().max(200).optional().nullable(),   // text tự do (Chức năng)
   taxAuthority:   z.string().max(200).optional().nullable(),
   status:         z.string().max(50).optional(),
   startDate:      dateOpt,

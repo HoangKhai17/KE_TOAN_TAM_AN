@@ -709,7 +709,7 @@ export default function SchedulesTab({ company, isAdmin }) {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div>
+    <div className={s.scTab}>
       {/* Header */}
       <div className={s.scHeader}>
         <div className={s.scHeaderLeft}>
@@ -746,7 +746,7 @@ export default function SchedulesTab({ company, isAdmin }) {
       ) : (
         <div className={s.tableWrap}>
           <div className={s.tableScroll}>
-            <table className={s.table}>
+            <table className={`${s.table} ${s.scTable}`}>
               <thead>
                 <tr>
                   <th>Loại công việc</th>

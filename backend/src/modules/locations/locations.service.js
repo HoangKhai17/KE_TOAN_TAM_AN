@@ -25,6 +25,8 @@ function toDto(row) {
     updatedBy:      row.updated_by ?? null,
     createdAt:      row.created_at,
     updatedAt:      row.updated_at,
+    // Đếm file đính kèm gộp sẵn trong query danh sách → frontend KHÔNG phải gọi N+1 request.
+    fileCount:      row.file_count != null ? Number(row.file_count) : 0,
   }
 }
 
@@ -40,17 +42,21 @@ async function assertCompanyAccess(companyId, user) {
 async function listLocations(companyId, { status } = {}, user) {
   await assertCompanyAccess(companyId, user)
 
-  const conditions = ['company_id = $1']
+  const conditions = ['cl.company_id = $1']
   const params = [companyId]
   if (status !== undefined && status !== '') {
     params.push(status)
-    conditions.push(`status = $${params.length}`)
+    conditions.push(`cl.status = $${params.length}`)
   }
 
+  // file_count gộp bằng subquery — 1 query duy nhất, không N+1 gọi API đếm file từng dòng.
   const { rows } = await query(
-    `SELECT * FROM company_locations
+    `SELECT cl.*,
+            (SELECT COUNT(*) FROM attachments a
+              WHERE a.module = 'company_location' AND a.entity_id = cl.id) AS file_count
+       FROM company_locations cl
       WHERE ${conditions.join(' AND ')}
-      ORDER BY sort_order ASC, created_at ASC`,
+      ORDER BY cl.sort_order ASC, cl.created_at ASC`,
     params
   )
   return rows.map(toDto)
