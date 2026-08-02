@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { MapPin, Plus, Trash2, Loader2, Paperclip, Download, Upload, Filter } from 'lucide-react'
+import { Plus, Trash2, Loader2, Paperclip, Download, Upload, Filter } from 'lucide-react'
 import * as XLSX from 'xlsx-js-style'
 import * as locationsApi from '../../api/locations'
 import * as attachmentsApi from '../../api/attachments'
@@ -566,28 +566,21 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
   const colCount = LOC_COLS.length + 2   // + File + Thao tác
 
   return (
-    <div ref={cardRef} className={s.infoCard}>
-      <div className={s.infoCardHeader}>
-        <div className={s.infoCardTitle}>
-          <div className={`${s.infoCardTitleIcon} ${s.infoCardIconBlue}`}><MapPin size={14} /></div>
-          Trụ sở chính / địa điểm kinh doanh
+    <div ref={cardRef}>
+      {canEdit && (
+        <div className={s.locHeaderActions} style={{ justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button className={s.locBtnExport} onClick={doExport} disabled={rows.length === 0}>
+            <Download size={13} /> Xuất
+          </button>
+          <button className={s.locBtnImport} onClick={() => setShowImport(true)}>
+            <Upload size={13} /> Import
+          </button>
+          <button className={s.locAddBtn} onClick={addRow}>
+            <Plus size={13} /> Thêm địa điểm
+          </button>
         </div>
-        {canEdit && (
-          <div className={s.locHeaderActions}>
-            <button className={s.locBtnExport} onClick={doExport} disabled={rows.length === 0}>
-              <Download size={13} /> Xuất
-            </button>
-            <button className={s.locBtnImport} onClick={() => setShowImport(true)}>
-              <Upload size={13} /> Import
-            </button>
-            <button className={s.locAddBtn} onClick={addRow}>
-              <Plus size={13} /> Thêm địa điểm
-            </button>
-          </div>
-        )}
-      </div>
+      )}
 
-      <div className={s.infoCardBody}>
         <div className={s.locTableWrap}>
           <div className={s.locTableScroll}>
           <table className={`${s.locTable} ${s.locTableWide}`}>
@@ -670,7 +663,6 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
         {canEdit && !loading && displayed.length > 0 && (
           <p className={s.locHint}>Mẹo: nhấp thẳng vào ô để sửa; Enter/Tab để sang ô kế; ở dòng cuối Enter/Tab tự thêm dòng mới.</p>
         )}
-      </div>
 
       {filterPopup && (() => {
         const col = LOC_COLS.find((c) => c.key === filterPopup.colKey)

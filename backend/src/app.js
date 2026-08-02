@@ -181,6 +181,9 @@ function createApp() {
   // Địa điểm công ty (company_locations) — nested under company
   app.use('/api/companies/:companyId/locations', require('./modules/locations/locations.router'))
 
+  // Hợp đồng dịch vụ (company_service_contracts) — nested under company
+  app.use('/api/companies/:companyId/contracts', require('./modules/contracts/contracts.router'))
+
   // Tab Quy trình — Chứng từ phát sinh & Điều cần lưu ý (nested under company)
   app.use('/api/companies/:companyId/document-types', require('./modules/document-types/documentTypes.router'))
   // 'important-notes' (không dùng '/notes' vì đã bị tab Ghi chú nhanh chiếm ở companies router)

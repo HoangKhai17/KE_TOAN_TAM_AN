@@ -4841,18 +4841,87 @@
 }
 
 .hdldToolbarBtn {
-  height: var(--control-h-sm);
-  padding: 0 var(--space-6);
-  font-size: var(--fs-sm);
+  height: 28px;
+  padding: 0 11px;
+  font-size: var(--fs-2xs);
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 5px;
+  border-radius: var(--radius-md);
+  font-weight: var(--fw-semibold);
 }
+
+.hdldExportBtn {
+  border-color: var(--color-success-border);
+  background: var(--color-success-surface);
+  color: var(--color-success-text);
+}
+.hdldExportBtn:hover:not(:disabled) {
+  border-color: var(--color-success);
+  background: var(--color-success);
+  color: var(--color-white);
+}
+
+.hdldImportBtn {
+  border-color: var(--color-primary-soft);
+  background: var(--color-primary-bg);
+  color: var(--color-primary-dark);
+}
+.hdldImportBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+.hdldAddRowBtn,
+.hdldAddRowBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+.hdldAddRowBtn:hover:not(:disabled) { filter: brightness(1.08); }
 
 /* ── Table ────────────────────────────────────────────────────────────────── */
 
 /* Override width:100% so table expands beyond container → tableScroll shows scrollbar */
-.hdldTable { width: max-content; min-width: 100%; }
+.hdldTable {
+  width: max-content; min-width: 100%;
+  font-size: var(--fs-2xs);
+}
+.hdldTable th {
+  padding: 7px 8px;
+  font-size: var(--fs-2xs);
+  text-transform: none;
+  letter-spacing: 0.2px;
+}
+.hdldTable td {
+  padding: 7px 8px;
+  font-size: var(--fs-2xs);
+  vertical-align: top;
+}
+.hdldTable .archInlineTdEditable:hover {
+  background: var(--color-info-surface) !important;
+}
+.hdldTable .archInlineEditInput {
+  display: block;
+  width: 100%; min-height: 20px;
+  margin: 0; padding: 0;
+  border: 0; border-radius: 0; outline: 0;
+  background: transparent; box-shadow: none;
+  font-size: var(--fs-2xs); line-height: inherit;
+}
+.hdldTable .ctblTextarea {
+  min-height: 20px; max-height: 108px;
+  overflow-x: hidden; overflow-y: auto;
+  resize: none; white-space: pre-wrap;
+  overflow-wrap: anywhere; word-break: break-word;
+  box-sizing: border-box;
+}
+.hdldTable .ctblCellActive {
+  outline: none;
+  background: var(--color-info-surface);
+  box-shadow: inset 0 -2px 0 var(--color-primary);
+}
 
 /* Column header widths */
 .hdldThStt     { width: 44px; }
@@ -6791,7 +6860,7 @@
   border-radius: var(--radius-md);
   background: var(--color-info-bg);
   color: var(--color-primary-dark);
-  font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+  font-size: var(--fs-2xs); font-weight: var(--fw-semibold);
   cursor: pointer; white-space: nowrap;
 }
 .locAddBtn:hover { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
@@ -6807,7 +6876,7 @@
   border-radius: var(--radius-md);
   background: var(--color-success-surface);
   color: var(--color-success-text);
-  font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+  font-size: var(--fs-2xs); font-weight: var(--fw-semibold);
   cursor: pointer; white-space: nowrap;
 }
 .locBtnExport:hover:not(:disabled) { background: var(--color-success); color: #fff; border-color: var(--color-success); }
@@ -6821,12 +6890,68 @@
   border-radius: var(--radius-md);
   background: var(--color-primary-bg);
   color: var(--color-primary-dark);
-  font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+  font-size: var(--fs-2xs); font-weight: var(--fw-semibold);
   cursor: pointer; white-space: nowrap;
 }
 .locBtnImport:hover { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
 
 .locHint { margin: 8px 2px 0; font-size: var(--fs-2xs); color: var(--color-muted); }
+
+/* ── Tab chuyển Địa điểm | Hợp đồng dịch vụ (trong tab Tổng quan) ─────────────── */
+.overviewTablesCard { position: relative; }
+.overviewTablesCardEditable > .infoCardHeader { padding-right: 330px; }
+.overviewTablesCard .locHeaderActions {
+  position: absolute;
+  top: 7px;
+  right: 14px;
+  z-index: 2;
+  margin-bottom: 0 !important;
+}
+.overviewTableTabs { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.overviewTableTab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border: none; background: none;
+  border-radius: var(--radius-md);
+  font-family: inherit; font-size: var(--fs-2xs); font-weight: var(--fw-semibold);
+  color: var(--color-muted); cursor: pointer;
+  transition: background 0.13s, color 0.13s;
+}
+.overviewTableTab:hover { background: var(--color-surface-muted); color: var(--color-text-soft); }
+.overviewTableTab svg { color: var(--color-primary); }
+.overviewTableTabActive,
+.overviewTableTabActive:hover {
+  background: var(--color-primary-bg); color: var(--color-primary-deep);
+}
+
+@media (max-width: 900px) {
+  .overviewTablesCardEditable > .infoCardHeader { padding-right: 14px; }
+  .overviewTablesCard .locHeaderActions {
+    position: static;
+    margin-bottom: 8px !important;
+  }
+}
+
+/* ── Bảng Hợp đồng dịch vụ ─────────────────────────────────────────────────────── */
+.contractTableWide { min-width: 1100px; }
+.colCt_contractType  { width: 120px; }
+.colCt_content       { width: 260px; }
+.colCt_startDate     { width: 115px; }
+.colCt_endDate       { width: 115px; }
+.colCt_daysRemaining { width: 150px; }
+.colCt_status        { width: 155px; }
+
+.contractDaysNeg { color: var(--color-danger); font-weight: var(--fw-bold); }
+
+/* Badge trạng thái hợp đồng (5 trạng thái nhãn cố định) */
+.contractStatus {
+  display: inline-block; padding: 2px 9px; border-radius: var(--radius-pill);
+  font-size: var(--fs-2xs); font-weight: var(--fw-semibold); white-space: nowrap;
+}
+.contractStActive  { background: #dcfce7; color: #15803d; }
+.contractStRenew   { background: #fef3c7; color: #b45309; }
+.contractStExpired { background: #fee2e2; color: #b91c1c; }
+.contractStRenewed { background: #dbeafe; color: #1d4ed8; }
+.contractStStopped { background: #f1f5f9; color: #64748b; }
 
 /* Viền + bo góc như .tableWrap chuẩn; cuộn ngang nằm ở div con .locTableScroll */
 .locTableWrap {

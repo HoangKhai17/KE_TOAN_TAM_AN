@@ -46,6 +46,14 @@ const MODULES = {
     canWrite:  async (user, entityId) => isAdmin(user) || phuTrachCongTyQuaDiaDiem(entityId, user?.id),
     canDelete: (att, user) => isAdmin(user) || att.uploaded_by === user.id,
   },
+
+  // File đính kèm của một HỢP ĐỒNG dịch vụ — bám RBAC theo công ty của hợp đồng.
+  company_contract: {
+    entityTable: 'company_service_contracts',
+    canRead:   async (att, user) => isAdmin(user) || phuTrachCongTyQuaHopDong(att.entity_id, user?.id),
+    canWrite:  async (user, entityId) => isAdmin(user) || phuTrachCongTyQuaHopDong(entityId, user?.id),
+    canDelete: (att, user) => isAdmin(user) || att.uploaded_by === user.id,
+  },
 }
 
 // Nhân sự có phụ trách công ty này không
@@ -62,6 +70,15 @@ async function phuTrachCongTyQuaDiaDiem(locationId, userId) {
   const { rows } = await query(
     `SELECT 1 FROM company_locations cl JOIN companies c ON c.id = cl.company_id
      WHERE cl.id = $1 AND c.assigned_staff_id = $2`, [locationId, userId])
+  return rows.length > 0
+}
+
+// Nhân sự có phụ trách công ty của HỢP ĐỒNG này không (entity_id = contract id)
+async function phuTrachCongTyQuaHopDong(contractId, userId) {
+  if (!contractId || !userId) return false
+  const { rows } = await query(
+    `SELECT 1 FROM company_service_contracts sc JOIN companies c ON c.id = sc.company_id
+     WHERE sc.id = $1 AND c.assigned_staff_id = $2`, [contractId, userId])
   return rows.length > 0
 }
 

@@ -352,11 +352,18 @@ function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavig
   const isTextType = !['number', 'date', 'select', 'computed'].includes(col.dataType)
   useEffect(() => { setLocal(value ?? '') }, [value])
   useEffect(() => {
-    if (active && ref.current) {
-      ref.current.focus()
-      if (ref.current.select && col.dataType !== 'date') { try { ref.current.select() } catch { /* ignore */ } }
+    if (!active || !ref.current) return
+    ref.current.focus()
+    if (isTextType && ref.current.setSelectionRange) {
+      const end = String(ref.current.value ?? '').length
+      ref.current.setSelectionRange(end, end)
     }
-  }, [active, col.dataType])
+    if (isTextType) {
+      ref.current.style.height = '0px'
+      ref.current.style.height = `${ref.current.scrollHeight}px`
+      ref.current.scrollTop = ref.current.scrollHeight
+    }
+  }, [active, col.dataType, isTextType])
 
   function commit(val) {
     const next = val !== undefined ? val : (col.dataType === 'date' ? local : String(local).replace(/[ \t]+$/gm, '').trim())
@@ -414,11 +421,16 @@ function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavig
   if (col.dataType === 'select') {
     return (
       <td className={`${s.archInlineTdEditable} ${active ? s.ctblCellActive : ''}`} onClick={onActivate}>
-        <select ref={ref} className={s.archInlineEditInput} value={value ?? ''}
-          onChange={(e) => onSave(e.target.value || null)} onKeyDown={handleKey}>
-          <option value=""></option>
-          {(col.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+        {active ? (
+          <select ref={ref} className={s.archInlineEditInput} value={value ?? ''}
+            onChange={(e) => { onSave(e.target.value || null); onNavigate?.('cancel') }}
+            onBlur={() => onNavigate?.('cancel')} onKeyDown={handleKey}>
+            <option value=""></option>
+            {(col.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ) : (
+          value || <span className={s.archInlineEmpty}>—</span>
+        )}
       </td>
     )
   }
@@ -428,16 +440,21 @@ function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavig
       onClick={onActivate}>
       {active ? (
         isTextType ? (
-          <textarea ref={ref}
-            rows={Math.min(8, Math.max(1, String(local).split('\n').length))}
+          <textarea ref={ref} rows={1} wrap="soft"
             value={local} className={`${s.archInlineEditInput} ${s.ctblTextarea}`}
-            onChange={(e) => setLocal(e.target.value)} onBlur={() => commit()}
+            onChange={(e) => {
+              setLocal(e.target.value)
+              e.target.style.height = '0px'
+              e.target.style.height = `${e.target.scrollHeight}px`
+            }}
+            onBlur={() => { commit(); onNavigate?.('cancel') }}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={handleKey} />
         ) : (
           <input ref={ref} type={col.dataType === 'number' ? 'number' : 'date'}
             value={local} className={s.archInlineEditInput}
-            onChange={(e) => setLocal(e.target.value)} onBlur={() => commit()}
+            onChange={(e) => setLocal(e.target.value)}
+            onBlur={() => { commit(); onNavigate?.('cancel') }}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={handleKey} />
         )
@@ -493,9 +510,20 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   // Nhập bằng phím (Tab/Enter) — ô đang mở để nhập; và focus dòng vừa thêm
   const [activeCell, setActiveCell]     = useState(null)   // { rowId, colKey }
   const [pendingFocus, setPendingFocus] = useState(null)   // { rowId, colKey } — focus sau khi render
+  const tabRef = useRef(null)
   // Kéo thả hàng
   const [dragRowId, setDragRowId]       = useState(null)
   const [dragOverId, setDragOverId]     = useState(null)
+
+  useEffect(() => {
+    if (!activeCell) return undefined
+    function handleOutsidePointer(e) {
+      if (tabRef.current?.contains(e.target)) return
+      window.setTimeout(() => setActiveCell(null), 0)
+    }
+    document.addEventListener('pointerdown', handleOutsidePointer)
+    return () => document.removeEventListener('pointerdown', handleOutsidePointer)
+  }, [activeCell])
 
   // Column widths — GLOBAL (lưu vào company_table_columns.width). Chỉ admin được kéo;
   // kéo 1 chỗ → đồng bộ mọi công ty. Khởi tạo từ def, cập nhật live khi kéo.
@@ -769,7 +797,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   const colSpan = columns.length + 2 + (canEdit ? 2 : 0) // [drag]+[check] + STT + columns + actions
 
   return (
-    <div>
+    <div ref={tabRef}>
       {/* Toolbar */}
       <div className={s.hdldToolbar}>
         {!loading && (
@@ -792,16 +820,16 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
           </button>
         )}
         <div className={s.hdldToolbarRight}>
-          <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`} onClick={() => setShowExport(true)} disabled={loading || rows.length === 0}>
+          <button className={`${s.btnOutline} ${s.hdldToolbarBtn} ${s.hdldExportBtn}`} onClick={() => setShowExport(true)} disabled={loading || rows.length === 0}>
             <Download size={13} /> Xuất Excel
           </button>
           {canEdit && columns.length > 0 && (
-            <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`} onClick={() => setShowImport(true)}>
+            <button className={`${s.btnOutline} ${s.hdldToolbarBtn} ${s.hdldImportBtn}`} onClick={() => setShowImport(true)}>
               <Upload size={13} /> Nhập Excel
             </button>
           )}
           {canEdit && (
-            <button className={`${s.btnNavy} ${s.hdldToolbarBtn}`} onClick={() => addRowAndFocus(editableCols[0]?.colKey)}>
+            <button className={`${s.btnNavy} ${s.hdldToolbarBtn} ${s.hdldAddRowBtn}`} onClick={() => addRowAndFocus(editableCols[0]?.colKey)}>
               <Plus size={13} /> Thêm dòng
             </button>
           )}

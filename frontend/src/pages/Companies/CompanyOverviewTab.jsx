@@ -8,7 +8,7 @@ import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import * as usersApi from '../../api/users'
 import { BUSINESS_TYPE_LABELS } from './Companies'
-import CompanyLocationsCard from './CompanyLocationsCard'
+import CompanyOverviewTables from './CompanyOverviewTables'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { fmtDate } from './companyUtils'
 import s from './companies.module.css'
@@ -168,7 +168,7 @@ function OverviewTab({ company, canEdit, onCompanyUpdated }) {
   return (
     <div className={s.overviewSingle}>
       <CustomerInfoCard company={company} canEdit={canEdit} onSaved={onCompanyUpdated} />
-      <CompanyLocationsCard companyId={company.id} />
+      <CompanyOverviewTables companyId={company.id} canEdit={canEdit} />
       <CustomFieldsCard company={company} canEdit={canEdit} onSaved={onCompanyUpdated} />
     </div>
   )
