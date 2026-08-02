@@ -6938,20 +6938,20 @@
 .colCt_startDate     { width: 115px; }
 .colCt_endDate       { width: 115px; }
 .colCt_daysRemaining { width: 150px; }
-.colCt_status        { width: 155px; }
+.colCt_statusOverride { width: 155px; }
 
 .contractDaysNeg { color: var(--color-danger); font-weight: var(--fw-bold); }
 
 /* Badge trạng thái hợp đồng (5 trạng thái nhãn cố định) */
 .contractStatus {
   display: inline-block; padding: 2px 9px; border-radius: var(--radius-pill);
-  font-size: var(--fs-2xs); font-weight: var(--fw-semibold); white-space: nowrap;
+  font-size: var(--fs-2xs); font-weight: var(--fw-bold); white-space: nowrap;
 }
-.contractStActive  { background: #dcfce7; color: #15803d; }
-.contractStRenew   { background: #fef3c7; color: #b45309; }
-.contractStExpired { background: #fee2e2; color: #b91c1c; }
-.contractStRenewed { background: #dbeafe; color: #1d4ed8; }
-.contractStStopped { background: #f1f5f9; color: #64748b; }
+.contractStActive  { background: var(--color-success); color: var(--color-white); }
+.contractStRenew   { background: var(--color-warning-amber); color: var(--color-white); }
+.contractStExpired { background: var(--color-danger); color: var(--color-white); }
+.contractStRenewed { background: var(--color-primary); color: var(--color-white); }
+.contractStStopped { background: var(--color-muted); color: var(--color-white); }
 
 /* Viền + bo góc như .tableWrap chuẩn; cuộn ngang nằm ở div con .locTableScroll */
 .locTableWrap {
@@ -6962,21 +6962,21 @@
 .locTableScroll { overflow-x: auto; }
 .locTable { width: 100%; border-collapse: collapse; font-size: var(--fs-2xs); table-layout: fixed; }
 /* Bảng địa điểm nhiều cột → min-width để cuộn ngang (không áp cho bảng Thông tin bổ sung dùng chung .locTable) */
-.locTableWide { min-width: 1780px; }
+.locTableWide { min-width: 1710px; }
 
 /* Bề rộng cột (px) — nhiều cột nên cuộn ngang; cột nhiều chữ (tên/địa chỉ/ghi chú) rộng hơn */
-.colLoc_locationType           { width: 130px; }
-.colLoc_name                   { width: 190px; }
+.colLoc_locationType           { width: 125px; }
+.colLoc_name                   { width: 180px; }
 .colLoc_taxCode                { width: 110px; }
 .colLoc_licenseEstablishedDate { width: 140px; }
-.colLoc_address                { width: 210px; }
-.colLoc_accountingForm         { width: 125px; }
-.colLoc_locationFunction       { width: 120px; }
-.colLoc_status                 { width: 125px; }
+.colLoc_address                { width: 195px; }
+.colLoc_accountingForm         { width: 120px; }
+.colLoc_locationFunction       { width: 115px; }
+.colLoc_status                 { width: 120px; }
 .colLoc_startDate              { width: 125px; }
 .colLoc_endDate                { width: 130px; }
-.colLoc_notes                  { width: 180px; }
-.colFiles   { width: 120px; }
+.colLoc_notes                  { width: 165px; }
+.colFiles   { width: 110px; }
 .colAction  { width: 76px;  }
 
 /* Header xanh chuẩn như các bảng khác — nhưng KHÔNG in hoa */

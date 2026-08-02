@@ -15,12 +15,13 @@ const ATTACH_MODULE = 'company_contract'
 
 // type: enum | textarea | date | computed(days, read-only) | status(đặc biệt)
 const CONTRACT_COLS = [
-  { key: 'contractType',  label: 'Loại',                    type: 'enum', enumType: 'contract_type' },
-  { key: 'content',       label: 'Nội dung công việc',      type: 'textarea' },
-  { key: 'startDate',     label: 'Ngày bắt đầu',            type: 'date' },
-  { key: 'endDate',       label: 'Ngày kết thúc',           type: 'date' },
-  { key: 'daysRemaining', label: 'Số ngày còn lại theo HĐ', type: 'computed' },
-  { key: 'status',        label: 'Trạng thái',              type: 'status' },
+  { key: 'contractType',  label: 'Loại',                    type: 'enum', enumType: 'contract_type', width: 120 },
+  { key: 'content',       label: 'Nội dung công việc',      type: 'textarea', width: 260 },
+  { key: 'startDate',     label: 'Ngày bắt đầu',            type: 'date', width: 115 },
+  { key: 'endDate',       label: 'Ngày kết thúc',           type: 'date', width: 115 },
+  { key: 'daysRemaining', label: 'Số ngày còn lại theo HĐ', type: 'computed', width: 150 },
+  // key = statusOverride: đúng field backend nhận (null=Tự động, 'renewed'/'stopped'=chọn tay)
+  { key: 'statusOverride', label: 'Trạng thái',             type: 'status', width: 155 },
 ]
 
 // 5 trạng thái NHÃN CỐ ĐỊNH gắn công thức (theo yêu cầu — không dùng enum động).
@@ -190,7 +191,7 @@ function ContractCell({ col, row, value, enumOpts, getLabel, canEdit, active, on
         {active ? (
           <select ref={ref} className={s.archInlineEditInput} value={row.statusOverride ?? ''}
             onChange={(e) => onSave(e.target.value || null)} onBlur={() => onNavigate?.('cancel')} onClick={(e) => e.stopPropagation()}>
-            <option value="">— Tự động —</option>
+            <option value="">↻ Tự động tính lại (Đang HĐ / Gia hạn / Hết hạn)</option>
             <option value="renewed">{CONTRACT_STATUS.renewed.label}</option>
             <option value="stopped">{CONTRACT_STATUS.stopped.label}</option>
           </select>
@@ -504,7 +505,9 @@ export default function CompanyContractsCard({ companyId, canEdit = true }) {
         <div className={s.locTableScroll}>
           <table className={`${s.locTable} ${s.contractTableWide}`}>
             <colgroup>
-              {CONTRACT_COLS.map((col) => <col key={col.key} className={s[`colCt_${col.key}`]} />)}
+              {CONTRACT_COLS.map((col) => (
+                <col key={col.key} className={s[`colCt_${col.key}`]} style={{ width: `${col.width}px` }} />
+              ))}
               <col className={s.colFiles} />
               <col className={s.colAction} />
             </colgroup>
