@@ -868,7 +868,7 @@ function ListView({
               </th>
               {/* Tiêu đề: KHÔNG đặt width → co giãn lấy phần còn lại (table-layout: fixed) */}
               <Th colKey="title">Tiêu đề</Th>
-              {vis('companyShort') && <Th colKey="companyShort" w={124}>Tên viết tắt</Th>}
+              {vis('companyShort') && <Th colKey="companyShort" w={160}>Tên viết tắt</Th>}
               {vis('startDate')    && <Th colKey="startDate" w={104}>Bắt đầu</Th>}
               {vis('dueDate')      && <Th colKey="dueDate" w={102}>Hết hạn</Th>}
               {vis('dayCount')     && <Th colKey="dayCount" w={108} noFilter>Ngày HT / KH</Th>}
@@ -876,7 +876,7 @@ function ListView({
               {vis('createdAt')    && <Th colKey="createdAt" w={122}>Ngày tạo</Th>}
               {vis('status')       && <Th colKey="status" w={132}>Trạng thái</Th>}
               {vis('priority')     && <Th colKey="priority" w={106}>Ưu tiên</Th>}
-              {vis('progress')     && <Th colKey="progress" w={84}>Tiến độ</Th>}
+              {vis('progress')     && <Th colKey="progress" w={110}>Tiến độ</Th>}
               {vis('assignedToName') && <Th colKey="assignedToName" w={116}>Giao cho</Th>}
               {vis('latestComment') && <Th colKey="latestComment" w={160}>Bình luận mới</Th>}
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
@@ -1050,27 +1050,22 @@ function ListView({
                   {/* Giao cho */}
                   {vis('assignedToName') && (
                     <td className={s.td}>
-                      {t.assignedToName ? (
-                        <div className={s.assignedCell}>
-                          <span className={s.assignedName} title={t.assignedToName}>{shortName(t.assignedToName)}</span>
+                      {(t.assignedToName || t.collaborators?.length > 0) ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, minWidth: 0 }}>
+                          {/* "+N hỗ trợ" đưa lên TRÊN như note → không đẩy tên người thực hiện */}
                           {t.collaborators?.length > 0 && (
                             <span
                               title={`Hỗ trợ: ${t.collaborators.map((c) => c.name).join(', ')}`}
-                              style={{ marginLeft: 4, padding: '0 6px', borderRadius: 10, fontSize: 11,
+                              style={{ padding: '0 5px', borderRadius: 8, fontSize: 10, lineHeight: 1.5,
                                        background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', whiteSpace: 'nowrap' }}
                             >
                               +{t.collaborators.length} hỗ trợ
                             </span>
                           )}
+                          {t.assignedToName
+                            ? <span className={s.assignedName} title={t.assignedToName}>{shortName(t.assignedToName)}</span>
+                            : <span className={s.mutedDash}>—</span>}
                         </div>
-                      ) : t.collaborators?.length > 0 ? (
-                        <span
-                          title={`Hỗ trợ: ${t.collaborators.map((c) => c.name).join(', ')}`}
-                          style={{ padding: '0 6px', borderRadius: 10, fontSize: 11,
-                                   background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', whiteSpace: 'nowrap' }}
-                        >
-                          +{t.collaborators.length} hỗ trợ
-                        </span>
                       ) : (
                         <span className={s.mutedDash}>—</span>
                       )}
@@ -1887,7 +1882,7 @@ export default function Tasks() {
         <div className={s.filterBar}>
           <div className={s.filterBarHead}>
             <button
-              className={s.filterCollapseBtn}
+              className={`${s.filterCollapseBtn} ${filterCollapsed ? s.filterCollapseActive : ''}`}
               onClick={() => setFilterCollapsed((v) => !v)}
               title={filterCollapsed ? 'Mở bộ lọc' : 'Thu gọn bộ lọc'}
             >
@@ -1900,7 +1895,44 @@ export default function Tasks() {
                 )}
               </span>
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+
+            {/* Thống kê (bấm để lọc theo trạng thái) — gộp lên header cho gọn */}
+            <div className={s.headStats}>
+              <span className={s.headStatsLabel}>Thống kê</span>
+              <button
+                type="button"
+                className={`${s.statItem} ${statusFilter.length === 0 ? s.statItemActive : ''}`}
+                onClick={() => { setStatusFilter([]); setPage(1) }}
+                title="Xem tất cả trạng thái"
+              >
+                <span className={s.statValue}>{stats.total}</span>
+                <span className={s.statLabel}>Tổng</span>
+              </button>
+              {statusOptions.map((opt) => {
+                const active = statusFilter.includes(opt.key)
+                return (
+                  <Fragment key={opt.key}>
+                    <span className={s.statDivider} />
+                    <button
+                      type="button"
+                      className={`${s.statItem} ${active ? s.statItemActive : ''}`}
+                      onClick={() => toggleStatusFilter(opt.key)}
+                      title={active ? `Bỏ lọc: ${opt.label}` : `Lọc theo: ${opt.label}`}
+                    >
+                      <span className={`${s.statValue} ${STAT_VALUE_CLASS[opt.key] ?? ''}`}>{stats[opt.key] ?? 0}</span>
+                      <span className={s.statLabel}>
+                        {opt.label}
+                        {opt.key === 'completed' && stats.total > 0
+                          ? ` · ${Math.round((stats.completed ?? 0) / stats.total * 100)}%`
+                          : ''}
+                      </span>
+                    </button>
+                  </Fragment>
+                )
+              })}
+            </div>
+
+            <div className={s.headActions}>
               {/* Toggle nhanh — chuyển từ grid lên header cho gọn */}
               <button
                 className={`${s.filterToggle} ${scheduleToday ? s.filterToggleActive : ''}`}
@@ -2148,44 +2180,6 @@ export default function Tasks() {
             </div>
           )}
 
-          {/* ── Stats row ── */}
-          <div className={s.statsRow}>
-            {/* Tổng — click để bỏ lọc trạng thái */}
-            <button
-              type="button"
-              className={`${s.statItem} ${statusFilter.length === 0 ? s.statItemActive : ''}`}
-              onClick={() => { setStatusFilter([]); setPage(1) }}
-              title="Xem tất cả trạng thái"
-            >
-              <span className={s.statValue}>{stats.total}</span>
-              <span className={s.statLabel}>Tổng</span>
-            </button>
-
-            {statusOptions.map((opt) => {
-              const active = statusFilter.includes(opt.key)
-              return (
-                <Fragment key={opt.key}>
-                  <span className={s.statDivider} />
-                  <button
-                    type="button"
-                    className={`${s.statItem} ${active ? s.statItemActive : ''}`}
-                    onClick={() => toggleStatusFilter(opt.key)}
-                    title={active ? `Bỏ lọc: ${opt.label}` : `Lọc theo: ${opt.label}`}
-                  >
-                    <span className={`${s.statValue} ${STAT_VALUE_CLASS[opt.key] ?? ''}`}>
-                      {stats[opt.key] ?? 0}
-                    </span>
-                    <span className={s.statLabel}>
-                      {opt.label}
-                      {opt.key === 'completed' && stats.total > 0
-                        ? ` · ${Math.round((stats.completed ?? 0) / stats.total * 100)}%`
-                        : ''}
-                    </span>
-                  </button>
-                </Fragment>
-              )
-            })}
-          </div>
         </div>
 
         {/* ── Bulk action bar ── */}

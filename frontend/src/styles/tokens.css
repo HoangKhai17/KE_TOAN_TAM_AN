@@ -170,8 +170,8 @@
   --control-px-md: 12px;
   --control-px-lg: 18px;
   --table-cell-px: 16px;
-  --table-cell-py: 13px;
-  --table-head-py: 12px;
+  --table-cell-py: 5px;
+  --table-head-py: 8px;
   --page-pad-x: 40px;
   --page-pad-y: 32px;
   --sidebar-w: 256px;

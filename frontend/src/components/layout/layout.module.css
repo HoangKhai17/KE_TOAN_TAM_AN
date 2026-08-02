@@ -957,7 +957,7 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 20px 25px;
+  padding: 14px 25px;
   background: var(--bg);
 }
 
