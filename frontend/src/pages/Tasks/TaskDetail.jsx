@@ -4,6 +4,7 @@ import {
   ArrowLeft, Check, X, Plus, Trash2, Edit2, ChevronLeft, ChevronRight,
   Building2, User, Tag, Clock, Calendar, AlertTriangle,
   ClipboardList, MessageSquare, History, Timer, Sliders, GripVertical,
+  Lock, Globe,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
@@ -841,6 +842,17 @@ export default function TaskDetail() {
     } catch { addToast('Không thể đổi nguồn công việc', 'error') }
   }
 
+  async function toggleVisibility() {
+    const next = task.visibility === 'private' ? 'company' : 'private'
+    try {
+      const updated = await tasksApi.updateTask(id, { visibility: next })
+      setTask(updated)
+      addToast(next === 'private'
+        ? 'Đã chuyển sang Riêng tư — ẩn với nhân sự phụ trách công ty'
+        : 'Đã chuyển sang công khai với nhân sự phụ trách công ty', 'success')
+    } catch { addToast('Không thể đổi chế độ riêng tư', 'error') }
+  }
+
   // Loading
   if (loading) {
     return (
@@ -903,6 +915,24 @@ export default function TaskDetail() {
                 {task.source && (
                   <span className={`${s.sourceBadge} ${task.source === 'auto' ? s.sourceAuto : s.sourceManual}`}>
                     {getLabel('task_source', task.source, SOURCE_LABELS[task.source] ?? task.source)}
+                  </span>
+                )}
+                {/* Riêng tư: admin bấm để đổi; người khác chỉ thấy nhãn khi task private */}
+                {isAdmin ? (
+                  <button
+                    type="button"
+                    className={`${s.visibilityBadge} ${task.visibility === 'private' ? s.visibilityPrivate : s.visibilityCompany}`}
+                    onClick={toggleVisibility}
+                    title={task.visibility === 'private'
+                      ? 'Đang riêng tư (ẩn với nhân sự phụ trách công ty). Bấm để công khai.'
+                      : 'Đang công khai với nhân sự phụ trách công ty. Bấm để chuyển riêng tư.'}
+                  >
+                    {task.visibility === 'private' ? <Lock size={10} /> : <Globe size={10} />}
+                    {task.visibility === 'private' ? 'Riêng tư' : 'Công khai'}
+                  </button>
+                ) : task.visibility === 'private' && (
+                  <span className={`${s.visibilityBadge} ${s.visibilityPrivate}`}>
+                    <Lock size={10} /> Riêng tư
                   </span>
                 )}
               </div>

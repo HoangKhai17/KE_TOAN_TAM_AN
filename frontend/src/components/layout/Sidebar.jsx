@@ -12,7 +12,7 @@ import s from './layout.module.css'
 
 const NAV_GROUPS = [
   {
-    label: 'ĐIỀU HƯỚNG',
+    label: 'Điều hướng',
     items: [
       { to: '/dashboard',              label: 'Dashboard',          icon: LayoutDashboard },
       { to: '/companies',              label: 'Khách hàng',         icon: Building2 },
@@ -24,7 +24,7 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: 'QUẢN TRỊ HỆ THỐNG',
+    label: 'Quản trị hệ thống',
     items: [
       { to: '/staff',             label: 'Nhân viên',         icon: Users,         adminOnly: true },
       { to: '/attendance',        label: 'Chấm công',         icon: CalendarCheck, staffOnly: true, end: true },
@@ -77,12 +77,12 @@ export default function Sidebar({ open, onToggle }) {
       <div className={s.sidebarLogo}>
         <div className={s.sidebarBrand}>
           <div className={s.sidebarLogoMark}>
-            <img src="/logo_taman.png" alt="Logo Kế Toán Tâm An" />
+            <img src="/logo_taman.png" alt="Logo Tâm An SG" />
           </div>
           {expanded && (
             <div>
-              <div className={s.sidebarTitle}>Kế Toán Tâm An</div>
-              <div className={s.sidebarSubtitle}>Nội bộ</div>
+              <div className={s.sidebarTitle}>Tâm An SG</div>
+              <div className={s.sidebarSubtitle}>Nội Bộ</div>
             </div>
           )}
         </div>
@@ -112,7 +112,7 @@ export default function Sidebar({ open, onToggle }) {
                 }
               >
                 <span className={s.navIcon}>
-                  <Icon size={17} />
+                  <Icon />
                 </span>
                 <span className={`${s.navLabel} ${!expanded ? s.navLabelHidden : ''}`}>
                   {label}

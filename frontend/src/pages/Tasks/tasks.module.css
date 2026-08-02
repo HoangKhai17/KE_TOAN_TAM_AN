@@ -355,6 +355,68 @@
   letter-spacing: 0.2px;
 }
 
+/* Icon khoá "Riêng tư" cạnh tiêu đề task (danh sách + board) */
+.titleLock {
+  display: inline;
+  vertical-align: -1px;
+  margin-right: 3px;
+  color: var(--color-warning-amber);
+  flex-shrink: 0;
+}
+
+/* Badge/toggle chế độ Riêng tư trên trang chi tiết công việc */
+.visibilityBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  font-family: inherit;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: filter 0.13s;
+}
+button.visibilityBadge:hover { filter: brightness(0.96); }
+.visibilityPrivate {
+  background: var(--color-accent-bg);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning-border);
+}
+.visibilityCompany {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+  border-color: var(--color-border-muted);
+}
+
+/* Checkbox "Riêng tư" trong modal tạo/sửa công việc */
+.fmVisibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-xs);
+  color: var(--color-text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.fmVisibility input { cursor: pointer; margin: 0; width: 15px; height: 15px; }
+.fmVisibility svg { color: var(--color-warning-amber); flex-shrink: 0; }
+
+/* Checkbox phụ "Gồm việc hỗ trợ" dưới ô lọc Nhân viên */
+.filterInlineCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: var(--fs-3xs);
+  color: var(--color-text-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.filterInlineCheck input { cursor: pointer; margin: 0; }
+
 .filterInput, .filterSelect {
   height: 30px;
   padding: 0 10px;

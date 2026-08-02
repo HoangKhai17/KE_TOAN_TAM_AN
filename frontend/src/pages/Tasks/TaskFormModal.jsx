@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Info, Search, ChevronDown, ChevronLeft, ChevronRight, X, Plus, Link2, Trash2, GripVertical } from 'lucide-react'
+import { Info, Search, ChevronDown, ChevronLeft, ChevronRight, X, Plus, Link2, Trash2, GripVertical, Lock } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { createTask, addTaskChecklistItem, addTaskLink } from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
 import { listUserOptions } from '../../api/users'
 import { listTaskTypes } from '../../api/taskTypes'
+import { useAuthStore } from '../../stores/authStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { PRIORITY_LABELS } from './taskUtils'
 import CollaboratorPicker from './CollaboratorPicker'
@@ -112,11 +113,12 @@ function CompanyPicker({ companies, value, onChange, disabled, hasError }) {
 // ── Main modal ────────────────────────────────────────────────────────────────
 
 export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initialCompanyId, lockCompany }) {
+  const isAdmin = useAuthStore((st) => st.user?.role === 'admin')
   const todayISO = new Date().toISOString().slice(0, 10)
   const [form, setForm] = useState({
     title: '', companyId: initialCompanyId || '', taskTypeId: '', assignedToId: '',
     startDate: todayISO, dueDate: '', priority: 'medium', slaDays: '', description: '',
-    source: 'manual', collaboratorIds: [],
+    source: 'manual', collaboratorIds: [], visibility: 'company',
   })
   const [companies, setCompanies] = useState([])
   const [users,     setUsers]     = useState([])
@@ -231,6 +233,8 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         description: form.description.trim() || null,
         source:      form.source || 'manual',
         collaboratorIds: form.collaboratorIds.filter((id) => id && id !== form.assignedToId),
+        // Chỉ gửi khi admin đặt riêng tư; backend mặc định 'company'.
+        ...(isAdmin && form.visibility === 'private' ? { visibility: 'private' } : {}),
       })
       for (const item of checklistItems) {
         await addTaskChecklistItem(task.id, { stepText: item.text, level: item.level ?? 0 })
@@ -408,6 +412,26 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
             placeholder="Mô tả chi tiết công việc..."
           />
         </div>
+
+        {/* Riêng tư — admin only */}
+        {isAdmin && (
+          <div className={`${s.formGroup} ${s.span2}`}>
+            <label className={s.fmVisibility}>
+              <input
+                type="checkbox"
+                checked={form.visibility === 'private'}
+                onChange={(e) => setForm((p) => ({ ...p, visibility: e.target.checked ? 'private' : 'company' }))}
+              />
+              <Lock size={13} />
+              <span>
+                <strong>Riêng tư</strong> — chỉ quản lý xem, ẩn với nhân sự phụ trách công ty
+              </span>
+            </label>
+            <p style={{ fontSize: 11, color: 'var(--color-muted)', margin: '3px 0 0 24px' }}>
+              Chỉ admin, người được giao và người hỗ trợ thấy công việc này. Nhân sự quản lý công ty sẽ không thấy.
+            </p>
+          </div>
+        )}
 
         {/* Checklist */}
         <div className={`${s.formGroup} ${s.span2}`}>

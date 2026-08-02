@@ -47,6 +47,8 @@ async function getTask(req, res, next) {
 
 async function createTask(req, res, next) {
   try {
+    // Chỉ admin mới đặt task 'private'. Staff gửi visibility → bỏ qua (mặc định 'company').
+    if (req.user.role !== 'admin') delete req.body.visibility
     const task = await svc.createTask(req.body, req.user.id, req.ip, req.headers['user-agent'])
     res.status(201).json({ success: true, data: { task } })
   } catch (err) { next(err) }
@@ -54,6 +56,8 @@ async function createTask(req, res, next) {
 
 async function updateTask(req, res, next) {
   try {
+    // Chỉ admin mới đổi được chế độ riêng tư (service cũng chặn staff — chặt 2 lớp).
+    if (req.user.role !== 'admin') delete req.body.visibility
     const task = await svc.updateTask(req.params.id, req.body, req.user.id, req.ip, req.headers['user-agent'], req.user)
     res.json({ success: true, data: { task } })
   } catch (err) { next(err) }

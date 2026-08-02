@@ -73,6 +73,7 @@ function toDto(row) {
     status:                 row.status,
     priority:               row.priority,
     source:                 row.source,
+    visibility:             row.visibility ?? 'company',
     startDate:              row.start_date ?? null,
     dueDate:                row.due_date ?? null,
     periodLabel:            row.period_label ?? null,
@@ -139,9 +140,12 @@ const TASK_SELECT = `
 // công ty của task (companies.assigned_staff_id), HOẶC là NGƯỜI HỖ TRỢ task đó
 // (task_collaborators). Nhận cả cờ `is_collaborator` (query rời) lẫn mảng
 // `collaborators` (từ TASK_SELECT). Trả về false nếu không đủ quyền.
+// Task 'private': BỎ nhánh phụ-trách-công-ty → nhân sự chỉ thấy nếu được giao/hỗ trợ.
 function staffOwnsOrManagesRow(row, staffId) {
+  const managesCompany = (row.visibility ?? 'company') !== 'private'
+    && row.company_assigned_staff_id === staffId
   return row.assigned_to === staffId
-    || row.company_assigned_staff_id === staffId
+    || managesCompany
     || row.is_collaborator === true
     || (Array.isArray(row.collaborators) && row.collaborators.some((c) => c && c.id === staffId))
 }
@@ -149,7 +153,7 @@ function staffOwnsOrManagesRow(row, staffId) {
 async function assertTaskAccess(taskId, user) {
   if (!user || user.role !== 'staff') return
   const { rows: [task] } = await query(
-    `SELECT t.assigned_to,
+    `SELECT t.assigned_to, t.visibility,
             c.assigned_staff_id AS company_assigned_staff_id,
             EXISTS (SELECT 1 FROM task_collaborators tc
                     WHERE tc.task_id = t.id AND tc.user_id = $2) AS is_collaborator
@@ -217,7 +221,7 @@ async function listTasks(filters = {}) {
     dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
     sortBy = 'created_at', sortDir = 'desc',
     audience = 'internal',
-    forceAssignedTo, staffScopeId, collaboratorIds,
+    forceAssignedTo, staffScopeId, collaboratorIds, assignedIncludeSupport,
   } = filters
 
   // Lọc "CV hỗ trợ": chỉ giữ task mà 1 trong các user chỉ định là NGƯỜI HỖ TRỢ.
@@ -227,6 +231,8 @@ async function listTasks(filters = {}) {
   const hasCollabFilter = Array.isArray(collabArr) && collabArr.length > 0
 
   const effectiveAssignedTo = forceAssignedTo ?? assignedTo
+  // "Gồm việc hỗ trợ": query string gửi 'true'/'false' → chuẩn hoá về boolean.
+  const includeSupport = assignedIncludeSupport === true || assignedIncludeSupport === 'true'
 
   // audience=client_request: return CDRs mapped to task-like shape.
   if (audience === 'client_request') {
@@ -300,7 +306,15 @@ async function listTasks(filters = {}) {
   if (effectiveAssignedTo && (!Array.isArray(effectiveAssignedTo) || effectiveAssignedTo.length > 0)) {
     const arr = Array.isArray(effectiveAssignedTo) ? effectiveAssignedTo : [effectiveAssignedTo]
     baseParams.push(arr)
-    baseConditions.push(`t.assigned_to = ANY($${baseParams.length}::uuid[])`)
+    const p = baseParams.length
+    // "Gồm việc hỗ trợ" (admin): với nhân viên đã chọn, gộp việc ĐƯỢC GIAO hoặc HỖ TRỢ
+    // → cái nhìn tổng quan mọi việc người đó dính líu. Mặc định (tắt) chỉ tính việc được giao.
+    baseConditions.push(
+      includeSupport
+        ? `(t.assigned_to = ANY($${p}::uuid[])
+            OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = ANY($${p}::uuid[])))`
+        : `t.assigned_to = ANY($${p}::uuid[])`
+    )
   }
   // Lọc theo NGƯỜI TẠO task (vd: admin xem tiến độ những việc chính mình tạo & giao cho staff).
   // Vẫn cộng dồn với staffScopeId nên không nới rộng phạm vi xem của nhân sự.
@@ -316,9 +330,10 @@ async function listTasks(filters = {}) {
   if (staffScopeId) {
     baseParams.push(staffScopeId)
     const p = baseParams.length
+    // Task 'private': BỎ nhánh phụ-trách-công-ty → nhân sự chỉ thấy nếu được giao/hỗ trợ.
     baseConditions.push(
       `(t.assigned_to = $${p}
-        OR t.company_id IN (SELECT id FROM companies WHERE assigned_staff_id = $${p})
+        OR (t.visibility <> 'private' AND t.company_id IN (SELECT id FROM companies WHERE assigned_staff_id = $${p}))
         OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = $${p}))`
     )
   }
@@ -456,6 +471,8 @@ async function getTaskById(id, user = null) {
 
 async function createTask(data, actorId, ipAddress, userAgent) {
   const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, collaboratorIds } = data
+  // Riêng tư: chỉ admin mới truyền 'private' (controller đã chặn staff). Mặc định 'company'.
+  const visibility = data.visibility === 'private' ? 'private' : 'company'
 
   // Ngày hết hạn KHÔNG được nhỏ hơn ngày bắt đầu (so sánh chuỗi YYYY-MM-DD hợp lệ).
   if (startDate && dueDate && dueDate < startDate) {
@@ -485,13 +502,13 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   const { rows: [task] } = await query(
     `INSERT INTO tasks
        (title, description, company_id, task_type_id, assigned_to, assigned_by,
-        start_date, due_date, priority, source, sla_days, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        start_date, due_date, priority, source, sla_days, created_by, visibility)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      RETURNING *`,
     [
       title, description ?? null, companyId, taskTypeId ?? null,
       assignedTo ?? null, actorId, startDate ?? null, dueDate ?? null,
-      priority, source, effectiveSlaDays, actorId,
+      priority, source, effectiveSlaDays, actorId, visibility,
     ]
   )
 
@@ -565,6 +582,7 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     priority:    'priority',
     slaDays:     'sla_days',
     source:      'source',
+    visibility:  'visibility',
   }
 
   const { rows: [current] } = await query('SELECT * FROM tasks WHERE id = $1', [id])
@@ -611,6 +629,7 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
       throw Object.assign(new Error('Bạn không có quyền chỉnh sửa công việc này'), { status: 403 })
     }
     delete fieldMap.assignedTo
+    delete fieldMap.visibility   // chỉ admin mới đổi được chế độ riêng tư
 
     // ── Quy tắc NGÀY với nhân viên ───────────────────────────────────────────
     // 1) Chỉ sửa được nếu task sinh từ LỊCH ĐỊNH KỲ (customer_task_schedule_id).

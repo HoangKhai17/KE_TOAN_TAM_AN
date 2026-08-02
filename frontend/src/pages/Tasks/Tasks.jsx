@@ -8,7 +8,7 @@ import {
 import {
   Plus, Search, RotateCcw, List, Columns, Layers,
   ChevronRight, ChevronDown, Filter, ClipboardList, Check,
-  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal, FileDown,
+  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal, FileDown, Lock,
 } from 'lucide-react'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
@@ -229,7 +229,12 @@ function BoardCardInner({ task, isAdmin, onDelete, onQuickView, showStatus = fal
     <>
       {/* Hàng tiêu đề + icon thao tác (hover) ngang hàng title → card gọn hơn */}
       <div className={s.boardCardHead}>
-        <div className={s.boardCardTitle}>{task.title}</div>
+        <div className={s.boardCardTitle}>
+          {task.visibility === 'private' && (
+            <Lock size={10} className={s.titleLock} aria-label="Riêng tư" />
+          )}
+          {task.title}
+        </div>
         {(onQuickView || onDelete) && (
           <div className={s.boardCardActions}>
             {onQuickView && (
@@ -927,7 +932,12 @@ function ListView({
                   </td>
                   {/* Tiêu đề (không còn tên KH bên dưới) */}
                   <td className={s.td}>
-                    <div className={`${s.taskTitle} ${overdue ? s.taskTitleOverdue : ''}`}>{t.title}</div>
+                    <div className={`${s.taskTitle} ${overdue ? s.taskTitleOverdue : ''}`}>
+                      {t.visibility === 'private' && (
+                        <Lock size={11} className={s.titleLock} aria-label="Riêng tư"><title>Riêng tư — ẩn với nhân sự phụ trách công ty</title></Lock>
+                      )}
+                      {t.title}
+                    </div>
                   </td>
 
                   {/* Tên viết tắt (thiếu thì lấy tên công ty) */}
@@ -1246,6 +1256,8 @@ export default function Tasks() {
   const [search, setSearch]                 = useState(initF.searchInput    ?? '')
   const [companyFilter, setCompanyFilter]   = useState(() => Array.isArray(initF.companyFilter) ? initF.companyFilter : [])
   const [staffFilter, setStaffFilter]       = useState(() => Array.isArray(initF.staffFilter)   ? initF.staffFilter   : [])
+  // Admin: khi lọc theo "Nhân viên", gộp cả việc người đó HỖ TRỢ (không chỉ việc được giao).
+  const [staffIncludeSupport, setStaffIncludeSupport] = useState(initF.staffIncludeSupport ?? false)
   const [creatorFilter, setCreatorFilter]   = useState(() => Array.isArray(initF.creatorFilter) ? initF.creatorFilter : [])
   // "CV hỗ trợ": mảng userId là NGƯỜI HỖ TRỢ. Admin = multi-select nhân viên; nhân viên = chính mình (toggle).
   const [supportFilter, setSupportFilter]   = useState(() => Array.isArray(initF.supportFilter) ? initF.supportFilter : [])
@@ -1393,11 +1405,11 @@ export default function Tasks() {
   useEffect(() => {
     saveFilters({
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
-      sortValue, searchInput, companyFilter, staffFilter, creatorFilter, supportFilter,
+      sortValue, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter,
       statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page,
       colFilters: serializeColFilters(colFilters), sortColState, filterCollapsed,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1408,6 +1420,7 @@ export default function Tasks() {
       // Staff: KHÔNG ép assignedTo — backend tự giới hạn phạm vi (việc được giao HOẶC
       // việc thuộc công ty mình phụ trách). Ép assignedTo sẽ che mất việc đã nhờ đồng nghiệp hỗ trợ.
       assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : undefined,
+      assignedIncludeSupport: isAdmin && staffFilter.length > 0 && staffIncludeSupport ? true : undefined,
       createdBy:   creatorFilter.length ? creatorFilter : undefined,
       collaboratorIds: supportFilter.length ? supportFilter : undefined,
       scheduleToday: scheduleToday ? true : undefined,
@@ -1427,7 +1440,7 @@ export default function Tasks() {
       }
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [search, companyFilter, staffFilter, creatorFilter, supportFilter, dueDateFrom, dueDateTo, scheduleToday, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, dueDateFrom, dueDateTo, scheduleToday, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tasks list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
   // Tải "working set" (tối đa 500) rồi lọc/sắp/phân trang phía client (docs/018).
@@ -1449,6 +1462,7 @@ export default function Tasks() {
       // Staff: KHÔNG ép assignedTo — backend tự giới hạn phạm vi (việc được giao HOẶC
       // việc thuộc công ty mình phụ trách). Ép assignedTo sẽ che mất việc đã nhờ đồng nghiệp hỗ trợ.
       assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : undefined,
+      assignedIncludeSupport: isAdmin && staffFilter.length > 0 && staffIncludeSupport ? true : undefined,
       createdBy:   creatorFilter.length ? creatorFilter : undefined,
       collaboratorIds: supportFilter.length ? supportFilter : undefined,
       status:      effectiveStatus,
@@ -1465,7 +1479,7 @@ export default function Tasks() {
       sortBy,
       sortDir,
     }
-  }, [search, companyFilter, staffFilter, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id, view]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id, view]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const listQuery = useQuery({
     queryKey: ['tasks', 'list', listParams],
@@ -1610,7 +1624,7 @@ export default function Tasks() {
 
   function resetFilters() {
     setSearchInput(''); setSearch('')
-    setCompanyFilter([]); setStaffFilter([]); setCreatorFilter([]); setSupportFilter([])
+    setCompanyFilter([]); setStaffFilter([]); setStaffIncludeSupport(false); setCreatorFilter([]); setSupportFilter([])
     setStatusFilter([]); setPriorityFilter([])
     setSourceFilter([]); setIsOverdue(false); setScheduleToday(false)
     setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
@@ -2035,6 +2049,16 @@ export default function Tasks() {
                   selected={staffFilter}
                   onChange={(v) => { setStaffFilter(v); setPage(1) }}
                 />
+                {staffFilter.length > 0 && (
+                  <label className={s.filterInlineCheck} title="Ngoài việc được giao, hiện thêm việc nhân viên đã chọn được nhờ hỗ trợ (tổng quan)">
+                    <input
+                      type="checkbox"
+                      checked={staffIncludeSupport}
+                      onChange={(e) => { setStaffIncludeSupport(e.target.checked); setPage(1) }}
+                    />
+                    Gồm việc hỗ trợ
+                  </label>
+                )}
               </div>
             )}
 

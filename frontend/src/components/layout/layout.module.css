@@ -97,8 +97,8 @@
 }
 
 .sidebarLogoMark {
-  width: 46px;
-  height: 46px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-lg);
   background: var(--color-white);
   border: 1px solid rgba(255, 255, 255, 0.25);
@@ -121,7 +121,7 @@
 }
 
 .sidebarTitle {
-  font-size: var(--fs-base);
+  font-size: var(--fs-md);
   font-weight: var(--fw-extrabold);
   color: rgba(255, 255, 255, 0.94);
   letter-spacing: 0.2px;
@@ -132,11 +132,11 @@
 }
 
 .sidebarSubtitle {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   color: rgba(255, 255, 255, 0.78);
   letter-spacing: 0.5px;
-  text-transform: uppercase;
+  text-transform: none;
   margin-top: 2px;
 }
 
@@ -149,8 +149,8 @@
 }
 
 .sidebarCollapsed .sidebarLogoMark {
-  width: 42px;
-  height: 42px;
+  width: 32px;
+  height: 32px;
 }
 
 .sidebarToggle {
@@ -196,11 +196,11 @@
 
 .sidebarSectionLabel {
   padding: var(--space-4) var(--space-4) 9px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-extrabold);
   color: rgba(255, 255, 255, 0.55);
   letter-spacing: 1.1px;
-  text-transform: uppercase;
+  text-transform: none;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -214,7 +214,7 @@
   border-radius: var(--radius-md);
   text-decoration: none;
   color: rgba(255, 255, 255, 0.84);
-  font-size: var(--fs-md);
+  font-size: var(--fs-xs);
   font-weight: var(--fw-bold);
   transition: background var(--duration-base), color var(--duration-base), box-shadow var(--duration-base), transform var(--duration-fast);
   cursor: pointer;
@@ -260,8 +260,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: var(--fs-xs);
+  height: var(--fs-xs);
+}
+
+.navIcon svg {
+  width: var(--fs-xs);
+  height: var(--fs-xs);
 }
 
 .navItem:hover .navIcon {
@@ -529,7 +534,7 @@
   border-radius: var(--radius-lg);
   background: var(--bg);
   font-family: 'Montserrat', inherit;
-  font-size: 13.5px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--text);
   outline: none;
@@ -644,7 +649,7 @@
 }
 
 .bellDropdownTitle {
-  font-size: 14px;
+  font-size: var(--fs-xs);
   font-weight: 800;
   color: var(--text);
 }
@@ -713,7 +718,7 @@
 }
 
 .bellItemTitle {
-  font-size: 13px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--text);
   line-height: 1.3;
@@ -753,7 +758,7 @@
   padding: 11px 16px;
   border-top: 1px solid var(--border-soft);
   text-align: center;
-  font-size: 13px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: #2563eb;
   text-decoration: none;
@@ -799,7 +804,7 @@
 }
 
 .headerUserName {
-  font-size: 13.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--text);
   white-space: nowrap;
@@ -849,7 +854,7 @@
 }
 
 .headerDropdownName {
-  font-size: 13.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--text);
   overflow: hidden;
@@ -875,7 +880,7 @@
   border: none;
   background: transparent;
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
@@ -905,7 +910,7 @@
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
   font-family: 'Montserrat', inherit;
-  font-size: 13.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;

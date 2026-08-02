@@ -174,9 +174,9 @@
   --table-head-py: 8px;
   --page-pad-x: 40px;
   --page-pad-y: 32px;
-  --sidebar-w: 256px;
+  --sidebar-w: 200px;
   --sidebar-col: 66px;
-  --header-h: 68px;
+  --header-h: 64px;
   --footer-h: 44px;
 
   /* Motion */
