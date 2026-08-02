@@ -10,6 +10,7 @@ const createLocationSchema = z.object({
   address:        z.string().max(1000).optional().nullable(),
   taxCode:        z.string().max(20).optional().nullable(),
   accountingForm: z.string().max(50).optional().nullable(),
+  locationFunction: z.string().max(50).optional().nullable(),
   taxAuthority:   z.string().max(200).optional().nullable(),
   status:         z.string().max(50).optional(),
   startDate:      dateOpt,
@@ -17,7 +18,6 @@ const createLocationSchema = z.object({
   licenseEstablishedDate: dateOpt,
   contactName:    z.string().max(100).optional().nullable(),
   contactPhone:   z.string().max(20).optional().nullable(),
-  isPrimary:      z.boolean().optional(),
   sortOrder:      z.number().int().optional(),
   notes:          z.string().max(2000).optional().nullable(),
 })
@@ -28,6 +28,7 @@ const updateLocationSchema = z.object({
   address:        z.string().max(1000).optional().nullable(),
   taxCode:        z.string().max(20).optional().nullable(),
   accountingForm: z.string().max(50).optional().nullable(),
+  locationFunction: z.string().max(50).optional().nullable(),
   taxAuthority:   z.string().max(200).optional().nullable(),
   status:         z.string().max(50).optional(),
   startDate:      dateOpt,
@@ -35,7 +36,6 @@ const updateLocationSchema = z.object({
   licenseEstablishedDate: dateOpt,
   contactName:    z.string().max(100).optional().nullable(),
   contactPhone:   z.string().max(20).optional().nullable(),
-  isPrimary:      z.boolean().optional(),
   sortOrder:      z.number().int().optional(),
   notes:          z.string().max(2000).optional().nullable(),
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })

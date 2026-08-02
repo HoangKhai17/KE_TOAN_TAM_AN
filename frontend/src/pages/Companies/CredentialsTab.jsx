@@ -446,7 +446,7 @@ export default function CredentialsTab({ company }) {
       ) : creds.length === 0 ? (
         <div className={s.emptyState}>
           <Shield size={32} style={{ color: 'var(--color-muted-soft)', marginBottom: 8 }} />
-          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)' }}>Chưa có tài khoản hệ thống nào.</p>
+          <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)' }}>Chưa có tài khoản hệ thống nào.</p>
         </div>
       ) : (
         <div className={s.credTableWrap}>
@@ -525,7 +525,7 @@ export default function CredentialsTab({ company }) {
           <span className={s.paginationInfo}>{creds.length} tài khoản</span>
           <div className={s.paginationBtns}>
             <button className={s.paginationBtn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageSafe === 1}>‹</button>
-            <span style={{ fontSize: 'var(--fs-sm)', padding: '0 8px', color: 'var(--color-muted)' }}>
+            <span style={{ fontSize: 'var(--fs-xs)', padding: '0 8px', color: 'var(--color-muted)' }}>
               {pageSafe} / {totalPages}
             </span>
             <button className={s.paginationBtn} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={pageSafe === totalPages}>›</button>

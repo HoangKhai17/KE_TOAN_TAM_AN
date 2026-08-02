@@ -37,6 +37,15 @@ const MODULES = {
     canWrite:  async (user, entityId) => isAdmin(user) || phuTrachCongTy(entityId, user?.id),
     canDelete: (_att, user) => isAdmin(user),
   },
+
+  // File đính kèm của một ĐỊA ĐIỂM (trụ sở/chi nhánh) — bám RBAC theo công ty của
+  // địa điểm đó: admin xem hết, nhân viên chỉ công ty MÌNH PHỤ TRÁCH.
+  company_location: {
+    entityTable: 'company_locations',
+    canRead:   async (att, user) => isAdmin(user) || phuTrachCongTyQuaDiaDiem(att.entity_id, user?.id),
+    canWrite:  async (user, entityId) => isAdmin(user) || phuTrachCongTyQuaDiaDiem(entityId, user?.id),
+    canDelete: (att, user) => isAdmin(user) || att.uploaded_by === user.id,
+  },
 }
 
 // Nhân sự có phụ trách công ty này không
@@ -44,6 +53,15 @@ async function phuTrachCongTy(companyId, userId) {
   if (!companyId || !userId) return false
   const { rows } = await query(
     'SELECT 1 FROM companies WHERE id = $1 AND assigned_staff_id = $2', [companyId, userId])
+  return rows.length > 0
+}
+
+// Nhân sự có phụ trách công ty của ĐỊA ĐIỂM này không (entity_id = location id)
+async function phuTrachCongTyQuaDiaDiem(locationId, userId) {
+  if (!locationId || !userId) return false
+  const { rows } = await query(
+    `SELECT 1 FROM company_locations cl JOIN companies c ON c.id = cl.company_id
+     WHERE cl.id = $1 AND c.assigned_staff_id = $2`, [locationId, userId])
   return rows.length > 0
 }
 

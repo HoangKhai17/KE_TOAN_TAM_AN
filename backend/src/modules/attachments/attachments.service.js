@@ -88,4 +88,16 @@ async function remove(id, user) {
   storage.removeFile(row.storage_path) // xoá DB xong mới xoá file trên đĩa
 }
 
-module.exports = { list, create, getForDownload, remove }
+// Dọn TẤT CẢ file của một entity (gọi nội bộ khi xoá bản ghi cha — vd xoá địa điểm).
+// KHÔNG kiểm tra quyền: phía gọi đã kiểm tra quyền trên bản ghi cha.
+async function removeAllForEntity(module, entityId) {
+  const { rows } = await query(
+    'SELECT id, storage_path FROM attachments WHERE module = $1 AND entity_id = $2',
+    [module, entityId]
+  )
+  if (rows.length === 0) return
+  await query('DELETE FROM attachments WHERE module = $1 AND entity_id = $2', [module, entityId])
+  for (const r of rows) storage.removeFile(r.storage_path)
+}
+
+module.exports = { list, create, getForDownload, remove, removeAllForEntity }

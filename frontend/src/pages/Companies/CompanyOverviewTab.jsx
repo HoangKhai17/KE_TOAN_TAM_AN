@@ -104,7 +104,7 @@ function EditableField({ companyId, field, value, label, type = 'text', options 
       <div className={`${s.editRow} ${fullWidth ? s.infoGridFull : ''}`}>
         <div className={s.infoLabel}>{label}</div>
         <div
-          className={`${s.editValue} ${canEdit ? s.editValueOn : ''} ${display ? '' : s.editValueEmpty}`}
+          className={`${s.editValue} ${type === 'textarea' ? s.editValueMultiline : ''} ${canEdit ? s.editValueOn : ''} ${display ? '' : s.editValueEmpty}`}
           onClick={begin}
           title={canEdit ? 'Nhấp để sửa' : undefined}
         >
@@ -176,17 +176,18 @@ function CustomerInfoCard({ company, canEdit, onSaved }) {
       </div>
       <div className={s.infoCardBody}>
         <div className={s.customerCols}>
-          {/* Cột 1 — Thông tin khách hàng */}
+          {/* Cột 1 — Thông tin khách hàng & hợp đồng */}
           <div className={s.customerCol}>
-            <div className={s.customerColTitle}>Thông tin khách hàng</div>
+            <div className={s.customerColTitle}>Thông tin khách hàng &amp; hợp đồng</div>
             <EditableField {...common} field="name"         label="Tên công ty"  value={company.name} />
             <EditableField {...common} field="shortName"    label="Tên viết tắt" value={company.shortName} />
             <EditableField {...common} field="taxCode"      label="Mã số thuế"   value={company.taxCode} />
             <EditableField {...common} field="businessType" label="Loại hình"    value={company.businessType} type="select" options={btOptions} />
             <EditableField {...common} field="industry"     label="Ngành nghề"   value={company.industry} />
+            <EditableField {...common} field="serviceStartDate" label="Ngày bắt đầu HĐ" value={company.serviceStartDate} type="date" />
           </div>
 
-          {/* Cột 2 — Đại diện pháp lý & người liên hệ */}
+          {/* Cột 2 — Đại diện pháp lý, người liên hệ & ghi chú */}
           <div className={s.customerCol}>
             <div className={s.customerColTitle}>Đại diện pháp lý &amp; người liên hệ</div>
             <EditableField {...common} field="legalRepName"  label="Họ tên đại diện pháp lý" value={company.legalRepName} />
@@ -194,12 +195,6 @@ function CustomerInfoCard({ company, canEdit, onSaved }) {
             <EditableField {...common} field="contactName"   label="Họ tên liên hệ"         value={company.contactName} />
             <EditableField {...common} field="contactPhone"  label="ĐT liên hệ"             value={company.contactPhone} type="tel" />
             <EditableField {...common} field="contactEmail"  label="Email liên hệ"          value={company.contactEmail} type="email" />
-          </div>
-
-          {/* Cột 3 — Hợp đồng & ghi chú */}
-          <div className={s.customerCol}>
-            <div className={s.customerColTitle}>Hợp đồng &amp; ghi chú</div>
-            <EditableField {...common} field="serviceStartDate" label="Ngày bắt đầu HĐ" value={company.serviceStartDate} type="date" />
             <EditableField {...common} field="notes"            label="Ghi chú"         value={company.notes} type="textarea" />
           </div>
         </div>

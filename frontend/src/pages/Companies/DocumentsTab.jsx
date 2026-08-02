@@ -728,7 +728,7 @@ export default function DocumentsTab({ company }) {
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i} className={s.docTableRow}>
-                  <td colSpan={7} style={{ padding: '14px 16px' }}>
+                  <td colSpan={7} style={{ padding: '7px 8px' }}>
                     <div className={s.docSkeletonBar} style={{ width: `${50 + (i % 3) * 12}%` }} />
                   </td>
                 </tr>
@@ -881,7 +881,7 @@ export default function DocumentsTab({ company }) {
           <span className={s.paginationInfo}>{pagination.total} tài liệu</span>
           <div className={s.paginationBtns}>
             <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
-            <span style={{ fontSize: 'var(--fs-sm)', padding: '0 8px', color: 'var(--color-muted)' }}>
+            <span style={{ fontSize: 'var(--fs-xs)', padding: '0 8px', color: 'var(--color-muted)' }}>
               {page} / {pagination.totalPages}
             </span>
             <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
