@@ -457,6 +457,11 @@ async function getTaskById(id, user = null) {
 async function createTask(data, actorId, ipAddress, userAgent) {
   const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, collaboratorIds } = data
 
+  // Ngày hết hạn KHÔNG được nhỏ hơn ngày bắt đầu (so sánh chuỗi YYYY-MM-DD hợp lệ).
+  if (startDate && dueDate && dueDate < startDate) {
+    throw Object.assign(new Error('Ngày hết hạn không được nhỏ hơn ngày bắt đầu'), { status: 422 })
+  }
+
   const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
 
@@ -564,6 +569,17 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
 
   const { rows: [current] } = await query('SELECT * FROM tasks WHERE id = $1', [id])
   if (!current) throw Object.assign(new Error('Task not found'), { status: 404 })
+
+  // Ngày hết hạn KHÔNG được nhỏ hơn ngày bắt đầu — dùng giá trị HIỆU LỰC
+  // (giá trị mới nếu đang sửa, ngược lại lấy giá trị hiện tại). Áp cho MỌI người
+  // sửa (admin/staff) và mọi màn (danh sách/xem nhanh/chi tiết).
+  {
+    const effStart = data.startDate !== undefined ? toDateStr(data.startDate) : toDateStr(current.start_date)
+    const effDue   = data.dueDate   !== undefined ? toDateStr(data.dueDate)   : toDateStr(current.due_date)
+    if (effStart && effDue && effDue < effStart) {
+      throw Object.assign(new Error('Ngày hết hạn không được nhỏ hơn ngày bắt đầu'), { status: 422 })
+    }
+  }
 
   // Mỗi ngày một lượt riêng — chỉnh ngày này không khoá ngày kia
   let staffAdjustStart = false

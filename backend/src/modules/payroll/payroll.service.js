@@ -1,6 +1,7 @@
 const { query } = require('../../config/db')
 const audit     = require('../../lib/audit')
 const ExcelJS   = require('exceljs')
+const { assertEndNotBeforeStart } = require('../../utils/dateRange')
 
 function periodToDto(row) {
   return {
@@ -113,6 +114,11 @@ async function updatePeriod(id, data, actorId) {
   if (period.status !== 'draft') {
     throw Object.assign(new Error('Cannot edit a confirmed or paid payroll period'), { status: 409 })
   }
+  // end >= start (dùng giá trị hiệu lực khi sửa từng phần)
+  assertEndNotBeforeStart(
+    data.startDate !== undefined ? data.startDate : period.start_date,
+    data.endDate   !== undefined ? data.endDate   : period.end_date,
+  )
 
   const updates = ['updated_at = NOW()']
   const params  = []

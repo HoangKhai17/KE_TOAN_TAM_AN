@@ -47,6 +47,7 @@ function CreatePeriodModal({ onClose, onCreated }) {
     e.preventDefault()
     if (!form.startDate) { setError('Vui lòng chọn ngày bắt đầu'); return }
     if (!form.endDate)   { setError('Vui lòng chọn ngày kết thúc'); return }
+    if (form.endDate < form.startDate) { setError('Ngày kết thúc không được nhỏ hơn ngày bắt đầu'); return }
     if (form.periodMonth < 1 || form.periodMonth > 12) { setError('Tháng không hợp lệ'); return }
     setError(null)
     setSaving(true)
@@ -111,6 +112,7 @@ function CreatePeriodModal({ onClose, onCreated }) {
               type="date"
               value={form.endDate}
               onChange={set('endDate')}
+              min={form.startDate || undefined}
               className={s.formInput}
             />
           </div>

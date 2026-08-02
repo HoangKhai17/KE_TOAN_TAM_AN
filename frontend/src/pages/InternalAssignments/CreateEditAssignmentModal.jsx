@@ -136,6 +136,8 @@ export default function CreateEditAssignmentModal({ item, onClose, onSaved }) {
   function validate() {
     const errs = {}
     if (!title.trim()) errs.title = 'Tiêu đề không được để trống'
+    if (startDate && deadlineDate && deadlineDate < startDate)
+      errs.deadlineDate = 'Hạn hoàn thành không được nhỏ hơn ngày bắt đầu'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -249,11 +251,12 @@ export default function CreateEditAssignmentModal({ item, onClose, onSaved }) {
                   <label className={s.formLabel}>Hạn hoàn thành</label>
                   <input
                     type="date"
-                    className={s.formInput}
+                    className={`${s.formInput} ${errors.deadlineDate ? s.formInputError : ''}`}
                     value={deadlineDate}
                     onChange={(e) => setDeadlineDate(e.target.value)}
-                    min={new Date().toISOString().slice(0, 10)}
+                    min={startDate || new Date().toISOString().slice(0, 10)}
                   />
+                  {errors.deadlineDate && <span className={s.formError}>{errors.deadlineDate}</span>}
                 </div>
               </div>
 

@@ -1,6 +1,7 @@
 const { query } = require('../../config/db')
 const { createAndEmit } = require('../../lib/notify')
 const { calculateAttendanceRecord } = require('./attendance.service')
+const { assertEndNotBeforeStart } = require('../../utils/dateRange')
 
 // ── DTO ───────────────────────────────────────────────────────────────────────
 
@@ -108,6 +109,7 @@ async function listLeaveRequests({ userId, status, leaveType, from, to, page = 1
 }
 
 async function createLeaveRequest({ userId, leaveType, startDate, endDate, reason }) {
+  assertEndNotBeforeStart(startDate, endDate, 'Ngày kết thúc nghỉ không được nhỏ hơn ngày bắt đầu')
   const totalDays = await countWorkingDays(startDate, endDate)
 
   const { rows } = await query(

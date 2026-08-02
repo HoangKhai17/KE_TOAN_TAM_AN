@@ -13,7 +13,7 @@ const createPeriodSchema = z.object({
   startDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   notes:       z.string().max(1000).optional().nullable(),
-})
+}).refine(d => d.endDate >= d.startDate, { message: 'Ngày kết thúc không được nhỏ hơn ngày bắt đầu', path: ['endDate'] })
 
 const updatePeriodSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

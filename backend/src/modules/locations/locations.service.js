@@ -1,4 +1,5 @@
 const { query, getClient } = require('../../config/db')
+const { assertEndNotBeforeStart } = require('../../utils/dateRange')
 
 function toDto(row) {
   return {
@@ -73,6 +74,7 @@ async function createLocation(companyId, data, user) {
     status = 'active', startDate, endDate, contactName, contactPhone,
     isPrimary = false, sortOrder = 0, notes, licenseEstablishedDate,
   } = data
+  assertEndNotBeforeStart(startDate, endDate, 'Ngày chấm dứt không được nhỏ hơn ngày thành lập/bắt đầu')
 
   const client = await getClient()
   try {
@@ -116,10 +118,15 @@ async function updateLocation(companyId, id, data, user) {
   try {
     await client.query('BEGIN')
     const { rows: [existing] } = await client.query(
-      'SELECT id FROM company_locations WHERE id = $1 AND company_id = $2',
+      'SELECT id, start_date, end_date FROM company_locations WHERE id = $1 AND company_id = $2',
       [id, companyId]
     )
     if (!existing) throw Object.assign(new Error('Location not found'), { status: 404 })
+    assertEndNotBeforeStart(
+      data.startDate !== undefined ? data.startDate : existing.start_date,
+      data.endDate   !== undefined ? data.endDate   : existing.end_date,
+      'Ngày chấm dứt không được nhỏ hơn ngày thành lập/bắt đầu',
+    )
 
     // Đặt làm trụ sở chính → bỏ cờ ở địa điểm khác (trừ chính nó)
     if (data.isPrimary === true) {

@@ -209,6 +209,8 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
     if (!form.title.trim()) errs.title = 'Tiêu đề không được để trống'
     if (!form.companyId)    errs.companyId = 'Vui lòng chọn khách hàng'
     if (!form.dueDate)      errs.dueDate = 'Vui lòng nhập ngày hết hạn'
+    else if (form.startDate && form.dueDate < form.startDate)
+      errs.dueDate = 'Ngày hết hạn không được nhỏ hơn ngày bắt đầu'
     // Bắt buộc phải có checklist: hoặc thêm tay ≥1 bước, hoặc chọn loại công việc có sẵn checklist mẫu.
     const hasTemplateChecklist = (selectedType?.checklistCount ?? 0) > 0
     if (checklistItems.length === 0 && !hasTemplateChecklist) {

@@ -36,7 +36,7 @@ function toDateValue(isoStr) {
 }
 
 // Date field: shows dd/MM/yyyy text, hidden native picker on click
-function QvDateField({ value, onChange, isError }) {
+function QvDateField({ value, onChange, isError, min, max }) {
   const ref = useRef(null)
   return (
     <div
@@ -49,6 +49,8 @@ function QvDateField({ value, onChange, isError }) {
         type="date"
         value={value}
         onChange={onChange}
+        min={min}
+        max={max}
         className={s.qvDateHidden}
         tabIndex={-1}
       />
@@ -229,19 +231,27 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   }
 
   async function changeStartDate(startDate) {
+    const dueVal = toDateValue(task.dueDate)
+    if (startDate && dueVal && dueVal < startDate) {
+      addToast('Ngày bắt đầu không được lớn hơn ngày hết hạn', 'error'); return
+    }
     try {
       const updated = await tasksApi.updateTask(taskId, { startDate: startDate || null })
       applyUpdate(updated)
       addToast(startDate ? 'Đã cập nhật ngày bắt đầu' : 'Đã xóa ngày bắt đầu', 'success')
-    } catch { addToast('Không thể đổi ngày bắt đầu', 'error') }
+    } catch (err) { addToast(err.response?.data?.error?.message ?? 'Không thể đổi ngày bắt đầu', 'error') }
   }
 
   async function changeDueDate(dueDate) {
+    const startVal = toDateValue(task.startDate)
+    if (dueDate && startVal && dueDate < startVal) {
+      addToast('Ngày hết hạn không được nhỏ hơn ngày bắt đầu', 'error'); return
+    }
     try {
       const updated = await tasksApi.updateTask(taskId, { dueDate: dueDate || null })
       applyUpdate(updated)
       addToast(dueDate ? 'Đã cập nhật ngày hết hạn' : 'Đã xóa ngày hết hạn', 'success')
-    } catch { addToast('Không thể đổi ngày hết hạn', 'error') }
+    } catch (err) { addToast(err.response?.data?.error?.message ?? 'Không thể đổi ngày hết hạn', 'error') }
   }
 
   async function changeAssigned(assignedTo) {
@@ -560,6 +570,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                     <QvDateField
                       value={toDateValue(task.startDate || task.createdAt)}
                       onChange={(e) => changeStartDate(e.target.value)}
+                      max={toDateValue(task.dueDate) || undefined}
                     />
                   ) : (
                     <span className={s.qvValue} title={dateLockReason(task, isAdmin, 'start')}>
@@ -575,6 +586,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                       value={toDateValue(task.dueDate)}
                       onChange={(e) => changeDueDate(e.target.value)}
                       isError={overdue}
+                      min={toDateValue(task.startDate || task.createdAt) || undefined}
                     />
                   ) : (
                     <span className={s.qvValue} title={dateLockReason(task, isAdmin, 'due')}>

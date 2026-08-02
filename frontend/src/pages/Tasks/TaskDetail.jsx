@@ -822,11 +822,15 @@ export default function TaskDetail() {
   }
 
   async function saveDueDate(val) {
+    const startVal = task.startDate?.slice(0, 10)
+    if (val && startVal && val < startVal) {
+      addToast('Ngày hết hạn không được nhỏ hơn ngày bắt đầu', 'error'); return
+    }
     setSavingDue(true)
     try {
       const updated = await tasksApi.updateTask(id, { dueDate: val || null })
       setTask(updated)
-    } catch { addToast('Không thể lưu ngày hết hạn', 'error') } finally { setSavingDue(false) }
+    } catch (err) { addToast(err.response?.data?.error?.message ?? 'Không thể lưu ngày hết hạn', 'error') } finally { setSavingDue(false) }
   }
 
   async function changeSource(source) {
@@ -1035,6 +1039,7 @@ export default function TaskDetail() {
                     type="date"
                     value={task.dueDate?.slice(0, 10) ?? ''}
                     onChange={(e) => saveDueDate(e.target.value)}
+                    min={task.startDate?.slice(0, 10) || undefined}
                     className={`${s.dateInput} ${s.dateInputCompact}`}
                     disabled={savingDue}
                   />

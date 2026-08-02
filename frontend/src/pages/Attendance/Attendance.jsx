@@ -722,7 +722,7 @@ function LeaveFormModal({ onClose, onSaved }) {
           </div>
           <div className={s.formGroup}>
             <label className={`${s.formLabel} ${s.req}`}>Ngày kết thúc</label>
-            <input type="date" value={form.endDate} onChange={set('endDate')} className={s.formInput} />
+            <input type="date" value={form.endDate} onChange={set('endDate')} min={form.startDate || undefined} className={s.formInput} />
           </div>
         </div>
         <div className={s.formGroup}>

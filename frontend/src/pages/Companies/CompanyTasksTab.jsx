@@ -97,7 +97,7 @@ const CT_PRIORITY_SELECT_CLASS = {
 }
 
 // Ô chỉnh nhanh Ngày hết hạn (đồng bộ giao diện với trang Tasks)
-function CtListDateField({ value, onChange, isOverdue }) {
+function CtListDateField({ value, onChange, isOverdue, min }) {
   const ref = useRef(null)
   const dateStr = value ? value.slice(0, 10) : ''
   return (
@@ -106,7 +106,7 @@ function CtListDateField({ value, onChange, isOverdue }) {
       onClick={() => ref.current?.showPicker?.()}
     >
       <span className={ts.qeDateText}>{dateStr ? fmtTaskDate(dateStr) : '—'}</span>
-      <input ref={ref} type="date" value={dateStr} onChange={onChange} className={ts.qeDateInputNative} tabIndex={-1} />
+      <input ref={ref} type="date" value={dateStr} onChange={onChange} min={min} className={ts.qeDateInputNative} tabIndex={-1} />
     </div>
   )
 }
@@ -798,6 +798,10 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     }
   }
   async function handleDueDateChange(task, dueDate) {
+    const startVal = (task.startDate || task.createdAt)?.slice(0, 10)
+    if (dueDate && startVal && dueDate < startVal) {
+      addToast('Ngày hết hạn không được nhỏ hơn ngày bắt đầu', 'error'); return
+    }
     try {
       const updated = await tasksApi.updateTask(task.id, { dueDate: dueDate || null })
       setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
@@ -1313,6 +1317,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                             value={task.dueDate ?? ''}
                             onChange={(e) => handleDueDateChange(task, e.target.value)}
                             isOverdue={overdue}
+                            min={(task.startDate || task.createdAt)?.slice(0, 10) || undefined}
                           />
                         ) : (
                           <span title="Chỉ Quản trị viên được sửa (công việc này không phải từ lịch định kỳ)">

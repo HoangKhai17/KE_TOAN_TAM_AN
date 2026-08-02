@@ -107,7 +107,7 @@ function shortName(name) {
 
 // ── List due-date field: shows dd/MM/yyyy text, hidden native picker on click ──
 
-function ListDateField({ value, onChange, isOverdue }) {
+function ListDateField({ value, onChange, isOverdue, min }) {
   const ref = useRef(null)
   const dateStr = value ? value.slice(0, 10) : ''
   return (
@@ -123,6 +123,7 @@ function ListDateField({ value, onChange, isOverdue }) {
         type="date"
         value={dateStr}
         onChange={onChange}
+        min={min}
         className={s.qeDateInputNative}
         tabIndex={-1}
       />
@@ -950,6 +951,7 @@ function ListView({
                           value={t.dueDate ?? ''}
                           onChange={(e) => onDueDateChange(t, e.target.value)}
                           isOverdue={overdue}
+                          min={(t.startDate || t.createdAt)?.slice(0, 10) || undefined}
                         />
                       ) : (
                         <span className={s.dueDateNormal} title="Chỉ Quản trị viên được sửa (công việc này không phải từ lịch định kỳ)">
@@ -1566,12 +1568,16 @@ export default function Tasks() {
   }
 
   async function handleDueDateChange(task, dueDate) {
+    const startVal = (task.startDate || task.createdAt)?.slice(0, 10)
+    if (dueDate && startVal && dueDate < startVal) {
+      addToast('Ngày hết hạn không được nhỏ hơn ngày bắt đầu', 'error'); return
+    }
     try {
       const updated = await tasksApi.updateTask(task.id, { dueDate: dueDate || null })
       setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
       addToast(dueDate ? 'Đã cập nhật ngày hết hạn' : 'Đã xóa ngày hết hạn', 'success')
-    } catch {
-      addToast('Không thể cập nhật ngày hết hạn', 'error')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật ngày hết hạn', 'error')
     }
   }
 

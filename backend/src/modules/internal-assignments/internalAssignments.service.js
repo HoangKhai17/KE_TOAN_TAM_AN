@@ -2,6 +2,7 @@
 const { query }        = require('../../config/db')
 const audit            = require('../../lib/audit')
 const { createAndEmit } = require('../../lib/notify')
+const { assertEndNotBeforeStart } = require('../../utils/dateRange')
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -301,6 +302,7 @@ async function getById(id, actorId, actorRole) {
 
 async function createAssignment(data, actorId) {
   const { title, description, companyId, priority, startDate, deadlineDate, assigneeIds = [] } = data
+  assertEndNotBeforeStart(startDate, deadlineDate, 'Hạn chót không được nhỏ hơn ngày bắt đầu')
 
   const { rows: [row] } = await query(
     `INSERT INTO internal_assignments
@@ -331,6 +333,11 @@ async function updateAssignment(id, data, actorId) {
   if (!['draft', 'active'].includes(row.status)) {
     throw Object.assign(new Error('Chỉ được sửa phiếu ở trạng thái nháp hoặc đang thực hiện'), { status: 422 })
   }
+  assertEndNotBeforeStart(
+    data.startDate    !== undefined ? data.startDate    : row.start_date,
+    data.deadlineDate !== undefined ? data.deadlineDate : row.deadline_date,
+    'Hạn chót không được nhỏ hơn ngày bắt đầu',
+  )
 
   const fields = []
   const params = []
