@@ -32,7 +32,8 @@ async function setCompanyOrder(req, res, next) {
 // Ghim / bỏ ghim công ty cho riêng user đang đăng nhập
 async function setCompanyPin(req, res, next) {
   try {
-    const result = await svc.setCompanyPin(req.user.id, req.params.id, req.body.isPinned)
+    // Ưu tiên là thuộc tính CHUNG (chỉ admin — router chốt quyền). Không còn theo user.
+    const result = await svc.setCompanyPin(req.params.id, req.body.isPinned, req.user.id)
     res.json({ success: true, data: result })
   } catch (err) { next(err) }
 }

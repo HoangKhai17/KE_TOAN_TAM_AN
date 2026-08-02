@@ -662,6 +662,7 @@ export default function Companies() {
   }
 
   async function handleTogglePin(company) {
+    if (!isAdmin) return   // Ưu tiên là thuộc tính chung — chỉ admin đặt (backend cũng chốt quyền)
     const next = !company.isPinned
     const prevList = companies
     // Cập nhật cờ ghim rồi đưa nhóm đã ghim lên đầu (filter giữ nguyên thứ tự tương đối)
@@ -1265,17 +1266,25 @@ function CompanyRow({
               <GripVertical size={14} />
             </button>
           )}
-          <button
-            className={s.coPinBtn}
-            title={company.isPinned ? 'Bỏ đánh dấu ưu tiên' : 'Đánh dấu ưu tiên'}
-            onClick={(e) => { e.stopPropagation(); onTogglePin() }}
-          >
-            <Star
-              size={14}
-              fill={company.isPinned ? '#f59e0b' : 'none'}
-              color={company.isPinned ? '#f59e0b' : 'var(--color-muted)'}
-            />
-          </button>
+          {/* Ưu tiên: admin bấm để đặt (thuộc tính chung). Staff chỉ THẤY (sao đầy read-only)
+              ở công ty được ưu tiên, không đặt được. */}
+          {isAdmin ? (
+            <button
+              className={s.coPinBtn}
+              title={company.isPinned ? 'Bỏ đánh dấu ưu tiên' : 'Đánh dấu ưu tiên'}
+              onClick={(e) => { e.stopPropagation(); onTogglePin() }}
+            >
+              <Star
+                size={14}
+                fill={company.isPinned ? '#f59e0b' : 'none'}
+                color={company.isPinned ? '#f59e0b' : 'var(--color-muted)'}
+              />
+            </button>
+          ) : company.isPinned ? (
+            <span className={s.coPinStatic} title="Công ty ưu tiên">
+              <Star size={14} fill="#f59e0b" color="#f59e0b" />
+            </span>
+          ) : null}
           {company.avatarUrl ? (
             <img
               src={company.avatarUrl}

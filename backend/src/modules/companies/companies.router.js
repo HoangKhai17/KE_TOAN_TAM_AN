@@ -113,8 +113,9 @@ router.post('/overview', ...auth, ctrl.overviewCompanies)
 
 // ── Tùy chọn danh sách RIÊNG của mỗi user: thứ tự kéo-thả + ghim ưu tiên ──────
 // LƯU Ý: '/order' phải khai báo TRƯỚC '/:id', nếu không sẽ bị khớp thành id='order'.
-router.patch('/order',    ...auth, validate(setCompanyOrderSchema), ctrl.setCompanyOrder)
-router.patch('/:id/pin',  ...auth, validate(setCompanyPinSchema),   ctrl.setCompanyPin)
+router.patch('/order',    ...auth,  validate(setCompanyOrderSchema), ctrl.setCompanyOrder)
+// Ưu tiên là thuộc tính CHUNG của công ty → chỉ ADMIN được đặt.
+router.patch('/:id/pin',  ...admin, validate(setCompanyPinSchema),   ctrl.setCompanyPin)
 
 /**
  * @openapi

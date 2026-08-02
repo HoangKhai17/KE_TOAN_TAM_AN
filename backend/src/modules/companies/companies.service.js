@@ -60,7 +60,7 @@ function toDto(row) {
     taskOnTimeCount:    parseInt(row.task_on_time_count ?? 0, 10),
     customFields:     Array.isArray(row.custom_fields) ? row.custom_fields : [],
     // Tùy chọn RIÊNG của người đang đăng nhập (bảng company_user_prefs)
-    isPinned:         row.is_pinned === true,
+    isPinned:         row.is_priority === true,
     sortPosition:     row.sort_position ?? null,
     createdBy:        row.created_by,
     createdAt:        row.created_at,
@@ -134,7 +134,6 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, busin
     `SELECT c.*,
             COUNT(*) OVER() AS _total,
             u.name AS staff_name, u.email AS staff_email, u.job_title AS staff_job_title, u.avatar_url AS staff_avatar_url,
-            cup.is_pinned,
             cup.position AS sort_position,
             tc.task_open_count,
             tc.task_overdue_count,
@@ -151,7 +150,7 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, busin
        FROM tasks tk WHERE tk.company_id = c.id
      ) tc ON TRUE
      WHERE ${where}
-     ORDER BY COALESCE(cup.is_pinned, FALSE) DESC,  -- công ty được ghim luôn lên đầu
+     ORDER BY c.is_priority DESC,  -- công ty ưu tiên (admin đặt, dùng chung) luôn lên đầu
               -- NULLS FIRST: công ty CHƯA có thứ tự (vd KH vừa thêm) nổi lên ĐẦU
               -- để user kéo ngay vào vị trí mong muốn, thay vì phải tìm ở cuối danh sách.
               cup.position ASC NULLS FIRST,
@@ -194,18 +193,14 @@ async function setCompanyOrder(userId, orderedIds = []) {
   return { updated: finalIds.length }
 }
 
-// Ghim / bỏ ghim 1 công ty cho riêng user đang đăng nhập.
-async function setCompanyPin(userId, companyId, isPinned) {
+// Đánh dấu / bỏ ưu tiên 1 công ty — thuộc tính CHUNG (chỉ admin, router đã chốt quyền).
+// Mọi người (kể cả staff phụ trách) đều thấy → emit data:company để list tự cập nhật.
+async function setCompanyPin(companyId, isPinned, actorId = null) {
   const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
 
-  await query(
-    `INSERT INTO company_user_prefs (user_id, company_id, is_pinned, updated_at)
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (user_id, company_id)
-     DO UPDATE SET is_pinned = EXCLUDED.is_pinned, updated_at = NOW()`,
-    [userId, companyId, !!isPinned]
-  )
+  await query('UPDATE companies SET is_priority = $2, updated_at = NOW() WHERE id = $1', [companyId, !!isPinned])
+  emitData('data:company', { action: 'updated', id: companyId, actorId })
   return { companyId, isPinned: !!isPinned }
 }
 

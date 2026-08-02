@@ -308,28 +308,6 @@ export default function CompanyDetail() {
                 )}
               </button>
 
-              {(isAdmin || company.assignedStaffId === currentUser?.id) && (
-                <>
-                  <span className={s.heroBtnDivider} />
-                  <button className={s.btnOutline} onClick={() => setShowEdit(true)}>
-                    <Pencil size={13} /> Chỉnh sửa
-                  </button>
-                  {isAdmin && company.status !== 'terminated' && (
-                    <button className={s.btnDanger} onClick={() => setShowTerminate(true)}>
-                      Kết thúc HĐ
-                    </button>
-                  )}
-                  {isAdmin && (
-                    <button
-                      className={s.btnDeleteIcon}
-                      onClick={() => setShowDelete(true)}
-                      title="Xoá công ty"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </>
-              )}
             </div>
           </div>
         </div>
@@ -345,6 +323,28 @@ export default function CompanyDetail() {
               setOverviewTick((t) => t + 1)
             }}
           />
+          {(isAdmin || company.assignedStaffId === currentUser?.id) && (
+            <div className={s.heroActionRow}>
+              <button className={`${s.btnOutline} ${s.heroEditBtn}`} onClick={() => setShowEdit(true)}>
+                <Pencil size={13} /> Chỉnh sửa
+              </button>
+              {isAdmin && company.status !== 'terminated' && (
+                <button className={s.btnDanger} onClick={() => setShowTerminate(true)}>
+                  Kết thúc HĐ
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  className={s.btnDeleteIcon}
+                  onClick={() => setShowDelete(true)}
+                  title="Xoá công ty"
+                  aria-label="Xoá công ty"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
