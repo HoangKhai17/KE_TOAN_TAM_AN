@@ -59,6 +59,24 @@ async function deleteOption(req, res, next) {
 }
 
 
+// ── Đổi thứ tự hiển thị (▲▼) + bật/tắt tính năng nhóm ────────────────────────
+async function moveOption(req, res, next) {
+  try {
+    const { typeKey, optionKey } = req.params
+    const r = await svc.moveOption(typeKey, optionKey, req.body.direction)
+    if (r?.notFound) return res.status(404).json({ success: false, error: { message: 'Không tìm thấy lựa chọn' } })
+    res.json({ success: true, data: r })
+  } catch (err) { next(err) }
+}
+
+async function setHasGroups(req, res, next) {
+  try {
+    const r = await svc.setHasGroups(req.params.typeKey, req.body.hasGroups)
+    if (!r) return res.status(404).json({ success: false, error: { message: 'Không tìm thấy danh mục' } })
+    res.json({ success: true, data: { enumType: r } })
+  } catch (err) { next(err) }
+}
+
 // ── Nhóm lựa chọn ────────────────────────────────────────────────────────────
 async function addGroup(req, res, next) {
   try {
@@ -95,4 +113,5 @@ async function setOptionGroup(req, res, next) {
 
 module.exports = {
   addGroup, updateGroup, deleteGroup, setOptionGroup,
-  listAllEnums, getEnumType, updateOptionLabel, addOption, toggleOption, deleteOption }
+  listAllEnums, getEnumType, updateOptionLabel, addOption, toggleOption, deleteOption,
+  moveOption, setHasGroups }

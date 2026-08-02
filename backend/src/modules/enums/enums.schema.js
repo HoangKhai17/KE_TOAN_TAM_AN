@@ -9,4 +9,12 @@ const addOptionSchema = z.object({
   label:     z.string().min(1).max(200),
 })
 
-module.exports = { updateOptionLabelSchema, addOptionSchema }
+const moveOptionSchema = z.object({
+  direction: z.enum(['up', 'down']),
+})
+
+const setHasGroupsSchema = z.object({
+  hasGroups: z.boolean(),
+})
+
+module.exports = { updateOptionLabelSchema, addOptionSchema, moveOptionSchema, setHasGroupsSchema }

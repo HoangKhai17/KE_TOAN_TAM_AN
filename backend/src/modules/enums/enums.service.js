@@ -1,4 +1,4 @@
-const { query } = require('../../config/db')
+const { query, getClient } = require('../../config/db')
 const enumsLib = require('../../lib/enums')
 
 async function listAllEnums() {
@@ -219,5 +219,48 @@ async function setOptionGroup(typeKey, optionKey, groupKey) {
   return { key: rows[0].option_key, groupKey: groupKey ?? null }
 }
 
+// ── Đổi thứ tự hiển thị (sort_order) bằng nút ▲▼ ─────────────────────────────
+// Reindex toàn bộ options về 0..n-1 sau khi đổi chỗ với option liền kề → luôn
+// đúng dù dữ liệu cũ có sort_order trùng/nhảy số.
+async function moveOption(typeKey, optionKey, direction) {
+  const { rows: t } = await query('SELECT id FROM enum_types WHERE type_key = $1', [typeKey])
+  if (t.length === 0) return { notFound: true }
+  const { rows: opts } = await query(
+    'SELECT id, option_key FROM enum_options WHERE type_id = $1 ORDER BY sort_order, option_key',
+    [t[0].id],
+  )
+  const idx = opts.findIndex((o) => o.option_key === optionKey)
+  if (idx === -1) return { notFound: true }
+  const swap = direction === 'up' ? idx - 1 : idx + 1
+  if (swap < 0 || swap >= opts.length) return { moved: false }   // đã ở biên
+  ;[opts[idx], opts[swap]] = [opts[swap], opts[idx]]
+
+  const client = await getClient()
+  try {
+    await client.query('BEGIN')
+    for (let i = 0; i < opts.length; i++) {
+      await client.query('UPDATE enum_options SET sort_order = $1 WHERE id = $2', [i, opts[i].id])
+    }
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK'); throw err
+  } finally { client.release() }
+
+  enumsLib.invalidate()
+  return { moved: true }
+}
+
+// ── Bật/tắt tính năng NHÓM cho một danh mục (has_groups) ─────────────────────
+async function setHasGroups(typeKey, hasGroups) {
+  const { rows } = await query(
+    'UPDATE enum_types SET has_groups = $1 WHERE type_key = $2 RETURNING type_key, has_groups',
+    [!!hasGroups, typeKey],
+  )
+  if (rows.length === 0) return null
+  enumsLib.invalidate()
+  return { typeKey: rows[0].type_key, hasGroups: rows[0].has_groups }
+}
+
 module.exports = {
-  addGroup, updateGroup, deleteGroup, setOptionGroup, listAllEnums, listEnumType, updateOptionLabel, addOption, toggleOption, deleteOption }
+  addGroup, updateGroup, deleteGroup, setOptionGroup, listAllEnums, listEnumType,
+  updateOptionLabel, addOption, toggleOption, deleteOption, moveOption, setHasGroups }

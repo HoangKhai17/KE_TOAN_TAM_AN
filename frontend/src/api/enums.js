@@ -25,6 +25,18 @@ export async function deleteEnumOption(typeKey, optionKey) {
   await api.delete(`/enums/${typeKey}/options/${optionKey}`)
 }
 
+// Đổi thứ tự hiển thị 1 lựa chọn (▲▼): direction = 'up' | 'down'
+export async function moveEnumOption(typeKey, optionKey, direction) {
+  const { data } = await api.patch(`/enums/${typeKey}/options/${optionKey}/move`, { direction })
+  return data.data
+}
+
+// Bật/tắt tính năng NHÓM cho một danh mục
+export async function setEnumHasGroups(typeKey, hasGroups) {
+  const { data } = await api.patch(`/enums/${typeKey}`, { hasGroups })
+  return data.data.enumType
+}
+
 // ── Nhóm lựa chọn (chỉ danh mục có hasGroups) ────────────────────────────────
 export async function addEnumGroup(typeKey, groupKey, label) {
   const { data } = await api.post(`/enums/${typeKey}/groups`, { groupKey, label })

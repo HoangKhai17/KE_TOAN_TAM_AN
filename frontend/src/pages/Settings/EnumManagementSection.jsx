@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { Pencil, Save, X, Loader2, ChevronRight, Plus, Power, Trash2, FolderPlus } from 'lucide-react'
+import { Pencil, Save, X, Loader2, ChevronRight, ChevronUp, ChevronDown, Plus, Power, Trash2, FolderPlus } from 'lucide-react'
 import {
   fetchAllEnums, updateEnumOptionLabel, addEnumOption, toggleEnumOption, deleteEnumOption,
   addEnumGroup, updateEnumGroup, deleteEnumGroup, setEnumOptionGroup,
+  moveEnumOption, setEnumHasGroups,
 } from '../../api/enums'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
@@ -42,6 +43,9 @@ export default function EnumManagementSection() {
   const [togglingKey, setTogglingKey] = useState(null)
   // Delete state
   const [deletingKey, setDeletingKey] = useState(null)
+  // Move (đổi thứ tự) + bật/tắt nhóm
+  const [movingKey, setMovingKey]     = useState(null)
+  const [togglingGroups, setTogglingGroups] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -249,6 +253,32 @@ Các lựa chọn trong nhóm KHÔNG bị xoá, chỉ trở về trạng thái c
 
   const activeData = allEnums[activeType]
 
+  // Đổi thứ tự hiển thị (▲▼) — reload lại toàn bộ vì reindex đổi nhiều option
+  async function handleMove(optionKey, direction) {
+    setMovingKey(optionKey + direction)
+    try {
+      await moveEnumOption(activeType, optionKey, direction)
+      await taiLai()
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không đổi được thứ tự', 'error')
+    } finally { setMovingKey(null) }
+  }
+
+  // Bật/tắt tính năng nhóm cho danh mục đang xem
+  async function handleToggleGroups() {
+    setTogglingGroups(true)
+    const next = !activeData.hasGroups
+    try {
+      await setEnumHasGroups(activeType, next)
+      await taiLai()
+      addToast(next ? 'Đã bật tính năng nhóm' : 'Đã tắt tính năng nhóm', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không đổi được', 'error')
+    } finally { setTogglingGroups(false) }
+  }
+
+  const opts = activeData?.options ?? []
+
   return (
     <div>
       <p className={s.sectionText}>
@@ -281,20 +311,29 @@ Các lựa chọn trong nhóm KHÔNG bị xoá, chỉ trở về trạng thái c
               <div className={s.enumContentHead}>
                 <div className={s.enumContentTitle}>{activeData.label || activeType}</div>
                 <code className={s.codePill}>{activeType}</code>
-                {activeData.isEditable !== false && (
-                  <button
-                    className={s.btnAddSmall}
-                    style={{ marginLeft: 'auto' }}
-                    onClick={openAdd}
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <label
+                    title="Bật để phân nhóm các lựa chọn (lọc gọn theo nhóm)"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', color: 'var(--color-text-soft)', whiteSpace: 'nowrap' }}
                   >
-                    <Plus size={12} /> Thêm mới
-                  </button>
-                )}
-                {activeData.isEditable === false && (
-                  <span className={s.enumFixedNote} style={{ marginLeft: 'auto' }}>
-                    Giá trị cố định — không thể thêm mới
-                  </span>
-                )}
+                    <input
+                      type="checkbox"
+                      checked={!!activeData.hasGroups}
+                      disabled={togglingGroups}
+                      onChange={handleToggleGroups}
+                      style={{ width: 15, height: 15, cursor: 'pointer' }}
+                    />
+                    Bật tính năng nhóm
+                    {togglingGroups && <Loader2 size={12} className={s.spin} />}
+                  </label>
+                  {activeData.isEditable !== false ? (
+                    <button className={s.btnAddSmall} onClick={openAdd}>
+                      <Plus size={12} /> Thêm mới
+                    </button>
+                  ) : (
+                    <span className={s.enumFixedNote}>Giá trị cố định — không thể thêm mới</span>
+                  )}
+                </div>
               </div>
 
               {/* Add form */}
@@ -446,7 +485,7 @@ Các lựa chọn trong nhóm KHÔNG bị xoá, chỉ trở về trạng thái c
                   </tr>
                 </thead>
                 <tbody>
-                  {activeData.options.map((opt) => (
+                  {activeData.options.map((opt, i) => (
                     <tr key={opt.key} style={!opt.isActive ? { opacity: 0.5 } : {}}>
                       <td>
                         <code className={s.codePill}>{opt.key}</code>
@@ -492,8 +531,25 @@ Các lựa chọn trong nhóm KHÔNG bị xoá, chỉ trở về trạng thái c
                           </select>
                         </td>
                       )}
-                      <td style={{ textAlign: 'center', color: 'var(--color-muted)', fontSize: 12 }}>
-                        {opt.sortOrder}
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                          <button
+                            className={s.iconBtn} title="Đưa lên"
+                            style={{ width: 24, height: 24 }}
+                            disabled={i === 0 || movingKey !== null}
+                            onClick={() => handleMove(opt.key, 'up')}
+                          >
+                            {movingKey === opt.key + 'up' ? <Loader2 size={12} /> : <ChevronUp size={14} />}
+                          </button>
+                          <button
+                            className={s.iconBtn} title="Đưa xuống"
+                            style={{ width: 24, height: 24 }}
+                            disabled={i === opts.length - 1 || movingKey !== null}
+                            onClick={() => handleMove(opt.key, 'down')}
+                          >
+                            {movingKey === opt.key + 'down' ? <Loader2 size={12} /> : <ChevronDown size={14} />}
+                          </button>
+                        </div>
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <span className={opt.isActive ? s.enumBadgeActive : s.enumBadgeInactive}>

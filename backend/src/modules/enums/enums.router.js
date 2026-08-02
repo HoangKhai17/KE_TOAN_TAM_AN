@@ -2,7 +2,7 @@ const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
 const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
-const { updateOptionLabelSchema, addOptionSchema } = require('./enums.schema')
+const { updateOptionLabelSchema, addOptionSchema, moveOptionSchema, setHasGroupsSchema } = require('./enums.schema')
 const ctrl = require('./enums.controller')
 
 const router = Router()
@@ -133,6 +133,10 @@ router.post('/:typeKey/options/:optionKey/toggle', ...admin, ctrl.toggleOption)
  *       409: { description: Option is in use }
  */
 router.delete('/:typeKey/options/:optionKey', ...admin, ctrl.deleteOption)
+
+/* ─── Đổi thứ tự hiển thị (▲▼) + bật/tắt tính năng nhóm (admin) ─── */
+router.patch('/:typeKey/options/:optionKey/move', ...admin, validate(moveOptionSchema), ctrl.moveOption)
+router.patch('/:typeKey', ...admin, validate(setHasGroupsSchema), ctrl.setHasGroups)
 
 /* ─── Nhóm lựa chọn (chỉ danh mục có has_groups) ─── */
 router.post('/:typeKey/groups', ...admin, ctrl.addGroup)
