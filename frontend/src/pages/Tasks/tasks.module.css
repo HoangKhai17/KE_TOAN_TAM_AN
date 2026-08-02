@@ -1029,8 +1029,17 @@
 .boardCardMeta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px 6px;
   margin-bottom: 4px;
+}
+
+/* Badge trạng thái trong card board: đồng bộ đúng tỉ lệ với badge Mức độ */
+.boardCardMeta .statusBadge {
+  height: 15px;
+  padding: 0 5px;
+  font-size: var(--fs-3xs);
+  letter-spacing: normal;
 }
 
 .boardCardDate { font-size: var(--fs-3xs); color: #64748b; }

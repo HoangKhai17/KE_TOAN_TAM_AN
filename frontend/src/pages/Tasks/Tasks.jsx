@@ -219,7 +219,7 @@ function OnHoldModal({ task, onConfirm, onClose }) {
 
 // ── Board card inner ──────────────────────────────────────────────────────────
 
-function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
+function BoardCardInner({ task, isAdmin, onDelete, onQuickView, showStatus = false }) {
   const pct     = progressPct(task)
   const overdue = isTaskOverdue(task)
   const startShort = task.startDate ? fmtDate(task.startDate).slice(0, 5) : null
@@ -257,12 +257,15 @@ function BoardCardInner({ task, isAdmin, onDelete, onQuickView }) {
       {/* Hàng: mức độ + nhân sự phụ trách + ngày (gọn 1 dòng để rút height) */}
       <div className={s.boardCardMeta}>
         <PriorityBadge priority={task.priority} />
+        {showStatus && <StatusBadge status={task.status} />}
         {completionKind(task) && (
           <span className={`${s.boardCompBadge} ${completionKind(task) === 'late' ? s.boardCompLate : s.boardCompOnTime}`}>
             {completionKind(task) === 'late' ? 'Trễ hạn' : 'Trước hạn'}
           </span>
         )}
-        {task.assignedToName && <span className={s.boardCardAssigneeName}>{task.assignedToName}</span>}
+        {task.assignedToName && (
+          <span className={s.boardCardAssigneeName} title={task.assignedToName}>{shortName(task.assignedToName)}</span>
+        )}
         {(startShort || endShort) && (
           <span className={`${s.boardCardDates} ${overdue ? s.boardCardDateOver : ''}`}>
             {startShort ?? '—'} → {endShort ?? '—'}
@@ -499,7 +502,7 @@ function DraggableSourceCard({ task, isAdmin, onDelete, onQuickView }) {
       style={transform ? { '--drag-x': `${transform.x}px`, '--drag-y': `${transform.y}px` } : undefined}
       onClick={() => !isDragging && onQuickView(task.id)}
     >
-      <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
+      <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} showStatus />
     </div>
   )
 }
@@ -565,7 +568,7 @@ function SourceBoardView({ tasks, sourceOptions, onSourceChange, onOpen, onQuick
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
           <div className={`${s.boardCard} ${s.boardCardOverlay}`}>
-            <BoardCardInner task={activeTask} isAdmin={false} onDelete={null} />
+            <BoardCardInner task={activeTask} isAdmin={false} onDelete={null} showStatus />
           </div>
         ) : null}
       </DragOverlay>
@@ -1430,6 +1433,16 @@ export default function Tasks() {
   // Tải "working set" (tối đa 500) rồi lọc/sắp/phân trang phía client (docs/018).
   const listParams = useMemo(() => {
     const [sortBy, sortDir] = sortValue.split(':')
+    // Kanban nguồn: mặc định ẩn việc đã "Hoàn thành" ngay ở tầng query (không phí
+    // ngạch working set 500 cho việc đã xong). Suy ra theo view — KHÔNG ghi vào
+    // statusFilter dùng chung nên không rò sang view Danh sách/Board. Nếu user tự
+    // chọn trạng thái thì tôn trọng lựa chọn đó.
+    const allStatusKeys = getOptions('task_status').length > 0
+      ? getOptions('task_status').map((o) => o.key)
+      : TASK_STATUSES
+    const effectiveStatus = statusFilter.length > 0
+      ? statusFilter
+      : (view === 'board_source' ? allStatusKeys.filter((k) => k !== 'completed') : undefined)
     return {
       search:      search              || undefined,
       companyId:   companyFilter.length ? companyFilter : undefined,
@@ -1438,7 +1451,7 @@ export default function Tasks() {
       assignedTo:  isAdmin ? (staffFilter.length ? staffFilter : undefined) : undefined,
       createdBy:   creatorFilter.length ? creatorFilter : undefined,
       collaboratorIds: supportFilter.length ? supportFilter : undefined,
-      status:      statusFilter.length   > 0 ? statusFilter   : undefined,
+      status:      effectiveStatus,
       priority:    priorityFilter.length > 0 ? priorityFilter : undefined,
       source:      sourceFilter.length   > 0 ? sourceFilter   : undefined,
       isOverdue:     scheduleToday ? undefined : (isOverdue ? true : undefined),
@@ -1452,7 +1465,7 @@ export default function Tasks() {
       sortBy,
       sortDir,
     }
-  }, [search, companyFilter, staffFilter, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id])
+  }, [search, companyFilter, staffFilter, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id, view]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const listQuery = useQuery({
     queryKey: ['tasks', 'list', listParams],
