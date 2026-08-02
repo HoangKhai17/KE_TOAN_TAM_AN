@@ -110,10 +110,15 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, busin
     conditions.push(`c.assigned_staff_id IN (${effectiveStaff.map((_, i) => `$${start + i}`).join(', ')})`)
   }
   if (search && search.trim()) {
-    filterParams.push(search.trim())
-    conditions.push(
-      `to_tsvector('simple', c.name || ' ' || coalesce(c.short_name, '') || ' ' || coalesce(c.tax_code, '')) @@ plainto_tsquery('simple', $${filterParams.length})`
-    )
+    // Khớp CHUỖI CON (ILIKE %..%) trên tên / tên viết tắt / MST — gõ một phần là ra,
+    // không bắt khớp nguyên từ như full-text cũ. Nhiều từ: mỗi từ phải khớp ở đâu đó (AND).
+    for (const tok of search.trim().split(/\s+/)) {
+      filterParams.push(`%${tok}%`)
+      const p = filterParams.length
+      conditions.push(
+        `(c.name ILIKE $${p} OR coalesce(c.short_name, '') ILIKE $${p} OR coalesce(c.tax_code, '') ILIKE $${p})`
+      )
+    }
   }
 
   const where = conditions.join(' AND ')

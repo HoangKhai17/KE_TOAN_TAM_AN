@@ -65,7 +65,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 16px;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  padding: 6px 14px;
   border-bottom: 1.5px solid #dbeafe;
   background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -78,11 +80,10 @@
 }
 
 .filterPanelLabel {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: 800;
   color: #1e3a8a;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
+  letter-spacing: 0.2px;
 }
 
 /* Nút lọc nhanh theo nhóm loại hình — đặt cạnh nhãn "Bộ lọc" */
@@ -136,15 +137,15 @@
 .filterGrid {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 8px 10px;
+  padding: 8px 14px;
   flex-wrap: wrap;
 }
 
 .filterField {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
   flex: 1;
   min-width: 110px;
 }
@@ -153,8 +154,7 @@
   font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   color: var(--color-muted-soft);
-  letter-spacing: 0.55px;
-  text-transform: uppercase;
+  letter-spacing: 0.2px;
   white-space: nowrap;
 }
 
@@ -182,12 +182,12 @@
 
 .searchInput {
   width: 100%;
-  height: var(--control-h-md);
+  height: 32px;
   padding: 0 var(--control-px-md) 0 34px;
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-medium);
   color: var(--color-text);
   background: var(--color-surface);
@@ -206,12 +206,12 @@
 
 .filterSelect {
   width: 100%;
-  height: var(--control-h-md);
+  height: 32px;
   padding: 0 28px 0 10px;
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
   background-color: var(--color-surface);
@@ -242,12 +242,12 @@
 
 .msBtn {
   width: 100%;
-  height: var(--control-h-md);
+  height: 32px;
   padding: 0 10px;
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
   background: var(--color-surface);
@@ -305,7 +305,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-5);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   color: var(--color-text-soft);
   cursor: pointer;
   user-select: none;
@@ -334,14 +334,14 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: var(--control-h-md);
+  height: 32px;
   padding: 0 12px;
-  border: 1.5px solid var(--color-border-strong);
+  border: 1.5px solid var(--color-danger-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  color: var(--color-muted);
+  color: var(--color-danger);
   font-family: var(--font-sans);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   cursor: pointer;
   white-space: nowrap;
@@ -349,21 +349,15 @@
 }
 
 .btnFilterReset:hover {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-  border-color: var(--color-border-strong);
-}
-
-.btnFilterResetActive {
-  border-color: rgba(239, 68, 68, 0.35);
-  color: var(--color-danger);
   background: var(--color-danger-bg);
-}
-
-.btnFilterResetActive:hover {
-  background: #fee2e2;
   border-color: var(--color-danger);
   color: var(--color-danger-dark);
+}
+
+/* Có bộ lọc đang bật → tô đậm (nền đỏ nhạt) để nhấn mạnh có thể xoá lọc */
+.btnFilterResetActive {
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
 }
 
 /* Active filter chips + summary footer */
@@ -373,7 +367,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 16px 10px;
+  padding: 6px 14px 7px;
   border-top: 1px solid var(--color-border-soft);
   flex-wrap: wrap;
 }
@@ -431,19 +425,25 @@
 .filterSummary {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 0;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
+/* Ngang: "22 Tổng KH · ..." (đồng bộ với thống kê trang Công việc) */
 .filterSummaryItem {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  text-align: right;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0 12px;
+}
+
+.filterSummaryItem + .filterSummaryItem {
+  border-left: 1px solid var(--color-border-muted);
 }
 
 .filterSummaryValue {
-  font-size: var(--fs-2xl);
+  font-size: var(--fs-md);
   font-weight: var(--fw-extrabold);
   color: #2563eb;
   line-height: 1;
@@ -453,9 +453,8 @@
   font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   color: var(--color-muted-soft);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  margin-top: 2px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 
 .filterSummaryDanger { color: var(--color-danger); }
@@ -571,7 +570,7 @@
 }
 
 .companyName {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   color: var(--color-text-strong);
   line-height: 1.35;
@@ -579,7 +578,7 @@
 }
 
 .companyMeta {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-medium);
   color: var(--color-table-muted);
   margin-top: 1px;
@@ -587,7 +586,7 @@
 }
 
 .shortNameCell {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
   word-break: break-word;
@@ -626,14 +625,14 @@
 }
 
 .staffName {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
   word-break: break-word;
 }
 
 .unassigned {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   color: var(--color-table-muted);
   font-style: italic;
 }
@@ -645,13 +644,13 @@
 }
 
 .metricOpen {
-  font-size: var(--fs-md);
+  font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
   color: var(--color-primary);
 }
 
 .metricZero {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-medium);
   color: var(--color-table-muted);
 }
@@ -662,7 +661,7 @@
   gap: 3px;
   padding: 2px var(--space-3);
   border-radius: var(--radius-pill);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   background: var(--color-danger-bg);
   color: var(--color-danger);
@@ -677,7 +676,7 @@
   gap: var(--space-1);
   padding: 3px var(--space-4);
   border-radius: var(--radius-pill);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   white-space: nowrap;
 }
@@ -988,7 +987,7 @@
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -1015,7 +1014,7 @@
   background: #fff;
   color: #374151;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -1029,6 +1028,20 @@
 }
 
 .btnOutline:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Trạng thái bật của nút outline (thay cho inline style theo state) */
+.btnOutlineActive,
+.btnOutlineActive:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+.btnOutlineWarnActive,
+.btnOutlineWarnActive:hover:not(:disabled) {
+  border-color: #f59e0b;
+  color: #b45309;
+  background: #fffbeb;
+}
 
 .btnGhost {
   display: inline-flex;
@@ -6396,16 +6409,31 @@
    LƯU Ý: phải khoanh vùng bằng .coListTable — class .table dùng chung cho 6 bảng
    khác trong module (Tổng quan, Công việc, Lịch định kỳ, Bảng tùy biến, Yêu cầu KH),
    nếu đặt thẳng lên .table sẽ phá layout các bảng đó. */
-.coListTable { min-width: 1180px; }
+.coListTable { min-width: 1180px; font-size: var(--fs-2xs); }
 
-.coListTable td { white-space: nowrap; }
+/* Đồng bộ với trang Công việc: dữ liệu dài thì XUỐNG DÒNG (không cắt "…"),
+   tràn ngang thì .tableScroll cuộn. */
+.coListTable td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
-/* Trước đây phải ngắt từ vì cột bị bóp — nay bỏ để tên nằm trọn 1 dòng */
+/* Header không viết hoa toàn bộ + font 11.5px như trang Công việc */
+.coListTable th {
+  font-size: var(--fs-2xs);
+  text-transform: none;
+  letter-spacing: 0.2px;
+}
+
+.coListTable .muted { font-size: var(--fs-2xs); }
+
+/* Cho phép ngắt để tên/ngành/nhân sự dài tự rớt dòng thay vì cắt cụt */
 .coListTable .companyName,
 .coListTable .shortNameCell,
-.coListTable .staffName { word-break: normal; }
+.coListTable .staffName,
+.coListTable .industryCell { overflow-wrap: anywhere; word-break: break-word; }
 
-/* Padding ngang hẹp hơn (mặc định 16px) để bảng nhiều cột vừa 1 màn, không cuộn ngang.
+/* Padding ngang hẹp hơn (mặc định 16px) để bảng nhiều cột vừa 1 màn.
    Chỉ áp cho bảng danh sách công ty (.coListTable), không đụng bảng khác. */
 .coListTable th,
 .coListTable td {
@@ -6413,27 +6441,17 @@
   padding-right: 11px;
 }
 
-/* Các cột nhiều chữ: giới hạn MỀM + ellipsis, giữ tooltip (title) khi bị cắt */
-.coListTable .companyName {
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/* Giới hạn MỀM bề ngang để cột không quá rộng — nội dung dài tự xuống dòng trong giới hạn đó */
+.coListTable .companyName { max-width: 260px; }
 .coListTable .industryCell {
   display: inline-block;
   max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   vertical-align: middle;
 }
-
 .coListTable .shortNameCell,
 .coListTable .staffName {
   display: inline-block;
   max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   vertical-align: middle;
 }
 

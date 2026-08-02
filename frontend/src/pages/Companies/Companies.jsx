@@ -855,20 +855,18 @@ export default function Companies() {
             </button>
             {/* Chỉ xem công ty đã ghim ưu tiên */}
             <button
-              className={s.btnOutline}
+              className={`${s.btnOutline} ${pinnedOnly ? s.btnOutlineWarnActive : ''}`}
               onClick={handleTogglePinnedOnly}
               title="Chỉ hiện công ty đã đánh dấu ưu tiên"
-              style={pinnedOnly ? { borderColor: '#f59e0b', color: '#b45309', background: '#fffbeb' } : undefined}
             >
               <Star size={14} fill={pinnedOnly ? '#f59e0b' : 'none'} /> Ưu tiên
             </button>
 
             {/* Bật/tắt chế độ tự sắp thứ tự bằng kéo-thả */}
             <button
-              className={s.btnOutline}
+              className={`${s.btnOutline} ${myOrderMode ? s.btnOutlineActive : ''}`}
               onClick={handleToggleOrderMode}
               title="Tự sắp xếp thứ tự danh sách bằng cách kéo-thả (thứ tự riêng của bạn)"
-              style={myOrderMode ? { borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'var(--color-primary-bg)' } : undefined}
             >
               <ArrowUpDown size={14} /> Thứ tự của tôi
             </button>
@@ -946,6 +944,36 @@ export default function Companies() {
                 </div>
               )}
             </div>
+
+            {/* Thống kê — gộp lên header cho gọn, giống trang Công việc */}
+            {!loading && (
+              <div className={s.filterSummary}>
+                <span className={s.filterSummaryItem}>
+                  <span className={s.filterSummaryValue}>{pagination.total}</span>
+                  <span className={s.filterSummaryLabel}>Tổng KH</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={`${s.filterSummaryValue} ${s.filterSummarySuccess}`}>{pageActiveTotal}</span>
+                  <span className={s.filterSummaryLabel}>Hợp tác</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={`${s.filterSummaryValue} ${pageInactiveTotal > 0 ? s.filterSummaryWarn : ''}`}>{pageInactiveTotal}</span>
+                  <span className={s.filterSummaryLabel}>Tạm ngưng</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={s.filterSummaryValue}>{pageTerminatedTotal}</span>
+                  <span className={s.filterSummaryLabel}>Chấm dứt</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={s.filterSummaryValue}>{pageOpenTotal}</span>
+                  <span className={s.filterSummaryLabel}>Việc mở</span>
+                </span>
+                <span className={s.filterSummaryItem}>
+                  <span className={`${s.filterSummaryValue} ${pageOverdueTotal > 0 ? s.filterSummaryDanger : ''}`}>{pageOverdueTotal}</span>
+                  <span className={s.filterSummaryLabel}>Quá hạn</span>
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Controls row */}
@@ -1000,74 +1028,15 @@ export default function Companies() {
                 />
               </div>
             </div>
-          </div>
 
-          {/* Footer: active chips + result summary */}
-          <div className={s.filterFooter}>
-            <div className={s.filterFooterLeft}>
-              <button
-                className={`${s.btnFilterReset} ${hasActiveFilters ? s.btnFilterResetActive : ''}`}
-                onClick={resetFilters}
-              >
-                <RotateCcw size={13} /> Đặt lại
-              </button>
-              <div className={s.filterChips}>
-                {statusFilter.map((v) => (
-                  <span key={v} className={s.filterChip}>
-                    {getLabel('company_status', v, STATUS_LABELS[v])}
-                    <button className={s.filterChipRemove} onClick={() => setStatusFilter((p) => p.filter((x) => x !== v))}>×</button>
-                  </span>
-                ))}
-                {btFilter.map((v) => (
-                  <span key={v} className={s.filterChip}>
-                    {isGroupValue(v)
-                      ? `Nhóm: ${getGroupLabel('business_type', stripGroup(v))}`
-                      : getLabel('business_type', v, BUSINESS_TYPE_LABELS[v])}
-                    <button className={s.filterChipRemove} onClick={() => setBtFilter((p) => p.filter((x) => x !== v))}>×</button>
-                  </span>
-                ))}
-                {isAdmin && staffFilter.map((id) => (
-                  <span key={id} className={s.filterChip}>
-                    {staffList.find((u) => u.id === id)?.name ?? '?'}
-                    <button className={s.filterChipRemove} onClick={() => setStaffFilter((p) => p.filter((x) => x !== id))}>×</button>
-                  </span>
-                ))}
-                {search && (
-                  <span className={s.filterChip}>
-                    &ldquo;{search}&rdquo;
-                    <button className={s.filterChipRemove} onClick={() => { setSearchInput(''); setSearch('') }}>×</button>
-                  </span>
-                )}
-              </div>
-            </div>
-            {!loading && (
-              <div className={s.filterSummary}>
-                <span className={s.filterSummaryItem}>
-                  <span className={s.filterSummaryValue}>{pagination.total}</span>
-                  <span className={s.filterSummaryLabel}>Tổng KH</span>
-                </span>
-                <span className={s.filterSummaryItem}>
-                  <span className={`${s.filterSummaryValue} ${s.filterSummarySuccess}`}>{pageActiveTotal}</span>
-                  <span className={s.filterSummaryLabel}>Hợp tác</span>
-                </span>
-                <span className={s.filterSummaryItem}>
-                  <span className={`${s.filterSummaryValue} ${pageInactiveTotal > 0 ? s.filterSummaryWarn : ''}`}>{pageInactiveTotal}</span>
-                  <span className={s.filterSummaryLabel}>Tạm ngưng</span>
-                </span>
-                <span className={s.filterSummaryItem}>
-                  <span className={s.filterSummaryValue}>{pageTerminatedTotal}</span>
-                  <span className={s.filterSummaryLabel}>Chấm dứt</span>
-                </span>
-                <span className={s.filterSummaryItem}>
-                  <span className={s.filterSummaryValue}>{pageOpenTotal}</span>
-                  <span className={s.filterSummaryLabel}>Việc mở</span>
-                </span>
-                <span className={s.filterSummaryItem}>
-                  <span className={`${s.filterSummaryValue} ${pageOverdueTotal > 0 ? s.filterSummaryDanger : ''}`}>{pageOverdueTotal}</span>
-                  <span className={s.filterSummaryLabel}>Quá hạn</span>
-                </span>
-              </div>
-            )}
+            {/* Đặt lại — nằm cùng hàng control cho gọn */}
+            <button
+              className={`${s.btnFilterReset} ${hasActiveFilters ? s.btnFilterResetActive : ''}`}
+              onClick={resetFilters}
+              title="Xoá tất cả bộ lọc"
+            >
+              <RotateCcw size={13} /> Đặt lại
+            </button>
           </div>
         </div>
 

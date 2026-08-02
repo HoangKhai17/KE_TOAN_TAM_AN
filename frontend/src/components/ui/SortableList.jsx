@@ -51,12 +51,13 @@ export function SortableList({ ids, onReorder, disabled, children }) {
 export function SortableItem({ id, disabled, children }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id, disabled })
+  // transform/transition BẮT BUỘC inline (dnd-kit đổi theo từng khung hình khi kéo).
+  // opacity/zIndex/position CHỈ cần khi đang kéo (nhấc dòng + xếp trên) — lúc đứng yên
+  // không set để không phát sinh inline style thừa trên mọi hàng.
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.45 : 1,
-    zIndex: isDragging ? 10 : 'auto',
-    position: 'relative',
+    ...(isDragging ? { opacity: 0.45, zIndex: 10, position: 'relative' } : null),
   }
   return children({ setNodeRef, style, handleProps: { ...attributes, ...listeners }, isDragging })
 }
