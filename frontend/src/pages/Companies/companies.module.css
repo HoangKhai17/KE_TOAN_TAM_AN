@@ -1346,7 +1346,7 @@
   padding: 10px 15px;
   margin-bottom: 20px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 20px;
   flex-wrap: wrap;
@@ -1354,7 +1354,7 @@
 
 .heroLeft {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
   flex: 1;
   min-width: 0;
@@ -1732,7 +1732,7 @@
   border: none;
   background: transparent;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: #6b7280;
   cursor: pointer;

@@ -1480,17 +1480,13 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     shortName:        company?.shortName         ?? '',
     taxCode:          company?.taxCode          ?? '',
     businessType:     company?.businessType     ?? 'TNHH',
-    address:          company?.address          ?? '',
     industry:         company?.industry         ?? '',
     legalRepName:     company?.legalRepName     ?? '',
     legalRepPhone:    company?.legalRepPhone    ?? '',
     contactName:      company?.contactName      ?? '',
     contactPhone:     company?.contactPhone     ?? '',
     contactEmail:     company?.contactEmail     ?? '',
-    bankAccount:      company?.bankAccount      ?? '',
-    bankName:         company?.bankName         ?? '',
     serviceStartDate: company?.serviceStartDate ? company.serviceStartDate.slice(0, 10) : '',
-    licenseEstablishedDate: company?.licenseEstablishedDate ? company.licenseEstablishedDate.slice(0, 10) : '',
     notes:            company?.notes            ?? '',
     avatarUrl:        company?.avatarUrl        ?? '',
   })
@@ -1526,17 +1522,13 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
         shortName:        form.shortName.trim()         || null,
         taxCode:          form.taxCode.trim()          || null,
         businessType:     form.businessType,
-        address:          form.address.trim()          || null,
         industry:         form.industry.trim()         || null,
         legalRepName:     form.legalRepName.trim()     || null,
         legalRepPhone:    form.legalRepPhone.trim()    || null,
         contactName:      form.contactName.trim()      || null,
         contactPhone:     form.contactPhone.trim()     || null,
         contactEmail:     form.contactEmail.trim()     || null,
-        bankAccount:      form.bankAccount.trim()      || null,
-        bankName:         form.bankName.trim()         || null,
         serviceStartDate: form.serviceStartDate        || null,
-        licenseEstablishedDate: form.licenseEstablishedDate || null,
         notes:            form.notes.trim()            || null,
         avatarUrl:        form.avatarUrl                || null,
       }
@@ -1610,17 +1602,9 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
                     ))}
                   </select>
                 </div>
-                <div className={s.cs6}>
+                <div className={s.cs12}>
                   <label className={s.formLabel}>Ngành nghề</label>
                   <input type="text" value={form.industry} onChange={set('industry')} className={s.formInput} placeholder="Thương mại, sản xuất..." />
-                </div>
-                <div className={s.cs8}>
-                  <label className={s.formLabel}>Địa chỉ</label>
-                  <input type="text" value={form.address} onChange={set('address')} className={s.formInput} placeholder="123 Đường ABC, Quận XYZ, TP.HCM" />
-                </div>
-                <div className={s.cs4}>
-                  <label className={s.formLabel}>Ngày thành lập (Theo GP)</label>
-                  <DateBox value={form.licenseEstablishedDate} onChange={(v) => setForm((p) => ({ ...p, licenseEstablishedDate: v }))} />
                 </div>
               </div>
             </div>
@@ -1668,21 +1652,13 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
           </div>
         </div>
 
-        {/* Hợp đồng & ngân hàng */}
+        {/* Hợp đồng */}
         <div>
-          <div className={s.formGroupLabel}>Hợp đồng & ngân hàng</div>
+          <div className={s.formGroupLabel}>Hợp đồng</div>
           <div className={s.formGrid3}>
             <div>
               <label className={s.formLabel}>Ngày bắt đầu dịch vụ</label>
               <DateBox value={form.serviceStartDate} onChange={(v) => setForm((p) => ({ ...p, serviceStartDate: v }))} />
-            </div>
-            <div>
-              <label className={s.formLabel}>Số tài khoản NH</label>
-              <input type="text" value={form.bankAccount} onChange={set('bankAccount')} className={s.formInput} placeholder="1234 5678 9012" />
-            </div>
-            <div>
-              <label className={s.formLabel}>Tên ngân hàng</label>
-              <input type="text" value={form.bankName} onChange={set('bankName')} className={s.formInput} placeholder="Vietcombank, ACB..." />
             </div>
           </div>
         </div>

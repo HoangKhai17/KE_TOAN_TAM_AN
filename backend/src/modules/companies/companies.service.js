@@ -35,7 +35,6 @@ function toDto(row) {
     name:             row.name,
     shortName:        row.short_name ?? null,
     taxCode:          row.tax_code ?? null,
-    address:          row.address ?? null,
     businessType:     row.business_type,
     industry:         row.industry ?? null,
     legalRepName:     row.legal_rep_name ?? null,
@@ -43,10 +42,7 @@ function toDto(row) {
     contactName:      row.contact_name ?? null,
     contactPhone:     row.contact_phone ?? null,
     contactEmail:     row.contact_email ?? null,
-    bankAccount:      row.bank_account ?? null,
-    bankName:         row.bank_name ?? null,
     serviceStartDate: row.service_start_date ?? null,
-    licenseEstablishedDate: row.license_established_date ?? null,
     status:           row.status,
     notes:            row.notes ?? null,
     avatarUrl:        row.avatar_url ?? null,
@@ -233,10 +229,9 @@ async function getCompanyById(id, user = null) {
 
 async function createCompany(data, actorId, ipAddress, userAgent) {
   const {
-    name, shortName, taxCode, address, businessType = 'TNHH', industry,
+    name, shortName, taxCode, businessType = 'TNHH', industry,
     legalRepName, legalRepPhone, contactName, contactPhone, contactEmail,
-    bankAccount, bankName, serviceStartDate, notes, assignedStaffId, avatarUrl,
-    licenseEstablishedDate,
+    serviceStartDate, notes, assignedStaffId, avatarUrl,
     customFields = [],
   } = data
 
@@ -247,19 +242,17 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
 
   const { rows } = await query(
     `INSERT INTO companies
-       (name, short_name, tax_code, address, business_type, industry, legal_rep_name, legal_rep_phone,
-        contact_name, contact_phone, contact_email, bank_account, bank_name,
-        service_start_date, notes, assigned_staff_id, avatar_url, created_by, custom_fields,
-        license_established_date)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       (name, short_name, tax_code, business_type, industry, legal_rep_name, legal_rep_phone,
+        contact_name, contact_phone, contact_email,
+        service_start_date, notes, assigned_staff_id, avatar_url, created_by, custom_fields)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      RETURNING *`,
     [
-      name, shortName ?? null, taxCode ?? null, address ?? null, businessType, industry ?? null,
+      name, shortName ?? null, taxCode ?? null, businessType, industry ?? null,
       legalRepName ?? null, legalRepPhone ?? null, contactName ?? null, contactPhone ?? null,
-      contactEmail ?? null, bankAccount ?? null, bankName ?? null,
+      contactEmail ?? null,
       serviceStartDate ?? null, notes ?? null, assignedStaffId ?? null, avatarUrl ?? null, actorId,
       JSON.stringify(Array.isArray(customFields) ? customFields : []),
-      licenseEstablishedDate ?? null,
     ]
   )
 
@@ -312,11 +305,10 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent, user = nul
   }
 
   const fieldMap = {
-    name: 'name', shortName: 'short_name', taxCode: 'tax_code', address: 'address', businessType: 'business_type',
+    name: 'name', shortName: 'short_name', taxCode: 'tax_code', businessType: 'business_type',
     industry: 'industry', legalRepName: 'legal_rep_name', legalRepPhone: 'legal_rep_phone',
     contactName: 'contact_name', contactPhone: 'contact_phone', contactEmail: 'contact_email',
-    bankAccount: 'bank_account', bankName: 'bank_name', serviceStartDate: 'service_start_date',
-    licenseEstablishedDate: 'license_established_date',
+    serviceStartDate: 'service_start_date',
     notes: 'notes', assignedStaffId: 'assigned_staff_id', avatarUrl: 'avatar_url',
   }
   // Staff cannot reassign themselves or others

@@ -73,7 +73,6 @@ router.get('/', ...auth, ctrl.listCompanies)
  *             properties:
  *               name:             { type: string, minLength: 2, maxLength: 200 }
  *               taxCode:          { type: string, maxLength: 20, nullable: true }
- *               address:          { type: string, nullable: true }
  *               businessType:     { type: string, enum: [TNHH, CP, HKD, DN_TU_NHAN, KHAC], default: TNHH }
  *               industry:         { type: string, nullable: true }
  *               legalRepName:     { type: string, nullable: true }
@@ -81,8 +80,6 @@ router.get('/', ...auth, ctrl.listCompanies)
  *               contactName:      { type: string, nullable: true }
  *               contactPhone:     { type: string, nullable: true }
  *               contactEmail:     { type: string, format: email, nullable: true }
- *               bankAccount:      { type: string, nullable: true }
- *               bankName:         { type: string, nullable: true }
  *               serviceStartDate: { type: string, format: date, nullable: true }
  *               notes:            { type: string, nullable: true }
  *               assignedStaffId:  { type: string, format: uuid, nullable: true }

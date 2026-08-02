@@ -6,7 +6,6 @@ const companyBaseSchema = z.object({
   name:             z.string().min(2).max(200),
   shortName:        z.string().max(100).optional().nullable(),
   taxCode:          z.string().max(20).optional().nullable(),
-  address:          z.string().optional().nullable(),
   // Danh mục ĐỘNG: nhận bất kỳ option_key nào admin thêm trong Cài đặt (không hardcode)
   businessType:     z.string().min(1).max(50).default('TNHH'),
   industry:         z.string().max(150).optional().nullable(),
@@ -15,10 +14,7 @@ const companyBaseSchema = z.object({
   contactName:      z.string().max(100).optional().nullable(),
   contactPhone:     z.string().max(20).optional().nullable(),
   contactEmail:     z.string().email().optional().nullable(),
-  bankAccount:      z.string().max(30).optional().nullable(),
-  bankName:         z.string().max(150).optional().nullable(),
   serviceStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD').optional().nullable(),
-  licenseEstablishedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format: YYYY-MM-DD').optional().nullable(),
   notes:            z.string().optional().nullable(),
   assignedStaffId:  z.string().uuid().optional().nullable(),
   avatarUrl:        z.union([

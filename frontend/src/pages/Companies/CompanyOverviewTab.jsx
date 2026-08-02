@@ -184,8 +184,6 @@ function CustomerInfoCard({ company, canEdit, onSaved }) {
             <EditableField {...common} field="taxCode"      label="Mã số thuế"   value={company.taxCode} />
             <EditableField {...common} field="businessType" label="Loại hình"    value={company.businessType} type="select" options={btOptions} />
             <EditableField {...common} field="industry"     label="Ngành nghề"   value={company.industry} />
-            <EditableField {...common} field="licenseEstablishedDate" label="Ngày thành lập (Theo GP)" value={company.licenseEstablishedDate} type="date" />
-            <EditableField {...common} field="address"      label="Địa chỉ"      value={company.address} type="textarea" />
           </div>
 
           {/* Cột 2 — Đại diện pháp lý & người liên hệ */}
@@ -198,12 +196,10 @@ function CustomerInfoCard({ company, canEdit, onSaved }) {
             <EditableField {...common} field="contactEmail"  label="Email liên hệ"          value={company.contactEmail} type="email" />
           </div>
 
-          {/* Cột 3 — Hợp đồng & ngân hàng */}
+          {/* Cột 3 — Hợp đồng & ghi chú */}
           <div className={s.customerCol}>
-            <div className={s.customerColTitle}>Hợp đồng &amp; ngân hàng</div>
+            <div className={s.customerColTitle}>Hợp đồng &amp; ghi chú</div>
             <EditableField {...common} field="serviceStartDate" label="Ngày bắt đầu HĐ" value={company.serviceStartDate} type="date" />
-            <EditableField {...common} field="bankAccount"      label="Số TK ngân hàng" value={company.bankAccount} />
-            <EditableField {...common} field="bankName"         label="Tên ngân hàng"   value={company.bankName} />
             <EditableField {...common} field="notes"            label="Ghi chú"         value={company.notes} type="textarea" />
           </div>
         </div>
