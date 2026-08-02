@@ -7030,8 +7030,18 @@
 .locEmpty { text-align: center; color: var(--color-muted); padding: 14px 8px; font-size: var(--fs-2xs); }
 
 .locStatus {
-  display: inline-block; padding: 1px 8px; border-radius: var(--radius-pill);
-  font-size: var(--fs-2xs); font-weight: var(--fw-semibold); white-space: nowrap;
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  box-sizing: border-box;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 .locStatusActive     { background: var(--color-success); color: var(--color-white); }
 .locStatusSuspended  { background: var(--color-warning-amber); color: var(--color-white); }
