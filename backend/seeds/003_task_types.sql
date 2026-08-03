@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 003_task_types.sql — 17 loại công việc kế toán chuẩn
+-- 003_task_types.sql — 16 loại công việc kế toán chuẩn (đã bỏ 'Lập bảng lương')
 -- Yêu cầu: migration 028 (task_types_name_key UNIQUE constraint) đã chạy.
 -- Idempotent: ON CONFLICT (name) DO UPDATE cập nhật SLA/mô tả nếu thay đổi
 --             mà KHÔNG tạo bản trùng và KHÔNG đổi UUID hiện có.
@@ -25,7 +25,7 @@ BEGIN
     (gen_random_uuid(), 'Quyết toán thuế TNDN năm',      'Báo cáo tài chính',   'Quyết toán thuế thu nhập doanh nghiệp cuối năm',              30, v_admin_id),
 
     -- ── Nhân sự ────────────────────────────────────────────────────────────────
-    (gen_random_uuid(), 'Lập bảng lương',                'Nhân sự',             'Tính lương và phụ cấp nhân viên hàng tháng',                 5,  v_admin_id),
+    -- (Đã bỏ 'Lập bảng lương' theo yêu cầu KH — production không dùng, không seed lại nữa)
     (gen_random_uuid(), 'Đóng BHXH / BHYT',              'Nhân sự',             'Kê khai và nộp bảo hiểm xã hội, bảo hiểm y tế',             7,  v_admin_id),
     (gen_random_uuid(), 'Kê khai thay đổi lao động',     'Nhân sự',             'Báo cáo tăng/giảm lao động với cơ quan BHXH',               5,  v_admin_id),
 
