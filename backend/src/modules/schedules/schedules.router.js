@@ -2,7 +2,7 @@ const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
 const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
-const { updateScheduleSchema, setMaxDueDaySchema } = require('./schedules.schema')
+const { updateScheduleSchema, setMaxDueDaySchema, backfillSchema } = require('./schedules.schema')
 const ctrl = require('./schedules.controller')
 
 const router = Router()
@@ -14,6 +14,9 @@ const admin = [authenticate, requireRole('admin')]
 // PATCH /schedules/overview/:scheduleId     → đặt/xoá trần "ngày N hàng tháng" cho lịch
 router.get('/overview', ...admin, ctrl.getRecurringOverview)
 router.patch('/overview/:scheduleId', ...admin, validate(setMaxDueDaySchema), ctrl.setScheduleMaxDueDay)
+// Sinh bù kỳ: GET bảng đối chiếu kỳ | POST sinh task cho các kỳ được chọn
+router.get('/overview/:scheduleId/periods',  ...admin, ctrl.getSchedulePeriods)
+router.post('/overview/:scheduleId/backfill', ...admin, validate(backfillSchema), ctrl.backfillPeriods)
 
 /**
  * @openapi

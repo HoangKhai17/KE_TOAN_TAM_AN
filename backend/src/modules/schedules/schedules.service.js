@@ -2,7 +2,11 @@ const { query } = require('../../config/db')
 const audit = require('../../lib/audit')
 const { getNextOccurrences, getNextOccurrence } = require('../../utils/recurrence.calculator')
 const { rollForwardToWorkday } = require('../../utils/workday.util')
-const { parseISO, format, addDays } = require('date-fns')
+const { buildPeriodLabel, docPeriodOffset } = require('../../utils/periodLabel')
+const { createTaskForOccurrence, loadHolidaySet } = require('../../jobs/taskGenerator.job')
+const { parseISO, format, addDays, addMonths } = require('date-fns')
+
+function midnight(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 
 // Trần "ngày N hàng tháng": kiểm tra HẠN DỰ KIẾN của kỳ kế tiếp có vượt ngày N không.
 // Bắt lỗi ngay khi lưu lịch / đặt trần → auto-gen luôn hợp lệ (không phải kẹp trong generator).
@@ -297,8 +301,136 @@ async function setScheduleMaxDueDay(scheduleId, maxDueDay) {
   return { scheduleId: row.id, maxDueDay: row.max_due_day ?? null }
 }
 
+// ── Sinh bù kỳ (admin) ───────────────────────────────────────────────────────
+// Đối chiếu kỳ "đáng lẽ phải có" (theo công thức lặp) vs kỳ "đã có task"
+// (theo period_label trong bảng tasks) → tìm kỳ THIẾU để admin sinh bù.
+
+// Liệt kê các occurrence (ngày phát sinh GỐC) trong khoảng [from, to] (bao gồm 2 đầu).
+function enumerateOccurrences(type, config, from, to) {
+  const out = []
+  const toM = midnight(to)
+  let cursor = addDays(midnight(from), -1)   // -1 để from tự nó lọt vào
+  let safety = 5000
+  while (safety-- > 0) {
+    const next = getNextOccurrence(type, config, cursor)
+    if (!next) break
+    if (midnight(next) > toM) break
+    out.push(midnight(next))
+    cursor = next
+  }
+  return out
+}
+
+// Bảng đối chiếu kỳ của 1 lịch: mỗi occurrence ≤ hôm nay → nhãn kỳ + start/due + đã-có-task?
+// months: cửa sổ lùi tối đa (mặc định 6). Không đề xuất kỳ TRƯỚC khi lịch tồn tại.
+async function getSchedulePeriods(scheduleId, { months = 6 } = {}) {
+  const m = Math.max(1, Math.min(24, Number(months) || 6))
+  const { rows: [sch] } = await query(
+    `SELECT s.*, tt.name AS task_type_name, c.name AS company_name
+       FROM customer_task_schedules s
+       JOIN task_types tt ON tt.id = s.task_type_id
+       JOIN companies c   ON c.id  = s.company_id
+      WHERE s.id = $1`,
+    [scheduleId]
+  )
+  if (!sch) throw Object.assign(new Error('Schedule not found'), { status: 404 })
+
+  const today = midnight(new Date())
+  const from = addMonths(today, -m)
+  // Mốc bắt đầu lịch (start_date trong config, hoặc ngày tạo lịch) — KHÔNG chặn cứng,
+  // chỉ để ĐÁNH DẤU kỳ phát sinh trước mốc này (beforeStart) → không tự tích, tránh
+  // sinh nhầm; nhưng vẫn hiện để admin chủ động chọn khi thật sự cần.
+  const cfgStart   = sch.recurrence_config?.start_date ? midnight(parseISO(sch.recurrence_config.start_date)) : null
+  const createdAt  = sch.created_at ? midnight(sch.created_at) : null
+  const scheduleStart = cfgStart || createdAt || from
+
+  const occ = enumerateOccurrences(sch.recurrence_type, sch.recurrence_config, from, today)
+
+  // Task đã có của lịch → map theo period_label
+  const { rows: existingTasks } = await query(
+    `SELECT id, period_label, title, status FROM tasks WHERE customer_task_schedule_id = $1`,
+    [scheduleId]
+  )
+  const byLabel = new Map()
+  for (const t of existingTasks) if (!byLabel.has(t.period_label)) byLabel.set(t.period_label, t)
+
+  const holidaySet = await loadHolidaySet()
+  const offset = docPeriodOffset(sch.recurrence_config)
+
+  const periods = occ.map((d) => {
+    const periodLabel = buildPeriodLabel(sch.recurrence_type, d, offset)
+    const existing = byLabel.get(periodLabel) || null
+    return {
+      forDate:        format(d, 'yyyy-MM-dd'),
+      periodLabel,
+      startDate:      format(rollForwardToWorkday(d, holidaySet), 'yyyy-MM-dd'),
+      dueDate:        format(rollForwardToWorkday(addDays(d, sch.deadline_offset_days || 0), holidaySet), 'yyyy-MM-dd'),
+      exists:         !!existing,
+      existingTaskId: existing?.id ?? null,
+      existingTitle:  existing?.title ?? null,
+      existingStatus: existing?.status ?? null,
+      beforeStart:    midnight(d) < scheduleStart,   // kỳ phát sinh trước khi lịch tồn tại
+    }
+  }).reverse()   // kỳ mới nhất lên đầu
+
+  return {
+    scheduleId,
+    companyName:  sch.company_name,
+    taskTypeName: sch.task_type_name,
+    recurrenceType: sch.recurrence_type,
+    periodOffset: offset,
+    scheduleStart: format(scheduleStart, 'yyyy-MM-dd'),
+    months: m,
+    // "kỳ thiếu" (badge) = thiếu VÀ trong phạm vi lịch (không tính kỳ trước khi tạo lịch)
+    missingCount: periods.filter((p) => !p.exists && !p.beforeStart).length,
+    periods,
+  }
+}
+
+// Sinh task cho các kỳ được chọn. periods = mảng ngày phát sinh 'yyyy-MM-dd'.
+// force=false → bỏ qua kỳ đã có task (an toàn, mặc định).
+// force=true  → sinh lại kể cả kỳ đã có (dùng cho ca đặc biệt; có thể tạo task trùng nhãn).
+async function backfillPeriods(scheduleId, { periods = [], force = false }, user, ipAddress, userAgent) {
+  if (!Array.isArray(periods) || periods.length === 0) {
+    throw Object.assign(new Error('Chưa chọn kỳ nào để sinh'), { status: 422 })
+  }
+  const { rows: [sch] } = await query(
+    `SELECT s.*, tt.name AS task_type_name, tt.default_sla_days
+       FROM customer_task_schedules s
+       JOIN task_types tt ON tt.id = s.task_type_id
+      WHERE s.id = $1`,
+    [scheduleId]
+  )
+  if (!sch) throw Object.assign(new Error('Schedule not found'), { status: 404 })
+
+  const holidaySet = await loadHolidaySet()
+  const created = []
+  const skipped = []
+  for (const p of periods) {
+    const d = parseISO(p)
+    if (Number.isNaN(d.getTime())) continue
+    const res = await createTaskForOccurrence(sch, d, holidaySet, { force: !!force })
+    if (res.status === 'created') {
+      created.push({ forDate: p, periodLabel: res.periodLabel, taskId: res.task.id, title: res.task.title, dueDate: res.task.dueDate })
+    } else {
+      skipped.push({ forDate: p, periodLabel: res.periodLabel, existingTaskId: res.existingId })
+    }
+  }
+  // CHỦ Ý: KHÔNG đụng last_generated_at — tránh làm lệch cadence của cron cho kỳ hiện tại.
+
+  await audit.log({
+    userId: user.id, action: 'schedule.backfill',
+    targetType: 'schedule', targetId: scheduleId,
+    meta: { force: !!force, requested: periods.length, created: created.length, skipped: skipped.length },
+    ipAddress, userAgent,
+  })
+
+  return { created, skipped }
+}
+
 module.exports = {
   listSchedules, getScheduleById, createSchedule,
   updateSchedule, deleteSchedule, toggleSchedule, previewSchedule,
   getRecurringOverview, setScheduleMaxDueDay,
+  getSchedulePeriods, backfillPeriods,
 }

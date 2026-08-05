@@ -50,4 +50,12 @@ const setMaxDueDaySchema = z.object({
   ]),
 })
 
-module.exports = { createScheduleSchema, updateScheduleSchema, setMaxDueDaySchema }
+// Sinh bù kỳ: danh sách ngày phát sinh 'yyyy-MM-dd' + cờ force (sinh lại kể cả kỳ đã có)
+const backfillSchema = z.object({
+  periods: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải dạng YYYY-MM-DD'))
+             .min(1, 'Chưa chọn kỳ nào')
+             .max(60, 'Tối đa 60 kỳ mỗi lần'),
+  force:   z.boolean().optional().default(false),
+})
+
+module.exports = { createScheduleSchema, updateScheduleSchema, setMaxDueDaySchema, backfillSchema }

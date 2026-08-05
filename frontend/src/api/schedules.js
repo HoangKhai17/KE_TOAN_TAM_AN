@@ -45,3 +45,16 @@ export async function setScheduleMaxDueDay(scheduleId, maxDueDay) {
   const { data } = await api.patch(`/schedules/overview/${scheduleId}`, { maxDueDay })
   return data.data
 }
+
+// ── Sinh bù kỳ (admin) ────────────────────────────────────────────────────────
+// Bảng đối chiếu kỳ đáng-lẽ-có vs đã-có (months = cửa sổ lùi, mặc định 6)
+export async function getSchedulePeriods(scheduleId, months = 6) {
+  const { data } = await api.get(`/schedules/overview/${scheduleId}/periods`, { params: { months } })
+  return data.data
+}
+
+// Sinh task cho các kỳ được chọn. periods = mảng 'yyyy-MM-dd'. force = sinh lại cả kỳ đã có.
+export async function backfillSchedulePeriods(scheduleId, periods, force = false) {
+  const { data } = await api.post(`/schedules/overview/${scheduleId}/backfill`, { periods, force })
+  return data.data
+}

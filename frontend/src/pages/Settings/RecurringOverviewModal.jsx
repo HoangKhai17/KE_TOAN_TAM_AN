@@ -1,8 +1,9 @@
 import { useState, useEffect, Fragment } from 'react'
-import { Loader2, Search, ShieldAlert } from 'lucide-react'
+import { Loader2, Search, ShieldAlert, CalendarPlus } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { getRecurringOverview, setScheduleMaxDueDay } from '../../api/schedules'
 import { useToastStore } from '../../stores/toastStore'
+import BackfillPeriodsModal from './BackfillPeriodsModal'
 import s from '../Companies/companies.module.css'
 
 const RECUR_LABEL = {
@@ -20,6 +21,7 @@ export default function RecurringOverviewModal({ onClose }) {
   const [loading, setLoading] = useState(true)
   const [q, setQ]             = useState('')
   const [savingId, setSavingId] = useState(null)
+  const [backfillFor, setBackfillFor] = useState(null)   // lịch đang mở popup "Sinh bù kỳ"
 
   useEffect(() => {
     let cancelled = false
@@ -106,10 +108,11 @@ export default function RecurringOverviewModal({ onClose }) {
           <div className={s.credTableWrap} style={{ maxHeight: '68vh', minHeight: 360, overflowY: 'auto' }}>
             <table className={s.credTable}>
               <colgroup>
-                <col style={{ width: '38%' }} />
-                <col style={{ width: '22%' }} />
-                <col style={{ width: '20%' }} />
-                <col style={{ width: '20%' }} />
+                <col style={{ width: '30%' }} />
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '19%' }} />
+                <col style={{ width: '17%' }} />
               </colgroup>
               <thead>
                 <tr>
@@ -117,17 +120,18 @@ export default function RecurringOverviewModal({ onClose }) {
                   <th>Chu kỳ</th>
                   <th>Phụ trách</th>
                   <th>Trần ngày (hàng tháng)</th>
+                  <th>Sinh bù kỳ</th>
                 </tr>
               </thead>
               <tbody>
                 {groups.length === 0 ? (
-                  <tr><td colSpan={4} style={{ textAlign: 'center', padding: 16, color: 'var(--color-muted)' }}>
+                  <tr><td colSpan={5} style={{ textAlign: 'center', padding: 16, color: 'var(--color-muted)' }}>
                     {rows.length === 0 ? 'Chưa có lịch định kỳ nào.' : 'Không tìm thấy.'}
                   </td></tr>
                 ) : groups.map((g) => (
                   <Fragment key={g.companyId}>
                     <tr>
-                      <td colSpan={4} style={{ background: '#f0f6ff', fontWeight: 700, color: '#1e3a8a' }}>
+                      <td colSpan={5} style={{ background: '#f0f6ff', fontWeight: 700, color: '#1e3a8a' }}>
                         {g.companyName}
                       </td>
                     </tr>
@@ -151,6 +155,16 @@ export default function RecurringOverviewModal({ onClose }) {
                             {savingId === r.scheduleId && <Loader2 size={13} className={s.spin} />}
                           </div>
                         </td>
+                        <td>
+                          <button
+                            className={s.btnOutline}
+                            style={{ height: 30, padding: '0 12px', fontSize: 'var(--fs-3xs)' }}
+                            onClick={() => setBackfillFor(r)}
+                            title="Đối chiếu & sinh bù các kỳ còn thiếu"
+                          >
+                            <CalendarPlus size={13} /> Kỳ thiếu
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </Fragment>
@@ -160,6 +174,13 @@ export default function RecurringOverviewModal({ onClose }) {
           </div>
         )}
       </div>
+
+      {backfillFor && (
+        <BackfillPeriodsModal
+          schedule={backfillFor}
+          onClose={() => setBackfillFor(null)}
+        />
+      )}
     </Modal>
   )
 }

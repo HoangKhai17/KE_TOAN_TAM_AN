@@ -66,8 +66,27 @@ async function setScheduleMaxDueDay(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Sinh bù kỳ — bảng đối chiếu kỳ đáng-lẽ-có vs đã-có
+async function getSchedulePeriods(req, res, next) {
+  try {
+    const result = await svc.getSchedulePeriods(req.params.scheduleId, { months: req.query.months })
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
+// Sinh bù kỳ — tạo task cho các kỳ được chọn
+async function backfillPeriods(req, res, next) {
+  try {
+    const { periods, force } = req.body
+    const result = await svc.backfillPeriods(
+      req.params.scheduleId, { periods, force }, req.user, req.ip, req.headers['user-agent'])
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listSchedules, getSchedule, createSchedule,
   updateSchedule, deleteSchedule, toggleSchedule, previewSchedule,
   getRecurringOverview, setScheduleMaxDueDay,
+  getSchedulePeriods, backfillPeriods,
 }
