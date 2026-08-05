@@ -22,6 +22,10 @@ export const adjustRecord = (id, body) =>
 export const manualAdjustRecord = (id, body) =>
   api.post(`/attendance/records/${id}/manual-adjust`, body).then(r => r.data)
 
+// Huỷ check-out (nhân viên lỡ bấm ra sớm) → admin reset để họ chấm ra lại. Bắt buộc lý do.
+export const resetCheckout = (id, reason) =>
+  api.post(`/attendance/records/${id}/reset-checkout`, { reason }).then(r => r.data)
+
 export const createManualRecord = (body) =>
   api.post('/attendance/manual-record', body).then(r => r.data)
 

@@ -1952,6 +1952,19 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
     } finally { setSaving(false) }
   }
 
+  // Reset check-out: nhân viên lỡ bấm ra sớm → huỷ giờ ra để họ chấm ra lại. Bắt buộc lý do.
+  async function handleReset() {
+    if (!reason.trim()) { addToast('Vui lòng nhập lý do reset check-out', 'error'); return }
+    setSaving(true)
+    try {
+      await attendanceApi.resetCheckout(record.id, reason.trim())
+      addToast('Đã huỷ check-out — nhân viên có thể chấm ra lại', 'success')
+      onSaved()
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Không thể reset check-out', 'error')
+    } finally { setSaving(false) }
+  }
+
   const fieldLabel = (f) => f === 'check_in_time' ? 'Giờ vào' : f === 'check_out_time' ? 'Giờ ra' : f === 'status' ? 'Trạng thái' : f
   const fmtTs = (v) => { if (!v) return '—'; const t = new Date(v); return isNaN(t) ? String(v).slice(0,16) : t.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) }
 
@@ -2140,6 +2153,24 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
                 className={s.formTextarea}
               />
             </div>
+
+            {/* Reset check-out — nhân viên lỡ bấm ra sớm, huỷ để chấm ra lại (dùng chung Lý do ở trên) */}
+            {hasRecord && record?.checkOutTime && (
+              <div className={sa.resetCheckoutBox}>
+                <div className={sa.resetCheckoutInfo}>
+                  <RefreshCw size={13} />
+                  <div>
+                    <strong>Huỷ giờ ra để chấm lại</strong>
+                    <span className={sa.resetCheckoutHint}>
+                      Nhân viên lỡ bấm check-out sớm ({fmtTime(record.checkOutTime)})? Huỷ giờ ra (giữ nguyên giờ vào) để chiều họ chấm ra lại. Cần nhập lý do ở trên.
+                    </span>
+                  </div>
+                </div>
+                <button onClick={handleReset} disabled={saving} className={sa.btnResetCheckout}>
+                  <RefreshCw size={13} /> Reset check-out
+                </button>
+              </div>
+            )}
 
             <div className={s.modalActions}>
               <button onClick={() => setMode('view')} disabled={saving} className={s.btnSecondary}>

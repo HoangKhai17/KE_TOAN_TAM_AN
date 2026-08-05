@@ -162,9 +162,10 @@ router.get('/records/summary', ...admin, ctrl.getSummary)
  *               type: array
  *               items: { $ref: '#/components/schemas/AttendanceAdjustment' }
  */
-router.put('/records/:id/adjust',         ...admin, ctrl.adjustRecord)
-router.post('/records/:id/manual-adjust', ...admin, ctrl.manualAdjustRecord)
-router.get('/records/:id/adjustments',    ...admin, ctrl.listAdjustments)
+router.put('/records/:id/adjust',          ...admin, ctrl.adjustRecord)
+router.post('/records/:id/manual-adjust',  ...admin, ctrl.manualAdjustRecord)
+router.post('/records/:id/reset-checkout', ...admin, ctrl.resetCheckout)
+router.get('/records/:id/adjustments',     ...admin, ctrl.listAdjustments)
 router.post('/manual-record',             ...admin, ctrl.createManualAttendanceRecord)
 
 // Raw check-in/out logs for a user on a specific date — used by admin detail popup

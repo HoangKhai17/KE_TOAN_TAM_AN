@@ -115,6 +115,17 @@ async function manualAdjustRecord(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function resetCheckout(req, res, next) {
+  try {
+    const { reason } = req.body
+    if (!reason?.trim()) {
+      return res.status(400).json({ error: { message: 'reason là bắt buộc' } })
+    }
+    const result = await adjSvc.resetCheckout(req.params.id, { reason, adjustedBy: req.user.id })
+    res.json(result)
+  } catch (err) { next(err) }
+}
+
 async function createManualAttendanceRecord(req, res, next) {
   try {
     const { userId, workDate, checkInTime, checkOutTime, reason } = req.body
@@ -287,7 +298,7 @@ async function updateSettings(req, res, next) {
 
 module.exports = {
   checkIn, checkOut, getToday, listRecords, getSummary,
-  adjustRecord, manualAdjustRecord, createManualAttendanceRecord, listAdjustments,
+  adjustRecord, manualAdjustRecord, createManualAttendanceRecord, resetCheckout, listAdjustments,
   getReport, exportReport, exportCustom, syncPayroll,
   listHolidays, createHoliday, updateHoliday, deleteHoliday,
   getSettings, updateSettings,

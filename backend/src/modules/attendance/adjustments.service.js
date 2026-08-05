@@ -332,6 +332,43 @@ async function createManualRecord(userId, workDate, { checkInTime, checkOutTime,
   return { ...record, isAdjusted: true }
 }
 
+// Reset checkout: nhân viên lỡ bấm check-out sớm → admin huỷ để họ chấm ra lại.
+// Xoá TẤT CẢ log check_out của ngày đó (kể cả log 'manual' do admin từng chỉnh),
+// ghi audit, rồi recompute → check_out_time về NULL (ngày ở trạng thái "đã vào, chưa ra").
+// Nhân viên getToday sẽ thấy hasCheckedOut=false → nút Check-out hiện lại.
+async function resetCheckout(recordId, { reason, adjustedBy }) {
+  if (!reason || !String(reason).trim()) {
+    throw Object.assign(new Error('Vui lòng nhập lý do reset check-out'), { status: 422 })
+  }
+  const recordRes = await query('SELECT * FROM attendance_records WHERE id = $1', [recordId])
+  if (!recordRes.rows[0]) throw Object.assign(new Error('Attendance record not found'), { status: 404 })
+  const record = recordRes.rows[0]
+  if (!record.check_out_time) {
+    throw Object.assign(new Error('Ngày này chưa có giờ check-out để reset'), { status: 400 })
+  }
+
+  const dateStr = String(record.work_date).slice(0, 10)
+  const before  = String(record.check_out_time)
+
+  // 1) Xoá mọi log check_out của user trong ngày (bấm nhầm 1 hay nhiều lần đều sạch)
+  await query(
+    `DELETE FROM attendance_logs
+      WHERE user_id = $1 AND log_type = 'check_out' AND logged_at::date = $2`,
+    [record.user_id, dateStr]
+  )
+
+  // 2) Audit trail: giờ ra <lúc nhầm> → NULL, kèm lý do + ai thực hiện
+  await query(
+    `INSERT INTO attendance_adjustments
+       (attendance_record_id, field_name, before_value, after_value, reason, adjusted_by)
+     VALUES ($1, 'check_out_time', $2, NULL, $3, $4)`,
+    [recordId, before, `[Reset check-out] ${String(reason).trim()}`, adjustedBy]
+  )
+
+  // 3) Recompute từ log còn lại (chỉ còn check_in) → check_out_time NULL, actual_hours NULL
+  return calculateAttendanceRecord(record.user_id, dateStr)
+}
+
 async function listAdjustments(attendanceRecordId) {
   const { rows } = await query(
     `SELECT aa.*, u.name AS adjuster_name
@@ -344,4 +381,4 @@ async function listAdjustments(attendanceRecordId) {
   return rows.map(toAdjDto)
 }
 
-module.exports = { adjustAttendanceRecord, manualAdjust, createManualRecord, listAdjustments }
+module.exports = { adjustAttendanceRecord, manualAdjust, createManualRecord, resetCheckout, listAdjustments }

@@ -1792,3 +1792,41 @@
   background: var(--color-primary-bg-strong);
   margin: 3px 0;
 }
+
+/* Khối "Reset check-out" trong popup chỉnh sửa chấm công (admin) */
+.resetCheckoutBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-warning-border, #fcd34d);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-warning-bg, #fff7ed);
+}
+.resetCheckoutInfo {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--fs-2xs, 11.5px);
+  color: var(--color-warning-text, #92400e);
+}
+.resetCheckoutInfo svg { flex-shrink: 0; margin-top: 1px; }
+.resetCheckoutInfo strong { display: block; font-size: var(--fs-xs, 12.5px); }
+.resetCheckoutHint { display: block; margin-top: 2px; line-height: 1.4; }
+.btnResetCheckout {
+  display: inline-flex; align-items: center; gap: 5px;
+  flex-shrink: 0;
+  height: 32px; padding: 0 12px;
+  border: 1px solid var(--color-warning-amber, #d97706);
+  border-radius: var(--radius-md, 8px);
+  background: #fff;
+  color: var(--color-warning-amber, #d97706);
+  font-family: inherit; font-size: var(--fs-2xs, 11.5px); font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background 0.13s, color 0.13s;
+}
+.btnResetCheckout:hover:not(:disabled) { background: var(--color-warning-amber, #d97706); color: #fff; }
+.btnResetCheckout:disabled { opacity: 0.55; cursor: not-allowed; }
