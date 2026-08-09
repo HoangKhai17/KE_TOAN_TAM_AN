@@ -76,6 +76,23 @@ Tài liệu tạm dùng làm chuẩn khi đồng bộ các trang còn lại vớ
   `Shift + Tab` quay lại, `Escape` hủy; textarea dùng `Shift + Enter` hoặc
   `Alt + Enter` nếu cần xuống dòng thủ công.
 
+## Footer và pagination cấp trang
+
+- `AppLayout` hỗ trợ footer slot: không truyền `footer` thì dùng footer hệ thống mặc định;
+  truyền `PaginationFooter` thì thay bằng pagination cấp trang; truyền `null` chỉ dùng khi
+  trang có lý do rõ ràng để ẩn hoàn toàn footer.
+- Chỉ dùng pagination footer cho trang danh sách có đúng một nguồn phân trang cấp cao nhất.
+  Dashboard, Settings, Báo cáo và trang không phân trang tiếp tục dùng footer mặc định.
+- Trang chi tiết có nhiều tab/bảng giữ pagination bên trong card/tab tương ứng, tránh footer
+  điều khiển nhầm bảng không active.
+- `PaginationFooter` là controlled/presentational component: nhận `page`, `pageSize`, `total`,
+  `totalPages`, `from`, `to` và callback; tuyệt đối không tạo state pagination hoặc gọi API/query.
+- State và query vẫn thuộc page. `onPageChange` chỉ gọi setter/handler hiện có; khi đổi page size,
+  page phải reset về `1` tại page trước khi query chạy lại.
+- Chuẩn bố cục footer: bên trái là khoảng dữ liệu/tổng số, giữa là số dòng mỗi trang, bên phải
+  là điều hướng trang. Font dùng `--fs-2xs`; control cao khoảng `26px`.
+- Component chuẩn: `frontend/src/components/layout/PaginationFooter.jsx`.
+
 ## Scope note
 
 Đây là baseline tạm, không phải design-system contract cuối cùng. Khi cập nhật page mới, ưu tiên token trong `frontend/src/styles/tokens.css` và ghi nhận ngoại lệ có lý do.

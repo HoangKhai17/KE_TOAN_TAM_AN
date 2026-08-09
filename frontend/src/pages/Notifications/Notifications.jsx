@@ -4,6 +4,7 @@ import {
   Bell, CheckCheck, Filter, FlaskConical, Trash2, Square, CheckSquare, MinusSquare,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import PaginationFooter from '../../components/layout/PaginationFooter'
 import { useNotificationStore } from '../../stores/notificationStore'
 import {
   listNotifications, markOneRead, markAllRead, sendTestNotification,
@@ -189,11 +190,26 @@ export default function Notifications() {
   // ── Derived ───────────────────────────────────────────────────────────────────
 
   const totalPages = Math.ceil(total / LIMIT)
+  const paginationFrom = total === 0 ? 0 : (page - 1) * LIMIT + 1
+  const paginationTo = Math.min(page * LIMIT, total)
   const allOnPageSelected = notifications.length > 0 && notifications.every((n) => selectedIds.has(n.id))
   const someOnPageSelected = notifications.some((n) => selectedIds.has(n.id)) && !allOnPageSelected
 
   return (
-    <AppLayout>
+    <AppLayout footer={(
+      <PaginationFooter
+        total={total}
+        from={paginationFrom}
+        to={paginationTo}
+        itemLabel="thông báo"
+        page={page}
+        pageSize={LIMIT}
+        totalPages={totalPages}
+        pageSizeOptions={[LIMIT]}
+        loading={loading}
+        onPageChange={handlePageChange}
+      />
+    )}>
       <div className={s.page}>
 
         {/* ── Header ── */}
@@ -371,42 +387,6 @@ export default function Notifications() {
           )}
         </div>
 
-        {/* ── Pagination ── */}
-        {totalPages > 1 && (
-          <div className={s.pagination}>
-            <button
-              className={s.pagBtn}
-              onClick={() => handlePageChange(page - 1)}
-              disabled={page === 1}
-            >‹</button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter((n) => n === 1 || n === totalPages || Math.abs(n - page) <= 2)
-              .reduce((acc, n, i, arr) => {
-                if (i > 0 && n - arr[i - 1] > 1) acc.push('…')
-                acc.push(n)
-                return acc
-              }, [])
-              .map((n, i) =>
-                n === '…' ? (
-                  <span key={`e${i}`} className={s.pagEllipsis}>…</span>
-                ) : (
-                  <button
-                    key={n}
-                    className={`${s.pagBtn} ${page === n ? s.pagBtnActive : ''}`}
-                    onClick={() => handlePageChange(n)}
-                  >{n}</button>
-                )
-              )}
-            <button
-              className={s.pagBtn}
-              onClick={() => handlePageChange(page + 1)}
-              disabled={page === totalPages}
-            >›</button>
-            <span className={s.pagInfo}>
-              {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} / {total}
-            </span>
-          </div>
-        )}
       </div>
     </AppLayout>
   )

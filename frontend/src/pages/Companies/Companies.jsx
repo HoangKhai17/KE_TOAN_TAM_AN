@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import AppLayout from '../../components/layout/AppLayout'
+import PaginationFooter from '../../components/layout/PaginationFooter'
 import Modal from '../../components/ui/Modal'
 import CompanyExportModal from './CompanyExportModal'
 import { useAuthStore } from '../../stores/authStore'
@@ -819,19 +820,32 @@ export default function Companies() {
     }
   }
 
-  // Pagination window (client-side)
+  // Pagination (client-side). State/query vẫn thuộc page; footer chỉ nhận props điều khiển.
   const paginationFrom = clientTotal === 0 ? 0 : (safePage - 1) * limit + 1
   const paginationTo   = Math.min(safePage * limit, clientTotal)
   const totalPages     = clientTotalPages
-  function pageWindow() {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    if (safePage <= 4) return [1, 2, 3, 4, 5, '…', totalPages]
-    if (safePage >= totalPages - 3) return [1, '…', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
-    return [1, '…', safePage - 1, safePage, safePage + 1, '…', totalPages]
-  }
+  const footerDetails = [
+    colFilterCount > 0 ? `${colFilterCount} lọc cột` : '',
+    hasColSortActive ? 'đang sắp xếp' : '',
+  ].filter(Boolean).join(' · ')
 
   return (
-    <AppLayout>
+    <AppLayout footer={(
+      <PaginationFooter
+        total={clientTotal}
+        from={paginationFrom}
+        to={paginationTo}
+        itemLabel="khách hàng"
+        page={safePage}
+        pageSize={limit}
+        totalPages={totalPages}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        loading={loading}
+        details={footerDetails}
+        onPageChange={setPage}
+        onPageSizeChange={(nextLimit) => { setLimit(nextLimit); setPage(1) }}
+      />
+    )}>
       <div className={s.page}>
 
         {/* Header */}
@@ -1139,48 +1153,6 @@ export default function Companies() {
             </div>
           )}
 
-          {/* Pagination — gộp trong table card */}
-          <div className={s.paginationBar}>
-            <span className={s.paginationInfo}>
-              {loading ? '...' : `Hiển thị ${paginationFrom}-${paginationTo} / ${clientTotal} record`}
-              {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
-              {hasColSortActive && ' · đang sắp xếp'}
-            </span>
-
-            <div className={s.paginationBtns}>
-              <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={safePage === 1}>«</button>
-              <button className={s.paginationBtn} onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage === 1}>‹</button>
-              {pageWindow().map((n, i) =>
-                n === '…' ? (
-                  <span key={`sep-${i}`} className={s.paginationEllipsis}>…</span>
-                ) : (
-                  <button
-                    key={n}
-                    className={`${s.paginationBtn} ${safePage === n ? s.paginationBtnActive : ''}`}
-                    onClick={() => setPage(n)}
-                  >
-                    {n}
-                  </button>
-                )
-              )}
-              <button className={s.paginationBtn} onClick={() => setPage(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}>›</button>
-              <button className={s.paginationBtn} onClick={() => setPage(totalPages)} disabled={safePage === totalPages}>»</button>
-            </div>
-
-            <div className={s.pageSizeWrap}>
-              <span className={s.pageSizeLabel}>Hiển thị:</span>
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  className={`${s.pageSizeBtn} ${limit === n ? s.pageSizeBtnActive : ''}`}
-                  onClick={() => setLimit(n)}
-                >
-                  {n}
-                </button>
-              ))}
-              <span className={s.pageSizeLabel}>/ trang</span>
-            </div>
-          </div>
         </div>
       </div>
 

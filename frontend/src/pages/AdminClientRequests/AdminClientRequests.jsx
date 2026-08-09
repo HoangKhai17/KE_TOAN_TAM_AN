@@ -7,6 +7,7 @@ import {
   ChevronDown, X,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import PaginationFooter from '../../components/layout/PaginationFooter'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
@@ -1148,21 +1149,31 @@ export default function AdminClientRequests() {
     { label: 'Không cần', value: stats?.not_required ?? 0, cls: s.statNotRequired },
   ]
 
-  function pageWindow() {
-    const total = clientTotalPages
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-    if (safePage <= 4) return [1, 2, 3, 4, 5, '…', total]
-    if (safePage >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
-    return [1, '…', safePage - 1, safePage, safePage + 1, '…', total]
-  }
-
   const from = displayed.length === 0 ? 0 : (safePage - 1) * pageSize + 1
   const to   = Math.min(safePage * pageSize, displayed.length)
+  const footerDetails = [
+    colFilterCount > 0 ? `${colFilterCount} lọc cột` : '',
+    hasColSort ? 'đang sắp xếp' : '',
+  ].filter(Boolean).join(' · ')
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <AppLayout>
+    <AppLayout footer={view === 'list' ? (
+      <PaginationFooter
+        total={displayed.length}
+        from={from}
+        to={to}
+        itemLabel="yêu cầu"
+        page={safePage}
+        pageSize={pageSize}
+        totalPages={clientTotalPages}
+        loading={loading}
+        details={footerDetails}
+        onPageChange={setPage}
+        onPageSizeChange={(nextSize) => { setPageSize(nextSize); setPage(1) }}
+      />
+    ) : undefined}>
       <div className={s.page}>
 
         {/* ── Toolbar ── */}
@@ -1573,40 +1584,6 @@ export default function AdminClientRequests() {
               </table>
             </div>
 
-            {/* Pagination */}
-            <div className={s.pagination}>
-              <div className={s.paginationLeft}>
-                <span className={s.paginationInfo}>
-                  {loading ? '...' : `${from}–${to} / ${displayed.length} yêu cầu`}
-                  {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
-                  {hasColSort && ' · đang sắp xếp'}
-                </span>
-                <div className={s.pageSizeBtns}>
-                  {[20, 50, 100].map((n) => (
-                    <button
-                      key={n}
-                      className={`${s.pageSizeBtn} ${pageSize === n ? s.pageSizeBtnActive : ''}`}
-                      onClick={() => setPageSize(n)}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className={s.paginationBtns}>
-                <button className={s.pageBtn} onClick={() => setPage(1)} disabled={safePage === 1}>«</button>
-                <button className={s.pageBtn} onClick={() => setPage(safePage - 1)} disabled={safePage === 1}>‹</button>
-                {pageWindow().map((n, i) =>
-                  n === '…' ? (
-                    <span key={`e${i}`} className={s.paginationGap}>…</span>
-                  ) : (
-                    <button key={n} className={`${s.pageBtn} ${safePage === n ? s.pageBtnActive : ''}`} onClick={() => setPage(n)}>{n}</button>
-                  )
-                )}
-                <button className={s.pageBtn} onClick={() => setPage(safePage + 1)} disabled={safePage === clientTotalPages}>›</button>
-                <button className={s.pageBtn} onClick={() => setPage(clientTotalPages)} disabled={safePage === clientTotalPages}>»</button>
-              </div>
-            </div>
           </div>
         )}
 

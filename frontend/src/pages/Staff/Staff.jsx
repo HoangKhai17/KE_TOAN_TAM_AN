@@ -3,10 +3,11 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import { invalidateRefStaff } from '../../hooks/useReferenceData'
 import { useNavigate } from 'react-router-dom'
 import {
-  Plus, Search, ChevronLeft, ChevronRight, Users, Loader2,
+  Plus, Search, Users, Loader2,
   Edit2, Trash2, UserCheck, UserMinus, UserX, FileDown,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import PaginationFooter from '../../components/layout/PaginationFooter'
 import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -117,8 +118,25 @@ export default function Staff() {
     }
   }
 
+  const pageSize = 20
+  const paginationFrom = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
+  const paginationTo = Math.min(page * pageSize, pagination.total)
+
   return (
-    <AppLayout title="Nhân viên">
+    <AppLayout title="Nhân viên" footer={(
+      <PaginationFooter
+        total={pagination.total}
+        from={paginationFrom}
+        to={paginationTo}
+        itemLabel="nhân viên"
+        page={page}
+        pageSize={pageSize}
+        totalPages={pagination.totalPages}
+        pageSizeOptions={[pageSize]}
+        loading={loading}
+        onPageChange={setPage}
+      />
+    )}>
       <div className={s.page}>
 
         {/* Header */}
@@ -223,39 +241,6 @@ export default function Staff() {
             </div>
           )}
 
-          {/* Pagination */}
-          {pagination.totalPages > 1 && (
-            <div className={s.paginationBar}>
-              <span className={s.paginationInfo}>
-                Trang {pagination.page}/{pagination.totalPages} — {pagination.total} nhân viên
-              </span>
-              <div className={s.paginationBtns}>
-                <button
-                  className={s.paginationBtn}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => i + 1).map((n) => (
-                  <button
-                    key={n}
-                    className={`${s.paginationBtn} ${page === n ? s.paginationBtnActive : ''}`}
-                    onClick={() => setPage(n)}
-                  >
-                    {n}
-                  </button>
-                ))}
-                <button
-                  className={s.paginationBtn}
-                  onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-                  disabled={page === pagination.totalPages}
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Export modal */}

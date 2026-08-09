@@ -13,7 +13,7 @@ function loadSidebarOpen() {
   catch { return false }
 }
 
-export default function AppLayout({ children }) {
+export default function AppLayout({ children, footer }) {
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
   useEffect(() => {
     try { sessionStorage.setItem(SIDEBAR_KEY, String(sidebarOpen)) } catch { /* ignore */ }
@@ -34,7 +34,7 @@ export default function AppLayout({ children }) {
           {children}
         </main>
 
-        <Footer />
+        {footer === null ? null : (footer ?? <Footer />)}
       </div>
     </div>
   )

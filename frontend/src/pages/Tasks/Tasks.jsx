@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
+import PaginationFooter from '../../components/layout/PaginationFooter'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as tasksApi from '../../api/tasks'
@@ -806,12 +807,11 @@ function FilterCompanyMultiPicker({ companies, value, onChange }) {
 // ── ListView ──────────────────────────────────────────────────────────────────
 
 function ListView({
-  tasks, loading, pagination, page, pageSize,
-  onPageChange, onPageSizeChange, onOpen, onQuickView,
+  tasks, loading, onOpen, onQuickView,
   selectedIds, onToggleSelect, onSelectAll,
   onStatusChange, onPriorityChange, onDueDateChange, onDelete,
   isAdmin,
-  sortColState, hasColFilter, onOpenColFilter, colFilterCount = 0, hasColSort = false,
+  sortColState, hasColFilter, onOpenColFilter,
   hiddenCols,
 }) {
   const getLabel    = useEnumsStore((st) => st.getLabel)
@@ -849,17 +849,6 @@ function ListView({
       </th>
     )
   }
-  const from = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
-  const to   = Math.min(page * pageSize, pagination.total)
-
-  function pageWindow() {
-    const total = pagination.totalPages ?? 1
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-    if (page <= 4) return [1, 2, 3, 4, 5, '…', total]
-    if (page >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
-    return [1, '…', page - 1, page, page + 1, '…', total]
-  }
-
   return (
     <div className={s.tableWrap}>
       {/* data-scroll-x: mốc ổn định để useScrollRestore nhớ vị trí cuộn NGANG của bảng */}
@@ -1128,46 +1117,6 @@ function ListView({
         </table>
       </div>
 
-      {/* Pagination */}
-      <div className={s.pagination}>
-        <div className={s.paginationLeft}>
-          <span className={s.paginationInfo}>
-            {loading ? '...' : `${from}–${to} / ${pagination.total} công việc`}
-            {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
-            {hasColSort && ' · đang sắp xếp'}
-          </span>
-          <div className={s.pageSizeBtns}>
-            {[20, 50, 100].map((n) => (
-              <button
-                key={n}
-                className={`${s.pageSizeBtn} ${pageSize === n ? s.pageSizeBtnActive : ''}`}
-                onClick={() => onPageSizeChange(n)}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className={s.paginationBtns}>
-          <button className={s.pageBtn} onClick={() => onPageChange(1)} disabled={page === 1}>«</button>
-          <button className={s.pageBtn} onClick={() => onPageChange(page - 1)} disabled={page === 1}>‹</button>
-          {pageWindow().map((n, i) =>
-            n === '…' ? (
-              <span key={`e${i}`} className={s.paginationGap}>…</span>
-            ) : (
-              <button
-                key={n}
-                className={`${s.pageBtn} ${page === n ? s.pageBtnActive : ''}`}
-                onClick={() => onPageChange(n)}
-              >
-                {n}
-              </button>
-            )
-          )}
-          <button className={s.pageBtn} onClick={() => onPageChange(page + 1)} disabled={page === (pagination.totalPages ?? 1)}>›</button>
-          <button className={s.pageBtn} onClick={() => onPageChange(pagination.totalPages ?? 1)} disabled={page === (pagination.totalPages ?? 1)}>»</button>
-        </div>
-      </div>
     </div>
   )
 }
@@ -1728,6 +1677,12 @@ export default function Tasks() {
   const safePage = Math.min(page, clientTotalPages)
   const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
   const clientPagination = { total: displayed.length, totalPages: clientTotalPages, page: safePage }
+  const paginationFrom = displayed.length === 0 ? 0 : (safePage - 1) * pageSize + 1
+  const paginationTo = Math.min(safePage * pageSize, displayed.length)
+  const footerDetails = [
+    colFilterCount > 0 ? `${colFilterCount} lọc cột` : '',
+    hasColSort ? 'đang sắp xếp' : '',
+  ].filter(Boolean).join(' · ')
 
   // Trạng thái: 1 nguồn nhãn duy nhất cho cả bộ lọc và hàng thống kê
   const statusOptions = getOptions('task_status').length > 0
@@ -1831,7 +1786,21 @@ export default function Tasks() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <AppLayout>
+    <AppLayout footer={view === 'list' ? (
+      <PaginationFooter
+        total={clientPagination.total}
+        from={paginationFrom}
+        to={paginationTo}
+        itemLabel="công việc"
+        page={safePage}
+        pageSize={pageSize}
+        totalPages={clientPagination.totalPages}
+        loading={loading}
+        details={footerDetails}
+        onPageChange={(nextPage) => { setPage(nextPage); setSelectedIds(new Set()) }}
+        onPageSizeChange={(nextSize) => { setPageSize(nextSize); setPage(1); setSelectedIds(new Set()) }}
+      />
+    ) : undefined}>
       <div className={s.page}>
 
         {/* ── Toolbar ── */}
@@ -2253,11 +2222,6 @@ export default function Tasks() {
           <ListView
             tasks={pageRows}
             loading={loading}
-            pagination={clientPagination}
-            page={safePage}
-            pageSize={pageSize}
-            onPageChange={(p) => { setPage(p); setSelectedIds(new Set()) }}
-            onPageSizeChange={(n) => { setPageSize(n); setPage(1) }}
             onOpen={openTask}
             onQuickView={setQuickViewId}
             selectedIds={selectedIds}
@@ -2271,8 +2235,6 @@ export default function Tasks() {
             sortColState={sortColState}
             hasColFilter={hasColFilter}
             onOpenColFilter={openColFilter}
-            colFilterCount={colFilterCount}
-            hasColSort={hasColSort}
             hiddenCols={hiddenCols}
           />
         )}
