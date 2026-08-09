@@ -37,12 +37,18 @@ const commentSchema = z.object({
 })
 
 const addChecklistItemSchema = z.object({
-  text: z.string().min(1, 'Nội dung không được để trống').max(500),
+  text:  z.string().min(1, 'Nội dung không được để trống').max(500),
+  level: z.number().int().min(0).max(1).optional().default(0),
 })
 
 const updateChecklistItemSchema = z.object({
   text:   z.string().min(1).max(500).optional(),
   isDone: z.boolean().optional(),
+  level:  z.number().int().min(0).max(1).optional(),
+})
+
+const reorderChecklistSchema = z.object({
+  orderedIds: z.array(z.string().uuid()).min(1),
 })
 
 const addLinkSchema = z.object({
@@ -53,5 +59,5 @@ const addLinkSchema = z.object({
 
 module.exports = {
   createSchema, updateSchema, noteSchema, optionalNoteSchema, commentSchema,
-  addChecklistItemSchema, updateChecklistItemSchema, addLinkSchema,
+  addChecklistItemSchema, updateChecklistItemSchema, reorderChecklistSchema, addLinkSchema,
 }

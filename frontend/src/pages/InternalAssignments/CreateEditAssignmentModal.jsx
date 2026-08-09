@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Search, Loader2, Check, Plus, Trash2, CheckSquare, Link2 } from 'lucide-react'
+import { X, Search, Loader2, Check, Plus, Trash2, CheckSquare, Link2, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
+import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { listUserOptions } from '../../api/users'
 import { listCompanies } from '../../api/companies'
 import * as api from '../../api/internalAssignments'
@@ -29,9 +30,12 @@ export default function CreateEditAssignmentModal({ item, onClose, onSaved }) {
   const [addAssigneeIds,    setAddAssigneeIds]    = useState([])
   const [removeAssigneeIds, setRemoveAssigneeIds] = useState([])
 
-  // Checklist items (create mode only — added after assignment is created)
-  const [checklistItems, setChecklistItems] = useState([''])
-  const checklistInputsRef = useRef([])
+  // Checklist items (create mode only) — phân cấp cha-con như trang Tasks: [{id,text,level}]
+  const [checklistItems, setChecklistItems] = useState([])
+  const [newItemText, setNewItemText] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const newItemRef = useRef(null)
 
   // Link items (create mode only — added after assignment is created)
   const [linkItems,    setLinkItems]    = useState([])
@@ -103,20 +107,28 @@ export default function CreateEditAssignmentModal({ item, onClose, onSaved }) {
     return (item?.assignees?.length ?? 0) - removeAssigneeIds.length + addAssigneeIds.length
   }
 
-  // Checklist helpers
-  function setChecklistItem(idx, val) {
-    setChecklistItems((prev) => prev.map((v, i) => (i === idx ? val : v)))
+  // Checklist helpers — cha/con, kéo thả, xuống dòng (đồng bộ trang Tasks)
+  function addToChecklist() {
+    const text = newItemText.trim()
+    if (!text) return
+    setChecklistItems((prev) => [...prev, { id: Date.now(), text, level: 0 }])
+    setNewItemText('')
+    newItemRef.current?.focus()
   }
-  function addChecklistRow(focusIdx) {
-    setChecklistItems((prev) => [...prev, ''])
-    if (focusIdx !== undefined) {
-      setTimeout(() => {
-        checklistInputsRef.current[focusIdx + 1]?.focus()
-      }, 0)
-    }
+  function removeFromChecklist(id) {
+    setChecklistItems((prev) => prev.filter((i) => i.id !== id))
+    if (editingId === id) cancelEdit()
   }
-  function removeChecklistRow(idx) {
-    setChecklistItems((prev) => prev.filter((_, i) => i !== idx))
+  function toggleItemLevel(id) {
+    setChecklistItems((prev) => prev.map((i) => (i.id === id ? { ...i, level: i.level === 1 ? 0 : 1 } : i)))
+  }
+  function startEdit(it) { setEditingId(it.id); setEditText(it.text) }
+  function cancelEdit() { setEditingId(null); setEditText('') }
+  function saveEdit() {
+    const text = editText.trim()
+    if (!text) { cancelEdit(); return }
+    setChecklistItems((prev) => prev.map((i) => (i.id === editingId ? { ...i, text } : i)))
+    cancelEdit()
   }
 
   // Link helpers
@@ -168,10 +180,10 @@ export default function CreateEditAssignmentModal({ item, onClose, onSaved }) {
           companyId:    companyId || null,
           assigneeIds,
         })
-        // Batch-create checklist items
-        const texts = checklistItems.map((t) => t.trim()).filter(Boolean)
-        if (texts.length > 0) {
-          await Promise.allSettled(texts.map((text) => api.addChecklistItem(result.id, text)))
+        // Tạo checklist TUẦN TỰ để giữ đúng thứ tự (position) + cấp cha/con (level)
+        for (const it of checklistItems) {
+          const text = (it.text ?? '').trim()
+          if (text) await api.addChecklistItem(result.id, text, it.level ?? 0)
         }
         // Batch-create link items
         if (linkItems.length > 0) {
@@ -310,40 +322,78 @@ export default function CreateEditAssignmentModal({ item, onClose, onSaved }) {
                 </div>
               </div>
 
-              {/* Checklist items (create mode only) */}
+              {/* Checklist items (create mode only) — cha/con, kéo thả, Alt/Shift+Enter xuống dòng */}
               {!isEdit && (
                 <div className={s.formGroup}>
                   <label className={s.formLabel}>
                     <CheckSquare size={12} style={{ display: 'inline', marginRight: 5 }} />
                     Danh sách công việc (tuỳ chọn)
+                    {checklistItems.length > 0 && (
+                      <span style={{ fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>({checklistItems.length} bước)</span>
+                    )}
                   </label>
-                  <div className={s.checklistInputList}>
-                    {checklistItems.map((text, idx) => (
-                      <div key={idx} className={s.checklistInputRow}>
-                        <span className={s.checklistBullet} />
-                        <input
-                          ref={(el) => { checklistInputsRef.current[idx] = el }}
-                          type="text"
-                          className={s.checklistInputField}
-                          placeholder={`Công việc ${idx + 1}...`}
-                          value={text}
-                          onChange={(e) => setChecklistItem(idx, e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') { e.preventDefault(); addChecklistRow(idx) }
-                          }}
-                        />
-                        {checklistItems.length > 1 && (
-                          <button
-                            type="button"
-                            className={s.checklistRemoveBtn}
-                            onClick={() => removeChecklistRow(idx)}
-                            tabIndex={-1}
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
+
+                  {checklistItems.length > 0 && (
+                    <div className={s.iaClList}>
+                      <SortableList
+                        ids={checklistItems.map((i) => i.id)}
+                        onReorder={(newIds) => setChecklistItems(newIds.map((id) => checklistItems.find((i) => i.id === id)))}
+                      >
+                        {checklistItems.map((it, idx) => {
+                          const isChild = it.level === 1
+                          return (
+                            <SortableItem key={it.id} id={it.id}>
+                              {({ setNodeRef, style, handleProps }) => (
+                                <div ref={setNodeRef} style={style} className={`${s.iaClItem} ${isChild ? s.iaClItemChild : ''}`}>
+                                  <button type="button" className={s.iaClDrag} title="Kéo để sắp xếp" {...handleProps}>
+                                    <GripVertical size={12} />
+                                  </button>
+                                  <button type="button" className={s.iaClIndent} onClick={() => toggleItemLevel(it.id)}
+                                    title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>
+                                    {isChild ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
+                                  </button>
+                                  <span className={s.iaClIdx}>{isChild ? '•' : `${idx + 1}.`}</span>
+                                  {editingId === it.id ? (
+                                    <textarea
+                                      autoFocus value={editText} rows={2}
+                                      className={s.iaClInput} style={{ resize: 'vertical', whiteSpace: 'pre-wrap' }}
+                                      onChange={(e) => setEditText(e.target.value)}
+                                      onBlur={saveEdit}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); saveEdit() }
+                                        if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                                      }}
+                                    />
+                                  ) : (
+                                    <span className={s.iaClText} style={{ whiteSpace: 'pre-wrap', cursor: 'text' }}
+                                      onClick={() => startEdit(it)} title="Nhấp để sửa">
+                                      {it.text}
+                                    </span>
+                                  )}
+                                  <button type="button" className={s.iaClDel} onClick={() => removeFromChecklist(it.id)} title="Xóa bước này">
+                                    <X size={11} />
+                                  </button>
+                                </div>
+                              )}
+                            </SortableItem>
+                          )
+                        })}
+                      </SortableList>
+                    </div>
+                  )}
+
+                  <div className={s.iaClAdd}>
+                    <Plus size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+                    <textarea
+                      ref={newItemRef} value={newItemText} rows={2}
+                      className={s.iaClInput} style={{ resize: 'vertical' }}
+                      placeholder="Thêm bước công việc… (Enter để thêm · Alt/Shift+Enter xuống dòng)"
+                      onChange={(e) => setNewItemText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); addToChecklist() } }}
+                    />
+                    {newItemText.trim() && (
+                      <button type="button" className={s.iaClAddBtn} onClick={addToChecklist}>Thêm</button>
+                    )}
                   </div>
                 </div>
               )}

@@ -85,8 +85,8 @@ export async function getChecklist(id) {
   return data.data.items
 }
 
-export async function addChecklistItem(id, text) {
-  const { data } = await api.post(`/internal-assignments/${id}/checklist`, { text })
+export async function addChecklistItem(id, text, level = 0) {
+  const { data } = await api.post(`/internal-assignments/${id}/checklist`, { text, level })
   return data.data.item
 }
 
@@ -97,6 +97,10 @@ export async function updateChecklistItem(id, itemId, body) {
 
 export async function deleteChecklistItem(id, itemId) {
   await api.delete(`/internal-assignments/${id}/checklist/${itemId}`)
+}
+
+export async function reorderChecklist(id, orderedIds) {
+  await api.patch(`/internal-assignments/${id}/checklist/reorder`, { orderedIds })
 }
 
 // ── Links ─────────────────────────────────────────────────────────────────────

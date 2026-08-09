@@ -1,29 +1,60 @@
 .tabs {
   display: flex;
-  gap: 0;
-  border-bottom: 2px solid var(--color-border);
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Segmented pill (đồng bộ với view-switch Danh sách | Board của Tasks) */
+.tabLinks {
+  display: flex;
+  align-items: center;
+  background: #f8fbff;
+  border: 1.5px solid #dbeafe;
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tabActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-5);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  color: var(--color-text-soft);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  transition: color 0.15s, border-color 0.15s;
   white-space: nowrap;
+  transition: background 0.13s, color 0.13s;
 }
 
-.tab:hover {
-  color: var(--color-text);
+.tab:hover { color: var(--color-text); background: rgba(0, 0, 0, 0.03); }
+
+.tabActive,
+.tabActive:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px -2px rgba(37, 99, 235, 0.45);
 }
 
-.tabActive {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
+@media (max-width: 720px) {
+  .tabs {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tabActions {
+    justify-content: flex-end;
+  }
 }

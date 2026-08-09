@@ -6,7 +6,7 @@ const { validate }      = require('../../middleware/validate')
 const {
   createSchema, updateSchema,
   noteSchema, optionalNoteSchema, commentSchema,
-  addChecklistItemSchema, updateChecklistItemSchema, addLinkSchema,
+  addChecklistItemSchema, updateChecklistItemSchema, reorderChecklistSchema, addLinkSchema,
 } = require('./internalAssignments.schema')
 const ctrl = require('./internalAssignments.controller')
 
@@ -43,6 +43,7 @@ router.delete('/:id/comments/:cid',   ...auth, ctrl.deleteComment)
 // ─── Checklist ────────────────────────────────────────────────────────────────
 router.get('/:id/checklist',               ...auth, ctrl.listChecklist)
 router.post('/:id/checklist',              ...auth, validate(addChecklistItemSchema), ctrl.addChecklistItem)
+router.patch('/:id/checklist/reorder',     ...auth, validate(reorderChecklistSchema), ctrl.reorderChecklist)
 router.patch('/:id/checklist/:itemId',     ...auth, validate(updateChecklistItemSchema), ctrl.updateChecklistItem)
 router.delete('/:id/checklist/:itemId',    ...auth, ctrl.deleteChecklistItem)
 

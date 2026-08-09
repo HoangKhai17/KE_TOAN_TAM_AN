@@ -1851,10 +1851,11 @@ export default function Tasks() {
         {/* ── Toolbar ── */}
         <div className={s.toolbar}>
           <div className={s.toolbarLeft}>
-            <h1 className={s.pageTitle}>Công việc</h1>
-            {pagination.total > 0 && !loading && (
-              <span className={s.totalBadge}>{pagination.total}</span>
-            )}
+            {/* Điều hướng chéo: Công việc (đang xem) ↔ Nội bộ */}
+            <div className={s.viewSwitch}>
+              <button type="button" className={`${s.viewBtn} ${s.viewBtnActive}`}>Công việc</button>
+              <button type="button" className={s.viewBtn} onClick={() => navigate('/internal-assignments')}>Nội bộ</button>
+            </div>
           </div>
 
           <div className={s.toolbarRight}>

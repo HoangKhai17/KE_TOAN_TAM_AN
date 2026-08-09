@@ -44,11 +44,18 @@ const PRIORITY_CSS = {
   urgent: s.badgeUrgent,
 }
 
-const PRIORITY_SELECT_STYLE = {
-  low:    { background: '#f8fafc', color: '#64748b', borderColor: '#e2e8f0' },
-  normal: { background: '#eff6ff', color: '#1d4ed8', borderColor: '#93c5fd' },
-  high:   { background: '#fff7ed', color: '#c2410c', borderColor: '#fdba74' },
-  urgent: { background: '#fef2f2', color: '#b91c1c', borderColor: '#fca5a5' },
+// Pill màu đồng bộ với danh sách + trang Tasks (thay cho badge/inline-style cũ nhìn xấu)
+const STATUS_SELECT_CLASS = {
+  draft:     s.qeStatusDraft,
+  active:    s.qeStatusActive,
+  done:      s.qeStatusDone,
+  cancelled: s.qeStatusCancelled,
+}
+const PRIORITY_SELECT_CLASS = {
+  low:    s.qePriorityLow,
+  normal: s.qePriorityNormal,
+  high:   s.qePriorityHigh,
+  urgent: s.qePriorityUrgent,
 }
 
 const ASSIGNEE_STATUS_LABELS = {
@@ -68,8 +75,10 @@ const ASSIGNEE_STATUS_CSS = {
 }
 
 const IA_STATUS_TRANSITIONS = {
-  draft:  ['active', 'cancelled'],
-  active: ['done', 'cancelled'],
+  draft:     ['active', 'cancelled'],
+  active:    ['done', 'cancelled'],
+  done:      ['active', 'cancelled'],   // mở lại / hủy (bỏ khóa cứng khi hoàn thành)
+  cancelled: ['active'],                // mở lại
 }
 
 const IA_SA_CLASS = {
@@ -221,6 +230,11 @@ export default function AssignmentDetailPanel({
 }) {
   const addToast   = useToastStore((st) => st.toast)
   const getOptions = useEnumsStore((st) => st.getOptions)
+  const getLabel   = useEnumsStore((st) => st.getLabel)
+  // Nhãn enum động (fallback về map cứng nếu enum chưa tải)
+  const statusLabel         = (k) => getLabel('assignment_status', k, STATUS_LABELS[k] ?? k)
+  const priorityLabel       = (k) => getLabel('assignment_priority', k, PRIORITY_LABELS[k] ?? k)
+  const assigneeStatusLabel = (k) => getLabel('assignee_status', k, ASSIGNEE_STATUS_LABELS[k] ?? k)
 
   const [item,    setItem]    = useState(null)
   const [loading, setLoading] = useState(true)
@@ -385,7 +399,7 @@ export default function AssignmentDetailPanel({
         setTitleDraft(reloaded.title ?? '')
         setDescDraft(reloaded.description ?? '')
       }
-      addToast(`Đã chuyển sang "${STATUS_LABELS[newStatus]}"`, 'success')
+      addToast(`Đã chuyển sang "${statusLabel(newStatus)}"`, 'success')
       onUpdate?.()
     } catch (err) {
       addToast(err?.response?.data?.error?.message ?? 'Không thể cập nhật trạng thái', 'error')
@@ -492,8 +506,8 @@ export default function AssignmentDetailPanel({
               )}
               {item && (
                 <div className={s.panelHeadBadges} style={{ marginTop: 6 }}>
-                  <span className={`${s.badge} ${STATUS_CSS[item.status]}`}>{STATUS_LABELS[item.status]}</span>
-                  <span className={`${s.badge} ${PRIORITY_CSS[item.priority]}`}>{PRIORITY_LABELS[item.priority]}</span>
+                  <span className={`${s.qeSelect} ${s.qeSelectStyled} ${s.qeStatic} ${STATUS_SELECT_CLASS[item.status] ?? ''}`}>{statusLabel(item.status)}</span>
+                  <span className={`${s.qeSelect} ${s.qeSelectStyled} ${s.qeStatic} ${PRIORITY_SELECT_CLASS[item.priority] ?? ''}`}>{priorityLabel(item.priority)}</span>
                   {isOverdueField && <span className={s.iaOverdueTag}>⚠ Quá hạn</span>}
                 </div>
               )}
@@ -523,7 +537,7 @@ export default function AssignmentDetailPanel({
                   onClick={() => handleSaveStatus(st)}
                   disabled={acting}
                 >
-                  {STATUS_LABELS[st]}
+                  {statusLabel(st)}
                 </button>
               ))}
             </div>
@@ -549,18 +563,18 @@ export default function AssignmentDetailPanel({
                     <span className={s.iaQvLabel}>Trạng thái</span>
                     {canEdit ? (
                       <select
-                        className={`${s.qeSelect} ${s.iaQvFieldSelect}`}
+                        className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[item.status] ?? ''} ${s.iaQvFieldSelect}`}
                         value={item.status}
                         onChange={(e) => handleSaveStatus(e.target.value)}
                         disabled={acting}
                       >
-                        <option value={item.status}>{STATUS_LABELS[item.status]}</option>
+                        <option value={item.status}>{statusLabel(item.status)}</option>
                         {(IA_STATUS_TRANSITIONS[item.status] ?? []).map((st) => (
-                          <option key={st} value={st}>{STATUS_LABELS[st]}</option>
+                          <option key={st} value={st}>{statusLabel(st)}</option>
                         ))}
                       </select>
                     ) : (
-                      <span className={`${s.badge} ${STATUS_CSS[item.status]}`}>{STATUS_LABELS[item.status]}</span>
+                      <span className={`${s.qeSelect} ${s.qeSelectStyled} ${s.qeStatic} ${STATUS_SELECT_CLASS[item.status] ?? ''}`}>{statusLabel(item.status)}</span>
                     )}
                   </div>
 
@@ -569,17 +583,16 @@ export default function AssignmentDetailPanel({
                     <span className={s.iaQvLabel}><Flag size={11} /> Ưu tiên</span>
                     {canEdit ? (
                       <select
-                        className={`${s.qeSelect} ${s.iaQvFieldSelect}`}
+                        className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[item.priority] ?? ''} ${s.iaQvFieldSelect}`}
                         value={item.priority}
                         onChange={(e) => handleSavePriority(e.target.value)}
-                        style={{ ...(PRIORITY_SELECT_STYLE[item.priority] ?? {}), fontWeight: 700 }}
                       >
                         {priorityOptions.map((o) => (
                           <option key={o.key} value={o.key}>{o.label}</option>
                         ))}
                       </select>
                     ) : (
-                      <span className={`${s.badge} ${PRIORITY_CSS[item.priority]}`}>{PRIORITY_LABELS[item.priority]}</span>
+                      <span className={`${s.qeSelect} ${s.qeSelectStyled} ${s.qeStatic} ${PRIORITY_SELECT_CLASS[item.priority] ?? ''}`}>{priorityLabel(item.priority)}</span>
                     )}
                   </div>
 
@@ -684,7 +697,7 @@ export default function AssignmentDetailPanel({
                               </div>
                             </div>
                             <span className={`${s.assigneeChip} ${ASSIGNEE_STATUS_CSS[a.status]}`}>
-                              {ASSIGNEE_STATUS_LABELS[a.status]}
+                              {assigneeStatusLabel(a.status)}
                             </span>
                           </div>
                         ))}

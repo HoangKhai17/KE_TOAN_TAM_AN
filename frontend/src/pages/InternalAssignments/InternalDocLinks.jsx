@@ -551,8 +551,7 @@ export default function InternalDocLinks() {
 
         {/* ── Title + tabs ── */}
         <div className={s.topSection}>
-          <h1 className={s.pageTitle}>Công việc nội bộ</h1>
-          <InternalNavTabs />
+          <div className={s.pageHeaderNav}><InternalNavTabs /></div>
         </div>
 
         {/* ── Search + add ── */}

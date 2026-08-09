@@ -7,18 +7,34 @@
   min-height: 100%;
 }
 
-.topSection {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
 .pageTitle {
   font-size: var(--fs-2xl, 20px);
   font-weight: var(--fw-extrabold, 800);
-  color: var(--color-text);
+  color: var(--color-text-strong);
   letter-spacing: -0.3px;
   margin: 0;
+  white-space: nowrap;
+}
+
+.topSection {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 20px;
+  min-width: 0;
+}
+
+.pageHeaderNav {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .topSection {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 4px;
+  }
 }
 
 /* ── Toolbar ───────────────────────────────────────────────────── */

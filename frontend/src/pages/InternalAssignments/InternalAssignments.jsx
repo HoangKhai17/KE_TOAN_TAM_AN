@@ -5,7 +5,7 @@ const EMPTY_ITEMS = []   // ref ổn định để useMemo phía dưới không 
 import {
   Plus, Search, ClipboardCheck, Loader2, Check,
   List, Columns, Filter, RotateCcw,
-  ChevronDown, Trash2, Eye, X,
+  ChevronDown, Trash2, ArrowUpRight, X,
 } from 'lucide-react'
 import {
   DndContext, DragOverlay,
@@ -14,6 +14,7 @@ import {
 } from '@dnd-kit/core'
 import { format, parseISO } from 'date-fns'
 import AppLayout from '../../components/layout/AppLayout'
+import PaginationFooter from '../../components/layout/PaginationFooter'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -22,8 +23,17 @@ import { useStaffOptions } from '../../hooks/useReferenceData'
 import AssignmentDetailPanel from './AssignmentDetailPanel'
 import CreateEditAssignmentModal from './CreateEditAssignmentModal'
 import InternalNavTabs from './InternalNavTabs'
+import PeriodPicker from '../Tasks/PeriodPicker'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
+import {
+  BulkActionBar,
+  IndexHeaderCell,
+  IndexRowCell,
+  SelectionHeaderCell,
+  SelectionRowCell,
+  useRowSelection,
+} from '../../components/ui/data-table'
 import s from './internalAssignments.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -56,6 +66,27 @@ const PRIORITY_CSS = {
   urgent: s.badgeUrgent,
 }
 
+// Ô select màu kiểu trang Tasks (đồng bộ giao diện danh sách)
+const STATUS_SELECT_CLASS = {
+  draft:     s.qeStatusDraft,
+  active:    s.qeStatusActive,
+  done:      s.qeStatusDone,
+  cancelled: s.qeStatusCancelled,
+}
+const PRIORITY_SELECT_CLASS = {
+  low:    s.qePriorityLow,
+  normal: s.qePriorityNormal,
+  high:   s.qePriorityHigh,
+  urgent: s.qePriorityUrgent,
+}
+
+// Rút gọn tên nhân sự: >2 từ → lấy 2 từ cuối (giống trang Tasks)
+function shortName(name) {
+  if (!name) return name
+  const parts = String(name).trim().split(/\s+/)
+  return parts.length <= 2 ? parts.join(' ') : parts.slice(-2).join(' ')
+}
+
 const ASSIGNEE_STATUS_LABELS = {
   pending:     'Chờ tiếp nhận',
   accepted:    'Đã tiếp nhận',
@@ -80,20 +111,6 @@ const MY_STATUS_CSS = {
   rejected:    s.myStatusRejected,
 }
 
-const STATUS_SELECT_CLASS = {
-  draft:     s.qeStatusDraft,
-  active:    s.qeStatusActive,
-  done:      s.qeStatusDone,
-  cancelled: s.qeStatusCancelled,
-}
-
-const PRIORITY_SELECT_CLASS = {
-  low:    s.qePriorityLow,
-  normal: s.qePriorityNormal,
-  high:   s.qePriorityHigh,
-  urgent: s.qePriorityUrgent,
-}
-
 function progressPct(item) {
   if ((item.checklistTotal ?? 0) > 0) {
     return Math.round((item.checklistDone / item.checklistTotal) * 100)
@@ -105,17 +122,27 @@ function progressPct(item) {
 const IA_STATUS_RANK   = { draft: 1, active: 2, done: 3, cancelled: 4 }
 const IA_PRIORITY_RANK = { urgent: 1, high: 2, normal: 3, low: 4 }
 const IA_COL_TYPE = {
-  title: 'text', priority: 'enum', startDate: 'dateRange',
-  deadlineDate: 'dateRange', progress: 'numberRange', status: 'enum',
+  title: 'text', companyShort: 'text', startDate: 'dateRange',
+  deadlineDate: 'dateRange', createdAt: 'dateRange', status: 'enum',
+  priority: 'enum', progress: 'numberRange', assignedToName: 'text',
+  latestComment: 'text',
 }
 function iaColFilterType(k) { return IA_COL_TYPE[k] ?? 'text' }
-function iaColRawDate(it, k) { return k === 'startDate' ? it.startDate : it.deadlineDate }
+function iaColRawDate(it, k) {
+  if (k === 'startDate') return it.startDate
+  if (k === 'deadlineDate') return it.deadlineDate
+  return it.createdAt
+}
 function iaColDisplayLabel(it, k) {
   switch (k) {
     case 'status':       return STATUS_LABELS[it.status] ?? it.status ?? '(Trống)'
     case 'priority':     return PRIORITY_LABELS[it.priority] ?? it.priority ?? '(Trống)'
     case 'startDate':    return it.startDate    ? fmtDate(it.startDate)    : '(Trống)'
     case 'deadlineDate': return it.deadlineDate ? fmtDate(it.deadlineDate) : '(Trống)'
+    case 'createdAt':    return it.createdAt    ? fmtDate(it.createdAt)    : '(Trống)'
+    case 'companyShort': return it.company?.shortName || it.company?.name || '(Trống)'
+    case 'assignedToName': return it.assignees?.map((a) => a.name).filter(Boolean).join(', ') || '(Trống)'
+    case 'latestComment': return it.latestComment || '(Trống)'
     default: { const v = it[k]; return v != null && v !== '' ? String(v) : '(Trống)' }
   }
 }
@@ -126,6 +153,10 @@ function iaColSortKey(it, k) {
     case 'progress':     { const p = progressPct(it); return p == null ? -1 : p }
     case 'startDate':    return it.startDate || ''
     case 'deadlineDate': return it.deadlineDate || ''
+    case 'createdAt':    return it.createdAt || ''
+    case 'companyShort': return (it.company?.shortName || it.company?.name || '').toLowerCase()
+    case 'assignedToName': return (it.assignees?.map((a) => a.name).join(' ') || '').toLowerCase()
+    case 'latestComment': return (it.latestComment || '').toLowerCase()
     default:             return (it.title || '').toLowerCase()
   }
 }
@@ -211,8 +242,10 @@ const IA_STATUSES = ['draft', 'active', 'done', 'cancelled']
 
 // Valid drag transitions (admin only): src → allowed destinations
 const IA_STATUS_TRANSITIONS = {
-  draft:  ['active', 'cancelled'],
-  active: ['done', 'cancelled'],
+  draft:     ['active', 'cancelled'],
+  active:    ['done', 'cancelled'],
+  done:      ['active', 'cancelled'],   // mở lại / hủy (bỏ khóa cứng khi hoàn thành)
+  cancelled: ['active'],                // mở lại
 }
 
 const COL_DOT = {
@@ -244,27 +277,6 @@ function fmtDate(d) {
 function isOverdue(item) {
   return item.deadlineDate && item.status === 'active'
     && new Date(item.deadlineDate) < new Date()
-}
-
-// ── FilterDateField ───────────────────────────────────────────────────────────
-
-function FilterDateField({ value, onChange }) {
-  const ref = useRef(null)
-  return (
-    <div className={s.filterDateField} onClick={() => ref.current?.showPicker?.()}>
-      <span className={value ? s.filterDateFieldText : `${s.filterDateFieldText} ${s.filterDateFieldPlaceholder}`}>
-        {value ? fmtDate(value) : 'dd/mm/yyyy'}
-      </span>
-      <input
-        ref={ref}
-        type="date"
-        value={value}
-        onChange={onChange}
-        tabIndex={-1}
-        className={s.filterDateFieldInput}
-      />
-    </div>
-  )
 }
 
 // ── DeleteModal ───────────────────────────────────────────────────────────────
@@ -447,19 +459,41 @@ function BoardView({ items, onOpen, onStatusChange, isAdmin }) {
 
 // ── ListView ──────────────────────────────────────────────────────────────────
 
-function ListView({
-  items, loading, pagination, page, pageSize,
-  onPageChange, onPageSizeChange, onOpen, isAdmin, onDelete, currentUserId,
-  selectedIds, onToggleSelect, onSelectAll,
-  onStatusChange, onPriorityChange,
-  sortColState, hasColFilter, onOpenColFilter, colFilterCount = 0, hasColSort = false,
-}) {
-  const allSelected = items.length > 0 && items.every((t) => selectedIds.has(t.id))
+// Ô ngày hết hạn kiểu Tasks: hiện dd/mm/yyyy, click mở lịch chọn ẩn (viền đỏ khi quá hạn)
+function IaListDateField({ value, onChange, isOverdue, min }) {
+  const ref = useRef(null)
+  const dateStr = value ? value.slice(0, 10) : ''
+  return (
+    <div
+      className={`${s.qeDate} ${s.qeDateInteractive} ${isOverdue ? s.qeDateOverdue : ''}`}
+      onClick={() => ref.current?.showPicker?.()}
+    >
+      <span className={s.qeDateText}>{dateStr ? fmtDate(dateStr) : '—'}</span>
+      <input ref={ref} type="date" value={dateStr} onChange={onChange} min={min}
+        className={s.qeDateInputNative} tabIndex={-1} />
+    </div>
+  )
+}
 
-  function Th({ colKey, children }) {
+function ListView({
+  items, loading, page, pageSize,
+  onOpen, isAdmin, onDelete,
+  selectedIds, allSelected, someSelected, onToggleSelect, onSelectAll,
+  onStatusChange, onPriorityChange, onDeadlineChange,
+  sortColState, hasColFilter, onOpenColFilter,
+}) {
+  const getLabel   = useEnumsStore((st) => st.getLabel)
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const statusLabel   = (k) => getLabel('assignment_status', k, STATUS_LABELS[k] ?? k)
+  const priorityLabel = (k) => getLabel('assignment_priority', k, PRIORITY_LABELS[k] ?? k)
+  const priorityOpts  = getOptions('assignment_priority').length > 0
+    ? getOptions('assignment_priority').map((o) => o.key)
+    : ['low', 'normal', 'high', 'urgent']
+
+  function Th({ colKey, children, w }) {
     const active = hasColFilter?.(colKey) || sortColState?.col === colKey
     return (
-      <th className={s.th}>
+      <th className={s.th} style={w ? { width: w } : undefined}>
         <div className={s.thFilterInner}>
           <span className={s.thFilterLabel}>{children}</span>
           <button
@@ -474,37 +508,24 @@ function ListView({
       </th>
     )
   }
-  const from = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
-  const to   = Math.min(page * pageSize, pagination.total)
-
-  function pageWindow() {
-    const total = pagination.totalPages ?? 1
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-    if (page <= 4) return [1, 2, 3, 4, 5, '…', total]
-    if (page >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
-    return [1, '…', page - 1, page, page + 1, '…', total]
-  }
-
   return (
     <div className={s.tableWrap}>
       <div className={s.tableScrollX}>
         <table className={s.table}>
           <thead className={s.thead}>
             <tr>
-              <th className={s.thCheck}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={(e) => onSelectAll(e.target.checked)}
-                />
-              </th>
-              <Th colKey="title">Tiêu đề / Khách hàng</Th>
-              <th className={s.th}>Người thực hiện</th>
-              <Th colKey="priority">Ưu tiên</Th>
-              <Th colKey="startDate">Ngày bắt đầu</Th>
-              <Th colKey="deadlineDate">Hạn chót</Th>
-              <Th colKey="progress">Tiến độ</Th>
-              <Th colKey="status">Trạng thái</Th>
+              <SelectionHeaderCell allSelected={allSelected} someSelected={someSelected} onToggle={onSelectAll} className={s.thCheck} />
+              <IndexHeaderCell className={s.thIndex} />
+              <Th colKey="title">Tiêu đề</Th>
+              <Th colKey="companyShort" w={160}>Khách hàng</Th>
+              <Th colKey="startDate" w={104}>Ngày bắt đầu</Th>
+              <Th colKey="deadlineDate" w={104}>Ngày kết thúc</Th>
+              <Th colKey="createdAt" w={112}>Ngày tạo</Th>
+              <Th colKey="status" w={132}>Trạng thái</Th>
+              <Th colKey="priority" w={106}>Ưu tiên</Th>
+              <Th colKey="progress" w={110}>Tiến độ</Th>
+              <Th colKey="assignedToName" w={150}>Giao cho</Th>
+              <Th colKey="latestComment" w={180}>Bình luận mới nhất</Th>
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
             </tr>
           </thead>
@@ -513,7 +534,8 @@ function ListView({
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className={s.tr}>
                   <td className={s.tdCheck} />
-                  {[280, 180, 90, 90, 100, 90, 110, 70].map((w, j) => (
+                  <td className={s.tdIndex} />
+                  {[280, 150, 90, 90, 90, 110, 90, 100, 130, 160, 70].map((w, j) => (
                     <td key={j} className={s.td}>
                       <div className={s.tableSkeletonBar} style={{ '--skeleton-w': `${w}px`, width: `${w}px` }} />
                     </td>
@@ -522,7 +544,7 @@ function ListView({
               ))
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={9}>
+                <td colSpan={13}>
                   <div className={s.emptyBox}>
                     <div className={s.emptyIcon}><ClipboardCheck size={28} /></div>
                     <p className={s.emptyTitle}>Không có phiếu giao việc</p>
@@ -530,7 +552,7 @@ function ListView({
                   </div>
                 </td>
               </tr>
-            ) : items.map((item) => {
+            ) : items.map((item, rowIndex) => {
               const overdue = isOverdue(item)
               const pct     = progressPct(item)
               return (
@@ -540,64 +562,19 @@ function ListView({
                   onClick={() => onOpen(item.id)}
                 >
                   {/* Checkbox */}
-                  <td className={s.tdCheck} onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(item.id)}
-                      onChange={() => onToggleSelect(item.id)}
-                    />
+                  <SelectionRowCell checked={selectedIds.has(item.id)} onToggle={() => onToggleSelect(item.id)} className={s.tdCheck} />
+                  <IndexRowCell index={(page - 1) * pageSize + rowIndex + 1} className={s.tdIndex} />
+
+                  {/* Tiêu đề — click ra quick view (không sửa trực tiếp) */}
+                  <td className={s.td}>
+                    <span className={`${s.taskTitle} ${overdue ? s.taskTitleOverdue : ''}`}>{item.title}</span>
                   </td>
 
-                  {/* Tiêu đề */}
+                  {/* Khách hàng — ưu tiên tên viết tắt */}
                   <td className={s.td}>
-                    <div className={`${s.taskTitle} ${overdue ? s.taskTitleOverdue : ''}`}>
-                      {item.title}
-                    </div>
-                    <div className={s.taskMeta}>
-                      {item.company ? item.company.name : <span className={s.internalBadge}>Công việc nội bộ</span>}
-                    </div>
-                  </td>
-
-                  {/* Người thực hiện */}
-                  <td className={s.td}>
-                    <div className={s.assigneesCell}>
-                      {item.assignees?.slice(0, 3).map((a) => (
-                        <span
-                          key={a.userId}
-                          className={`${s.assigneeChip} ${ASSIGNEE_STATUS_CSS[a.status]}`}
-                          title={`${a.name} — ${ASSIGNEE_STATUS_LABELS[a.status]}`}
-                        >
-                          {a.name}
-                        </span>
-                      ))}
-                      {(item.assignees?.length ?? 0) > 3 && (
-                        <span className={`${s.assigneeChip} ${s.chipPending}`}>
-                          +{item.assignees.length - 3}
-                        </span>
-                      )}
-                      {!item.assignees?.length && <span className={s.mutedDash}>—</span>}
-                    </div>
-                  </td>
-
-                  {/* Ưu tiên — quick edit (admin) */}
-                  <td className={s.td}>
-                    {isAdmin ? (
-                      <select
-                        value={item.priority}
-                        onChange={(e) => { if (e.target.value !== item.priority) onPriorityChange(item, e.target.value) }}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[item.priority] ?? ''}`}
-                        title="Đổi ưu tiên"
-                      >
-                        {['low', 'normal', 'high', 'urgent'].map((p) => (
-                          <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className={`${s.badge} ${PRIORITY_CSS[item.priority]}`}>
-                        {PRIORITY_LABELS[item.priority]}
-                      </span>
-                    )}
+                    {item.company?.shortName || item.company?.name
+                      ? <span className={s.companyShort}>{item.company.shortName || item.company.name}</span>
+                      : <span className={s.mutedDash}>—</span>}
                   </td>
 
                   {/* Ngày bắt đầu */}
@@ -607,14 +584,68 @@ function ListView({
                       : <span className={s.mutedDash}>—</span>}
                   </td>
 
-                  {/* Hạn chót */}
-                  <td className={s.td}>
-                    {item.deadlineDate ? (
-                      <span className={overdue ? s.dueDateOverdue : s.dueDateNormal}>
-                        {fmtDate(item.deadlineDate)}
-                        {overdue ? ' ⚠' : ''}
+                  {/* Ngày kết thúc — ô viền kiểu Tasks (viền đỏ khi quá hạn); admin sửa được */}
+                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                    {isAdmin ? (
+                      <IaListDateField
+                        value={item.deadlineDate ?? ''}
+                        onChange={(e) => onDeadlineChange(item, e.target.value)}
+                        isOverdue={overdue}
+                        min={(item.startDate || item.createdAt)?.slice(0, 10) || undefined}
+                      />
+                    ) : item.deadlineDate ? (
+                      <span className={`${s.qeDate} ${s.qeDateInteractive} ${overdue ? s.qeDateOverdue : ''}`} style={{ cursor: 'default' }}>
+                        <span className={s.qeDateText}>{fmtDate(item.deadlineDate)}</span>
                       </span>
                     ) : <span className={s.mutedDash}>—</span>}
+                  </td>
+
+                  {/* Ngày tạo */}
+                  <td className={s.td}>
+                    {item.createdAt
+                      ? <span className={s.dueDateNormal}>{fmtDate(item.createdAt)}</span>
+                      : <span className={s.mutedDash}>—</span>}
+                  </td>
+
+                  {/* Trạng thái — select màu kiểu Tasks; admin đổi được (theo bước cho phép) */}
+                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                    {isAdmin && (IA_STATUS_TRANSITIONS[item.status] ?? []).length > 0 ? (
+                      <select
+                        value={item.status}
+                        onChange={(e) => { if (e.target.value !== item.status) onStatusChange(item, e.target.value) }}
+                        className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[item.status] ?? ''}`}
+                        title="Đổi trạng thái"
+                      >
+                        <option value={item.status}>{statusLabel(item.status)}</option>
+                        {(IA_STATUS_TRANSITIONS[item.status] ?? []).map((st) => (
+                          <option key={st} value={st}>{statusLabel(st)}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`${s.qeSelect} ${s.qeSelectStyled} ${s.qeStatic} ${STATUS_SELECT_CLASS[item.status] ?? ''}`}>
+                        {statusLabel(item.status)}
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Ưu tiên — select màu kiểu Tasks */}
+                  <td className={s.td} onClick={(e) => e.stopPropagation()}>
+                    {isAdmin ? (
+                      <select
+                        value={item.priority ?? ''}
+                        onChange={(e) => onPriorityChange(item, e.target.value)}
+                        className={`${s.qeSelect} ${s.qeSelectStyled} ${PRIORITY_SELECT_CLASS[item.priority] ?? ''}`}
+                        title="Đổi ưu tiên"
+                      >
+                        {priorityOpts.map((k) => (
+                          <option key={k} value={k}>{priorityLabel(k)}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`${s.qeSelect} ${s.qeSelectStyled} ${s.qeStatic} ${PRIORITY_SELECT_CLASS[item.priority] ?? ''}`}>
+                        {priorityLabel(item.priority)}
+                      </span>
+                    )}
                   </td>
 
                   {/* Tiến độ */}
@@ -632,26 +663,20 @@ function ListView({
                     ) : <span className={s.mutedDash}>—</span>}
                   </td>
 
-                  {/* Trạng thái — quick edit (admin) */}
+                  {/* Giao cho — rút gọn tên 2 từ cuối (như Tasks) */}
                   <td className={s.td}>
-                    {isAdmin ? (
-                      <select
-                        value={item.status}
-                        onChange={(e) => { if (e.target.value !== item.status) onStatusChange(item, e.target.value) }}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`${s.qeSelect} ${s.qeSelectStyled} ${STATUS_SELECT_CLASS[item.status] ?? ''}`}
-                        title="Đổi trạng thái"
-                      >
-                        <option value={item.status}>{STATUS_LABELS[item.status]}</option>
-                        {(IA_STATUS_TRANSITIONS[item.status] ?? []).map((st) => (
-                          <option key={st} value={st}>{STATUS_LABELS[st]}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className={`${s.badge} ${STATUS_CSS[item.status]}`}>
-                        {STATUS_LABELS[item.status]}
-                      </span>
-                    )}
+                    {item.assignees?.length
+                      ? <span className={s.assignedName} title={item.assignees.map((a) => a.name).filter(Boolean).join(', ')}>
+                          {item.assignees.map((a) => shortName(a.name)).filter(Boolean).join(', ')}
+                        </span>
+                      : <span className={s.mutedDash}>—</span>}
+                  </td>
+
+                  {/* Bình luận mới nhất */}
+                  <td className={s.td}>
+                    {item.latestComment
+                      ? <span className={s.latestComment}>{item.latestComment}</span>
+                      : <span className={s.mutedDash}>—</span>}
                   </td>
 
                   {/* Hành động */}
@@ -662,7 +687,7 @@ function ListView({
                         onClick={() => onOpen(item.id)}
                         title="Xem chi tiết"
                       >
-                        <Eye size={13} />
+                        <ArrowUpRight size={13} />
                       </button>
                       {isAdmin && (
                         <button
@@ -682,46 +707,6 @@ function ListView({
         </table>
       </div>
 
-      {/* Pagination */}
-      <div className={s.pagination}>
-        <div className={s.paginationLeft}>
-          <span className={s.paginationInfo}>
-            {loading ? '...' : `${from}–${to} / ${pagination.total} phiếu`}
-            {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
-            {hasColSort && ' · đang sắp xếp'}
-          </span>
-          <div className={s.pageSizeBtns}>
-            {[20, 50, 100].map((n) => (
-              <button
-                key={n}
-                className={`${s.pageSizeBtn} ${pageSize === n ? s.pageSizeBtnActive : ''}`}
-                onClick={() => onPageSizeChange(n)}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className={s.paginationBtns}>
-          <button className={s.pageBtn} onClick={() => onPageChange(1)} disabled={page === 1}>«</button>
-          <button className={s.pageBtn} onClick={() => onPageChange(page - 1)} disabled={page === 1}>‹</button>
-          {pageWindow().map((n, i) =>
-            n === '…' ? (
-              <span key={`e${i}`} className={s.paginationGap}>…</span>
-            ) : (
-              <button
-                key={n}
-                className={`${s.pageBtn} ${page === n ? s.pageBtnActive : ''}`}
-                onClick={() => onPageChange(n)}
-              >
-                {n}
-              </button>
-            )
-          )}
-          <button className={s.pageBtn} onClick={() => onPageChange(page + 1)} disabled={page === (pagination.totalPages ?? 1)}>›</button>
-          <button className={s.pageBtn} onClick={() => onPageChange(pagination.totalPages ?? 1)} disabled={page === (pagination.totalPages ?? 1)}>»</button>
-        </div>
-      </div>
     </div>
   )
 }
@@ -781,14 +766,31 @@ export default function InternalAssignments() {
   // UI
   const [selectedId,    setSelectedId]    = useState(null)
   const [showCreate,    setShowCreate]    = useState(false)
+  const [showFilters,   setShowFilters]   = useState(false)
+  const filterBarRef = useRef(null)
   const [deleteTarget,  setDeleteTarget]  = useState(null)
   const [deleting,      setDeleting]      = useState(false)
   const [refreshKey,    setRefreshKey]    = useState(0)
 
   // Bulk selection
-  const [selectedIds,          setSelectedIds]          = useState(new Set())
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [bulkDeleting,          setBulkDeleting]          = useState(false)
+
+  useEffect(() => {
+    if (!showFilters) return undefined
+    const handlePointerDown = (event) => {
+      if (!filterBarRef.current?.contains(event.target)) setShowFilters(false)
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setShowFilters(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showFilters])
 
   // Debounce search
   useEffect(() => {
@@ -950,20 +952,23 @@ export default function InternalAssignments() {
   const safePage = Math.min(page, clientTotalPages)
   const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
   const clientPagination = { total: displayed.length, totalPages: clientTotalPages, page: safePage }
+  const paginationFrom = clientPagination.total === 0 ? 0 : (safePage - 1) * pageSize + 1
+  const paginationTo = Math.min(safePage * pageSize, clientPagination.total)
+  const footerDetails = [
+    colFilterCount > 0 ? `${colFilterCount} lọc cột` : '',
+    hasColSort ? 'đang sắp xếp' : '',
+  ].filter(Boolean).join(' · ')
 
-  // Bulk selection helpers
-  function toggleSelect(id) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function selectAll(checked) {
-    setSelectedIds(checked ? new Set(pageRows.map((t) => t.id)) : new Set())
-  }
+  const {
+    selectedIds,
+    setSelectedIds,
+    selectedCount,
+    allSelected,
+    someSelected,
+    toggle: toggleSelect,
+    toggleAll: selectAll,
+    clear: clearSelection,
+  } = useRowSelection({ rows: pageRows })
 
   async function bulkClose() {
     let done = 0
@@ -1018,6 +1023,18 @@ export default function InternalAssignments() {
     }
   }
 
+  async function handleDeadlineChange(item, value) {
+    if ((value || '') === (item.deadlineDate ? item.deadlineDate.slice(0, 10) : '')) return
+    try {
+      await api.updateAssignment(item.id, { deadlineDate: value || null })
+      addToast(`Đã cập nhật ngày hết hạn "${item.title}"`, 'success')
+      refresh()
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Không thể đổi ngày hết hạn', 'error')
+    }
+  }
+
+
   // Date filter handlers
   function handleYearChange(year) {
     setYearFilter(year)
@@ -1032,6 +1049,27 @@ export default function InternalAssignments() {
     const { from, to } = yearMonthToDates(yearFilter, month)
     setDeadlineFrom(from)
     setDeadlineTo(to)
+  }
+
+  function setPeriod(year, month) {
+    setYearFilter(year)
+    setMonthFilter(month)
+    const { from, to } = yearMonthToDates(year, month)
+    setDeadlineFrom(from)
+    setDeadlineTo(to)
+    setPage(1)
+  }
+
+  function applyPeriodPreset(key) {
+    if (key === 'tm') return setPeriod(CUR_YEAR, CUR_MONTH)
+    if (key === 'ty') return setPeriod(CUR_YEAR, '')
+    if (key === 'all') return setPeriod('', '')
+    if (key === 'lm') {
+      let year = parseInt(CUR_YEAR, 10)
+      let month = parseInt(CUR_MONTH, 10) - 1
+      if (month < 1) { month = 12; year -= 1 }
+      return setPeriod(String(year), String(month))
+    }
   }
 
   function resetFilters() {
@@ -1118,99 +1156,183 @@ export default function InternalAssignments() {
   ]
 
   const statsItems   = isAdmin ? adminStatsItems : staffStatsItems
+  const hasActiveFilterChips = yearFilter || monthFilter || filterStatus.length > 0
+    || filterPriority.length > 0 || filterAssignees.length > 0 || filterMyStatus || search
+  const filterChips = hasActiveFilterChips ? (
+    <div className={s.filterChipsRow}>
+      {(yearFilter || monthFilter) && (
+        <span className={s.filterChip}>
+          {monthFilter && yearFilter ? `T${monthFilter}/${yearFilter}` : yearFilter ? `Năm ${yearFilter}` : `T${monthFilter}`}
+          <button className={s.filterChipRemove} onClick={() => { setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH); const { from, to } = yearMonthToDates(CUR_YEAR, CUR_MONTH); setDeadlineFrom(from); setDeadlineTo(to); setPage(1) }}>×</button>
+        </span>
+      )}
+      {filterStatus.map((status) => (
+        <span key={status} className={s.filterChip}>
+          {STATUS_LABELS[status] ?? status}
+          <button className={s.filterChipRemove} onClick={() => { setFilterStatus((current) => current.filter((value) => value !== status)); setPage(1) }}>×</button>
+        </span>
+      ))}
+      {!isAdmin && filterMyStatus && (
+        <span className={s.filterChip}>
+          {ASSIGNEE_STATUS_LABELS[filterMyStatus]}
+          <button className={s.filterChipRemove} onClick={() => { setFilterMyStatus(''); setPage(1) }}>×</button>
+        </span>
+      )}
+      {filterPriority.map((priority) => (
+        <span key={priority} className={s.filterChip}>
+          {PRIORITY_LABELS[priority] ?? priority}
+          <button className={s.filterChipRemove} onClick={() => { setFilterPriority((current) => current.filter((value) => value !== priority)); setPage(1) }}>×</button>
+        </span>
+      ))}
+      {isAdmin && filterAssignees.map((id) => (
+        <span key={id} className={s.filterChip}>
+          NV: {staffList.find((user) => user.id === id)?.name ?? '?'}
+          <button className={s.filterChipRemove} onClick={() => { setFilterAssignees((current) => current.filter((value) => value !== id)); setPage(1) }}>×</button>
+        </span>
+      ))}
+      {search && (
+        <span className={s.filterChip}>
+          &ldquo;{search}&rdquo;
+          <button className={s.filterChipRemove} onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>×</button>
+        </span>
+      )}
+    </div>
+  ) : null
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <AppLayout>
+    <AppLayout footer={view === 'list' ? (
+      <PaginationFooter
+        total={clientPagination.total}
+        from={paginationFrom}
+        to={paginationTo}
+        itemLabel="phiếu"
+        page={safePage}
+        pageSize={pageSize}
+        totalPages={clientPagination.totalPages}
+        loading={loading}
+        details={footerDetails}
+        onPageChange={(nextPage) => { setPage(nextPage); clearSelection() }}
+        onPageSizeChange={(nextSize) => { setPageSize(nextSize); setPage(1); clearSelection() }}
+      />
+    ) : undefined}>
       <div className={s.page}>
 
         {/* ── Page title + tabs ── */}
-        <div>
-          <h1 className={s.pageTitle}>Công việc nội bộ</h1>
-          <InternalNavTabs />
-        </div>
-
-        {/* ── Toolbar ── */}
-        <div className={s.toolbar}>
-          <div className={s.toolbarLeft} />
-          <div className={s.toolbarRight}>
-            <div className={s.viewSwitch}>
-              <button
-                className={`${s.viewBtn} ${view === 'list' ? s.viewBtnActive : ''}`}
-                onClick={() => setView('list')}
-              >
-                <List size={13} /> Danh sách
+        <div className={s.pageHeader}>
+          <div className={s.pageHeaderNav}>
+          <InternalNavTabs actions={(
+            <>
+              <div className={s.viewSwitch}>
+                <button
+                  className={`${s.viewBtn} ${view === 'list' ? s.viewBtnActive : ''}`}
+                  onClick={() => setView('list')}
+                >
+                  <List size={13} /> Danh sách
+                </button>
+                <button
+                  className={`${s.viewBtn} ${view === 'board' ? s.viewBtnActive : ''}`}
+                  onClick={() => setView('board')}
+                >
+                  <Columns size={13} /> Board
+                </button>
+              </div>
+              <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
+                <Plus size={14} /> Tạo phiếu
               </button>
-              <button
-                className={`${s.viewBtn} ${view === 'board' ? s.viewBtnActive : ''}`}
-                onClick={() => setView('board')}
-              >
-                <Columns size={13} /> Board
-              </button>
-            </div>
-            <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
-              <Plus size={14} /> Tạo phiếu
-            </button>
+            </>
+          )} />
           </div>
         </div>
 
         {/* ── Filter panel ── */}
-        <div className={s.filterBar}>
+        <div className={s.filterBar} ref={filterBarRef}>
           <div className={s.filterBarHead}>
-            <div className={s.filterBarTitle}>
+            <button
+              type="button"
+              className={`${s.filterBarTitle} ${showFilters ? s.filterBarTitleOpen : ''}`}
+              onClick={() => setShowFilters((open) => !open)}
+              aria-expanded={showFilters}
+              aria-controls="internal-assignment-filters"
+            >
               <Filter size={12} />
               Bộ lọc
               {activeFilterCount > 0 && (
                 <span className={s.filterActiveBadge}>{activeFilterCount} đang bật</span>
               )}
+            </button>
+            <div className={s.headStats}>
+              <span className={s.headStatsLabel}>Thống kê</span>
+              {statsItems.flatMap((item, index) => [
+                index > 0 ? <span key={`hd${index}`} className={s.statDivider} /> : null,
+                <button
+                  type="button"
+                  key={item.key}
+                  className={`${s.statItem} ${(item.key ? filterStatus.includes(item.key) : filterStatus.length === 0) ? s.statItemActive : ''}`}
+                  onClick={() => handleFilterStatus(item.key)}
+                >
+                  <span className={`${s.statValue} ${item.css}`}>{item.value}</span>
+                  <span className={s.statLabel}>{item.label}</span>
+                </button>,
+              ]).filter(Boolean)}
             </div>
             <button className={s.filterReset} onClick={resetFilters}>
               <RotateCcw size={11} /> Đặt lại
             </button>
           </div>
 
-          <div className={s.filterGrid}>
-
-            {/* NĂM */}
+          <div className={s.quickFilterArea}>
+          <div className={s.quickFilterGrid}>
             <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Năm</label>
-              <select value={yearFilter} onChange={(e) => handleYearChange(e.target.value)} className={s.filterSelect}>
-                <option value="">Tất cả năm</option>
-                {availableYears.map((y) => (
-                  <option key={y} value={String(y)}>Năm {y}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* THÁNG */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Tháng</label>
-              <select value={monthFilter} onChange={(e) => handleMonthChange(e.target.value)} className={s.filterSelect} disabled={!yearFilter}>
-                <option value="">Cả năm</option>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                  <option key={m} value={String(m)}>Tháng {m}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* TỪ NGÀY */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Từ ngày</label>
-              <FilterDateField
-                value={deadlineFrom}
-                onChange={(e) => { setDeadlineFrom(e.target.value); setPage(1) }}
+              <label className={s.filterLabel}>Kỳ</label>
+              <PeriodPicker
+                year={yearFilter}
+                month={monthFilter}
+                from={deadlineFrom}
+                to={deadlineTo}
+                availableYears={availableYears}
+                onYear={handleYearChange}
+                onMonth={handleMonthChange}
+                onFrom={(event) => { setDeadlineFrom(event.target.value); setPage(1) }}
+                onTo={(event) => { setDeadlineTo(event.target.value); setPage(1) }}
+                onPreset={applyPeriodPreset}
               />
             </div>
-
-            {/* ĐẾN NGÀY */}
             <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Đến ngày</label>
-              <FilterDateField
-                value={deadlineTo}
-                onChange={(e) => { setDeadlineTo(e.target.value); setPage(1) }}
+              <label className={s.filterLabel}>Trạng thái</label>
+              <MultiSelect
+                placeholder="Tất cả"
+                options={getOptions('assignment_status').length > 0
+                  ? getOptions('assignment_status')
+                  : IA_STATUSES.map((key) => ({ key, label: STATUS_LABELS[key] }))}
+                selected={filterStatus}
+                onChange={(value) => { setFilterStatus(value); setPage(1) }}
               />
             </div>
+            <div className={`${s.filterGroup} ${s.quickSearch}`}>
+              <label className={s.filterLabel}>Từ khoá</label>
+              <div className={s.filterSearchWrap}>
+                <Search size={12} className={s.filterSearchIcon} />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  className={`${s.filterInput} ${s.filterInputWithIcon}`}
+                  placeholder="Tiêu đề phiếu..."
+                />
+              </div>
+            </div>
+          </div>
+          {filterChips}
+
+          {showFilters && (
+          <div id="internal-assignment-filters" className={s.filterPopover}>
+            <div className={s.filterPopoverHead}>
+              <span>Bộ lọc công việc nội bộ</span>
+              {activeFilterCount > 0 && <span>{activeFilterCount} điều kiện</span>}
+            </div>
+            <div className={s.filterGrid}>
 
             {/* SẮP XẾP */}
             <div className={s.filterGroup}>
@@ -1218,39 +1340,6 @@ export default function InternalAssignments() {
               <select value={sortValue} onChange={(e) => setSortValue(e.target.value)} className={s.filterSelect}>
                 {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
-            </div>
-
-            {/* TỪ KHOÁ */}
-            <div className={`${s.filterGroup} ${s.grow}`}>
-              <label className={s.filterLabel}>Từ khoá</label>
-              <div className={s.filterSearchWrap}>
-                <Search size={12} className={s.filterSearchIcon} />
-                <input
-                  type="text"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className={`${s.filterInput} ${s.filterInputWithIcon}`}
-                  placeholder="Tiêu đề phiếu..."
-                />
-              </div>
-            </div>
-
-            {/* TRẠNG THÁI — multi-select */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Trạng thái</label>
-              <MultiSelect
-                placeholder="Tất cả"
-                options={getOptions('assignment_status').length > 0
-                  ? getOptions('assignment_status')
-                  : [
-                    { key: 'draft',     label: 'Nháp' },
-                    { key: 'active',    label: 'Đang thực hiện' },
-                    { key: 'done',      label: 'Hoàn thành' },
-                    { key: 'cancelled', label: 'Đã hủy' },
-                  ]}
-                selected={filterStatus}
-                onChange={(v) => { setFilterStatus(v); setPage(1) }}
-              />
             </div>
 
             {/* TRẠNG THÁI CỦA TÔI (staff only) */}
@@ -1298,71 +1387,16 @@ export default function InternalAssignments() {
               </div>
             )}
 
-          </div>
-
-          {/* ── Active filter chips ── */}
-          {(yearFilter || monthFilter || filterStatus.length > 0 || filterPriority.length > 0 || filterAssignees.length > 0 || filterMyStatus || search) && (
-            <div className={s.filterChipsRow}>
-              {(yearFilter || monthFilter) && (
-                <span className={s.filterChip}>
-                  {monthFilter && yearFilter ? `T${monthFilter}/${yearFilter}` : yearFilter ? `Năm ${yearFilter}` : `T${monthFilter}`}
-                  <button className={s.filterChipRemove} onClick={() => { setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH); const { from, to } = yearMonthToDates(CUR_YEAR, CUR_MONTH); setDeadlineFrom(from); setDeadlineTo(to); setPage(1) }}>×</button>
-                </span>
-              )}
-              {filterStatus.map((st) => (
-                <span key={st} className={s.filterChip}>
-                  {STATUS_LABELS[st] ?? st}
-                  <button className={s.filterChipRemove} onClick={() => { setFilterStatus((prev) => prev.filter((x) => x !== st)); setPage(1) }}>×</button>
-                </span>
-              ))}
-              {!isAdmin && filterMyStatus && (
-                <span className={s.filterChip}>
-                  {ASSIGNEE_STATUS_LABELS[filterMyStatus]}
-                  <button className={s.filterChipRemove} onClick={() => { setFilterMyStatus(''); setPage(1) }}>×</button>
-                </span>
-              )}
-              {filterPriority.map((pr) => (
-                <span key={pr} className={s.filterChip}>
-                  {PRIORITY_LABELS[pr] ?? pr}
-                  <button className={s.filterChipRemove} onClick={() => { setFilterPriority((prev) => prev.filter((x) => x !== pr)); setPage(1) }}>×</button>
-                </span>
-              ))}
-              {isAdmin && filterAssignees.map((id) => (
-                <span key={id} className={s.filterChip}>
-                  NV: {staffList.find((u) => u.id === id)?.name ?? '?'}
-                  <button className={s.filterChipRemove} onClick={() => { setFilterAssignees((prev) => prev.filter((x) => x !== id)); setPage(1) }}>×</button>
-                </span>
-              ))}
-              {search && (
-                <span className={s.filterChip}>
-                  &ldquo;{search}&rdquo;
-                  <button className={s.filterChipRemove} onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>×</button>
-                </span>
-              )}
             </div>
+          </div>
           )}
 
-          {/* ── Stats row ── */}
-          <div className={s.statsRow}>
-            {statsItems.flatMap((item, i) => [
-              i > 0 ? <span key={`d${i}`} className={s.statDivider} /> : null,
-              <div
-                key={item.key}
-                className={`${s.statItem} ${filterStatus.includes(item.key) ? s.statItemActive : ''}`}
-                onClick={() => handleFilterStatus(item.key)}
-              >
-                <span className={`${s.statValue} ${item.css}`}>{item.value}</span>
-                <span className={s.statLabel}>{item.label}</span>
-              </div>,
-            ]).filter(Boolean)}
           </div>
+
         </div>
 
         {/* ── Bulk action bar ── */}
-        {selectedIds.size > 0 && (
-          <div className={s.bulkBar}>
-            <span className={s.bulkCount}>{selectedIds.size} đã chọn</span>
-            <span className={s.bulkDivider} />
+        <BulkActionBar count={selectedCount} className={s.bulkBar}>
             <button className={s.btnGhost} onClick={bulkClose}>
               <Check size={13} /> Hoàn thành tất cả
             </button>
@@ -1372,11 +1406,10 @@ export default function InternalAssignments() {
             >
               <Trash2 size={13} /> Xóa đã chọn
             </button>
-            <button className={s.btnGhost} onClick={() => setSelectedIds(new Set())}>
+            <button className={s.btnGhost} onClick={clearSelection}>
               Bỏ chọn
             </button>
-          </div>
-        )}
+        </BulkActionBar>
 
         {/* ── Content area ── */}
         {loading && view !== 'list' && (
@@ -1390,25 +1423,22 @@ export default function InternalAssignments() {
           <ListView
             items={pageRows}
             loading={loading}
-            pagination={clientPagination}
             page={safePage}
             pageSize={pageSize}
-            onPageChange={(p) => { setPage(p); setSelectedIds(new Set()) }}
-            onPageSizeChange={(n) => { setPageSize(n); setPage(1) }}
             onOpen={setSelectedId}
             isAdmin={isAdmin}
             onDelete={setDeleteTarget}
-            currentUserId={currentUser?.id}
             selectedIds={selectedIds}
+            allSelected={allSelected}
+            someSelected={someSelected}
             onToggleSelect={toggleSelect}
             onSelectAll={selectAll}
             onStatusChange={handleStatusChange}
             onPriorityChange={handlePriorityChange}
+            onDeadlineChange={handleDeadlineChange}
             sortColState={sortColState}
             hasColFilter={hasColFilter}
             onOpenColFilter={openColFilter}
-            colFilterCount={colFilterCount}
-            hasColSort={hasColSort}
           />
         )}
 

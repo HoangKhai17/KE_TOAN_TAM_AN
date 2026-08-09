@@ -11,7 +11,11 @@ function toAssignmentDto(row) {
     id:           row.id,
     title:        row.title,
     description:  row.description ?? null,
-    company:      row.company_id ? { id: row.company_id, name: row.company_name ?? null } : null,
+    company:      row.company_id ? {
+      id: row.company_id,
+      name: row.company_name ?? null,
+      shortName: row.company_short_name ?? null,
+    } : null,
     priority:     row.priority,
     startDate:    row.start_date
       ? (typeof row.start_date === 'string'
@@ -29,6 +33,7 @@ function toAssignmentDto(row) {
     closedAt:     row.closed_at ?? null,
     createdAt:    row.created_at,
     updatedAt:    row.updated_at,
+    latestComment: row.latest_comment ?? null,
   }
 }
 
@@ -195,6 +200,13 @@ async function listAssignments(actorId, actorRole, {
     `SELECT ia.*,
             u.name  AS creator_name,
             c.name  AS company_name,
+            c.short_name AS company_short_name,
+            (SELECT iac.content
+             FROM internal_assignment_comments iac
+             WHERE iac.assignment_id = ia.id
+             ORDER BY iac.created_at DESC
+             LIMIT 1
+            ) AS latest_comment,
             (SELECT json_agg(json_build_object(
                'userId', iaa.user_id, 'name', us.name,
                'status', iaa.status, 'acceptedAt', iaa.accepted_at,
@@ -456,8 +468,10 @@ async function deleteAssignment(id, actorId) {
 
 async function sendAssignment(id, actorId) {
   const row = await assertExists(id)
-  if (row.status !== 'draft') {
-    throw Object.assign(new Error('Chỉ gửi được phiếu ở trạng thái nháp'), { status: 422 })
+  // Gửi lần đầu (từ 'draft') HOẶC mở lại (từ 'done'/'cancelled' → 'active').
+  const isReopen = row.status === 'done' || row.status === 'cancelled'
+  if (row.status !== 'draft' && !isReopen) {
+    throw Object.assign(new Error('Chỉ gửi/mở lại phiếu ở trạng thái nháp, hoàn thành hoặc đã hủy'), { status: 422 })
   }
 
   const { rows: assignees } = await query(
@@ -468,21 +482,27 @@ async function sendAssignment(id, actorId) {
     throw Object.assign(new Error('Phiếu phải có ít nhất 1 nhân sự thực hiện trước khi gửi'), { status: 422 })
   }
 
+  // Mở lại: đưa về 'active', xoá mốc đóng; giữ sent_at cũ nếu đã từng gửi.
   await query(
-    `UPDATE internal_assignments SET status = 'active', sent_at = NOW(), updated_at = NOW() WHERE id = $1`,
+    `UPDATE internal_assignments
+        SET status = 'active', sent_at = COALESCE(sent_at, NOW()), closed_at = NULL, updated_at = NOW()
+      WHERE id = $1`,
     [id]
   )
 
-  for (const { user_id } of assignees) {
-    createAndEmit(user_id, 'task_assigned',
-      'Phiếu giao việc mới',
-      `Bạn có phiếu giao việc mới: "${row.title}"`,
-      null
-    )
+  // Chỉ thông báo "phiếu mới" khi gửi lần đầu (không spam khi mở lại).
+  if (!isReopen) {
+    for (const { user_id } of assignees) {
+      createAndEmit(user_id, 'task_assigned',
+        'Phiếu giao việc mới',
+        `Bạn có phiếu giao việc mới: "${row.title}"`,
+        null
+      )
+    }
   }
 
   await audit.log({
-    userId: actorId, action: 'internal_assignment.sent',
+    userId: actorId, action: isReopen ? 'internal_assignment.reopened' : 'internal_assignment.sent',
     targetType: 'internal_assignments', targetId: id,
   })
 
@@ -493,7 +513,8 @@ async function sendAssignment(id, actorId) {
 
 async function cancelAssignment(id, actorId) {
   const row = await assertExists(id)
-  if (!['draft', 'active'].includes(row.status)) {
+  // Cho phép hủy cả phiếu đã 'done' (bỏ hard rule khóa cứng khi hoàn thành).
+  if (!['draft', 'active', 'done'].includes(row.status)) {
     throw Object.assign(new Error('Không thể hủy phiếu ở trạng thái này'), { status: 422 })
   }
 

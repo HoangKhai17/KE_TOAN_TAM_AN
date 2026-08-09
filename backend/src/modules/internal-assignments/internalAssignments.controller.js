@@ -133,7 +133,7 @@ async function listChecklist(req, res, next) {
 
 async function addChecklistItem(req, res, next) {
   try {
-    const item = await checklistSvc.addItem(req.params.id, req.body.text, req.user.id)
+    const item = await checklistSvc.addItem(req.params.id, req.body.text, req.user.id, req.body.level ?? 0)
     res.status(201).json({ success: true, data: { item } })
   } catch (err) { next(err) }
 }
@@ -148,6 +148,13 @@ async function updateChecklistItem(req, res, next) {
 async function deleteChecklistItem(req, res, next) {
   try {
     await checklistSvc.deleteItem(req.params.id, req.params.itemId)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+async function reorderChecklist(req, res, next) {
+  try {
+    await checklistSvc.reorderItems(req.params.id, req.body.orderedIds || [])
     res.status(204).end()
   } catch (err) { next(err) }
 }
@@ -182,6 +189,6 @@ module.exports = {
   sendAssignment, cancelAssignment, closeAssignment,
   acceptAssignment, progressAssignment, completeAssignment, rejectAssignment,
   addComment, deleteComment,
-  listChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem,
+  listChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, reorderChecklist,
   listLinks, addLink, deleteLink,
 }
