@@ -1012,7 +1012,7 @@
   border: 1.5px solid #e5e7eb;
   border-radius: 8px;
   background: #fff;
-  color: #374151;
+  color: var(--color-text-strong);
   font-family: 'Montserrat', sans-serif;
   font-size: var(--fs-2xs);
   font-weight: 600;
@@ -1024,7 +1024,7 @@
 .btnOutline:hover:not(:disabled) {
   background: #f3f4f6;
   border-color: #d1d5db;
-  color: #111827;
+  color: var(--color-text-strong);
 }
 
 .btnOutline:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1052,7 +1052,7 @@
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: #6b7280;
+  color: var(--color-text-strong);
   font-family: 'Montserrat', sans-serif;
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -1061,7 +1061,7 @@
   transition: background 0.12s, color 0.12s;
 }
 
-.btnGhost:hover { background: #f3f4f6; color: #111827; }
+.btnGhost:hover { background: #f3f4f6; color: var(--color-text-strong); }
 
 .btnDanger {
   display: inline-flex;
@@ -6552,16 +6552,44 @@
 .coListTable td {
   white-space: normal;
   overflow-wrap: anywhere;
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
 }
 
 /* Header không viết hoa toàn bộ + font 11.5px như trang Công việc */
 .coListTable th {
   font-size: var(--fs-2xs);
+  color: var(--color-primary-deep);
   text-transform: none;
   letter-spacing: 0.2px;
 }
 
-.coListTable .muted { font-size: var(--fs-2xs); }
+/* Đồng nhất cột đầu với toàn bộ header bằng xanh navy đậm của hệ thống. */
+.coListTable th:first-child {
+  color: var(--color-primary-deep);
+}
+
+.coListTable .muted {
+  font-size: var(--fs-2xs);
+  color: var(--color-muted-subtle);
+}
+
+/* Phân cấp màu dữ liệu: chỉ tên công ty dùng đen tuyệt đối; dữ liệu thật dùng
+   text chính. Muted chỉ dành cho giá trị trống/không có dữ liệu. */
+.coListTable .companyName { color: var(--color-text-strong); }
+.coListTable .coDataValue,
+.coListTable .companyName,
+.coListTable .shortNameCell,
+.coListTable .industryCell,
+.coListTable .staffName {
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
+}
+.coListTable .metricOpen,
+.coListTable .metricZero {
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
+}
 
 /* Cho phép ngắt để tên/ngành/nhân sự dài tự rớt dòng thay vì cắt cụt */
 .coListTable .companyName,

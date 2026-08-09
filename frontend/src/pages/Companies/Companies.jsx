@@ -1285,7 +1285,9 @@ function CompanyRow({
       )}
       {vis('taxCode') && (
       <td className={s.tableCellVisible}>
-        <span className={s.muted}>{company.taxCode || '—'}</span>
+        {company.taxCode
+          ? <span className={s.coDataValue}>{company.taxCode}</span>
+          : <span className={s.muted}>—</span>}
       </td>
       )}
       {vis('businessType') && (
@@ -1331,7 +1333,9 @@ function CompanyRow({
       )}
       {vis('serviceStartDate') && (
       <td className={s.tableCellVisible}>
-        <span className={s.muted}>{fmtDate(company.serviceStartDate) || '—'}</span>
+        {company.serviceStartDate
+          ? <span className={s.coDataValue}>{fmtDate(company.serviceStartDate)}</span>
+          : <span className={s.muted}>—</span>}
       </td>
       )}
       {vis('status') && <td><StatusPill status={company.status} /></td>}

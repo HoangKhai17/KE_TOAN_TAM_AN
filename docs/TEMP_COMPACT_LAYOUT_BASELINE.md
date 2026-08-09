@@ -9,6 +9,37 @@ Tài liệu tạm dùng làm chuẩn khi đồng bộ các trang còn lại vớ
 - Tiêu đề, label và giá trị trong card thông tin compact: `var(--fs-2xs)` = `11.5px`.
 - Không dùng `text-transform: uppercase` cho tiêu đề nhóm và label thông tin.
 
+## Color hierarchy
+
+- Page title, hero title, tên thực thể chính và chữ button trung tính dùng
+  `--color-text-strong` (`#000000`).
+- Nội dung/dữ liệu thật dùng `--color-text` (`#111827`); không dùng `muted` chỉ vì
+  dữ liệu nằm ở cột phụ.
+- Label và nội dung phụ vẫn cần đọc dùng `--color-text-soft` (`#374151`).
+- Metadata dùng `--color-muted` (`#4b5563`) hoặc `--color-muted-soft` (`#6b7280`).
+- `--color-muted-subtle` (`#9ca3af`) chỉ dành cho placeholder, disabled, dấu `—`
+  và trạng thái không có dữ liệu.
+- Primary blue dành cho link, tab active, focus, button chính và thành phần có tương tác;
+  không dùng xanh cho title thông thường chỉ để trang trí.
+- Không thay màu chữ trắng của button primary/danger/status có nền đặc.
+
+### Page baseline — Companies list
+
+- Toàn bộ dữ liệu thật trong table, gồm tên công ty và các cột đã có giá trị:
+  `--color-text-strong` (`#000000`).
+- Tiêu đề các cột giữ tông xanh nhưng dùng xanh navy đậm
+  `--color-primary-deep` (`#001c6d`) và weight `800`; không dùng xanh nhạt
+  hoặc muted cho header của bảng Companies.
+- Dữ liệu thường giữa các cột dùng thống nhất `--fw-medium`; không tự tăng riêng
+  tên công ty, nhân viên phụ trách hoặc cột số liệu lên `--fw-semibold`.
+- Badge trạng thái và badge cảnh báo được phép dùng `--fw-semibold`/`--fw-bold`
+  vì đây là thành phần ngữ nghĩa, không phải text dữ liệu thường.
+- Dấu `—` và dữ liệu không tồn tại: `--color-muted-subtle`.
+- “Chưa phân công” là metadata trạng thái thiếu dữ liệu, được phép dùng muted.
+- Button trung tính/outline: chữ `--color-text-strong`; button primary và semantic
+  tiếp tục dùng màu nền/chữ theo vai trò hành động.
+- Không gắn class `.muted` cho MST, ngày hoặc dữ liệu thật chỉ để tạo phân cấp cột.
+
 ## Page and section spacing
 
 - Padding khung nội dung chung (`AppLayout`): `14px 25px`.
