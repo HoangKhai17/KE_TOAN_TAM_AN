@@ -1227,7 +1227,25 @@ export default function Tasks() {
   useEffect(() => { saveHiddenCols(hiddenCols) }, [hiddenCols])
 
   // Thu gọn / mở panel bộ lọc — lưu sessionStorage
-  const [filterCollapsed, setFilterCollapsed] = useState(initF.filterCollapsed ?? true)
+  const [filterCollapsed, setFilterCollapsed] = useState(
+    initF.filterLayoutVersion === 2 ? (initF.filterCollapsed ?? true) : true,
+  )
+  const filterBarRef = useRef(null)
+  useEffect(() => {
+    if (filterCollapsed) return undefined
+    const handlePointerDown = (event) => {
+      if (!filterBarRef.current?.contains(event.target)) setFilterCollapsed(true)
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setFilterCollapsed(true)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [filterCollapsed])
   function toggleColVisible(key) {
     setHiddenCols((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
   }
@@ -1358,6 +1376,7 @@ export default function Tasks() {
       sortValue, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter,
       statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page,
       colFilters: serializeColFilters(colFilters), sortColState, filterCollapsed,
+      filterLayoutVersion: 2,
     })
   }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
 
@@ -1876,11 +1895,14 @@ export default function Tasks() {
         </div>
 
         {/* ── Unified filter panel (always visible) ── */}
-        <div className={s.filterBar}>
+        <div className={s.filterBar} ref={filterBarRef}>
           <div className={s.filterBarHead}>
             <button
-              className={`${s.filterCollapseBtn} ${filterCollapsed ? s.filterCollapseActive : ''}`}
+              type="button"
+              className={`${s.filterCollapseBtn} ${!filterCollapsed ? s.filterCollapseActive : ''}`}
               onClick={() => setFilterCollapsed((v) => !v)}
+              aria-expanded={!filterCollapsed}
+              aria-controls="tasks-advanced-filters"
               title={filterCollapsed ? 'Mở bộ lọc' : 'Thu gọn bộ lọc'}
             >
               {filterCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
@@ -1954,157 +1976,114 @@ export default function Tasks() {
             </div>
           </div>
 
-          <div className={s.filterGrid}>
-
-            {/* KỲ — gộp Năm + Tháng + Từ ngày + Đến ngày */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Kỳ</label>
-              <PeriodPicker
-                year={yearFilter}
-                month={monthFilter}
-                from={dueDateFrom}
-                to={dueDateTo}
-                availableYears={availableYears}
-                disabled={scheduleToday}
-                onYear={handleYearChange}
-                onMonth={handleMonthChange}
-                onFrom={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
-                onTo={(e) => { setDueDateTo(e.target.value); setPage(1) }}
-                onPreset={applyPeriodPreset}
-                disabledTitle="“Hôm nay” không dùng bộ lọc theo kỳ"
-              />
-            </div>
-
-            {/* SẮP XẾP */}
-            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
-              <label className={s.filterLabel}>Sắp xếp</label>
-              <select value={sortValue} onChange={(e) => setSortValue(e.target.value)} className={s.filterSelect}>
-                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-
-            {/* TỪ KHOÁ */}
-            <div className={`${s.filterGroup} ${s.grow}`}>
-              <label className={s.filterLabel}>Từ khoá</label>
-              <div className={s.filterSearchWrap}>
-                <Search size={12} className={s.filterSearchIcon} />
-                <input
-                  type="text"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className={`${s.filterInput} ${s.filterInputWithIcon}`}
-                  placeholder="Tiêu đề công việc..."
+          <div className={s.quickFilterArea}>
+            {/* Bộ lọc nhanh luôn hiển thị, không phụ thuộc popover nâng cao. */}
+            <div className={s.quickFilterGrid}>
+              <div className={s.filterGroup}>
+                <label className={s.filterLabel}>Kỳ</label>
+                <PeriodPicker
+                  year={yearFilter}
+                  month={monthFilter}
+                  from={dueDateFrom}
+                  to={dueDateTo}
+                  availableYears={availableYears}
+                  disabled={scheduleToday}
+                  onYear={handleYearChange}
+                  onMonth={handleMonthChange}
+                  onFrom={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
+                  onTo={(e) => { setDueDateTo(e.target.value); setPage(1) }}
+                  onPreset={applyPeriodPreset}
+                  disabledTitle="“Hôm nay” không dùng bộ lọc theo kỳ"
                 />
+              </div>
+              <div className={s.filterGroup}>
+                <label className={s.filterLabel}>Trạng thái</label>
+                <MultiSelect
+                  placeholder="Tất cả trạng thái"
+                  options={statusOptions}
+                  selected={statusFilter}
+                  onChange={(v) => { setStatusFilter(v); setPage(1) }}
+                />
+              </div>
+              <div className={`${s.filterGroup} ${s.grow}`}>
+                <label className={s.filterLabel}>Từ khoá</label>
+                <div className={s.filterSearchWrap}>
+                  <Search size={12} className={s.filterSearchIcon} />
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className={`${s.filterInput} ${s.filterInputWithIcon}`}
+                    placeholder="Tiêu đề công việc..."
+                  />
+                </div>
               </div>
             </div>
 
-            {/* KHÁCH HÀNG */}
-            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
-              <label className={s.filterLabel}>Khách hàng</label>
-              <FilterCompanyMultiPicker
-                companies={companies}
-                value={companyFilter}
-                onChange={(v) => { setCompanyFilter(v); setPage(1) }}
-              />
-            </div>
-
-            {/* NHÂN VIÊN — admin only */}
-            {isAdmin && (
-              <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
-                <label className={s.filterLabel}>Nhân viên</label>
-                <MultiSelect
-                  placeholder="Tất cả"
-                  options={staffList.map((u) => ({ key: u.id, label: u.name }))}
-                  selected={staffFilter}
-                  onChange={(v) => { setStaffFilter(v); setPage(1) }}
-                />
-                {staffFilter.length > 0 && (
-                  <label className={s.filterInlineCheck} title="Ngoài việc được giao, hiện thêm việc nhân viên đã chọn được nhờ hỗ trợ (tổng quan)">
-                    <input
-                      type="checkbox"
-                      checked={staffIncludeSupport}
-                      onChange={(e) => { setStaffIncludeSupport(e.target.checked); setPage(1) }}
-                    />
-                    Gồm việc hỗ trợ
-                  </label>
+          {!filterCollapsed && (
+            <div id="tasks-advanced-filters" className={s.filterPopover}>
+              <div className={s.filterPopoverHead}>
+                <span>Bộ lọc công việc</span>
+                {activeFilterCount > 0 && <span>{activeFilterCount} điều kiện</span>}
+              </div>
+              <div className={s.advancedFilterGrid}>
+                <div className={s.filterGroup}>
+                  <label className={s.filterLabel}>Sắp xếp</label>
+                  <select value={sortValue} onChange={(e) => setSortValue(e.target.value)} className={s.filterSelect}>
+                    {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div className={s.filterGroup}>
+                  <label className={s.filterLabel}>Khách hàng</label>
+                  <FilterCompanyMultiPicker companies={companies} value={companyFilter} onChange={(v) => { setCompanyFilter(v); setPage(1) }} />
+                </div>
+                {isAdmin && (
+                  <div className={s.filterGroup}>
+                    <label className={s.filterLabel}>Nhân viên</label>
+                    <MultiSelect placeholder="Tất cả" options={staffList.map((u) => ({ key: u.id, label: u.name }))} selected={staffFilter} onChange={(v) => { setStaffFilter(v); setPage(1) }} />
+                    {staffFilter.length > 0 && (
+                      <label className={s.filterInlineCheck} title="Ngoài việc được giao, hiện thêm việc nhân viên đã chọn được nhờ hỗ trợ (tổng quan)">
+                        <input type="checkbox" checked={staffIncludeSupport} onChange={(e) => { setStaffIncludeSupport(e.target.checked); setPage(1) }} />
+                        Gồm việc hỗ trợ
+                      </label>
+                    )}
+                  </div>
                 )}
+                <div className={s.filterGroup}>
+                  <label className={s.filterLabel}>Người tạo</label>
+                  <MultiSelect placeholder="Tất cả" options={staffList.map((u) => ({ key: u.id, label: u.name }))} selected={creatorFilter} onChange={(v) => { setCreatorFilter(v); setPage(1) }} />
+                </div>
+                <div className={s.filterGroup}>
+                  <label className={s.filterLabel}>CV hỗ trợ</label>
+                  {isAdmin ? (
+                    <MultiSelect placeholder="Tất cả" options={staffList.map((u) => ({ key: u.id, label: u.name }))} selected={supportFilter} onChange={(v) => { setSupportFilter(v); setPage(1) }} />
+                  ) : (
+                    <button className={`${s.filterToggle} ${supportFilter.length ? s.filterToggleActive : ''}`} onClick={() => { setSupportFilter((p) => (p.length ? [] : [currentUser?.id].filter(Boolean))); setPage(1) }}>
+                      {supportFilter.length ? '✓ ' : ''}Việc tôi hỗ trợ
+                    </button>
+                  )}
+                </div>
+                <div className={s.filterGroup}>
+                  <label className={s.filterLabel}>Ưu tiên</label>
+                  <MultiSelect
+                    placeholder="Tất cả ưu tiên"
+                    options={getOptions('task_priority').length > 0 ? getOptions('task_priority') : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))}
+                    selected={priorityFilter}
+                    onChange={(v) => { setPriorityFilter(v); setPage(1) }}
+                  />
+                </div>
+                <div className={s.filterGroup}>
+                  <label className={s.filterLabel}>Nguồn</label>
+                  <MultiSelect
+                    placeholder="Tất cả nguồn"
+                    options={getOptions('task_source').length > 0 ? getOptions('task_source') : [{ key: 'auto', label: 'Tự động' }, { key: 'manual', label: 'Thủ công' }]}
+                    selected={sourceFilter}
+                    onChange={(v) => { setSourceFilter(v); setPage(1) }}
+                  />
+                </div>
               </div>
-            )}
-
-            {/* NGƯỜI TẠO — vd: admin xem tiến độ những việc chính mình tạo & giao cho nhân viên */}
-            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
-              <label className={s.filterLabel}>Người tạo</label>
-              <MultiSelect
-                placeholder="Tất cả"
-                options={staffList.map((u) => ({ key: u.id, label: u.name }))}
-                selected={creatorFilter}
-                onChange={(v) => { setCreatorFilter(v); setPage(1) }}
-              />
             </div>
-
-            {/* CV HỖ TRỢ — admin: multi-select nhân viên; nhân viên: toggle "việc mình hỗ trợ" */}
-            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
-              <label className={s.filterLabel}>CV hỗ trợ</label>
-              {isAdmin ? (
-                <MultiSelect
-                  placeholder="Tất cả"
-                  options={staffList.map((u) => ({ key: u.id, label: u.name }))}
-                  selected={supportFilter}
-                  onChange={(v) => { setSupportFilter(v); setPage(1) }}
-                />
-              ) : (
-                <button
-                  className={`${s.filterToggle} ${supportFilter.length ? s.filterToggleActive : ''}`}
-                  onClick={() => { setSupportFilter((p) => (p.length ? [] : [currentUser?.id].filter(Boolean))); setPage(1) }}
-                  title="Chỉ hiện công việc mình đang hỗ trợ đồng nghiệp"
-                >
-                  {supportFilter.length ? '✓ ' : ''}Việc tôi hỗ trợ
-                </button>
-              )}
-            </div>
-
-            {/* TRẠNG THÁI — multi-select */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Trạng thái</label>
-              <MultiSelect
-                placeholder="Tất cả trạng thái"
-                options={statusOptions}
-                selected={statusFilter}
-                onChange={(v) => { setStatusFilter(v); setPage(1) }}
-              />
-            </div>
-
-            {/* ƯU TIÊN — multi-select */}
-            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
-              <label className={s.filterLabel}>Ưu tiên</label>
-              <MultiSelect
-                placeholder="Tất cả ưu tiên"
-                options={
-                  getOptions('task_priority').length > 0
-                    ? getOptions('task_priority')
-                    : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
-                }
-                selected={priorityFilter}
-                onChange={(v) => { setPriorityFilter(v); setPage(1) }}
-              />
-            </div>
-
-            {/* NGUỒN — multi-select */}
-            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
-              <label className={s.filterLabel}>Nguồn</label>
-              <MultiSelect
-                placeholder="Tất cả nguồn"
-                options={
-                  getOptions('task_source').length > 0
-                    ? getOptions('task_source')
-                    : [{ key: 'auto', label: 'Tự động' }, { key: 'manual', label: 'Thủ công' }]
-                }
-                selected={sourceFilter}
-                onChange={(v) => { setSourceFilter(v); setPage(1) }}
-              />
-            </div>
-
-          </div>
+          )}
 
           {/* ── Active filter chips ── */}
           {(yearFilter || monthFilter || staffFilter.length > 0 || creatorFilter.length > 0 || supportFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || scheduleToday || search) && (
@@ -2184,6 +2163,7 @@ export default function Tasks() {
               )}
             </div>
           )}
+          </div>
 
         </div>
 
