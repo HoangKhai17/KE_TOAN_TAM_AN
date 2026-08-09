@@ -34,6 +34,14 @@ Tài liệu tạm dùng làm chuẩn khi đồng bộ các trang còn lại vớ
   tên công ty, nhân viên phụ trách hoặc cột số liệu lên `--fw-semibold`.
 - Badge trạng thái và badge cảnh báo được phép dùng `--fw-semibold`/`--fw-bold`
   vì đây là thành phần ngữ nghĩa, không phải text dữ liệu thường.
+- Bộ lọc danh sách dùng filter popover nổi, không mở thường trực và không đẩy table
+  xuống dưới. Nút `Bộ lọc` hiển thị badge số lượng điều kiện đang bật.
+- Group enum truy cập nhanh như `Doanh nghiệp | Hộ kinh doanh` luôn hiển thị cạnh
+  nút Bộ lọc; không sinh thêm chip text mô tả từng điều kiện đã chọn.
+- Click ngoài popover hoặc nhấn `Esc` để đóng. Trên màn hình hẹp, nội dung filter
+  chuyển từ lưới 2 cột về 1 cột.
+- Nhãn của dải thống kê Companies dùng `--color-text-soft` (`#374151`), không dùng
+  `--color-muted-soft`; số liệu trạng thái vẫn giữ semantic color tương ứng.
 - Dấu `—` và dữ liệu không tồn tại: `--color-muted-subtle`.
 - “Chưa phân công” là metadata trạng thái thiếu dữ liệu, được phép dùng muted.
 - Button trung tính/outline: chữ `--color-text-strong`; button primary và semantic

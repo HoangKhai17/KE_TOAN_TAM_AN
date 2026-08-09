@@ -492,6 +492,8 @@ export default function Companies() {
   const [myOrderMode, setMyOrderMode] = useState(() => readSaved().myOrderMode ?? false)
   const [pinnedOnly,  setPinnedOnly]  = useState(() => readSaved().pinnedOnly  ?? false)
   const [filterPopup, setFilterPopup] = useState(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const filterPanelRef = useRef(null)
 
   const [showCreate, setShowCreate]   = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)  // company to delete
@@ -527,6 +529,23 @@ export default function Companies() {
 
   // Reset page on filter/limit change
   useEffect(() => { setPage(1) }, [statusFilter, btFilter, staffFilter, limit, colFilters, sortState])
+
+  // Bộ lọc dạng popover: không đẩy bảng xuống; click ngoài hoặc Esc để đóng.
+  useEffect(() => {
+    if (!showFilters) return undefined
+    const handlePointerDown = (event) => {
+      if (!filterPanelRef.current?.contains(event.target)) setShowFilters(false)
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setShowFilters(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showFilters])
 
   // Load enums + custom table defs (staff list đã chuyển sang React Query hook)
   useEffect(() => {
@@ -929,14 +948,23 @@ export default function Companies() {
         </div>
 
         {/* Filter panel */}
-        <div className={s.filterPanel}>
+        <div className={s.filterPanel} ref={filterPanelRef}>
           {/* Header */}
           <div className={s.filterPanelHeader}>
             <div className={s.filterPanelTitle}>
-              <span className={s.filterPanelLabel}>Bộ lọc</span>
-              {activeFilterCount > 0 && (
-                <span className={s.filterPanelBadge}>{activeFilterCount} đang bật</span>
-              )}
+              <button
+                type="button"
+                className={`${s.filterTrigger} ${showFilters ? s.filterTriggerOpen : ''}`}
+                onClick={() => setShowFilters((open) => !open)}
+                aria-expanded={showFilters}
+                aria-controls="companies-filter-popover"
+              >
+                <Filter size={13} />
+                <span>Bộ lọc</span>
+                {activeFilterCount > 0 && (
+                  <span className={s.filterTriggerCount}>{activeFilterCount}</span>
+                )}
+              </button>
               {/* Lọc nhanh theo NHÓM loại hình — đồng bộ với multi-select "Loại hình" (cùng dùng btFilter) */}
               {getGroups('business_type').length > 0 && (
                 <div className={s.filterQuickGroups}>
@@ -991,8 +1019,13 @@ export default function Companies() {
             )}
           </div>
 
-          {/* Controls row */}
-          <div className={s.filterGrid}>
+          {/* Popover bộ lọc — nổi trên bảng, không làm tăng chiều cao layout */}
+          {showFilters && <div id="companies-filter-popover" className={s.filterPopover}>
+            <div className={s.filterPopoverHead}>
+              <span>Bộ lọc khách hàng</span>
+              {activeFilterCount > 0 && <span>{activeFilterCount} điều kiện</span>}
+            </div>
+            <div className={s.filterGrid}>
             {isAdmin && staffList.length > 0 && (
               <div className={s.filterField}>
                 <label className={s.filterFieldLabel}>Phụ trách</label>
@@ -1052,7 +1085,8 @@ export default function Companies() {
             >
               <RotateCcw size={13} /> Đặt lại
             </button>
-          </div>
+            </div>
+          </div>}
         </div>
 
         {/* Bulk export bar (admin) */}
