@@ -1628,7 +1628,7 @@
 .heroName {
   font-size: var(--fs-2xl);
   font-weight: 800;
-  color: #111827;
+  color: var(--color-text-strong);
   letter-spacing: -0.3px;
   margin: 0 0 8px;
   line-height: 1.2;
@@ -1637,7 +1637,7 @@
 .heroShortName {
   font-size: var(--fs-sm);
   font-weight: 600;
-  color: var(--color-table-muted);
+  color: var(--color-text-soft);
   margin: -4px 0 8px;
 }
 
@@ -1732,7 +1732,7 @@
 }
 .heroStaffLabel {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: var(--fs-xs); font-weight: 700; color: #64748b;
+  font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-soft);
   text-transform: none; letter-spacing: 0.4px;
 }
 .heroStaffPerson { display: flex; align-items: center; gap: 8px; }
@@ -1743,8 +1743,8 @@
 }
 .heroStaffText { display: flex; flex-direction: column; min-width: 0; }
 .heroStaffName { font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-strong); line-height: 1.25; }
-.heroStaffRole { font-size: var(--fs-2xs); color: var(--color-muted); }
-.heroStaffEmpty { font-size: var(--fs-sm); color: var(--color-muted); }
+.heroStaffRole { font-size: var(--fs-2xs); color: var(--color-text-soft); }
+.heroStaffEmpty { font-size: var(--fs-sm); color: var(--color-text-soft); }
 
 /* Tab Tổng quan: một cột, các section trải full bề ngang */
 .overviewSingle { display: flex; flex-direction: column; gap: 12px; }
@@ -1835,7 +1835,7 @@
   font-family: 'Montserrat', sans-serif;
   font-size: var(--fs-xs);
   font-weight: 600;
-  color: #6b7280;
+  color: var(--color-text-soft);
   cursor: pointer;
   white-space: nowrap;
   transition: color 0.13s;
@@ -1843,11 +1843,11 @@
   margin-bottom: -1.5px;
 }
 
-.tabBtn:hover { color: #111827; }
+.tabBtn:hover { color: var(--color-text); }
 
 .tabBtnActive {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
   font-weight: 700;
 }
 
@@ -1862,12 +1862,12 @@
   font-size: var(--fs-2xs);
   font-weight: 700;
   background: #e9edf2;
-  color: #6b7280;
+  color: var(--color-text-soft);
 }
 
 .tabBtnActive .tabCount {
   background: #dbeafe;
-  color: #2563eb;
+  color: var(--color-primary);
 }
 
 /* ── Overview grid (2-col) ───────────────────────────────── */
@@ -1911,7 +1911,7 @@
   gap: 8px;
   font-size: var(--fs-2xs);
   font-weight: 700;
-  color: #0f172a;
+  color: var(--color-text-strong);
 }
 
 .infoCardTitleIcon {
@@ -7245,7 +7245,7 @@
 .customerCol { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .customerColTitle {
   font-size: var(--fs-2xs); font-weight: 800; text-transform: none;
-  letter-spacing: 0.4px; color: #64748b;
+  letter-spacing: 0.4px; color: var(--color-text-strong);
   padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid #eef2f7;
 }
 
@@ -7282,6 +7282,59 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: var(--lh-normal);
+}
+
+/* ── Company Detail / Hồ sơ / Tổng quan: hệ màu chữ compact chuẩn ───────────
+   Scope theo overview để không ảnh hưởng modal và các tab khác dùng chung class. */
+.overviewSingle .infoCardTitle,
+.overviewSingle .customerColTitle,
+.overviewSingle .infoLabel,
+.overviewSingle .editValue {
+  color: var(--color-text-strong);
+}
+
+.overviewSingle .editValue {
+  font-weight: var(--fw-medium);
+}
+
+.overviewSingle .infoLabel {
+  font-weight: var(--fw-regular);
+}
+
+.overviewSingle .editValuePrimary {
+  color: var(--color-primary-deep);
+  font-weight: var(--fw-medium);
+}
+
+.overviewSingle .overviewTableTab {
+  color: var(--color-text-strong);
+}
+
+.overviewSingle .overviewTableTabActive,
+.overviewSingle .overviewTableTabActive:hover {
+  color: var(--color-primary-deep);
+}
+
+/* Hai bảng Địa điểm / Hợp đồng dùng cùng màu và weight dữ liệu như Companies. */
+.overviewTablesCard .locTable td,
+.overviewTablesCard .locEnumText,
+.overviewTablesCard .locDateText,
+.overviewTablesCard .archInlineEditInput,
+.overviewTablesCard .ctblTextarea {
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
+}
+
+/* Empty/missing data và badge trạng thái tiếp tục dùng màu semantic riêng. */
+.overviewTablesCard .locMuted,
+.overviewTablesCard .locEmpty {
+  color: var(--color-muted);
+}
+
+/* Header cột đồng bộ xanh navy đậm với danh sách Companies. */
+.overviewTablesCard .locTable th {
+  color: var(--color-primary-deep);
+  font-weight: 800;
 }
 .editValueOn { cursor: pointer; transition: background 0.12s; }
 .editValueOn:hover { background: #f0f7ff; }

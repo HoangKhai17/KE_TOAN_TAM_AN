@@ -42,6 +42,22 @@ Tài liệu tạm dùng làm chuẩn khi đồng bộ các trang còn lại vớ
   chuyển từ lưới 2 cột về 1 cột.
 - Nhãn của dải thống kê Companies dùng `--color-text-soft` (`#374151`), không dùng
   `--color-muted-soft`; số liệu trạng thái vẫn giữ semantic color tương ứng.
+
+### Page baseline — Company Detail / Hồ sơ / Tổng quan
+
+- Tiêu đề card/section và tiêu đề nhóm dùng `--color-text-strong` (`#000000`),
+  không khai báo lại bằng mã hex cục bộ.
+- Label trong section Thông tin khách hàng dùng `--fw-regular`; value dùng
+  `--fw-medium`. Riêng value `Tên công ty` dùng `--color-primary-deep`
+  (`#001c6d`) cùng `--fw-medium` để tạo điểm nhấn.
+- Text phụ ở hero như `Phụ trách`, vai trò nhân viên và tab Hồ sơ inactive dùng
+  `--color-text-soft`, không dùng các mã xám hard-code hoặc muted quá nhạt.
+- Dữ liệu thường trong bảng `Trụ sở chính / địa điểm kinh doanh` và
+  `Hợp đồng dịch vụ` dùng `--color-text-strong` cùng `--fw-medium`.
+- Header cột của hai bảng dùng `--color-primary-deep` (`#001c6d`) và weight `800`,
+  đồng bộ với header bảng danh sách Companies.
+- Dấu `—`, dữ liệu trống và disabled được phép dùng muted; badge trạng thái,
+  cảnh báo và action tiếp tục dùng semantic color, không ép về màu đen.
 - Dấu `—` và dữ liệu không tồn tại: `--color-muted-subtle`.
 - “Chưa phân công” là metadata trạng thái thiếu dữ liệu, được phép dùng muted.
 - Button trung tính/outline: chữ `--color-text-strong`; button primary và semantic

@@ -256,7 +256,7 @@ async function previewSchedule(id, count = 10) {
 async function getRecurringOverview() {
   const { rows } = await query(
     `SELECT cts.id AS schedule_id, cts.max_due_day, cts.recurrence_type,
-            c.id AS company_id, c.name AS company_name,
+            c.id AS company_id, c.name AS company_name, c.business_type,
             tt.name AS task_type_name,
             u.name AS assigned_staff_name
        FROM customer_task_schedules cts
@@ -270,6 +270,7 @@ async function getRecurringOverview() {
     scheduleId:        r.schedule_id,
     companyId:         r.company_id,
     companyName:       r.company_name,
+    businessType:      r.business_type ?? null,   // loại hình DN — để lọc theo enum/nhóm
     taskTypeName:      r.task_type_name,
     recurrenceType:    r.recurrence_type,
     assignedStaffName: r.assigned_staff_name ?? null,

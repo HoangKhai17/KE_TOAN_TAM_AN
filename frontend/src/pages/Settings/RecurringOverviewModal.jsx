@@ -1,8 +1,10 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import { Loader2, Search, ShieldAlert, CalendarPlus } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { getRecurringOverview, setScheduleMaxDueDay } from '../../api/schedules'
 import { useToastStore } from '../../stores/toastStore'
+import { useEnumsStore } from '../../hooks/useEnums'
+import { MultiSelectFilter, isGroupValue, stripGroup, BUSINESS_TYPE_LABELS } from '../Companies/Companies'
 import BackfillPeriodsModal from './BackfillPeriodsModal'
 import s from '../Companies/companies.module.css'
 
@@ -20,8 +22,17 @@ export default function RecurringOverviewModal({ onClose }) {
   const [drafts, setDrafts]   = useState({})   // scheduleId → giá trị ô đang gõ
   const [loading, setLoading] = useState(true)
   const [q, setQ]             = useState('')
+  const [btFilter, setBtFilter] = useState([])   // lọc loại hình DN (mã lựa chọn + 'g:nhóm')
   const [savingId, setSavingId] = useState(null)
   const [backfillFor, setBackfillFor] = useState(null)   // lịch đang mở popup "Sinh bù kỳ"
+
+  const loadEnums = useEnumsStore((st) => st.load)
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const getGroups  = useEnumsStore((st) => st.getGroups)
+  const getLabel   = useEnumsStore((st) => st.getLabel)
+  const enumsLoaded = useEnumsStore((st) => st.loaded)
+
+  useEffect(() => { loadEnums() }, [loadEnums])
 
   useEffect(() => {
     let cancelled = false
@@ -35,6 +46,21 @@ export default function RecurringOverviewModal({ onClose }) {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [addToast])
+
+  // Options + nhóm loại hình DN cho bộ lọc (dùng chung enum 'business_type' như Companies)
+  const btOptions = useMemo(() => {
+    const opts = getOptions('business_type')
+    if (opts.length) return opts.map((o) => ({ value: o.key, label: o.label, groupKey: o.groupKey ?? null }))
+    return Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => ({ value, label }))
+  }, [getOptions, enumsLoaded])
+  const btGroups = useMemo(() => getGroups('business_type'), [getGroups, enumsLoaded])
+  // Mã loại hình → nhóm (để lọc theo nhóm)
+  const btOptionGroup = useMemo(() => {
+    const m = {}
+    for (const o of getOptions('business_type')) m[o.key] = o.groupKey ?? null
+    return m
+  }, [getOptions, enumsLoaded])
+  const btLabel = (key) => key ? getLabel('business_type', key, BUSINESS_TYPE_LABELS[key] ?? key) : '—'
 
   // Lưu khi rời ô (blur) nếu giá trị đổi so với dữ liệu gốc
   async function commit(row) {
@@ -66,15 +92,23 @@ export default function RecurringOverviewModal({ onClose }) {
   }
 
   const kw = q.trim().toLowerCase()
-  const filtered = kw
-    ? rows.filter((r) => `${r.companyName} ${r.taskTypeName}`.toLowerCase().includes(kw))
-    : rows
+  // Tách bộ lọc loại hình DN thành mã lựa chọn + mã nhóm (tiền tố 'g:')
+  const btOptSel = new Set(btFilter.filter((v) => !isGroupValue(v)))
+  const btGrpSel = new Set(btFilter.filter(isGroupValue).map(stripGroup))
+  const matchesBt = (r) => {
+    if (btFilter.length === 0) return true
+    if (btOptSel.has(r.businessType)) return true
+    const g = btOptionGroup[r.businessType]
+    return g != null && btGrpSel.has(g)
+  }
+  const filtered = rows.filter((r) =>
+    (!kw || `${r.companyName} ${r.taskTypeName}`.toLowerCase().includes(kw)) && matchesBt(r))
 
   // Gộp nhóm theo công ty (giữ thứ tự đã sort từ backend)
   const groups = []
   for (const r of filtered) {
     let g = groups[groups.length - 1]
-    if (!g || g.companyId !== r.companyId) { g = { companyId: r.companyId, companyName: r.companyName, items: [] }; groups.push(g) }
+    if (!g || g.companyId !== r.companyId) { g = { companyId: r.companyId, companyName: r.companyName, businessType: r.businessType, items: [] }; groups.push(g) }
     g.items.push(r)
   }
 
@@ -89,15 +123,31 @@ export default function RecurringOverviewModal({ onClose }) {
           </span>
         </div>
 
-        <div style={{ position: 'relative', marginBottom: 12, maxWidth: 340 }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--color-muted)' }} />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Tìm công ty / loại công việc..."
-            className={s.formInput}
-            style={{ paddingLeft: 30 }}
-          />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', width: 340, maxWidth: '100%' }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--color-muted)' }} />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Tìm công ty / loại công việc..."
+              className={s.formInput}
+              style={{ paddingLeft: 30 }}
+            />
+          </div>
+          <div style={{ minWidth: 220 }}>
+            <MultiSelectFilter
+              options={btOptions}
+              groups={btGroups}
+              value={btFilter}
+              onChange={setBtFilter}
+              placeholder="Loại hình doanh nghiệp"
+            />
+          </div>
+          {btFilter.length > 0 && (
+            <button className={s.btnGhost} style={{ height: 32 }} onClick={() => setBtFilter([])}>
+              Xoá lọc
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -133,6 +183,15 @@ export default function RecurringOverviewModal({ onClose }) {
                     <tr>
                       <td colSpan={5} style={{ background: '#f0f6ff', fontWeight: 700, color: '#1e3a8a' }}>
                         {g.companyName}
+                        {g.businessType && (
+                          <span style={{
+                            marginLeft: 8, padding: '1px 8px', borderRadius: 10, fontWeight: 600,
+                            fontSize: 'var(--fs-3xs)', background: '#dbeafe', color: '#1d4ed8',
+                            verticalAlign: 'middle',
+                          }}>
+                            {btLabel(g.businessType)}
+                          </span>
+                        )}
                       </td>
                     </tr>
                     {g.items.map((r) => (
