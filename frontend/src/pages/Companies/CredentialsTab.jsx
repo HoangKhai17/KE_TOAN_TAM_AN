@@ -501,7 +501,7 @@ export default function CredentialsTab({ company }) {
                       {cred.isActive ? 'Đang kích hoạt' : 'Đã tắt'}
                     </span>
                   </td>
-                  <td className={s.credMuted}>{fmtDateTime(cred.updatedAt)}</td>
+                  <td className={s.credDate}>{fmtDateTime(cred.updatedAt)}</td>
                   <td className={s.credCenter}>
                     <div className={s.credRowActions}>
                       <button className={s.iconBtnSm} onClick={() => setEditTarget(cred)} title="Chỉnh sửa">

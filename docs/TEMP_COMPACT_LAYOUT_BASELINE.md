@@ -63,6 +63,24 @@ Tài liệu tạm dùng làm chuẩn khi đồng bộ các trang còn lại vớ
 - Popup file của bảng Địa điểm/Hợp đồng dùng chung `AttachmentManagerModal`.
   Viewer PDF/ảnh dùng chung `AttachmentPreviewModal` với tab Tài liệu; định dạng
   không hỗ trợ preview vẫn cho tải xuống.
+
+### Page baseline — Company Detail / Tài liệu & Tài khoản hệ thống
+
+- Header cột của cả hai table dùng `--color-primary-deep` (`#001c6d`) và
+  `font-weight: 800`, đồng bộ với danh sách Companies.
+- Dữ liệu thật dùng `--color-text-strong` (`#000000`) và `--fw-medium`; không dùng
+  mã xám hard-code cho tên, mô tả, kỳ, ngày, người cập nhật hoặc ghi chú.
+- Dấu `—` và dữ liệu không tồn tại vẫn dùng muted. Link, danh mục và trạng thái
+  giữ semantic color; tài khoản đã tắt được phép giảm opacity toàn dòng.
+
+### Page baseline — Company Detail / Ghi chú
+
+- Danh sách ghi chú dùng table compact thay cho card riêng lẻ. Các cột chuẩn:
+  `Ghim | Nội dung ghi chú | Người ghi | Cập nhật | Thao tác`.
+- Header cột dùng `--color-primary-deep` (`#001c6d`) và weight `800`; dữ liệu dùng
+  `--color-text-strong`, `--fs-2xs` và `--fw-medium`.
+- Nội dung dài được thu gọn trong cell và có `Xem thêm/Thu gọn`. Dòng được ghim
+  dùng nền warning nhẹ; quyền sửa, ghim và xóa giữ nguyên như dạng card cũ.
 - Dấu `—` và dữ liệu không tồn tại: `--color-muted-subtle`.
 - “Chưa phân công” là metadata trạng thái thiếu dữ liệu, được phép dùng muted.
 - Button trung tính/outline: chữ `--color-text-strong`; button primary và semantic
@@ -152,6 +170,24 @@ Tài liệu tạm dùng làm chuẩn khi đồng bộ các trang còn lại vớ
 - Chuẩn bố cục footer: bên trái là khoảng dữ liệu/tổng số, giữa là số dòng mỗi trang, bên phải
   là điều hướng trang. Font dùng `--fs-2xs`; control cao khoảng `26px`.
 - Component chuẩn: `frontend/src/components/layout/PaginationFooter.jsx`.
+
+## Kiến trúc bảng dữ liệu dùng chung
+
+- Primitive chuẩn nằm tại `frontend/src/components/ui/data-table` và không chứa query/API theo nghiệp vụ.
+- `useRowSelection({ rows, getRowId })` quản lý chọn dòng, chọn toàn bộ trang hiện tại và trạng thái
+  checkbox trung gian. Selection giữ theo ID, không giữ theo index vì pagination/sort/filter có thể đổi vị trí dòng.
+- Các cell dùng chung gồm `DragHeaderCell`, `DragRowCell`, `SelectionHeaderCell`,
+  `SelectionRowCell`, `IndexHeaderCell`, `IndexRowCell`; thanh thao tác hàng loạt dùng `BulkActionBar`.
+- Bảng nghiệp vụ chỉ khai báo `rows`, hàm lấy ID, quyền `canEdit/canReorder` và callback lưu thứ tự.
+  Primitive không tự sửa query, không tự gọi API và không giả định schema backend.
+- Chỉ bật kéo thả khi đang ở thứ tự thủ công mặc định, không có filter/sort làm thay đổi tập hoặc thứ tự dòng.
+  Khi thả, UI có thể cập nhật optimistic nhưng phải rollback/reload nếu callback lưu thứ tự thất bại.
+- Muốn thứ tự tồn tại sau reload, bảng phải có trường thứ tự (`position` hoặc `sort_order`) và endpoint reorder.
+  Nếu nghiệp vụ chưa có hai phần này thì chỉ được bật checkbox/STT, không bật kéo thả giả.
+- Bulk action nhận tập ID đã chọn. Bảng phân trang phía server phải phân biệt rõ “chọn trang hiện tại” với
+  “chọn toàn bộ kết quả”; mặc định chuẩn hiện tại chỉ chọn các dòng đang hiển thị trên trang.
+- `CustomTableTab` là adapter đầu tiên dùng `useRowSelection`; các bảng còn lại tích hợp cùng primitive thay vì
+  sao chép state `selectedIds`, logic indeterminate và kích thước ba cột điều khiển.
 
 ## Scope note
 

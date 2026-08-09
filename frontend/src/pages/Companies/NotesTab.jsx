@@ -24,7 +24,7 @@ const QUILL_MODULES = {
 }
 const QUILL_FORMATS = ['header', 'bold', 'italic', 'underline', 'list', 'bullet', 'link']
 
-const CLAMP_PX = 130
+const CLAMP_PX = 58
 
 function isHtmlEmpty(html) {
   if (!html) return true
@@ -101,7 +101,7 @@ function NoteEditorModal({ initialNote, onSave, onClose }) {
 
 // ── NoteCard ───────────────────────────────────────────────────────────────────
 
-function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin }) {
+function NoteTableRow({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [expanded, setExpanded]           = useState(false)
   const [overflows, setOverflows]         = useState(false)
@@ -123,14 +123,11 @@ function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin 
   const displayHtml = DOMPurify.sanitize(rawHtml)
 
   return (
-    <div className={`${s.noteCard} ${note.isPinned ? s.noteCardPinned : ''}`}>
-      {note.isPinned && (
-        <div className={s.notePinnedBadge}>
-          <Pin size={10} /> Ghim
-        </div>
-      )}
-
-      <div className={s.noteCardBody}>
+    <tr className={note.isPinned ? s.noteTableRowPinned : ''}>
+      <td className={s.notePinCell}>
+        {note.isPinned ? <span className={s.notePinnedBadge}><Pin size={10} /> Ghim</span> : <span className={s.noteMuted}>—</span>}
+      </td>
+      <td className={s.noteContentCell}>
         <div
           ref={contentRef}
           className={`${s.noteHtmlContent} ${!expanded ? s.noteContentClamped : ''}`}
@@ -141,18 +138,18 @@ function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin 
             {expanded ? 'Thu gọn ▴' : 'Xem thêm ▾'}
           </button>
         )}
-      </div>
-
-      <div className={s.noteCardFooter}>
+      </td>
+      <td>
         <div className={s.noteAuthorRow}>
           <div className={s.noteAvatar}>{getInitials(note.authorName)}</div>
           <span className={s.noteAuthorName}>{note.authorName}</span>
-          <span className={s.noteTime}>
-            {fmtDateTime(note.updatedAt !== note.createdAt ? note.updatedAt : note.createdAt)}
-          </span>
-          {note.updatedAt !== note.createdAt && <span className={s.noteEdited}>(đã sửa)</span>}
         </div>
-
+      </td>
+      <td className={s.noteTimeCell}>
+        <span>{fmtDateTime(note.updatedAt !== note.createdAt ? note.updatedAt : note.createdAt)}</span>
+        {note.updatedAt !== note.createdAt && <span className={s.noteEdited}>(đã sửa)</span>}
+      </td>
+      <td className={s.noteActionsCell}>
         {canEdit && (
           <div className={s.noteActions}>
             {confirmDelete ? (
@@ -196,8 +193,8 @@ function NoteCard({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin 
             )}
           </div>
         )}
-      </div>
-    </div>
+      </td>
+    </tr>
   )
 }
 
@@ -293,7 +290,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
         </div>
         <button
           className={s.btnNavy}
-          style={{ height: 32, fontSize: 'var(--fs-md)', padding: '0 14px' }}
+          style={{ height: 32, fontSize: 'var(--fs-2xs)', padding: '0 14px' }}
           onClick={() => setShowAdd(true)}
         >
           <Plus size={13} /> Thêm ghi chú
@@ -310,22 +307,42 @@ export default function NotesTab({ company, onNoteCountChange }) {
           <StickyNote size={32} style={{ color: 'var(--color-warning-border)', marginBottom: 8 }} />
           <p style={{ fontSize: 'var(--fs-md)', color: 'var(--color-muted)', margin: 0 }}>Chưa có ghi chú nào.</p>
           <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)', margin: '4px 0 0' }}>
-            Nhấn "Thêm ghi chú" để tạo ghi chú đầu tiên.
+            {'Nhấn "Thêm ghi chú" để tạo ghi chú đầu tiên.'}
           </p>
         </div>
       ) : (
-        <div className={s.noteList}>
-          {notes.map((note) => (
-            <NoteCard
-              key={note.id}
-              note={note}
-              currentUserId={currentUser?.id}
-              isAdmin={isAdmin}
-              onEdit={setEditTarget}
-              onDelete={handleDelete}
-              onTogglePin={handleTogglePin}
-            />
-          ))}
+        <div className={s.noteTableWrap}>
+          <table className={s.noteTable}>
+            <colgroup>
+              <col className={s.noteColPin} />
+              <col className={s.noteColContent} />
+              <col className={s.noteColAuthor} />
+              <col className={s.noteColUpdated} />
+              <col className={s.noteColActions} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Ghim</th>
+                <th>Nội dung ghi chú</th>
+                <th>Người ghi</th>
+                <th>Cập nhật</th>
+                <th className={s.noteActionsCell}>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {notes.map((note) => (
+                <NoteTableRow
+                  key={note.id}
+                  note={note}
+                  currentUserId={currentUser?.id}
+                  isAdmin={isAdmin}
+                  onEdit={setEditTarget}
+                  onDelete={handleDelete}
+                  onTogglePin={handleTogglePin}
+                />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

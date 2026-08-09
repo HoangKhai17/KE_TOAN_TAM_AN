@@ -1,11 +1,18 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Plus, Trash2, Filter, Loader2, Download, Upload, GripVertical } from 'lucide-react'
+import { Plus, Trash2, Filter, Loader2, Download, Upload } from 'lucide-react'
 // xlsx-js-style: bản drop-in cùng API SheetJS nhưng ghi được style (font/border).
 // SheetJS community ('xlsx') không hỗ trợ style khi ghi file.
 import * as XLSX from 'xlsx-js-style'
 import * as api from '../../api/companyTables'
 import Modal from '../../components/ui/Modal'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
+import {
+  DragHeaderCell,
+  DragRowCell,
+  SelectionHeaderCell,
+  SelectionRowCell,
+  useRowSelection,
+} from '../../components/ui/data-table'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import s from './companies.module.css'
@@ -504,7 +511,6 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   const [showExport, setShowExport]     = useState(false)
   const [showImport, setShowImport]     = useState(false)
   const [pageSize, setPageSize]         = useState(PAGE_SIZE)
-  const [selectedIds, setSelectedIds]   = useState(() => new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Nhập bằng phím (Tab/Enter) — ô đang mở để nhập; và focus dòng vừa thêm
@@ -564,6 +570,8 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       .catch(() => { if (!cancelled) setRows([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
+  // setSelectedIds là setter ổn định của hook; load chạy sau khi render hoàn tất.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, def.id, def.allowCompanyColumns])
 
   useEffect(() => load(), [load])
@@ -614,6 +622,14 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   const totalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
   const safePage   = Math.min(page, totalPages)
   const pageRows   = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const {
+    selectedIds,
+    setSelectedIds,
+    allSelected: allPageSelected,
+    someSelected: somePageSelected,
+    toggle: toggleSelect,
+    toggleAll: toggleSelectAll,
+  } = useRowSelection({ rows: pageRows })
 
   // ── Filter handlers ──────────────────────────────────────────────────────────
   function openFilter(colKey, e) {
@@ -738,19 +754,6 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   }
 
   // ── Row multi-select + bulk delete ───────────────────────────────────────────
-  function toggleSelect(id) {
-    setSelectedIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
-  }
-  const allPageSelected = pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id))
-  const somePageSelected = pageRows.some((r) => selectedIds.has(r.id))
-  function toggleSelectAll() {
-    setSelectedIds((p) => {
-      const n = new Set(p)
-      if (allPageSelected) pageRows.forEach((r) => n.delete(r.id))
-      else pageRows.forEach((r) => n.add(r.id))
-      return n
-    })
-  }
   async function bulkDelete() {
     if (!selectedIds.size) return
     if (!window.confirm(`Xoá ${selectedIds.size} dòng đã chọn? Không thể hoàn tác.`)) return
@@ -847,13 +850,14 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
             <table className={`${s.table} ${s.hdldTable}`}>
               <thead>
                 <tr>
-                  {canEdit && <th className={s.ctblDragTh} />}
+                  {canEdit && <DragHeaderCell className={s.ctblDragTh} />}
                   {canEdit && (
-                    <th className={s.hdldThStt}>
-                      <input type="checkbox" checked={allPageSelected}
-                        ref={(el) => { if (el) el.indeterminate = !allPageSelected && somePageSelected }}
-                        onChange={toggleSelectAll} title="Chọn tất cả trang này" />
-                    </th>
+                    <SelectionHeaderCell
+                      className={s.hdldThStt}
+                      allSelected={allPageSelected}
+                      someSelected={somePageSelected}
+                      onToggle={toggleSelectAll}
+                    />
                   )}
                   <th className={`${s.hdldThStt} ${s.ctblTh}`}>
                     <div className={s.hdldThInner}>
@@ -897,25 +901,24 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
                     onDrop={canReorder ? () => handleRowDrop(row.id) : undefined}
                   >
                     {canEdit && (
-                      <td className={s.ctblDragTd} onClick={(e) => e.stopPropagation()}>
-                        {canReorder ? (
-                          <span className={s.ctblDragHandle} title="Kéo để đổi vị trí"
-                            draggable
-                            onDragStart={() => setDragRowId(row.id)}
-                            onDragEnd={() => { setDragRowId(null); setDragOverId(null) }}>
-                            <GripVertical size={14} />
-                          </span>
-                        ) : (
-                          <span className={s.ctblDragHandleOff} title="Bỏ lọc/sắp xếp cột để kéo thả hàng">
-                            <GripVertical size={14} />
-                          </span>
-                        )}
-                      </td>
+                      <DragRowCell
+                        className={s.ctblDragTd}
+                        enabled={canReorder}
+                        enabledClassName={s.ctblDragHandle}
+                        disabledClassName={s.ctblDragHandleOff}
+                        handleProps={{
+                          draggable: true,
+                          onDragStart: () => setDragRowId(row.id),
+                          onDragEnd: () => { setDragRowId(null); setDragOverId(null) },
+                        }}
+                      />
                     )}
                     {canEdit && (
-                      <td className={s.hdldCellStt} onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} />
-                      </td>
+                      <SelectionRowCell
+                        className={s.hdldCellStt}
+                        checked={selectedIds.has(row.id)}
+                        onToggle={() => toggleSelect(row.id)}
+                      />
                     )}
                     <td className={s.hdldCellStt}>{(safePage - 1) * pageSize + idx + 1}</td>
                     {columns.map((col) => {

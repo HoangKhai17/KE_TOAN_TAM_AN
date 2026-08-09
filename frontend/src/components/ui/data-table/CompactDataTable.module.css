@@ -1,0 +1,63 @@
+.selectionCell {
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
+  padding-left: 7px !important;
+  padding-right: 7px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+.selectionCell input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.dragCell {
+  width: 30px;
+  min-width: 30px;
+  max-width: 30px;
+  padding-left: 5px !important;
+  padding-right: 5px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.dragHandle:hover { color: var(--color-primary); }
+.dragHandle:active { cursor: grabbing; }
+.dragHandleDisabled { opacity: 0.38; cursor: not-allowed; }
+
+.indexCell {
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  text-align: center !important;
+  white-space: nowrap;
+}
+
+.bulkBar {
+  min-height: 36px;
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--color-primary-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-bg);
+  font-size: var(--fs-2xs);
+}
+
+.bulkCount { color: var(--color-primary-deep); font-weight: var(--fw-bold); }
+.bulkActions { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }

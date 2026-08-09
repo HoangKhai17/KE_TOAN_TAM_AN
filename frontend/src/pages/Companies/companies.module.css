@@ -3438,6 +3438,74 @@
   gap: 10px;
 }
 
+/* Ghi chú hiển thị dạng table compact, đồng bộ các tab dữ liệu Company Detail. */
+.noteTableWrap {
+  border: 1.5px solid #dbeafe;
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.07), 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.noteTable {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: var(--fs-2xs);
+}
+
+.noteTable thead th {
+  padding: 7px 8px;
+  text-align: left;
+  font-size: var(--fs-2xs);
+  font-weight: 800;
+  color: var(--color-primary-deep);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #f0f6ff 0%, #dbeafe 100%);
+  border-bottom: 1.5px solid #93c5fd;
+}
+
+.noteTable td {
+  padding: 7px 8px;
+  vertical-align: top;
+  color: var(--color-text-strong);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.noteTable tbody tr:last-child td { border-bottom: none; }
+.noteTable tbody tr:hover td { background: #f8fbff; }
+.noteTableRowPinned td { background: var(--color-warning-bg); }
+.noteTableRowPinned:hover td { background: var(--color-warning-bg); }
+
+.noteColPin { width: 72px; }
+.noteColContent { width: auto; }
+.noteColAuthor { width: 180px; }
+.noteColUpdated { width: 175px; }
+.noteColActions { width: 112px; }
+
+.notePinCell { vertical-align: middle !important; }
+.noteContentCell { min-width: 0; }
+.noteActionsCell { text-align: right !important; vertical-align: middle !important; }
+.noteActionsCell .noteActions { justify-content: flex-end; }
+.noteTimeCell { vertical-align: middle !important; white-space: nowrap; }
+.noteTimeCell span { display: block; }
+.noteMuted { color: var(--color-muted); }
+
+.noteTable .notePinnedBadge { margin: 0; }
+.noteTable .noteHtmlContent {
+  font-size: var(--fs-2xs);
+  color: var(--color-text-strong);
+  line-height: var(--lh-normal);
+}
+.noteTable .noteContentClamped { max-height: 58px; }
+.noteTable .noteExpandBtn { font-size: var(--fs-2xs); margin-top: 3px; }
+.noteTable .noteAuthorName { font-size: var(--fs-2xs); font-weight: var(--fw-medium); color: var(--color-text-strong); }
+.noteTable .noteEdited { font-size: var(--fs-2xs); color: var(--color-muted); }
+
 .noteCard {
   position: relative;
   background: #fff;
@@ -4413,7 +4481,7 @@
   text-align: left;
   font-size: var(--fs-2xs);
   font-weight: 800;
-  color: #1e3a8a;
+  color: var(--color-primary-deep);
   text-transform: none;
   letter-spacing: 0.5px;
   background: linear-gradient(180deg, #f0f6ff 0%, #e8f0fe 100%);
@@ -4429,7 +4497,8 @@
 .docTableRow td {
   padding: 7px 8px;
   vertical-align: middle;
-  color: #1e293b;
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
   border-bottom: 1px solid #f1f5f9;
 }
 
@@ -4469,8 +4538,8 @@
 
 .docTableName {
   font-size: var(--fs-2xs);
-  font-weight: 700;
-  color: #1e293b;
+  font-weight: var(--fw-medium);
+  color: var(--color-text-strong);
   /* Hiện ĐẦY ĐỦ tên tài liệu — tự xuống dòng nếu quá dài, không cắt "…" */
   white-space: normal;
   word-break: break-word;
@@ -4478,7 +4547,8 @@
 
 .docTableDesc {
   font-size: var(--fs-2xs);
-  color: #64748b;
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4530,7 +4600,7 @@
 
 .docUrlText {
   font-size: var(--fs-2xs);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4542,16 +4612,17 @@
 
 .docTableDate {
   font-size: var(--fs-2xs);
-  color: #64748b;
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
   white-space: nowrap;
   min-width: 90px;
 }
 
 .docTableBy {
   font-size: var(--fs-2xs);
-  color: #334155;
+  color: var(--color-text-strong);
   white-space: nowrap;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   min-width: 100px;
 }
 
@@ -7391,7 +7462,7 @@ textarea.editInput {
 .docColBy      { width: 11%; }
 .docColActions { width: 10%; }
 
-.docTablePeriod { font-size: var(--fs-2xs); color: var(--color-text-soft); white-space: nowrap; }
+.docTablePeriod { font-size: var(--fs-2xs); color: var(--color-text-strong); font-weight: var(--fw-medium); white-space: nowrap; }
 .docMutedDash   { color: var(--color-muted); }
 
 /* ── Modal xem trước PDF/ảnh ───────────────────────────────────────────────── */
@@ -7526,7 +7597,7 @@ textarea.editInput {
 .credTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--fs-2xs); table-layout: fixed; }
 .credTable thead th {
   padding: 7px 8px; text-align: left;
-  font-size: var(--fs-2xs); font-weight: 800; color: #1e3a8a;
+  font-size: var(--fs-2xs); font-weight: 800; color: var(--color-primary-deep);
   text-transform: none; letter-spacing: 0.5px;
   background: linear-gradient(180deg, #f0f6ff 0%, #dbeafe 100%);
   border-bottom: 1.5px solid #93c5fd; white-space: nowrap;
@@ -7534,6 +7605,7 @@ textarea.editInput {
 .credTable td {
   padding: 7px 8px; border-bottom: 1px solid var(--color-border-soft);
   vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--color-text-strong); font-weight: var(--fw-medium);
 }
 .credTable tbody tr:last-child td { border-bottom: none; }
 .credTable tbody tr:hover { background: #f0f9ff; }
@@ -7541,8 +7613,9 @@ textarea.editInput {
 .credCenter { text-align: center; }
 .credMuted { color: var(--color-muted); }
 
-.credName { font-weight: 700; color: #1e293b; overflow: hidden; text-overflow: ellipsis; }
-.credNoteSub { font-size: var(--fs-2xs); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.credName { font-weight: var(--fw-medium); color: var(--color-text-strong); overflow: hidden; text-overflow: ellipsis; }
+.credNoteSub { font-size: var(--fs-2xs); font-weight: var(--fw-medium); color: var(--color-text-strong); overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.credDate { color: var(--color-text-strong); font-weight: var(--fw-medium); }
 .credUrlLink { color: #2563eb; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .credUrlLink:hover { text-decoration: underline; }
 .credPwCell { display: inline-flex; align-items: center; gap: 8px; }
