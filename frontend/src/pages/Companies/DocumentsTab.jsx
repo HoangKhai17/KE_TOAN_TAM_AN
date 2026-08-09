@@ -11,6 +11,7 @@ import { MultiSelectFilter } from './Companies'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import * as documentsApi from '../../api/documents'
 import * as attApi from '../../api/attachments'
+import AttachmentPreviewModal from './AttachmentPreviewModal'
 import s from './companies.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -401,52 +402,8 @@ function EditLinkForm({ doc, onSave, onCancel, saving, catOptions }) {
 // ── PreviewModal: xem trước PDF/ảnh ngay trong app (tải blob giữ auth) ───────────
 
 function PreviewModal({ doc, onClose }) {
-  const [url, setUrl] = useState(null)
-  const [err, setErr] = useState(false)
-  const isImg = (doc.file.mimeType || '').startsWith('image/')
-
-  useEffect(() => {
-    let obj
-    let alive = true
-    attApi.getFileBlobUrl(doc.file.id)
-      .then((u) => { if (alive) { obj = u; setUrl(u) } })
-      .catch(() => { if (alive) setErr(true) })
-    return () => { alive = false; if (obj) URL.revokeObjectURL(obj) }
-  }, [doc])
-
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   return (
-    <div className={s.docModalOverlay} onClick={onClose}>
-      <div className={s.docPreviewDialog} onClick={(e) => e.stopPropagation()}>
-        <div className={s.docPreviewHead}>
-          <span className={s.docPreviewTitle}><FileText size={14} /> {doc.name}</span>
-          <div className={s.docPreviewHeadBtns}>
-            <button className={s.docActionBtn} title="Tải xuống" onClick={() => attApi.downloadFile(doc.file.id, doc.file.fileName)}>
-              <Download size={14} />
-            </button>
-            <button className={s.docActionBtn} title="Đóng (Esc)" onClick={onClose}>
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-        <div className={s.docPreviewBody}>
-          {err ? (
-            <div className={s.docPreviewMsg}>Không xem trước được tệp này. Hãy tải xuống để mở.</div>
-          ) : !url ? (
-            <div className={s.docPreviewMsg}><Loader2 size={20} className={s.spin} /></div>
-          ) : isImg ? (
-            <img src={url} alt={doc.name} className={s.docPreviewImg} />
-          ) : (
-            <iframe src={url} title={doc.name} className={s.docPreviewFrame} />
-          )}
-        </div>
-      </div>
-    </div>
+    <AttachmentPreviewModal file={doc.file} title={doc.name} onClose={onClose} />
   )
 }
 

@@ -58,6 +58,11 @@ Tài liệu tạm dùng làm chuẩn khi đồng bộ các trang còn lại vớ
   đồng bộ với header bảng danh sách Companies.
 - Dấu `—`, dữ liệu trống và disabled được phép dùng muted; badge trạng thái,
   cảnh báo và action tiếp tục dùng semantic color, không ép về màu đen.
+- Filter ngày trong header cột phải dùng `DateBox`, hiển thị `dd/mm/yyyy`; không
+  render trực tiếp `<input type="date">` vì format native phụ thuộc trình duyệt.
+- Popup file của bảng Địa điểm/Hợp đồng dùng chung `AttachmentManagerModal`.
+  Viewer PDF/ảnh dùng chung `AttachmentPreviewModal` với tab Tài liệu; định dạng
+  không hỗ trợ preview vẫn cho tải xuống.
 - Dấu `—` và dữ liệu không tồn tại: `--color-muted-subtle`.
 - “Chưa phân công” là metadata trạng thái thiếu dữ liệu, được phép dùng muted.
 - Button trung tính/outline: chữ `--color-text-strong`; button primary và semantic

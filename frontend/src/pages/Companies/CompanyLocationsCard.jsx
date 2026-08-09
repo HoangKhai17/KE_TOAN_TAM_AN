@@ -2,13 +2,12 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus, Trash2, Loader2, Paperclip, Download, Upload, Filter } from 'lucide-react'
 import * as XLSX from 'xlsx-js-style'
 import * as locationsApi from '../../api/locations'
-import * as attachmentsApi from '../../api/attachments'
-import Modal from '../../components/ui/Modal'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
 import { fmtDate } from './companyUtils'
 import DateBox from './DateBox'
+import AttachmentManagerModal from './AttachmentManagerModal'
 import s from './companies.module.css'
 
 const ATTACH_MODULE = 'company_location'
@@ -90,11 +89,11 @@ function DateRangeSection({ currentFilter, onChange }) {
     <div className={s.hdldDdFilterSection}>
       <div className={s.hdldDdRangeGroup}>
         <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Từ ngày</span>
-          <input type="date" className={s.hdldDdInput} value={from}
-            onChange={(e) => { setFrom(e.target.value); apply(e.target.value, to) }} /></div>
+          <DateBox value={from} className={s.hdldDdDateBox}
+            onChange={(value) => { setFrom(value); apply(value, to) }} /></div>
         <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Đến ngày</span>
-          <input type="date" className={s.hdldDdInput} value={to}
-            onChange={(e) => { setTo(e.target.value); apply(from, e.target.value) }} /></div>
+          <DateBox value={to} className={s.hdldDdDateBox}
+            onChange={(value) => { setTo(value); apply(from, value) }} /></div>
       </div>
       {(from || to) && <div className={s.hdldDdFooter}><button className={s.hdldDdClearBtn}
         onClick={() => { setFrom(''); setTo(''); onChange(null) }}>Xoá bộ lọc</button></div>}
@@ -258,73 +257,15 @@ function LocEditableCell({ col, row, value, enumOpts, getLabel, canEdit, active,
 
 // ── Popup quản lý file đính kèm của MỘT địa điểm ────────────────────────────────
 function LocationFilesModal({ location, canEdit, onClose, onChanged }) {
-  const addToast = useToastStore((st) => st.toast)
-  const [files, setFiles]     = useState([])
-  const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
-  const fileRef = useRef(null)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try { const f = await attachmentsApi.listFiles(ATTACH_MODULE, location.id); setFiles(f); return f }
-    catch { addToast('Không tải được danh sách file', 'error'); return null }
-    finally { setLoading(false) }
-  }, [location.id, addToast])
-  useEffect(() => { load() }, [load])
-
-  async function onPick(e) {
-    const file = e.target.files?.[0]; e.target.value = ''
-    if (!file) return
-    if (file.size > attachmentsApi.MAX_FILE_BYTES) {
-      addToast(`File quá lớn (tối đa ${attachmentsApi.formatSize(attachmentsApi.MAX_FILE_BYTES)})`, 'error'); return
-    }
-    setUploading(true)
-    try {
-      await attachmentsApi.uploadFile(ATTACH_MODULE, location.id, file)
-      addToast('Đã tải file lên', 'success'); const f = await load(); onChanged?.(f?.length ?? 0)
-    } catch (err) { addToast(err.response?.data?.error?.message ?? 'Tải file thất bại', 'error') }
-    finally { setUploading(false) }
-  }
-  async function remove(f) {
-    try { await attachmentsApi.deleteFile(f.id); addToast('Đã xoá file', 'success'); const arr = await load(); onChanged?.(arr?.length ?? 0) }
-    catch (err) { addToast(err.response?.data?.error?.message ?? 'Không xoá được file', 'error') }
-  }
-
   return (
-    <Modal title={`File đính kèm — ${location.name || 'địa điểm'}`} onClose={onClose}>
-      {loading ? (
-        <div className={s.locFileEmpty}><Loader2 size={16} className={s.spin} /> Đang tải…</div>
-      ) : files.length === 0 ? (
-        <div className={s.locFileEmpty}>Chưa có file đính kèm.</div>
-      ) : (
-        <div className={s.locFileList}>
-          {files.map((f) => (
-            <div key={f.id} className={s.locFileRow}>
-              <Paperclip size={14} className={s.locMuted} />
-              <span className={s.locFileName} title={f.fileName}>{f.fileName}</span>
-              <span className={s.locFileSize}>{attachmentsApi.formatSize(f.sizeBytes)}</span>
-              <button className={s.locFileIconBtn} title="Tải xuống" onClick={() => attachmentsApi.downloadFile(f.id, f.fileName)}>
-                <Download size={14} />
-              </button>
-              {canEdit && (
-                <button className={`${s.locFileIconBtn} ${s.locFileIconDanger}`} title="Xoá" onClick={() => remove(f)}>
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      {canEdit && (
-        <>
-          <input ref={fileRef} type="file" accept={attachmentsApi.ACCEPT_ATTR} className={s.hiddenInput} onChange={onPick} />
-          <button className={s.locFileBtn} onClick={() => fileRef.current?.click()} disabled={uploading}>
-            {uploading ? <Loader2 size={13} className={s.spin} /> : <Upload size={13} />}
-            {uploading ? 'Đang tải lên…' : 'Tải file lên'}
-          </button>
-        </>
-      )}
-    </Modal>
+    <AttachmentManagerModal
+      module={ATTACH_MODULE}
+      entityId={location.id}
+      title={`File đính kèm — ${location.name || 'địa điểm'}`}
+      canEdit={canEdit}
+      onClose={onClose}
+      onChanged={onChanged}
+    />
   )
 }
 
