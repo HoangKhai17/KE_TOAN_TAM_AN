@@ -1227,7 +1227,7 @@ export default function Tasks() {
   useEffect(() => { saveHiddenCols(hiddenCols) }, [hiddenCols])
 
   // Thu gọn / mở panel bộ lọc — lưu sessionStorage
-  const [filterCollapsed, setFilterCollapsed] = useState(initF.filterCollapsed ?? false)
+  const [filterCollapsed, setFilterCollapsed] = useState(initF.filterCollapsed ?? true)
   function toggleColVisible(key) {
     setHiddenCols((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
   }
@@ -1954,7 +1954,6 @@ export default function Tasks() {
             </div>
           </div>
 
-          {!filterCollapsed && (
           <div className={s.filterGrid}>
 
             {/* KỲ — gộp Năm + Tháng + Từ ngày + Đến ngày */}
@@ -1977,7 +1976,7 @@ export default function Tasks() {
             </div>
 
             {/* SẮP XẾP */}
-            <div className={s.filterGroup}>
+            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
               <label className={s.filterLabel}>Sắp xếp</label>
               <select value={sortValue} onChange={(e) => setSortValue(e.target.value)} className={s.filterSelect}>
                 {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -2000,7 +1999,7 @@ export default function Tasks() {
             </div>
 
             {/* KHÁCH HÀNG */}
-            <div className={s.filterGroup}>
+            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
               <label className={s.filterLabel}>Khách hàng</label>
               <FilterCompanyMultiPicker
                 companies={companies}
@@ -2011,7 +2010,7 @@ export default function Tasks() {
 
             {/* NHÂN VIÊN — admin only */}
             {isAdmin && (
-              <div className={s.filterGroup}>
+              <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
                 <label className={s.filterLabel}>Nhân viên</label>
                 <MultiSelect
                   placeholder="Tất cả"
@@ -2033,7 +2032,7 @@ export default function Tasks() {
             )}
 
             {/* NGƯỜI TẠO — vd: admin xem tiến độ những việc chính mình tạo & giao cho nhân viên */}
-            <div className={s.filterGroup}>
+            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
               <label className={s.filterLabel}>Người tạo</label>
               <MultiSelect
                 placeholder="Tất cả"
@@ -2044,7 +2043,7 @@ export default function Tasks() {
             </div>
 
             {/* CV HỖ TRỢ — admin: multi-select nhân viên; nhân viên: toggle "việc mình hỗ trợ" */}
-            <div className={s.filterGroup}>
+            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
               <label className={s.filterLabel}>CV hỗ trợ</label>
               {isAdmin ? (
                 <MultiSelect
@@ -2076,7 +2075,7 @@ export default function Tasks() {
             </div>
 
             {/* ƯU TIÊN — multi-select */}
-            <div className={s.filterGroup}>
+            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
               <label className={s.filterLabel}>Ưu tiên</label>
               <MultiSelect
                 placeholder="Tất cả ưu tiên"
@@ -2091,7 +2090,7 @@ export default function Tasks() {
             </div>
 
             {/* NGUỒN — multi-select */}
-            <div className={s.filterGroup}>
+            <div className={`${s.filterGroup} ${filterCollapsed ? s.advancedFilterHidden : ''}`}>
               <label className={s.filterLabel}>Nguồn</label>
               <MultiSelect
                 placeholder="Tất cả nguồn"
@@ -2106,7 +2105,6 @@ export default function Tasks() {
             </div>
 
           </div>
-          )}
 
           {/* ── Active filter chips ── */}
           {(yearFilter || monthFilter || staffFilter.length > 0 || creatorFilter.length > 0 || supportFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || scheduleToday || search) && (

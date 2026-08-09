@@ -28,7 +28,7 @@
 .pageTitle {
   font-size: var(--fs-2xl);
   font-weight: var(--fw-extrabold);
-  color: var(--color-text);
+  color: var(--color-text-strong);
   letter-spacing: -0.3px;
   margin: 0;
 }
@@ -73,7 +73,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: var(--color-text-soft);
   font-size: var(--fs-2xs);
   font-weight: 700;
   cursor: pointer;
@@ -132,7 +132,7 @@
 .qLabel {
   font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
-  color: var(--color-muted);
+  color: var(--color-text-soft);
   letter-spacing: 0.3px;
   margin-right: 2px;
 }
@@ -146,7 +146,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   background: var(--color-surface);
-  color: var(--color-text-soft);
+  color: var(--color-text-strong);
   font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   cursor: pointer;
@@ -176,7 +176,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-text-soft);
   font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   cursor: pointer;
@@ -223,7 +223,7 @@
 .headStatsLabel {
   font-size: var(--fs-3xs);
   font-weight: var(--fw-bold);
-  color: var(--color-muted);
+  color: var(--color-text-soft);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-right: 6px;
@@ -237,7 +237,7 @@
   gap: 6px;
   font-size: var(--fs-2xs);
   font-weight: 800;
-  color: #1e3a8a;
+  color: var(--color-primary-deep);
   letter-spacing: 0.3px;
 }
 
@@ -251,7 +251,7 @@
   padding: 4px 12px 4px 9px;
   border-radius: var(--radius-pill);
   cursor: pointer;
-  color: #1e3a8a;
+  color: var(--color-primary-deep);
   transition: background 0.13s, border-color 0.13s, box-shadow 0.13s;
 }
 .filterCollapseBtn:hover {
@@ -283,7 +283,7 @@
   padding: 0 7px;
   border-radius: var(--radius-pill);
   background: #dbeafe;
-  color: #2563eb;
+  color: var(--color-primary-deep);
   font-size: var(--fs-2xs);
   font-weight: var(--fw-bold);
   border: 1px solid #93c5fd;
@@ -304,7 +304,7 @@
   padding: 2px 4px 2px 9px;
   border-radius: 999px;
   background: #eff6ff;
-  color: #2563eb;
+  color: var(--color-primary-deep);
   border: 1px solid rgba(59, 130, 246, 0.2);
   font-size: var(--fs-2xs);
   font-weight: 600;
@@ -351,7 +351,7 @@
 .filterLabel {
   font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
-  color: var(--color-muted);
+  color: var(--color-text-soft);
   letter-spacing: 0.2px;
 }
 
@@ -411,7 +411,7 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   gap: 5px;
   margin-top: 2px;
   font-size: var(--fs-3xs);
-  color: var(--color-text-soft);
+  color: var(--color-text-strong);
   cursor: pointer;
   user-select: none;
 }
@@ -425,7 +425,7 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   background: #fff;
   font-size: var(--fs-2xs);
   font-family: inherit;
-  color: var(--color-text);
+  color: var(--color-text-strong);
   transition: border-color 0.13s, box-shadow 0.13s;
   width: 100%;
 }
@@ -449,7 +449,7 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   background: #fff;
   font-size: var(--fs-2xs);
   font-family: inherit;
-  color: var(--color-text);
+  color: var(--color-text-strong);
   transition: border-color 0.13s, box-shadow 0.13s;
   width: 100%;
   cursor: pointer;
@@ -755,7 +755,7 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   text-align: left;
   font-size: var(--fs-2xs);
   font-weight: 800;
-  color: #1e3a8a;
+  color: var(--color-primary-deep);
   letter-spacing: 0.3px;
   border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
@@ -786,7 +786,8 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
 .td {
   padding: var(--table-cell-py) var(--table-col-px);
   vertical-align: middle;
-  color: var(--color-text);
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
   font-size: var(--fs-2xs);
   /* Cột bề rộng cố định (table-layout: fixed) → nội dung dài RỚT DÒNG xuống dưới
      (không dùng dấu "…"). Từ dài không dấu cách sẽ tự bẻ dòng.
@@ -811,7 +812,7 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
 
 .taskMeta {
   font-size: var(--fs-2xs);
-  color: var(--color-muted);
+  color: var(--color-text-soft);
   margin-top: 2px;
   white-space: normal;
   overflow-wrap: anywhere;   /* dài thì rớt dòng */
@@ -3329,7 +3330,8 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
 
 .statLabel {
   font-size: var(--fs-2xs);
-  color: var(--color-muted);
+  color: var(--color-text-soft);
+  font-weight: var(--fw-medium);
   white-space: nowrap;
 }
 
