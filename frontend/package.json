@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx",
+    "test:clipboard": "node --test test/clipboardGrid.test.js",
     "lint:fix": "eslint src --ext .js,.jsx --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\""
   },

@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Plus, Trash2, Filter, Loader2, Download, Upload, Link2, X, ExternalLink, Paperclip, FileUp } from 'lucide-react'
+import { Plus, Trash2, Filter, Loader2, Download, Upload, X, ExternalLink, Paperclip, FileUp } from 'lucide-react'
 // xlsx-js-style: bản drop-in cùng API SheetJS nhưng ghi được style (font/border).
 // SheetJS community ('xlsx') không hỗ trợ style khi ghi file.
 import * as XLSX from 'xlsx-js-style'
 import * as api from '../../api/companyTables'
 import { uploadFile, downloadFile, deleteFile, formatSize, ACCEPT_ATTR, MAX_FILE_BYTES } from '../../api/attachments'
 import { evaluateFormula } from '../../utils/formula'
+import { normalizeClipboardGrid, parseClipboardGrid } from '../../utils/clipboardGrid'
 import Modal from '../../components/ui/Modal'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
@@ -966,6 +967,73 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       setRows((p) => p.map((r) => r.id === updated.id ? updated : r))
     } catch { addToast('Không thể lưu', 'error') }
   }
+
+  async function handleTablePaste(event) {
+    if (!canEdit || !activeCell || !editableCols.length) return
+    const startColumnIndex = editableCols.findIndex((column) => column.colKey === activeCell.colKey)
+    const startRowIndex = displayed.findIndex((row) => row.id === activeCell.rowId)
+    if (startColumnIndex < 0 || startRowIndex < 0) return
+
+    const clipboardText = event.clipboardData?.getData('text/plain') ?? ''
+    const grid = parseClipboardGrid(clipboardText)
+    const isRangePaste = grid.length > 1 || (grid[0]?.length ?? 0) > 1
+    const startColumn = editableCols[startColumnIndex]
+    // Text/number/select một ô vẫn dùng paste native của editor. DateBox không có input text hiển thị,
+    // nên phải bắt clipboard tại table để chuẩn hóa ngày.
+    if (!isRangePaste && startColumn.dataType !== 'date') return
+
+    event.preventDefault()
+    event.stopPropagation()
+    const maxClipboardColumns = Math.max(0, ...grid.map((row) => row.length))
+    const targetColumns = editableCols.slice(startColumnIndex, startColumnIndex + maxClipboardColumns)
+    if (!targetColumns.length) return
+    const normalized = normalizeClipboardGrid(grid, targetColumns)
+    if (normalized.errors.length) {
+      const remaining = normalized.errors.length - 1
+      addToast(`${normalized.errors[0]}${remaining > 0 ? ` (+${remaining} lỗi khác)` : ''}`, 'error')
+      return
+    }
+
+    setActiveCell(null)
+    let nextRows = [...rows]
+    let changed = 0
+    let created = 0
+    let lastTarget = null
+    try {
+      for (let rowOffset = 0; rowOffset < normalized.values.length; rowOffset += 1) {
+        const values = normalized.values[rowOffset]
+        const payload = {}
+        values.forEach((value, columnOffset) => {
+          const column = targetColumns[columnOffset]
+          if (column) payload[column.colKey] = value
+        })
+        if (!Object.keys(payload).length) continue
+
+        const existing = displayed[startRowIndex + rowOffset]
+        let saved
+        if (existing) {
+          saved = await api.updateRow(companyId, def.id, existing.id, payload)
+          nextRows = nextRows.map((row) => row.id === saved.id ? saved : row)
+        } else {
+          saved = await api.createRow(companyId, def.id, payload)
+          nextRows.push(saved)
+          created += 1
+        }
+        changed += 1
+        lastTarget = { rowId: saved.id, colKey: targetColumns[Math.min(values.length, targetColumns.length) - 1].colKey }
+      }
+      setRows(nextRows)
+      if (created > 0) {
+        setColFilters({})
+        setSortState({ col: '__stt', dir: 'asc' })
+      }
+      if (lastTarget) setPendingFocus(lastTarget)
+      addToast(`Đã dán dữ liệu vào ${changed} dòng${created ? `, tạo mới ${created} dòng` : ''}`, 'success')
+    } catch (error) {
+      setRows(nextRows)
+      addToast(error.response?.data?.error?.message ?? `Chỉ lưu được ${changed}/${normalized.values.length} dòng`, 'error')
+    }
+  }
   async function removeRow(row) {
     setDeletingRow(row.id)
     try { await api.deleteRow(companyId, def.id, row.id); setRows((p) => p.filter((r) => r.id !== row.id)) }
@@ -1069,7 +1137,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       ) : (
         <div className={s.tableWrap}>
           <div className={s.tableScroll}>
-            <table className={`${s.table} ${s.hdldTable}`}>
+            <table className={`${s.table} ${s.hdldTable}`} onPaste={handleTablePaste}>
               <thead>
                 <tr>
                   {canEdit && <DragHeaderCell className={s.ctblDragTh} />}
