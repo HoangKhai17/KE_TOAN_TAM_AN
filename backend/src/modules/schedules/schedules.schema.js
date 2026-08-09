@@ -15,6 +15,7 @@ const createScheduleSchema = z.object({
   overrideSlaDays:    z.number().int().min(1).optional().nullable(),
   excludedStepIds:    z.array(z.string().uuid()).optional().default([]),
   notes:              z.string().max(500).optional().nullable(),
+  sortOrder:          z.number().int().min(0).optional(),
 }).superRefine((d, ctx) => {
   try {
     validateRecurrenceConfig(d.recurrenceType, d.recurrenceConfig)
@@ -31,6 +32,7 @@ const updateScheduleSchema = z.object({
   overrideSlaDays:    z.number().int().min(1).optional().nullable(),
   excludedStepIds:    z.array(z.string().uuid()).optional(),
   notes:              z.string().max(500).optional().nullable(),
+  sortOrder:          z.number().int().min(0).optional(),
 }).superRefine((d, ctx) => {
   if (d.recurrenceType !== undefined && d.recurrenceConfig !== undefined) {
     try {

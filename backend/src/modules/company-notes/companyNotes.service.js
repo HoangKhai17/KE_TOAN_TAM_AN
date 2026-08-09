@@ -39,13 +39,16 @@ async function listNotes(companyId, user) {
 async function createNote(companyId, data, user) {
   await assertCompanyAccess(companyId, user)
   const actorId = user.id
-  const { content, severity = 'normal', isPinned = false, sortOrder = 0 } = data
+  const { content, severity = 'normal', isPinned = false, sortOrder } = data
+  const order = sortOrder ?? Number((await query(
+    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM company_important_notes WHERE company_id = $1', [companyId]
+  )).rows[0].next)
   const { rows: [row] } = await query(
     `INSERT INTO company_important_notes
        (company_id, content, severity, is_pinned, sort_order, created_by, updated_by)
      VALUES ($1,$2,$3,$4,$5,$6,$6)
      RETURNING *`,
-    [companyId, content, severity, isPinned, sortOrder, actorId]
+    [companyId, content, severity, isPinned, order, actorId]
   )
   return toDto(row)
 }

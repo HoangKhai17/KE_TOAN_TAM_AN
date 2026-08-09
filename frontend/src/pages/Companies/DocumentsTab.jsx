@@ -12,6 +12,11 @@ import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import * as documentsApi from '../../api/documents'
 import * as attApi from '../../api/attachments'
 import AttachmentPreviewModal from './AttachmentPreviewModal'
+import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import {
+  DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
+  SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
+} from '../../components/ui/data-table'
 import s from './companies.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -410,6 +415,7 @@ function PreviewModal({ doc, onClose }) {
 // ── DocumentsTab ───────────────────────────────────────────────────────────────
 
 export default function DocumentsTab({ company }) {
+  const confirmDelete = useDeleteConfirm()
   const isAdmin  = useAuthStore((st) => st.user?.role === 'admin')
   const addToast = useToastStore((st) => st.toast)
   const getOptions = useEnumsStore((st) => st.getOptions)
@@ -435,6 +441,7 @@ export default function DocumentsTab({ company }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting]     = useState(false)
   const [previewDoc, setPreviewDoc] = useState(null)
+  const selection = useRowSelection({ rows: docs })
 
   // Header-filter cột (docs/018) — client-side trên tập đã tải
   const [colFilters, setColFilters]   = useState({})
@@ -505,6 +512,25 @@ export default function DocumentsTab({ company }) {
     }
     return result
   }, [docs, colFilters, sortState])
+  const canReorder = !hasFilter && Object.keys(colFilters).length === 0 && sortState.col == null && editingId == null
+  const reorder = useRowReorder({
+    rows: docs, setRows: setDocs, enabled: canReorder,
+    onError: () => addToast('Không thể lưu thứ tự tài liệu', 'error'),
+    onPersist: (ordered, previous) => Promise.all(ordered
+      .map((doc, index) => ({ doc, index }))
+      .filter(({ doc, index }) => previous[index]?.id !== doc.id)
+      .map(({ doc, index }) => documentsApi.updateDocumentLink(company.id, doc.id, { sortOrder: index }))),
+  })
+
+  async function handleBulkDelete() {
+    if (!isAdmin || !selection.selectedCount || !(await confirmDelete({ title: 'Xóa tài liệu', message: <>Bạn có chắc chắn muốn xóa <strong>{selection.selectedCount}</strong> tài liệu đã chọn?</>, confirmLabel: `Xóa ${selection.selectedCount} mục` }))) return
+    const ids = [...selection.selectedIds]
+    const results = await Promise.allSettled(ids.map((id) => documentsApi.deleteDocument(company.id, id)))
+    const deleted = new Set(ids.filter((_, index) => results[index].status === 'fulfilled'))
+    setDocs((current) => current.filter((doc) => !deleted.has(doc.id)))
+    selection.remove(deleted)
+    addToast(`Đã xoá ${deleted.size}/${ids.length} tài liệu`, deleted.size ? 'success' : 'error')
+  }
 
   function hasColFilter(colKey) {
     const f = colFilters[colKey]
@@ -655,6 +681,7 @@ export default function DocumentsTab({ company }) {
               {displayed.length}{displayed.length < docs.length ? `/${docs.length}` : ''} tài liệu
             </span>
           )}
+          {isAdmin && selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={handleBulkDelete}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
         </div>
       </div>
 
@@ -662,6 +689,7 @@ export default function DocumentsTab({ company }) {
       <div className={s.docTableWrap}>
         <table className={s.docTable}>
           <colgroup>
+            <col className={s.dataTableColDrag} /><col className={s.dataTableColSelect} /><col className={s.dataTableColIndex} />
             <col className={s.docColName} />
             <col className={s.docColCat} />
             <col className={s.docColPeriod} />
@@ -672,6 +700,9 @@ export default function DocumentsTab({ company }) {
           </colgroup>
           <thead>
             <tr>
+              <DragHeaderCell />
+              <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
+              <IndexHeaderCell />
               <FilterTh colKey="name">Tài liệu</FilterTh>
               <FilterTh colKey="category">Danh mục</FilterTh>
               <FilterTh colKey="period">Kỳ</FilterTh>
@@ -685,14 +716,14 @@ export default function DocumentsTab({ company }) {
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i} className={s.docTableRow}>
-                  <td colSpan={7} style={{ padding: '7px 8px' }}>
+                  <td colSpan={10} style={{ padding: '7px 8px' }}>
                     <div className={s.docSkeletonBar} style={{ width: `${50 + (i % 3) * 12}%` }} />
                   </td>
                 </tr>
               ))
             ) : displayed.length === 0 ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={10}>
                   <div className={s.docEmpty}>
                     <FolderOpen size={36} color="var(--color-border)" />
                     <p>
@@ -703,9 +734,10 @@ export default function DocumentsTab({ company }) {
                   </div>
                 </td>
               </tr>
-            ) : displayed.map((doc) => (
+            ) : displayed.map((doc, index) => (
               editingId === doc.id ? (
                 <tr key={doc.id}>
+                  <td /><td /><td />
                   <td colSpan={7} className={s.docEditTd}>
                     <EditLinkForm
                       doc={doc}
@@ -717,7 +749,10 @@ export default function DocumentsTab({ company }) {
                   </td>
                 </tr>
               ) : (
-                <tr key={doc.id} className={s.docTableRow}>
+                <tr key={doc.id} {...reorder.rowProps(doc.id)} className={`${s.docTableRow} ${reorder.dragOverId === doc.id ? s.dataTableRowDragOver : ''}`}>
+                  <DragRowCell enabled={canReorder} handleProps={reorder.handleProps(doc.id)} />
+                  <SelectionRowCell checked={selection.selectedIds.has(doc.id)} onToggle={() => selection.toggle(doc.id)} />
+                  <IndexRowCell index={index + 1} />
 
                   {/* Tài liệu */}
                   <td>
@@ -878,26 +913,14 @@ export default function DocumentsTab({ company }) {
       )}
 
       {/* ── Delete confirm overlay ── */}
-      {deleteTarget && (
-        <div className={s.docDeleteOverlay} onClick={() => setDeleteTarget(null)}>
-          <div className={s.docDeleteDialog} onClick={(e) => e.stopPropagation()}>
-            <div className={s.terminateWarn} style={{ background: 'var(--color-danger-bg-soft)', borderColor: 'var(--color-danger-border)' }}>
-              <AlertTriangle size={16} style={{ flexShrink: 0, color: 'var(--color-danger)' }} />
-              <span style={{ fontSize: 'var(--fs-md)' }}>
-                Xoá tài liệu <strong>&ldquo;{deleteTarget.name}&rdquo;</strong>?
-                Hành động này không thể hoàn tác.
-              </span>
-            </div>
-            <div className={s.modalActions} style={{ marginTop: 16 }}>
-              <button onClick={() => setDeleteTarget(null)} className={s.btnOutline}>Huỷ</button>
-              <button onClick={handleDelete} disabled={deleting} className={s.btnDanger}>
-                {deleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
-                {deleting ? 'Đang xoá...' : 'Xoá'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa tài liệu"
+        message={deleteTarget ? <>Bạn có chắc chắn muốn xóa tài liệu <strong>“{deleteTarget.name}”</strong>?</> : null}
+        loading={deleting}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

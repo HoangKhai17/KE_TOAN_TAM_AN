@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Loader2, Plus, Trash2, Pencil, Check, X } from 'lucide-react'
 import { useQuickNotes } from '../../hooks/useQuickNotes'
+import { useDeleteConfirm } from '../ui/DeleteConfirmDialog'
 import s from './quickNotes.module.css'
 
 function fmtRelative(iso) {
@@ -16,6 +17,7 @@ function fmtRelative(iso) {
 
 // Lõi UI ghi chú nhanh — dùng chung cho ngăn trượt desktop và màn hình mobile.
 export default function QuickNotes() {
+  const confirmDelete = useDeleteConfirm()
   const { data: notes = [], isLoading, create, update, remove } = useQuickNotes()
   const [draft, setDraft]         = useState('')
   const [editingId, setEditingId] = useState(null)
@@ -83,7 +85,9 @@ export default function QuickNotes() {
                     <button className={s.iconBtn} onClick={() => startEdit(n)} title="Sửa"><Pencil size={13} /></button>
                     <button
                       className={`${s.iconBtn} ${s.danger}`}
-                      onClick={() => { if (window.confirm('Xoá ghi chú này?')) remove.mutate(n.id) }}
+                      onClick={async () => {
+                        if (await confirmDelete({ message: 'Bạn có chắc chắn muốn xóa ghi chú này?' })) remove.mutate(n.id)
+                      }}
                       title="Xoá"
                     >
                       <Trash2 size={13} />

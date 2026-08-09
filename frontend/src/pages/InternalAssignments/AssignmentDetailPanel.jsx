@@ -11,6 +11,7 @@ import { listCompanies } from '../../api/companies'
 import * as api from '../../api/internalAssignments'
 import IaChecklistSection from './IaChecklistSection'
 import IaLinksSection from './IaLinksSection'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import s from './internalAssignments.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -887,14 +888,14 @@ export default function AssignmentDetailPanel({
       {modal === 'complete' && (
         <CompleteModal saving={acting} onConfirm={handleComplete} onClose={() => setModal(null)} />
       )}
-      {modal === 'delete' && (
-        <DeleteModal
-          title={item?.title}
-          saving={acting}
-          onConfirm={handleDelete}
-          onClose={() => !acting && setModal(null)}
-        />
-      )}
+      <DeleteConfirmDialog
+        open={modal === 'delete'}
+        title="Xóa phiếu giao việc"
+        message={item ? <>Bạn có chắc chắn muốn xóa phiếu <strong>“{item.title}”</strong>?</> : null}
+        loading={acting}
+        onConfirm={handleDelete}
+        onCancel={() => !acting && setModal(null)}
+      />
     </>
   )
 }

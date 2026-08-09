@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ToastContainer from './components/ui/Toast'
+import { DeleteConfirmProvider } from './components/ui/DeleteConfirmDialog'
 import { useAuthStore } from './stores/authStore'
 import { refreshSession } from './api/session'
 import { useTokenRefresh } from './hooks/useTokenRefresh'
@@ -237,9 +238,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <SocketProvider>
-        <AppRoutes />
-      </SocketProvider>
+      <DeleteConfirmProvider>
+        <SocketProvider>
+          <AppRoutes />
+        </SocketProvider>
+      </DeleteConfirmProvider>
       <ToastContainer />
     </BrowserRouter>
   )

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
@@ -240,6 +241,7 @@ function buildCalendar(year, month, recordMap, holidaySet = new Set()) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function AttendanceAdmin() {
+  const confirmDelete = useDeleteConfirm()
   const now         = new Date()
   const currentUser = useAuthStore((st) => st.user)
   const [activeTab, setActiveTab] = useState('calendar')
@@ -3673,7 +3675,7 @@ function AdminDevToolsTab({ staffList }) {
   }
 
   async function handleClear() {
-    if (!window.confirm(`Xóa toàn bộ data giả lập tháng ${mthMonth}/${mthYear}?`)) return
+    if (!(await confirmDelete({ title: 'Xóa dữ liệu giả lập', message: <>Bạn có chắc chắn muốn xóa toàn bộ dữ liệu giả lập tháng <strong>{mthMonth}/{mthYear}</strong>?</> }))) return
     setClrLoading(true)
     try {
       const res = await attendanceApi.simClear({

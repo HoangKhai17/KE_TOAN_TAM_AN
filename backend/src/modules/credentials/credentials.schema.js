@@ -24,4 +24,10 @@ const revealCredentialSchema = z.object({
   password: z.string().min(1, 'Vui lòng nhập mật khẩu đăng nhập'),
 })
 
-module.exports = { createCredentialSchema, updateCredentialSchema, revealCredentialSchema }
+const reorderCredentialsSchema = z.object({
+  orderedIds: z.array(z.string().uuid()).min(1),
+}).refine(({ orderedIds }) => new Set(orderedIds).size === orderedIds.length, {
+  message: 'orderedIds contains duplicates',
+})
+
+module.exports = { createCredentialSchema, updateCredentialSchema, revealCredentialSchema, reorderCredentialsSchema }

@@ -1,4 +1,24 @@
 const { query, getClient } = require('../../config/db')
+const attachmentsSvc = require('../attachments/attachments.service')
+
+// Chuẩn hoá cột kiểu 'link' → mảng {url,label}. Chấp nhận string | object | mảng.
+function normalizeLinks(v) {
+  const arr = Array.isArray(v) ? v : [v]
+  const out = []
+  for (const item of arr) {
+    if (item == null) continue
+    let url, label
+    if (typeof item === 'string') { url = item; label = '' }
+    else if (typeof item === 'object') { url = item.url; label = item.label ?? '' }
+    else continue
+    url = String(url ?? '').trim()
+    if (!url) continue
+    // Bổ sung scheme nếu người dùng gõ thiếu (vd "abc.com" → "https://abc.com")
+    if (!/^(https?:|mailto:)/i.test(url)) url = 'https://' + url
+    out.push({ url, label: String(label ?? '').trim() })
+  }
+  return out.length ? out : null
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -131,6 +151,9 @@ async function deleteDef(id) {
   const { rows } = await query('SELECT is_system FROM company_table_defs WHERE id = $1', [id])
   if (!rows.length) { const e = new Error('Không tìm thấy bảng'); e.status = 404; throw e }
   if (rows[0].is_system) { const e = new Error('Bảng hệ thống — không thể xóa'); e.status = 403; throw e }
+  // Dọn file đính kèm của mọi dòng thuộc bảng (CASCADE chỉ xoá row, không xoá attachments)
+  const { rows: rowIds } = await query('SELECT id FROM company_table_rows WHERE def_id = $1', [id])
+  await attachmentsSvc.removeAllForEntities('company_table_row', rowIds.map((r) => r.id))
   await query('DELETE FROM company_table_defs WHERE id = $1', [id])
 }
 
@@ -181,8 +204,15 @@ async function updateColumn(colId, body) {
 }
 
 async function deleteColumn(colId) {
-  const { rowCount } = await query('DELETE FROM company_table_columns WHERE id = $1', [colId])
-  if (!rowCount) { const e = new Error('Không tìm thấy cột'); e.status = 404; throw e }
+  const { rows } = await query('SELECT def_id, col_key, data_type FROM company_table_columns WHERE id = $1', [colId])
+  if (!rows.length) { const e = new Error('Không tìm thấy cột'); e.status = 404; throw e }
+  const col = rows[0]
+  await query('DELETE FROM company_table_columns WHERE id = $1', [colId])
+  // Cột file → dọn file của CHỈ cột này trên mọi dòng của bảng (giữ file cột khác)
+  if (col.data_type === 'file') {
+    const { rows: rowIds } = await query('SELECT id FROM company_table_rows WHERE def_id = $1', [col.def_id])
+    await attachmentsSvc.removeAllForField('company_table_row', rowIds.map((r) => r.id), col.col_key)
+  }
 }
 
 // Đổi thứ tự các BẢNG (quyết định thứ tự tab hiển thị trong Chi tiết khách hàng)
@@ -243,13 +273,19 @@ async function getColumnsForCompany(defId, companyId) {
   return [...g, ...c]
 }
 
+// Các kiểu KHÔNG nhận giá trị qua PATCH row:
+//  - computed/formula: tính động lúc render, không lưu
+//  - file: do hệ attachments quản lý (entity_id=row, field_key=col), không nằm trong data
+const SERVER_MANAGED_TYPES = new Set(['computed', 'formula', 'file'])
+
 function sanitizeData(raw, columns) {
   const byKey = {}
   for (const c of columns) byKey[c.col_key] = c
   const out = {}
   for (const [k, v] of Object.entries(raw || {})) {
     const col = byKey[k]
-    if (!col || col.data_type === 'computed') continue
+    if (!col || SERVER_MANAGED_TYPES.has(col.data_type)) continue
+    if (col.data_type === 'link') { out[k] = normalizeLinks(v); continue }
     if (v === null || v === undefined || v === '') { out[k] = null; continue }
     if (col.data_type === 'number') { const n = Number(v); out[k] = Number.isNaN(n) ? null : n }
     else if (col.data_type === 'date') { out[k] = String(v).substring(0, 10) }
@@ -301,6 +337,27 @@ async function deleteRow(defId, companyId, rowId, user) {
     'DELETE FROM company_table_rows WHERE id = $1 AND def_id = $2 AND company_id = $3',
     [rowId, defId, companyId])
   if (!rowCount) { const e = new Error('Không tìm thấy dòng'); e.status = 404; throw e }
+  // Dọn file đính kèm của dòng (attachments không có FK tới rows → phải xoá tay)
+  await attachmentsSvc.removeAllForEntity('company_table_row', rowId)
+}
+
+// Gộp toàn bộ file (cột kiểu 'file') của 1 bảng trong 1 công ty → nhóm theo (rowId, colKey).
+// 1 query, tránh N+1 khi render lưới. RBAC bám công ty.
+async function listDefFiles(defId, companyId, user) {
+  await assertAccess(companyId, user)
+  const { rows } = await query(
+    `SELECT a.id, a.entity_id AS row_id, a.field_key AS col_key,
+            a.file_name, a.mime_type, a.size_bytes, a.uploaded_by, a.created_at
+       FROM attachments a
+       JOIN company_table_rows r ON r.id = a.entity_id
+      WHERE a.module = 'company_table_row' AND r.def_id = $1 AND r.company_id = $2
+      ORDER BY a.created_at`,
+    [defId, companyId])
+  return rows.map((r) => ({
+    id: r.id, rowId: r.row_id, colKey: r.col_key,
+    fileName: r.file_name, mimeType: r.mime_type, sizeBytes: Number(r.size_bytes),
+    uploadedBy: r.uploaded_by, createdAt: r.created_at,
+  }))
 }
 
 async function batchCreateRows(defId, companyId, user, rowsData) {
@@ -412,4 +469,5 @@ module.exports = {
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,
   listRows, createRow, updateRow, deleteRow, reorderRows, batchCreateRows, upsertRows,
+  listDefFiles,
 }

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as payrollApi from '../../api/payroll'
@@ -498,6 +499,7 @@ export default function PayrollDetail() {
   const [records, setRecords] = useState([])
   const [staffList, setStaffList] = useState([])
   const [loading, setLoading] = useState(true)
+  const [deletingRecord, setDeletingRecord] = useState(false)
   const [error, setError]     = useState(null)
 
   const [showUpsert, setShowUpsert] = useState(false)
@@ -583,10 +585,16 @@ export default function PayrollDetail() {
   }
 
   async function handleDeleteRecord() {
-    await payrollApi.deleteRecord(id, deleteRecord.id)
-    setRecords((prev) => prev.filter((r) => r.id !== deleteRecord.id))
-    setDeleteRecord(null)
-    addToast('Đã xoá bản ghi lương', 'success')
+    if (!deleteRecord) return
+    setDeletingRecord(true)
+    try {
+      await payrollApi.deleteRecord(id, deleteRecord.id)
+      setRecords((prev) => prev.filter((r) => r.id !== deleteRecord.id))
+      setDeleteRecord(null)
+      addToast('Đã xoá bản ghi lương', 'success')
+    } finally {
+      setDeletingRecord(false)
+    }
   }
 
   if (loading) {
@@ -775,13 +783,14 @@ export default function PayrollDetail() {
             onSaved={handleUpserted}
           />
         )}
-        {deleteRecord && (
-          <DeleteRecordModal
-            record={deleteRecord}
-            onClose={() => setDeleteRecord(null)}
-            onDeleted={handleDeleteRecord}
-          />
-        )}
+        <DeleteConfirmDialog
+          open={Boolean(deleteRecord)}
+          title="Xóa bản ghi lương"
+          message={deleteRecord ? <>Bạn có chắc chắn muốn xóa bảng lương của <strong>“{deleteRecord.userName}”</strong> khỏi kỳ này?</> : null}
+          loading={deletingRecord}
+          onCancel={() => !deletingRecord && setDeleteRecord(null)}
+          onConfirm={handleDeleteRecord}
+        />
       </div>
     </AppLayout>
   )

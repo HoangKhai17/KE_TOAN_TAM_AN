@@ -26,6 +26,7 @@ function toDto(row) {
     addedByName: row.uploader_name ?? null,
     createdAt:   row.created_at,
     updatedAt:   row.updated_at,
+    sortOrder:   row.sort_order ?? 0,
   }
 }
 
@@ -76,7 +77,7 @@ async function listDocuments(companyId, { taskId, category, search, period, page
      JOIN users u ON u.id = d.uploaded_by
      LEFT JOIN attachments a ON a.id = d.attachment_id
      WHERE ${where}
-     ORDER BY d.created_at DESC
+     ORDER BY d.sort_order ASC, d.created_at DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   )
@@ -111,8 +112,9 @@ async function addDocumentLink(companyId, { name, url, attachmentId, category = 
   }
 
   const { rows: [doc] } = await query(
-    `INSERT INTO documents (company_id, task_id, name, url, attachment_id, category, description, period, uploaded_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    `INSERT INTO documents (company_id, task_id, name, url, attachment_id, category, description, period, sort_order, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+       (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM documents WHERE company_id = $1), $9) RETURNING *`,
     [companyId, taskId || null, name, attachmentId ? null : url, attachmentId || null,
      category, description || null, period || null, actorId]
   )
@@ -148,11 +150,12 @@ async function updateDocumentLink(companyId, documentId, updates, actorId) {
 
   const fields = []
   const params = []
-  const allowed = ['name', 'url', 'category', 'description', 'period']
+  const allowed = ['name', 'url', 'category', 'description', 'period', 'sortOrder']
+  const columnByKey = { sortOrder: 'sort_order' }
   for (const key of allowed) {
     if (updates[key] !== undefined) {
       params.push(updates[key])
-      fields.push(`${key} = $${params.length}`)
+      fields.push(`${columnByKey[key] ?? key} = $${params.length}`)
     }
   }
   if (fields.length === 0) throw Object.assign(new Error('No fields to update'), { status: 400 })

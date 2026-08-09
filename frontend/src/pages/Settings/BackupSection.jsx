@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Loader2, Download, Trash2, Play, Save, CheckCircle2, AlertCircle, Database } from 'lucide-react'
 import { useToastStore } from '../../stores/toastStore'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { getBackupOverview, runBackup, updateBackupConfig, deleteBackup, downloadBackup } from '../../api/backup'
 
 const C = {
@@ -23,6 +24,7 @@ function fmtSize(b) {
 function fmtDate(iso) { return iso ? new Date(iso).toLocaleString('vi-VN') : '—' }
 
 export default function BackupSection() {
+  const confirmDelete = useDeleteConfirm()
   const addToast = useToastStore((st) => st.toast)
   const [config, setConfig]   = useState(null)
   const [backups, setBackups] = useState([])
@@ -67,7 +69,7 @@ export default function BackupSection() {
   }
 
   async function handleDelete(name) {
-    if (!window.confirm(`Xoá bản sao lưu "${name}"?`)) return
+    if (!(await confirmDelete({ title: 'Xóa bản sao lưu', message: <>Bạn có chắc chắn muốn xóa bản sao lưu <strong>“{name}”</strong>?</> }))) return
     setDeleting(name)
     try {
       await deleteBackup(name)

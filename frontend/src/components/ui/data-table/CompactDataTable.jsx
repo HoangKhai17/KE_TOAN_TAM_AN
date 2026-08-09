@@ -46,6 +46,49 @@ export function useRowSelection({ rows = [], getRowId = defaultGetRowId } = {}) 
   }
 }
 
+export function useRowReorder({ rows = [], setRows, onPersist, onError, enabled = true, getRowId = defaultGetRowId } = {}) {
+  const [draggedId, setDraggedId] = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)
+
+  const reset = useCallback(() => {
+    setDraggedId(null)
+    setDragOverId(null)
+  }, [])
+
+  const drop = useCallback(async (targetId) => {
+    const sourceId = draggedId
+    reset()
+    if (!enabled || !sourceId || sourceId === targetId) return
+    const sourceIndex = rows.findIndex((row) => getRowId(row) === sourceId)
+    const targetIndex = rows.findIndex((row) => getRowId(row) === targetId)
+    if (sourceIndex < 0 || targetIndex < 0) return
+
+    const previous = rows
+    const next = [...rows]
+    next.splice(targetIndex, 0, next.splice(sourceIndex, 1)[0])
+    setRows?.(next)
+    try {
+      await onPersist?.(next, previous)
+    } catch (error) {
+      setRows?.(previous)
+      onError?.(error)
+    }
+  }, [draggedId, enabled, getRowId, onError, onPersist, reset, rows, setRows])
+
+  const rowProps = useCallback((id) => ({
+    onDragOver: enabled ? (event) => { event.preventDefault(); setDragOverId(id) } : undefined,
+    onDrop: enabled ? () => drop(id) : undefined,
+  }), [drop, enabled])
+
+  const handleProps = useCallback((id) => ({
+    draggable: true,
+    onDragStart: () => setDraggedId(id),
+    onDragEnd: reset,
+  }), [reset])
+
+  return { draggedId, dragOverId, rowProps, handleProps, reset }
+}
+
 export function SelectionHeaderCell({ allSelected, someSelected, onToggle, className = '', title = 'Chọn tất cả trang này' }) {
   return (
     <th className={`${s.selectionCell} ${className}`}>

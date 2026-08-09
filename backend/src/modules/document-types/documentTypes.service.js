@@ -40,13 +40,16 @@ async function listDocumentTypes(companyId, user) {
 async function createDocumentType(companyId, data, user) {
   await assertCompanyAccess(companyId, user)
   const actorId = user.id
-  const { name, category, frequency, source, note, sortOrder = 0 } = data
+  const { name, category, frequency, source, note, sortOrder } = data
+  const order = sortOrder ?? Number((await query(
+    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM company_document_types WHERE company_id = $1', [companyId]
+  )).rows[0].next)
   const { rows: [row] } = await query(
     `INSERT INTO company_document_types
        (company_id, name, category, frequency, source, note, sort_order, created_by, updated_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8)
      RETURNING *`,
-    [companyId, name, category ?? null, frequency ?? null, source ?? null, note ?? null, sortOrder, actorId]
+    [companyId, name, category ?? null, frequency ?? null, source ?? null, note ?? null, order, actorId]
   )
   return toDto(row)
 }

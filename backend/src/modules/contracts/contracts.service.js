@@ -55,13 +55,16 @@ async function getContract(companyId, id, user) {
 
 async function createContract(companyId, data, user) {
   await assertCompanyAccess(companyId, user)
-  const { contractType, content, startDate, endDate, statusOverride, sortOrder = 0 } = data
+  const { contractType, content, startDate, endDate, statusOverride, sortOrder } = data
+  const order = sortOrder ?? Number((await query(
+    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM company_service_contracts WHERE company_id = $1', [companyId]
+  )).rows[0].next)
   assertEndNotBeforeStart(startDate, endDate, 'Ngày kết thúc không được nhỏ hơn ngày bắt đầu')
   const { rows: [row] } = await query(
     `INSERT INTO company_service_contracts
        (company_id, contract_type, content, start_date, end_date, status_override, sort_order, created_by, updated_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING *`,
-    [companyId, contractType ?? null, content ?? null, startDate ?? null, endDate ?? null, statusOverride ?? null, sortOrder, user.id]
+    [companyId, contractType ?? null, content ?? null, startDate ?? null, endDate ?? null, statusOverride ?? null, order, user.id]
   )
   return toDto(row)
 }

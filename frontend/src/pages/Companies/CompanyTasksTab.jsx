@@ -9,6 +9,7 @@ import {
   closestCenter, useDraggable, useDroppable,
 } from '@dnd-kit/core'
 import Modal from '../../components/ui/Modal'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as tasksApi from '../../api/tasks'
@@ -1496,26 +1497,15 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       )}
 
       {/* Bulk delete confirm modal */}
-      {showBulkDelete && (
-        <Modal title={`Xóa ${selectedIds.size} công việc`} onClose={() => !bulkDeleting && setShowBulkDelete(false)}>
-          <div className={s.modalStack}>
-            <div className={`${s.terminateWarn} ${s.terminateWarnDanger}`}>
-              <AlertTriangle size={18} className={`${s.warnIconInline} ${s.warnIconDanger}`} />
-              <span>
-                Bạn có chắc muốn xoá <strong>{selectedIds.size}</strong> công việc đã chọn?
-                Hành động này không thể hoàn tác.
-              </span>
-            </div>
-            <div className={s.modalActions}>
-              <button className={s.btnOutline} onClick={() => setShowBulkDelete(false)} disabled={bulkDeleting}>Huỷ bỏ</button>
-              <button className={s.btnDanger} onClick={bulkDelete} disabled={bulkDeleting}>
-                {bulkDeleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
-                {bulkDeleting ? 'Đang xoá...' : `Xoá ${selectedIds.size} mục`}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmDialog
+        open={showBulkDelete}
+        title={`Xóa ${selectedIds.size} công việc`}
+        message={<>Bạn có chắc chắn muốn xóa <strong>{selectedIds.size}</strong> công việc đã chọn?</>}
+        confirmLabel={`Xóa ${selectedIds.size} mục`}
+        loading={bulkDeleting}
+        onCancel={() => !bulkDeleting && setShowBulkDelete(false)}
+        onConfirm={bulkDelete}
+      />
 
       {/* Create task modal */}
       {showCreate && (
@@ -1538,14 +1528,14 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       )}
 
       {/* Delete confirm modal */}
-      {deleteTarget && (
-        <DeleteTaskModal
-          task={deleteTarget}
-          deleting={deleting}
-          onClose={() => setDeleteTarget(null)}
-          onConfirm={handleDelete}
-        />
-      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa công việc"
+        message={deleteTarget ? <>Bạn có chắc chắn muốn xóa công việc <strong>“{deleteTarget.title}”</strong>?</> : null}
+        loading={deleting}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
 
       {/* Quick view sidebar */}
       {quickViewId && (

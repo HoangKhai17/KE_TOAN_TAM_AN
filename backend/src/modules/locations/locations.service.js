@@ -78,8 +78,11 @@ async function createLocation(companyId, data, user) {
   const {
     locationType, name, address, taxCode, accountingForm, locationFunction, taxAuthority,
     status = 'active', startDate, endDate, contactName, contactPhone,
-    sortOrder = 0, notes, licenseEstablishedDate,
+    sortOrder, notes, licenseEstablishedDate,
   } = data
+  const order = sortOrder ?? Number((await query(
+    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM company_locations WHERE company_id = $1', [companyId]
+  )).rows[0].next)
   assertEndNotBeforeStart(startDate, endDate, 'Ngày chấm dứt không được nhỏ hơn ngày thành lập/bắt đầu')
 
   const { rows: [row] } = await query(
@@ -92,7 +95,7 @@ async function createLocation(companyId, data, user) {
     [
       companyId, locationType, name ?? null, address ?? null, taxCode ?? null,
       accountingForm ?? null, locationFunction ?? null, taxAuthority ?? null, status, startDate ?? null, endDate ?? null,
-      contactName ?? null, contactPhone ?? null, sortOrder, notes ?? null,
+      contactName ?? null, contactPhone ?? null, order, notes ?? null,
       licenseEstablishedDate ?? null, actorId,
     ]
   )

@@ -11,6 +11,7 @@ import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import AppLayout from '../../components/layout/AppLayout'
 import PaginationFooter from '../../components/layout/PaginationFooter'
 import Modal from '../../components/ui/Modal'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import CompanyExportModal from './CompanyExportModal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -1439,6 +1440,21 @@ function SkeletonRow({ isAdmin }) {
 
 function DeleteCompanyModal({ company, deleting, onClose, onConfirm }) {
   const hasActivities = company.taskOpenCount > 0 || company.taskOverdueCount > 0
+
+  if (!hasActivities) {
+    return (
+      <DeleteConfirmDialog
+        open
+        title="Xóa công ty"
+        message={<>Bạn có chắc chắn muốn xóa vĩnh viễn công ty <strong>“{company.name}”</strong>?</>}
+        warning="Chỉ có thể xóa công ty chưa có công việc hoặc lịch sử phân công."
+        confirmLabel="Xóa vĩnh viễn"
+        loading={deleting}
+        onCancel={onClose}
+        onConfirm={onConfirm}
+      />
+    )
+  }
 
   return (
     <Modal title="Xoá công ty" onClose={onClose}>

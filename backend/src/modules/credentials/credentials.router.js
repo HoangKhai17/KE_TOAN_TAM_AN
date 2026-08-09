@@ -1,7 +1,12 @@
 const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
 const { validate } = require('../../middleware/validate')
-const { createCredentialSchema, updateCredentialSchema, revealCredentialSchema } = require('./credentials.schema')
+const {
+  createCredentialSchema,
+  updateCredentialSchema,
+  revealCredentialSchema,
+  reorderCredentialsSchema,
+} = require('./credentials.schema')
 const ctrl = require('./credentials.controller')
 
 // Mounted at /api/companies/:companyId/credentials
@@ -70,6 +75,7 @@ const auth  = [authenticate]
  */
 router.get('/',     ...auth,  ctrl.listCredentials)
 router.post('/',    ...auth,  validate(createCredentialSchema), ctrl.createCredential)
+router.patch('/reorder', ...auth, validate(reorderCredentialsSchema), ctrl.reorderCredentials)
 
 /**
  * @openapi

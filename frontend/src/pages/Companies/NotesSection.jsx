@@ -3,6 +3,11 @@ import { Plus, Pencil, Trash2, Check, X, Loader2, Pin } from 'lucide-react'
 import * as notesApi from '../../api/companyNotes'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import {
+  DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
+  SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
+} from '../../components/ui/data-table'
 import s from './companies.module.css'
 
 // Màu badge mức độ theo key của enum assignment_priority (dùng lại, không tạo enum mới)
@@ -24,6 +29,7 @@ function draftFromRow(r) {
 function NoteEditRow({ draft, setF, save, cancel, saving, severityOpts }) {
   return (
     <tr className={s.locEditRow}>
+      <td /><td /><td />
       <td><input className={s.locInput} value={draft.content} onChange={setF('content')} placeholder="Nội dung lưu ý" /></td>
       <td>
         <select className={s.locInput} value={draft.severity} onChange={setF('severity')}>
@@ -46,6 +52,7 @@ function NoteEditRow({ draft, setF, save, cancel, saving, severityOpts }) {
 }
 
 export default function NotesSection({ companyId, canEdit = true }) {
+  const confirmDelete = useDeleteConfirm()
   const getOptions = useEnumsStore((st) => st.getOptions)
   const getLabel   = useEnumsStore((st) => st.getLabel)
   const addToast   = useToastStore((st) => st.toast)
@@ -58,6 +65,15 @@ export default function NotesSection({ companyId, canEdit = true }) {
   const [editingId, setEditingId] = useState(null)   // null | 'new' | <id>
   const [draft, setDraft]       = useState(() => emptyDraft(defSeverity))
   const [saving, setSaving]     = useState(false)
+  const selection = useRowSelection({ rows })
+  const reorder = useRowReorder({
+    rows, setRows, enabled: canEdit && editingId == null,
+    onError: () => addToast('Không thể lưu thứ tự lưu ý', 'error'),
+    onPersist: (ordered, previous) => Promise.all(ordered
+      .map((row, index) => ({ row, index }))
+      .filter(({ row, index }) => previous[index]?.id !== row.id)
+      .map(({ row, index }) => notesApi.updateNote(companyId, row.id, { sortOrder: index }))),
+  })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -103,7 +119,7 @@ export default function NotesSection({ companyId, canEdit = true }) {
   }
 
   async function remove(row) {
-    if (!window.confirm('Xoá lưu ý này?')) return
+    if (!(await confirmDelete({ title: 'Xóa lưu ý', message: 'Bạn có chắc chắn muốn xóa lưu ý này?' }))) return
     try {
       await notesApi.deleteNote(companyId, row.id)
       addToast('Đã xoá lưu ý', 'success')
@@ -113,19 +129,31 @@ export default function NotesSection({ companyId, canEdit = true }) {
     }
   }
 
-  const colSpan = 4
+  async function removeSelected() {
+    if (!selection.selectedCount || !(await confirmDelete({ title: 'Xóa lưu ý', message: <>Bạn có chắc chắn muốn xóa <strong>{selection.selectedCount}</strong> lưu ý đã chọn?</>, confirmLabel: `Xóa ${selection.selectedCount} mục` }))) return
+    const ids = [...selection.selectedIds]
+    const results = await Promise.allSettled(ids.map((id) => notesApi.deleteNote(companyId, id)))
+    const deleted = new Set(ids.filter((_, index) => results[index].status === 'fulfilled'))
+    setRows((current) => current.filter((row) => !deleted.has(row.id)))
+    selection.remove(deleted)
+    addToast(`Đã xoá ${deleted.size}/${ids.length} lưu ý`, deleted.size ? 'success' : 'error')
+  }
+
+  const colSpan = 7
   const editRowProps = { draft, setF, save, cancel, saving, severityOpts }
 
   return (
     <div>
       {canEdit && editingId !== 'new' && (
         <div className={s.procSectionBar}>
+          {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={removeSelected}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
           <button className={s.credAddBtn} onClick={startAdd}><Plus size={13} /> Thêm lưu ý</button>
         </div>
       )}
       <div className={s.credTableWrap}>
         <table className={s.credTable}>
           <colgroup>
+            <col className={s.dataTableColDrag} /><col className={s.dataTableColSelect} /><col className={s.dataTableColIndex} />
             <col style={{ width: '58%' }} />
             <col style={{ width: '18%' }} />
             <col style={{ width: '12%' }} />
@@ -133,6 +161,9 @@ export default function NotesSection({ companyId, canEdit = true }) {
           </colgroup>
           <thead>
             <tr>
+              <DragHeaderCell />
+              <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
+              <IndexHeaderCell />
               <th>Nội dung</th>
               <th>Mức độ</th>
               <th style={{ textAlign: 'center' }}>Ghim</th>
@@ -145,9 +176,12 @@ export default function NotesSection({ companyId, canEdit = true }) {
             ) : rows.length === 0 && editingId !== 'new' ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có điều cần lưu ý. Nhấn “Thêm lưu ý”.</td></tr>
             ) : (
-              rows.map((r) => (
+              rows.map((r, index) => (
                 editingId === r.id ? <NoteEditRow key={r.id} {...editRowProps} /> : (
-                  <tr key={r.id}>
+                  <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
+                    <DragRowCell enabled={canEdit && editingId == null} handleProps={reorder.handleProps(r.id)} />
+                    <SelectionRowCell checked={selection.selectedIds.has(r.id)} onToggle={() => selection.toggle(r.id)} />
+                    <IndexRowCell index={index + 1} />
                     <td title={r.content}>{r.content}</td>
                     <td>
                       <span className={s.locStatus} style={SEVERITY_STYLE[r.severity] ?? SEVERITY_STYLE.normal}>

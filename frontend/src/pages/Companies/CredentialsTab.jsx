@@ -7,6 +7,16 @@ import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import * as credApi from '../../api/credentials'
 import Modal from '../../components/ui/Modal'
+import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import {
+  DragHeaderCell,
+  DragRowCell,
+  IndexHeaderCell,
+  IndexRowCell,
+  SelectionHeaderCell,
+  SelectionRowCell,
+  useRowSelection,
+} from '../../components/ui/data-table'
 import s from './companies.module.css'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -330,6 +340,7 @@ function ImportTemplateModal({ names, onConfirm, onClose }) {
 // ── Main CredentialsTab ───────────────────────────────────────────────────────
 
 export default function CredentialsTab({ company }) {
+  const confirmDelete = useDeleteConfirm()
   const companyId  = company.id
   const addToast   = useToastStore((st) => st.toast)
   const loadEnums  = useEnumsStore((st) => st.load)
@@ -345,6 +356,9 @@ export default function CredentialsTab({ company }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [revealTarget, setRevealTarget] = useState(null)
   const [showImport, setShowImport] = useState(false)
+  const [dragCredentialId, setDragCredentialId] = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   useEffect(() => { loadEnums() }, [loadEnums])
 
@@ -372,10 +386,58 @@ export default function CredentialsTab({ company }) {
   const totalPages = Math.max(1, Math.ceil(creds.length / PAGE_SIZE))
   const pageSafe   = Math.min(page, totalPages)
   const pageCreds  = creds.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
+  const selection = useRowSelection({ rows: pageCreds })
+  const canReorder = filterActive === ''
+
+  useEffect(() => { selection.clear() }, [companyId, filterActive]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleDrop(targetId) {
+    const sourceId = dragCredentialId
+    setDragCredentialId(null)
+    setDragOverId(null)
+    if (!canReorder || !sourceId || sourceId === targetId) return
+
+    const orderedIds = creds.map((credential) => credential.id)
+    const from = orderedIds.indexOf(sourceId)
+    const to = orderedIds.indexOf(targetId)
+    if (from < 0 || to < 0) return
+    orderedIds.splice(to, 0, orderedIds.splice(from, 1)[0])
+
+    const previous = creds
+    const rank = new Map(orderedIds.map((id, index) => [id, index]))
+    setCreds((current) => [...current].sort((a, b) => rank.get(a.id) - rank.get(b.id)))
+    try {
+      await credApi.reorderCredentials(companyId, orderedIds)
+    } catch {
+      setCreds(previous)
+      addToast('Không thể lưu thứ tự tài khoản', 'error')
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!selection.selectedCount) return
+    if (!(await confirmDelete({ title: 'Xóa tài khoản hệ thống', message: <>Bạn có chắc chắn muốn xóa <strong>{selection.selectedCount}</strong> tài khoản đã chọn?</>, confirmLabel: `Xóa ${selection.selectedCount} mục` }))) return
+    setBulkDeleting(true)
+    const ids = [...selection.selectedIds]
+    const deletedIds = new Set()
+    for (const id of ids) {
+      try {
+        await credApi.deleteCredential(companyId, id)
+        deletedIds.add(id)
+      } catch { /* tiếp tục các dòng còn lại */ }
+    }
+    setCreds((current) => current.filter((credential) => !deletedIds.has(credential.id)))
+    selection.remove(deletedIds)
+    setBulkDeleting(false)
+    addToast(
+      deletedIds.size === ids.length ? `Đã xoá ${deletedIds.size} tài khoản` : `Đã xoá ${deletedIds.size}/${ids.length} tài khoản`,
+      deletedIds.size ? 'success' : 'error',
+    )
+  }
 
   async function handleCreate(body) {
     const cred = await credApi.createCredential(companyId, body)
-    setCreds((prev) => [cred, ...prev])
+    setCreds((prev) => [...prev, cred])
     setShowCreate(false)
     addToast(`Đã thêm "${cred.systemName}"`, 'success')
   }
@@ -428,6 +490,12 @@ export default function CredentialsTab({ company }) {
           <option value="false">Đã tắt</option>
         </select>
         <span className={s.credCount}>{!loading && `${creds.length} tài khoản`}</span>
+        {selection.selectedCount > 0 && (
+          <button className={`${s.btnOutline} ${s.credBulkDelete}`} onClick={handleBulkDelete} disabled={bulkDeleting}>
+            {bulkDeleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
+            Xoá {selection.selectedCount} dòng
+          </button>
+        )}
         {templateNames.length > 0 && (
           <button className={s.credImportBtn} onClick={() => setShowImport(true)} title="Thêm nhanh các tài khoản hệ thống mặc định">
             <Download size={13} /> Import mẫu
@@ -452,6 +520,9 @@ export default function CredentialsTab({ company }) {
         <div className={s.credTableWrap}>
           <table className={s.credTable}>
             <colgroup>
+              <col className={s.dataTableColDrag} />
+              <col className={s.dataTableColSelect} />
+              <col className={s.dataTableColIndex} />
               <col className={s.credColName} />
               <col className={s.credColUrl} />
               <col className={s.credColUser} />
@@ -462,6 +533,13 @@ export default function CredentialsTab({ company }) {
             </colgroup>
             <thead>
               <tr>
+                <DragHeaderCell />
+                <SelectionHeaderCell
+                  allSelected={selection.allSelected}
+                  someSelected={selection.someSelected}
+                  onToggle={selection.toggleAll}
+                />
+                <IndexHeaderCell />
                 <th>Hệ thống</th>
                 <th>Đường dẫn</th>
                 <th>Tên đăng nhập</th>
@@ -472,8 +550,26 @@ export default function CredentialsTab({ company }) {
               </tr>
             </thead>
             <tbody>
-              {pageCreds.map((cred) => (
-                <tr key={cred.id} className={cred.isActive ? '' : s.credRowOff}>
+              {pageCreds.map((cred, index) => (
+                <tr
+                  key={cred.id}
+                  className={`${cred.isActive ? '' : s.credRowOff} ${dragOverId === cred.id ? s.dataTableRowDragOver : ''}`}
+                  onDragOver={canReorder ? (event) => { event.preventDefault(); setDragOverId(cred.id) } : undefined}
+                  onDrop={canReorder ? () => handleDrop(cred.id) : undefined}
+                >
+                  <DragRowCell
+                    enabled={canReorder}
+                    handleProps={{
+                      draggable: true,
+                      onDragStart: () => setDragCredentialId(cred.id),
+                      onDragEnd: () => { setDragCredentialId(null); setDragOverId(null) },
+                    }}
+                  />
+                  <SelectionRowCell
+                    checked={selection.selectedIds.has(cred.id)}
+                    onToggle={() => selection.toggle(cred.id)}
+                  />
+                  <IndexRowCell index={(pageSafe - 1) * PAGE_SIZE + index + 1} />
                   <td>
                     <div className={s.credName} title={cred.systemName}>{cred.systemName}</div>
                     {cred.notes && <div className={s.credNoteSub} title={cred.notes}>{cred.notes}</div>}
@@ -549,13 +645,13 @@ export default function CredentialsTab({ company }) {
           onClose={() => setEditTarget(null)}
         />
       )}
-      {deleteTarget && (
-        <DeleteConfirmModal
-          credential={deleteTarget}
-          onConfirm={handleDelete}
-          onClose={() => setDeleteTarget(null)}
-        />
-      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa tài khoản hệ thống"
+        message={deleteTarget ? <>Bạn có chắc chắn muốn xóa tài khoản <strong>“{deleteTarget.systemName}”</strong>?</> : null}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
       {revealTarget && (
         <RevealModal
           companyId={companyId}

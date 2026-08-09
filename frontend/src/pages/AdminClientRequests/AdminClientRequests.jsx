@@ -11,6 +11,7 @@ import PaginationFooter from '../../components/layout/PaginationFooter'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import * as cdrApi from '../../api/clientRequests'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
@@ -1627,25 +1628,14 @@ export default function AdminClientRequests() {
         />
       )}
 
-      {deleteTarget && (
-        <Modal title="Xoá yêu cầu tài liệu" onClose={() => setDeleteTarget(null)} maxWidth={480}>
-          <div className={s.formBody}>
-            <div className={s.deleteBanner}>
-              <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span>
-                Xoá yêu cầu <strong>"{deleteTarget.documentName}"</strong>? Hành động này không thể hoàn tác.
-              </span>
-            </div>
-            <div className={s.formActions}>
-              <button onClick={() => setDeleteTarget(null)} className={s.btnSecondary}>Huỷ</button>
-              <button onClick={handleDelete} disabled={deleting} className={s.btnDangerSolid}>
-                {deleting ? <Loader2 size={13} className={s.spinIcon} /> : <Trash2 size={13} />}
-                {deleting ? 'Đang xoá...' : 'Xoá'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa yêu cầu tài liệu"
+        message={deleteTarget ? <>Bạn có chắc chắn muốn xóa yêu cầu <strong>“{deleteTarget.documentName}”</strong>?</> : null}
+        loading={deleting}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
 
       {linkTarget && (
         <LinkModal item={linkTarget} generatedUrl={generatedUrl} generating={generatingLink} copied={linkCopied}

@@ -23,6 +23,7 @@ import AssignmentDetailPanel from './AssignmentDetailPanel'
 import CreateEditAssignmentModal from './CreateEditAssignmentModal'
 import InternalNavTabs from './InternalNavTabs'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import s from './internalAssignments.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -1458,42 +1459,25 @@ export default function InternalAssignments() {
       )}
 
       {/* ── Delete confirmation ── */}
-      {deleteTarget && (
-        <DeleteModal
-          item={deleteTarget}
-          deleting={deleting}
-          onClose={() => !deleting && setDeleteTarget(null)}
-          onConfirm={handleDeleteConfirm}
-        />
-      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa phiếu giao việc"
+        message={deleteTarget ? <>Bạn có chắc chắn muốn xóa phiếu <strong>“{deleteTarget.title}”</strong>?</> : null}
+        loading={deleting}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+      />
 
       {/* ── Bulk delete confirmation ── */}
-      {showBulkDeleteConfirm && (
-        <div className={s.miniOverlay}>
-          <div className={s.miniDialog}>
-            <h4 className={s.miniTitle}>Xóa {selectedIds.size} phiếu giao việc</h4>
-            <p className={s.miniBody}>
-              Bạn có chắc chắn muốn xóa <strong>{selectedIds.size}</strong> phiếu đã chọn?{' '}
-              Hành động này không thể hoàn tác.
-            </p>
-            <div className={s.miniActions}>
-              <button
-                onClick={() => !bulkDeleting && setShowBulkDeleteConfirm(false)}
-                className={s.btnSecondary}
-                disabled={bulkDeleting}
-              >
-                Hủy bỏ
-              </button>
-              <button onClick={bulkDeleteConfirmed} disabled={bulkDeleting} className={s.btnDanger}>
-                {bulkDeleting
-                  ? <><Loader2 size={13} className={s.spinIcon} /> Đang xóa...</>
-                  : <><Trash2 size={13} /> Xóa {selectedIds.size} mục</>
-                }
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmDialog
+        open={showBulkDeleteConfirm}
+        title={`Xóa ${selectedIds.size} phiếu giao việc`}
+        message={<>Bạn có chắc chắn muốn xóa <strong>{selectedIds.size}</strong> phiếu đã chọn?</>}
+        confirmLabel={`Xóa ${selectedIds.size} mục`}
+        loading={bulkDeleting}
+        onCancel={() => !bulkDeleting && setShowBulkDeleteConfirm(false)}
+        onConfirm={bulkDeleteConfirmed}
+      />
     </AppLayout>
   )
 }

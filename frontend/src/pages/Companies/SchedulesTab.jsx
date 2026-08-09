@@ -10,7 +10,12 @@ import { listHolidays } from '../../api/attendance'
 import { getNextOccurrences } from '../../utils/recurrencePreview'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
+import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import DateBox from './DateBox'
+import {
+  DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
+  SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
+} from '../../components/ui/data-table'
 import s from './companies.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -489,7 +494,8 @@ function PreviewPanel({ type, config, holidaySet }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function SchedulesTab({ company, isAdmin }) {
+export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
+  const confirmDelete = useDeleteConfirm()
   const toast = useToastStore(st => st.toast)
 
   const [schedules,  setSchedules]  = useState([])
@@ -561,6 +567,25 @@ export default function SchedulesTab({ company, isAdmin }) {
 
   // Toggle
   const [togglingId, setTogglingId] = useState(null)
+  const selection = useRowSelection({ rows: schedules })
+  const reorder = useRowReorder({
+    rows: schedules, setRows: setSchedules,
+    onError: () => toast('Không thể lưu thứ tự lịch định kỳ', 'error'),
+    onPersist: (ordered, previous) => Promise.all(ordered
+      .map((schedule, index) => ({ schedule, index }))
+      .filter(({ schedule, index }) => previous[index]?.id !== schedule.id)
+      .map(({ schedule, index }) => schedulesApi.updateSchedule(schedule.id, { sortOrder: index }))),
+  })
+
+  async function deleteSelected() {
+    if (!selection.selectedCount || !(await confirmDelete({ title: 'Xóa lịch định kỳ', message: <>Bạn có chắc chắn muốn xóa <strong>{selection.selectedCount}</strong> lịch đã chọn?</>, confirmLabel: `Xóa ${selection.selectedCount} mục` }))) return
+    const ids = [...selection.selectedIds]
+    const results = await Promise.allSettled(ids.map((id) => schedulesApi.deleteSchedule(id)))
+    const deleted = new Set(ids.filter((_, index) => results[index].status === 'fulfilled'))
+    setSchedules((current) => current.filter((schedule) => !deleted.has(schedule.id)))
+    selection.remove(deleted)
+    toast(deleted.size === ids.length ? `Đã xoá ${deleted.size} lịch` : `Đã xoá ${deleted.size}/${ids.length} lịch; lịch đã sinh công việc không thể xoá`, deleted.size ? 'success' : 'error')
+  }
 
   // Server preview
   const [previewModal, setPreviewModal] = useState(null)  // null | { schedule, dates, loading }
@@ -719,6 +744,7 @@ export default function SchedulesTab({ company, isAdmin }) {
           )}
         </div>
         <div className={s.scHeaderRight}>
+          {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={deleteSelected}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
           <button className={s.btnGhost} onClick={load} title="Tải lại" disabled={loading}>
             <RefreshCw size={14} className={loading ? s.spin : ''} />
           </button>
@@ -747,8 +773,12 @@ export default function SchedulesTab({ company, isAdmin }) {
         <div className={s.tableWrap}>
           <div className={s.tableScroll}>
             <table className={`${s.table} ${s.scTable}`}>
+              <colgroup><col className={s.dataTableColDrag} /><col className={s.dataTableColSelect} /><col className={s.dataTableColIndex} /></colgroup>
               <thead>
                 <tr>
+                  <DragHeaderCell />
+                  <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
+                  <IndexHeaderCell />
                   <th>Loại công việc</th>
                   <th>Lịch lặp</th>
                   <th>Nhân viên</th>
@@ -758,8 +788,11 @@ export default function SchedulesTab({ company, isAdmin }) {
                 </tr>
               </thead>
               <tbody>
-                {schedules.map(sc => (
-                  <tr key={sc.id}>
+                {schedules.map((sc, index) => (
+                  <tr key={sc.id} {...reorder.rowProps(sc.id)} className={reorder.dragOverId === sc.id ? s.dataTableRowDragOver : ''}>
+                    <DragRowCell enabled handleProps={reorder.handleProps(sc.id)} />
+                    <SelectionRowCell checked={selection.selectedIds.has(sc.id)} onToggle={() => selection.toggle(sc.id)} />
+                    <IndexRowCell index={index + 1} />
                     <td>
                       <div className={s.scTypeName}>{sc.taskTypeName}</div>
                     </td>
@@ -1098,28 +1131,16 @@ export default function SchedulesTab({ company, isAdmin }) {
       )}
 
       {/* ── Delete confirm modal ── */}
-      {deleteTarget && (
-        <Modal title="Xóa lịch định kỳ" onClose={() => setDeleteTarget(null)}>
-          <div className={s.terminateWarn}>
-            <AlertTriangle size={18} style={{ flexShrink: 0 }} />
-            <div>
-              Bạn chắc chắn muốn xóa lịch <strong>{deleteTarget.taskTypeName}</strong>?
-              Chỉ có thể xóa nếu lịch chưa sinh công việc nào. Hành động này không thể hoàn tác.
-            </div>
-          </div>
-          <div className={s.modalActions}>
-            <button className={s.btnOutline} onClick={() => setDeleteTarget(null)} disabled={deleting}>
-              Hủy
-            </button>
-            <button className={s.btnDanger} onClick={handleDelete} disabled={deleting}>
-              {deleting
-                ? <><Loader2 size={13} className={s.spin} /> Đang xóa…</>
-                : 'Xóa lịch'
-              }
-            </button>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa lịch định kỳ"
+        message={deleteTarget ? <>Bạn có chắc chắn muốn xóa lịch <strong>“{deleteTarget.taskTypeName}”</strong>?</> : null}
+        warning="Chỉ có thể xóa nếu lịch chưa sinh công việc nào."
+        confirmLabel="Xóa lịch"
+        loading={deleting}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

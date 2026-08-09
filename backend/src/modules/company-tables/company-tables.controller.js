@@ -72,6 +72,12 @@ async function deleteRow(req, res, next) {
     await svc.deleteRow(defId, companyId, rowId, req.user); res.status(204).end()
   } catch (e) { next(e) }
 }
+async function listDefFiles(req, res, next) {
+  try {
+    const { companyId, defId } = req.params
+    res.json({ success: true, data: { files: await svc.listDefFiles(defId, companyId, req.user) } })
+  } catch (e) { next(e) }
+}
 async function reorderRows(req, res, next) {
   try {
     const { companyId, defId } = req.params
@@ -116,4 +122,5 @@ module.exports = {
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listRows, createRow, updateRow, deleteRow, reorderRows, batchRows, upsertRows,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,
+  listDefFiles,
 }

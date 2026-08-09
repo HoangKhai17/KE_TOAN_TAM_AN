@@ -71,6 +71,13 @@ export async function upsertRows(companyId, defId, matchKey, rows) {
   return data.data  // { inserted, updated, failed, errors }
 }
 
+// ── File (cột kiểu 'file') ────────────────────────────────────────────────────
+// Gộp toàn bộ file của bảng trong 1 công ty → [{id,rowId,colKey,fileName,mimeType,sizeBytes,...}]
+export async function listDefFiles(companyId, defId) {
+  const { data } = await api.get(`/companies/${companyId}/tables/${defId}/files`)
+  return data.data.files
+}
+
 // ── Per-company columns (hybrid) ──────────────────────────────────────────────
 export async function listCompanyColumns(companyId, defId) {
   const { data } = await api.get(`/companies/${companyId}/tables/${defId}/company-columns`)

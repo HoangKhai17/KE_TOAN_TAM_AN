@@ -23,6 +23,7 @@ import TaskQuickView from './TaskQuickView'
 import PeriodPicker from './PeriodPicker'
 import Modal from '../../components/ui/Modal'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import {
   TASK_STATUSES, STATUS_LABELS, STATUS_CSS,
   PRIORITY_LABELS, PRIORITY_CSS, SOURCE_LABELS,
@@ -2305,14 +2306,14 @@ export default function Tasks() {
         />
       )}
 
-      {deleteTarget && (
-        <DeleteTaskModal
-          task={deleteTarget}
-          deleting={deleting}
-          onClose={() => !deleting && setDeleteTarget(null)}
-          onConfirm={handleDeleteConfirm}
-        />
-      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa công việc"
+        message={deleteTarget ? <>Bạn có chắc chắn muốn xóa công việc <strong>“{deleteTarget.title}”</strong>?</> : null}
+        loading={deleting}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+      />
 
       {quickViewId && (
         <TaskQuickView
@@ -2322,36 +2323,15 @@ export default function Tasks() {
         />
       )}
 
-      {showBulkDelete && (
-        <div className={s.miniOverlay}>
-          <div className={s.miniDialog}>
-            <h4 className={s.miniTitle}>Xóa {selectedIds.size} công việc</h4>
-            <p className={s.miniBody}>
-              Bạn có chắc chắn muốn xóa <strong>{selectedIds.size}</strong> công việc đã chọn?{' '}
-              Hành động này không thể hoàn tác.
-            </p>
-            <div className={s.miniActions}>
-              <button
-                onClick={() => setShowBulkDelete(false)}
-                className={s.btnSecondary}
-                disabled={bulkDeleting}
-              >
-                Hủy bỏ
-              </button>
-              <button
-                onClick={bulkDelete}
-                disabled={bulkDeleting}
-                className={s.btnDangerSolid}
-              >
-                {bulkDeleting
-                  ? <><Loader2 size={13} className={s.spinIcon} /> Đang xóa...</>
-                  : <><Trash2 size={13} /> Xóa {selectedIds.size} mục</>
-                }
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmDialog
+        open={showBulkDelete}
+        title={`Xóa ${selectedIds.size} công việc`}
+        message={<>Bạn có chắc chắn muốn xóa <strong>{selectedIds.size}</strong> công việc đã chọn?</>}
+        confirmLabel={`Xóa ${selectedIds.size} mục`}
+        loading={bulkDeleting}
+        onCancel={() => !bulkDeleting && setShowBulkDelete(false)}
+        onConfirm={bulkDelete}
+      />
     </AppLayout>
   )
 }

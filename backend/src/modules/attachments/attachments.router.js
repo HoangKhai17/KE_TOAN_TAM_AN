@@ -35,7 +35,7 @@ router.get('/download/:id', ...auth, requireUuid('id'), async (req, res, next) =
 // Danh sách file của một bản ghi
 router.get('/:module/:entityId', ...auth, requireUuid('entityId'), async (req, res, next) => {
   try {
-    const files = await svc.list(req.params.module, req.params.entityId, req.user)
+    const files = await svc.list(req.params.module, req.params.entityId, req.user, { fieldKey: req.query.fieldKey })
     res.json({ success: true, data: { files } })
   } catch (err) { next(err) }
 })

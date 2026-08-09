@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Loader2, Columns, Power, ChevronUp, ChevronDown, GripVertical } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { useToastStore } from '../../stores/toastStore'
 import * as api from '../../api/companyTables'
+import { checkSyntax, extractRefs } from '../../utils/formula'
 import s from './settings.module.css'
 
-const TYPE_LABELS = { text: 'Văn bản', number: 'Số', date: 'Ngày', select: 'Lựa chọn', computed: 'Computed' }
+const TYPE_LABELS = { text: 'Văn bản', number: 'Số', date: 'Ngày', select: 'Lựa chọn', link: 'Link', file: 'File đính kèm', formula: 'Công thức', computed: 'Computed' }
 const COMPUTED_LABELS = { days_until: 'Số ngày còn lại', days_since: 'Số ngày chậm', months_since: 'Số tháng chậm', status_threshold: 'Tô màu theo ngưỡng' }
 const TONES = ['success', 'warning', 'danger', 'info', 'muted']
 
@@ -57,7 +59,10 @@ function ColumnModal({ defColumns, column, onClose, onSaved }) {
   const [form, setForm] = useState({
     label: column?.label ?? '', dataType: column?.dataType ?? 'text',
     required: column?.required ?? false, width: column?.width ?? '',
-    options: (column?.options ?? []).join('\n'),
+    options: (Array.isArray(column?.options) ? column.options : []).join('\n'),
+    multiple: column?.options?.multiple ?? true,               // link/file: cho nhiều
+    expression: column?.computedConfig?.expression ?? '',      // formula
+    resultType: column?.computedConfig?.resultType ?? 'number',
     computedType: column?.computedType ?? 'days_until',
     sourceCol: column?.computedConfig?.source_col ?? '',
     buckets: column?.computedConfig?.buckets ?? [
@@ -71,6 +76,17 @@ function ColumnModal({ defColumns, column, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const dateNumberCols = defColumns.filter((c) => c.dataType === 'date' || c.dataType === 'number')
 
+  // Kiểm công thức: cú pháp + cột tham chiếu có tồn tại (trừ chính cột đang sửa)
+  const knownKeys = new Set(defColumns.map((c) => c.colKey))
+  const formulaSyntax = form.dataType === 'formula' ? checkSyntax(form.expression) : { ok: true }
+  const formulaRefs = form.dataType === 'formula' ? extractRefs(form.expression) : []
+  const unknownRefs = formulaRefs.filter((k) => !knownKeys.has(k))
+  const formulaValid = form.dataType !== 'formula' || (form.expression.trim() !== '' && formulaSyntax.ok && unknownRefs.length === 0)
+
+  function insertToken(key) {
+    setForm((f) => ({ ...f, expression: `${f.expression}{${key}}` }))
+  }
+
   function buildBody() {
     const body = {
       label: form.label.trim(),
@@ -80,6 +96,13 @@ function ColumnModal({ defColumns, column, onClose, onSaved }) {
     }
     if (form.dataType === 'select') {
       body.options = form.options.split('\n').map((x) => x.trim()).filter(Boolean)
+    }
+    if (form.dataType === 'link' || form.dataType === 'file') {
+      body.options = { multiple: !!form.multiple }
+    }
+    if (form.dataType === 'formula') {
+      body.required = false
+      body.computedConfig = { expression: form.expression.trim(), resultType: form.resultType }
     }
     if (form.dataType === 'computed') {
       body.computedType = form.computedType
@@ -98,6 +121,12 @@ function ColumnModal({ defColumns, column, onClose, onSaved }) {
 
   async function save() {
     if (!form.label.trim()) return
+    if (form.dataType === 'formula' && !formulaValid) {
+      addToast(form.expression.trim() === '' ? 'Chưa nhập công thức'
+        : unknownRefs.length ? `Cột không tồn tại: ${unknownRefs.join(', ')}`
+        : `Công thức lỗi cú pháp (${formulaSyntax.error})`, 'error')
+      return
+    }
     setSaving(true)
     try {
       const saved = column ? await api.updateColumn(column.id, buildBody()) : await api.addColumn(defColumns._defId, buildBody())
@@ -136,6 +165,54 @@ function ColumnModal({ defColumns, column, onClose, onSaved }) {
             <textarea className={s.settingsInput} rows={4} value={form.options}
               onChange={(e) => setForm((f) => ({ ...f, options: e.target.value }))} />
           </label>
+        )}
+
+        {(form.dataType === 'link' || form.dataType === 'file') && (
+          <label style={{ ...row }}>
+            <input type="checkbox" checked={form.multiple}
+              onChange={(e) => setForm((f) => ({ ...f, multiple: e.target.checked }))} />
+            Cho phép nhiều {form.dataType === 'link' ? 'link' : 'file'}
+          </label>
+        )}
+
+        {form.dataType === 'formula' && (
+          <div style={{ border: '1px solid var(--color-border-muted)', borderRadius: 8, padding: 10, display: 'grid', gap: 8 }}>
+            <label>Công thức
+              <textarea className={s.settingsInput} rows={3} value={form.expression}
+                placeholder="VD: {so_luong} * {don_gia}   ·   IF({con_lai} < 0, 'Quá hạn', 'Còn hạn')"
+                onChange={(e) => setForm((f) => ({ ...f, expression: e.target.value }))} />
+            </label>
+            <div>
+              <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', marginBottom: 4 }}>Chèn cột (bấm để thêm):</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {defColumns.filter((c) => !column || c.colKey !== column.colKey).map((c) => (
+                  <button key={c.colKey} type="button" className={s.btnOutline}
+                    style={{ padding: '2px 8px', fontSize: 'var(--fs-2xs)' }}
+                    onClick={() => insertToken(c.colKey)} title={c.colKey}>{c.label}</button>
+                ))}
+                {defColumns.length === 0 && <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)' }}>Chưa có cột nào để tham chiếu.</span>}
+              </div>
+            </div>
+            <label style={{ width: 180 }}>Kiểu kết quả
+              <select className={s.settingsInput} value={form.resultType}
+                onChange={(e) => setForm((f) => ({ ...f, resultType: e.target.value }))}>
+                <option value="number">Số</option>
+                <option value="text">Văn bản</option>
+              </select>
+            </label>
+            {form.expression.trim() && (
+              <div style={{ fontSize: 'var(--fs-xs)' }}>
+                {!formulaSyntax.ok
+                  ? <span style={{ color: 'var(--color-danger)' }}>✗ Lỗi cú pháp ({formulaSyntax.error})</span>
+                  : unknownRefs.length
+                    ? <span style={{ color: 'var(--color-danger)' }}>✗ Cột không tồn tại: {unknownRefs.join(', ')}</span>
+                    : <span style={{ color: 'var(--color-success)' }}>✓ Hợp lệ{formulaRefs.length ? ` · dùng: ${formulaRefs.join(', ')}` : ''}</span>}
+              </div>
+            )}
+            <div style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', lineHeight: 1.5 }}>
+              Hàm: IF AND OR NOT SUM MIN MAX AVG ROUND ABS CONCAT LEN TODAY DATEDIFF · Toán tử: + − × / % ^ &amp; = &lt;&gt; &lt; &lt;= &gt; &gt;= · Tham chiếu cột bằng {'{col_key}'}.
+            </div>
+          </div>
         )}
 
         {form.dataType === 'computed' && (
@@ -196,6 +273,7 @@ function ColumnModal({ defColumns, column, onClose, onSaved }) {
 
 // ── Main section ──────────────────────────────────────────────────────────────
 export default function CompanyTablesSection() {
+  const confirmDelete = useDeleteConfirm()
   const addToast = useToastStore((st) => st.toast)
   const [defs, setDefs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -216,12 +294,12 @@ export default function CompanyTablesSection() {
     catch { addToast('Không thể đổi trạng thái', 'error') }
   }
   async function removeDef(def) {
-    if (!window.confirm(`Xóa bảng "${def.name}" và toàn bộ dữ liệu ở mọi công ty?`)) return
+    if (!(await confirmDelete({ title: 'Xóa bảng dữ liệu', message: <>Xóa bảng <strong>“{def.name}”</strong> và toàn bộ dữ liệu của bảng này ở mọi công ty?</> }))) return
     try { await api.deleteDef(def.id); if (selected === def.id) setSelected(null); reload() }
     catch (e) { addToast(e.response?.data?.error?.message ?? 'Không thể xóa', 'error') }
   }
   async function removeCol(col) {
-    if (!window.confirm(`Xóa cột "${col.label}"? Dữ liệu cột này ở các công ty sẽ không hiển thị.`)) return
+    if (!(await confirmDelete({ title: 'Xóa cột dữ liệu', message: <>Bạn có chắc chắn muốn xóa cột <strong>“{col.label}”</strong>?</>, warning: 'Dữ liệu của cột này tại các công ty sẽ không còn hiển thị.' }))) return
     try { await api.deleteColumn(col.id); reload() }
     catch { addToast('Không thể xóa cột', 'error') }
   }

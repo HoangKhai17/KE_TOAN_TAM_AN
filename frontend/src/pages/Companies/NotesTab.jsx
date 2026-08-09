@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import ReactQuill from 'react-quill-new'
 import 'react-quill-new/dist/quill.snow.css'
 import DOMPurify from 'dompurify'
@@ -7,6 +7,11 @@ import {
   Loader2, Check, X,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import {
+  DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
+  SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
+} from '../../components/ui/data-table'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
@@ -101,7 +106,7 @@ function NoteEditorModal({ initialNote, onSave, onClose }) {
 
 // ── NoteCard ───────────────────────────────────────────────────────────────────
 
-function NoteTableRow({ note, currentUserId, isAdmin, onEdit, onDelete, onTogglePin }) {
+function NoteTableRow({ note, index, selection, reorder, currentUserId, isAdmin, onEdit, onDelete, onTogglePin }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [expanded, setExpanded]           = useState(false)
   const [overflows, setOverflows]         = useState(false)
@@ -123,7 +128,12 @@ function NoteTableRow({ note, currentUserId, isAdmin, onEdit, onDelete, onToggle
   const displayHtml = DOMPurify.sanitize(rawHtml)
 
   return (
-    <tr className={note.isPinned ? s.noteTableRowPinned : ''}>
+    <tr {...reorder.rowProps(note.id)} className={`${note.isPinned ? s.noteTableRowPinned : ''} ${reorder.dragOverId === note.id ? s.dataTableRowDragOver : ''}`}>
+      <DragRowCell enabled handleProps={reorder.handleProps(note.id)} />
+      {canEdit
+        ? <SelectionRowCell checked={selection.selectedIds.has(note.id)} onToggle={() => selection.toggle(note.id)} />
+        : <td />}
+      <IndexRowCell index={index + 1} />
       <td className={s.notePinCell}>
         {note.isPinned ? <span className={s.notePinnedBadge}><Pin size={10} /> Ghim</span> : <span className={s.noteMuted}>—</span>}
       </td>
@@ -201,6 +211,7 @@ function NoteTableRow({ note, currentUserId, isAdmin, onEdit, onDelete, onToggle
 // ── Main NotesTab ──────────────────────────────────────────────────────────────
 
 export default function NotesTab({ company, onNoteCountChange }) {
+  const confirmDelete = useDeleteConfirm()
   const companyId   = company.id
   const currentUser = useAuthStore((st) => st.user)
   const isAdmin     = currentUser?.role === 'admin'
@@ -210,6 +221,19 @@ export default function NotesTab({ company, onNoteCountChange }) {
   const [loading,     setLoading]     = useState(true)
   const [showAdd,     setShowAdd]     = useState(false)
   const [editTarget,  setEditTarget]  = useState(null)  // note object being edited
+  const selectableNotes = useMemo(
+    () => notes.filter((note) => isAdmin || note.createdBy === currentUser?.id),
+    [currentUser?.id, isAdmin, notes],
+  )
+  const selection = useRowSelection({ rows: selectableNotes })
+  const reorder = useRowReorder({
+    rows: notes, setRows: setNotes,
+    onError: () => addToast('Không thể lưu thứ tự ghi chú', 'error'),
+    onPersist: (ordered, previous) => Promise.all(ordered
+      .map((note, index) => ({ note, index }))
+      .filter(({ note, index }) => previous[index]?.id !== note.id)
+      .map(({ note, index }) => companiesApi.updateNote(companyId, note.id, { sortOrder: index }))),
+  })
 
   useEffect(() => { onNoteCountChange?.(notes.length) }, [notes.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -230,7 +254,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
   async function handleAdd(html) {
     try {
       const note = await companiesApi.createNote(companyId, { content: html })
-      setNotes((prev) => [note, ...prev])
+      setNotes((prev) => [...prev, note])
       setShowAdd(false)
       addToast('Đã thêm ghi chú', 'success')
     } catch {
@@ -261,6 +285,16 @@ export default function NotesTab({ company, onNoteCountChange }) {
     }
   }
 
+  async function handleBulkDelete() {
+    if (!selection.selectedCount || !(await confirmDelete({ title: 'Xóa ghi chú', message: <>Bạn có chắc chắn muốn xóa <strong>{selection.selectedCount}</strong> ghi chú đã chọn?</>, confirmLabel: `Xóa ${selection.selectedCount} mục` }))) return
+    const ids = [...selection.selectedIds]
+    const results = await Promise.allSettled(ids.map((id) => companiesApi.deleteNote(companyId, id)))
+    const deleted = new Set(ids.filter((_, index) => results[index].status === 'fulfilled'))
+    setNotes((current) => current.filter((note) => !deleted.has(note.id)))
+    selection.remove(deleted)
+    addToast(`Đã xoá ${deleted.size}/${ids.length} ghi chú`, deleted.size ? 'success' : 'error')
+  }
+
   async function handleTogglePin(noteId, isPinned) {
     try {
       const updated = await companiesApi.updateNote(companyId, noteId, { isPinned })
@@ -288,13 +322,16 @@ export default function NotesTab({ company, onNoteCountChange }) {
             </span>
           )}
         </div>
-        <button
-          className={s.btnNavy}
-          style={{ height: 32, fontSize: 'var(--fs-2xs)', padding: '0 14px' }}
-          onClick={() => setShowAdd(true)}
-        >
-          <Plus size={13} /> Thêm ghi chú
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={handleBulkDelete}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
+          <button
+            className={s.btnNavy}
+            style={{ height: 32, fontSize: 'var(--fs-2xs)', padding: '0 14px' }}
+            onClick={() => setShowAdd(true)}
+          >
+            <Plus size={13} /> Thêm ghi chú
+          </button>
+        </div>
       </div>
 
       {/* Notes list */}
@@ -314,6 +351,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
         <div className={s.noteTableWrap}>
           <table className={s.noteTable}>
             <colgroup>
+              <col className={s.dataTableColDrag} /><col className={s.dataTableColSelect} /><col className={s.dataTableColIndex} />
               <col className={s.noteColPin} />
               <col className={s.noteColContent} />
               <col className={s.noteColAuthor} />
@@ -322,6 +360,9 @@ export default function NotesTab({ company, onNoteCountChange }) {
             </colgroup>
             <thead>
               <tr>
+                <DragHeaderCell />
+                <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
+                <IndexHeaderCell />
                 <th>Ghim</th>
                 <th>Nội dung ghi chú</th>
                 <th>Người ghi</th>
@@ -330,10 +371,13 @@ export default function NotesTab({ company, onNoteCountChange }) {
               </tr>
             </thead>
             <tbody>
-              {notes.map((note) => (
+              {notes.map((note, index) => (
                 <NoteTableRow
                   key={note.id}
                   note={note}
+                  index={index}
+                  selection={selection}
+                  reorder={reorder}
                   currentUserId={currentUser?.id}
                   isAdmin={isAdmin}
                   onEdit={setEditTarget}

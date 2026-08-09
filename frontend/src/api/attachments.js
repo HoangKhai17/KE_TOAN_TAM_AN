@@ -23,11 +23,13 @@ export async function listFiles(module, entityId) {
 }
 
 // onProgress(percent) — tuỳ chọn, để hiện thanh tiến trình
-export async function uploadFile(module, entityId, file, { title, description, onProgress } = {}) {
+// fieldKey — chỉ dùng cho module 'company_table_row' (phân biệt cột file trong 1 dòng)
+export async function uploadFile(module, entityId, file, { title, description, fieldKey, onProgress } = {}) {
   const fd = new FormData()
   fd.append('file', file)
   if (title) fd.append('title', title)
   if (description) fd.append('description', description)
+  if (fieldKey) fd.append('fieldKey', fieldKey)
 
   const { data } = await api.post(`/attachments/${module}/${entityId}`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' },

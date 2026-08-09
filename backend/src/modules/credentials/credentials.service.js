@@ -17,6 +17,7 @@ function toDto(row, includePassword = false) {
     password:   includePassword ? plain : '***',
     notes:      row.notes ?? null,
     isActive:   row.is_active,
+    sortOrder:  row.sort_order ?? 0,
     createdBy:  row.created_by,
     updatedBy:  row.updated_by ?? null,
     createdAt:  row.created_at,
@@ -44,7 +45,9 @@ async function listCredentials(companyId, { isActive } = {}, user) {
   }
 
   const { rows } = await query(
-    `SELECT * FROM company_credentials WHERE ${conditions.join(' AND ')} ORDER BY system_name`,
+    `SELECT * FROM company_credentials
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY sort_order ASC, created_at ASC`,
     params
   )
   return rows.map(r => toDto(r, false))
@@ -68,10 +71,13 @@ async function createCredential(companyId, data, user) {
 
   const { rows: [row] } = await query(
     `INSERT INTO company_credentials
-       (company_id, system_name, system_url, username, encrypted_password, iv, notes, is_active, created_by, updated_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)
+       (company_id, system_name, system_url, username, encrypted_password, iv, notes, is_active,
+        sort_order, created_by, updated_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,
+       (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM company_credentials WHERE company_id = $9),
+       $10,$10)
      RETURNING *`,
-    [companyId, systemName, systemUrl ?? null, username ?? '', ciphertext, iv, notes ?? null, isActive, actorId]
+    [companyId, systemName, systemUrl ?? null, username ?? '', ciphertext, iv, notes ?? null, isActive, companyId, actorId]
   )
   return toDto(row, false)
 }
@@ -157,7 +163,30 @@ async function revealCredential(companyId, id, user, reauthPassword, ipAddress, 
   return { password: decrypt(row.encrypted_password, row.iv) }
 }
 
+async function reorderCredentials(companyId, orderedIds, user) {
+  await assertCompanyAccess(companyId, user)
+  const { rows: existing } = await query(
+    'SELECT id FROM company_credentials WHERE company_id = $1',
+    [companyId]
+  )
+  const existingIds = new Set(existing.map((row) => row.id))
+  if (existingIds.size !== orderedIds.length || orderedIds.some((id) => !existingIds.has(id))) {
+    throw Object.assign(new Error('orderedIds must contain every credential exactly once'), { status: 400 })
+  }
+
+  await query(
+    `UPDATE company_credentials AS credential
+        SET sort_order = (ordered.position - 1)::integer,
+            updated_at = NOW(),
+            updated_by = $3
+       FROM unnest($2::uuid[]) WITH ORDINALITY AS ordered(id, position)
+      WHERE credential.company_id = $1
+        AND credential.id = ordered.id`,
+    [companyId, orderedIds, user.id]
+  )
+}
+
 module.exports = {
   listCredentials, getCredential, createCredential,
-  updateCredential, deleteCredential, revealCredential,
+  updateCredential, deleteCredential, revealCredential, reorderCredentials,
 }

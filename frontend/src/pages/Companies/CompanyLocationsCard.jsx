@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Trash2, Loader2, Paperclip, Download, Upload, Filter } from 'lucide-react'
+import { Plus, Trash2, Paperclip, Download, Upload, Filter } from 'lucide-react'
 import * as XLSX from 'xlsx-js-style'
 import * as locationsApi from '../../api/locations'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
@@ -8,6 +8,11 @@ import { useToastStore } from '../../stores/toastStore'
 import { fmtDate } from './companyUtils'
 import DateBox from './DateBox'
 import AttachmentManagerModal from './AttachmentManagerModal'
+import {
+  DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
+  SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
+} from '../../components/ui/data-table'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import s from './companies.module.css'
 
 const ATTACH_MODULE = 'company_location'
@@ -126,7 +131,7 @@ function ColumnFilterDropdown({ col, values, currentFilter, sortState, onSort, o
 }
 
 // ── Ô nhập inline (enum/date/text/textarea) — click để sửa, blur/Enter tự lưu ──
-function LocEditableCell({ col, row, value, enumOpts, getLabel, canEdit, active, onActivate, onSave, onNavigate }) {
+function LocEditableCell({ col, row: _row, value, enumOpts, getLabel, canEdit, active, onActivate, onSave, onNavigate }) {
   const [local, setLocal] = useState(value ?? '')
   const ref = useRef(null)
   const isTextType = col.type === 'text' || col.type === 'textarea'
@@ -270,6 +275,7 @@ function LocationFilesModal({ location, canEdit, onClose, onChanged }) {
 }
 
 export default function CompanyLocationsCard({ companyId, canEdit = true }) {
+  const confirmDelete = useDeleteConfirm()
   const getOptions = useEnumsStore((st) => st.getOptions)
   const getLabel   = useEnumsStore((st) => st.getLabel)
   const addToast   = useToastStore((st) => st.toast)
@@ -351,6 +357,16 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
   const totalPages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE))
   const safePage   = Math.min(page, totalPages)
   const pageRows   = displayed.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const selection = useRowSelection({ rows: pageRows })
+  const canReorder = canEdit && Object.keys(colFilters).length === 0 && sortState.col == null && activeCell == null
+  const reorder = useRowReorder({
+    rows, setRows, enabled: canReorder,
+    onError: () => addToast('Không thể lưu thứ tự địa điểm', 'error'),
+    onPersist: (ordered, previous) => Promise.all(ordered
+      .map((row, index) => ({ row, index }))
+      .filter(({ row, index }) => previous[index]?.id !== row.id)
+      .map(({ row, index }) => locationsApi.updateLocation(companyId, row.id, { sortOrder: index }))),
+  })
   useEffect(() => { setPage(1) }, [colFilters, sortState])   // đổi lọc/sắp → về trang 1
 
   // ── Inline edit: lưu từng ô ──────────────────────────────────────────────────
@@ -412,6 +428,15 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
   async function remove(row) {
     try { await locationsApi.deleteLocation(companyId, row.id); setRows((p) => p.filter((r) => r.id !== row.id)); addToast('Đã xoá địa điểm', 'success') }
     catch (err) { addToast(err.response?.data?.error?.message ?? 'Không xoá được địa điểm', 'error') }
+  }
+  async function removeSelected() {
+    if (!selection.selectedCount || !(await confirmDelete({ title: 'Xóa địa điểm', message: <>Bạn có chắc chắn muốn xóa <strong>{selection.selectedCount}</strong> địa điểm đã chọn?</>, confirmLabel: `Xóa ${selection.selectedCount} mục` }))) return
+    const ids = [...selection.selectedIds]
+    const results = await Promise.allSettled(ids.map((id) => locationsApi.deleteLocation(companyId, id)))
+    const deleted = new Set(ids.filter((_, index) => results[index].status === 'fulfilled'))
+    setRows((current) => current.filter((row) => !deleted.has(row.id)))
+    selection.remove(deleted)
+    addToast(`Đã xoá ${deleted.size}/${ids.length} địa điểm`, deleted.size ? 'success' : 'error')
   }
 
   // ── Header filter ─────────────────────────────────────────────────────────────
@@ -504,7 +529,7 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
     return { inserted, failed, errors }
   }
 
-  const colCount = LOC_COLS.length + 2   // + File + Thao tác
+  const colCount = LOC_COLS.length + 5   // controls + File + Thao tác
 
   return (
     <div ref={cardRef}>
@@ -516,6 +541,7 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
           <button className={s.locBtnImport} onClick={() => setShowImport(true)}>
             <Upload size={13} /> Import
           </button>
+          {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={removeSelected}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
           <button className={s.locAddBtn} onClick={addRow}>
             <Plus size={13} /> Thêm địa điểm
           </button>
@@ -526,12 +552,16 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
           <div className={s.locTableScroll}>
           <table className={`${s.locTable} ${s.locTableWide}`}>
             <colgroup>
+              <col className={s.dataTableColDrag} /><col className={s.dataTableColSelect} /><col className={s.dataTableColIndex} />
               {LOC_COLS.map((col) => <col key={col.key} className={s[`colLoc_${col.key}`]} />)}
               <col className={s.colFiles} />
               <col className={s.colAction} />
             </colgroup>
             <thead>
               <tr>
+                <DragHeaderCell />
+                <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
+                <IndexHeaderCell />
                 {LOC_COLS.map((col) => (
                   <th key={col.key}>
                     <div className={s.hdldThInner}>
@@ -556,8 +586,11 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
                   {rows.length === 0 ? 'Chưa có địa điểm. Nhấn “Thêm địa điểm”.' : 'Không có dòng khớp bộ lọc.'}
                 </td></tr>
               ) : (
-                pageRows.map((r) => (
-                  <tr key={r.id}>
+                pageRows.map((r, index) => (
+                  <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
+                    <DragRowCell enabled={canReorder} handleProps={reorder.handleProps(r.id)} />
+                    <SelectionRowCell checked={selection.selectedIds.has(r.id)} onToggle={() => selection.toggle(r.id)} />
+                    <IndexRowCell index={(safePage - 1) * PAGE_SIZE + index + 1} />
                     {LOC_COLS.map((col) => (
                       <LocEditableCell
                         key={col.key} col={col} row={r} value={r[col.key]}

@@ -7,9 +7,11 @@ import {
 } from '../../api/enums'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import s from './settings.module.css'
 
 export default function EnumManagementSection() {
+  const confirmDelete = useDeleteConfirm()
   const addToast   = useToastStore((st) => st.toast)
   const invalidate = useEnumsStore((st) => st.invalidate)
   const reloadStore = useEnumsStore((st) => st.load)
@@ -127,7 +129,7 @@ export default function EnumManagementSection() {
   // ── Delete option (chỉ khi chưa dùng) ──────────────────────────────────────
 
   async function handleDelete(optionKey, label) {
-    if (!window.confirm(`Xóa mục "${label}"?\nChỉ xóa được khi mục này chưa được sử dụng trong dữ liệu.`)) return
+    if (!(await confirmDelete({ title: 'Xóa lựa chọn', message: <>Bạn có chắc chắn muốn xóa mục <strong>“{label}”</strong>?</>, warning: 'Chỉ có thể xóa khi mục này chưa được sử dụng trong dữ liệu.' }))) return
     setDeletingKey(optionKey)
     try {
       await deleteEnumOption(activeType, optionKey)
@@ -230,9 +232,7 @@ export default function EnumManagementSection() {
 
   async function xoaNhom(groupKey, nhan) {
     // Xoá nhóm KHÔNG xoá lựa chọn — chúng chỉ trở về trạng thái chưa gán nhóm
-    if (!window.confirm(`Xoá nhóm "${nhan}"?
-
-Các lựa chọn trong nhóm KHÔNG bị xoá, chỉ trở về trạng thái chưa gán nhóm.`)) return
+    if (!(await confirmDelete({ title: 'Xóa nhóm lựa chọn', message: <>Bạn có chắc chắn muốn xóa nhóm <strong>“{nhan}”</strong>?</>, warning: 'Các lựa chọn trong nhóm không bị xóa, chỉ trở về trạng thái chưa gán nhóm.' }))) return
     try {
       await deleteEnumGroup(activeType, groupKey)
       await taiLai()

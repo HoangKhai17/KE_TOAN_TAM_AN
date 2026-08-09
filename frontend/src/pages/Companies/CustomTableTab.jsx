@@ -1,11 +1,14 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Plus, Trash2, Filter, Loader2, Download, Upload } from 'lucide-react'
+import { Plus, Trash2, Filter, Loader2, Download, Upload, Link2, X, ExternalLink, Paperclip, FileUp } from 'lucide-react'
 // xlsx-js-style: bản drop-in cùng API SheetJS nhưng ghi được style (font/border).
 // SheetJS community ('xlsx') không hỗ trợ style khi ghi file.
 import * as XLSX from 'xlsx-js-style'
 import * as api from '../../api/companyTables'
+import { uploadFile, downloadFile, deleteFile, formatSize, ACCEPT_ATTR, MAX_FILE_BYTES } from '../../api/attachments'
+import { evaluateFormula } from '../../utils/formula'
 import Modal from '../../components/ui/Modal'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import {
   DragHeaderCell,
   DragRowCell,
@@ -18,19 +21,29 @@ import { useToastStore } from '../../stores/toastStore'
 import s from './companies.module.css'
 
 // ── Cell value as plain text (for export/preview) ─────────────────────────────
-export function cellText(col, row) {
+// columns cần cho cột 'formula' (tham chiếu cột khác). files: map "rowId|colKey"→[file] cho cột 'file'.
+export function cellText(col, row, columns = [], filesByCell = null) {
   if (col.dataType === 'computed') {
     if (col.computedType === 'status_threshold') {
       return resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).label
     }
     const v = computeDays(col, row); return v ?? ''
   }
+  if (col.dataType === 'formula') {
+    const { value, error } = evalFormula(col, row, columns)
+    return error || formatFormulaValue(value)
+  }
+  if (col.dataType === 'link') return linksText(row.data?.[col.colKey])
+  if (col.dataType === 'file') {
+    const list = filesByCell?.[`${row.id}|${col.colKey}`] ?? []
+    return list.map((f) => f.fileName).join(', ')
+  }
   const v = row.data?.[col.colKey]
   return col.dataType === 'date' ? fmtDate(v) : (v ?? '')
 }
 
 // ── Export modal: chọn cột + preview (giống flow tab cũ) ──────────────────────
-function ExportModal({ def, columns, rows, company, onClose }) {
+function ExportModal({ def, columns, rows, company, filesByCell, onClose }) {
   // Trường thông tin công ty (giá trị giống nhau mọi dòng) — tùy chọn xuất
   const extraFields = [
     { key: '__row_id',         label: 'ID dòng',           perRow: (r) => r.id },
@@ -50,7 +63,7 @@ function ExportModal({ def, columns, rows, company, onClose }) {
     ...extraFields.filter((f) => selected.has(f.key)),
     ...columns.filter((c) => selected.has(c.colKey)).map((c) => ({ key: c.colKey, label: c.label, col: c })),
   ]
-  const cellOf = (f, r) => (f.col ? cellText(f.col, r) : (f.perRow ? f.perRow(r) : f.value))
+  const cellOf = (f, r) => (f.col ? cellText(f.col, r, columns, filesByCell) : (f.perRow ? f.perRow(r) : f.value))
 
   function doExport() {
     const header = ['STT', ...outFields.map((f) => f.label)]
@@ -191,18 +204,65 @@ const TONE_CLASS = {
 }
 const STATUS_ORDER = { danger: 0, warning: 1, info: 2, success: 3, muted: 4 }
 
+// ── Formula engine wiring (Pha kiểu 'formula') ────────────────────────────────
+// resolver đọc giá trị cột cho công thức; hỗ trợ formula-tham-chiếu-formula + chống vòng lặp.
+function makeResolver(row, columns) {
+  const byKey = {}
+  for (const c of columns) byKey[c.colKey] = c
+  const stack = new Set()
+  function resolve(key) {
+    const col = byKey[key]
+    if (!col) return undefined                          // → #REF
+    if (col.dataType === 'formula') {
+      if (stack.has(key)) { const e = new Error('cycle'); e.__formulaError = '#CYCLE'; throw e }
+      stack.add(key)
+      const { value, error } = evaluateFormula(col.computedConfig?.expression, resolve)
+      stack.delete(key)
+      if (error) { const e = new Error(error); e.__formulaError = error; throw e }
+      return value
+    }
+    if (col.dataType === 'computed') {
+      if (col.computedType === 'status_threshold') return resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).label
+      return computeDays(col, row)
+    }
+    if (col.dataType === 'link' || col.dataType === 'file') return null   // không tham chiếu được
+    const v = row.data?.[key]
+    if (v == null || v === '') return null
+    if (col.dataType === 'number') return Number(v)
+    return v
+  }
+  return resolve
+}
+function evalFormula(col, row, columns) {
+  return evaluateFormula(col.computedConfig?.expression, makeResolver(row, columns))
+}
+function formatFormulaValue(v) {
+  if (v == null) return ''
+  if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE'
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(Math.round(v * 10000) / 10000)
+  return String(v)
+}
+function isFormulaNumber(col) { return (col.computedConfig?.resultType ?? 'number') === 'number' }
+
+// ── Link helpers ──────────────────────────────────────────────────────────────
+function asLinks(v) { return Array.isArray(v) ? v.filter((l) => l && l.url) : [] }
+function linksText(v) { return asLinks(v).map((l) => l.label || l.url).join(', ') }
+
 // ── Type-driven helpers (docs/018) ────────────────────────────────────────────
 function columnFilterType(col) {
   if (col.colKey === '__stt') return 'none'   // STT: chỉ sắp xếp, không lọc giá trị
   if (col.dataType === 'computed') {
     return col.computedType === 'status_threshold' ? 'enum' : 'numberRange'
   }
+  if (col.dataType === 'formula') return isFormulaNumber(col) ? 'numberRange' : 'text'
+  if (col.dataType === 'file')   return 'none'   // file: không lọc theo giá trị
+  if (col.dataType === 'link')   return 'text'
   if (col.dataType === 'select') return 'enum'
   if (col.dataType === 'date')   return 'dateRange'
   if (col.dataType === 'number') return 'numberRange'
   return 'text'
 }
-function displayLabel(row, col) {
+function displayLabel(row, col, columns = []) {
   if (col.dataType === 'computed') {
     if (col.computedType === 'status_threshold') {
       return resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).label
@@ -210,17 +270,28 @@ function displayLabel(row, col) {
     const v = computeDays(col, row)
     return v != null ? String(v) : '(Trống)'
   }
+  if (col.dataType === 'formula') {
+    const { value, error } = evalFormula(col, row, columns)
+    if (error) return error
+    return value == null || value === '' ? '(Trống)' : formatFormulaValue(value)
+  }
+  if (col.dataType === 'link') { const t = linksText(row.data?.[col.colKey]); return t || '(Trống)' }
   const v = row.data?.[col.colKey]
   if (v == null || v === '') return '(Trống)'
   if (col.dataType === 'date') return fmtDate(v)
   return String(v)
 }
-function numericValue(row, col) {
+function numericValue(row, col, columns = []) {
   if (col.dataType === 'computed') return computeDays(col, row)
+  if (col.dataType === 'formula') {
+    const { value, error } = evalFormula(col, row, columns)
+    if (error || value == null) return null
+    const n = Number(value); return Number.isNaN(n) ? null : n
+  }
   const v = row.data?.[col.colKey]
   return v == null || v === '' ? null : Number(v)
 }
-function sortKey(row, col) {
+function sortKey(row, col, columns = []) {
   if (col.colKey === '__stt') return typeof row.position === 'number' ? row.position : 0   // STT = thứ tự thủ công (position, cho phép kéo thả)
   if (col.dataType === 'computed') {
     if (col.computedType === 'status_threshold') {
@@ -228,6 +299,12 @@ function sortKey(row, col) {
     }
     return computeDays(col, row) ?? Number.MAX_SAFE_INTEGER
   }
+  if (col.dataType === 'formula') {
+    const { value, error } = evalFormula(col, row, columns)
+    if (isFormulaNumber(col)) { const n = Number(value); return error || value == null || Number.isNaN(n) ? Number.MAX_SAFE_INTEGER : n }
+    return error || String(value ?? '').toLowerCase()
+  }
+  if (col.dataType === 'link') return linksText(row.data?.[col.colKey]).toLowerCase()
   const v = row.data?.[col.colKey]
   if (col.dataType === 'number') return v == null || v === '' ? Number.MAX_SAFE_INTEGER : Number(v)
   if (col.dataType === 'date')   return v ?? ''
@@ -235,12 +312,12 @@ function sortKey(row, col) {
 }
 
 // ── Column-header filter sub-sections ─────────────────────────────────────────
-function EnumSection({ col, allRows, currentFilter, onChange, onClose }) {
+function EnumSection({ col, columns, allRows, currentFilter, onChange, onClose }) {
   const allValues = useMemo(() => {
     const seen = new Set(); const out = []
-    for (const r of allRows) { const l = displayLabel(r, col); if (!seen.has(l)) { seen.add(l); out.push(l) } }
+    for (const r of allRows) { const l = displayLabel(r, col, columns); if (!seen.has(l)) { seen.add(l); out.push(l) } }
     return out.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
-  }, [allRows, col])
+  }, [allRows, col, columns])
   const selected = useMemo(() => (!currentFilter ? new Set(allValues) : currentFilter), [currentFilter, allValues])
   const allChecked = selected.size === allValues.length
   const noneChecked = selected.size === 0
@@ -321,7 +398,7 @@ function NumberRangeSection({ currentFilter, onChange }) {
     </div>
   )
 }
-function ColumnFilterDropdown({ col, allRows, currentFilter, sortState, onSort, onChange, onClose, style }) {
+function ColumnFilterDropdown({ col, columns, allRows, currentFilter, sortState, onSort, onChange, onClose, style }) {
   const ref = useRef(null)
   const ft = columnFilterType(col)
   useEffect(() => {
@@ -342,7 +419,7 @@ function ColumnFilterDropdown({ col, allRows, currentFilter, sortState, onSort, 
         <button className={`${s.hdldDdSortBtn} ${asc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.colKey, 'asc')}>{ascLabel}</button>
         <button className={`${s.hdldDdSortBtn} ${desc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.colKey, 'desc')}>{descLabel}</button>
       </div>
-      {ft === 'enum'        && <EnumSection col={col} allRows={allRows} currentFilter={currentFilter} onChange={onChange} onClose={onClose} />}
+      {ft === 'enum'        && <EnumSection col={col} columns={columns} allRows={allRows} currentFilter={currentFilter} onChange={onChange} onClose={onClose} />}
       {ft === 'text'        && <TextSection currentFilter={currentFilter} onChange={onChange} />}
       {ft === 'dateRange'   && <DateRangeSection currentFilter={currentFilter} onChange={onChange} />}
       {ft === 'numberRange' && <NumberRangeSection currentFilter={currentFilter} onChange={onChange} />}
@@ -490,10 +567,117 @@ function ResizeHandle({ onResize, onResizeEnd }) {
   return <span className={s.archColResizeHandle} onMouseDown={down} />
 }
 
+// ── Link cell (kiểu 'link' — 1..n link) ───────────────────────────────────────
+function LinkCell({ col, value, canEdit, active, onActivate, onSave }) {
+  const links = asLinks(value)
+  const multiple = col.options?.multiple !== false
+  const [local, setLocal] = useState(links)
+  // Chỉ đồng bộ từ server khi KHÔNG đang sửa → tránh reset mất chữ đang gõ giữa các ô
+  useEffect(() => { if (!active) setLocal(asLinks(value)) }, [value, active])
+
+  if (!canEdit || !active) {
+    return (
+      <td className={canEdit ? s.archInlineTdEditable : undefined} onClick={canEdit ? onActivate : undefined}>
+        {links.length === 0
+          ? <span className={s.archInlineEmpty}>—</span>
+          : (
+            <div className={s.ctblLinkChips}>
+              {links.map((l, i) => (
+                <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
+                  className={s.ctblLinkChip} onClick={(e) => e.stopPropagation()} title={l.url}>
+                  <ExternalLink size={11} /> {l.label || l.url}
+                </a>
+              ))}
+            </div>
+          )}
+      </td>
+    )
+  }
+  const commit = (list) => onSave(list.filter((l) => l.url && l.url.trim()))
+  const setAt = (i, key, val) => setLocal((p) => p.map((l, j) => (j === i ? { ...l, [key]: val } : l)))
+  const removeAt = (i) => { const nx = local.filter((_, j) => j !== i); setLocal(nx); commit(nx) }
+  return (
+    <td className={`${s.archInlineTdEditable} ${s.ctblCellActive}`} onClick={(e) => e.stopPropagation()}>
+      <div className={s.ctblLinkEditor}>
+        {local.map((l, i) => (
+          <div key={i} className={s.ctblLinkEditorRow}>
+            <input className={s.archInlineEditInput} placeholder="https://..." value={l.url}
+              autoFocus={i === local.length - 1 && !l.url}
+              onChange={(e) => setAt(i, 'url', e.target.value)} onBlur={() => commit(local)} />
+            <input className={s.archInlineEditInput} placeholder="Nhãn (tuỳ chọn)" value={l.label}
+              onChange={(e) => setAt(i, 'label', e.target.value)} onBlur={() => commit(local)} />
+            <button className={s.ctblIconBtn} title="Xoá link" onClick={() => removeAt(i)}><X size={12} /></button>
+          </div>
+        ))}
+        {(multiple || local.length === 0) && (
+          <button className={s.ctblLinkAddBtn} onClick={() => setLocal((p) => [...p, { url: '', label: '' }])}>
+            <Plus size={12} /> Thêm link
+          </button>
+        )}
+      </div>
+    </td>
+  )
+}
+
+// ── File cell (kiểu 'file' — dùng lại hệ attachments) ──────────────────────────
+function FileCell({ col, row, files, canEdit, onChanged, addToast }) {
+  const multiple = col.options?.multiple !== false
+  const inputRef = useRef(null)
+  const [busy, setBusy] = useState(false)
+  const list = files ?? []
+
+  async function pick(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > MAX_FILE_BYTES) { addToast('File vượt quá 5MB', 'error'); return }
+    setBusy(true)
+    try {
+      if (!multiple) { for (const f of list) await deleteFile(f.id) }   // 1 file → thay thế
+      await uploadFile('company_table_row', row.id, file, { fieldKey: col.colKey })
+      onChanged()
+    } catch (err) { addToast(err.response?.data?.error?.message ?? 'Không tải file lên được', 'error') }
+    finally { setBusy(false) }
+  }
+  async function remove(f) {
+    setBusy(true)
+    try { await deleteFile(f.id); onChanged() }
+    catch { addToast('Không xoá được file', 'error') }
+    finally { setBusy(false) }
+  }
+  return (
+    <td>
+      <div className={s.ctblFileCell}>
+        {list.map((f) => (
+          <span key={f.id} className={s.ctblFileChip}>
+            <button className={s.ctblFileName} title={`${f.fileName} · ${formatSize(f.sizeBytes)}`}
+              onClick={() => downloadFile(f.id, f.fileName)}>
+              <Paperclip size={11} /> {f.fileName}
+            </button>
+            {canEdit && <button className={s.ctblIconBtn} title="Xoá file" onClick={() => remove(f)}><X size={11} /></button>}
+          </span>
+        ))}
+        {canEdit && (multiple || list.length === 0) && (
+          <button className={s.ctblFileAddBtn} disabled={busy} onClick={() => inputRef.current?.click()}>
+            {busy ? <Loader2 size={12} className={s.spin} /> : <FileUp size={12} />} Tải lên
+          </button>
+        )}
+        {list.length === 0 && !canEdit && <span className={s.archInlineEmpty}>—</span>}
+        <input ref={inputRef} type="file" accept={ACCEPT_ATTR} style={{ display: 'none' }} onChange={pick} />
+      </div>
+    </td>
+  )
+}
+
+// Kiểu cột read-only (tính động) hoặc "giàu" (thao tác trực tiếp) → KHÔNG tham gia
+// điều hướng phím Tab/Enter và KHÔNG nhập qua Excel.
+const NON_SIMPLE_TYPES = ['computed', 'formula', 'file', 'link']
+
 const PAGE_SIZE = 20
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function CustomTableTab({ def, company, onDefUpdated }) {
+  const confirmDelete = useDeleteConfirm()
   const companyId = company.id
   const user     = useAuthStore((st) => st.user)
   const addToast = useToastStore((st) => st.toast)
@@ -502,6 +686,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
 
   const [rows, setRows]                 = useState([])
   const [companyCols, setCompanyCols]   = useState([])
+  const [files, setFiles]               = useState([])   // file của cột kiểu 'file' (gộp cả bảng)
   const [loading, setLoading]           = useState(true)
   const [colFilters, setColFilters]     = useState({})
   const [sortState, setSortState]       = useState({ col: '__stt', dir: 'asc' })  // mặc định: thứ tự thủ công (kéo thả được)
@@ -559,22 +744,40 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     return [...glob, ...companyCols]
   }, [def.columns, companyCols])
 
+  // Có cột 'file' không → mới cần tải danh sách file (tránh gọi thừa)
+  const defHasFile = useMemo(
+    () => (def.columns || []).some((c) => c.dataType === 'file') || def.allowCompanyColumns,
+    [def.columns, def.allowCompanyColumns])
+
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
     Promise.all([
       api.listRows(companyId, def.id),
       def.allowCompanyColumns ? api.listCompanyColumns(companyId, def.id) : Promise.resolve([]),
+      defHasFile ? api.listDefFiles(companyId, def.id) : Promise.resolve([]),
     ])
-      .then(([r, cc]) => { if (!cancelled) { setRows(r); setCompanyCols(cc); setSelectedIds(new Set()) } })
+      .then(([r, cc, ff]) => { if (!cancelled) { setRows(r); setCompanyCols(cc); setFiles(ff); setSelectedIds(new Set()) } })
       .catch(() => { if (!cancelled) setRows([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   // setSelectedIds là setter ổn định của hook; load chạy sau khi render hoàn tất.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, def.id, def.allowCompanyColumns])
+  }, [companyId, def.id, def.allowCompanyColumns, defHasFile])
 
   useEffect(() => load(), [load])
+
+  // Tải lại danh sách file sau khi upload/xoá (dùng bởi FileCell)
+  const reloadFiles = useCallback(() => {
+    api.listDefFiles(companyId, def.id).then(setFiles).catch(() => {})
+  }, [companyId, def.id])
+
+  // Nhóm file theo ô "rowId|colKey" — tránh N+1 khi render
+  const filesByCell = useMemo(() => {
+    const m = {}
+    for (const f of files) (m[`${f.rowId}|${f.colKey}`] ??= []).push(f)
+    return m
+  }, [files])
   useEffect(() => { setPage(1) }, [colFilters, sortState, pageSize])
 
   // ── Client filter + sort + pagination ───────────────────────────────────────
@@ -585,10 +788,10 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       if (!col) continue
       const ft = columnFilterType(col)
       if (ft === 'enum' && fv instanceof Set && fv.size > 0) {
-        result = result.filter((r) => fv.has(displayLabel(r, col)))
+        result = result.filter((r) => fv.has(displayLabel(r, col, columns)))
       } else if (ft === 'text' && typeof fv === 'string' && fv.trim()) {
         const q = fv.toLowerCase()
-        result = result.filter((r) => displayLabel(r, col).toLowerCase().includes(q))
+        result = result.filter((r) => displayLabel(r, col, columns).toLowerCase().includes(q))
       } else if (ft === 'dateRange' && fv && (fv.from || fv.to)) {
         result = result.filter((r) => {
           const raw = r.data?.[col.colKey]; if (!raw) return false
@@ -599,7 +802,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
         })
       } else if (ft === 'numberRange' && fv && (fv.min !== '' || fv.max !== '')) {
         result = result.filter((r) => {
-          const n = numericValue(r, col)
+          const n = numericValue(r, col, columns)
           if (n == null || isNaN(n)) return false
           if (fv.min !== '' && n < parseFloat(fv.min)) return false
           if (fv.max !== '' && n > parseFloat(fv.max)) return false
@@ -610,7 +813,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     if (sortState.col) {
       const col = sortState.col === '__stt' ? { colKey: '__stt' } : columns.find((c) => c.colKey === sortState.col)
       if (col) result.sort((a, b) => {
-        const ak = sortKey(a, col), bk = sortKey(b, col)
+        const ak = sortKey(a, col, columns), bk = sortKey(b, col, columns)
         if (typeof ak === 'number' && typeof bk === 'number') return sortState.dir === 'asc' ? ak - bk : bk - ak
         const cmp = String(ak).localeCompare(String(bk), 'vi', { numeric: true })
         return sortState.dir === 'asc' ? cmp : -cmp
@@ -672,8 +875,8 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     if (row) setPendingFocus({ rowId: row.id, colKey })
   }
 
-  // Các cột có thể nhập (bỏ cột tính toán)
-  const editableCols = useMemo(() => columns.filter((c) => c.dataType !== 'computed'), [columns])
+  // Cột điều hướng bằng phím (Tab/Enter) — chỉ ô ĐƠN GIẢN (bỏ computed/formula/file/link).
+  const editableCols = useMemo(() => columns.filter((c) => !NON_SIMPLE_TYPES.includes(c.dataType)), [columns])
 
   // Điều hướng ô bằng phím: next=Tab, prev=Shift+Tab, down=Enter, cancel=Esc
   function navigateCell(rowId, colKey, dir) {
@@ -756,7 +959,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   // ── Row multi-select + bulk delete ───────────────────────────────────────────
   async function bulkDelete() {
     if (!selectedIds.size) return
-    if (!window.confirm(`Xoá ${selectedIds.size} dòng đã chọn? Không thể hoàn tác.`)) return
+    if (!(await confirmDelete({ title: 'Xóa dòng dữ liệu', message: <>Bạn có chắc chắn muốn xóa <strong>{selectedIds.size}</strong> dòng đã chọn?</>, confirmLabel: `Xóa ${selectedIds.size} mục` }))) return
     setBulkDeleting(true)
     let done = 0
     for (const id of [...selectedIds]) {
@@ -769,8 +972,9 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   }
 
   // ── Import Excel ─────────────────────────────────────────────────────────────
+  // Import: bỏ cột computed/formula/file (không nhập được). Link nhập dạng text (1 URL).
   const importCols = useMemo(() => {
-    const cols = columns.filter((c) => c.dataType !== 'computed').map((c) => ({
+    const cols = columns.filter((c) => !['computed', 'formula', 'file'].includes(c.dataType)).map((c) => ({
       key: c.colKey, label: c.label, required: c.required,
       type: c.dataType === 'number' ? 'number' : c.dataType === 'date' ? 'date' : 'text',
       example: '',
@@ -779,8 +983,9 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     cols.push({ key: '__id', label: 'ID dòng', required: false, type: 'text', example: '' })
     return cols
   }, [columns])
+  // matchKey (khoá đối chiếu upsert) chỉ hợp lý với cột vô hướng
   const matchKeyOptions = useMemo(
-    () => columns.filter((c) => c.dataType !== 'computed').map((c) => ({ value: c.colKey, label: c.label })),
+    () => columns.filter((c) => !NON_SIMPLE_TYPES.includes(c.dataType)).map((c) => ({ value: c.colKey, label: c.label })),
     [columns],
   )
   async function handleImport(validRows, opts = {}) {
@@ -930,6 +1135,33 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
                         const v = computeDays(col, row)
                         return <td key={col.colKey}>{v != null ? v : <span className={s.archInlineEmpty}>—</span>}</td>
                       }
+                      if (col.dataType === 'formula') {
+                        const { value, error } = evalFormula(col, row, columns)
+                        return (
+                          <td key={col.colKey} className={s.ctblFormulaCell}>
+                            {error
+                              ? <span className={s.ctblFormulaErr} title="Lỗi công thức">{error}</span>
+                              : (value == null || value === '')
+                                ? <span className={s.archInlineEmpty}>—</span>
+                                : formatFormulaValue(value)}
+                          </td>
+                        )
+                      }
+                      if (col.dataType === 'link') {
+                        return (
+                          <LinkCell key={col.colKey} col={col} value={row.data?.[col.colKey]} canEdit={canEdit}
+                            active={canEdit && activeCell?.rowId === row.id && activeCell?.colKey === col.colKey}
+                            onActivate={() => canEdit && setActiveCell({ rowId: row.id, colKey: col.colKey })}
+                            onSave={(val) => saveCell(row, col.colKey, val)} />
+                        )
+                      }
+                      if (col.dataType === 'file') {
+                        return (
+                          <FileCell key={col.colKey} col={col} row={row}
+                            files={filesByCell[`${row.id}|${col.colKey}`]}
+                            canEdit={canEdit} onChanged={reloadFiles} addToast={addToast} />
+                        )
+                      }
                       return (
                         <EditableCell key={col.colKey} col={col} value={row.data?.[col.colKey]}
                           canEdit={canEdit}
@@ -980,7 +1212,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
         if (!col) return null
         return (
           <ColumnFilterDropdown
-            col={col} allRows={rows}
+            col={col} columns={columns} allRows={rows}
             currentFilter={colFilters[filterPopup.colKey] ?? null}
             sortState={sortState}
             onSort={(c, d) => setSortState({ col: c, dir: d })}
@@ -992,7 +1224,8 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       })()}
 
       {showExport && (
-        <ExportModal def={def} columns={columns} rows={rows} company={company} onClose={() => setShowExport(false)} />
+        <ExportModal def={def} columns={columns} rows={rows} company={company}
+          filesByCell={filesByCell} onClose={() => setShowExport(false)} />
       )}
       {showImport && (
         <ExcelImportModal

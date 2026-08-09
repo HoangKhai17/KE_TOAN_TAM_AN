@@ -3,6 +3,7 @@ import { Plus, Trash2, Pencil, Loader2, Workflow, FileText, AlertTriangle } from
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import * as api from '../../api/companyProcesses'
 import DocumentTypesSection from './DocumentTypesSection'
 import NotesSection from './NotesSection'
@@ -187,17 +188,15 @@ export default function ProcessesTab({ company }) {
       )}
 
       {/* Modal xoá */}
-      {deleteTarget && (
-        <Modal title="Xoá quy trình" onClose={() => setDeleteTarget(null)}>
-          <div className={s.modalStack}>
-            <p>Xoá quy trình <strong>{deleteTarget.name}</strong>? Toàn bộ các bước và mũi tên trong sơ đồ sẽ mất.</p>
-            <div className={s.modalActions}>
-              <button className={s.btnOutline} onClick={() => setDeleteTarget(null)} disabled={busy}>Huỷ</button>
-              <button className={s.btnDanger} onClick={handleDelete} disabled={busy}>Xoá</button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa quy trình"
+        message={deleteTarget ? <>Bạn có chắc chắn muốn xóa quy trình <strong>“{deleteTarget.name}”</strong>?</> : null}
+        warning="Toàn bộ các bước và mũi tên trong sơ đồ sẽ bị xóa."
+        loading={busy}
+        onCancel={() => !busy && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

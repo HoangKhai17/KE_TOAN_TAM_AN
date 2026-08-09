@@ -54,6 +54,16 @@ const MODULES = {
     canWrite:  async (user, entityId) => isAdmin(user) || phuTrachCongTyQuaHopDong(entityId, user?.id),
     canDelete: (att, user) => isAdmin(user) || att.uploaded_by === user.id,
   },
+
+  // File của một DÒNG trong Bảng tùy chỉnh (cột kiểu 'file') — entity_id = row id,
+  // phân biệt cột bằng field_key. RBAC bám công ty của dòng: admin xem/ghi hết,
+  // nhân viên chỉ công ty MÌNH PHỤ TRÁCH. Xoá = admin hoặc người upload.
+  company_table_row: {
+    entityTable: 'company_table_rows',
+    canRead:   async (att, user) => isAdmin(user) || phuTrachCongTyQuaRow(att.entity_id, user?.id),
+    canWrite:  async (user, entityId) => isAdmin(user) || phuTrachCongTyQuaRow(entityId, user?.id),
+    canDelete: (att, user) => isAdmin(user) || att.uploaded_by === user.id,
+  },
 }
 
 // Nhân sự có phụ trách công ty này không
@@ -79,6 +89,15 @@ async function phuTrachCongTyQuaHopDong(contractId, userId) {
   const { rows } = await query(
     `SELECT 1 FROM company_service_contracts sc JOIN companies c ON c.id = sc.company_id
      WHERE sc.id = $1 AND c.assigned_staff_id = $2`, [contractId, userId])
+  return rows.length > 0
+}
+
+// Nhân sự có phụ trách công ty của DÒNG này không (entity_id = company_table_rows.id)
+async function phuTrachCongTyQuaRow(rowId, userId) {
+  if (!rowId || !userId) return false
+  const { rows } = await query(
+    `SELECT 1 FROM company_table_rows r JOIN companies c ON c.id = r.company_id
+     WHERE r.id = $1 AND c.assigned_staff_id = $2`, [rowId, userId])
   return rows.length > 0
 }
 

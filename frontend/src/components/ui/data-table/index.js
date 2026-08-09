@@ -7,4 +7,5 @@ export {
   SelectionHeaderCell,
   SelectionRowCell,
   useRowSelection,
+  useRowReorder,
 } from './CompactDataTable'

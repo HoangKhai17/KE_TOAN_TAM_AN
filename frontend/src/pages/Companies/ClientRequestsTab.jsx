@@ -8,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import Modal from '../../components/ui/Modal'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import * as cdrApi from '../../api/clientRequests'
 import s from './companies.module.css'
 
@@ -591,25 +592,14 @@ export default function ClientRequestsTab({ company }) {
       )}
 
       {/* ── Delete confirm ── */}
-      {deleteTarget && (
-        <Modal title="Xoá yêu cầu tài liệu" onClose={() => setDeleteTarget(null)}>
-          <div className={s.modalStack}>
-            <div className={`${s.terminateWarn} ${s.terminateWarnDanger}`}>
-              <AlertTriangle size={16} className={`${s.warnIconInline} ${s.warnIconDanger}`} />
-              <span style={{ fontSize: 'var(--fs-md)' }}>
-                Xoá yêu cầu <strong>"{deleteTarget.documentName}"</strong>? Hành động này không thể hoàn tác.
-              </span>
-            </div>
-            <div className={s.modalActions}>
-              <button onClick={() => setDeleteTarget(null)} className={s.btnOutline}>Huỷ</button>
-              <button onClick={handleDelete} disabled={deleting} className={s.btnDanger}>
-                {deleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
-                {deleting ? 'Đang xoá...' : 'Xoá'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa yêu cầu tài liệu"
+        message={deleteTarget ? <>Bạn có chắc chắn muốn xóa yêu cầu <strong>“{deleteTarget.documentName}”</strong>?</> : null}
+        loading={deleting}
+        onCancel={() => !deleting && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+      />
 
       {/* ── Generate/copy link modal ── */}
       {linkTarget && (

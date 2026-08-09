@@ -51,7 +51,14 @@ async function revealCredential(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function reorderCredentials(req, res, next) {
+  try {
+    await svc.reorderCredentials(req.params.companyId, req.body.orderedIds, req.user)
+    res.json({ success: true })
+  } catch (err) { next(err) }
+}
+
 module.exports = {
   listCredentials, getCredential, createCredential,
-  updateCredential, deleteCredential, revealCredential,
+  updateCredential, deleteCredential, revealCredential, reorderCredentials,
 }

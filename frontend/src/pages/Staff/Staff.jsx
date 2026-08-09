@@ -9,6 +9,7 @@ import {
 import AppLayout from '../../components/layout/AppLayout'
 import PaginationFooter from '../../components/layout/PaginationFooter'
 import Modal from '../../components/ui/Modal'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as usersApi from '../../api/users'
@@ -38,6 +39,7 @@ const FALLBACK_AVATAR = `https://ui-avatars.com/api/?name=&size=56&background=e2
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function Staff() {
+  const confirmDelete = useDeleteConfirm()
   const navigate    = useNavigate()
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
@@ -105,7 +107,7 @@ export default function Staff() {
   }
 
   async function handleDelete(user) {
-    if (!window.confirm(`Xóa nhân viên "${user.name}"? Thao tác này không thể hoàn tác.`)) return
+    if (!(await confirmDelete({ title: 'Xóa nhân viên', message: <>Bạn có chắc chắn muốn xóa nhân viên <strong>“{user.name}”</strong>?</> }))) return
     try {
       await usersApi.deleteUser(user.id)
       invalidateRefStaff(queryClient)

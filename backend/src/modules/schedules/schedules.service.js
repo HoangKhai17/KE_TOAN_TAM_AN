@@ -49,6 +49,7 @@ function toDto(row) {
     createdBy:          row.created_by,
     createdAt:          row.created_at,
     updatedAt:          row.updated_at,
+    sortOrder:          row.sort_order ?? 0,
   }
 }
 
@@ -94,7 +95,7 @@ async function listSchedules(companyId) {
      JOIN task_types tt ON tt.id = s.task_type_id
      LEFT JOIN users u  ON u.id  = s.assigned_staff_id
      WHERE s.company_id = $1
-     ORDER BY s.created_at DESC`,
+     ORDER BY s.sort_order ASC, s.created_at DESC`,
     [companyId]
   )
   return rows.map(toDto)
@@ -115,8 +116,9 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
   const { rows: [schedule] } = await query(
     `INSERT INTO customer_task_schedules
        (company_id, task_type_id, assigned_staff_id, recurrence_type, recurrence_config,
-        deadline_offset_days, override_sla_days, excluded_step_ids, notes, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        deadline_offset_days, override_sla_days, excluded_step_ids, notes, sort_order, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+       (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM customer_task_schedules WHERE company_id = $1),$10)
      RETURNING *`,
     [
       companyId, taskTypeId, assignedStaffId ?? null,
@@ -156,6 +158,7 @@ async function updateSchedule(id, data, user, ipAddress, userAgent) {
     deadlineOffsetDays: 'deadline_offset_days',
     overrideSlaDays:    'override_sla_days',
     notes:              'notes',
+    sortOrder:          'sort_order',
   }
 
   const updates = []

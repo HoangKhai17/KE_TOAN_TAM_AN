@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
+import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
@@ -467,26 +468,16 @@ export default function CompanyDetail() {
       )}
 
       {/* Delete confirm */}
-      {showDelete && (
-        <Modal title="Xoá công ty" onClose={() => setShowDelete(false)}>
-          <div className={s.modalStack}>
-            <div className={`${s.terminateWarn} ${s.terminateWarnDanger}`}>
-              <AlertTriangle size={18} className={`${s.warnIconInline} ${s.warnIconDanger}`} />
-              <span>
-                Bạn sắp <strong>xoá vĩnh viễn</strong> công ty <strong>&ldquo;{company.name}&rdquo;</strong>.
-                Hành động này không thể hoàn tác. Nếu công ty đã có công việc hoặc lịch sử phân công, hãy dùng <strong>&ldquo;Kết thúc HĐ&rdquo;</strong> thay thế.
-              </span>
-            </div>
-            <div className={s.modalActions}>
-              <button onClick={() => setShowDelete(false)} className={s.btnOutline}>Huỷ bỏ</button>
-              <button onClick={handleDelete} disabled={deleting} className={s.btnDanger}>
-                {deleting ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
-                {deleting ? 'Đang xoá...' : 'Xoá vĩnh viễn'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmDialog
+        open={showDelete}
+        title="Xóa công ty"
+        message={<>Bạn có chắc chắn muốn xóa vĩnh viễn công ty <strong>“{company.name}”</strong>?</>}
+        warning="Nếu công ty đã có công việc hoặc lịch sử phân công, hãy dùng “Kết thúc HĐ” thay thế."
+        confirmLabel="Xóa vĩnh viễn"
+        loading={deleting}
+        onCancel={() => !deleting && setShowDelete(false)}
+        onConfirm={handleDelete}
+      />
     </AppLayout>
   )
 }

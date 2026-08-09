@@ -188,6 +188,14 @@ Tài liệu tạm dùng làm chuẩn khi đồng bộ các trang còn lại vớ
   “chọn toàn bộ kết quả”; mặc định chuẩn hiện tại chỉ chọn các dòng đang hiển thị trên trang.
 - `CustomTableTab` là adapter đầu tiên dùng `useRowSelection`; các bảng còn lại tích hợp cùng primitive thay vì
   sao chép state `selectedIds`, logic indeterminate và kích thước ba cột điều khiển.
+- Tab `Tài khoản hệ thống` là adapter nghiệp vụ đầu tiên: có kéo thứ tự, checkbox, STT và xóa hàng loạt.
+  Kéo thả chỉ bật ở bộ lọc `Tất cả`; thứ tự được lưu bằng `company_credentials.sort_order` qua endpoint reorder.
+- Adapter đã được mở rộng cho `Ghi chú`, `Lịch định kỳ`, `Tài liệu`, `Chứng từ phát sinh`,
+  `Điều cần lưu ý`, `Trụ sở chính / Địa điểm kinh doanh` và `Hồ sơ dịch vụ`.
+- Các bảng dùng `useRowReorder`; component nghiệp vụ chỉ cung cấp `rows`, `setRows`, điều kiện `enabled`
+  và callback lưu `sortOrder`. Hook tự cập nhật optimistic và rollback khi callback thất bại.
+- Với bảng có filter/sort hoặc inline editing, khóa kéo thả trong lúc tập hiển thị không còn phản ánh đúng
+  thứ tự thủ công toàn bộ. Checkbox và STT vẫn hoạt động trên trang/tập đang hiển thị.
 
 ## Scope note
 

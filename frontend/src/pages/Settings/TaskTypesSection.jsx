@@ -13,6 +13,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import Modal from '../../components/ui/Modal'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useToastStore } from '../../stores/toastStore'
 import {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
@@ -56,6 +57,7 @@ function toFieldKey(label) {
 // ── Main Section ──────────────────────────────────────────────────────────────
 
 export default function TaskTypesSection() {
+  const confirmDelete = useDeleteConfirm()
   const addToast              = useToastStore((st) => st.toast)
   const [grouped, setGrouped] = useState({})
   const [loading, setLoading] = useState(true)
@@ -111,7 +113,7 @@ export default function TaskTypesSection() {
   }
 
   async function handleDelete(tt) {
-    if (!window.confirm(`Xóa loại công việc "${tt.name}"?\nChỉ xóa được nếu chưa có công việc/lịch nào dùng. Không thể hoàn tác.`)) return
+    if (!(await confirmDelete({ title: 'Xóa loại công việc', message: <>Bạn có chắc chắn muốn xóa loại công việc <strong>“{tt.name}”</strong>?</>, warning: 'Chỉ có thể xóa nếu chưa có công việc hoặc lịch nào đang sử dụng.' }))) return
     try {
       await deleteTaskType(tt.id)
       setDetailCache((p) => { const n = { ...p }; delete n[tt.id]; return n })
@@ -557,7 +559,7 @@ function CustomFieldsPanel({ taskTypeId, customFields, onRefresh }) {
   }
 
   async function handleDelete(fieldId) {
-    if (!window.confirm('Xóa trường tùy chỉnh này?')) return
+    if (!(await confirmDelete({ title: 'Xóa trường tùy chỉnh', message: 'Bạn có chắc chắn muốn xóa trường tùy chỉnh này?' }))) return
     setSaving(true)
     try {
       await deleteCustomField(taskTypeId, fieldId)

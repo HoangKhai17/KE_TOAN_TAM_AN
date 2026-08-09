@@ -607,18 +607,19 @@ async function assertCompanyAccess(companyId, user) {
 async function listNotes(companyId, user) {
   await assertCompanyAccess(companyId, user)
   const { rows } = await query(
-    `SELECT cn.id, cn.content, cn.is_pinned, cn.created_at, cn.updated_at,
+    `SELECT cn.id, cn.content, cn.is_pinned, cn.sort_order, cn.created_at, cn.updated_at,
             u.name AS author_name, cn.created_by
      FROM company_notes cn
      LEFT JOIN users u ON u.id = cn.created_by
      WHERE cn.company_id = $1
-     ORDER BY cn.is_pinned DESC, cn.created_at DESC`,
+     ORDER BY cn.is_pinned DESC, cn.sort_order ASC, cn.created_at DESC`,
     [companyId]
   )
   return rows.map(r => ({
     id:         r.id,
     content:    r.content,
     isPinned:   r.is_pinned,
+    sortOrder:  r.sort_order,
     authorName: r.author_name ?? 'Hệ thống',
     createdBy:  r.created_by,
     createdAt:  r.created_at,
@@ -631,15 +632,16 @@ async function createNote(companyId, { content, isPinned = false }, user) {
   // S4: cap note length
   const trimmed = content.trim().slice(0, 10000)
   const { rows: [row] } = await query(
-    `INSERT INTO company_notes (company_id, content, is_pinned, created_by)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, content, is_pinned, created_at, updated_at, created_by`,
+    `INSERT INTO company_notes (company_id, content, is_pinned, sort_order, created_by)
+     VALUES ($1, $2, $3, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM company_notes WHERE company_id = $1), $4)
+     RETURNING id, content, is_pinned, sort_order, created_at, updated_at, created_by`,
     [companyId, trimmed, isPinned, user.id]
   )
   return {
     id:         row.id,
     content:    row.content,
     isPinned:   row.is_pinned,
+    sortOrder:  row.sort_order,
     authorName: user.name ?? 'Hệ thống',  // P3: use caller's name — no extra DB query
     createdBy:  row.created_by,
     createdAt:  row.created_at,
@@ -647,12 +649,13 @@ async function createNote(companyId, { content, isPinned = false }, user) {
   }
 }
 
-async function updateNote(companyId, noteId, { content, isPinned }, user) {
+async function updateNote(companyId, noteId, { content, isPinned, sortOrder }, user) {
   await assertCompanyAccess(companyId, user)
   const sets = []
   const vals = []
   if (content  !== undefined) { sets.push(`content = $${sets.length + 1}`);   vals.push(content.trim().slice(0, 10000)) }
   if (isPinned !== undefined) { sets.push(`is_pinned = $${sets.length + 1}`); vals.push(isPinned) }
+  if (sortOrder !== undefined) { sets.push(`sort_order = $${sets.length + 1}`); vals.push(sortOrder) }
   if (!sets.length) throw new Error('Nothing to update')
   sets.push('updated_at = NOW()')
   vals.push(companyId, noteId)
@@ -660,7 +663,7 @@ async function updateNote(companyId, noteId, { content, isPinned }, user) {
   const { rows: [row] } = await query(
     `UPDATE company_notes SET ${sets.join(', ')}
      WHERE company_id = $${vals.length - 1} AND id = $${vals.length}
-     RETURNING id, content, is_pinned, created_at, updated_at, created_by`,
+     RETURNING id, content, is_pinned, sort_order, created_at, updated_at, created_by`,
     vals
   )
   if (!row) throw Object.assign(new Error('Note not found'), { status: 404 })
@@ -668,6 +671,7 @@ async function updateNote(companyId, noteId, { content, isPinned }, user) {
     id:         row.id,
     content:    row.content,
     isPinned:   row.is_pinned,
+    sortOrder:  row.sort_order,
     createdAt:  row.created_at,
     updatedAt:  row.updated_at,
   }
