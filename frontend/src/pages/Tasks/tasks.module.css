@@ -4513,3 +4513,33 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   font-size: var(--fs-sm);
   color: var(--color-muted);
 }
+
+/* Kanban nguồn — nhóm thẻ theo KHÁCH HÀNG bên trong mỗi cột nguồn */
+.boardGroup { display: flex; flex-direction: column; gap: 5px; }
+.boardGroupHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-primary-bg);
+  border-radius: 4px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.boardGroupName {
+  font-size: var(--fs-3xs);
+  font-weight: 700;
+  color: var(--color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.boardGroupCount {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: var(--fs-3xs);
+  font-weight: 600;
+  color: var(--color-muted);
+}

@@ -221,7 +221,7 @@ function OnHoldModal({ task, onConfirm, onClose }) {
 
 // ── Board card inner ──────────────────────────────────────────────────────────
 
-function BoardCardInner({ task, isAdmin, onDelete, onQuickView, showStatus = false }) {
+function BoardCardInner({ task, isAdmin, onDelete, onQuickView, showStatus = false, hideCompany = false }) {
   const pct     = progressPct(task)
   const overdue = isTaskOverdue(task)
   const startShort = task.startDate ? fmtDate(task.startDate).slice(0, 5) : null
@@ -260,7 +260,7 @@ function BoardCardInner({ task, isAdmin, onDelete, onQuickView, showStatus = fal
           </div>
         )}
       </div>
-      {company && <div className={s.boardCardCompany}>{company}</div>}
+      {!hideCompany && company && <div className={s.boardCardCompany}>{company}</div>}
       {/* Hàng: mức độ + nhân sự phụ trách + ngày (gọn 1 dòng để rút height) */}
       <div className={s.boardCardMeta}>
         <PriorityBadge priority={task.priority} />
@@ -509,13 +509,30 @@ function DraggableSourceCard({ task, isAdmin, onDelete, onQuickView }) {
       style={transform ? { '--drag-x': `${transform.x}px`, '--drag-y': `${transform.y}px` } : undefined}
       onClick={() => !isDragging && onQuickView(task.id)}
     >
-      <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} showStatus />
+      <BoardCardInner task={task} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} showStatus hideCompany />
     </div>
   )
 }
 
+// Gom danh sách task trong 1 cột theo KHÁCH HÀNG. Có KH sắp theo tên; "không KH" xuống cuối.
+function groupTasksByCompany(tasks) {
+  const map = new Map()   // companyId (hoặc '') → { label, tasks }
+  for (const t of tasks) {
+    const key = t.companyId ?? ''
+    if (!map.has(key)) map.set(key, { label: t.companyShortName || t.companyName || '(Không có khách hàng)', tasks: [] })
+    map.get(key).tasks.push(t)
+  }
+  const NO_KH = '(Không có khách hàng)'
+  return [...map.values()].sort((a, b) => {
+    const ae = a.label === NO_KH, be = b.label === NO_KH
+    if (ae !== be) return ae ? 1 : -1
+    return a.label.localeCompare(b.label, 'vi')
+  })
+}
+
 function DroppableSourceColumn({ srcKey, label, tasks, onOpen, isAdmin, onDelete, onQuickView }) {
   const { setNodeRef, isOver } = useDroppable({ id: srcKey })
+  const groups = groupTasksByCompany(tasks)
   return (
     <div className={s.boardCol}>
       <div className={s.boardColHead}>
@@ -524,10 +541,18 @@ function DroppableSourceColumn({ srcKey, label, tasks, onOpen, isAdmin, onDelete
         <span className={s.boardColCount}>{tasks.length}</span>
       </div>
       <div ref={setNodeRef} className={`${s.boardCards} ${isOver ? s.boardCardsOver : ''}`}>
-        {tasks.map((t) => (
-          <DraggableSourceCard key={t.id} task={t} onOpen={onOpen} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
-        ))}
         {tasks.length === 0 && <p className={s.boardEmptyText}>Không có</p>}
+        {groups.map((g) => (
+          <div key={g.label} className={s.boardGroup}>
+            <div className={s.boardGroupHead} title={g.label}>
+              <span className={s.boardGroupName}>{g.label}</span>
+              <span className={s.boardGroupCount}>{g.tasks.length}</span>
+            </div>
+            {g.tasks.map((t) => (
+              <DraggableSourceCard key={t.id} task={t} onOpen={onOpen} isAdmin={isAdmin} onDelete={onDelete} onQuickView={onQuickView} />
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -575,7 +600,7 @@ function SourceBoardView({ tasks, sourceOptions, onSourceChange, onOpen, onQuick
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
           <div className={`${s.boardCard} ${s.boardCardOverlay}`}>
-            <BoardCardInner task={activeTask} isAdmin={false} onDelete={null} showStatus />
+            <BoardCardInner task={activeTask} isAdmin={false} onDelete={null} showStatus hideCompany />
           </div>
         ) : null}
       </DragOverlay>
