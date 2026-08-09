@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Plus, Pencil, Trash2, Eye, EyeOff, Copy, Check,
-  Shield, Loader2, ExternalLink, Download,
+  Shield, Loader2, ExternalLink, Download, Filter,
 } from 'lucide-react'
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import * as credApi from '../../api/credentials'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import {
   DragHeaderCell,
   DragRowCell,
@@ -188,27 +189,20 @@ function CredentialForm({ initial, onSubmit, onClose, title }) {
 
 function RevealModal({ companyId, credential, onClose }) {
   const addToast = useToastStore((st) => st.toast)
-  const [reauth, setReauth]       = useState('')     // mật khẩu ĐĂNG NHẬP của user
-  const [showReauth, setShowReauth] = useState(false)
-  const [password, setPassword]   = useState(null)   // mật khẩu hệ thống sau khi xác thực
-  const [verifying, setVerifying] = useState(false)
-  const [error, setError]         = useState(null)
-  const [copied, setCopied]       = useState(false)
+  const [password, setPassword] = useState(null)   // mật khẩu hệ thống
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState(null)
+  const [copied, setCopied]     = useState(false)
 
-  async function handleVerify(e) {
-    e.preventDefault()
-    if (!reauth.trim()) { setError('Vui lòng nhập mật khẩu đăng nhập'); return }
-    setError(null)
-    setVerifying(true)
-    try {
-      const pw = await credApi.revealCredential(companyId, credential.id, reauth)
-      setPassword(pw)
-    } catch (err) {
-      setError(err.response?.data?.error?.message ?? 'Xác thực thất bại')
-    } finally {
-      setVerifying(false)
-    }
-  }
+  // Bỏ re-auth: mở popup là xem luôn. Server vẫn kiểm quyền + ghi audit log mỗi lần xem.
+  useEffect(() => {
+    let cancelled = false
+    credApi.revealCredential(companyId, credential.id)
+      .then((pw) => { if (!cancelled) setPassword(pw) })
+      .catch((err) => { if (!cancelled) setError(err.response?.data?.error?.message ?? 'Không xem được mật khẩu') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [companyId, credential.id])
 
   async function handleCopy() {
     try {
@@ -225,39 +219,19 @@ function RevealModal({ companyId, credential, onClose }) {
       <div style={{ padding: '8px 0' }}>
         <div className={s.securityBanner} style={{ marginBottom: 16 }}>
           <Shield size={14} style={{ flexShrink: 0 }} />
-          <span>Xác thực lại danh tính trước khi xem. Mỗi lần xem đều được ghi vào audit log.</span>
+          <span>Mỗi lần xem đều được ghi vào audit log.</span>
         </div>
 
-        {password === null ? (
-          // Bước 1 — nhập lại mật khẩu ĐĂNG NHẬP để xác thực
-          <form onSubmit={handleVerify}>
-            <label className={s.formLabel}>Nhập mật khẩu đăng nhập của bạn để xem mật khẩu này</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={showReauth ? 'text' : 'password'}
-                value={reauth}
-                onChange={(e) => { setReauth(e.target.value); setError(null) }}
-                placeholder="Mật khẩu đăng nhập"
-                className={s.formInput}
-                style={{ paddingRight: 36 }}
-                autoFocus
-                autoComplete="current-password"
-              />
-              <button type="button" onClick={() => setShowReauth((v) => !v)} className={s.pwToggle} tabIndex={-1}>
-                {showReauth ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-            </div>
-            {error && <div className={s.formError} style={{ marginTop: 6 }}>{error}</div>}
+        {loading ? (
+          <div className={s.loadingCenter}><Loader2 size={16} className={s.spin} style={{ marginRight: 8 }} /> Đang tải...</div>
+        ) : error ? (
+          <>
+            <div className={s.formError}>{error}</div>
             <div className={s.modalActions} style={{ marginTop: 16 }}>
-              <button type="button" onClick={onClose} className={s.btnOutline} disabled={verifying}>Huỷ</button>
-              <button type="submit" className={s.btnNavy} disabled={verifying}>
-                {verifying ? <Loader2 size={13} className={s.spin} /> : <Eye size={13} />}
-                {verifying ? 'Đang xác thực...' : 'Xác thực & Xem'}
-              </button>
+              <button onClick={onClose} className={s.btnOutline}>Đóng</button>
             </div>
-          </form>
+          </>
         ) : (
-          // Bước 2 — hiển thị mật khẩu hệ thống
           <>
             <div className={s.credRevealBox}>
               <code className={s.credRevealPw}>{password}</code>
@@ -359,6 +333,9 @@ export default function CredentialsTab({ company }) {
   const [dragCredentialId, setDragCredentialId] = useState(null)
   const [dragOverId, setDragOverId] = useState(null)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [colFilters, setColFilters] = useState({})
+  const [sortState, setSortState] = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup] = useState(null)
 
   useEffect(() => { loadEnums() }, [loadEnums])
 
@@ -383,13 +360,70 @@ export default function CredentialsTab({ company }) {
   useEffect(() => { setPage(1) }, [companyId, filterActive])
 
   // Phân trang phía client (danh sách theo 1 công ty nên số lượng nhỏ)
-  const totalPages = Math.max(1, Math.ceil(creds.length / PAGE_SIZE))
+  const filteredCreds = useMemo(() => {
+    let result = [...creds]
+    const displayValue = (row, key) => {
+      if (key === 'isActive') return row.isActive ? 'Đang kích hoạt' : 'Đã tắt'
+      if (key === 'updatedAt') return fmtDateTime(row.updatedAt)
+      return String(row[key] ?? '')
+    }
+    for (const [key, value] of Object.entries(colFilters)) {
+      if (value instanceof Set && value.size) {
+        result = result.filter((row) => value.has(displayValue(row, key)))
+      } else if (typeof value === 'string' && value.trim()) {
+        const query = value.trim().toLocaleLowerCase('vi')
+        result = result.filter((row) => displayValue(row, key).toLocaleLowerCase('vi').includes(query))
+      } else if (key === 'updatedAt' && value && (value.from || value.to)) {
+        result = result.filter((row) => {
+          const date = String(row.updatedAt ?? '').slice(0, 10)
+          return date && (!value.from || date >= value.from) && (!value.to || date <= value.to)
+        })
+      }
+    }
+    if (sortState.col) {
+      result.sort((a, b) => displayValue(a, sortState.col).localeCompare(displayValue(b, sortState.col), 'vi', { numeric: true }) * (sortState.dir === 'asc' ? 1 : -1))
+    }
+    return result
+  }, [creds, colFilters, sortState])
+
+  const totalPages = Math.max(1, Math.ceil(filteredCreds.length / PAGE_SIZE))
   const pageSafe   = Math.min(page, totalPages)
-  const pageCreds  = creds.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
+  const pageCreds  = filteredCreds.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
   const selection = useRowSelection({ rows: pageCreds })
-  const canReorder = filterActive === ''
+  const canReorder = filterActive === '' && Object.keys(colFilters).length === 0 && !sortState.col
 
   useEffect(() => { selection.clear() }, [companyId, filterActive]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(1); selection.clear() }, [colFilters, sortState]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function updateColumnFilter(colKey, value) {
+    setColFilters((current) => {
+      const next = { ...current }
+      if (value == null || (value instanceof Set && value.size === 0) || (typeof value === 'string' && !value.trim())) delete next[colKey]
+      else next[colKey] = value
+      return next
+    })
+  }
+
+  function openColumnFilter(colKey, event) {
+    event.stopPropagation()
+    if (filterPopup?.colKey === colKey) return setFilterPopup(null)
+    const rect = event.currentTarget.getBoundingClientRect()
+    setFilterPopup({ colKey, top: rect.bottom + 4, left: Math.min(rect.left, window.innerWidth - 260) })
+  }
+
+  function FilterHeader({ colKey, children }) {
+    const active = colFilters[colKey] != null || sortState.col === colKey
+    return (
+      <th>
+        <div className={s.hdldThInner}>
+          <span className={s.hdldThLabel}>{children}</span>
+          <button data-colfilter-btn className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`} onClick={(event) => openColumnFilter(colKey, event)} title="Lọc / Sắp xếp">
+            <Filter size={10} />
+          </button>
+        </div>
+      </th>
+    )
+  }
 
   async function handleDrop(targetId) {
     const sourceId = dragCredentialId
@@ -540,12 +574,12 @@ export default function CredentialsTab({ company }) {
                   onToggle={selection.toggleAll}
                 />
                 <IndexHeaderCell />
-                <th>Hệ thống</th>
-                <th>Đường dẫn</th>
-                <th>Tên đăng nhập</th>
+                <FilterHeader colKey="systemName">Hệ thống</FilterHeader>
+                <FilterHeader colKey="systemUrl">Đường dẫn</FilterHeader>
+                <FilterHeader colKey="username">Tên đăng nhập</FilterHeader>
                 <th>Mật khẩu</th>
-                <th>Trạng thái</th>
-                <th>Cập nhật</th>
+                <FilterHeader colKey="isActive">Trạng thái</FilterHeader>
+                <FilterHeader colKey="updatedAt">Cập nhật</FilterHeader>
                 <th className={s.credCenter}>Thao tác</th>
               </tr>
             </thead>
@@ -618,7 +652,7 @@ export default function CredentialsTab({ company }) {
       {/* Pagination */}
       {!loading && totalPages > 1 && (
         <div className={s.paginationBar} style={{ marginTop: 10 }}>
-          <span className={s.paginationInfo}>{creds.length} tài khoản</span>
+          <span className={s.paginationInfo}>{filteredCreds.length} tài khoản</span>
           <div className={s.paginationBtns}>
             <button className={s.paginationBtn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageSafe === 1}>‹</button>
             <span style={{ fontSize: 'var(--fs-xs)', padding: '0 8px', color: 'var(--color-muted)' }}>
@@ -652,6 +686,20 @@ export default function CredentialsTab({ company }) {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+      {filterPopup && (
+        <ColumnFilterDropdown
+          colKey={filterPopup.colKey}
+          filterType={filterPopup.colKey === 'isActive' ? 'enum' : filterPopup.colKey === 'updatedAt' ? 'dateRange' : 'text'}
+          allRows={creds}
+          getDisplayLabel={(row, key) => key === 'isActive' ? (row.isActive ? 'Đang kích hoạt' : 'Đã tắt') : String(row[key] ?? '')}
+          currentFilter={colFilters[filterPopup.colKey] ?? null}
+          sortState={sortState}
+          onSort={(col, dir) => { setSortState({ col, dir }); setFilterPopup(null) }}
+          onFilterChange={updateColumnFilter}
+          onClose={() => setFilterPopup(null)}
+          style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }}
+        />
+      )}
       {revealTarget && (
         <RevealModal
           companyId={companyId}

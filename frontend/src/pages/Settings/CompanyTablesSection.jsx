@@ -15,20 +15,22 @@ const TONES = ['success', 'warning', 'danger', 'info', 'muted']
 const row = { display: 'flex', alignItems: 'center', gap: 8 }
 
 // ── Def create/edit modal ─────────────────────────────────────────────────────
-function DefModal({ def, onClose, onSaved }) {
+function DefModal({ def, parentDefId, onClose, onSaved }) {
   const [form, setForm] = useState({ name: def?.name ?? '', icon: def?.icon ?? '', description: def?.description ?? '' })
   const [saving, setSaving] = useState(false)
   const addToast = useToastStore((st) => st.toast)
+  const isChild = !def && !!parentDefId
   async function save() {
     if (!form.name.trim()) return
     setSaving(true)
     try {
-      const saved = def ? await api.updateDef(def.id, form) : await api.createDef(form)
+      const saved = def ? await api.updateDef(def.id, form)
+        : await api.createDef(parentDefId ? { ...form, parentDefId } : form)
       onSaved(saved)
-    } catch { addToast('Không thể lưu bảng', 'error') } finally { setSaving(false) }
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Không thể lưu bảng', 'error') } finally { setSaving(false) }
   }
   return (
-    <Modal title={def ? 'Sửa bảng' : 'Tạo bảng mới'} onClose={onClose}>
+    <Modal title={def ? 'Sửa bảng' : isChild ? 'Tạo bảng con' : 'Tạo bảng mới'} onClose={onClose}>
       <div style={{ display: 'grid', gap: 12 }}>
         <label>Tên tab *
           <input className={s.settingsInput} value={form.name} autoFocus
@@ -288,6 +290,9 @@ export default function CompanyTablesSection() {
   useEffect(() => { reload() }, [])
 
   const selDef = defs.find((d) => d.id === selected)
+  const topDefs = defs.filter((d) => !d.parentDefId)                                  // bảng cấp cao (tab chính)
+  const selChildren = selDef && !selDef.parentDefId ? defs.filter((d) => d.parentDefId === selDef.id) : []
+  const selParent = selDef?.parentDefId ? defs.find((d) => d.id === selDef.parentDefId) : null
 
   async function toggleActive(def) {
     try { await api.updateDef(def.id, { isActive: !def.isActive }); reload() }
@@ -303,15 +308,27 @@ export default function CompanyTablesSection() {
     try { await api.deleteColumn(col.id); reload() }
     catch { addToast('Không thể xóa cột', 'error') }
   }
-  // Kéo-thả đổi thứ tự BẢNG → đổi luôn thứ tự tab trong Chi tiết khách hàng
+  // Kéo-thả đổi thứ tự BẢNG cấp cao → đổi luôn thứ tự tab trong Chi tiết khách hàng.
+  // Giữ nguyên các bảng con trong state (chỉ sắp lại nhóm cấp cao).
   async function reorderDefs(newIds) {
     const prev = defs
-    setDefs(newIds.map((id) => prev.find((d) => d.id === id)))   // optimistic
+    const children = prev.filter((d) => d.parentDefId)
+    setDefs([...newIds.map((id) => prev.find((d) => d.id === id)), ...children])   // optimistic
     try { await api.reorderDefs(newIds) }
     catch {
       setDefs(prev)                                              // revert
       addToast('Không thể đổi thứ tự bảng', 'error')
     }
+  }
+
+  // Đổi thứ tự BẢNG CON (sub-tab) trong phạm vi cùng bảng cha
+  async function moveChild(children, idx, dir) {
+    const j = idx + dir
+    if (j < 0 || j >= children.length) return
+    const ids = children.map((c) => c.id)
+    ;[ids[idx], ids[j]] = [ids[j], ids[idx]]
+    try { await api.reorderDefs(ids); reload() }
+    catch { addToast('Không thể đổi thứ tự bảng con', 'error') }
   }
 
   async function moveColumn(idx, dir) {
@@ -338,9 +355,9 @@ export default function CompanyTablesSection() {
         <table className={s.settingsTable}>
           <thead><tr><th style={{ width: 34 }}></th><th>Tab</th><th>Key</th><th>Số cột</th><th>Hiện</th><th></th></tr></thead>
           <tbody>
-            {defs.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--color-muted)' }}>Chưa có bảng nào.</td></tr>}
-            <SortableList ids={defs.map((d) => d.id)} onReorder={reorderDefs}>
-            {defs.map((d) => (
+            {topDefs.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--color-muted)' }}>Chưa có bảng nào.</td></tr>}
+            <SortableList ids={topDefs.map((d) => d.id)} onReorder={reorderDefs}>
+            {topDefs.map((d) => (
               <SortableItem key={d.id} id={d.id}>
               {({ setNodeRef, style, handleProps }) => (
               <tr ref={setNodeRef} style={{ ...style, ...(selected === d.id ? { background: 'var(--color-primary-bg)' } : null) }}>
@@ -371,6 +388,13 @@ export default function CompanyTablesSection() {
             </SortableList>
           </tbody>
         </table>
+      )}
+
+      {selDef?.parentDefId && (
+        <div style={{ marginTop: 16, ...row, gap: 10 }}>
+          <button className={s.btnOutline} onClick={() => setSelected(selDef.parentDefId)}>← Bảng cha: {selParent?.name}</button>
+          <span style={{ color: 'var(--color-muted)', fontSize: 'var(--fs-sm)' }}>Đang chỉnh cột của bảng con “{selDef.name}”.</span>
+        </div>
       )}
 
       {selDef && (
@@ -404,8 +428,54 @@ export default function CompanyTablesSection() {
         </div>
       )}
 
+      {/* Bảng con (sub-tab) — chỉ cho bảng CẤP CAO, 1 cấp */}
+      {selDef && !selDef.parentDefId && (
+        <div style={{ marginTop: 16, border: '1px dashed var(--color-border-muted)', borderRadius: 10, padding: 14 }}>
+          <div style={{ ...row, justifyContent: 'space-between', marginBottom: 10 }}>
+            <h4 className={s.sectionTitle} style={{ margin: 0 }}>
+              Bảng con của “{selDef.name}”
+              <span style={{ fontWeight: 400, fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', marginLeft: 6 }}>(hiện dạng sub-tab)</span>
+            </h4>
+            <button className={s.btnSave} onClick={() => setDefModal({ parentDefId: selDef.id })}><Plus size={13} /> Thêm bảng con</button>
+          </div>
+          {selChildren.length === 0 ? (
+            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)', margin: 0 }}>
+              Chưa có bảng con. Bảng con là bảng <strong>song song</strong> (cột & dữ liệu riêng), người dùng chuyển qua lại bằng sub-tab.
+            </p>
+          ) : (
+            <table className={s.settingsTable}>
+              <thead><tr><th>Tên</th><th>Key</th><th>Số cột</th><th>Hiện</th><th></th></tr></thead>
+              <tbody>
+                {selChildren.map((c, idx, arr) => (
+                  <tr key={c.id}>
+                    <td>{c.name}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-xs)' }}>{c.tableKey}</td>
+                    <td>{c.columns?.length ?? 0}</td>
+                    <td>
+                      <button className={s.btnOutline} onClick={() => toggleActive(c)} title={c.isActive ? 'Đang hiện' : 'Đang ẩn'}>
+                        <Power size={13} color={c.isActive ? 'var(--color-success)' : 'var(--color-muted)'} />
+                      </button>
+                    </td>
+                    <td>
+                      <div style={row}>
+                        <button className={s.btnOutline} disabled={idx === 0} title="Lên" onClick={() => moveChild(arr, idx, -1)}><ChevronUp size={13} /></button>
+                        <button className={s.btnOutline} disabled={idx === arr.length - 1} title="Xuống" onClick={() => moveChild(arr, idx, 1)}><ChevronDown size={13} /></button>
+                        <button className={s.btnOutline} onClick={() => setSelected(c.id)}><Columns size={13} /> Cột</button>
+                        <button className={s.btnOutline} onClick={() => setDefModal({ def: c })}><Pencil size={13} /></button>
+                        <button className={s.btnOutline} onClick={() => removeDef(c)}><Trash2 size={13} color="var(--color-danger)" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {defModal && (
-        <DefModal def={defModal.def} onClose={() => setDefModal(null)} onSaved={() => { setDefModal(null); reload() }} />
+        <DefModal def={defModal.def} parentDefId={defModal.parentDefId}
+          onClose={() => setDefModal(null)} onSaved={() => { setDefModal(null); reload() }} />
       )}
       {colModal && selDef && (
         <ColumnModal

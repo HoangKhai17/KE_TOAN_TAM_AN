@@ -9,6 +9,7 @@ import { evaluateFormula } from '../../utils/formula'
 import Modal from '../../components/ui/Modal'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import DateBox from './DateBox'
 import {
   DragHeaderCell,
   DragRowCell,
@@ -368,11 +369,11 @@ function DateRangeSection({ currentFilter, onChange }) {
     <div className={s.hdldDdFilterSection}>
       <div className={s.hdldDdRangeGroup}>
         <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Từ ngày</span>
-          <input type="date" className={s.hdldDdInput} value={from}
-            onChange={(e) => { setFrom(e.target.value); apply(e.target.value, to) }} /></div>
+          <DateBox value={from} className={s.hdldDdDateBox}
+            onChange={(value) => { setFrom(value); apply(value, to) }} /></div>
         <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Đến ngày</span>
-          <input type="date" className={s.hdldDdInput} value={to}
-            onChange={(e) => { setTo(e.target.value); apply(from, e.target.value) }} /></div>
+          <DateBox value={to} className={s.hdldDdDateBox}
+            onChange={(value) => { setTo(value); apply(from, value) }} /></div>
       </div>
       {(from || to) && <div className={s.hdldDdFooter}><button className={s.hdldDdClearBtn}
         onClick={() => { setFrom(''); setTo(''); onChange(null) }}>Xoá bộ lọc</button></div>}
@@ -519,6 +520,22 @@ function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavig
     )
   }
 
+  if (col.dataType === 'date') {
+    return (
+      <td className={`${s.archInlineTdEditable} ${active ? s.ctblCellActive : ''}`} onClick={onActivate}>
+        {active ? (
+          <DateBox
+            value={local ? String(local).slice(0, 10) : ''}
+            className={s.locDateBox}
+            onChange={(next) => { setLocal(next); commit(next); onNavigate?.('cancel') }}
+          />
+        ) : (
+          value ? fmtDate(value) : <span className={s.archInlineEmpty}>—</span>
+        )}
+      </td>
+    )
+  }
+
   return (
     <td className={`${s.archInlineTdEditable} ${active ? s.ctblCellActive : ''}`}
       onClick={onActivate}>
@@ -535,7 +552,7 @@ function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavig
             onClick={(e) => e.stopPropagation()}
             onKeyDown={handleKey} />
         ) : (
-          <input ref={ref} type={col.dataType === 'number' ? 'number' : 'date'}
+          <input ref={ref} type="number"
             value={local} className={s.archInlineEditInput}
             onChange={(e) => setLocal(e.target.value)}
             onBlur={() => { commit(); onNavigate?.('cancel') }}

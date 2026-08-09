@@ -24,7 +24,8 @@ export async function reorderCredentials(companyId, orderedIds) {
 }
 
 // Xem mật khẩu: buộc gửi kèm mật khẩu ĐĂNG NHẬP của user để re-auth (server verify)
-export async function revealCredential(companyId, id, password) {
-  const { data } = await api.post(`/companies/${companyId}/credentials/${id}/reveal`, { password })
+// Xem mật khẩu — không cần re-auth (đã bỏ theo yêu cầu KH). Server vẫn kiểm quyền + ghi log.
+export async function revealCredential(companyId, id) {
+  const { data } = await api.post(`/companies/${companyId}/credentials/${id}/reveal`)
   return data.data.password
 }

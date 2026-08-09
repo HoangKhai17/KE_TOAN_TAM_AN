@@ -45,7 +45,7 @@ async function revealCredential(req, res, next) {
   try {
     const result = await svc.revealCredential(
       req.params.companyId, req.params.id,
-      req.user, req.body.password, req.ip, req.headers['user-agent']
+      req.user, req.ip, req.headers['user-agent']
     )
     res.json({ success: true, data: result })
   } catch (err) { next(err) }

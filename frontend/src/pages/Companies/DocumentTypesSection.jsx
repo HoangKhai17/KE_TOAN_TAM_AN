@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Plus, Trash2, Check, X, Loader2, Filter } from 'lucide-react'
 import * as docTypeApi from '../../api/documentTypes'
 import { useToastStore } from '../../stores/toastStore'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import InlineTableCell from '../../components/ui/InlineTableCell'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
@@ -12,13 +14,6 @@ import s from './companies.module.css'
 function emptyDraft() {
   return { name: '', category: '', frequency: '', source: '', note: '' }
 }
-function draftFromRow(r) {
-  return {
-    name: r.name ?? '', category: r.category ?? '', frequency: r.frequency ?? '',
-    source: r.source ?? '', note: r.note ?? '',
-  }
-}
-
 // Hàng nhập liệu ở cấp cao nhất để input không bị remount → giữ focus.
 function DocTypeEditRow({ draft, setF, save, cancel, saving }) {
   return (
@@ -50,9 +45,24 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
   const [editingId, setEditingId] = useState(null)   // null | 'new' | <id>
   const [draft, setDraft]       = useState(emptyDraft)
   const [saving, setSaving]     = useState(false)
-  const selection = useRowSelection({ rows })
+  const [activeCell, setActiveCell] = useState(null)
+  const [colFilters, setColFilters] = useState({})
+  const [sortState, setSortState] = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup] = useState(null)
+  const displayedRows = useMemo(() => {
+    let result = [...rows]
+    for (const [key, value] of Object.entries(colFilters)) {
+      if (typeof value === 'string' && value.trim()) {
+        const query = value.trim().toLocaleLowerCase('vi')
+        result = result.filter((row) => String(row[key] ?? '').toLocaleLowerCase('vi').includes(query))
+      }
+    }
+    if (sortState.col) result.sort((a, b) => String(a[sortState.col] ?? '').localeCompare(String(b[sortState.col] ?? ''), 'vi', { numeric: true }) * (sortState.dir === 'asc' ? 1 : -1))
+    return result
+  }, [rows, colFilters, sortState])
+  const selection = useRowSelection({ rows: displayedRows })
   const reorder = useRowReorder({
-    rows, setRows, enabled: canEdit && editingId == null,
+    rows, setRows, enabled: canEdit && editingId == null && activeCell == null && Object.keys(colFilters).length === 0 && !sortState.col,
     onError: () => addToast('Không thể lưu thứ tự chứng từ', 'error'),
     onPersist: (ordered, previous) => Promise.all(ordered
       .map((row, index) => ({ row, index }))
@@ -73,8 +83,7 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
 
   useEffect(() => { load() }, [load])
 
-  function startAdd() { setDraft(emptyDraft()); setEditingId('new') }
-  function startEdit(row) { setDraft(draftFromRow(row)); setEditingId(row.id) }
+  function startAdd() { setActiveCell({ rowId: 'new', colKey: 'name' }) }
   function cancel() { setEditingId(null); setDraft(emptyDraft()) }
 
   const setF = (k) => (e) => setDraft((p) => ({ ...p, [k]: e.target.value }))
@@ -99,6 +108,70 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
       addToast(err.response?.data?.error?.message ?? 'Không lưu được chứng từ', 'error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveCell(row, field, value) {
+    try {
+      const updated = await docTypeApi.updateDocumentType(companyId, row.id, { [field]: value || null })
+      setRows((current) => current.map((item) => item.id === row.id ? { ...item, ...updated, [field]: value || null } : item))
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không lưu được thay đổi', 'error')
+      throw err
+    }
+  }
+
+  async function createFromFirstCell(value) {
+    if (!value?.trim()) return null
+    try {
+      const created = await docTypeApi.createDocumentType(companyId, { name: value.trim() })
+      setRows((current) => [...current, created])
+      addToast('Đã thêm chứng từ', 'success')
+      return { rowId: created.id }
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thêm được chứng từ', 'error')
+      throw err
+    }
+  }
+
+  const editableColumns = ['name', 'category', 'frequency', 'source', 'note']
+  function setColumnFilter(colKey, value) {
+    setColFilters((current) => {
+      const next = { ...current }
+      if (value == null || (typeof value === 'string' && !value.trim())) delete next[colKey]
+      else next[colKey] = value
+      return next
+    })
+  }
+  function openColumnFilter(colKey, event) {
+    event.stopPropagation()
+    if (filterPopup?.colKey === colKey) return setFilterPopup(null)
+    const rect = event.currentTarget.getBoundingClientRect()
+    setFilterPopup({ colKey, top: rect.bottom + 4, left: Math.min(rect.left, window.innerWidth - 260) })
+  }
+  function FilterHeader({ colKey, children }) {
+    const active = colFilters[colKey] != null || sortState.col === colKey
+    return <th><div className={s.hdldThInner}><span className={s.hdldThLabel}>{children}</span><button data-colfilter-btn className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`} onClick={(event) => openColumnFilter(colKey, event)} title="Lọc / Sắp xếp"><Filter size={10} /></button></div></th>
+  }
+  function navigateCell(rowId, colKey, direction, result) {
+    if (direction === 'cancel') { setActiveCell(null); return }
+    const actualRowId = result?.rowId ?? rowId
+    const rowIndex = rows.findIndex((row) => row.id === actualRowId)
+    const columnIndex = editableColumns.indexOf(colKey)
+    if (direction === 'next') {
+      if (columnIndex < editableColumns.length - 1 && actualRowId !== 'new') return setActiveCell({ rowId: actualRowId, colKey: editableColumns[columnIndex + 1] })
+      const nextRow = rows[rowIndex + 1]
+      return setActiveCell({ rowId: nextRow?.id ?? 'new', colKey: 'name' })
+    }
+    if (direction === 'prev') {
+      if (columnIndex > 0 && actualRowId !== 'new') return setActiveCell({ rowId: actualRowId, colKey: editableColumns[columnIndex - 1] })
+      const previousRow = rows[rowIndex - 1]
+      return setActiveCell(previousRow ? { rowId: previousRow.id, colKey: 'note' } : null)
+    }
+    if (direction === 'down') {
+      if (result?.rowId) return setActiveCell(null)
+      const nextRow = rows[rowIndex + 1]
+      setActiveCell({ rowId: nextRow?.id ?? 'new', colKey })
     }
   }
 
@@ -128,7 +201,7 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
 
   return (
     <div>
-      {canEdit && editingId !== 'new' && (
+      {canEdit && (
         <div className={s.procSectionBar}>
           {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={removeSelected}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
           <button className={s.credAddBtn} onClick={startAdd}><Plus size={13} /> Thêm chứng từ</button>
@@ -150,47 +223,48 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
               <DragHeaderCell />
               <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
               <IndexHeaderCell />
-              <th>Tên chứng từ</th>
-              <th>Phân loại</th>
-              <th>Tần suất</th>
-              <th>Nguồn cung cấp</th>
-              <th>Ghi chú</th>
+              <FilterHeader colKey="name">Tên chứng từ</FilterHeader>
+              <FilterHeader colKey="category">Phân loại</FilterHeader>
+              <FilterHeader colKey="frequency">Tần suất</FilterHeader>
+              <FilterHeader colKey="source">Nguồn cung cấp</FilterHeader>
+              <FilterHeader colKey="note">Ghi chú</FilterHeader>
               <th style={{ textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Đang tải…</td></tr>
-            ) : rows.length === 0 && editingId !== 'new' ? (
+            ) : displayedRows.length === 0 && editingId !== 'new' ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có chứng từ phát sinh. Nhấn “Thêm chứng từ”.</td></tr>
             ) : (
-              rows.map((r, index) => (
-                editingId === r.id ? <DocTypeEditRow key={r.id} {...editRowProps} /> : (
-                  <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
+              displayedRows.map((r, index) => (
+                <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
                     <DragRowCell enabled={canEdit && editingId == null} handleProps={reorder.handleProps(r.id)} />
                     <SelectionRowCell checked={selection.selectedIds.has(r.id)} onToggle={() => selection.toggle(r.id)} />
                     <IndexRowCell index={index + 1} />
-                    <td title={r.name}>{r.name}</td>
-                    <td title={r.category || ''}>{r.category || <span className={s.locMuted}>—</span>}</td>
-                    <td title={r.frequency || ''}>{r.frequency || <span className={s.locMuted}>—</span>}</td>
-                    <td title={r.source || ''}>{r.source || <span className={s.locMuted}>—</span>}</td>
-                    <td title={r.note || ''}>{r.note || <span className={s.locMuted}>—</span>}</td>
+                    {editableColumns.map((field) => <td key={field}><InlineTableCell value={r[field]} required={field === 'name'} multiline canEdit={canEdit} active={activeCell?.rowId === r.id && activeCell?.colKey === field} onActivate={() => setActiveCell({ rowId: r.id, colKey: field })} onSave={(value) => saveCell(r, field, value)} onNavigate={(direction) => navigateCell(r.id, field, direction)} /></td>)}
                     <td className={s.locCenter}>
                       {canEdit && (
                         <div className={s.credRowActions}>
-                          <button className={s.iconBtnSm} onClick={() => startEdit(r)} title="Sửa"><Pencil size={13} /></button>
                           <button className={`${s.iconBtnSm} ${s.iconBtnDanger}`} onClick={() => remove(r)} title="Xoá"><Trash2 size={13} /></button>
                         </div>
                       )}
                     </td>
                   </tr>
-                )
               ))
             )}
-            {editingId === 'new' && <DocTypeEditRow {...editRowProps} />}
+            {canEdit && activeCell?.rowId === 'new' && (
+              <tr className={s.excelNewRow}>
+                <td /><td /><td />
+                <td><InlineTableCell value="" required multiline active={activeCell?.rowId === 'new' && activeCell?.colKey === 'name'} onActivate={() => setActiveCell({ rowId: 'new', colKey: 'name' })} onSave={createFromFirstCell} onNavigate={(direction, result) => navigateCell('new', 'name', direction, result)} /></td>
+                <td colSpan={4} />
+                <td />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+      {filterPopup && <ColumnFilterDropdown colKey={filterPopup.colKey} filterType="text" allRows={rows} currentFilter={colFilters[filterPopup.colKey] ?? null} sortState={sortState} onSort={(col, dir) => { setSortState({ col, dir }); setFilterPopup(null) }} onFilterChange={setColumnFilter} onClose={() => setFilterPopup(null)} style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }} />}
     </div>
   )
 }

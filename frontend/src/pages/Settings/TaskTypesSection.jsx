@@ -503,6 +503,7 @@ const EMPTY_CF_FORM = {
 }
 
 function CustomFieldsPanel({ taskTypeId, customFields, onRefresh }) {
+  const confirmDelete = useDeleteConfirm()
   const addToast = useToastStore((st) => st.toast)
   const [saving, setSaving]       = useState(false)
   const [showForm, setShowForm]   = useState(false)

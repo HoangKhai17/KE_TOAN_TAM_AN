@@ -1880,6 +1880,42 @@
   color: var(--color-primary);
 }
 
+/* Dải sub-tab của Bảng dữ liệu: chuyển giữa bảng cha ↔ các bảng con (song song) */
+.subTabBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 5px;
+  margin: 10px 0 4px;
+  background: var(--color-bg-subtle, #f1f5f9);
+  border-radius: var(--radius-md, 8px);
+  width: fit-content;
+  max-width: 100%;
+}
+.subTabBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  font-family: 'Montserrat', sans-serif;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--color-text-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.13s, color 0.13s;
+}
+.subTabBtn:hover { color: var(--color-text); background: rgba(0,0,0,0.04); }
+.subTabBtnActive, .subTabBtnActive:hover {
+  background: #fff;
+  color: var(--color-primary);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
 /* ── Overview grid (2-col) ───────────────────────────────── */
 
 .overviewGrid {
@@ -5075,11 +5111,15 @@
   font-size: var(--fs-2xs);
   text-transform: none;
   letter-spacing: 0.2px;
+  color: var(--color-primary-deep);
+  font-weight: 800;
 }
 .hdldTable td {
   padding: 7px 8px;
   font-size: var(--fs-2xs);
   vertical-align: top;
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
 }
 .hdldTable .archInlineTdEditable:hover {
   background: var(--color-info-surface) !important;
@@ -5091,6 +5131,12 @@
   border: 0; border-radius: 0; outline: 0;
   background: transparent; box-shadow: none;
   font-size: var(--fs-2xs); line-height: inherit;
+  color: var(--color-text-strong);
+}
+.hdldTable .ctblMultiline,
+.hdldTable .ctblFormulaCell,
+.hdldTable .ctblFileName {
+  color: var(--color-text-strong);
 }
 .hdldTable .ctblTextarea {
   min-height: 20px; max-height: 108px;
@@ -7619,7 +7665,12 @@ textarea.editInput {
 }
 .credTable td {
   padding: 7px 8px; border-bottom: 1px solid var(--color-border-soft);
-  vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  vertical-align: middle;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   color: var(--color-text-strong); font-weight: var(--fw-medium);
 }
 .credTable tbody tr:last-child td { border-bottom: none; }
@@ -7632,12 +7683,38 @@ textarea.editInput {
 .credCenter { text-align: center; }
 .credMuted { color: var(--color-muted); }
 
-.credName { font-weight: var(--fw-medium); color: var(--color-text-strong); overflow: hidden; text-overflow: ellipsis; }
+.credName {
+  font-weight: var(--fw-medium);
+  color: var(--color-text-strong);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .credNoteSub { font-size: var(--fs-2xs); font-weight: var(--fw-medium); color: var(--color-text-strong); overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.credDate { color: var(--color-text-strong); font-weight: var(--fw-medium); }
-.credUrlLink { color: #2563eb; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.credNoteSub {
+  color: var(--color-text-soft);
+  font-weight: var(--fw-normal);
+  font-style: italic;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.credDate { color: var(--color-text-strong); font-weight: var(--fw-medium); white-space: nowrap; }
+.credUrlLink {
+  color: #2563eb;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .credUrlLink:hover { text-decoration: underline; }
-.credPwCell { display: inline-flex; align-items: center; gap: 8px; }
+.credPwCell { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .credPwMask { letter-spacing: 2px; color: var(--color-text-soft); }
 .credStatusOn  { display: inline-block; padding: 2px 9px; border: 1px solid var(--color-success-border); border-radius: var(--radius-pill); font-size: var(--fs-2xs); font-weight: var(--fw-bold); background: var(--color-success-bg); color: var(--color-success-text); white-space: nowrap; }
 .credStatusOff { display: inline-block; padding: 2px 9px; border: 1px solid var(--color-warning-border); border-radius: var(--radius-pill); font-size: var(--fs-2xs); font-weight: var(--fw-bold); background: var(--color-warning-bg); color: var(--color-warning-dark); white-space: nowrap; }
@@ -7718,10 +7795,56 @@ textarea.editInput {
 .procAddChip:hover { border-color: var(--color-primary); background: var(--color-primary-bg); }
 
 /* Thanh nút "Thêm" của mục Chứng từ / Lưu ý (dạng table) */
-.procSectionBar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.procSectionBar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  margin-bottom: 12px;
+}
+
+/* Chuẩn màu header table Company Detail: cùng navy đậm với danh sách Companies. */
+.credTable thead th,
+.docTable thead th {
+  color: var(--color-primary-deep) !important;
+  font-weight: 800;
+}
+
+/* Chứng từ phát sinh / Điều cần lưu ý dùng cùng nhịp inline-edit với hồ sơ dịch vụ. */
+.procTab .credTable td {
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.inlinePinButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+.inlinePinButton:hover:not(:disabled) { background: var(--color-info-surface); color: var(--color-primary); }
+.inlinePinButton:disabled { cursor: default; }
+.excelNewRow td {
+  background: var(--color-surface-subtle);
+  border-top: 1px dashed var(--color-border);
+}
+.excelNewRowHint {
+  color: var(--color-muted);
+  font-size: var(--fs-2xs);
+  font-style: italic;
+  vertical-align: middle !important;
+}
 
 /* ── Bảng tùy chỉnh: cột kiểu Link / File / Công thức ─────────────────────────── */
-.ctblLinkChips { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Mỗi link xuống dòng riêng (xếp dọc) cho layout gọn */
+.ctblLinkChips { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .ctblLinkChip {
   display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
   padding: 1px 8px; border-radius: var(--radius-pill);
@@ -7748,7 +7871,8 @@ textarea.editInput {
   border-radius: var(--radius-sm); cursor: pointer;
 }
 .ctblIconBtn:hover { background: rgba(0,0,0,0.06); color: var(--color-danger); }
-.ctblFileCell { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+/* Mỗi file xuống dòng riêng; nút "Tải lên" nằm dưới cùng */
+.ctblFileCell { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .ctblFileChip {
   display: inline-flex; align-items: center; gap: 2px; max-width: 100%;
   padding: 1px 4px 1px 8px; border-radius: var(--radius-pill);

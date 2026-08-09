@@ -1,4 +1,3 @@
-const bcrypt    = require('bcrypt')
 const { query } = require('../../config/db')
 const audit     = require('../../lib/audit')
 const { encrypt, decrypt } = require('../../utils/encrypt')
@@ -131,22 +130,11 @@ async function deleteCredential(companyId, id, user, ipAddress, userAgent) {
   })
 }
 
-async function revealCredential(companyId, id, user, reauthPassword, ipAddress, userAgent) {
+// Xem mật khẩu hệ thống. Bỏ bước re-auth (nhập lại mật khẩu đăng nhập) theo yêu cầu KH
+// — GIỮ kiểm quyền (assertCompanyAccess) và GIỮ ghi audit log mỗi lần xem.
+async function revealCredential(companyId, id, user, ipAddress, userAgent) {
   await assertCompanyAccess(companyId, user)
   const actorId = user.id
-
-  // RE-AUTH: buộc nhập lại mật khẩu ĐĂNG NHẬP của chính user trước khi lộ mật khẩu
-  // hệ thống — tăng bảo mật (người mượn máy đang đăng nhập cũng không xem được).
-  const { rows: [u] } = await query('SELECT password_hash FROM users WHERE id = $1', [actorId])
-  const ok = u && reauthPassword && await bcrypt.compare(reauthPassword, u.password_hash)
-  if (!ok) {
-    await audit.log({
-      userId: actorId, action: 'credential.reveal_denied',
-      targetType: 'company_credentials', targetId: id,
-      meta: { companyId, reason: 'wrong_reauth_password' }, ipAddress, userAgent,
-    })
-    throw Object.assign(new Error('Mật khẩu đăng nhập không đúng'), { status: 401 })
-  }
 
   const { rows: [row] } = await query(
     'SELECT * FROM company_credentials WHERE id = $1 AND company_id = $2',
@@ -157,7 +145,7 @@ async function revealCredential(companyId, id, user, reauthPassword, ipAddress, 
   await audit.log({
     userId: actorId, action: 'credential.revealed',
     targetType: 'company_credentials', targetId: id,
-    meta: { systemName: row.system_name, companyId, reauth: true }, ipAddress, userAgent,
+    meta: { systemName: row.system_name, companyId }, ipAddress, userAgent,
   })
 
   return { password: decrypt(row.encrypted_password, row.iv) }

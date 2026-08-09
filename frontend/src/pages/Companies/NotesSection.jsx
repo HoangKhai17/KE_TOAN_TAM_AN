@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Check, X, Loader2, Pin } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Plus, Trash2, Check, X, Loader2, Pin, Filter } from 'lucide-react'
 import * as notesApi from '../../api/companyNotes'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import InlineTableCell from '../../components/ui/InlineTableCell'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
@@ -12,19 +14,15 @@ import s from './companies.module.css'
 
 // Màu badge mức độ theo key của enum assignment_priority (dùng lại, không tạo enum mới)
 const SEVERITY_STYLE = {
-  urgent: { background: '#fee2e2', color: '#b91c1c' },
-  high:   { background: '#ffedd5', color: '#c2410c' },
-  normal: { background: '#e0f2fe', color: '#0369a1' },
-  low:    { background: '#f1f5f9', color: '#64748b' },
+  urgent: { background: 'var(--color-danger)', color: '#fff' },
+  high:   { background: 'var(--color-warning)', color: '#fff' },
+  normal: { background: 'var(--color-primary-deep)', color: '#fff' },
+  low:    { background: 'var(--color-muted)', color: '#fff' },
 }
 
 function emptyDraft(defSeverity) {
   return { content: '', severity: defSeverity || 'normal', isPinned: false }
 }
-function draftFromRow(r) {
-  return { content: r.content ?? '', severity: r.severity ?? 'normal', isPinned: !!r.isPinned }
-}
-
 // Hàng nhập liệu ở cấp cao nhất để input không bị remount → giữ focus.
 function NoteEditRow({ draft, setF, save, cancel, saving, severityOpts }) {
   return (
@@ -65,9 +63,30 @@ export default function NotesSection({ companyId, canEdit = true }) {
   const [editingId, setEditingId] = useState(null)   // null | 'new' | <id>
   const [draft, setDraft]       = useState(() => emptyDraft(defSeverity))
   const [saving, setSaving]     = useState(false)
-  const selection = useRowSelection({ rows })
+  const [activeCell, setActiveCell] = useState(null)
+  const [colFilters, setColFilters] = useState({})
+  const [sortState, setSortState] = useState({ col: null, dir: 'asc' })
+  const [filterPopup, setFilterPopup] = useState(null)
+  const displayValue = useCallback((row, key) => {
+    if (key === 'severity') return getLabel('assignment_priority', row.severity, row.severity)
+    if (key === 'isPinned') return row.isPinned ? 'Đã ghim' : 'Chưa ghim'
+    return String(row[key] ?? '')
+  }, [getLabel])
+  const displayedRows = useMemo(() => {
+    let result = [...rows]
+    for (const [key, value] of Object.entries(colFilters)) {
+      if (value instanceof Set && value.size) result = result.filter((row) => value.has(displayValue(row, key)))
+      else if (typeof value === 'string' && value.trim()) {
+        const query = value.trim().toLocaleLowerCase('vi')
+        result = result.filter((row) => displayValue(row, key).toLocaleLowerCase('vi').includes(query))
+      }
+    }
+    if (sortState.col) result.sort((a, b) => displayValue(a, sortState.col).localeCompare(displayValue(b, sortState.col), 'vi', { numeric: true }) * (sortState.dir === 'asc' ? 1 : -1))
+    return result
+  }, [rows, colFilters, sortState, displayValue])
+  const selection = useRowSelection({ rows: displayedRows })
   const reorder = useRowReorder({
-    rows, setRows, enabled: canEdit && editingId == null,
+    rows, setRows, enabled: canEdit && editingId == null && activeCell == null && Object.keys(colFilters).length === 0 && !sortState.col,
     onError: () => addToast('Không thể lưu thứ tự lưu ý', 'error'),
     onPersist: (ordered, previous) => Promise.all(ordered
       .map((row, index) => ({ row, index }))
@@ -88,8 +107,7 @@ export default function NotesSection({ companyId, canEdit = true }) {
 
   useEffect(() => { load() }, [load])
 
-  function startAdd() { setDraft(emptyDraft(defSeverity)); setEditingId('new') }
-  function startEdit(row) { setDraft(draftFromRow(row)); setEditingId(row.id) }
+  function startAdd() { setActiveCell({ rowId: 'new', colKey: 'content' }) }
   function cancel() { setEditingId(null); setDraft(emptyDraft(defSeverity)) }
 
   const setF = (k) => (e) => {
@@ -115,6 +133,71 @@ export default function NotesSection({ companyId, canEdit = true }) {
       addToast(err.response?.data?.error?.message ?? 'Không lưu được lưu ý', 'error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveCell(row, field, value) {
+    try {
+      const payload = { [field]: value }
+      const updated = await notesApi.updateNote(companyId, row.id, payload)
+      setRows((current) => current.map((item) => item.id === row.id ? { ...item, ...updated, [field]: value } : item))
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không lưu được thay đổi', 'error')
+      throw err
+    }
+  }
+
+  async function createFromFirstCell(value) {
+    if (!value?.trim()) return null
+    try {
+      const created = await notesApi.createNote(companyId, { content: value.trim(), severity: defSeverity, isPinned: false })
+      setRows((current) => [...current, created])
+      addToast('Đã thêm lưu ý', 'success')
+      return { rowId: created.id }
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thêm được lưu ý', 'error')
+      throw err
+    }
+  }
+
+  const editableColumns = ['content', 'severity']
+  function setColumnFilter(colKey, value) {
+    setColFilters((current) => {
+      const next = { ...current }
+      if (value == null || (value instanceof Set && value.size === 0) || (typeof value === 'string' && !value.trim())) delete next[colKey]
+      else next[colKey] = value
+      return next
+    })
+  }
+  function openColumnFilter(colKey, event) {
+    event.stopPropagation()
+    if (filterPopup?.colKey === colKey) return setFilterPopup(null)
+    const rect = event.currentTarget.getBoundingClientRect()
+    setFilterPopup({ colKey, top: rect.bottom + 4, left: Math.min(rect.left, window.innerWidth - 260) })
+  }
+  function FilterHeader({ colKey, children }) {
+    const active = colFilters[colKey] != null || sortState.col === colKey
+    return <th><div className={s.hdldThInner}><span className={s.hdldThLabel}>{children}</span><button data-colfilter-btn className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`} onClick={(event) => openColumnFilter(colKey, event)} title="Lọc / Sắp xếp"><Filter size={10} /></button></div></th>
+  }
+  function navigateCell(rowId, colKey, direction, result) {
+    if (direction === 'cancel') { setActiveCell(null); return }
+    const actualRowId = result?.rowId ?? rowId
+    const rowIndex = rows.findIndex((row) => row.id === actualRowId)
+    const columnIndex = editableColumns.indexOf(colKey)
+    if (direction === 'next') {
+      if (columnIndex < editableColumns.length - 1 && actualRowId !== 'new') return setActiveCell({ rowId: actualRowId, colKey: editableColumns[columnIndex + 1] })
+      const nextRow = rows[rowIndex + 1]
+      return setActiveCell({ rowId: nextRow?.id ?? 'new', colKey: 'content' })
+    }
+    if (direction === 'prev') {
+      if (columnIndex > 0 && actualRowId !== 'new') return setActiveCell({ rowId: actualRowId, colKey: editableColumns[columnIndex - 1] })
+      const previousRow = rows[rowIndex - 1]
+      return setActiveCell(previousRow ? { rowId: previousRow.id, colKey: 'severity' } : null)
+    }
+    if (direction === 'down') {
+      if (result?.rowId) return setActiveCell(null)
+      const nextRow = rows[rowIndex + 1]
+      setActiveCell({ rowId: nextRow?.id ?? 'new', colKey })
     }
   }
 
@@ -144,7 +227,7 @@ export default function NotesSection({ companyId, canEdit = true }) {
 
   return (
     <div>
-      {canEdit && editingId !== 'new' && (
+      {canEdit && (
         <div className={s.procSectionBar}>
           {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={removeSelected}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
           <button className={s.credAddBtn} onClick={startAdd}><Plus size={13} /> Thêm lưu ý</button>
@@ -164,49 +247,63 @@ export default function NotesSection({ companyId, canEdit = true }) {
               <DragHeaderCell />
               <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
               <IndexHeaderCell />
-              <th>Nội dung</th>
-              <th>Mức độ</th>
-              <th style={{ textAlign: 'center' }}>Ghim</th>
+              <FilterHeader colKey="content">Nội dung</FilterHeader>
+              <FilterHeader colKey="severity">Mức độ</FilterHeader>
+              <FilterHeader colKey="isPinned">Ghim</FilterHeader>
               <th style={{ textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Đang tải…</td></tr>
-            ) : rows.length === 0 && editingId !== 'new' ? (
+            ) : displayedRows.length === 0 && editingId !== 'new' ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có điều cần lưu ý. Nhấn “Thêm lưu ý”.</td></tr>
             ) : (
-              rows.map((r, index) => (
-                editingId === r.id ? <NoteEditRow key={r.id} {...editRowProps} /> : (
-                  <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
+              displayedRows.map((r, index) => (
+                <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
                     <DragRowCell enabled={canEdit && editingId == null} handleProps={reorder.handleProps(r.id)} />
                     <SelectionRowCell checked={selection.selectedIds.has(r.id)} onToggle={() => selection.toggle(r.id)} />
                     <IndexRowCell index={index + 1} />
-                    <td title={r.content}>{r.content}</td>
+                    <td><InlineTableCell value={r.content} required multiline canEdit={canEdit} active={activeCell?.rowId === r.id && activeCell?.colKey === 'content'} onActivate={() => setActiveCell({ rowId: r.id, colKey: 'content' })} onSave={(value) => saveCell(r, 'content', value)} onNavigate={(direction) => navigateCell(r.id, 'content', direction)} /></td>
                     <td>
-                      <span className={s.locStatus} style={SEVERITY_STYLE[r.severity] ?? SEVERITY_STYLE.normal}>
-                        {getLabel('assignment_priority', r.severity, r.severity)}
-                      </span>
+                      <InlineTableCell
+                        value={r.severity}
+                        type="select"
+                        options={severityOpts}
+                        canEdit={canEdit}
+                        active={activeCell?.rowId === r.id && activeCell?.colKey === 'severity'}
+                        onActivate={() => setActiveCell({ rowId: r.id, colKey: 'severity' })}
+                        displayValue={<span className={s.locStatus} style={SEVERITY_STYLE[r.severity] ?? SEVERITY_STYLE.normal}>{getLabel('assignment_priority', r.severity, r.severity)}</span>}
+                        onSave={(value) => saveCell(r, 'severity', value)}
+                        onNavigate={(direction) => navigateCell(r.id, 'severity', direction)}
+                      />
                     </td>
                     <td className={s.locCenter}>
-                      {r.isPinned ? <Pin size={14} className={s.locStar} fill="currentColor" /> : <span className={s.locMuted}>—</span>}
+                      <button type="button" className={s.inlinePinButton} disabled={!canEdit} onClick={() => saveCell(r, 'isPinned', !r.isPinned)} title={r.isPinned ? 'Bỏ ghim' : 'Ghim'}>
+                        {r.isPinned ? <Pin size={14} className={s.locStar} fill="currentColor" /> : <Pin size={14} />}
+                      </button>
                     </td>
                     <td className={s.locCenter}>
                       {canEdit && (
                         <div className={s.credRowActions}>
-                          <button className={s.iconBtnSm} onClick={() => startEdit(r)} title="Sửa"><Pencil size={13} /></button>
                           <button className={`${s.iconBtnSm} ${s.iconBtnDanger}`} onClick={() => remove(r)} title="Xoá"><Trash2 size={13} /></button>
                         </div>
                       )}
                     </td>
                   </tr>
-                )
               ))
             )}
-            {editingId === 'new' && <NoteEditRow {...editRowProps} />}
+            {canEdit && activeCell?.rowId === 'new' && (
+              <tr className={s.excelNewRow}>
+                <td /><td /><td />
+                <td><InlineTableCell value="" required multiline active={activeCell?.rowId === 'new' && activeCell?.colKey === 'content'} onActivate={() => setActiveCell({ rowId: 'new', colKey: 'content' })} onSave={createFromFirstCell} onNavigate={(direction, result) => navigateCell('new', 'content', direction, result)} /></td>
+                <td colSpan={3} />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+      {filterPopup && <ColumnFilterDropdown colKey={filterPopup.colKey} filterType={filterPopup.colKey === 'content' ? 'text' : 'enum'} allRows={rows} getDisplayLabel={displayValue} currentFilter={colFilters[filterPopup.colKey] ?? null} sortState={sortState} onSort={(col, dir) => { setSortState({ col, dir }); setFilterPopup(null) }} onFilterChange={setColumnFilter} onClose={() => setFilterPopup(null)} style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }} />}
     </div>
   )
 }

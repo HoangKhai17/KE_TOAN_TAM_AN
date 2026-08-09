@@ -241,7 +241,6 @@ function buildCalendar(year, month, recordMap, holidaySet = new Set()) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function AttendanceAdmin() {
-  const confirmDelete = useDeleteConfirm()
   const now         = new Date()
   const currentUser = useAuthStore((st) => st.user)
   const [activeTab, setActiveTab] = useState('calendar')
@@ -3426,6 +3425,7 @@ function SyncPayrollModal({ year, month, onClose }) {
 // ── AttendanceSettingsTab ─────────────────────────────────────────────────────
 
 function AttendanceSettingsTab() {
+  const confirmDelete = useDeleteConfirm()
   const addToast       = useToastStore((st) => st.toast)
   const [loading,      setLoading]      = useState(true)
   const [saving,       setSaving]       = useState(false)

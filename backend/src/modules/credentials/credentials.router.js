@@ -4,7 +4,6 @@ const { validate } = require('../../middleware/validate')
 const {
   createCredentialSchema,
   updateCredentialSchema,
-  revealCredentialSchema,
   reorderCredentialsSchema,
 } = require('./credentials.schema')
 const ctrl = require('./credentials.controller')
@@ -161,6 +160,6 @@ router.delete('/:id',       ...auth,  ctrl.deleteCredential)
  *                     password: { type: string, example: 'P@ssw0rd123' }
  *       404: { description: Not found }
  */
-router.post('/:id/reveal',  ...auth,  validate(revealCredentialSchema), ctrl.revealCredential)
+router.post('/:id/reveal',  ...auth,  ctrl.revealCredential)
 
 module.exports = router

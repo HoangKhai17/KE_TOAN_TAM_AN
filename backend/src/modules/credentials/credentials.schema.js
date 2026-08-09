@@ -19,15 +19,10 @@ const updateCredentialSchema = z.object({
   isActive:   z.boolean().optional(),
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })
 
-// Re-auth khi xem mật khẩu: buộc nhập lại mật khẩu đăng nhập của user
-const revealCredentialSchema = z.object({
-  password: z.string().min(1, 'Vui lòng nhập mật khẩu đăng nhập'),
-})
-
 const reorderCredentialsSchema = z.object({
   orderedIds: z.array(z.string().uuid()).min(1),
 }).refine(({ orderedIds }) => new Set(orderedIds).size === orderedIds.length, {
   message: 'orderedIds contains duplicates',
 })
 
-module.exports = { createCredentialSchema, updateCredentialSchema, revealCredentialSchema, reorderCredentialsSchema }
+module.exports = { createCredentialSchema, updateCredentialSchema, reorderCredentialsSchema }

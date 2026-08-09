@@ -71,6 +71,7 @@ function defToDto(d, columns) {
     id: d.id, tableKey: d.table_key, name: d.name, description: d.description ?? null,
     icon: d.icon ?? null, sortOrder: d.sort_order, isActive: d.is_active,
     allowCompanyColumns: d.allow_company_columns, isSystem: d.is_system,
+    parentDefId: d.parent_def_id ?? null,   // null = bảng cấp cao; có = bảng con (sub-tab)
     createdAt: d.created_at, updatedAt: d.updated_at,
     columns: columns ? columns.map(colToDto) : undefined,
   }
@@ -116,14 +117,26 @@ async function createDef(body, userId) {
   const set = new Set(existing.map((r) => r.table_key))
   const tableKey = uniqueKey(slugify(body.tableKey || body.name, 'tbl'), set)
 
-  const { rows: maxRows } = await query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM company_table_defs')
+  // Bảng con: chỉ cho 1 CẤP — def cha phải tồn tại và chính nó KHÔNG phải bảng con.
+  let parentDefId = null
+  if (body.parentDefId) {
+    const { rows: [p] } = await query('SELECT id, parent_def_id FROM company_table_defs WHERE id = $1', [body.parentDefId])
+    if (!p) { const e = new Error('Không tìm thấy bảng cha'); e.status = 404; throw e }
+    if (p.parent_def_id) { const e = new Error('Chỉ hỗ trợ 1 cấp: bảng con không thể có bảng con'); e.status = 422; throw e }
+    parentDefId = p.id
+  }
+
+  // sort_order tính trong PHẠM VI anh em (cùng cha, hoặc cùng cấp cao)
+  const { rows: maxRows } = await query(
+    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM company_table_defs WHERE parent_def_id IS NOT DISTINCT FROM $1',
+    [parentDefId])
   const sortOrder = body.sortOrder ?? maxRows[0].next
 
   const { rows } = await query(
-    `INSERT INTO company_table_defs (table_key, name, description, icon, sort_order, allow_company_columns, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    `INSERT INTO company_table_defs (table_key, name, description, icon, sort_order, allow_company_columns, parent_def_id, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
     [tableKey, body.name, body.description || null, body.icon || null, sortOrder,
-     body.allowCompanyColumns ?? false, userId],
+     body.allowCompanyColumns ?? false, parentDefId, userId],
   )
   return defToDto(rows[0], [])
 }
@@ -151,10 +164,13 @@ async function deleteDef(id) {
   const { rows } = await query('SELECT is_system FROM company_table_defs WHERE id = $1', [id])
   if (!rows.length) { const e = new Error('Không tìm thấy bảng'); e.status = 404; throw e }
   if (rows[0].is_system) { const e = new Error('Bảng hệ thống — không thể xóa'); e.status = 403; throw e }
-  // Dọn file đính kèm của mọi dòng thuộc bảng (CASCADE chỉ xoá row, không xoá attachments)
-  const { rows: rowIds } = await query('SELECT id FROM company_table_rows WHERE def_id = $1', [id])
+  // Dọn file đính kèm của mọi dòng thuộc bảng NÀY và mọi BẢNG CON (CASCADE xoá row nhưng
+  // không xoá attachments — attachments không có FK tới rows).
+  const { rows: rowIds } = await query(
+    'SELECT id FROM company_table_rows WHERE def_id IN (SELECT id FROM company_table_defs WHERE id = $1 OR parent_def_id = $1)',
+    [id])
   await attachmentsSvc.removeAllForEntities('company_table_row', rowIds.map((r) => r.id))
-  await query('DELETE FROM company_table_defs WHERE id = $1', [id])
+  await query('DELETE FROM company_table_defs WHERE id = $1', [id])   // CASCADE tự xoá def con
 }
 
 // ── Columns (global) ────────────────────────────────────────────────────────

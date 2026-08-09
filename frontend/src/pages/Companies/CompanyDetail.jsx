@@ -79,15 +79,29 @@ export default function CompanyDetail() {
   const [customDefs, setCustomDefs] = useState([])
   const isTablesMode = mode === MODE_TABLES
 
+  // Bảng CẤP CAO (không phải bảng con) → dựng thanh tab chính. Bảng con hiện dạng sub-tab.
+  const topDefs = useMemo(() => customDefs.filter((d) => !d.parentDefId), [customDefs])
+
   // activeTab suy ra từ URL (URL là nguồn sự thật, không dùng state nữa)
   const activeTab = useMemo(() => {
     if (isTablesMode) {
       if (tabId) return `ct_${tabId}`
-      return customDefs.length ? `ct_${customDefs[0].id}` : ''
+      return topDefs.length ? `ct_${topDefs[0].id}` : ''
     }
     if (tabId && TABS.some((t) => t.id === tabId)) return tabId
     return 'overview'
-  }, [isTablesMode, tabId, customDefs])
+  }, [isTablesMode, tabId, topDefs])
+
+  // Bảng đang mở (có thể là bảng cha hoặc bảng con) + nhóm sub-tab của nó
+  const activeDef = useMemo(() => customDefs.find((x) => `ct_${x.id}` === activeTab) ?? null, [customDefs, activeTab])
+  const activeTopId = activeDef?.parentDefId ?? activeDef?.id ?? null
+  const subDefs = useMemo(() => {
+    if (!activeTopId) return []
+    const children = customDefs.filter((d) => d.parentDefId === activeTopId)
+    if (!children.length) return []
+    const top = customDefs.find((d) => d.id === activeTopId)
+    return top ? [top, ...children] : []
+  }, [customDefs, activeTopId])
 
   // Điều hướng tab (thay cho setActiveTab cũ)
   const goProfileTab = useCallback((tid) => navigate(`/companies/${id}/${MODE_PROFILE}/${tid}`), [navigate, id])
@@ -106,9 +120,9 @@ export default function CompanyDetail() {
     navigate(`/companies/${id}/${MODE_PROFILE}/${lastProfileTabRef.current || 'overview'}`)
   }, [navigate, id])
   const goTablesMode = useCallback(() => {
-    const target = lastTableIdRef.current ?? customDefs[0]?.id
+    const target = lastTableIdRef.current ?? topDefs[0]?.id
     navigate(target ? `/companies/${id}/${MODE_TABLES}/${target}` : `/companies/${id}/${MODE_TABLES}`)
-  }, [navigate, id, customDefs])
+  }, [navigate, id, topDefs])
 
   // ── Kéo ngang dải tab bằng chuột (desktop không có scroll ngang) ──────────────
   const tabBarRef = useRef(null)
@@ -144,18 +158,18 @@ export default function CompanyDetail() {
     navigate(`/companies/${id}/${loadActivePath(id)}`, { replace: true })
   }, [mode, id, searchParams, navigate])
 
-  // Vào chế độ bảng nhưng chưa chỉ định bảng → chọn bảng đầu tiên cho URL rõ ràng
+  // Vào chế độ bảng nhưng chưa chỉ định bảng → chọn bảng cấp cao đầu tiên cho URL rõ ràng
   useEffect(() => {
-    if (isTablesMode && !tabId && customDefs.length) {
-      navigate(`/companies/${id}/${MODE_TABLES}/${customDefs[0].id}`, { replace: true })
+    if (isTablesMode && !tabId && topDefs.length) {
+      navigate(`/companies/${id}/${MODE_TABLES}/${topDefs[0].id}`, { replace: true })
     }
-  }, [isTablesMode, tabId, customDefs, id, navigate])
+  }, [isTablesMode, tabId, topDefs, id, navigate])
 
   // Nhớ vị trí gần nhất (để lần sau vào /companies/:id quay lại đúng chỗ)
   useEffect(() => {
     if (!mode) return
     const suffix = isTablesMode
-      ? `${MODE_TABLES}/${tabId ?? customDefs[0]?.id ?? ''}`
+      ? `${MODE_TABLES}/${tabId ?? topDefs[0]?.id ?? ''}`
       : `${MODE_PROFILE}/${activeTab}`
     try { sessionStorage.setItem(ACTIVE_TAB_KEY(id), suffix) } catch { /* ignore */ }
   }, [mode, isTablesMode, tabId, activeTab, customDefs, id])
@@ -304,8 +318,8 @@ export default function CompanyDetail() {
                 className={`${s.modeBtn} ${s.modeBtnTables} ${isTablesMode ? s.modeBtnTablesActive : ''}`}
               >
                 <Table2 size={14} /> Bảng dữ liệu
-                {customDefs.length > 0 && (
-                  <span className={s.modeBtnCount}>{customDefs.length}</span>
+                {topDefs.length > 0 && (
+                  <span className={s.modeBtnCount}>{topDefs.length}</span>
                 )}
               </button>
 
@@ -375,22 +389,37 @@ export default function CompanyDetail() {
             )}
           </button>
         ))}
-        {isTablesMode && customDefs.map((d) => (
+        {isTablesMode && topDefs.map((d) => (
           <button
             key={`ct_${d.id}`}
-            className={`${s.tabBtn} ${activeTab === `ct_${d.id}` ? s.tabBtnActive : ''}`}
+            className={`${s.tabBtn} ${activeTopId === d.id ? s.tabBtnActive : ''}`}
             onClick={() => goTableTab(d.id)}
           >
             <Table2 size={13} />
             {d.name}
           </button>
         ))}
-        {isTablesMode && customDefs.length === 0 && (
+        {isTablesMode && topDefs.length === 0 && (
           <span style={{ padding: '8px 4px', fontSize: 13, color: 'var(--color-muted)' }}>
             Chưa có bảng tùy biến nào. Quản trị viên có thể tạo trong Cài đặt.
           </span>
         )}
       </div>
+
+      {/* Dải sub-tab: bảng cha ↔ các bảng con (chỉ hiện khi bảng cha có bảng con) */}
+      {isTablesMode && subDefs.length > 0 && (
+        <div className={s.subTabBar}>
+          {subDefs.map((d) => (
+            <button
+              key={d.id}
+              className={`${s.subTabBtn} ${activeDef?.id === d.id ? s.subTabBtnActive : ''}`}
+              onClick={() => goTableTab(d.id)}
+            >
+              {d.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Tab content */}
       {activeTab === 'overview' && (
@@ -424,10 +453,9 @@ export default function CompanyDetail() {
       {activeTab === 'notes' && (
         <NotesTab company={company} onNoteCountChange={setNoteCount} />
       )}
-      {activeTab.startsWith('ct_') && (() => {
-        const d = customDefs.find((x) => `ct_${x.id}` === activeTab)
-        return d ? <CustomTableTab def={d} company={company} onDefUpdated={refetchCustomDefs} /> : null
-      })()}
+      {activeTab.startsWith('ct_') && activeDef && (
+        <CustomTableTab key={activeDef.id} def={activeDef} company={company} onDefUpdated={refetchCustomDefs} />
+      )}
 
       {/* Edit modal */}
       {showEdit && (
