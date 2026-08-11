@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, ListTodo, Loader2, Trash2, Plus, Search, RotateCcw, Filter, Eye,
-  SlidersHorizontal, ChevronDown, Check, LayoutGrid, List,
+  SlidersHorizontal, ChevronDown, ChevronRight, Check, LayoutGrid, List,
 } from 'lucide-react'
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -10,6 +10,7 @@ import {
 } from '@dnd-kit/core'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
+import DateBox from '../../components/ui/DateBox'
 import { useCompanyFooter } from './companyFooter'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -67,13 +68,12 @@ function DeleteTaskModal({ task, deleting, onClose, onConfirm }) {
 }
 
 // ── Cột danh sách công việc (đồng bộ với trang Tasks) ─────────────────────────
-// Bỏ "Tên viết tắt" vì trong 1 công ty mọi dòng đều cùng công ty.
 const CT_TASK_COLUMNS = [
   { key: 'title',          label: 'Tiêu đề', fixed: true },
-  { key: 'startDate',      label: 'Ngày bắt đầu' },
+  { key: 'companyShort',   label: 'Tên viết tắt' },
+  { key: 'startDate',      label: 'Bắt đầu' },
   { key: 'dueDate',        label: 'Hết hạn' },
-  { key: 'days',           label: 'Số ngày hoàn thành' },
-  { key: 'plannedDays',    label: 'Số ngày kế hoạch' },
+  { key: 'dayCount',       label: 'Ngày HT / KH' },
   { key: 'source',         label: 'Nguồn tạo' },
   { key: 'createdAt',      label: 'Ngày tạo' },
   { key: 'status',         label: 'Trạng thái' },
@@ -98,18 +98,16 @@ const CT_PRIORITY_SELECT_CLASS = {
   low: ts.qePriorityLow,
 }
 
-// Ô chỉnh nhanh Ngày hết hạn (đồng bộ giao diện với trang Tasks)
+// Ô chỉnh nhanh Ngày hết hạn — DateBox lai (gõ tay dd/mm/yyyy + lịch), đồng bộ hệ thống.
+// onChange nhận thẳng chuỗi 'YYYY-MM-DD' | '' (không phải event).
 function CtListDateField({ value, onChange, isOverdue, min }) {
-  const ref = useRef(null)
-  const dateStr = value ? value.slice(0, 10) : ''
   return (
-    <div
-      className={`${ts.qeDate} ${ts.qeDateInteractive} ${isOverdue ? ts.qeDateOverdue : ''}`}
-      onClick={() => ref.current?.showPicker?.()}
-    >
-      <span className={ts.qeDateText}>{dateStr ? fmtTaskDate(dateStr) : '—'}</span>
-      <input ref={ref} type="date" value={dateStr} onChange={onChange} min={min} className={ts.qeDateInputNative} tabIndex={-1} />
-    </div>
+    <DateBox
+      value={value ? value.slice(0, 10) : ''}
+      min={min || ''}
+      onChange={onChange}
+      className={`${ts.qeDateBox} ${isOverdue ? ts.qeDateBoxOverdue : ''}`}
+    />
   )
 }
 
@@ -119,7 +117,7 @@ function CtListDateField({ value, onChange, isOverdue, min }) {
 function getTaskColumnFilterType(colKey) {
   if (colKey === 'status' || colKey === 'priority' || colKey === 'assignedToName' || colKey === 'source') return 'enum'
   if (colKey === 'createdAt' || colKey === 'dueDate' || colKey === 'startDate') return 'dateRange'
-  if (colKey === 'progress' || colKey === 'days' || colKey === 'plannedDays') return 'numberRange'
+  if (colKey === 'progress') return 'numberRange'
   return 'text'
 }
 
@@ -131,8 +129,7 @@ function getTaskDisplayLabel(row, colKey) {
     case 'startDate':      { const d = row.startDate || row.createdAt; return d ? fmtTaskDate(d) : '(Trống)' }
     case 'createdAt':      return row.createdAt ? fmtTaskDate(row.createdAt) : '(Trống)'
     case 'dueDate':        return row.dueDate ? fmtTaskDate(row.dueDate) : '(Trống)'
-    case 'days':           { const d = calcDays(row);        return d !== null ? `${d}d` : '(Trống)' }
-    case 'plannedDays':    { const d = calcPlannedDays(row); return d !== null ? `${d}d` : '(Trống)' }
+    case 'companyShort':   return row.companyShortName || row.companyName || '(Trống)'
     case 'assignedToName': return row.assignedToName || '(Chưa giao)'
     case 'latestComment':  return row.latestComment || '(Trống)'
     case 'source':         return SOURCE_LABELS[row.source] ?? row.source ?? '(Trống)'
@@ -155,8 +152,7 @@ function getTaskSortKey(row, colKey) {
     case 'startDate':      return row.startDate || row.createdAt || ''
     case 'createdAt':      return row.createdAt ?? ''
     case 'dueDate':        return row.dueDate ?? ''
-    case 'days':           { const d = calcDays(row);        return d == null ? Number.MAX_SAFE_INTEGER : d }
-    case 'plannedDays':    { const d = calcPlannedDays(row); return d == null ? Number.MAX_SAFE_INTEGER : d }
+    case 'companyShort':   return (row.companyShortName || row.companyName || '').toLowerCase()
     case 'progress':       return progressPct(row) ?? -1
     case 'assignedToName': return (row.assignedToName ?? '').toLowerCase()
     case 'latestComment':  return (row.latestComment ?? '').toLowerCase()
@@ -255,13 +251,13 @@ function TaskDateRangeFilterSection({ colKey, currentFilter, onFilterChange }) {
       <div className={s.hdldDdRangeGroup}>
         <div className={s.hdldDdRangeRow}>
           <span className={s.hdldDdRangeLabel}>Từ ngày</span>
-          <input type="date" className={s.hdldDdInput} value={from}
-            onChange={(e) => { setFrom(e.target.value); apply(e.target.value, to) }} />
+          <DateBox className={s.hdldDdDateBox} value={from}
+            onChange={(v) => { setFrom(v); apply(v, to) }} />
         </div>
         <div className={s.hdldDdRangeRow}>
           <span className={s.hdldDdRangeLabel}>Đến ngày</span>
-          <input type="date" className={s.hdldDdInput} value={to}
-            onChange={(e) => { setTo(e.target.value); apply(from, e.target.value) }} />
+          <DateBox className={s.hdldDdDateBox} value={to}
+            onChange={(v) => { setTo(v); apply(from, v) }} />
         </div>
       </div>
       {(from || to) && (
@@ -416,27 +412,36 @@ function saveCtState(cid, obj) {
 function SourceCardInner({ task, getLabel }) {
   const overdue = isTaskOverdue(task)
   const pct     = progressPct(task)
+  const startShort = task.startDate ? fmtTaskDate(task.startDate).slice(0, 5) : null
+  const endShort   = task.dueDate ? fmtTaskDate(task.dueDate).slice(0, 5) : null
   return (
     <>
-      <div className={`${s.cTaskTitle} ${overdue ? s.cTaskTitleOverdue : ''}`}>{task.title}</div>
-      <div className={s.srcCardMeta}>
-        <span className={`${ts.statusBadge} ${ts[STATUS_CSS[task.status]]}`}>
-          {getLabel('task_status', task.status, STATUS_LABELS[task.status])}
-        </span>
+      <div className={ts.boardCardHead}>
+        <div className={`${ts.boardCardTitle} ${overdue ? s.companyTaskBoardTitleOverdue : ''}`}>{task.title}</div>
+      </div>
+      <div className={ts.boardCardMeta}>
         <span className={`${ts.priorityBadge} ${ts[PRIORITY_CSS[task.priority]]}`}>
           {getLabel('task_priority', task.priority, PRIORITY_LABELS[task.priority])}
         </span>
-      </div>
-      <div className={s.srcCardFoot}>
-        <span className={overdue ? s.cTaskDueOverdue : ''}>{fmtTaskDate(task.dueDate) ?? 'Chưa có hạn'}</span>
-        <span>{task.assignedToName ?? '—'}</span>
+        <span className={`${ts.statusBadge} ${ts[STATUS_CSS[task.status]]}`}>
+          {getLabel('task_status', task.status, STATUS_LABELS[task.status])}
+        </span>
+        {task.assignedToName && (
+          <span className={ts.boardCardAssigneeName} title={task.assignedToName}>{task.assignedToName}</span>
+        )}
+        {(startShort || endShort) && (
+          <span className={`${ts.boardCardDates} ${overdue ? ts.boardCardDateOver : ''}`}>
+            {startShort ?? '—'} → {endShort ?? '—'}
+          </span>
+        )}
       </div>
       {pct !== null && (
-        <div className={s.cTaskProgressBar}>
-          <div
-            className={`${s.cTaskProgressFill} ${pct === 100 ? s.cTaskProgressFillDone : ''}`}
-            style={{ '--progress-width': `${pct}%` }}
-          />
+        <div className={ts.boardCardProgress}>
+          <div className={ts.progressBar}>
+            <div className={`${ts.progressFill} ${ts.progressFillDynamic} ${pct === 100 ? ts.progressFillDone : ''}`}
+              style={{ '--progress-width': `${pct}%` }} />
+          </div>
+          <span className={ts.boardCardProgressText}>{pct}%</span>
         </div>
       )}
     </>
@@ -452,7 +457,7 @@ function DraggableSourceCard({ task, onOpen, getLabel }) {
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      className={`${ts.boardCard} ${isDragging ? ts.boardCardDragging : ''} ${transform ? ts.dragTransform : ''}`}
+      className={`${ts.boardCard} ${s.companyTaskBoardCard} ${isDragging ? ts.boardCardDragging : ''} ${transform ? ts.dragTransform : ''}`}
       style={transform ? { '--drag-x': `${transform.x}px`, '--drag-y': `${transform.y}px` } : undefined}
       onClick={() => !isDragging && onOpen(task.id)}
     >
@@ -464,13 +469,13 @@ function DraggableSourceCard({ task, onOpen, getLabel }) {
 function DroppableSourceColumn({ srcKey, label, tasks, onOpen, getLabel }) {
   const { setNodeRef, isOver } = useDroppable({ id: srcKey })
   return (
-    <div className={ts.boardCol}>
-      <div className={ts.boardColHead}>
-        <span className={ts.boardColDot} />
-        <span className={ts.boardColTitle}>{label}</span>
-        <span className={ts.boardColCount}>{tasks.length}</span>
+    <div className={`${ts.boardCol} ${s.companyTaskBoardCol}`}>
+      <div className={`${ts.boardColHead} ${s.companyTaskBoardColHead}`}>
+        <span className={`${ts.boardColDot} ${s.companyTaskBoardColDot}`} />
+        <span className={`${ts.boardColTitle} ${s.companyTaskBoardColTitle}`}>{label}</span>
+        <span className={`${ts.boardColCount} ${s.companyTaskBoardColCount}`}>{tasks.length}</span>
       </div>
-      <div ref={setNodeRef} className={`${ts.boardCards} ${isOver ? ts.boardCardsOver : ''}`}>
+      <div ref={setNodeRef} className={`${ts.boardCards} ${s.companyTaskBoardCards} ${isOver ? ts.boardCardsOver : ''}`}>
         {tasks.map((t) => (
           <DraggableSourceCard key={t.id} task={t} onOpen={onOpen} getLabel={getLabel} />
         ))}
@@ -512,7 +517,7 @@ function SourceBoardView({ tasks, sources, onSourceChange, onOpen, getLabel }) {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className={ts.boardWrap}>
+      <div className={`${ts.boardWrap} ${s.companyTaskBoard}`}>
         {cols.map((sc) => (
           <DroppableSourceColumn
             key={sc.key}
@@ -526,7 +531,7 @@ function SourceBoardView({ tasks, sources, onSourceChange, onOpen, getLabel }) {
       </div>
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
-          <div className={`${ts.boardCard} ${ts.boardCardOverlay}`}>
+          <div className={`${ts.boardCard} ${s.companyTaskBoardCard} ${ts.boardCardOverlay}`}>
             <SourceCardInner task={activeTask} getLabel={getLabel} />
           </div>
         ) : null}
@@ -584,6 +589,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting]         = useState(false)
   const [quickViewId, setQuickViewId]   = useState(null)
+  const [filterCollapsed, setFilterCollapsed] = useState(true)
 
   // Ẩn/hiện cột (đồng bộ với trang Tasks) — lưu sessionStorage theo công ty
   const [hiddenCols, setHiddenCols] = useState(() => new Set(Array.isArray(initCt.hiddenCols) ? initCt.hiddenCols : []))
@@ -921,20 +927,22 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
   const hasSortActive  = sortState.col !== null
 
-  function FilterTh({ colKey, className, children }) {
+  function FilterTh({ colKey, className, children, w, noFilter = false }) {
     const active = hasColFilter(colKey) || sortState.col === colKey
     return (
-      <th className={className}>
+      <th className={className} style={w ? { width: w } : undefined}>
         <div className={s.hdldThInner}>
           <span className={s.hdldThLabel}>{children}</span>
-          <button
-            data-hdld-filter-btn
-            className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`}
-            onClick={(e) => openFilter(colKey, e)}
-            title="Lọc / Sắp xếp"
-          >
-            <Filter size={10} />
-          </button>
+          {!noFilter && (
+            <button
+              data-hdld-filter-btn
+              className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`}
+              onClick={(e) => openFilter(colKey, e)}
+              title="Lọc / Sắp xếp"
+            >
+              <Filter size={10} />
+            </button>
+          )}
         </div>
       </th>
     )
@@ -1030,50 +1038,61 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         </div>
       </div>
 
-      {/* Filter panel */}
-      <div className={s.cTaskFilterPanel}>
-        <div className={s.cTaskFilterHead}>
-          <div className={s.cTaskFilterTitle}>
-            <Filter size={12} />
-            Bộ lọc
-            {activeFilters > 0 && (
-              <span className={s.cTaskFilterBadge}>{activeFilters} đang bật</span>
-            )}
-          </div>
+      {/* Bộ lọc — cùng cấu trúc với trang Tasks */}
+      <div className={ts.filterBar}>
+        <div className={ts.filterBarHead}>
+          <button
+            type="button"
+            className={`${ts.filterCollapseBtn} ${!filterCollapsed ? ts.filterCollapseActive : ''}`}
+            onClick={() => setFilterCollapsed((v) => !v)}
+            aria-expanded={!filterCollapsed}
+            aria-controls="company-tasks-advanced-filters"
+          >
+            {filterCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+            <span className={ts.filterBarTitle}>
+              <Filter size={12} /> Bộ lọc
+              {activeFilters > 0 && <span className={ts.filterActiveBadge}>{activeFilters} đang bật</span>}
+            </span>
+          </button>
           {/* Dãy chip đếm theo trạng thái nằm NGAY TRÊN HÀNG TIÊU ĐỀ của khung
               bộ lọc — chỗ này vốn bỏ trống, nhét vào đây thì không tốn thêm
               hàng nào. Nhãn lấy từ danh mục trạng thái của hệ thống
               (getOptions('task_status')), không viết cứng trong mã. */}
-          <div className={s.cTaskStatusRow}>
+          <div className={ts.headStats}>
+            <span className={ts.headStatsLabel}>Thống kê</span>
             {statusChipOptions.map(({ key, label }) => {
               const count = key === '' ? pagination.total : (statusCounts[key] ?? 0)
               const isActive = key === '' ? statusFilter.length === 0 : statusFilter.includes(key)
               return (
                 <button
                   key={key}
-                  className={`${s.cTaskStatusChip} ${isActive ? `${s.cTaskStatusChipActive} ${COMPANY_TASK_STATUS_TONE[key] ?? ''}` : ''}`}
+                  className={`${ts.statItem} ${isActive ? ts.statItemActive : ''}`}
                   onClick={() => {
                     if (key === '') setStatusFilter([])
                     else setStatusFilter((arr) => arr.includes(key) ? arr.filter((k) => k !== key) : [...arr, key])
                     setPage(1)
                   }}
                 >
-                  <span>{label}</span>
-                  <span className={`${s.cTaskStatusChipCount} ${isActive ? s.cTaskStatusChipCountActive : ''}`}>{count}</span>
+                  <span className={`${ts.statValue} ${COMPANY_TASK_STATUS_TONE[key] ?? ''}`}>{count}</span>
+                  <span className={ts.statLabel}>{label}</span>
                 </button>
               )
             })}
           </div>
 
-          <button className={s.cTaskFilterReset} onClick={resetFilters}>
-            <RotateCcw size={11} /> Đặt lại
-          </button>
+          <div className={ts.headActions}>
+            <button className={`${ts.filterToggle} ${isOverdue ? ts.filterToggleActive : ''}`} onClick={() => { setIsOverdue((v) => !v); setPage(1) }}>
+              {isOverdue ? '✓ ' : ''}Trễ hạn
+            </button>
+            <button className={ts.filterReset} onClick={resetFilters}><RotateCcw size={11} /> Đặt lại</button>
+          </div>
         </div>
 
-        <div className={s.cTaskFilterGrid}>
+        <div className={ts.quickFilterArea}>
+        <div className={ts.quickFilterGrid}>
           {/* Kỳ — gộp Năm + Tháng vào 1 control, dùng chung với trang Công việc */}
-          <div className={s.cTaskFilterGroup}>
-            <label className={s.cTaskFilterLabel}>Kỳ</label>
+          <div className={ts.filterGroup}>
+            <label className={ts.filterLabel}>Kỳ</label>
             <PeriodPicker
               year={yearFilter}
               month={monthFilter}
@@ -1082,30 +1101,15 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               availableYears={availableYears}
               onYear={(v) => { setYearFilter(v); if (!v) setMonthFilter(''); clearRange(); setPage(1) }}
               onMonth={(v) => { setMonthFilter(v); clearRange(); setPage(1) }}
-              onFrom={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
-              onTo={(e) => { setDueDateTo(e.target.value); setPage(1) }}
+              onFrom={(v) => { setDueDateFrom(v); setPage(1) }}
+              onTo={(v) => { setDueDateTo(v); setPage(1) }}
               onPreset={applyPeriodPreset}
             />
           </div>
 
-          {/* Tìm kiếm */}
-          <div className={`${s.cTaskFilterGroup} ${s.cTaskFilterGroupGrow}`}>
-            <label className={s.cTaskFilterLabel}>Từ khoá</label>
-            <div className={s.searchFieldWrap}>
-              <Search size={12} className={s.searchFieldIcon} />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Tìm công việc..."
-                className={`${s.cTaskFilterInput} ${s.cTaskFilterInputWithIcon}`}
-              />
-            </div>
-          </div>
-
           {/* Trạng thái — multi-select */}
-          <div className={s.cTaskFilterGroup}>
-            <label className={s.cTaskFilterLabel}>Trạng thái</label>
+          <div className={ts.filterGroup}>
+            <label className={ts.filterLabel}>Trạng thái</label>
             <TaskMultiSelect
               placeholder="Tất cả"
               options={statusOptions}
@@ -1114,9 +1118,26 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             />
           </div>
 
-          {/* Ưu tiên — multi-select */}
-          <div className={s.cTaskFilterGroup}>
-            <label className={s.cTaskFilterLabel}>Ưu tiên</label>
+          {/* Tìm kiếm */}
+          <div className={`${ts.filterGroup} ${ts.grow}`}>
+            <label className={ts.filterLabel}>Từ khoá</label>
+            <div className={ts.filterSearchWrap}>
+              <Search size={12} className={ts.filterSearchIcon} />
+              <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Tiêu đề công việc..." className={`${ts.filterInput} ${ts.filterInputWithIcon}`} />
+            </div>
+          </div>
+        </div>
+
+        {!filterCollapsed && (
+          <div id="company-tasks-advanced-filters" className={ts.filterPopover}>
+            <div className={ts.filterPopoverHead}>
+              <span>Bộ lọc công việc</span>
+              {activeFilters > 0 && <span>{activeFilters} điều kiện</span>}
+            </div>
+            <div className={ts.advancedFilterGrid}>
+          <div className={ts.filterGroup}>
+            <label className={ts.filterLabel}>Ưu tiên</label>
             <TaskMultiSelect
               placeholder="Tất cả"
               options={getOptions('task_priority').length > 0
@@ -1128,8 +1149,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           </div>
 
           {/* Nguồn công việc — multi-select */}
-          <div className={s.cTaskFilterGroup}>
-            <label className={s.cTaskFilterLabel}>Nguồn</label>
+          <div className={ts.filterGroup}>
+            <label className={ts.filterLabel}>Nguồn</label>
             <TaskMultiSelect
               placeholder="Tất cả"
               options={getOptions('task_source').length > 0
@@ -1139,30 +1160,21 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               onChange={(v) => { setSourceFilter(v); setPage(1) }}
             />
           </div>
-
-          {/* Trễ hạn — gọi đúng tên như trang Công việc */}
-          <div className={`${s.cTaskFilterGroup} ${s.filterGroupEnd}`}>
-            <label className={s.cTaskFilterLabel}>&nbsp;</label>
-            <button
-              className={`${s.cTaskOverdueBtn} ${isOverdue ? s.cTaskOverdueBtnActive : ''}`}
-              onClick={() => { setIsOverdue((v) => !v); setPage(1) }}
-            >
-              {isOverdue ? '✓ ' : ''}Trễ hạn
-            </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Active filter chips */}
-        <div className={`${s.filterChips} ${s.filterChipsCompact}`}>
+        <div className={ts.filterChipsRow}>
           {/* Period chip — always show current period */}
           {(() => {
             const isDefault = monthFilter === CUR_MONTH && yearFilter === CUR_YEAR && !dueDateFrom && !dueDateTo
             return (
-              <span className={`${s.filterChip} ${isDefault ? s.filterChipMuted : ''}`} title={periodRangeLabel(activeRange)}>
-                Kỳ: {periodRangeLabel(activeRange)}
+              <span className={ts.filterChip} title={periodRangeLabel(activeRange)}>
+                {monthFilter && yearFilter ? `T${monthFilter}/${yearFilter}` : periodRangeLabel(activeRange)}
                 {!isDefault && (
                   <button
-                    className={s.filterChipRemove}
+                    className={ts.filterChipRemove}
                     onClick={() => { setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR); clearRange(); setPage(1) }}
                   >×</button>
                 )}
@@ -1170,31 +1182,32 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
             )
           })()}
           {priorityFilter.map((p) => (
-            <span key={p} className={s.filterChip}>
+            <span key={p} className={ts.filterChip}>
               Ưu tiên: {getLabel('task_priority', p, PRIORITY_LABELS[p] ?? p)}
-              <button className={s.filterChipRemove} onClick={() => { setPriorityFilter((arr) => arr.filter((k) => k !== p)); setPage(1) }}>×</button>
+              <button className={ts.filterChipRemove} onClick={() => { setPriorityFilter((arr) => arr.filter((k) => k !== p)); setPage(1) }}>×</button>
             </span>
           ))}
           {sourceFilter.map((src) => (
-            <span key={src} className={s.filterChip}>
+            <span key={src} className={ts.filterChip}>
               Nguồn: {getLabel('task_source', src, src === 'auto' ? 'Tự động' : 'Thủ công')}
-              <button className={s.filterChipRemove} onClick={() => { setSourceFilter((arr) => arr.filter((k) => k !== src)); setPage(1) }}>×</button>
+              <button className={ts.filterChipRemove} onClick={() => { setSourceFilter((arr) => arr.filter((k) => k !== src)); setPage(1) }}>×</button>
             </span>
           ))}
           {isOverdue && (
-            <span className={`${s.filterChip} ${s.filterChipDanger}`}>
+            <span className={ts.filterChip}>
               Trễ hạn
-              <button className={s.filterChipRemove} onClick={() => { setIsOverdue(false); setPage(1) }}>×</button>
+              <button className={ts.filterChipRemove} onClick={() => { setIsOverdue(false); setPage(1) }}>×</button>
             </span>
           )}
           {search && (
-            <span className={s.filterChip}>
+            <span className={ts.filterChip}>
               &ldquo;{search}&rdquo;
-              <button className={s.filterChipRemove} onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>×</button>
+              <button className={ts.filterChipRemove} onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>×</button>
             </span>
           )}
         </div>
 
+        </div>
       </div>
 
       {/* Bulk action bar (list view) */}
@@ -1216,7 +1229,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
 
       {/* ── Kanban board (theo nguồn công việc) ── */}
       {view === 'board' ? (
-        <div className={s.tableWrap}>
+        <div className={`${s.tableWrap} ${s.companyTaskBoardWrap}`}>
           {loading ? (
             <div className={s.cTaskBoardLoading}>Đang tải...</div>
           ) : displayed.length === 0 ? (
@@ -1238,7 +1251,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       /* ── Table (list view) ── */
       <div className={s.tableWrap}>
         <div className={s.tableScroll}>
-          <table className={s.table}>
+          <table className={`${s.table} ${s.companyTaskTable}`}>
             <thead>
               <tr>
                 <th className={ts.thCheck}>
@@ -1250,18 +1263,18 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                   />
                 </th>
                 <FilterTh colKey="title">Tiêu đề</FilterTh>
-                {vis('startDate')      && <FilterTh colKey="startDate">Ngày bắt đầu</FilterTh>}
-                {vis('dueDate')        && <FilterTh colKey="dueDate">Hết hạn</FilterTh>}
-                {vis('days')           && <FilterTh colKey="days">Số ngày hoàn thành</FilterTh>}
-                {vis('plannedDays')    && <FilterTh colKey="plannedDays">Số ngày kế hoạch</FilterTh>}
-                {vis('source')         && <FilterTh colKey="source">Nguồn tạo</FilterTh>}
-                {vis('createdAt')      && <FilterTh colKey="createdAt">Ngày tạo</FilterTh>}
-                {vis('status')         && <FilterTh colKey="status">Trạng thái</FilterTh>}
-                {vis('priority')       && <FilterTh colKey="priority">Ưu tiên</FilterTh>}
-                {vis('progress')       && <FilterTh colKey="progress">Tiến độ</FilterTh>}
-                {vis('assignedToName') && <FilterTh colKey="assignedToName">Giao cho</FilterTh>}
-                {vis('latestComment')  && <FilterTh colKey="latestComment">Bình luận mới nhất</FilterTh>}
-                <th className={s.taskActionHeadAdmin} />
+                {vis('companyShort')   && <FilterTh colKey="companyShort" w={160}>Tên viết tắt</FilterTh>}
+                {vis('startDate')      && <FilterTh colKey="startDate" w={104}>Bắt đầu</FilterTh>}
+                {vis('dueDate')        && <FilterTh colKey="dueDate" w={124}>Hết hạn</FilterTh>}
+                {vis('dayCount')       && <FilterTh colKey="dayCount" w={108} noFilter>Ngày HT / KH</FilterTh>}
+                {vis('source')         && <FilterTh colKey="source" w={116}>Nguồn tạo</FilterTh>}
+                {vis('createdAt')      && <FilterTh colKey="createdAt" w={122}>Ngày tạo</FilterTh>}
+                {vis('status')         && <FilterTh colKey="status" w={132}>Trạng thái</FilterTh>}
+                {vis('priority')       && <FilterTh colKey="priority" w={106}>Ưu tiên</FilterTh>}
+                {vis('progress')       && <FilterTh colKey="progress" w={110}>Tiến độ</FilterTh>}
+                {vis('assignedToName') && <FilterTh colKey="assignedToName" w={116}>Giao cho</FilterTh>}
+                {vis('latestComment')  && <FilterTh colKey="latestComment" w={160}>Bình luận mới</FilterTh>}
+                <th className={s.taskActionHeadAdmin}>Hành động</th>
               </tr>
             </thead>
             <tbody>
@@ -1312,6 +1325,14 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                       </div>
                     </td>
 
+                    {vis('companyShort') && (
+                      <td>
+                        {task.companyShortName || task.companyName
+                          ? <span className={s.cTaskCompanyShort}>{task.companyShortName || task.companyName}</span>
+                          : <span className={s.cTaskDash}>—</span>}
+                      </td>
+                    )}
+
                     {/* Ngày bắt đầu */}
                     {vis('startDate') && (
                       <td className={s.cTaskDateCell}>
@@ -1325,7 +1346,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                         {canEditDueDate(task, isAdmin) ? (
                           <CtListDateField
                             value={task.dueDate ?? ''}
-                            onChange={(e) => handleDueDateChange(task, e.target.value)}
+                            onChange={(v) => handleDueDateChange(task, v)}
                             isOverdue={overdue}
                             min={(task.startDate || task.createdAt)?.slice(0, 10) || undefined}
                           />
@@ -1337,21 +1358,18 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                       </td>
                     )}
 
-                    {/* Số ngày hoàn thành (thực tế) */}
-                    {vis('days') && (
+                    {/* Ngày HT / KH — đồng bộ cột gộp của Tasks */}
+                    {vis('dayCount') && (
                       <td>
-                        {days !== null ? (
-                          <span className={`${ts.daysBadge} ${task.status === 'completed' ? ts.daysBadgeDone : ''}`}>{days}d</span>
-                        ) : <span className={s.cTaskDash}>—</span>}
-                      </td>
-                    )}
-
-                    {/* Số ngày kế hoạch (hết hạn − bắt đầu) */}
-                    {vis('plannedDays') && (
-                      <td>
-                        {planned !== null ? (
-                          <span className={`${ts.daysBadge} ${ts.daysBadgePlan}`}>{planned}d</span>
-                        ) : <span className={s.cTaskDash}>—</span>}
+                        <span className={ts.dayCountCell}>
+                          {days !== null
+                            ? <span className={`${ts.daysBadge} ${task.status === 'completed' ? ts.daysBadgeDone : ''}`}>{days}d</span>
+                            : <span className={s.cTaskDash}>—</span>}
+                          <span className={ts.dayCountSep}>/</span>
+                          {planned !== null
+                            ? <span className={`${ts.daysBadge} ${ts.daysBadgePlan}`}>{planned}d</span>
+                            : <span className={s.cTaskDash}>—</span>}
+                        </span>
                       </td>
                     )}
 

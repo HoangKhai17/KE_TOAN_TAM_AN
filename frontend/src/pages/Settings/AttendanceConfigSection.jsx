@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Pencil, Trash2, Loader2, Power, Check, X, Clock, Star } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
+import DateBox from '../../components/ui/DateBox'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
 import s from './settings.module.css'
@@ -517,11 +518,10 @@ function HolidayModal({ holiday, onClose, onSaved }) {
       <form onSubmit={handleSubmit} className={s.modalForm}>
         <div>
           <label className={s.settingsLabel}>Ngày lễ *</label>
-          <input
-            type="date"
-            className={s.settingsInput}
-            value={form.holidayDate}
-            onChange={(e) => set('holidayDate', e.target.value)}
+          <DateBox
+            block
+            value={form.holidayDate ?? ''}
+            onChange={(v) => set('holidayDate', v)}
             disabled={isEdit}
           />
           {isEdit && (

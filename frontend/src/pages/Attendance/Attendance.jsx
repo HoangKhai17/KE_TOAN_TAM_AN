@@ -10,6 +10,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
 import { useCompanyOptions } from '../../hooks/useReferenceData'
+import DateBox from '../../components/ui/DateBox'
 import s from './Attendance.module.css'
 
 const EMPTY_ARR = []   // ref ổn định cho fallback danh sách rỗng
@@ -718,11 +719,11 @@ function LeaveFormModal({ onClose, onSaved }) {
         <div className={s.formGrid}>
           <div className={s.formGroup}>
             <label className={`${s.formLabel} ${s.req}`}>Ngày bắt đầu</label>
-            <input type="date" value={form.startDate} onChange={set('startDate')} className={s.formInput} />
+            <DateBox value={form.startDate ?? ''} onChange={(v) => setForm((p) => ({ ...p, startDate: v }))} block />
           </div>
           <div className={s.formGroup}>
             <label className={`${s.formLabel} ${s.req}`}>Ngày kết thúc</label>
-            <input type="date" value={form.endDate} onChange={set('endDate')} min={form.startDate || undefined} className={s.formInput} />
+            <DateBox value={form.endDate ?? ''} onChange={(v) => setForm((p) => ({ ...p, endDate: v }))} min={form.startDate || ''} block />
           </div>
         </div>
         <div className={s.formGroup}>
@@ -1021,7 +1022,7 @@ function OvertimeFormModal({ onClose, onSaved }) {
         <div className={s.formGrid}>
           <div className={s.formGroup}>
             <label className={`${s.formLabel} ${s.req}`}>Ngày tăng ca</label>
-            <input type="date" value={form.otDate} onChange={set('otDate')} className={s.formInput} />
+            <DateBox value={form.otDate ?? ''} onChange={(v) => setForm((p) => ({ ...p, otDate: v }))} block />
           </div>
           <div className={s.formGroup}>
             <label className={s.formLabel}>Khách hàng</label>

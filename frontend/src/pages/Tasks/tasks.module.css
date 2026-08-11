@@ -2885,6 +2885,27 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   color: var(--color-danger);
 }
 
+/* DateBox lai thu gọn cho ô ngày inline trong bảng công việc (thay .qeDate cũ).
+   Nhân đôi selector để thắng base .dateBox (nằm ở components/ui/DateBox.module.css). */
+.qeDateBox.qeDateBox {
+  height: 26px; min-height: 26px;
+  padding: 0 6px; gap: 4px;
+  border-width: 1px; border-radius: var(--radius-sm);
+  font-size: var(--fs-2xs);
+  width: 100%; min-width: 0;  /* vừa khít cột (độ rộng do cột quyết định), không tự tràn */
+}
+.qeDateBoxOverdue.qeDateBoxOverdue { border-color: var(--color-danger); color: var(--color-danger); }
+/* viền đỏ báo lỗi cho DateBox trong form/quickview (nhân đôi selector để thắng base) */
+.dbError.dbError { border-color: var(--color-danger); }
+/* DateBox gọn cho quickview (khớp .qvDateField cũ cao 26px, co giãn theo hàng) */
+.qvDateBox.qvDateBox {
+  flex: 1; min-width: 0;
+  height: 26px; min-height: 26px;
+  padding: 0 8px; gap: 4px;
+  border-width: 1px; border-radius: var(--radius-sm);
+  font-size: var(--fs-2xs);
+}
+
 /* ── Table action column / delete row button ─────────────────── */
 
 .tdAction {

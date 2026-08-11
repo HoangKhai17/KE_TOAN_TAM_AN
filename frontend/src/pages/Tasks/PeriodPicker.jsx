@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
+import DateBox from '../../components/ui/DateBox'
 import s from './tasks.module.css'
 import { fmtDate, resolvePeriodRange, periodRangeLabel } from './taskUtils'
 
@@ -11,25 +12,17 @@ import { fmtDate, resolvePeriodRange, periodRangeLabel } from './taskUtils'
 // Chỉ bọc phần giao diện: vẫn đẩy xuống đúng các state cũ nên logic truy vấn và
 // backend không đổi. Bỏ qua onFrom/onTo thì phần khoảng ngày tự ẩn.
 
-// Ô ngày: hiện dd/mm/yyyy, giấu input ngày gốc của trình duyệt phía sau.
-// Chưa nhập gì thì hiện luôn ngày suy ra từ Năm/Tháng (mờ) — nhờ vậy chọn
-// "Tháng 7" là thấy ngay đang lọc 01/07 → 31/07, không cần ghi thêm ở đâu nữa.
+// Ô ngày lai: gõ tay dd/mm/yyyy hoặc bấm lịch. Chưa nhập gì thì hiện luôn ngày
+// suy ra từ Năm/Tháng (làm placeholder mờ) — chọn "Tháng 7" là thấy ngay đang lọc
+// 01/07 → 31/07. onChange nhận thẳng chuỗi 'YYYY-MM-DD' | ''.
 export function FilterDateField({ value, onChange, placeholder }) {
-  const ref = useRef(null)
   return (
-    <div className={s.filterDateField} onClick={() => ref.current?.showPicker?.()}>
-      <span className={value ? s.filterDateFieldText : `${s.filterDateFieldText} ${s.filterDateFieldPlaceholder}`}>
-        {value ? fmtDate(value) : (placeholder ? fmtDate(placeholder) : 'dd/mm/yyyy')}
-      </span>
-      <input
-        ref={ref}
-        type="date"
-        value={value}
-        onChange={onChange}
-        tabIndex={-1}
-        className={s.filterDateFieldInput}
-      />
-    </div>
+    <DateBox
+      block
+      value={value || ''}
+      onChange={onChange}
+      placeholder={placeholder ? fmtDate(placeholder) : 'dd/mm/yyyy'}
+    />
   )
 }
 

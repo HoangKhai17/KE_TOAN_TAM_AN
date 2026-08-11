@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Info, Search, ChevronDown, ChevronLeft, ChevronRight, X, Plus, Link2, Trash2, GripVertical, Lock } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
+import DateBox from '../../components/ui/DateBox'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { createTask, addTaskChecklistItem, addTaskLink } from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
@@ -369,19 +370,18 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         {/* Start date */}
         <div className={s.formGroup}>
           <label className={s.formLabel}>Ngày bắt đầu</label>
-          <input type="date" value={form.startDate} onChange={set('startDate')} className={s.formInput} />
+          <DateBox block value={form.startDate ?? ''} onChange={(v) => setForm((p) => ({ ...p, startDate: v }))} />
         </div>
 
         {/* Due date */}
         <div className={s.formGroup}>
           <label className={`${s.formLabel} ${s.required}`}>Ngày hết hạn</label>
-          <input
-            type="date"
-            value={form.dueDate}
-            onChange={set('dueDate')}
-            className={s.formInput}
-            min={form.startDate || undefined}
-            style={fe.dueDate ? { borderColor: '#ef4444' } : {}}
+          <DateBox
+            block
+            value={form.dueDate ?? ''}
+            onChange={(v) => setForm((p) => ({ ...p, dueDate: v }))}
+            min={form.startDate || ''}
+            className={fe.dueDate ? s.dbError : ''}
           />
           {fe.dueDate && <p className={s.formError}>{fe.dueDate}</p>}
         </div>

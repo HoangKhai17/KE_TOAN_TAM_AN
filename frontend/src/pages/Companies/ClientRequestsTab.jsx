@@ -9,6 +9,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
+import DateBox from '../../components/ui/DateBox'
 import { useCompanyFooter } from './companyFooter'
 import * as cdrApi from '../../api/clientRequests'
 import s from './companies.module.css'
@@ -42,12 +43,10 @@ function StatusBadge({ status }) {
   const label = opts.find((o) => o.key === status)?.label ?? status
   const cfg = STATUS_COLOR[status] ?? STATUS_COLOR.pending
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '2px 9px', borderRadius: 20, fontSize: 'var(--fs-xs)', fontWeight: 600,
-      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
-      whiteSpace: 'nowrap',
-    }}>
+    <span
+      className={s.clientRequestStatusBadge}
+      style={{ '--status-bg': cfg.bg, '--status-color': cfg.color, '--status-border': cfg.border }}
+    >
       {label}
     </span>
   )
@@ -103,7 +102,7 @@ export default function ClientRequestsTab({ company }) {
   // Phân trang → footer trang (thay copyright)
   useCompanyFooter(loading ? null : {
     total: pagination.total,
-    from: (page - 1) * pageSize + 1,
+    from: pagination.total === 0 ? 0 : (page - 1) * pageSize + 1,
     to: Math.min(page * pageSize, pagination.total),
     page, pageSize, totalPages: pagination.totalPages,
     itemLabel: 'yêu cầu', loading,
@@ -265,18 +264,16 @@ export default function ClientRequestsTab({ company }) {
             <span className={s.countPill}>{pagination.total}</span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className={s.compactHeaderActions}>
           <button
-            className={s.btnOutline}
-            style={{ height: 32, padding: '0 10px', fontSize: 'var(--fs-sm)' }}
+            className={`${s.btnOutline} ${s.compactIconButton}`}
             onClick={load}
             title="Làm mới"
           >
             <RefreshCw size={12} />
           </button>
           <button
-            className={s.btnPrimary}
-            style={{ height: 32, padding: '0 12px', fontSize: 'var(--fs-md)' }}
+            className={`${s.btnPrimary} ${s.compactActionButton}`}
             onClick={() => setShowCreate(true)}
           >
             <Plus size={13} /> Tạo yêu cầu
@@ -295,6 +292,17 @@ export default function ClientRequestsTab({ company }) {
                 {[searchQuery, statusFilter, sortFilter !== 'created_at:desc' ? '1' : ''].filter(Boolean).length} đang bật
               </span>
             )}
+          </div>
+          <div className={`${s.cTaskStatusRow} ${s.clientRequestStatusRow}`}>
+            {statusFilters.map(({ key, label }) => (
+              <button
+                key={key}
+                className={`${s.cTaskStatusChip} ${statusFilter === key ? s.cTaskStatusChipActive : ''}`}
+                onClick={() => setStatusFilter(key)}
+              >
+                <span>{label}</span>
+              </button>
+            ))}
           </div>
           <button
             className={s.cTaskFilterReset}
@@ -334,24 +342,12 @@ export default function ClientRequestsTab({ company }) {
           </div>
         </div>
 
-        {/* Status chips row */}
-        <div className={s.cTaskStatusRow} style={{ padding: '0 14px 10px', marginBottom: 0 }}>
-          {statusFilters.map(({ key, label }) => (
-            <button
-              key={key}
-              className={`${s.cTaskStatusChip} ${statusFilter === key ? s.cTaskStatusChipActive : ''}`}
-              onClick={() => setStatusFilter(key)}
-            >
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Table */}
       <div className={s.tableWrap}>
         <div className={s.tableScroll}>
-          <table className={s.table}>
+          <table className={`${s.table} ${s.clientRequestTable}`}>
             <thead>
               <tr>
                 <th style={{ minWidth: 200 }}>Tài liệu yêu cầu</th>
@@ -361,7 +357,7 @@ export default function ClientRequestsTab({ company }) {
                 <th style={{ width: 100 }}>Hạn nộp</th>
                 <th style={{ width: 160 }}>Email KH</th>
                 <th style={{ width: 60, textAlign: 'center' }}>Link</th>
-                <th style={{ width: 130 }} />
+                <th style={{ width: 130 }}>Hành động</th>
               </tr>
             </thead>
             <tbody>
@@ -378,9 +374,9 @@ export default function ClientRequestsTab({ company }) {
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={8}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 16px', gap: 8, color: 'var(--color-muted-soft)' }}>
+                    <div className={s.clientRequestEmpty}>
                       <ClipboardList size={32} />
-                      <span style={{ fontSize: 'var(--fs-md)' }}>
+                      <span>
                         {statusFilter || debouncedSearch
                           ? 'Không tìm thấy yêu cầu nào phù hợp'
                           : 'Chưa có yêu cầu tài liệu nào'}
@@ -395,11 +391,11 @@ export default function ClientRequestsTab({ company }) {
                 return (
                   <tr key={item.id}>
                     <td>
-                      <div style={{ fontWeight: 600, fontSize: 'var(--fs-md)', color: 'var(--color-text-heading)', marginBottom: 2 }}>
+                      <div className={s.clientRequestName}>
                         {item.documentName}
                       </div>
                       {item.description && (
-                        <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 260 }}>
+                        <div className={s.clientRequestDescription}>
                           {item.description}
                         </div>
                       )}
@@ -427,17 +423,17 @@ export default function ClientRequestsTab({ company }) {
                           <Eye size={11} /> Xem
                         </button>
                       ) : (
-                        <span style={{ color: 'var(--color-border)', fontSize: 'var(--fs-md)' }}>—</span>
+                        <span className={s.clientRequestDash}>—</span>
                       )}
                     </td>
 
-                    <td style={{ fontSize: 'var(--fs-md)', color: 'var(--color-muted)' }}>
+                    <td className={s.clientRequestDataCell}>
                       {item.periodLabel || '—'}
                     </td>
-                    <td style={{ fontSize: 'var(--fs-md)', color: item.status === 'overdue' ? 'var(--color-danger-text)' : 'var(--color-muted)' }}>
+                    <td className={item.status === 'overdue' ? s.clientRequestDeadlineOverdue : s.clientRequestDataCell}>
                       {fmtDate(item.deadlineDate)}
                     </td>
-                    <td style={{ fontSize: 'var(--fs-md)', color: 'var(--color-muted)' }}>
+                    <td className={s.clientRequestDataCell}>
                       {item.contactEmail || '—'}
                     </td>
 
@@ -721,11 +717,10 @@ function CdrFormModal({ company, initial, onClose, onSaved }) {
 
         <div>
           <label className={s.formLabel}>Hạn nộp</label>
-          <input
-            type="date"
+          <DateBox
+            block
             value={form.deadlineDate}
-            onChange={(e) => set('deadlineDate', e.target.value)}
-            className={s.formInput}
+            onChange={(v) => set('deadlineDate', v)}
           />
         </div>
 

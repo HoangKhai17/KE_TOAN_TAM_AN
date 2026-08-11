@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Loader2, DollarSign } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
+import DateBox from '../../components/ui/DateBox'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as payrollApi from '../../api/payroll'
@@ -99,21 +100,19 @@ function CreatePeriodModal({ onClose, onCreated }) {
           </div>
           <div className={s.formGroup}>
             <label className={`${s.formLabel} ${s.formLabelReq}`}>Ngày bắt đầu</label>
-            <input
-              type="date"
-              value={form.startDate}
-              onChange={set('startDate')}
-              className={s.formInput}
+            <DateBox
+              value={form.startDate ?? ''}
+              onChange={(v) => setForm((p) => ({ ...p, startDate: v }))}
+              block
             />
           </div>
           <div className={s.formGroup}>
             <label className={`${s.formLabel} ${s.formLabelReq}`}>Ngày kết thúc</label>
-            <input
-              type="date"
-              value={form.endDate}
-              onChange={set('endDate')}
-              min={form.startDate || undefined}
-              className={s.formInput}
+            <DateBox
+              value={form.endDate ?? ''}
+              onChange={(v) => setForm((p) => ({ ...p, endDate: v }))}
+              min={form.startDate || ''}
+              block
             />
           </div>
           <div className={`${s.formGroup} ${s.formSpan2}`}>

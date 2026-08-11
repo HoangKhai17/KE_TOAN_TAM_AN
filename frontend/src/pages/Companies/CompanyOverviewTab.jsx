@@ -4,6 +4,7 @@ import {
   Plus, Trash2, Check, X, Calendar,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
+import DateBox from '../../components/ui/DateBox'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import * as usersApi from '../../api/users'
@@ -502,12 +503,7 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
 
         <div>
           <label className={s.formLabel}>Ngày bắt đầu</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className={s.formInput}
-          />
+          <DateBox block value={startDate} onChange={setStartDate} />
         </div>
 
         <div>

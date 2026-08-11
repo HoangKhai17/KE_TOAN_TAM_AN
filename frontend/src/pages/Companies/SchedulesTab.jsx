@@ -231,13 +231,11 @@ function CustomDatesPanel({ config, onChange }) {
   return (
     <div>
       <div className={s.scDatesAdd}>
-        <input
-          type="date"
+        <DateBox
           value={newDate}
           min={today}
-          className={s.scConfigInput}
-          onChange={e => setNewDate(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addDate())}
+          className={s.scConfigDate}
+          onChange={setNewDate}
         />
         <button
           type="button"
@@ -448,12 +446,11 @@ function RecurrenceConfigPanel({ type, config, onChange }) {
       return (
         <div className={s.scConfigRow}>
           <label className={s.scConfigLabel}>Ngày thực hiện</label>
-          <input
-            type="date"
+          <DateBox
             value={config.date ?? ''}
             min={format(new Date(), 'yyyy-MM-dd')}
-            className={s.scConfigInput}
-            onChange={e => onChange({ ...config, date: e.target.value })}
+            className={s.scConfigDate}
+            onChange={v => onChange({ ...config, date: v })}
           />
         </div>
       )

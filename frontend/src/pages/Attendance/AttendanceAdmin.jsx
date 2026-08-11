@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
+import DateBox from '../../components/ui/DateBox'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -3718,7 +3719,7 @@ function AdminDevToolsTab({ staffList }) {
             </div>
             <div className={sa.devField}>
               <span className={sa.devLabel}>Ngày</span>
-              <input type="date" value={dayDate} onChange={(e) => setDayDate(e.target.value)} className={s.formInput} />
+              <DateBox value={dayDate ?? ''} onChange={(v) => setDayDate(v)} block />
             </div>
             {!dayAbsent && (
               <>

@@ -11,6 +11,7 @@ import PaginationFooter from '../../components/layout/PaginationFooter'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
+import DateBox from '../../components/ui/DateBox'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import * as cdrApi from '../../api/clientRequests'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
@@ -212,7 +213,7 @@ function CdrFormModal({ companies, staffList = [], ownerId, initial, onClose, on
 
           <div className={s.formGroup}>
             <label className={s.formLabel}>Hạn nộp</label>
-            <input type="date" value={form.deadlineDate} onChange={(e) => set('deadlineDate', e.target.value)} className={s.formInput} />
+            <DateBox value={form.deadlineDate ?? ''} onChange={(v) => set('deadlineDate', v)} block />
           </div>
         </div>
 

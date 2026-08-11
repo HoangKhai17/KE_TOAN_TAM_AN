@@ -2809,7 +2809,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   color: var(--color-text);
 }
@@ -2831,7 +2831,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   color: var(--color-primary);
   background: var(--color-primary-bg);
@@ -2867,10 +2867,10 @@
 
 .cTaskFilterLabel {
   font-size: var(--fs-2xs);
-  font-weight: 700;
-  color: var(--color-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+  font-weight: var(--fw-medium);
+  color: var(--color-text-soft);
+  text-transform: none;
+  letter-spacing: 0.2px;
 }
 
 .cTaskFilterInput {
@@ -2880,7 +2880,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: #fff;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-family: inherit;
   color: var(--color-text);
   outline: none;
@@ -2894,7 +2894,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-family: inherit;
   color: var(--color-text);
   outline: none;
@@ -2910,7 +2910,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: #fff;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: var(--color-muted);
   cursor: pointer;
@@ -2940,7 +2940,7 @@
   border: 1px solid var(--color-border);
   border-radius: 99px;
   background: #fff;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: 500;
   color: var(--color-text-soft);
   cursor: pointer;
@@ -2991,8 +2991,9 @@
   box-shadow: 0 0 0 3px rgba(15, 52, 94, 0.08);
 }
 
-/* DateBox trong cấu hình lịch lặp (Ngày bắt đầu) — hiển thị dd/mm/yyyy, trải kín ô */
-.scConfigDate { width: 100%; min-height: 34px; }
+/* DateBox trong cấu hình lịch lặp (Ngày bắt đầu) — hiển thị dd/mm/yyyy, trải kín ô.
+   Nhân đôi selector để thắng base .dateBox (base nằm ở components/ui/DateBox.module.css). */
+.scConfigDate.scConfigDate { width: 100%; min-height: 34px; }
 
 .scConfigSelect {
   height: 34px;
@@ -4220,7 +4221,7 @@
   margin: 0;
   font-size: var(--fs-lg);
   font-weight: var(--fw-bold);
-  color: var(--color-text);
+  color: var(--color-text-strong);
 }
 .countPill {
   font-size: var(--fs-2xs);
@@ -4270,7 +4271,7 @@
   background: rgba(0, 0, 0, 0.16);
   color: var(--color-white);
 }
-.taskCreateBtnCompact { height: var(--control-h-sm); font-size: var(--fs-sm); }
+.taskCreateBtnCompact { height: var(--control-h-sm); font-size: var(--fs-2xs); }
 .searchFieldWrap { position: relative; }
 .searchFieldIcon {
   position: absolute;
@@ -4378,6 +4379,168 @@
   gap: var(--space-1);
 }
 .paginationGap { padding: 0 var(--space-1); font-size: var(--fs-xs); color: var(--color-muted); }
+
+/* Company Detail / Cong viec & Yeu cau KH: compact baseline. */
+.companyTaskTable,
+.clientRequestTable {
+  font-size: var(--fs-2xs);
+}
+
+.companyTaskTable {
+  min-width: 1480px;
+  table-layout: fixed;
+}
+
+.companyTaskTable th,
+.clientRequestTable th {
+  padding: 7px 8px;
+  font-size: var(--fs-2xs);
+  font-weight: 800;
+  color: var(--color-primary-deep);
+  text-transform: none;
+  letter-spacing: 0.2px;
+  text-shadow: none;
+}
+
+.companyTaskTable th:first-child,
+.clientRequestTable th:first-child {
+  color: var(--color-primary-deep);
+}
+
+.companyTaskTable td,
+.clientRequestTable td {
+  padding: 7px 8px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  color: var(--color-text-strong);
+}
+
+.companyTaskTable .cTaskTitle,
+.companyTaskTable .cTaskDateCell,
+.companyTaskTable .cTaskAssigneeCell,
+.companyTaskTable .cTaskProgressText,
+.companyTaskTable .cTaskDash {
+  font-size: var(--fs-2xs);
+}
+
+.companyTaskTable .cTaskCompanyShort {
+  display: block;
+  color: var(--color-text-strong);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.companyTaskTable .taskActionHeadAdmin,
+.companyTaskTable th:last-child {
+  width: 84px;
+  text-align: center;
+}
+
+.companyTaskTable .cTaskTitle,
+.companyTaskTable .cTaskDateCell,
+.companyTaskTable .cTaskAssigneeCell {
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
+}
+
+.companyTaskTable .cTaskTitleOverdue,
+.companyTaskTable .cTaskDueOverdue {
+  color: var(--color-danger);
+}
+
+.companyTaskTable .cTaskProgressText { color: var(--color-text-soft); }
+.companyTaskTable .cTaskDash { color: var(--color-muted-subtle); }
+
+.compactHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compactIconButton,
+.compactActionButton {
+  height: 32px;
+  font-size: var(--fs-2xs);
+}
+
+.compactIconButton { padding: 0 10px; }
+.compactActionButton { padding: 0 12px; }
+
+.clientRequestStatusRow {
+  flex: 1;
+  padding: 0;
+  margin-bottom: 0;
+}
+
+.clientRequestStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border: 1px solid var(--status-border);
+  border-radius: var(--radius-pill);
+  background: var(--status-bg);
+  color: var(--status-color);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.clientRequestName {
+  margin-bottom: 2px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  color: var(--color-text-strong);
+}
+
+.clientRequestDescription {
+  max-width: 260px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-regular);
+  line-height: 1.35;
+  color: var(--color-text-soft);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.clientRequestDataCell {
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
+}
+
+.clientRequestDeadlineOverdue {
+  color: var(--color-danger-text);
+  font-weight: var(--fw-semibold);
+}
+
+.clientRequestDash { color: var(--color-muted-subtle); }
+
+.clientRequestEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: var(--color-muted);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+}
+
+.clientRequestTable .rowActionBtn {
+  width: 28px;
+  height: 28px;
+  font-size: var(--fs-2xs);
+}
+
+@media (max-width: 820px) {
+  .compactHeaderActions { width: 100%; justify-content: flex-end; }
+  .cTaskFilterGrid { align-items: stretch; }
+  .cTaskFilterGroup,
+  .cTaskFilterGroupGrow { flex: 1 1 min(100%, 260px); }
+}
 
 /* ── Document Link Storage (Phase 11 revised) ──────────────────── */
 .addLinkBtn {
@@ -6384,6 +6547,70 @@
   font-size: var(--fs-sm);
 }
 
+/* Company Detail / Công việc / Kanban — compact baseline. */
+.companyTaskBoardWrap {
+  padding: 10px;
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.companyTaskBoard {
+  grid-auto-columns: minmax(270px, 320px);
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.companyTaskBoardCol {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
+  box-shadow: none;
+}
+
+.companyTaskBoardColHead {
+  min-height: 36px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.companyTaskBoardColDot { background: var(--color-primary); }
+
+.companyTaskBoardColTitle {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-strong);
+  text-transform: none;
+  letter-spacing: 0.2px;
+}
+
+.companyTaskBoardColCount {
+  height: 18px;
+  min-width: 18px;
+  font-size: var(--fs-2xs);
+  color: var(--color-text-soft);
+}
+
+.companyTaskBoardCards {
+  min-height: 108px;
+  padding: 6px;
+  gap: 6px;
+}
+
+.companyTaskBoardCard {
+  padding: 7px 9px;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-xs);
+}
+
+.companyTaskBoardCard:hover {
+  border-color: var(--color-primary-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+.companyTaskBoardTitleOverdue { color: var(--color-danger); }
+
 /* ── Companies list: row checkbox + bulk export bar ── */
 .coCheckTh,
 .coCheckTd {
@@ -7563,52 +7790,16 @@ textarea.editInput {
 .docPreviewImg   { max-width: 100%; max-height: 100%; object-fit: contain; }
 .docPreviewMsg   { color: #e2e8f0; font-size: var(--fs-sm); display: flex; align-items: center; gap: 8px; }
 
-/* ── DateBox: ô ngày hiển thị dd/mm/yyyy (input native ẩn) ────────────────────── */
-.dateBox {
-  position: relative;
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  min-height: 38px; padding: 0 10px;
-  border: 1.5px solid var(--color-border); border-radius: var(--radius-md);
-  background: #fff; cursor: pointer;
-  font-family: inherit; font-size: var(--fs-sm); color: var(--color-text);
-}
-.dateBox:hover { border-color: var(--color-primary-soft); }
-.dateBoxPlaceholder { color: var(--color-muted); }
-.dateBoxIcon { color: var(--color-muted); flex-shrink: 0; }
-/* input native trải kín ô nhưng trong suốt — click vào ô sẽ gọi showPicker() */
-.dateBoxNative {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  opacity: 0; border: none; background: transparent; pointer-events: none;
-}
-
-/* ── DateBox lai: gõ tay dd/mm/yyyy + icon lịch ─────────────────────────────── */
-.dateBoxHybrid { cursor: text; }
-.dateBoxText {
-  flex: 1 1 auto; min-width: 0;
-  border: none; background: transparent; outline: none; padding: 0;
-  font-family: inherit; font-size: inherit; color: inherit; line-height: 1.2;
-}
-.dateBoxText::placeholder { color: var(--color-muted); }
-.dateBoxIconBtn {
-  display: inline-flex; align-items: center; justify-content: center;
-  flex-shrink: 0; border: none; background: transparent; padding: 0; cursor: pointer;
-}
-.dateBoxError { border-color: var(--color-danger, #dc2626); }
-/* input date native ẩn góc, chỉ dùng để showPicker() */
-.dateBoxNativeHidden {
-  position: absolute; left: 8px; bottom: 0; width: 1px; height: 1px;
-  opacity: 0; pointer-events: none; border: none; background: transparent;
-}
-
-/* DateBox biến thể gọn */
-.editDateBox { width: 100%; min-height: 32px; margin-top: 1px; }
-.locDateBox  {
+/* ── DateBox biến thể kích thước (base + hybrid nằm ở components/ui/DateBox.module.css)
+   Nhân đôi selector để chắc chắn thắng base .dateBox dù thứ tự bundle CSS thế nào. ── */
+.editDateBox.editDateBox { width: 100%; min-height: 32px; margin-top: 1px; }
+.locDateBox.locDateBox {
   width: 100%; min-height: 28px; padding: 0 7px;
   gap: 4px; font-size: var(--fs-2xs); white-space: nowrap;
 }
 
 /* Date range trong header filter: dùng DateBox để luôn hiển thị dd/mm/yyyy. */
-.hdldDdDateBox {
+.hdldDdDateBox.hdldDdDateBox {
   width: 100%;
   min-height: 30px;
   height: 30px;

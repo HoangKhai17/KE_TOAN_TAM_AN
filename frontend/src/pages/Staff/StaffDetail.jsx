@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
+import DateBox from '../../components/ui/DateBox'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as usersApi from '../../api/users'
@@ -452,12 +453,12 @@ function EditUserModal({ user, onClose, onSaved, isAdmin }) {
         <div className={s.formGrid}>
           <div className={s.formGroup}>
             <label className={s.formLabel}>Ngày sinh</label>
-            <input type="date" value={form.dob} onChange={set('dob')} className={s.formInput} />
+            <DateBox value={form.dob ?? ''} onChange={(v) => setForm((p) => ({ ...p, dob: v }))} block />
           </div>
           {isAdmin && (
             <div className={s.formGroup}>
               <label className={s.formLabel}>Ngày vào làm</label>
-              <input type="date" value={form.hireDate} onChange={set('hireDate')} className={s.formInput} />
+              <DateBox value={form.hireDate ?? ''} onChange={(v) => setForm((p) => ({ ...p, hireDate: v }))} block />
             </div>
           )}
         </div>

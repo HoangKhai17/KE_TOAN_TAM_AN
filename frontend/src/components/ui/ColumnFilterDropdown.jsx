@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
+import DateBox from './DateBox'
 import s from './ColumnFilterDropdown.module.css'
 
 // ── ColumnFilterDropdown (docs/018) ─────────────────────────────────────────────
@@ -154,13 +155,13 @@ function DateRangeSection({ colKey, currentFilter, onFilterChange }) {
       <div className={s.rangeGroup}>
         <div className={s.rangeRow}>
           <label className={s.rangeLabel}>Từ ngày</label>
-          <input type="date" className={s.input} value={from}
-            onChange={(e) => { setFrom(e.target.value); update(e.target.value, to) }} />
+          <DateBox block value={from}
+            onChange={(v) => { setFrom(v); update(v, to) }} />
         </div>
         <div className={s.rangeRow}>
           <label className={s.rangeLabel}>Đến ngày</label>
-          <input type="date" className={s.input} value={to}
-            onChange={(e) => { setTo(e.target.value); update(from, e.target.value) }} />
+          <DateBox block value={to}
+            onChange={(v) => { setTo(v); update(from, v) }} />
         </div>
       </div>
       {(from || to) && (

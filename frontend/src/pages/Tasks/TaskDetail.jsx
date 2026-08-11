@@ -7,6 +7,7 @@ import {
   Lock, Globe,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import DateBox from '../../components/ui/DateBox'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -682,7 +683,7 @@ function CustomFieldsTab({ taskId }) {
       )
     }
     if (f.dataType === 'date') {
-      return <input type="date" value={val} onChange={(e) => set(e.target.value)} className={s.cfInput} />
+      return <DateBox block value={val ?? ''} onChange={(v) => set(v)} />
     }
     if (f.dataType === 'number') {
       return <input type="number" value={val} onChange={(e) => set(e.target.value)} className={s.cfInput} />
@@ -1065,12 +1066,11 @@ export default function TaskDetail() {
               <div className={s.infoRow}>
                 <span className={s.infoRowLabel}>Hết hạn</span>
                 {canEditDueDate(task, isAdmin) ? (
-                  <input
-                    type="date"
+                  <DateBox
+                    block
                     value={task.dueDate?.slice(0, 10) ?? ''}
-                    onChange={(e) => saveDueDate(e.target.value)}
-                    min={task.startDate?.slice(0, 10) || undefined}
-                    className={`${s.dateInput} ${s.dateInputCompact}`}
+                    onChange={(v) => saveDueDate(v)}
+                    min={task.startDate?.slice(0, 10) || ''}
                     disabled={savingDue}
                   />
                 ) : (

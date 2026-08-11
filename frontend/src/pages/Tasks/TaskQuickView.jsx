@@ -6,6 +6,7 @@ import {
   Lock, Globe,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
+import DateBox from '../../components/ui/DateBox'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { listUserOptions } from '../../api/users'
 import {
@@ -37,25 +38,16 @@ function toDateValue(isoStr) {
 }
 
 // Date field: shows dd/MM/yyyy text, hidden native picker on click
+// DateBox lai (gõ tay dd/mm/yyyy + lịch). onChange nhận thẳng chuỗi 'YYYY-MM-DD' | ''.
 function QvDateField({ value, onChange, isError, min, max }) {
-  const ref = useRef(null)
   return (
-    <div
-      className={`${s.qvDateField} ${isError ? s.qvDateFieldError : ''}`}
-      onClick={() => ref.current?.showPicker?.()}
-    >
-      <span className={s.qvDateValue}>{value ? fmtDate(value) : '—'}</span>
-      <input
-        ref={ref}
-        type="date"
-        value={value}
-        onChange={onChange}
-        min={min}
-        max={max}
-        className={s.qvDateHidden}
-        tabIndex={-1}
-      />
-    </div>
+    <DateBox
+      value={value || ''}
+      onChange={onChange}
+      min={min || ''}
+      max={max || ''}
+      className={`${s.qvDateBox} ${isError ? s.dbError : ''}`}
+    />
   )
 }
 
@@ -598,7 +590,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                   {canEditStartDate(task, isAdmin) ? (
                     <QvDateField
                       value={toDateValue(task.startDate || task.createdAt)}
-                      onChange={(e) => changeStartDate(e.target.value)}
+                      onChange={(v) => changeStartDate(v)}
                       max={toDateValue(task.dueDate) || undefined}
                     />
                   ) : (
@@ -613,7 +605,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                   {canEditDueDate(task, isAdmin) ? (
                     <QvDateField
                       value={toDateValue(task.dueDate)}
-                      onChange={(e) => changeDueDate(e.target.value)}
+                      onChange={(v) => changeDueDate(v)}
                       isError={overdue}
                       min={toDateValue(task.startDate || task.createdAt) || undefined}
                     />

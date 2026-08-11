@@ -26,6 +26,7 @@ import InternalNavTabs from './InternalNavTabs'
 import PeriodPicker from '../Tasks/PeriodPicker'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
+import DateBox from '../../components/ui/DateBox'
 import {
   BulkActionBar,
   IndexHeaderCell,
@@ -459,19 +460,16 @@ function BoardView({ items, onOpen, onStatusChange, isAdmin }) {
 
 // ── ListView ──────────────────────────────────────────────────────────────────
 
-// Ô ngày hết hạn kiểu Tasks: hiện dd/mm/yyyy, click mở lịch chọn ẩn (viền đỏ khi quá hạn)
+// Ô ngày hết hạn kiểu Tasks: DateBox lai (gõ tay dd/mm/yyyy + lịch, viền đỏ khi quá hạn).
+// onChange nhận thẳng chuỗi 'YYYY-MM-DD' | ''.
 function IaListDateField({ value, onChange, isOverdue, min }) {
-  const ref = useRef(null)
-  const dateStr = value ? value.slice(0, 10) : ''
   return (
-    <div
-      className={`${s.qeDate} ${s.qeDateInteractive} ${isOverdue ? s.qeDateOverdue : ''}`}
-      onClick={() => ref.current?.showPicker?.()}
-    >
-      <span className={s.qeDateText}>{dateStr ? fmtDate(dateStr) : '—'}</span>
-      <input ref={ref} type="date" value={dateStr} onChange={onChange} min={min}
-        className={s.qeDateInputNative} tabIndex={-1} />
-    </div>
+    <DateBox
+      value={value ? value.slice(0, 10) : ''}
+      min={min || ''}
+      onChange={onChange}
+      className={`${s.qeDateBox} ${isOverdue ? s.qeDateBoxOverdue : ''}`}
+    />
   )
 }
 
@@ -519,7 +517,7 @@ function ListView({
               <Th colKey="title">Tiêu đề</Th>
               <Th colKey="companyShort" w={160}>Khách hàng</Th>
               <Th colKey="startDate" w={104}>Ngày bắt đầu</Th>
-              <Th colKey="deadlineDate" w={104}>Ngày kết thúc</Th>
+              <Th colKey="deadlineDate" w={124}>Ngày kết thúc</Th>
               <Th colKey="createdAt" w={112}>Ngày tạo</Th>
               <Th colKey="status" w={132}>Trạng thái</Th>
               <Th colKey="priority" w={106}>Ưu tiên</Th>
@@ -589,7 +587,7 @@ function ListView({
                     {isAdmin ? (
                       <IaListDateField
                         value={item.deadlineDate ?? ''}
-                        onChange={(e) => onDeadlineChange(item, e.target.value)}
+                        onChange={(v) => onDeadlineChange(item, v)}
                         isOverdue={overdue}
                         min={(item.startDate || item.createdAt)?.slice(0, 10) || undefined}
                       />
@@ -1294,8 +1292,8 @@ export default function InternalAssignments() {
                 availableYears={availableYears}
                 onYear={handleYearChange}
                 onMonth={handleMonthChange}
-                onFrom={(event) => { setDeadlineFrom(event.target.value); setPage(1) }}
-                onTo={(event) => { setDeadlineTo(event.target.value); setPage(1) }}
+                onFrom={(v) => { setDeadlineFrom(v); setPage(1) }}
+                onTo={(v) => { setDeadlineTo(v); setPage(1) }}
                 onPreset={applyPeriodPreset}
               />
             </div>

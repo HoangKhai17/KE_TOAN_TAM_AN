@@ -12,6 +12,7 @@ import * as api from '../../api/internalAssignments'
 import IaChecklistSection from './IaChecklistSection'
 import IaLinksSection from './IaLinksSection'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
+import DateBox from '../../components/ui/DateBox'
 import s from './internalAssignments.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -106,23 +107,16 @@ function initials(name) {
 
 // ── IaDateField ───────────────────────────────────────────────────────────────
 
-function IaDateField({ value, onChange, isError }) {
-  const ref = useRef(null)
+// DateBox lai (gõ tay dd/mm/yyyy + lịch). onChange nhận thẳng chuỗi 'YYYY-MM-DD' | ''.
+function IaDateField({ value, onChange, isError, min, max }) {
   return (
-    <div
-      className={`${s.iaQvDateField} ${isError ? s.iaQvDateFieldError : ''}`}
-      onClick={() => ref.current?.showPicker?.()}
-    >
-      <span className={s.iaQvDateValue}>{value ? fmtDate(value) : '—'}</span>
-      <input
-        ref={ref}
-        type="date"
-        value={value}
-        onChange={onChange}
-        className={s.iaQvDateHidden}
-        tabIndex={-1}
-      />
-    </div>
+    <DateBox
+      value={value || ''}
+      onChange={onChange}
+      min={min || ''}
+      max={max || ''}
+      className={`${s.iaQvDateBox} ${isError ? s.dbError : ''}`}
+    />
   )
 }
 
@@ -635,7 +629,7 @@ export default function AssignmentDetailPanel({
                     {canEdit ? (
                       <IaDateField
                         value={item.startDate ? item.startDate.slice(0, 10) : ''}
-                        onChange={(e) => handleSaveStartDate(e.target.value)}
+                        onChange={(v) => handleSaveStartDate(v)}
                       />
                     ) : (
                       <span className={s.iaQvValue}>{fmtDate(item.startDate)}</span>
@@ -648,7 +642,7 @@ export default function AssignmentDetailPanel({
                     {canEdit ? (
                       <IaDateField
                         value={item.deadlineDate ? item.deadlineDate.slice(0, 10) : ''}
-                        onChange={(e) => handleSaveDeadline(e.target.value)}
+                        onChange={(v) => handleSaveDeadline(v)}
                         isError={isOverdueField}
                       />
                     ) : (

@@ -1,0 +1,31 @@
+/* ── DateBox: ô ngày lai (gõ tay dd/mm/yyyy + icon lịch) — dùng chung toàn hệ thống ── */
+.dateBox {
+  position: relative;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 38px; padding: 0 10px;
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-md);
+  background: #fff; cursor: pointer;
+  font-family: inherit; font-size: var(--fs-sm); color: var(--color-text);
+}
+.dateBox:hover { border-color: var(--color-primary-soft); }
+.dateBoxIcon { color: var(--color-muted); flex-shrink: 0; }
+
+.dateBoxHybrid { cursor: text; }
+/* biến thể full-width cho form (thay cho .formInput native) */
+.block { width: 100%; }
+.dateBoxText {
+  flex: 1 1 auto; min-width: 0;
+  border: none; background: transparent; outline: none; padding: 0;
+  font-family: inherit; font-size: inherit; color: inherit; line-height: 1.2;
+}
+.dateBoxText::placeholder { color: var(--color-muted); }
+.dateBoxIconBtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; border: none; background: transparent; padding: 0; cursor: pointer;
+}
+.dateBoxError { border-color: var(--color-danger, #dc2626); }
+/* input date native ẩn góc, chỉ dùng để showPicker() */
+.dateBoxNativeHidden {
+  position: absolute; left: 8px; bottom: 0; width: 1px; height: 1px;
+  opacity: 0; pointer-events: none; border: none; background: transparent;
+}

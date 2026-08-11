@@ -22,6 +22,7 @@ import TaskFormModal from './TaskFormModal'
 import TaskQuickView from './TaskQuickView'
 import PeriodPicker from './PeriodPicker'
 import Modal from '../../components/ui/Modal'
+import DateBox from '../../components/ui/DateBox'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import {
@@ -109,27 +110,15 @@ function shortName(name) {
 
 // ── List due-date field: shows dd/MM/yyyy text, hidden native picker on click ──
 
+// DateBox lai (gõ tay dd/mm/yyyy + lịch). onChange nhận thẳng chuỗi 'YYYY-MM-DD' | ''.
 function ListDateField({ value, onChange, isOverdue, min }) {
-  const ref = useRef(null)
-  const dateStr = value ? value.slice(0, 10) : ''
   return (
-    <div
-      className={`${s.qeDate} ${s.qeDateInteractive} ${isOverdue ? s.qeDateOverdue : ''}`}
-      onClick={() => ref.current?.showPicker?.()}
-    >
-      <span className={s.qeDateText}>
-        {dateStr ? fmtDate(dateStr) : '—'}
-      </span>
-      <input
-        ref={ref}
-        type="date"
-        value={dateStr}
-        onChange={onChange}
-        min={min}
-        className={s.qeDateInputNative}
-        tabIndex={-1}
-      />
-    </div>
+    <DateBox
+      value={value ? value.slice(0, 10) : ''}
+      min={min || ''}
+      onChange={onChange}
+      className={`${s.qeDateBox} ${isOverdue ? s.qeDateBoxOverdue : ''}`}
+    />
   )
 }
 
@@ -893,7 +882,7 @@ function ListView({
               <Th colKey="title">Tiêu đề</Th>
               {vis('companyShort') && <Th colKey="companyShort" w={160}>Tên viết tắt</Th>}
               {vis('startDate')    && <Th colKey="startDate" w={104}>Bắt đầu</Th>}
-              {vis('dueDate')      && <Th colKey="dueDate" w={102}>Hết hạn</Th>}
+              {vis('dueDate')      && <Th colKey="dueDate" w={124}>Hết hạn</Th>}
               {vis('dayCount')     && <Th colKey="dayCount" w={108} noFilter>Ngày HT / KH</Th>}
               {vis('source')       && <Th colKey="source" w={116}>Nguồn tạo</Th>}
               {vis('createdAt')    && <Th colKey="createdAt" w={122}>Ngày tạo</Th>}
@@ -977,7 +966,7 @@ function ListView({
                       {canEditDueDate(t, isAdmin) ? (
                         <ListDateField
                           value={t.dueDate ?? ''}
-                          onChange={(e) => onDueDateChange(t, e.target.value)}
+                          onChange={(v) => onDueDateChange(t, v)}
                           isOverdue={overdue}
                           min={(t.startDate || t.createdAt)?.slice(0, 10) || undefined}
                         />
@@ -2016,8 +2005,8 @@ export default function Tasks() {
                   disabled={scheduleToday}
                   onYear={handleYearChange}
                   onMonth={handleMonthChange}
-                  onFrom={(e) => { setDueDateFrom(e.target.value); setPage(1) }}
-                  onTo={(e) => { setDueDateTo(e.target.value); setPage(1) }}
+                  onFrom={(v) => { setDueDateFrom(v); setPage(1) }}
+                  onTo={(v) => { setDueDateTo(v); setPage(1) }}
                   onPreset={applyPeriodPreset}
                   disabledTitle="“Hôm nay” không dùng bộ lọc theo kỳ"
                 />

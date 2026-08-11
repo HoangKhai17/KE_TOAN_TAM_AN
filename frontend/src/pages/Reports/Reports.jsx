@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import AppLayout from '../../components/layout/AppLayout'
+import DateBox from '../../components/ui/DateBox'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import {
@@ -245,14 +246,14 @@ export default function Reports() {
             {/* Custom date range inputs */}
             {!isForecast && preset === 'custom' && (
               <div className={s.customDates}>
-                <input
-                  type="date" className={s.dateInput}
-                  value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+                <DateBox
+                  value={customFrom ?? ''} onChange={(v) => setCustomFrom(v)}
+                  block
                 />
                 <span className={s.dateSep}>→</span>
-                <input
-                  type="date" className={s.dateInput}
-                  value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+                <DateBox
+                  value={customTo ?? ''} onChange={(v) => setCustomTo(v)}
+                  block
                 />
               </div>
             )}

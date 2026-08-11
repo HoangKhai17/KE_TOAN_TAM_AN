@@ -3,6 +3,7 @@ import { X, Search, Loader2, Check, Plus, Trash2, CheckSquare, Link2, GripVertic
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
+import DateBox from '../../components/ui/DateBox'
 import { listUserOptions } from '../../api/users'
 import { listCompanies } from '../../api/companies'
 import * as api from '../../api/internalAssignments'
@@ -252,21 +253,20 @@ export default function CreateEditAssignmentModal({ item, onClose, onSaved }) {
               <div className={s.formRow}>
                 <div className={s.formGroup}>
                   <label className={s.formLabel}>Ngày bắt đầu</label>
-                  <input
-                    type="date"
-                    className={s.formInput}
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                  <DateBox
+                    block
+                    value={startDate ?? ''}
+                    onChange={(v) => setStartDate(v)}
                   />
                 </div>
                 <div className={s.formGroup}>
                   <label className={s.formLabel}>Hạn hoàn thành</label>
-                  <input
-                    type="date"
-                    className={`${s.formInput} ${errors.deadlineDate ? s.formInputError : ''}`}
-                    value={deadlineDate}
-                    onChange={(e) => setDeadlineDate(e.target.value)}
+                  <DateBox
+                    block
+                    value={deadlineDate ?? ''}
+                    onChange={(v) => setDeadlineDate(v)}
                     min={startDate || new Date().toISOString().slice(0, 10)}
+                    className={errors.deadlineDate ? s.dbError : ''}
                   />
                   {errors.deadlineDate && <span className={s.formError}>{errors.deadlineDate}</span>}
                 </div>

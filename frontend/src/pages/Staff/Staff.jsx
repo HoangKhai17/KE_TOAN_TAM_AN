@@ -9,6 +9,7 @@ import {
 import AppLayout from '../../components/layout/AppLayout'
 import PaginationFooter from '../../components/layout/PaginationFooter'
 import Modal from '../../components/ui/Modal'
+import DateBox from '../../components/ui/DateBox'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -731,11 +732,11 @@ function UserFormModal({ user, onClose, onSaved }) {
         <div className={s.formGrid}>
           <div className={s.formGroup}>
             <label className={s.formLabel}>Ngày sinh</label>
-            <input type="date" value={form.dob} onChange={set('dob')} className={s.formInput} />
+            <DateBox value={form.dob ?? ''} onChange={(v) => setForm((prev) => ({ ...prev, dob: v }))} block />
           </div>
           <div className={s.formGroup}>
             <label className={s.formLabel}>Ngày vào làm</label>
-            <input type="date" value={form.hireDate} onChange={set('hireDate')} className={s.formInput} />
+            <DateBox value={form.hireDate ?? ''} onChange={(v) => setForm((prev) => ({ ...prev, hireDate: v }))} block />
           </div>
         </div>
 
