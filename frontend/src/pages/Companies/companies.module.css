@@ -7477,6 +7477,16 @@
   font-family: inherit; font-size: var(--fs-2xs); background: #fff; color: var(--color-text);
 }
 .editInput:focus { outline: none; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12); }
+/* Ô sửa ngày inline: input text gõ tay + nút mở lịch */
+.editDateInline { position: relative; display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; }
+.editDateInline .editInput { flex: 1 1 auto; }
+.editDatePick {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; width: 28px; height: 30px; padding: 0;
+  border: 1.5px solid var(--color-border); border-radius: 6px;
+  background: #fff; color: var(--color-muted); cursor: pointer;
+}
+.editDatePick:hover { border-color: var(--color-primary-soft); color: var(--color-primary); }
 textarea.editInput {
   min-height: 32px; max-height: 140px;
   resize: none; line-height: 1.4;
@@ -7569,6 +7579,25 @@ textarea.editInput {
 .dateBoxNative {
   position: absolute; inset: 0; width: 100%; height: 100%;
   opacity: 0; border: none; background: transparent; pointer-events: none;
+}
+
+/* ── DateBox lai: gõ tay dd/mm/yyyy + icon lịch ─────────────────────────────── */
+.dateBoxHybrid { cursor: text; }
+.dateBoxText {
+  flex: 1 1 auto; min-width: 0;
+  border: none; background: transparent; outline: none; padding: 0;
+  font-family: inherit; font-size: inherit; color: inherit; line-height: 1.2;
+}
+.dateBoxText::placeholder { color: var(--color-muted); }
+.dateBoxIconBtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; border: none; background: transparent; padding: 0; cursor: pointer;
+}
+.dateBoxError { border-color: var(--color-danger, #dc2626); }
+/* input date native ẩn góc, chỉ dùng để showPicker() */
+.dateBoxNativeHidden {
+  position: absolute; left: 8px; bottom: 0; width: 1px; height: 1px;
+  opacity: 0; pointer-events: none; border: none; background: transparent;
 }
 
 /* DateBox biến thể gọn */

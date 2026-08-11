@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   Building2, UserPlus, Loader2, Users, SlidersHorizontal, Pencil,
-  Plus, Trash2, Check, X,
+  Plus, Trash2, Check, X, Calendar,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useToastStore } from '../../stores/toastStore'
@@ -10,7 +10,7 @@ import * as usersApi from '../../api/users'
 import { BUSINESS_TYPE_LABELS } from './Companies'
 import CompanyOverviewTables from './CompanyOverviewTables'
 import { useEnumsStore } from '../../hooks/useEnums'
-import { fmtDate } from './companyUtils'
+import { fmtDate, parseDateInput } from './companyUtils'
 import s from './companies.module.css'
 
 // ── Helpers (chỉ tab Tổng quan dùng) ───────────────────────────────────────────
@@ -36,14 +36,14 @@ function EditableField({ companyId, field, value, label, type = 'text', options 
 
   function begin() {
     if (!canEdit || saving) return
-    setDraft(type === 'date' ? (value ? String(value).slice(0, 10) : '') : (value ?? ''))
+    setDraft(type === 'date' ? (value ? fmtDate(value) : '') : (value ?? ''))
     cancelRef.current = false
     setEditing(true)
     setTimeout(() => {
       const editor = inputRef.current
       if (!editor) return
       editor.focus()
-      if ((type === 'text' || type === 'textarea' || type === 'tel' || type === 'email') && editor.setSelectionRange) {
+      if ((type === 'text' || type === 'textarea' || type === 'tel' || type === 'email' || type === 'date') && editor.setSelectionRange) {
         const end = String(editor.value ?? '').length
         editor.setSelectionRange(end, end)
       }
@@ -78,35 +78,13 @@ function EditableField({ companyId, field, value, label, type = 'text', options 
     else if (e.key === 'Escape') { cancelRef.current = true; inputRef.current?.blur() }
   }
 
-  // Ngày: hiển thị CHỮ TRƠN dd/mm/yyyy như các field khác (không viền). Bấm mới mở
-  // lịch native (ẩn) → chọn xong lưu ngay. Tránh input native lộ mm/dd/yyyy.
-  if (type === 'date') {
-    const display = value ? fmtDate(value) : null
-    return (
-      <div className={`${s.editRow} ${fullWidth ? s.infoGridFull : ''}`}>
-        <div className={s.infoLabel}>{label}</div>
-        <div
-          className={`${s.editValue} ${canEdit ? s.editValueOn : ''} ${display ? '' : s.editValueEmpty}`}
-          onClick={() => canEdit && dateRef.current?.showPicker?.()}
-          title={canEdit ? 'Nhấp để chọn ngày' : undefined}
-        >
-          <span className={s.editValueText}>{display || '—'}</span>
-          {canEdit && !saving && <Pencil size={11} className={s.editPencil} />}
-          {saving && <Loader2 size={12} className={s.spin} />}
-          {canEdit && (
-            <input
-              ref={dateRef}
-              type="date"
-              value={value ? String(value).slice(0, 10) : ''}
-              onChange={(e) => commit(e.target.value)}
-              style={{ position: 'absolute', left: 0, bottom: 0, width: 0, height: 0, opacity: 0, pointerEvents: 'none', border: 0, padding: 0 }}
-              tabIndex={-1}
-              aria-hidden="true"
-            />
-          )}
-        </div>
-      </div>
-    )
+  // Chốt ô ngày khi gõ tay: parse dd/mm/yyyy → ISO. Gõ sai (không parse được) thì
+  // bỏ qua, giữ nguyên giá trị cũ; để trống thì xoá ngày.
+  function commitDate() {
+    if (cancelRef.current) { cancelRef.current = false; setEditing(false); return }
+    const iso = parseDateInput(draft) // '' | 'YYYY-MM-DD' | null
+    if (iso === null) { setEditing(false); return }
+    commit(iso)
   }
 
   if (!editing) {
@@ -148,9 +126,35 @@ function EditableField({ companyId, field, value, label, type = 'text', options 
               e.target.style.height = `${e.target.scrollHeight}px`
             }}
             onBlur={() => commit()} />
+        ) : type === 'date' ? (
+          <div className={s.editDateInline}>
+            <input {...common} type="text" inputMode="numeric" placeholder="dd/mm/yyyy"
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commitDate()} />
+            <button
+              type="button"
+              className={s.editDatePick}
+              // giữ focus ở ô text (không blur) để lịch mở mà không thoát chế độ sửa
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => dateRef.current?.showPicker?.()}
+              tabIndex={-1}
+              aria-label="Chọn ngày từ lịch"
+            >
+              <Calendar size={13} />
+            </button>
+            <input
+              ref={dateRef}
+              type="date"
+              value={parseDateInput(draft) || (value ? String(value).slice(0, 10) : '')}
+              onChange={(e) => { const iso = e.target.value; setDraft(iso ? fmtDate(iso) : ''); commit(iso) }}
+              style={{ position: 'absolute', left: 8, bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none', border: 0, padding: 0 }}
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+          </div>
         ) : (
           <input {...common}
-            type={type === 'date' ? 'date' : type === 'tel' ? 'tel' : type === 'email' ? 'email' : 'text'}
+            type={type === 'tel' ? 'tel' : type === 'email' ? 'email' : 'text'}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={() => commit()}
           />
