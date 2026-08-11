@@ -15,6 +15,7 @@ import {
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
+import { useCompanyFooter } from './companyFooter'
 import s from './companies.module.css'
 
 // ── Quill config ───────────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ function NoteEditorModal({ initialNote, onSave, onClose }) {
 
 // ── NoteCard ───────────────────────────────────────────────────────────────────
 
-function NoteTableRow({ note, index, selection, reorder, currentUserId, isAdmin, onEdit, onDelete, onTogglePin }) {
+function NoteTableRow({ note, index, canReorder = true, selection, reorder, currentUserId, isAdmin, onEdit, onDelete, onTogglePin }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [expanded, setExpanded]           = useState(false)
   const [overflows, setOverflows]         = useState(false)
@@ -129,7 +130,7 @@ function NoteTableRow({ note, index, selection, reorder, currentUserId, isAdmin,
 
   return (
     <tr {...reorder.rowProps(note.id)} className={`${note.isPinned ? s.noteTableRowPinned : ''} ${reorder.dragOverId === note.id ? s.dataTableRowDragOver : ''}`}>
-      <DragRowCell enabled handleProps={reorder.handleProps(note.id)} />
+      <DragRowCell enabled={canReorder} handleProps={reorder.handleProps(note.id)} />
       {canEdit
         ? <SelectionRowCell checked={selection.selectedIds.has(note.id)} onToggle={() => selection.toggle(note.id)} />
         : <td />}
@@ -221,13 +222,28 @@ export default function NotesTab({ company, onNoteCountChange }) {
   const [loading,     setLoading]     = useState(true)
   const [showAdd,     setShowAdd]     = useState(false)
   const [editTarget,  setEditTarget]  = useState(null)  // note object being edited
+  const [page, setPage]     = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const selectableNotes = useMemo(
     () => notes.filter((note) => isAdmin || note.createdBy === currentUser?.id),
     [currentUser?.id, isAdmin, notes],
   )
   const selection = useRowSelection({ rows: selectableNotes })
+
+  // Phân trang client-side → footer trang
+  const notesTotal      = notes.length
+  const notesTotalPages = Math.max(1, Math.ceil(notesTotal / pageSize))
+  const safePage        = Math.min(page, notesTotalPages)
+  const pageNotes       = notes.slice((safePage - 1) * pageSize, safePage * pageSize)
+  useEffect(() => { setPage(1) }, [pageSize])
+  useCompanyFooter(loading ? null : {
+    total: notesTotal, from: (safePage - 1) * pageSize + 1, to: Math.min(safePage * pageSize, notesTotal),
+    page: safePage, pageSize, totalPages: notesTotalPages, itemLabel: 'ghi chú',
+    onPageChange: setPage, onPageSizeChange: setPageSize,
+  })
+
   const reorder = useRowReorder({
-    rows: notes, setRows: setNotes,
+    rows: notes, setRows: setNotes, enabled: notesTotalPages === 1,
     onError: () => addToast('Không thể lưu thứ tự ghi chú', 'error'),
     onPersist: (ordered, previous) => Promise.all(ordered
       .map((note, index) => ({ note, index }))
@@ -371,11 +387,12 @@ export default function NotesTab({ company, onNoteCountChange }) {
               </tr>
             </thead>
             <tbody>
-              {notes.map((note, index) => (
+              {pageNotes.map((note, index) => (
                 <NoteTableRow
                   key={note.id}
                   note={note}
-                  index={index}
+                  index={(safePage - 1) * pageSize + index}
+                  canReorder={notesTotalPages === 1}
                   selection={selection}
                   reorder={reorder}
                   currentUserId={currentUser?.id}

@@ -9,6 +9,7 @@ import { evaluateFormula } from '../../utils/formula'
 import { normalizeClipboardGrid, parseClipboardGrid } from '../../utils/clipboardGrid'
 import Modal from '../../components/ui/Modal'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
+import { useCompanyFooter } from './companyFooter'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import DateBox from './DateBox'
 import {
@@ -843,6 +844,17 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
   const totalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
   const safePage   = Math.min(page, totalPages)
   const pageRows   = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+  // Phân trang → footer trang (thay copyright), đồng bộ Companies/Tasks
+  useCompanyFooter(loading || columns.length === 0 ? null : {
+    total: displayed.length,
+    from: displayed.length ? (safePage - 1) * pageSize + 1 : 0,
+    to: Math.min(safePage * pageSize, displayed.length),
+    page: safePage, pageSize, totalPages,
+    itemLabel: 'dòng',
+    onPageChange: setPage, onPageSizeChange: setPageSize,
+  })
+
   const {
     selectedIds,
     setSelectedIds,
@@ -1270,23 +1282,6 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
             </table>
           </div>
 
-          <div className={s.archTableFooter}>
-            <span className={s.archTableCount}>{displayed.length} dòng</span>
-            {totalPages > 1 && (
-              <div className={s.archPagination}>
-                <button className={s.archPageBtn} disabled={safePage === 1} onClick={() => setPage(safePage - 1)}>‹ Trước</button>
-                <span className={s.archPageInfo}>{safePage} / {totalPages}</span>
-                <button className={s.archPageBtn} disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>Tiếp ›</button>
-              </div>
-            )}
-            <div className={s.pageSizeWrap}>
-              <span className={s.pageSizeLabel}>Hiển thị:</span>
-              {[20, 50, 100].map((n) => (
-                <button key={n} className={`${s.pageSizeBtn} ${pageSize === n ? s.pageSizeBtnActive : ''}`} onClick={() => setPageSize(n)}>{n}</button>
-              ))}
-              <span className={s.pageSizeLabel}>/ trang</span>
-            </div>
-          </div>
         </div>
       )}
 

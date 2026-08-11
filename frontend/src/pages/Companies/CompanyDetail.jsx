@@ -9,6 +9,7 @@ import {
   BarChart2, ListTodo, ClipboardList, CalendarDays, Lock, FileText, StickyNote, Workflow,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import { CompanyFooterContext } from './companyFooter'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
@@ -77,6 +78,7 @@ export default function CompanyDetail() {
   const loadEnums = useEnumsStore((st) => st.load)
 
   const [customDefs, setCustomDefs] = useState([])
+  const [pageFooter, setPageFooter] = useState(null)   // tab con đẩy PaginationFooter lên đây
   const isTablesMode = mode === MODE_TABLES
 
   // Bảng CẤP CAO (không phải bảng con) → dựng thanh tab chính. Bảng con hiện dạng sub-tab.
@@ -280,7 +282,8 @@ export default function CompanyDetail() {
   }
 
   return (
-    <AppLayout>
+    <CompanyFooterContext.Provider value={setPageFooter}>
+    <AppLayout footer={pageFooter ?? undefined}>
       {/* Breadcrumb đã có ở header chung → bỏ ở đây cho gọn layout */}
 
       {/* Hero card */}
@@ -507,5 +510,6 @@ export default function CompanyDetail() {
         onConfirm={handleDelete}
       />
     </AppLayout>
+    </CompanyFooterContext.Provider>
   )
 }

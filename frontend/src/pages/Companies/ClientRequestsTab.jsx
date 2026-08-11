@@ -9,6 +9,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
+import { useCompanyFooter } from './companyFooter'
 import * as cdrApi from '../../api/clientRequests'
 import s from './companies.module.css'
 
@@ -68,6 +69,7 @@ export default function ClientRequestsTab({ company }) {
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
   const [loading, setLoading]       = useState(true)
   const [page, setPage]             = useState(1)
+  const [pageSize, setPageSize]     = useState(20)
   const [statusFilter, setStatusFilter] = useState('')
   const [searchQuery, setSearchQuery]   = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -95,8 +97,18 @@ export default function ClientRequestsTab({ company }) {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  // Reset page on filter change
-  useEffect(() => { setPage(1) }, [statusFilter, debouncedSearch, sortFilter])
+  // Reset page on filter / page-size change
+  useEffect(() => { setPage(1) }, [statusFilter, debouncedSearch, sortFilter, pageSize])
+
+  // Phân trang → footer trang (thay copyright)
+  useCompanyFooter(loading ? null : {
+    total: pagination.total,
+    from: (page - 1) * pageSize + 1,
+    to: Math.min(page * pageSize, pagination.total),
+    page, pageSize, totalPages: pagination.totalPages,
+    itemLabel: 'yêu cầu', loading,
+    onPageChange: setPage, onPageSizeChange: setPageSize,
+  })
 
   const load = useCallback(() => {
     let cancelled = false
@@ -107,7 +119,7 @@ export default function ClientRequestsTab({ company }) {
       status:    statusFilter || undefined,
       search:    debouncedSearch || undefined,
       page,
-      limit: 20,
+      limit: pageSize,
       sortBy,
       sortDir,
     })
@@ -120,7 +132,7 @@ export default function ClientRequestsTab({ company }) {
       .catch(() => { if (!cancelled) setItems([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [company.id, statusFilter, debouncedSearch, sortFilter, page])
+  }, [company.id, statusFilter, debouncedSearch, sortFilter, page, pageSize])
 
   useEffect(() => {
     const cancel = load()
@@ -553,22 +565,6 @@ export default function ClientRequestsTab({ company }) {
           </table>
         </div>
 
-        {/* Pagination — always show when items exist */}
-        {!loading && pagination.total > 0 && (
-          <div className={s.paginationBar} style={{ marginTop: 8 }}>
-            <span className={s.paginationInfo}>
-              {pagination.total} yêu cầu
-              {pagination.totalPages > 1 && ` · Trang ${page}/${pagination.totalPages}`}
-            </span>
-            {pagination.totalPages > 1 && (
-              <div className={s.paginationBtns}>
-                <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
-                <span style={{ fontSize: 'var(--fs-sm)', padding: '0 8px', color: 'var(--color-muted)' }}>{page} / {pagination.totalPages}</span>
-                <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── Create / Edit Modal ── */}

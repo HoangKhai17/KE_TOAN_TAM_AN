@@ -9,6 +9,7 @@ import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
 } from '../../components/ui/data-table'
+import { useCompanyFooter } from './companyFooter'
 import s from './companies.module.css'
 
 function emptyDraft() {
@@ -49,6 +50,8 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
   const [colFilters, setColFilters] = useState({})
   const [sortState, setSortState] = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup] = useState(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const displayedRows = useMemo(() => {
     let result = [...rows]
     for (const [key, value] of Object.entries(colFilters)) {
@@ -60,9 +63,22 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
     if (sortState.col) result.sort((a, b) => String(a[sortState.col] ?? '').localeCompare(String(b[sortState.col] ?? ''), 'vi', { numeric: true }) * (sortState.dir === 'asc' ? 1 : -1))
     return result
   }, [rows, colFilters, sortState])
+
+  // Phân trang client-side → footer trang
+  const docTotal      = displayedRows.length
+  const docTotalPages = Math.max(1, Math.ceil(docTotal / pageSize))
+  const safePage      = Math.min(page, docTotalPages)
+  const pageRows      = displayedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
+  useEffect(() => { setPage(1) }, [colFilters, sortState, pageSize])
+  useCompanyFooter(loading ? null : {
+    total: docTotal, from: (safePage - 1) * pageSize + 1, to: Math.min(safePage * pageSize, docTotal),
+    page: safePage, pageSize, totalPages: docTotalPages, itemLabel: 'chứng từ',
+    onPageChange: setPage, onPageSizeChange: setPageSize,
+  })
+
   const selection = useRowSelection({ rows: displayedRows })
   const reorder = useRowReorder({
-    rows, setRows, enabled: canEdit && editingId == null && activeCell == null && Object.keys(colFilters).length === 0 && !sortState.col,
+    rows, setRows, enabled: canEdit && editingId == null && activeCell == null && Object.keys(colFilters).length === 0 && !sortState.col && docTotalPages === 1,
     onError: () => addToast('Không thể lưu thứ tự chứng từ', 'error'),
     onPersist: (ordered, previous) => Promise.all(ordered
       .map((row, index) => ({ row, index }))
@@ -237,11 +253,11 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
             ) : displayedRows.length === 0 && editingId !== 'new' ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có chứng từ phát sinh. Nhấn “Thêm chứng từ”.</td></tr>
             ) : (
-              displayedRows.map((r, index) => (
+              pageRows.map((r, index) => (
                 <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
                     <DragRowCell enabled={canEdit && editingId == null} handleProps={reorder.handleProps(r.id)} />
                     <SelectionRowCell checked={selection.selectedIds.has(r.id)} onToggle={() => selection.toggle(r.id)} />
-                    <IndexRowCell index={index + 1} />
+                    <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
                     {editableColumns.map((field) => <td key={field}><InlineTableCell value={r[field]} required={field === 'name'} multiline canEdit={canEdit} active={activeCell?.rowId === r.id && activeCell?.colKey === field} onActivate={() => setActiveCell({ rowId: r.id, colKey: field })} onSave={(value) => saveCell(r, field, value)} onNavigate={(direction) => navigateCell(r.id, field, direction)} /></td>)}
                     <td className={s.locCenter}>
                       {canEdit && (

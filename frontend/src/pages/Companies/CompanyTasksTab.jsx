@@ -10,6 +10,7 @@ import {
 } from '@dnd-kit/core'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
+import { useCompanyFooter } from './companyFooter'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as tasksApi from '../../api/tasks'
@@ -944,6 +945,14 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const from = clientTotal === 0 ? 0 : (safePage - 1) * limit + 1
   const to   = Math.min(safePage * limit, clientTotal)
 
+  // Phân trang → footer trang (chỉ ở chế độ Danh sách; Board không phân trang)
+  useCompanyFooter(view === 'list' ? {
+    total: clientTotal, from, to, page: safePage, pageSize: limit, totalPages: clientTotalPages,
+    itemLabel: 'công việc', loading,
+    onPageChange: setPage, onPageSizeChange: setLimit,
+    details: [colFilterCount > 0 ? `${colFilterCount} lọc cột` : null, hasSortActive ? 'đang sắp xếp' : null].filter(Boolean).join(' · ') || undefined,
+  } : null)
+
   function pageWindow() {
     const total = clientTotalPages
     if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
@@ -1453,46 +1462,6 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
           </table>
         </div>
 
-        {/* Pagination — always visible when data exists */}
-        <div className={s.paginationBar}>
-          <span className={s.paginationInfo}>
-            {loading ? '...' : clientTotal === 0 ? '0 công việc' : `${from}–${to} / ${clientTotal}`}
-            {colFilterCount > 0 && ` · ${colFilterCount} lọc cột`}
-            {hasSortActive && ' · đang sắp xếp'}
-          </span>
-          <div className={s.paginationBtns}>
-            <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={safePage === 1 || loading}>«</button>
-            <button className={s.paginationBtn} onClick={() => setPage(safePage - 1)} disabled={safePage === 1 || loading}>‹</button>
-            {pageWindow().map((n, i) =>
-              n === '…' ? (
-                <span key={`e${i}`} className={s.paginationGap}>…</span>
-              ) : (
-                <button
-                  key={n}
-                  className={`${s.paginationBtn} ${safePage === n ? s.paginationBtnActive : ''}`}
-                  onClick={() => setPage(n)}
-                >
-                  {n}
-                </button>
-              )
-            )}
-            <button className={s.paginationBtn} onClick={() => setPage(safePage + 1)} disabled={safePage === clientTotalPages || loading}>›</button>
-            <button className={s.paginationBtn} onClick={() => setPage(clientTotalPages)} disabled={safePage === clientTotalPages || loading}>»</button>
-          </div>
-          <div className={s.pageSizeWrap}>
-            <span className={s.pageSizeLabel}>Hiển thị:</span>
-            {[10, 20, 50].map((n) => (
-              <button
-                key={n}
-                className={`${s.pageSizeBtn} ${limit === n ? s.pageSizeBtnActive : ''}`}
-                onClick={() => setLimit(n)}
-              >
-                {n}
-              </button>
-            ))}
-            <span className={s.pageSizeLabel}>/ trang</span>
-          </div>
-        </div>
       </div>
       )}
 

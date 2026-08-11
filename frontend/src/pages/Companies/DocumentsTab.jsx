@@ -17,6 +17,7 @@ import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
 } from '../../components/ui/data-table'
+import { useCompanyFooter } from './companyFooter'
 import s from './companies.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -431,6 +432,7 @@ export default function DocumentsTab({ company }) {
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
   const [loading, setLoading]       = useState(true)
   const [page, setPage]             = useState(1)
+  const [pageSize, setPageSize]     = useState(20)
   const [category, setCategory]     = useState([])   // multi-select
   const [period, setPeriod]         = useState('')   // text (đã áp dụng)
   const [periodInput, setPeriodInput] = useState('') // ô nhập Kỳ (debounce)
@@ -478,7 +480,7 @@ export default function DocumentsTab({ company }) {
   }, [periodInput])
 
   // Đổi bộ lọc thì về trang 1
-  useEffect(() => { setPage(1) }, [category, period])
+  useEffect(() => { setPage(1) }, [category, period, pageSize, colFilters, sortState])
 
   // Lọc + sắp xếp theo header cột (client-side, AND nhiều cột) — docs/018
   const displayed = useMemo(() => {
@@ -512,7 +514,25 @@ export default function DocumentsTab({ company }) {
     }
     return result
   }, [docs, colFilters, sortState])
-  const canReorder = !hasFilter && Object.keys(colFilters).length === 0 && sortState.col == null && editingId == null
+
+  // Phân trang client-side trên tập đã lọc (đồng bộ footer hệ thống)
+  const clientTotal      = displayed.length
+  const clientTotalPages = Math.max(1, Math.ceil(clientTotal / pageSize))
+  const safePage         = Math.min(page, clientTotalPages)
+  const pageDocs         = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+  // Kéo-thả chỉ khi KHÔNG lọc/sắp VÀ vừa 1 trang (tránh lệch thứ tự khi phân trang)
+  const canReorder = !hasFilter && Object.keys(colFilters).length === 0 && sortState.col == null && editingId == null && clientTotalPages === 1
+
+  // Phân trang → footer trang (thay copyright)
+  useCompanyFooter(loading ? null : {
+    total: clientTotal,
+    from: (safePage - 1) * pageSize + 1,
+    to: Math.min(safePage * pageSize, clientTotal),
+    page: safePage, pageSize, totalPages: clientTotalPages,
+    itemLabel: 'tài liệu',
+    onPageChange: setPage, onPageSizeChange: setPageSize,
+  })
   const reorder = useRowReorder({
     rows: docs, setRows: setDocs, enabled: canReorder,
     onError: () => addToast('Không thể lưu thứ tự tài liệu', 'error'),
@@ -734,7 +754,7 @@ export default function DocumentsTab({ company }) {
                   </div>
                 </td>
               </tr>
-            ) : displayed.map((doc, index) => (
+            ) : pageDocs.map((doc, index) => (
               editingId === doc.id ? (
                 <tr key={doc.id}>
                   <td /><td /><td />
@@ -752,7 +772,7 @@ export default function DocumentsTab({ company }) {
                 <tr key={doc.id} {...reorder.rowProps(doc.id)} className={`${s.docTableRow} ${reorder.dragOverId === doc.id ? s.dataTableRowDragOver : ''}`}>
                   <DragRowCell enabled={canReorder} handleProps={reorder.handleProps(doc.id)} />
                   <SelectionRowCell checked={selection.selectedIds.has(doc.id)} onToggle={() => selection.toggle(doc.id)} />
-                  <IndexRowCell index={index + 1} />
+                  <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
 
                   {/* Tài liệu */}
                   <td>
@@ -867,19 +887,6 @@ export default function DocumentsTab({ company }) {
         </table>
       </div>
 
-      {/* ── Pagination ── */}
-      {pagination.totalPages > 1 && (
-        <div className={s.paginationBar} style={{ marginTop: 10 }}>
-          <span className={s.paginationInfo}>{pagination.total} tài liệu</span>
-          <div className={s.paginationBtns}>
-            <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
-            <span style={{ fontSize: 'var(--fs-xs)', padding: '0 8px', color: 'var(--color-muted)' }}>
-              {page} / {pagination.totalPages}
-            </span>
-            <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
-          </div>
-        </div>
-      )}
 
       {/* ── Add link modal ── */}
       {showAddModal && (

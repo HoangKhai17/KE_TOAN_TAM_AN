@@ -36,7 +36,7 @@ export default function PaginationFooter({
     <footer className={s.root} aria-label="Phân trang">
       <div className={s.summary} aria-live="polite">
         <span className={s.total}>
-          {loading ? 'Đang tải…' : `${from}–${to} / ${total} ${itemLabel}`}
+          {loading ? 'Đang tải…' : (total === 0 ? `0 ${itemLabel}` : `${from}–${to} / ${total} ${itemLabel}`)}
         </span>
         {details && <span className={s.details}>{details}</span>}
       </div>

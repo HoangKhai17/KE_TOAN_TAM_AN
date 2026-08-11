@@ -10,6 +10,7 @@ import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
 } from '../../components/ui/data-table'
+import { useCompanyFooter } from './companyFooter'
 import s from './companies.module.css'
 
 // Màu badge mức độ theo key của enum assignment_priority (dùng lại, không tạo enum mới)
@@ -67,6 +68,8 @@ export default function NotesSection({ companyId, canEdit = true }) {
   const [colFilters, setColFilters] = useState({})
   const [sortState, setSortState] = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup] = useState(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const displayValue = useCallback((row, key) => {
     if (key === 'severity') return getLabel('assignment_priority', row.severity, row.severity)
     if (key === 'isPinned') return row.isPinned ? 'Đã ghim' : 'Chưa ghim'
@@ -84,9 +87,22 @@ export default function NotesSection({ companyId, canEdit = true }) {
     if (sortState.col) result.sort((a, b) => displayValue(a, sortState.col).localeCompare(displayValue(b, sortState.col), 'vi', { numeric: true }) * (sortState.dir === 'asc' ? 1 : -1))
     return result
   }, [rows, colFilters, sortState, displayValue])
+
+  // Phân trang client-side → footer trang
+  const noteTotal      = displayedRows.length
+  const noteTotalPages = Math.max(1, Math.ceil(noteTotal / pageSize))
+  const safePage       = Math.min(page, noteTotalPages)
+  const pageRows       = displayedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
+  useEffect(() => { setPage(1) }, [colFilters, sortState, pageSize])
+  useCompanyFooter(loading ? null : {
+    total: noteTotal, from: (safePage - 1) * pageSize + 1, to: Math.min(safePage * pageSize, noteTotal),
+    page: safePage, pageSize, totalPages: noteTotalPages, itemLabel: 'lưu ý',
+    onPageChange: setPage, onPageSizeChange: setPageSize,
+  })
+
   const selection = useRowSelection({ rows: displayedRows })
   const reorder = useRowReorder({
-    rows, setRows, enabled: canEdit && editingId == null && activeCell == null && Object.keys(colFilters).length === 0 && !sortState.col,
+    rows, setRows, enabled: canEdit && editingId == null && activeCell == null && Object.keys(colFilters).length === 0 && !sortState.col && noteTotalPages === 1,
     onError: () => addToast('Không thể lưu thứ tự lưu ý', 'error'),
     onPersist: (ordered, previous) => Promise.all(ordered
       .map((row, index) => ({ row, index }))
@@ -259,11 +275,11 @@ export default function NotesSection({ companyId, canEdit = true }) {
             ) : displayedRows.length === 0 && editingId !== 'new' ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có điều cần lưu ý. Nhấn “Thêm lưu ý”.</td></tr>
             ) : (
-              displayedRows.map((r, index) => (
+              pageRows.map((r, index) => (
                 <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
                     <DragRowCell enabled={canEdit && editingId == null} handleProps={reorder.handleProps(r.id)} />
                     <SelectionRowCell checked={selection.selectedIds.has(r.id)} onToggle={() => selection.toggle(r.id)} />
-                    <IndexRowCell index={index + 1} />
+                    <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
                     <td><InlineTableCell value={r.content} required multiline canEdit={canEdit} active={activeCell?.rowId === r.id && activeCell?.colKey === 'content'} onActivate={() => setActiveCell({ rowId: r.id, colKey: 'content' })} onSave={(value) => saveCell(r, 'content', value)} onNavigate={(direction) => navigateCell(r.id, 'content', direction)} /></td>
                     <td>
                       <InlineTableCell

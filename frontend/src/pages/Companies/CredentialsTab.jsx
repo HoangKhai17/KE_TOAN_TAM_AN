@@ -8,6 +8,7 @@ import { useEnumsStore } from '../../hooks/useEnums'
 import * as credApi from '../../api/credentials'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import { useCompanyFooter } from './companyFooter'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import {
   DragHeaderCell,
@@ -22,7 +23,6 @@ import s from './companies.module.css'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 10   // số tài khoản mỗi trang
 
 function fmtDateTime(iso) {
   if (!iso) return '—'
@@ -325,6 +325,7 @@ export default function CredentialsTab({ company }) {
   const [loading, setLoading]     = useState(true)
   const [filterActive, setFilterActive] = useState('')
   const [page, setPage]           = useState(1)
+  const [pageSize, setPageSize]   = useState(20)
 
   const [showCreate, setShowCreate] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -387,9 +388,20 @@ export default function CredentialsTab({ company }) {
     return result
   }, [creds, colFilters, sortState])
 
-  const totalPages = Math.max(1, Math.ceil(filteredCreds.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(filteredCreds.length / pageSize))
   const pageSafe   = Math.min(page, totalPages)
-  const pageCreds  = filteredCreds.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
+  const pageCreds  = filteredCreds.slice((pageSafe - 1) * pageSize, pageSafe * pageSize)
+
+  // Phân trang → footer trang (thay copyright)
+  useCompanyFooter(loading ? null : {
+    total: filteredCreds.length,
+    from: (pageSafe - 1) * pageSize + 1,
+    to: Math.min(pageSafe * pageSize, filteredCreds.length),
+    page: pageSafe, pageSize, totalPages,
+    itemLabel: 'tài khoản',
+    onPageChange: setPage,
+    onPageSizeChange: (n) => { setPageSize(n); setPage(1) },
+  })
   const selection = useRowSelection({ rows: pageCreds })
   const canReorder = filterActive === '' && Object.keys(colFilters).length === 0 && !sortState.col
 
@@ -604,7 +616,7 @@ export default function CredentialsTab({ company }) {
                     checked={selection.selectedIds.has(cred.id)}
                     onToggle={() => selection.toggle(cred.id)}
                   />
-                  <IndexRowCell index={(pageSafe - 1) * PAGE_SIZE + index + 1} />
+                  <IndexRowCell index={(pageSafe - 1) * pageSize + index + 1} />
                   <td>
                     <div className={s.credName} title={cred.systemName}>{cred.systemName}</div>
                     {cred.notes && <div className={s.credNoteSub} title={cred.notes}>{cred.notes}</div>}
@@ -650,19 +662,6 @@ export default function CredentialsTab({ company }) {
         </div>
       )}
 
-      {/* Pagination */}
-      {!loading && totalPages > 1 && (
-        <div className={s.paginationBar} style={{ marginTop: 10 }}>
-          <span className={s.paginationInfo}>{filteredCreds.length} tài khoản</span>
-          <div className={s.paginationBtns}>
-            <button className={s.paginationBtn} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageSafe === 1}>‹</button>
-            <span style={{ fontSize: 'var(--fs-xs)', padding: '0 8px', color: 'var(--color-muted)' }}>
-              {pageSafe} / {totalPages}
-            </span>
-            <button className={s.paginationBtn} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={pageSafe === totalPages}>›</button>
-          </div>
-        </div>
-      )}
 
       {/* Modals */}
       {showCreate && (

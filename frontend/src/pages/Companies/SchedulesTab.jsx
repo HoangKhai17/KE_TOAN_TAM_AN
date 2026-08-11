@@ -16,6 +16,7 @@ import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
 } from '../../components/ui/data-table'
+import { useCompanyFooter } from './companyFooter'
 import s from './companies.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -567,9 +568,24 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
 
   // Toggle
   const [togglingId, setTogglingId] = useState(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+
+  // Phân trang client-side → footer trang
+  const schTotal      = schedules.length
+  const schTotalPages = Math.max(1, Math.ceil(schTotal / pageSize))
+  const safePage      = Math.min(page, schTotalPages)
+  const pageSchedules = schedules.slice((safePage - 1) * pageSize, safePage * pageSize)
+  useEffect(() => { setPage(1) }, [pageSize])
+  useCompanyFooter(loading ? null : {
+    total: schTotal, from: (safePage - 1) * pageSize + 1, to: Math.min(safePage * pageSize, schTotal),
+    page: safePage, pageSize, totalPages: schTotalPages, itemLabel: 'lịch',
+    onPageChange: setPage, onPageSizeChange: setPageSize,
+  })
+
   const selection = useRowSelection({ rows: schedules })
   const reorder = useRowReorder({
-    rows: schedules, setRows: setSchedules,
+    rows: schedules, setRows: setSchedules, enabled: schTotalPages === 1,
     onError: () => toast('Không thể lưu thứ tự lịch định kỳ', 'error'),
     onPersist: (ordered, previous) => Promise.all(ordered
       .map((schedule, index) => ({ schedule, index }))
@@ -788,11 +804,11 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                 </tr>
               </thead>
               <tbody>
-                {schedules.map((sc, index) => (
+                {pageSchedules.map((sc, index) => (
                   <tr key={sc.id} {...reorder.rowProps(sc.id)} className={reorder.dragOverId === sc.id ? s.dataTableRowDragOver : ''}>
-                    <DragRowCell enabled handleProps={reorder.handleProps(sc.id)} />
+                    <DragRowCell enabled={schTotalPages === 1} handleProps={reorder.handleProps(sc.id)} />
                     <SelectionRowCell checked={selection.selectedIds.has(sc.id)} onToggle={() => selection.toggle(sc.id)} />
-                    <IndexRowCell index={index + 1} />
+                    <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
                     <td>
                       <div className={s.scTypeName}>{sc.taskTypeName}</div>
                     </td>
