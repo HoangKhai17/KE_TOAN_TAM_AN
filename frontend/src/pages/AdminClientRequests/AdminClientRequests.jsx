@@ -18,6 +18,15 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import CollaboratorPicker from '../Tasks/CollaboratorPicker'
+import PeriodPicker from '../Tasks/PeriodPicker'
+import {
+  BulkActionBar,
+  IndexHeaderCell,
+  IndexRowCell,
+  SelectionHeaderCell,
+  SelectionRowCell,
+  useRowSelection,
+} from '../../components/ui/data-table'
 import s from './adminClientRequests.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -43,6 +52,8 @@ const STATUS_FILTERS = [
   { key: 'received',     label: 'Đã nhận' },
   { key: 'not_required', label: 'Không cần' },
 ]
+// Trạng thái dạng droplist multi-select (bỏ mục "Tất cả")
+const STATUS_OPTIONS = STATUS_FILTERS.filter((f) => f.key).map((f) => ({ id: f.key, name: f.label }))
 
 const SORT_OPTIONS = [
   { value: 'deadline_date:asc',  label: 'Hạn nộp: Sớm nhất' },
@@ -685,7 +696,7 @@ function BoardView({ items, isAdmin, navigate, actionLoading, onEdit, onReceive,
   return (
     <div className={s.boardWrap}>
       {BOARD_COLS.map(({ key, label, dot }) => (
-        <div key={key} className={s.boardCol}>
+        <div key={key} className={`${s.boardCol} ${s[`boardCol_${key}`] ?? ''}`}>
           <div className={s.boardColHead}>
             <span className={`${s.boardColDot} ${dot}`} />
             <span className={s.boardColTitle}>{label}</span>
@@ -829,6 +840,29 @@ export default function AdminClientRequests() {
   const [manualSubmitTarget, setManualSubmitTarget] = useState(null)
   const [actionLoading, setActionLoading]           = useState({})
   const [dismissTarget, setDismissTarget]           = useState(null)
+
+  // Advanced-filter panel (gập/mở) + bulk delete
+  const [showFilters, setShowFilters]                     = useState(false)
+  const filterBarRef                                      = useRef(null)
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting]                   = useState(false)
+
+  // Đóng khối lọc nâng cao khi click ra ngoài / nhấn Escape
+  useEffect(() => {
+    if (!showFilters) return undefined
+    const handlePointerDown = (event) => {
+      if (!filterBarRef.current?.contains(event.target)) setShowFilters(false)
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setShowFilters(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showFilters])
 
   // Load years on mount (companies/staff đã chuyển sang React Query hooks)
   useEffect(() => {
@@ -1048,6 +1082,26 @@ export default function AdminClientRequests() {
     setDeadlineFrom(from); setDeadlineTo(to)
   }
 
+  function setPeriod(year, month) {
+    setYearFilter(year)
+    setMonthFilter(month)
+    const { from, to } = yearMonthToDates(year, month)
+    setDeadlineFrom(from); setDeadlineTo(to)
+    setPage(1)
+  }
+
+  function applyPeriodPreset(key) {
+    if (key === 'tm') return setPeriod(CUR_YEAR, CUR_MONTH)
+    if (key === 'ty') return setPeriod(CUR_YEAR, '')
+    if (key === 'all') return setPeriod('', '')
+    if (key === 'lm') {
+      let year = parseInt(CUR_YEAR, 10)
+      let month = parseInt(CUR_MONTH, 10) - 1
+      if (month < 1) { month = 12; year -= 1 }
+      return setPeriod(String(year), String(month))
+    }
+  }
+
   function resetFilters() {
     setStatusFilter([]); setCompanyFilter([]); setStaffFilter([]); setSupportFilter([])
     setColFilters({}); setSortColState({ col: null, dir: 'asc' })
@@ -1120,6 +1174,37 @@ export default function AdminClientRequests() {
   const safePage = Math.min(page, clientTotalPages)
   const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
 
+  // ── Row selection + bulk delete ────────────────────────────────────────────
+  const {
+    selectedIds,
+    setSelectedIds,
+    selectedCount,
+    allSelected,
+    someSelected,
+    toggle: toggleSelect,
+    toggleAll: selectAll,
+    clear: clearSelection,
+  } = useRowSelection({ rows: pageRows })
+
+  async function bulkDeleteConfirmed() {
+    setBulkDeleting(true)
+    const ids = [...selectedIds]
+    const results = await Promise.allSettled(ids.map((id) => cdrApi.deleteClientRequest(id)))
+    const deletedIds = new Set(ids.filter((_, i) => results[i].status === 'fulfilled'))
+    const failed = ids.length - deletedIds.size
+    if (deletedIds.size > 0) {
+      setItems((prev) => prev.filter((r) => !deletedIds.has(r.id)))
+      setPagination((p) => ({ ...p, total: Math.max(0, p.total - deletedIds.size) }))
+      setStatsKey((k) => k + 1)
+    }
+    setSelectedIds(new Set())
+    setShowBulkDeleteConfirm(false)
+    setBulkDeleting(false)
+    if (failed === 0) addToast(`Đã xoá ${deletedIds.size} yêu cầu`, 'success')
+    else if (deletedIds.size > 0) addToast(`Đã xoá ${deletedIds.size} yêu cầu, ${failed} thất bại`, 'warning')
+    else addToast('Không thể xoá các yêu cầu đã chọn', 'error')
+  }
+
   function ColTh({ colKey, className, children }) {
     const active = hasColFilter(colKey) || sortColState.col === colKey
     return (
@@ -1139,7 +1224,11 @@ export default function AdminClientRequests() {
     )
   }
 
-  const activeFilterCount = [statusFilter, companyFilter, staffFilter, debouncedSearch].filter(Boolean).length
+  const activeFilterCount = (statusFilter.length ? 1 : 0)
+    + (companyFilter.length ? 1 : 0)
+    + (staffFilter.length ? 1 : 0)
+    + (supportFilter.length ? 1 : 0)
+    + (debouncedSearch ? 1 : 0)
     + (sortFilter !== 'deadline_date:asc' ? 1 : 0)
     + (yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH ? 1 : 0)
 
@@ -1202,138 +1291,160 @@ export default function AdminClientRequests() {
         </div>
 
         {/* ── Filter bar ── */}
-        <div className={s.filterBar}>
+        <div className={s.filterBar} ref={filterBarRef}>
           <div className={s.filterBarHead}>
-            <div className={s.filterBarTitle}>
-              <Filter size={12} />
-              Bộ lọc
-              {activeFilterCount > 0 && (
-                <span className={s.filterActiveBadge}>{activeFilterCount} đang bật</span>
-              )}
+            <div className={s.filterBarHeadLeft}>
+              <button
+                type="button"
+                className={`${s.filterBarTitle} ${showFilters ? s.filterBarTitleOpen : ''}`}
+                onClick={() => setShowFilters((open) => !open)}
+                aria-expanded={showFilters}
+                aria-controls="cdr-advanced-filters"
+              >
+                <Filter size={12} />
+                Bộ lọc
+                {activeFilterCount > 0 && (
+                  <span className={s.filterActiveBadge}>{activeFilterCount} đang bật</span>
+                )}
+              </button>
+
+              {/* Thống kê — sát bên trái, cạnh nút Bộ lọc */}
+              <div className={`${s.statsRow} ${s.statsRowHead}`}>
+                {statItems.map((item, i) => (
+                  <Fragment key={item.label}>
+                    <div className={s.statItem}>
+                      <span className={`${s.statValue} ${item.cls}`}>
+                        {statsLoading ? '…' : item.value}
+                      </span>
+                      <span className={s.statLabel}>{item.label}</span>
+                    </div>
+                    {i < statItems.length - 1 && <span className={s.statDivider} />}
+                  </Fragment>
+                ))}
+              </div>
             </div>
+
             <button className={s.filterReset} onClick={resetFilters}>
               <RotateCcw size={11} /> Đặt lại
             </button>
           </div>
 
-          <div className={s.filterGrid}>
-
-            {/* Năm */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Năm</label>
-              <select value={yearFilter} onChange={(e) => handleYearChange(e.target.value)} className={s.filterSelect}>
-                <option value="">Tất cả năm</option>
-                {availableYears.map((y) => (
-                  <option key={y} value={String(y)}>Năm {y}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tháng */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Tháng</label>
-              <select value={monthFilter} onChange={(e) => handleMonthChange(e.target.value)} className={s.filterSelect} disabled={!yearFilter}>
-                <option value="">Cả năm</option>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                  <option key={m} value={String(m)}>Tháng {m}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Sắp xếp */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Sắp xếp</label>
-              <select value={sortFilter} onChange={(e) => setSortFilter(e.target.value)} className={s.filterSelect}>
-                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-
-            {/* Công ty — multi-select */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Khách hàng</label>
-              <FilterMultiPicker
-                options={companies}
-                value={companyFilter}
-                onChange={(v) => { setCompanyFilter(v); setPage(1) }}
-                searchPlaceholder="Tìm khách hàng..."
-              />
-            </div>
-
-            {/* Nhân viên (admin only) — multi-select */}
-            {isAdmin && staffList.length > 0 && (
+          {/* ── Lọc nhanh (luôn hiện) ── */}
+          <div className={s.quickFilterArea}>
+            <div className={s.quickFilterGrid}>
+              {/* Kỳ */}
               <div className={s.filterGroup}>
-                <label className={s.filterLabel}>Nhân viên</label>
-                <FilterMultiPicker
-                  options={staffList}
-                  value={staffFilter}
-                  onChange={(v) => { setStaffFilter(v); setPage(1) }}
-                  searchPlaceholder="Tìm nhân viên..."
+                <label className={s.filterLabel}>Kỳ</label>
+                <PeriodPicker
+                  year={yearFilter}
+                  month={monthFilter}
+                  from={deadlineFrom}
+                  to={deadlineTo}
+                  availableYears={availableYears}
+                  onYear={handleYearChange}
+                  onMonth={handleMonthChange}
+                  onFrom={(v) => { setDeadlineFrom(v); setPage(1) }}
+                  onTo={(v) => { setDeadlineTo(v); setPage(1) }}
+                  onPreset={applyPeriodPreset}
                 />
+              </div>
+
+              {/* Trạng thái — droplist multi-select */}
+              <div className={s.filterGroup}>
+                <label className={s.filterLabel}>Trạng thái</label>
+                <FilterMultiPicker
+                  options={STATUS_OPTIONS}
+                  value={statusFilter}
+                  onChange={(v) => { setStatusFilter(v); setPage(1) }}
+                  placeholder="Tất cả trạng thái"
+                  searchPlaceholder="Tìm trạng thái..."
+                />
+              </div>
+
+              {/* Từ khoá */}
+              <div className={`${s.filterGroup} ${s.quickSearch}`}>
+                <label className={s.filterLabel}>Từ khoá</label>
+                <div className={s.filterSearchWrap}>
+                  <Search size={12} className={s.filterSearchIcon} />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Tìm tên tài liệu, email KH..."
+                    className={`${s.filterInput} ${s.filterInputWithIcon}`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Khối nâng cao (gập) ── */}
+            {showFilters && (
+              <div id="cdr-advanced-filters" className={s.filterPopover}>
+                <div className={s.filterPopoverHead}>
+                  <span>Bộ lọc yêu cầu KH</span>
+                  {activeFilterCount > 0 && <span>{activeFilterCount} điều kiện</span>}
+                </div>
+                <div className={s.filterGrid}>
+
+                  {/* Sắp xếp */}
+                  <div className={s.filterGroup}>
+                    <label className={s.filterLabel}>Sắp xếp</label>
+                    <select value={sortFilter} onChange={(e) => setSortFilter(e.target.value)} className={s.filterSelect}>
+                      {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Công ty — multi-select */}
+                  <div className={s.filterGroup}>
+                    <label className={s.filterLabel}>Khách hàng</label>
+                    <FilterMultiPicker
+                      options={companies}
+                      value={companyFilter}
+                      onChange={(v) => { setCompanyFilter(v); setPage(1) }}
+                      searchPlaceholder="Tìm khách hàng..."
+                    />
+                  </div>
+
+                  {/* Nhân viên (admin only) — multi-select */}
+                  {isAdmin && staffList.length > 0 && (
+                    <div className={s.filterGroup}>
+                      <label className={s.filterLabel}>Nhân viên</label>
+                      <FilterMultiPicker
+                        options={staffList}
+                        value={staffFilter}
+                        onChange={(v) => { setStaffFilter(v); setPage(1) }}
+                        searchPlaceholder="Tìm nhân viên..."
+                      />
+                    </div>
+                  )}
+
+                  {/* CV hỗ trợ — admin: multi-select NV; nhân viên: toggle "việc mình hỗ trợ" */}
+                  <div className={s.filterGroup}>
+                    <label className={s.filterLabel}>CV hỗ trợ</label>
+                    {isAdmin ? (
+                      <FilterMultiPicker
+                        options={staffList}
+                        value={supportFilter}
+                        onChange={(v) => { setSupportFilter(v); setPage(1) }}
+                        searchPlaceholder="Tìm nhân viên..."
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setSupportFilter((p) => (p.length ? [] : [currentUser?.id].filter(Boolean))); setPage(1) }}
+                        title="Chỉ hiện yêu cầu KH mình đang hỗ trợ đồng nghiệp"
+                        className={`${s.supportToggle} ${supportFilter.length ? s.supportToggleActive : ''}`}
+                      >
+                        {supportFilter.length ? '✓ ' : ''}Việc tôi hỗ trợ
+                      </button>
+                    )}
+                  </div>
+
+                </div>
               </div>
             )}
-
-            {/* CV hỗ trợ — admin: multi-select NV; nhân viên: toggle "việc mình hỗ trợ" */}
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>CV hỗ trợ</label>
-              {isAdmin ? (
-                <FilterMultiPicker
-                  options={staffList}
-                  value={supportFilter}
-                  onChange={(v) => { setSupportFilter(v); setPage(1) }}
-                  searchPlaceholder="Tìm nhân viên..."
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => { setSupportFilter((p) => (p.length ? [] : [currentUser?.id].filter(Boolean))); setPage(1) }}
-                  title="Chỉ hiện yêu cầu KH mình đang hỗ trợ đồng nghiệp"
-                  style={{
-                    height: 32, padding: '0 12px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                    border: `1px solid ${supportFilter.length ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                    background: supportFilter.length ? 'var(--color-primary-bg)' : '#fff',
-                    color: supportFilter.length ? 'var(--color-primary-dark)' : 'var(--color-text)',
-                  }}
-                >
-                  {supportFilter.length ? '✓ ' : ''}Việc tôi hỗ trợ
-                </button>
-              )}
-            </div>
-
-            {/* Từ khoá */}
-            <div className={`${s.filterGroup} ${s.filterGroupGrow}`}>
-              <label className={s.filterLabel}>Từ khoá</label>
-              <div className={s.filterSearchWrap}>
-                <Search size={12} className={s.filterSearchIcon} />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Tìm tên tài liệu, email KH..."
-                  className={`${s.filterInput} ${s.filterInputWithIcon}`}
-                />
-              </div>
-            </div>
           </div>
 
-          {/* Status chips */}
-          <div className={s.statusChips}>
-            {STATUS_FILTERS.map(({ key, label }) => {
-              const active = key === '' ? statusFilter.length === 0 : statusFilter.includes(key)
-              return (
-                <button
-                  key={key}
-                  onClick={() => {
-                    if (key === '') setStatusFilter([])
-                    else setStatusFilter((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])
-                    setPage(1)
-                  }}
-                  className={`${s.statusChip} ${active ? s.statusChipActive : ''}`}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
 
           {/* Active filter chips */}
           {(yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH || companyFilter.length > 0 || staffFilter.length > 0 || supportFilter.length > 0 || debouncedSearch) && (
@@ -1378,21 +1489,22 @@ export default function AdminClientRequests() {
             </div>
           )}
 
-          {/* ── Stats row ── */}
-          <div className={s.statsRow}>
-            {statItems.map((item, i) => (
-              <Fragment key={item.label}>
-                <div className={s.statItem}>
-                  <span className={`${s.statValue} ${item.cls}`}>
-                    {statsLoading ? '…' : item.value}
-                  </span>
-                  <span className={s.statLabel}>{item.label}</span>
-                </div>
-                {i < statItems.length - 1 && <span className={s.statDivider} />}
-              </Fragment>
-            ))}
-          </div>
         </div>
+
+        {/* ── Bulk action bar ── */}
+        {view === 'list' && (
+          <BulkActionBar count={selectedCount} className={s.bulkBar}>
+            <button
+              className={`${s.btnGhost} ${s.btnDangerText}`}
+              onClick={() => setShowBulkDeleteConfirm(true)}
+            >
+              <Trash2 size={13} /> Xoá đã chọn
+            </button>
+            <button className={s.btnGhost} onClick={clearSelection}>
+              Bỏ chọn
+            </button>
+          </BulkActionBar>
+        )}
 
         {/* ── Loading spinner (non-list views) ── */}
         {loading && view === 'board' && (
@@ -1427,6 +1539,8 @@ export default function AdminClientRequests() {
               <table className={s.table}>
                 <thead>
                   <tr>
+                    <SelectionHeaderCell allSelected={allSelected} someSelected={someSelected} onToggle={selectAll} />
+                    <IndexHeaderCell />
                     <ColTh colKey="documentName" className={s.colDoc}>Tài liệu yêu cầu</ColTh>
                     <ColTh colKey="companyName" className={s.colCompany}>Công ty</ColTh>
                     <ColTh colKey="status" className={s.colStatus}>Trạng thái</ColTh>
@@ -1435,14 +1549,14 @@ export default function AdminClientRequests() {
                     <ColTh colKey="deadlineDate" className={s.colDeadline}>Hạn nộp</ColTh>
                     <ColTh colKey="contactEmail" className={s.colEmail}>Email KH</ColTh>
                     <th className={`${s.th} ${s.thCenter} ${s.colLink}`}>Link</th>
-                    <th className={`${s.th} ${s.colActions}`} />
+                    <th className={`${s.th} ${s.thCenter} ${s.colActions}`}>Hành động</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     Array.from({ length: 6 }).map((_, i) => (
                       <tr key={i}>
-                        {[200, 150, 100, 60, 100, 90, 140, 50, 110].map((w, j) => (
+                        {[28, 36, 200, 150, 100, 60, 100, 90, 140, 50, 110].map((w, j) => (
                           <td key={j} className={s.td}>
                             <div className={s.tableSkeletonBar} style={{ width: w }} />
                           </td>
@@ -1451,7 +1565,7 @@ export default function AdminClientRequests() {
                     ))
                   ) : displayed.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className={s.td}>
+                      <td colSpan={11} className={s.td}>
                         <div className={s.emptyBox}>
                           <div className={s.emptyIcon}><ClipboardList size={32} /></div>
                           <p className={s.emptyTitle}>Không có yêu cầu tài liệu</p>
@@ -1459,22 +1573,23 @@ export default function AdminClientRequests() {
                         </div>
                       </td>
                     </tr>
-                  ) : pageRows.map((item) => {
+                  ) : pageRows.map((item, i) => {
                     const busy         = actionLoading[item.id]
                     const hasToken     = !!item.publicToken
                     const hasSubmitted = !!item.tokenSubmittedAt
                     const isOverdue    = item.status === 'overdue'
 
                     return (
-                      <tr key={item.id} className={`${s.tr} ${isOverdue ? s.trOverdue : ''}`}>
+                      <tr key={item.id} className={`${s.tr} ${selectedIds.has(item.id) ? s.trSelected : ''} ${isOverdue ? s.trOverdue : ''}`}>
+                        <SelectionRowCell checked={selectedIds.has(item.id)} onToggle={() => toggleSelect(item.id)} />
+                        <IndexRowCell index={(safePage - 1) * pageSize + i + 1} />
                         <td className={s.td}>
                           <div className={s.docTitle}>
                             {item.documentName}
                             {item.collaborators?.length > 0 && (
                               <span
+                                className={s.collaboratorBadge}
                                 title={`Hỗ trợ: ${item.collaborators.map((c) => c.name).join(', ')}`}
-                                style={{ marginLeft: 6, padding: '0 6px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-                                         background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', whiteSpace: 'nowrap' }}
                               >
                                 +{item.collaborators.length} hỗ trợ
                               </span>
@@ -1636,6 +1751,17 @@ export default function AdminClientRequests() {
         loading={deleting}
         onCancel={() => !deleting && setDeleteTarget(null)}
         onConfirm={handleDelete}
+      />
+
+      {/* ── Bulk delete confirmation ── */}
+      <DeleteConfirmDialog
+        open={showBulkDeleteConfirm}
+        title={`Xóa ${selectedIds.size} yêu cầu tài liệu`}
+        message={<>Bạn có chắc chắn muốn xóa <strong>{selectedIds.size}</strong> yêu cầu đã chọn?</>}
+        confirmLabel={`Xóa ${selectedIds.size} mục`}
+        loading={bulkDeleting}
+        onCancel={() => !bulkDeleting && setShowBulkDeleteConfirm(false)}
+        onConfirm={bulkDeleteConfirmed}
       />
 
       {linkTarget && (

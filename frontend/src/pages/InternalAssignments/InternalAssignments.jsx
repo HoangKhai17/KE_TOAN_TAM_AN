@@ -375,7 +375,7 @@ function DroppableColumn({ status, items, onOpen, isAdmin }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
 
   return (
-    <div className={s.boardCol}>
+    <div className={`${s.boardCol} ${s[`boardCol_${status}`] ?? ''}`}>
       <div className={s.boardColHead}>
         <span className={`${s.boardColDot} ${COL_DOT[status]}`} />
         <span className={s.boardColTitle}>{STATUS_LABELS[status]}</span>
