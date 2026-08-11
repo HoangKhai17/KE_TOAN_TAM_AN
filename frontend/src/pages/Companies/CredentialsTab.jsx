@@ -81,7 +81,7 @@ function CredentialForm({ initial, onSubmit, onClose, title }) {
   }
 
   return (
-    <Modal title={title} onClose={onClose} maxWidth={720}>
+    <Modal title={title} onClose={onClose} width="min(1120px, calc(100vw - 56px))">
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}
 
@@ -153,7 +153,8 @@ function CredentialForm({ initial, onSubmit, onClose, title }) {
               onChange={set('notes')}
               placeholder="Thông tin thêm về tài khoản..."
               className={s.formTextarea}
-              rows={2}
+              rows={11}
+              style={{ minHeight: 220 }}
             />
           </div>
 
