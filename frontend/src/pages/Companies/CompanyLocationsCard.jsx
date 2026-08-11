@@ -22,14 +22,14 @@ const LOC_COLS = [
   { key: 'locationType',           label: 'Loại GP',        type: 'enum', enumType: 'location_type',     required: true },
   { key: 'name',                   label: 'Tên trụ sở / Địa điểm KD', type: 'textarea' },
   { key: 'taxCode',                label: 'MST',            type: 'text' },
-  { key: 'licenseEstablishedDate', label: 'Ngày thành lập', type: 'date' },
+  { key: 'licenseEstablishedDate', label: 'Ngày TL/thay đổi GD', type: 'date' },
   { key: 'address',                label: 'Địa chỉ',        type: 'textarea' },
   { key: 'accountingForm',         label: 'PP hạch toán',   type: 'enum', enumType: 'accounting_form' },
   { key: 'locationFunction',       label: 'Chức năng',      type: 'text' },
   { key: 'status',                 label: 'Trạng thái',     type: 'enum', enumType: 'location_status' },
   { key: 'startDate',              label: 'Ngày bắt đầu',   type: 'date' },
   { key: 'endDate',                label: 'Ngày kết thúc',  type: 'date' },
-  { key: 'notes',                  label: 'Ghi chú',        type: 'textarea' },
+  { key: 'notes',                  label: 'Ghi chú thay đổi', type: 'textarea' },
 ]
 
 const STATUS_CLASS = {
@@ -480,14 +480,14 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
     { key: 'locationType', label: 'Loại GP', required: true, type: 'text', example: 'Văn phòng đại diện' },
     { key: 'name', label: 'Tên trụ sở / Địa điểm KD', type: 'text', example: 'Chi nhánh 1' },
     { key: 'taxCode', label: 'MST', type: 'text', example: '0312345678-001' },
-    { key: 'licenseEstablishedDate', label: 'Ngày thành lập', type: 'date', example: '01/04/2026' },
+    { key: 'licenseEstablishedDate', label: 'Ngày TL/thay đổi GD', type: 'date', example: '01/04/2026' },
     { key: 'address', label: 'Địa chỉ', type: 'text' },
     { key: 'accountingForm', label: 'PP hạch toán', type: 'text', example: 'Phụ thuộc' },
     { key: 'locationFunction', label: 'Chức năng', type: 'text', example: 'Địa điểm làm việc' },
     { key: 'status', label: 'Trạng thái', type: 'text', example: 'Đang hoạt động' },
     { key: 'startDate', label: 'Ngày bắt đầu', type: 'date' },
     { key: 'endDate', label: 'Ngày kết thúc', type: 'date' },
-    { key: 'notes', label: 'Ghi chú', type: 'text' },
+    { key: 'notes', label: 'Ghi chú thay đổi', type: 'text' },
   ]
   function reverseEnum(enumType) {
     const m = {}
