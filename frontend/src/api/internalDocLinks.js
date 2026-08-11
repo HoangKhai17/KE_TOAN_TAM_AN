@@ -41,3 +41,7 @@ export async function updateLink(id, body) {
 export async function deleteLink(id) {
   await api.delete(`/internal-doc-links/${id}`)
 }
+
+export async function reorderLinks(orderedIds) {
+  await api.patch('/internal-doc-links/reorder', { orderedIds })
+}

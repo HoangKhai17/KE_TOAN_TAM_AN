@@ -564,6 +564,16 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   background: transparent;
 }
 
+/* DateBox lai cho khoảng ngày tuỳ chọn trong PeriodPicker — chia đều 2 ô, không tràn.
+   flex:1 1 0 để 2 ô rộng bằng nhau bất kể nội dung; nhân đôi selector để thắng base. */
+.filterRangeBox.filterRangeBox {
+  flex: 1 1 0; min-width: 0;
+  height: 30px; min-height: 30px;
+  padding: 0 8px; gap: 4px;
+  border-width: 1px; border-radius: var(--radius-sm);
+  font-size: var(--fs-2xs);
+}
+
 .filterReset {
   display: inline-flex;
   align-items: center;

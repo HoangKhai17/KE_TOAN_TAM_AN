@@ -18,7 +18,7 @@ import { fmtDate, resolvePeriodRange, periodRangeLabel } from './taskUtils'
 export function FilterDateField({ value, onChange, placeholder }) {
   return (
     <DateBox
-      block
+      className={s.filterRangeBox}
       value={value || ''}
       onChange={onChange}
       placeholder={placeholder ? fmtDate(placeholder) : 'dd/mm/yyyy'}

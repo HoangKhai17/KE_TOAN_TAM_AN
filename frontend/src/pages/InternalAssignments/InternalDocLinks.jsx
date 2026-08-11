@@ -2,9 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Link2, Plus, Search, Pencil, Trash2, ExternalLink,
   FolderOpen, Loader2, X, Check, FolderPlus,
-  Link as LinkIcon, Upload, File as FileIcon, Download,
+  Link as LinkIcon, Upload, File as FileIcon, Download, ChevronDown,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import PaginationFooter from '../../components/layout/PaginationFooter'
+import {
+  BulkActionBar, DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
+  SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
+} from '../../components/ui/data-table'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as api from '../../api/internalDocLinks'
@@ -376,6 +381,117 @@ function LinkCard({ link, canEdit, onEdit, onDelete }) {
 
 // ── DeleteConfirm ─────────────────────────────────────────────────────────────
 
+function LinkTableRow({ link, canEdit, onEdit, onDelete, index, selection, reorder, canReorder }) {
+  const domain = getDomain(link.url)
+  const isFile = Boolean(link.file)
+
+  return (
+    <tr {...reorder.rowProps(link.id)} className={`${s.docTableRow} ${reorder.dragOverId === link.id ? s.docTableRowDragOver : ''}`}>
+      <DragRowCell enabled={canReorder} handleProps={reorder.handleProps(link.id)} />
+      <SelectionRowCell checked={selection.selectedIds.has(link.id)} onToggle={() => selection.toggle(link.id)} />
+      <IndexRowCell index={index} />
+      <td className={s.docTitleCell}>
+        <div className={s.docTitleContent}>
+          <span className={s.docTitleIcon}>{isFile ? <FileIcon size={13} /> : <Link2 size={13} />}</span>
+          <span>{link.title}</span>
+        </div>
+      </td>
+      <td>{isFile ? 'File' : 'Liên kết'}</td>
+      <td className={s.docResourceCell}>
+        {isFile ? (
+          <button type="button" className={s.docResourceLink} onClick={() => attApi.downloadFile(link.file.id, link.file.fileName)}>
+            {link.file.fileName}<Download size={11} />
+          </button>
+        ) : (
+          <a className={s.docResourceLink} href={link.url} target="_blank" rel="noopener noreferrer">
+            {domain || link.url}<ExternalLink size={11} />
+          </a>
+        )}
+      </td>
+      <td>
+        {link.category ? (
+          <span className={s.categoryBadge} style={{ '--cat': link.category.color, '--cat-bg': `${link.category.color}22` }}>
+            {link.category.name}
+          </span>
+        ) : '—'}
+      </td>
+      <td className={s.docDescription}>{link.description || '—'}</td>
+      <td>{link.createdBy?.name || '—'}</td>
+      <td className={s.docUpdated}>{timeAgo(link.updatedAt || link.createdAt)}</td>
+      <td>
+        <div className={s.cardActions}>
+          {isFile ? (
+            <button type="button" className={s.btnOpen} onClick={() => attApi.downloadFile(link.file.id, link.file.fileName)}>
+              <Download size={12} /> Tải
+            </button>
+          ) : (
+            <a href={link.url} target="_blank" rel="noopener noreferrer" className={s.btnOpen}><ExternalLink size={12} /> Mở</a>
+          )}
+          {canEdit && <>
+            <button type="button" className={s.btnIcon} onClick={() => onEdit(link)} title="Sửa"><Pencil size={12} /></button>
+            <button type="button" className={s.btnIconDanger} onClick={() => onDelete(link)} title="Xóa"><Trash2 size={12} /></button>
+          </>}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+function CategoryFilter({ categories, selected, onChange, isAdmin, onEdit, onDelete }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    function closeOutside(event) {
+      if (!rootRef.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', closeOutside)
+    return () => document.removeEventListener('mousedown', closeOutside)
+  }, [])
+
+  function toggle(id) {
+    onChange(selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id])
+  }
+
+  return (
+    <div className={s.categoryFilter} ref={rootRef}>
+      <button type="button" className={s.categoryFilterTrigger} onClick={() => setOpen((value) => !value)}>
+        <FolderOpen size={13} />
+        <span>{selected.length ? `${selected.length} danh mục` : 'Tất cả danh mục'}</span>
+        <ChevronDown size={12} />
+      </button>
+      {open && <div className={s.categoryDropdown}>
+        <div className={s.categoryDropdownHead}>
+          <span>Lọc theo danh mục</span>
+          {selected.length > 0 && <button type="button" onClick={() => onChange([])}>Bỏ chọn</button>}
+        </div>
+        <div className={s.categoryOptions}>
+          <div className={`${s.categoryOption} ${selected.length === 0 ? s.categoryOptionAll : ''}`}>
+            <label>
+              <input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} />
+              <FolderOpen size={13} />
+              <span className={s.catName}>Tất cả</span>
+            </label>
+          </div>
+          {categories.map((cat) => <div className={s.categoryOption} key={cat.id}>
+            <label>
+              <input type="checkbox" checked={selected.includes(cat.id)} onChange={() => toggle(cat.id)} />
+              <span className={s.catDot} style={{ '--dot-bg': cat.color }} />
+              <span className={s.catName}>{cat.name}</span>
+              <span className={s.catCount}>{cat.linkCount}</span>
+            </label>
+            {isAdmin && <div className={s.categoryOptionActions}>
+              <button type="button" onClick={() => onEdit(cat)} title="Sửa danh mục"><Pencil size={11} /></button>
+              <button type="button" onClick={() => onDelete(cat)} title="Xóa danh mục"><Trash2 size={11} /></button>
+            </div>}
+          </div>)}
+          {categories.length === 0 && <div className={s.categoryEmpty}>Chưa có danh mục</div>}
+        </div>
+      </div>}
+    </div>
+  )
+}
+
 function DeleteConfirm({ label, onClose, onConfirm, deleting }) {
   return (
     <div className={s.overlay}>
@@ -400,8 +516,6 @@ function DeleteConfirm({ label, onClose, onConfirm, deleting }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 20
-
 export default function InternalDocLinks() {
   const currentUser = useAuthStore((st) => st.user)
   const addToast    = useToastStore((st) => st.toast)
@@ -413,8 +527,9 @@ export default function InternalDocLinks() {
   const [loading,        setLoading]        = useState(true)
   const [search,         setSearch]         = useState('')
   const [searchInput,    setSearchInput]    = useState('')
-  const [activeCategory, setActiveCategory] = useState('')
+  const [selectedCategories, setSelectedCategories] = useState([])
   const [page,           setPage]           = useState(1)
+  const [pageSize,       setPageSize]       = useState(20)
 
   // Modals
   const [showLinkModal, setShowLinkModal] = useState(false)
@@ -424,9 +539,20 @@ export default function InternalDocLinks() {
   const [deleteTarget,  setDeleteTarget]  = useState(null)
   const [deleting,      setDeleting]      = useState(false)
   const [refreshKey,    setRefreshKey]    = useState(0)
+  const selection = useRowSelection({ rows: links })
+  const canReorder = isAdmin && !search && selectedCategories.length === 0 && pagination.totalPages === 1
+  const reorder = useRowReorder({
+    rows: links,
+    setRows: setLinks,
+    enabled: canReorder,
+    onPersist: (ordered) => api.reorderLinks(ordered.map((item) => item.id)),
+    onError: () => addToast('Không thể lưu thứ tự tài liệu', 'error'),
+  })
+
+  useEffect(() => { selection.clear() }, [page, pageSize, search, selectedCategories, selection.clear])
 
   // Reset page on filter/search change
-  useEffect(() => { setPage(1) }, [activeCategory, search])
+  useEffect(() => { setPage(1) }, [selectedCategories, search])
 
   // Debounce search
   useEffect(() => {
@@ -447,8 +573,8 @@ export default function InternalDocLinks() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    const params = { page, limit: PAGE_SIZE }
-    if (activeCategory) params.categoryId = activeCategory
+    const params = { page, limit: pageSize }
+    if (selectedCategories.length) params.categoryIds = selectedCategories.join(',')
     if (search)         params.search     = search
     api.listLinks(params)
       .then((result) => {
@@ -459,7 +585,7 @@ export default function InternalDocLinks() {
       .catch(() => { if (!cancelled) { setLinks([]); setPagination({ page: 1, totalPages: 1, total: 0 }) } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [activeCategory, search, page, refreshKey])
+  }, [selectedCategories, search, page, pageSize, refreshKey])
 
   function refresh() { setRefreshKey((k) => k + 1) }
 
@@ -481,7 +607,7 @@ export default function InternalDocLinks() {
     try {
       await api.deleteCategory(deleteTarget.item.id)
       addToast('Đã xóa danh mục', 'success')
-      if (activeCategory === deleteTarget.item.id) setActiveCategory('')
+      setSelectedCategories((current) => current.filter((id) => id !== deleteTarget.item.id))
       setDeleteTarget(null)
       refresh()
     } catch (err) {
@@ -533,6 +659,19 @@ export default function InternalDocLinks() {
     } finally { setDeleting(false) }
   }
 
+  async function handleDeleteSelectedLinks() {
+    setDeleting(true)
+    const ids = [...selection.selectedIds]
+    try {
+      const results = await Promise.allSettled(ids.map((id) => api.deleteLink(id)))
+      const deleted = new Set(ids.filter((_, index) => results[index].status === 'fulfilled'))
+      selection.remove(deleted)
+      addToast(`Đã xóa ${deleted.size}/${ids.length} tài liệu`, deleted.size ? 'success' : 'error')
+      setDeleteTarget(null)
+      refresh()
+    } finally { setDeleting(false) }
+  }
+
   // Pagination window helper
   function pageWindow() {
     const total = pagination.totalPages ?? 1
@@ -542,11 +681,24 @@ export default function InternalDocLinks() {
     return [1, '…', page - 1, page, page + 1, '…', total]
   }
 
-  const from = pagination.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
-  const to   = Math.min(page * PAGE_SIZE, pagination.total)
+  const from = pagination.total === 0 ? 0 : (page - 1) * pageSize + 1
+  const to   = Math.min(page * pageSize, pagination.total)
 
   return (
-    <AppLayout>
+    <AppLayout footer={(
+      <PaginationFooter
+        total={pagination.total}
+        from={from}
+        to={to}
+        itemLabel="tài liệu"
+        page={page}
+        pageSize={pageSize}
+        totalPages={pagination.totalPages}
+        loading={loading}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1) }}
+      />
+    )}>
       <div className={s.page}>
 
         {/* ── Title + tabs ── */}
@@ -569,64 +721,34 @@ export default function InternalDocLinks() {
               <button className={s.searchClear} onClick={() => setSearchInput('')}><X size={12} /></button>
             )}
           </div>
+          <CategoryFilter
+            categories={categories}
+            selected={selectedCategories}
+            onChange={setSelectedCategories}
+            isAdmin={isAdmin}
+            onEdit={(cat) => { setEditCategory(cat); setShowCatModal(true) }}
+            onDelete={(cat) => setDeleteTarget({ type: 'category', item: cat })}
+          />
+          {isAdmin && <button className={s.btnAddCategory} onClick={() => { setEditCategory(null); setShowCatModal(true) }}>
+            <FolderPlus size={13} /> Thêm danh mục
+          </button>}
           <button className={s.btnPrimary} onClick={() => { setEditLink(null); setShowLinkModal(true) }}>
             <Plus size={14} /> Thêm tài liệu
           </button>
         </div>
 
-        {/* ── Body: sidebar + content ── */}
+        {/* ── Data table ── */}
         <div className={s.body}>
-
-          {/* ── Category sidebar ── */}
-          <div className={s.sidebar}>
-            <div className={s.sidebarHead}>
-              <span className={s.sidebarTitle}>Danh mục</span>
-              {isAdmin && (
-                <button className={s.btnAddCat} onClick={() => { setEditCategory(null); setShowCatModal(true) }} title="Thêm danh mục">
-                  <FolderPlus size={13} />
-                </button>
-              )}
-            </div>
-
-            <button
-              className={`${s.catItem} ${activeCategory === '' ? s.catItemActive : ''}`}
-              onClick={() => setActiveCategory('')}
-            >
-              <FolderOpen size={13} />
-              <span className={s.catName}>Tất cả</span>
-              <span className={s.catCount}>{activeCategory === '' ? pagination.total : categories.reduce((s, c) => s + c.linkCount, 0)}</span>
-            </button>
-
-            {categories.map((cat) => (
-              <div key={cat.id} className={s.catRow}>
-                <button
-                  className={`${s.catItem} ${activeCategory === cat.id ? s.catItemActive : ''}`}
-                  onClick={() => setActiveCategory(cat.id)}
-                >
-                  <span className={s.catDot} style={{ '--dot-bg': cat.color }} />
-                  <span className={s.catName}>{cat.name}</span>
-                  <span className={s.catCount}>{cat.linkCount}</span>
-                </button>
-                {isAdmin && (
-                  <div className={s.catActions}>
-                    <button className={s.catActionBtn} onClick={() => { setEditCategory(cat); setShowCatModal(true) }}>
-                      <Pencil size={11} />
-                    </button>
-                    <button className={s.catActionBtn} onClick={() => setDeleteTarget({ type: 'category', item: cat })}>
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {categories.length === 0 && (
-              <p className={s.catEmpty}>Chưa có danh mục</p>
-            )}
-          </div>
-
-          {/* ── Links area ── */}
           <div className={s.linksArea}>
+            <BulkActionBar count={selection.selectedCount}>
+              <button
+                type="button"
+                className={s.bulkDeleteButton}
+                onClick={() => setDeleteTarget({ type: 'links', item: { name: `${selection.selectedCount} tài liệu` } })}
+              >
+                <Trash2 size={12} /> Xóa {selection.selectedCount} dòng
+              </button>
+            </BulkActionBar>
             {/* summary row */}
             {!loading && pagination.total > 0 && (
               <div className={s.paginationInfo}>
@@ -648,21 +770,44 @@ export default function InternalDocLinks() {
                 </p>
               </div>
             ) : (
-              <div className={s.cardList}>
-                {links.map((link) => (
-                  <LinkCard
+              <div className={s.docTableWrap}>
+                <table className={s.docTable}>
+                  <colgroup>
+                    <col className={s.docColDrag} /><col className={s.docColSelect} /><col className={s.docColIndex} />
+                    <col className={s.docColTitle} /><col className={s.docColType} /><col className={s.docColResource} />
+                    <col className={s.docColCategory} /><col className={s.docColDescription} /><col className={s.docColCreator} />
+                    <col className={s.docColUpdated} /><col className={s.docColActions} />
+                  </colgroup>
+                  <thead><tr>
+                    <DragHeaderCell />
+                    <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
+                    <IndexHeaderCell />
+                    <th>Tiêu đề</th>
+                    <th>Loại</th>
+                    <th>Đường dẫn / File</th>
+                    <th>Danh mục</th>
+                    <th>Mô tả</th>
+                    <th>Người tạo</th>
+                    <th>Cập nhật</th>
+                    <th>Thao tác</th>
+                  </tr></thead>
+                  <tbody>{links.map((link, index) => <LinkTableRow
                     key={link.id}
                     link={link}
+                    index={(page - 1) * pageSize + index + 1}
+                    selection={selection}
+                    reorder={reorder}
+                    canReorder={canReorder}
                     canEdit={isAdmin || link.createdBy?.id === currentUser?.id}
-                    onEdit={(l) => { setEditLink(l); setShowLinkModal(true) }}
-                    onDelete={(l) => setDeleteTarget({ type: 'link', item: l })}
-                  />
-                ))}
+                    onEdit={(item) => { setEditLink(item); setShowLinkModal(true) }}
+                    onDelete={(item) => setDeleteTarget({ type: 'link', item })}
+                  />)}</tbody>
+                </table>
               </div>
             )}
 
             {/* Pagination */}
-            {!loading && pagination.totalPages > 1 && (
+            {false && !loading && pagination.totalPages > 1 && (
               <div className={s.pagination}>
                 <button className={s.pageBtn} onClick={() => setPage(1)} disabled={page === 1}>«</button>
                 <button className={s.pageBtn} onClick={() => setPage(page - 1)} disabled={page === 1}>‹</button>
@@ -710,7 +855,7 @@ export default function InternalDocLinks() {
           label={deleteTarget.item.title ?? deleteTarget.item.name}
           deleting={deleting}
           onClose={() => !deleting && setDeleteTarget(null)}
-          onConfirm={deleteTarget.type === 'link' ? handleDeleteLink : handleDeleteCategory}
+          onConfirm={deleteTarget.type === 'link' ? handleDeleteLink : deleteTarget.type === 'links' ? handleDeleteSelectedLinks : handleDeleteCategory}
         />
       )}
     </AppLayout>

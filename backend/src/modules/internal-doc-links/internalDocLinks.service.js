@@ -36,6 +36,7 @@ function toLinkDto(row) {
     createdBy:   { id: row.created_by, name: row.creator_name ?? null },
     createdAt:   row.created_at,
     updatedAt:   row.updated_at,
+    sortOrder:   row.sort_order ?? 0,
   }
 }
 
@@ -88,7 +89,7 @@ async function deleteCategory(id) {
 
 // ─── Links ────────────────────────────────────────────────────────────────────
 
-async function listLinks({ categoryId, search, page = 1, limit = 20 } = {}) {
+async function listLinks({ categoryId, categoryIds = [], search, page = 1, limit = 20 } = {}) {
   const params = []
   const conds  = []
 
@@ -96,7 +97,10 @@ async function listLinks({ categoryId, search, page = 1, limit = 20 } = {}) {
   const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20))
   const offset    = (safePage - 1) * safeLimit
 
-  if (categoryId === 'none') {
+  if (Array.isArray(categoryIds) && categoryIds.length > 0) {
+    params.push(categoryIds)
+    conds.push(`dl.category_id = ANY($${params.length}::uuid[])`)
+  } else if (categoryId === 'none') {
     conds.push('dl.category_id IS NULL')
   } else if (categoryId) {
     params.push(categoryId)
@@ -122,7 +126,7 @@ async function listLinks({ categoryId, search, page = 1, limit = 20 } = {}) {
      LEFT JOIN internal_doc_categories dc ON dc.id = dl.category_id
      LEFT JOIN attachments a ON a.id = dl.attachment_id
      ${where}
-     ORDER BY dc.sort_order NULLS LAST, dc.name NULLS LAST, dl.created_at DESC
+     ORDER BY dl.sort_order ASC, dl.created_at DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, safeLimit, offset]
   )
@@ -137,8 +141,9 @@ async function listLinks({ categoryId, search, page = 1, limit = 20 } = {}) {
 // Một mục = LINK (url) HOẶC FILE (attachmentId) — ràng buộc CHECK ở DB đảm bảo đúng 1 trong 2.
 async function createLink({ categoryId, title, url, description, attachmentId }, actorId) {
   const { rows: [row] } = await query(
-    `INSERT INTO internal_doc_links (category_id, title, url, description, attachment_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    `INSERT INTO internal_doc_links (category_id, title, url, description, attachment_id, created_by, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6,
+       (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM internal_doc_links)) RETURNING *`,
     [categoryId ?? null, title, url ?? null, description ?? null, attachmentId ?? null, actorId]
   )
   const { rows: [full] } = await query(
@@ -201,7 +206,18 @@ async function deleteLink(id, actorId, isAdmin) {
   }
 }
 
+async function reorderLinks(orderedIds) {
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) return
+  await query(
+    `UPDATE internal_doc_links AS links
+     SET sort_order = ordered.position - 1, updated_at = NOW()
+     FROM unnest($1::uuid[]) WITH ORDINALITY AS ordered(id, position)
+     WHERE links.id = ordered.id`,
+    [orderedIds]
+  )
+}
+
 module.exports = {
   listCategories, createCategory, updateCategory, deleteCategory,
-  listLinks, createLink, updateLink, deleteLink,
+  listLinks, createLink, updateLink, deleteLink, reorderLinks,
 }

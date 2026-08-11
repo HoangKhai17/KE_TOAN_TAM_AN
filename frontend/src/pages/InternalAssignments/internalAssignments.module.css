@@ -1542,7 +1542,12 @@
 
 .tr:last-child { border-bottom: none; }
 .tr:hover { background: #f8faff; }
-.trOverdue { background: #fff7f7; }
+.trOverdue {
+  background: transparent;
+  box-shadow: inset 3px 0 0 var(--color-danger);
+}
+
+.trOverdue:hover { background: #fffafa; }
 
 .td {
   padding: 7px 8px;

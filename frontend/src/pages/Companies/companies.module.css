@@ -3517,7 +3517,9 @@
 
 .noteTable td {
   padding: 7px 8px;
-  vertical-align: top;
+  /* Cột nội dung có thể rất cao → các cột còn lại căn giữa theo chiều dọc cho cân dòng.
+     Riêng cột nội dung ghi đè về top để chữ bắt đầu từ trên. */
+  vertical-align: middle;
   color: var(--color-text-strong);
   font-size: var(--fs-2xs);
   font-weight: var(--fw-medium);
@@ -3536,7 +3538,7 @@
 .noteColActions { width: 112px; }
 
 .notePinCell { vertical-align: middle !important; }
-.noteContentCell { min-width: 0; }
+.noteContentCell { min-width: 0; vertical-align: top; }
 .noteActionsCell { text-align: right !important; vertical-align: middle !important; }
 .noteActionsCell .noteActions { justify-content: flex-end; }
 .noteTimeCell { vertical-align: middle !important; white-space: nowrap; }

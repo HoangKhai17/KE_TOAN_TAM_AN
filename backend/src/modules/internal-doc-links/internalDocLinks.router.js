@@ -43,11 +43,20 @@ router.delete('/categories/:id', ...adminOnly, async (req, res, next) => {
 })
 
 // ─── Links ────────────────────────────────────────────────────────────────────
+router.patch('/reorder', ...adminOnly, async (req, res, next) => {
+  try {
+    await svc.reorderLinks(req.body?.orderedIds || [])
+    res.status(204).end()
+  } catch (err) { next(err) }
+})
+
 router.get('/', ...auth, async (req, res, next) => {
   try {
-    const { categoryId, search, page = '1', limit = '20' } = req.query
+    const { categoryId, categoryIds, search, page = '1', limit = '20' } = req.query
     const result = await svc.listLinks({
-      categoryId, search,
+      categoryId,
+      categoryIds: typeof categoryIds === 'string' ? categoryIds.split(',').filter(Boolean) : [],
+      search,
       page:  Math.max(1, parseInt(page, 10)  || 1),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 20)),
     })
