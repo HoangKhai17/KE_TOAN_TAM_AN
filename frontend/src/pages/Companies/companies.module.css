@@ -8116,3 +8116,13 @@ textarea.editInput {
 .ctblFileName:hover { color: var(--color-primary); text-decoration: underline; }
 .ctblFormulaCell { font-variant-numeric: tabular-nums; color: var(--color-text); }
 .ctblFormulaErr { color: var(--color-danger); font-weight: var(--fw-semibold); font-size: var(--fs-3xs); }
+
+/* Dòng TỔNG (Σ) — nằm ngay dưới header (đầu bảng), tránh đặt cuối vì có phân trang */
+.ctblTotalRow td {
+  background: var(--color-bg-soft, #f4f7fb);
+  border-bottom: 2px solid var(--color-border);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-semibold);
+  padding: 6px 8px;
+}
+.ctblTotalCell { color: var(--color-text-strong); white-space: nowrap; }

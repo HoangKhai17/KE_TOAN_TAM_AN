@@ -282,6 +282,22 @@ function formatFormulaValue(v) {
 }
 function isFormulaNumber(col) { return (col.computedConfig?.resultType ?? 'number') === 'number' }
 
+// ── Định dạng số (phân cách nghìn kiểu VN) — CHỈ khi cột bật options.thousands ────
+function fmtNumberVN(v) {
+  const n = Number(v)
+  return Number.isNaN(n) ? String(v ?? '') : n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
+}
+// Hiển thị ô Số (không phải lúc nhập). Bật thousands → 200000 → "200.000".
+function displayNumberCell(col, v) {
+  if (v == null || v === '') return ''
+  return col.options?.thousands ? fmtNumberVN(v) : String(v)
+}
+// Hiển thị giá trị công thức: format số nếu cột bật thousands, ngược lại như cũ.
+function formatFormulaDisplay(col, value) {
+  if (typeof value === 'number' && col.options?.thousands) return fmtNumberVN(value)
+  return formatFormulaValue(value)
+}
+
 // ── Link helpers ──────────────────────────────────────────────────────────────
 function asLinks(v) { return Array.isArray(v) ? v.filter((l) => l && l.url) : [] }
 function linksText(v) { return asLinks(v).map((l) => l.label || l.url).join(', ') }
@@ -537,7 +553,7 @@ function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavig
 
   if (!canEdit) {
     if (col.dataType === 'select') return <td>{value || <span className={s.archInlineEmpty}>—</span>}</td>
-    return <td>{(value == null || value === '') ? <span className={s.archInlineEmpty}>—</span> : (col.dataType === 'date' ? fmtDate(value) : <span className={s.ctblMultiline}>{String(value)}</span>)}</td>
+    return <td>{(value == null || value === '') ? <span className={s.archInlineEmpty}>—</span> : (col.dataType === 'date' ? fmtDate(value) : <span className={s.ctblMultiline}>{col.dataType === 'number' ? displayNumberCell(col, value) : String(value)}</span>)}</td>
   }
 
   if (col.dataType === 'select') {
@@ -599,7 +615,7 @@ function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavig
       ) : (
         (value == null || value === '')
           ? <span className={s.archInlineEmpty}>—</span>
-          : (col.dataType === 'date' ? fmtDate(value) : <span className={s.ctblMultiline}>{String(value)}</span>)
+          : (col.dataType === 'date' ? fmtDate(value) : <span className={s.ctblMultiline}>{col.dataType === 'number' ? displayNumberCell(col, value) : String(value)}</span>)
       )}
     </td>
   )
@@ -919,6 +935,21 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
   const totalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
   const safePage   = Math.min(page, totalPages)
   const pageRows   = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+  // Dòng TỔNG (Σ) — cộng theo cột bật options.showTotal, trên TOÀN BỘ dòng đã lọc (không chỉ trang).
+  const totalCols = useMemo(
+    () => columns.filter((c) => c.options?.showTotal && (c.dataType === 'number' || c.dataType === 'formula')),
+    [columns])
+  const totals = useMemo(() => {
+    if (totalCols.length === 0) return null
+    const acc = {}
+    for (const col of totalCols) {
+      let sum = 0
+      for (const r of displayed) { const n = numericValue(r, col, columns); if (n != null && !Number.isNaN(n)) sum += n }
+      acc[col.colKey] = sum
+    }
+    return acc
+  }, [totalCols, displayed, columns])
 
   // Phân trang → footer trang (thay copyright), đồng bộ Companies/Tasks
   useCompanyFooter(loading || columns.length === 0 ? null : {
@@ -1267,6 +1298,21 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
                 </tr>
               </thead>
               <tbody>
+                {totals && displayed.length > 0 && (
+                  <tr className={s.ctblTotalRow}>
+                    {canEdit && <td className={s.ctblDragTd} />}
+                    {canEdit && <td className={s.hdldCellStt} />}
+                    <td className={s.hdldCellStt}>Tổng</td>
+                    {columns.map((col) => (
+                      <td key={col.colKey} className={s.ctblTotalCell}>
+                        {totals[col.colKey] != null
+                          ? <strong>{col.options?.thousands ? fmtNumberVN(totals[col.colKey]) : String(totals[col.colKey])}</strong>
+                          : ''}
+                      </td>
+                    ))}
+                    <td />
+                  </tr>
+                )}
                 {displayed.length === 0 ? (
                   <tr><td colSpan={colSpan} className={s.hdldEmptyRow}>
                     {(colFilterCount > 0) ? 'Không có dòng khớp bộ lọc.' : 'Chưa có dữ liệu. Nhấn "Thêm dòng".'}
@@ -1315,7 +1361,7 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
                               ? <span className={s.ctblFormulaErr} title="Lỗi công thức">{error}</span>
                               : (value == null || value === '')
                                 ? <span className={s.archInlineEmpty}>—</span>
-                                : formatFormulaValue(value)}
+                                : formatFormulaDisplay(col, value)}
                           </td>
                         )
                       }

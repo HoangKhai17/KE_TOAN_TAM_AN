@@ -63,6 +63,8 @@ function ColumnModal({ defColumns, column, onClose, onSaved, otherDefs = [] }) {
     required: column?.required ?? false, width: column?.width ?? '',
     options: (Array.isArray(column?.options) ? column.options : []).join('\n'),
     multiple: column?.options?.multiple ?? true,               // link/file: cho nhiều
+    thousands: column?.options?.thousands ?? false,            // số/công thức: phân cách nghìn
+    showTotal: column?.options?.showTotal ?? false,            // số/công thức: hiện dòng tổng
     expression: column?.computedConfig?.expression ?? '',      // formula
     resultType: column?.computedConfig?.resultType ?? 'number',
     computedType: column?.computedType ?? 'days_until',
@@ -114,9 +116,13 @@ function ColumnModal({ defColumns, column, onClose, onSaved, otherDefs = [] }) {
     if (form.dataType === 'link' || form.dataType === 'file') {
       body.options = { multiple: !!form.multiple }
     }
+    if (form.dataType === 'number') {
+      body.options = { thousands: !!form.thousands, showTotal: !!form.showTotal }
+    }
     if (form.dataType === 'formula') {
       body.required = false
       body.computedConfig = { expression: form.expression.trim(), resultType: form.resultType }
+      body.options = { thousands: !!form.thousands, showTotal: !!form.showTotal }
     }
     if (form.dataType === 'computed') {
       body.computedType = form.computedType
@@ -187,6 +193,21 @@ function ColumnModal({ defColumns, column, onClose, onSaved, otherDefs = [] }) {
               onChange={(e) => setForm((f) => ({ ...f, multiple: e.target.checked }))} />
             Cho phép nhiều {form.dataType === 'link' ? 'link' : 'file'}
           </label>
+        )}
+
+        {(form.dataType === 'number' || form.dataType === 'formula') && (
+          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+            <label style={{ ...row }}>
+              <input type="checkbox" checked={form.thousands}
+                onChange={(e) => setForm((f) => ({ ...f, thousands: e.target.checked }))} />
+              Phân cách hàng nghìn (200.000)
+            </label>
+            <label style={{ ...row }}>
+              <input type="checkbox" checked={form.showTotal}
+                onChange={(e) => setForm((f) => ({ ...f, showTotal: e.target.checked }))} />
+              Hiện dòng tổng (Σ)
+            </label>
+          </div>
         )}
 
         {form.dataType === 'formula' && (
