@@ -5,7 +5,7 @@ import { Plus, Trash2, Filter, Loader2, Download, Upload, X, ExternalLink, Paper
 import * as XLSX from 'xlsx-js-style'
 import * as api from '../../api/companyTables'
 import { uploadFile, downloadFile, deleteFile, formatSize, ACCEPT_ATTR, MAX_FILE_BYTES } from '../../api/attachments'
-import { evaluateFormula } from '../../utils/formula'
+import { evaluateFormula, extractRefs, splitRef } from '../../utils/formula'
 import { normalizeClipboardGrid, parseClipboardGrid } from '../../utils/clipboardGrid'
 import Modal from '../../components/ui/Modal'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
@@ -209,11 +209,46 @@ const STATUS_ORDER = { danger: 0, warning: 1, info: 2, success: 3, muted: 4 }
 
 // ── Formula engine wiring (Pha kiểu 'formula') ────────────────────────────────
 // resolver đọc giá trị cột cho công thức; hỗ trợ formula-tham-chiếu-formula + chống vòng lặp.
-function makeResolver(row, columns) {
+//
+// LIÊN BẢNG: token {tableKey!col_key} resolve thành MẢNG cả cột của bảng kia (trong cụm
+// cha–con). Dữ liệu bảng kia nằm ở holder `_crossTables` (component set trước khi render).
+// Chỉ 1 CustomTableTab mount tại một thời điểm nên holder module-level là an toàn.
+//   _crossTables = { [tableKey]: { rows, columns } }
+let _crossTables = null
+export function setCrossTables(map) { _crossTables = map || null }
+
+// Lấy giá trị 1 ô của BẢNG NGOÀI (raw / formula-nội-bảng / computed). KHÔNG cho cross
+// lồng cross ở v1 (resolver bảng ngoài truyền cross=null) → tránh vòng lặp liên bảng.
+function resolveOtherCell(row, col, columns) {
+  if (col.dataType === 'formula') {
+    const { value } = evaluateFormula(col.computedConfig?.expression, makeResolver(row, columns, null))
+    return value
+  }
+  if (col.dataType === 'computed') {
+    if (col.computedType === 'status_threshold') return resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).label
+    return computeDays(col, row)
+  }
+  if (col.dataType === 'link' || col.dataType === 'file') return null
+  const v = row.data?.[col.colKey]
+  if (v == null || v === '') return null
+  return col.dataType === 'number' ? Number(v) : v
+}
+
+function makeResolver(row, columns, cross = null) {
   const byKey = {}
   for (const c of columns) byKey[c.colKey] = c
   const stack = new Set()
   function resolve(key) {
+    // Liên bảng {defId!col_key} → mảng cả cột của bảng kia
+    if (typeof key === 'string' && key.includes('!')) {
+      if (!cross) return undefined                       // v1: không cho cross lồng cross → #REF
+      const { table, col } = splitRef(key)
+      const t = cross[table]
+      if (!t) return undefined                           // bảng không có/không nạp → #REF
+      const cdef = t.columns.find((c) => c.colKey === col)
+      if (!cdef) return undefined                        // cột lạ → #REF
+      return t.rows.map((r) => resolveOtherCell(r, cdef, t.columns))
+    }
     const col = byKey[key]
     if (!col) return undefined                          // → #REF
     if (col.dataType === 'formula') {
@@ -237,7 +272,7 @@ function makeResolver(row, columns) {
   return resolve
 }
 function evalFormula(col, row, columns) {
-  return evaluateFormula(col.computedConfig?.expression, makeResolver(row, columns))
+  return evaluateFormula(col.computedConfig?.expression, makeResolver(row, columns, _crossTables))
 }
 function formatFormulaValue(v) {
   if (v == null) return ''
@@ -695,7 +730,7 @@ const NON_SIMPLE_TYPES = ['computed', 'formula', 'file', 'link']
 const PAGE_SIZE = 20
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function CustomTableTab({ def, company, onDefUpdated }) {
+export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs = [] }) {
   const confirmDelete = useDeleteConfirm()
   const companyId = company.id
   const user     = useAuthStore((st) => st.user)
@@ -762,6 +797,46 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
     const glob = (def.columns || []).filter((c) => c.isActive !== false)
     return [...glob, ...companyCols]
   }, [def.columns, companyCols])
+
+  // ── Liên bảng: các bảng được công thức của bảng này tham chiếu (trong cụm cha–con) ──
+  // Token liên bảng dùng MÃ BẢNG (table_key), vd {nsnn!col} → dễ đọc, bền khi đổi tên.
+  const [otherTables, setOtherTables] = useState({})   // { [tableKey]: { rows, columns } }
+  const referencedKeys = useMemo(() => {
+    const clusterKeys = new Set((clusterDefs || []).map((d) => d.tableKey))
+    const keys = new Set()
+    for (const c of (def.columns || [])) {
+      if (c.dataType !== 'formula') continue
+      for (const ref of extractRefs(c.computedConfig?.expression)) {
+        const { table } = splitRef(ref)
+        if (table && table !== def.tableKey && clusterKeys.has(table)) keys.add(table)
+      }
+    }
+    return [...keys]
+  }, [def.columns, def.tableKey, clusterDefs])
+
+  useEffect(() => {
+    if (referencedKeys.length === 0) { setOtherTables({}); return undefined }
+    let cancelled = false
+    const byKey = {}
+    for (const d of (clusterDefs || [])) byKey[d.tableKey] = d
+    Promise.all(referencedKeys.map((k) => {
+      const d = byKey[k]
+      if (!d) return Promise.resolve({ key: k, rows: [], columns: [] })
+      return api.listRows(companyId, d.id)
+        .then((r) => ({ key: k, rows: r, columns: (d.columns || []).filter((c) => c.isActive !== false) }))
+        .catch(() => ({ key: k, rows: [], columns: [] }))
+    })).then((list) => {
+      if (cancelled) return
+      const map = {}
+      for (const { key, rows: r, columns: cols } of list) map[key] = { rows: r, columns: cols }
+      setOtherTables(map)
+    })
+    return () => { cancelled = true }
+  }, [companyId, referencedKeys, clusterDefs])
+
+  // Đưa dữ liệu bảng ngoài vào holder module-level TRƯỚC khi các helper (displayLabel/
+  // sortKey/render cell) chạy trong render này. Chỉ 1 CustomTableTab mount nên an toàn.
+  setCrossTables(otherTables)
 
   // Có cột 'file' không → mới cần tải danh sách file (tránh gọi thừa)
   const defHasFile = useMemo(
@@ -839,7 +914,7 @@ export default function CustomTableTab({ def, company, onDefUpdated }) {
       })
     }
     return result
-  }, [rows, columns, colFilters, sortState])
+  }, [rows, columns, colFilters, sortState, otherTables])
 
   const totalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
   const safePage   = Math.min(page, totalPages)

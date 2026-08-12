@@ -56,7 +56,7 @@ function DefModal({ def, parentDefId, onClose, onSaved }) {
 }
 
 // ── Column create/edit modal ──────────────────────────────────────────────────
-function ColumnModal({ defColumns, column, onClose, onSaved }) {
+function ColumnModal({ defColumns, column, onClose, onSaved, otherDefs = [] }) {
   const addToast = useToastStore((st) => st.toast)
   const [form, setForm] = useState({
     label: column?.label ?? '', dataType: column?.dataType ?? 'text',
@@ -80,9 +80,21 @@ function ColumnModal({ defColumns, column, onClose, onSaved }) {
 
   // Kiểm công thức: cú pháp + cột tham chiếu có tồn tại (trừ chính cột đang sửa)
   const knownKeys = new Set(defColumns.map((c) => c.colKey))
+  // Cột hợp lệ của các bảng KHÁC trong cụm cha–con (token liên bảng {tableKey!col_key})
+  const crossKeys = new Set()
+  const defNameByKey = {}
+  for (const d of otherDefs) {
+    defNameByKey[d.tableKey] = d.name
+    for (const c of (d.columns || [])) crossKeys.add(`${d.tableKey}!${c.colKey}`)
+  }
+  const prettyRef = (k) => {
+    if (!k.includes('!')) return k
+    const [tKey, col] = [k.slice(0, k.indexOf('!')), k.slice(k.indexOf('!') + 1)]
+    return `${defNameByKey[tKey] ?? tKey}!${col}`
+  }
   const formulaSyntax = form.dataType === 'formula' ? checkSyntax(form.expression) : { ok: true }
   const formulaRefs = form.dataType === 'formula' ? extractRefs(form.expression) : []
-  const unknownRefs = formulaRefs.filter((k) => !knownKeys.has(k))
+  const unknownRefs = formulaRefs.filter((k) => k.includes('!') ? !crossKeys.has(k) : !knownKeys.has(k))
   const formulaValid = form.dataType !== 'formula' || (form.expression.trim() !== '' && formulaSyntax.ok && unknownRefs.length === 0)
 
   function insertToken(key) {
@@ -195,6 +207,27 @@ function ColumnModal({ defColumns, column, onClose, onSaved }) {
                 {defColumns.length === 0 && <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)' }}>Chưa có cột nào để tham chiếu.</span>}
               </div>
             </div>
+            {otherDefs.length > 0 && (
+              <div>
+                <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)', marginBottom: 4 }}>Liên bảng — chèn cột bảng khác trong cụm (dùng với SUMIF/LOOKUP…):</div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {otherDefs.map((d) => (
+                    <div key={d.id}>
+                      <div style={{ fontSize: 'var(--fs-2xs)', fontWeight: 600, color: 'var(--color-text-soft)', marginBottom: 2 }}>{d.name} <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>({d.tableKey})</span></div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {(d.columns || []).filter((c) => c.dataType !== 'file' && c.dataType !== 'link').map((c) => (
+                          <button key={c.colKey} type="button" className={s.btnOutline}
+                            style={{ padding: '2px 8px', fontSize: 'var(--fs-2xs)' }}
+                            onClick={() => insertToken(`${d.tableKey}!${c.colKey}`)} title={`${d.tableKey}!${c.colKey}`}>{c.label}</button>
+                        ))}
+                        {(d.columns || []).filter((c) => c.dataType !== 'file' && c.dataType !== 'link').length === 0 &&
+                          <span style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)' }}>(chưa có cột)</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <label style={{ width: 180 }}>Kiểu kết quả
               <select className={s.settingsInput} value={form.resultType}
                 onChange={(e) => setForm((f) => ({ ...f, resultType: e.target.value }))}>
@@ -207,12 +240,12 @@ function ColumnModal({ defColumns, column, onClose, onSaved }) {
                 {!formulaSyntax.ok
                   ? <span style={{ color: 'var(--color-danger)' }}>✗ Lỗi cú pháp ({formulaSyntax.error})</span>
                   : unknownRefs.length
-                    ? <span style={{ color: 'var(--color-danger)' }}>✗ Cột không tồn tại: {unknownRefs.join(', ')}</span>
-                    : <span style={{ color: 'var(--color-success)' }}>✓ Hợp lệ{formulaRefs.length ? ` · dùng: ${formulaRefs.join(', ')}` : ''}</span>}
+                    ? <span style={{ color: 'var(--color-danger)' }}>✗ Cột không tồn tại: {unknownRefs.map(prettyRef).join(', ')}</span>
+                    : <span style={{ color: 'var(--color-success)' }}>✓ Hợp lệ{formulaRefs.length ? ` · dùng: ${formulaRefs.map(prettyRef).join(', ')}` : ''}</span>}
               </div>
             )}
             <div style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', lineHeight: 1.5 }}>
-              Hàm: IF AND OR NOT SUM MIN MAX AVG ROUND ABS CONCAT LEN TODAY DATEDIFF · Toán tử: + − × / % ^ &amp; = &lt;&gt; &lt; &lt;= &gt; &gt;= · Tham chiếu cột bằng {'{col_key}'}.
+              Hàm: IF AND OR NOT SUM MIN MAX AVG COUNT ROUND ABS CONCAT LEN TODAY DATEDIFF · Điều kiện &amp; liên bảng: SUMIF COUNTIF AVERAGEIF SUMIFS LOOKUP VLOOKUP · Toán tử: + − × / % ^ &amp; = &lt;&gt; &lt; &lt;= &gt; &gt;= · Cột cùng bảng {'{col_key}'}; cột bảng khác bấm nút "Liên bảng" ở trên.
             </div>
           </div>
         )}
@@ -290,6 +323,9 @@ export default function CompanyTablesSection() {
   useEffect(() => { reload() }, [])
 
   const selDef = defs.find((d) => d.id === selected)
+  // Cụm cha–con của bảng đang chọn, TRỪ chính nó → dùng cho công thức liên bảng
+  const selTopId = selDef ? (selDef.parentDefId ?? selDef.id) : null
+  const clusterOtherDefs = selDef ? defs.filter((d) => d.id !== selDef.id && (d.id === selTopId || d.parentDefId === selTopId)) : []
   const topDefs = defs.filter((d) => !d.parentDefId)                                  // bảng cấp cao (tab chính)
   const selChildren = selDef && !selDef.parentDefId ? defs.filter((d) => d.parentDefId === selDef.id) : []
   const selParent = selDef?.parentDefId ? defs.find((d) => d.id === selDef.parentDefId) : null
@@ -480,6 +516,7 @@ export default function CompanyTablesSection() {
       {colModal && selDef && (
         <ColumnModal
           defColumns={Object.assign(selDef.columns ?? [], { _defId: selDef.id })}
+          otherDefs={clusterOtherDefs}
           column={colModal.column}
           onClose={() => setColModal(null)}
           onSaved={() => { setColModal(null); reload() }}

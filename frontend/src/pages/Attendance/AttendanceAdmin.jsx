@@ -23,6 +23,8 @@ import * as payrollApi from '../../api/payroll'
 import s from './Attendance.module.css'
 import sa from './AttendanceAdmin.module.css'
 
+const ATTENDANCE_MODAL_WIDTH = '760px'
+
 // ── Module-level date helpers ─────────────────────────────────────────────────
 
 const _NOW = new Date()
@@ -1971,7 +1973,7 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
   const fmtTs = (v) => { if (!v) return '—'; const t = new Date(v); return isNaN(t) ? String(v).slice(0,16) : t.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) }
 
   return (
-    <Modal title={mode === 'edit' ? `Chỉnh sửa chấm công ${d}/${m}/${y}` : `Chi tiết ngày ${d}/${m}/${y}`} onClose={onClose}>
+    <Modal title={mode === 'edit' ? `Chỉnh sửa chấm công ${d}/${m}/${y}` : `Chi tiết ngày ${d}/${m}/${y}`} onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
       <div className={`${s.detailPanel} ${s.detailPanelWide}`}>
 
         {mode === 'view' ? (
@@ -2728,7 +2730,7 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Xét duyệt đơn nghỉ phép" onClose={onClose}>
+    <Modal title="Xét duyệt đơn nghỉ phép" onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
       <div className={s.modalForm}>
         <div className={s.reviewCard}>
           <p className={s.reviewCardTitle}>{request.userName}</p>
@@ -3008,7 +3010,7 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Xét duyệt đơn tăng ca" onClose={onClose}>
+    <Modal title="Xét duyệt đơn tăng ca" onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
       <div className={s.modalForm}>
         <div className={`${s.reviewCard} ${s.reviewCardPurple}`}>
           <p className={s.reviewCardTitle}>{request.userName}</p>
@@ -3370,7 +3372,7 @@ function SyncPayrollModal({ year, month, onClose }) {
   }
 
   return (
-    <Modal title="Đồng bộ chấm công vào Bảng Lương" onClose={onClose}>
+    <Modal title="Đồng bộ chấm công vào Bảng Lương" onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
       <div className={s.modalForm}>
         <div className={sa.syncWarning}>
           Dữ liệu chấm công tháng {month}/{year} sẽ được ghi vào mục

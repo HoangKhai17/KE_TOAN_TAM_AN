@@ -105,6 +105,14 @@ export default function CompanyDetail() {
     return top ? [top, ...children] : []
   }, [customDefs, activeTopId])
 
+  // Cụm cha–con (top + mọi con) — luôn có (kể cả cụm 1 bảng). Dùng cho công thức LIÊN BẢNG.
+  const clusterDefs = useMemo(() => {
+    if (!activeTopId) return []
+    const top = customDefs.find((d) => d.id === activeTopId)
+    const children = customDefs.filter((d) => d.parentDefId === activeTopId)
+    return [top, ...children].filter(Boolean)
+  }, [customDefs, activeTopId])
+
   // Điều hướng tab (thay cho setActiveTab cũ)
   const goProfileTab = useCallback((tid) => navigate(`/companies/${id}/${MODE_PROFILE}/${tid}`), [navigate, id])
   const goTableTab   = useCallback((defId) => navigate(`/companies/${id}/${MODE_TABLES}/${defId}`), [navigate, id])
@@ -457,7 +465,7 @@ export default function CompanyDetail() {
         <NotesTab company={company} onNoteCountChange={setNoteCount} />
       )}
       {activeTab.startsWith('ct_') && activeDef && (
-        <CustomTableTab key={activeDef.id} def={activeDef} company={company} onDefUpdated={refetchCustomDefs} />
+        <CustomTableTab key={activeDef.id} def={activeDef} company={company} onDefUpdated={refetchCustomDefs} clusterDefs={clusterDefs} />
       )}
 
       {/* Edit modal */}

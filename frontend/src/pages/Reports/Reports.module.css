@@ -22,9 +22,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
-  margin-bottom: 14px;
-  background: #f0f6ff;
-  border: 1.5px solid #dbeafe;
+  margin-bottom: 12px;
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 4px;
 }
@@ -33,20 +33,20 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
+  padding: 8px 14px;
   border: none;
   border-radius: 7px;
   background: transparent;
   cursor: pointer;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: #64748b;
+  color: var(--color-text-soft);
   transition: color 0.15s, background 0.15s;
   white-space: nowrap;
 }
 
 .tab:hover {
-  color: #1e3a8a;
+  color: var(--color-primary-deep);
   background: rgba(255, 255, 255, 0.7);
 }
 
@@ -70,9 +70,9 @@
   gap: 10px;
   padding: 10px 14px;
   background: var(--color-surface);
-  border: 1.5px solid #dbeafe;
-  border-radius: 10px;
-  margin-bottom: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  margin-bottom: 12px;
   box-shadow: 0 1px 4px rgba(37, 99, 235, 0.05);
 }
 
@@ -93,8 +93,8 @@
 .presets {
   display: flex;
   gap: 3px;
-  background: #f0f6ff;
-  border: 1.5px solid #dbeafe;
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 3px;
 }
@@ -105,20 +105,20 @@
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 700;
-  color: #475569;
+  color: var(--color-text-soft);
   transition: background 0.14s, color 0.14s;
 }
 
 .preset:hover {
   background: rgba(255, 255, 255, 0.8);
-  color: #1e3a8a;
+  color: var(--color-primary-deep);
 }
 
 .presetActive {
-  background: #fff;
-  color: #2563eb;
+  background: var(--color-surface);
+  color: var(--color-primary);
   box-shadow: 0 1px 4px rgba(37, 99, 235, 0.15);
 }
 
@@ -132,11 +132,11 @@
 .dateInput {
   height: 32px;
   padding: 0 10px;
-  border: 1.5px solid #dbeafe;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #fff;
-  color: #1e293b;
-  font-size: var(--fs-sm);
+  background: var(--color-surface);
+  color: var(--color-text-strong);
+  font-size: var(--fs-2xs);
   font-weight: 600;
   outline: none;
   transition: border-color 0.14s, box-shadow 0.14s;
@@ -148,7 +148,7 @@
 }
 
 .dateSep {
-  color: #94a3b8;
+  color: var(--color-muted-subtle);
   font-weight: 700;
   font-size: var(--fs-md);
 }
@@ -158,11 +158,11 @@
   align-items: center;
   height: 32px;
   padding: 0 11px;
-  border: 1.5px solid #dbeafe;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #f8fbff;
-  color: #1e3a8a;
-  font-size: var(--fs-sm);
+  background: var(--color-bg-soft);
+  color: var(--color-primary-deep);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -177,11 +177,11 @@
 .filterSelect {
   height: 32px;
   padding: 0 10px;
-  border: 1.5px solid #dbeafe;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #fff;
-  color: #1e293b;
-  font-size: var(--fs-sm);
+  background: var(--color-surface);
+  color: var(--color-text-strong);
+  font-size: var(--fs-2xs);
   font-weight: 600;
   outline: none;
   cursor: pointer;
@@ -200,11 +200,11 @@
   gap: 6px;
   height: 32px;
   padding: 0 13px;
-  border: 1.5px solid #dbeafe;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #fff;
-  color: #475569;
-  font-size: var(--fs-sm);
+  background: var(--color-surface);
+  color: var(--color-text-strong);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   cursor: pointer;
   transition: all 0.14s;
@@ -229,10 +229,10 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1.5px solid #dbeafe;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #fff;
-  color: #475569;
+  background: var(--color-surface);
+  color: var(--color-text-strong);
   cursor: pointer;
   transition: all 0.14s;
 }
@@ -265,7 +265,7 @@
   border-radius: 7px;
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #fff;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
@@ -295,13 +295,13 @@
   justify-content: center;
   gap: 12px;
   padding: 64px 24px;
-  color: #64748b;
+  color: var(--color-text-soft);
 }
 
 .loadingText {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: 600;
-  color: #64748b;
+  color: var(--color-text-soft);
 }
 
 .errorBox {
@@ -313,7 +313,7 @@
   border: 1.5px solid #fecaca;
   border-radius: 10px;
   color: #b91c1c;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: 600;
 }
 
@@ -322,16 +322,16 @@
   align-items: center;
   justify-content: center;
   padding: 64px 24px;
-  color: #94a3b8;
-  font-size: var(--fs-base);
+  color: var(--color-muted-subtle);
+  font-size: var(--fs-xs);
   font-weight: 600;
 }
 
 .emptyChart {
   padding: 28px 0;
   text-align: center;
-  color: #94a3b8;
-  font-size: var(--fs-sm);
+  color: var(--color-muted-subtle);
+  font-size: var(--fs-xs);
   font-weight: 600;
 }
 
@@ -339,7 +339,7 @@
 .tabContent {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 /* ── Stat cards ───────────────────────────────────────────────────────────── */
@@ -360,9 +360,9 @@
   display: flex;
   align-items: center;
   gap: 13px;
-  padding: 14px 16px;
+  padding: 10px 14px;
   background: var(--color-surface);
-  border: 1.5px solid #dbeafe;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(37, 99, 235, 0.05);
   transition: box-shadow 0.16s, transform 0.12s;
@@ -391,11 +391,9 @@
 }
 
 .statLabel {
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-regular);
+  color: var(--color-text-soft);
   margin: 0;
 }
 
@@ -419,9 +417,9 @@
 /* ── Section ──────────────────────────────────────────────────────────────── */
 .section {
   background: var(--color-surface);
-  border: 1.5px solid #dbeafe;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 10px 14px;
   box-shadow: 0 1px 4px rgba(37, 99, 235, 0.04);
 }
 
@@ -429,14 +427,14 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .sectionTitle {
-  font-size: var(--fs-base);
+  font-size: var(--fs-xs);
   font-weight: 800;
-  color: #1e3a8a;
-  margin: 0 0 14px;
+  color: var(--color-text-strong);
+  margin: 0 0 10px;
 }
 
 .sectionHead .sectionTitle {
@@ -448,7 +446,7 @@
   background: #eff6ff;
   border: 1px solid #dbeafe;
   border-radius: 99px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   color: #2563eb;
 }
@@ -479,13 +477,13 @@
 .tableWrapper {
   overflow-x: auto;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
 }
 
 .table thead tr {
@@ -494,21 +492,20 @@
 }
 
 .table th {
-  padding: 10px 14px;
+  padding: 7px 8px;
   text-align: left;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: 800;
-  color: #1e3a8a;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: var(--color-primary-deep);
   white-space: nowrap;
 }
 
 .table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #334155;
-  font-size: var(--fs-sm);
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--color-border-soft);
+  color: var(--color-text-strong);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
   vertical-align: middle;
 }
 
@@ -527,12 +524,12 @@
 }
 
 .bold {
-  font-weight: 700;
-  color: #1e293b;
+  font-weight: var(--fw-medium);
+  color: var(--color-text-strong);
 }
 
 .muted {
-  color: #64748b;
+  color: var(--color-text-strong);
 }
 
 .danger {
@@ -560,7 +557,7 @@
   display: inline-block;
   padding: 2px 8px;
   border-radius: 99px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -595,16 +592,14 @@
   border-radius: 8px;
   padding: 8px 12px;
   box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
 }
 
 .tooltipLabel {
   font-weight: 800;
-  color: #1e3a8a;
+  color: var(--color-primary-deep);
   margin: 0 0 4px;
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: var(--fs-2xs);
 }
 
 /* ── Spinner ──────────────────────────────────────────────────────────────── */

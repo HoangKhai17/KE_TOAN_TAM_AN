@@ -13,6 +13,8 @@ import { useCompanyOptions } from '../../hooks/useReferenceData'
 import DateBox from '../../components/ui/DateBox'
 import s from './Attendance.module.css'
 
+const ATTENDANCE_MODAL_WIDTH = '760px'
+
 const EMPTY_ARR = []   // ref ổn định cho fallback danh sách rỗng
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -441,7 +443,7 @@ function DayDetailModal({ dateStr, record, onClose }) {
   const [y, m, d] = dateStr.split('-')
 
   return (
-    <Modal title={`Chi tiết ngày ${d}/${m}/${y}`} onClose={onClose}>
+    <Modal title={`Chi tiết ngày ${d}/${m}/${y}`} onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
       <div className={s.detailPanel}>
         {!record ? (
           <div className={s.detailEmpty}>
@@ -707,7 +709,7 @@ function LeaveFormModal({ onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Tạo đơn xin nghỉ phép" onClose={onClose}>
+    <Modal title="Tạo đơn xin nghỉ phép" onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}
         <div className={s.formGroup}>
@@ -774,7 +776,7 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Xét duyệt đơn nghỉ phép" onClose={onClose}>
+    <Modal title="Xét duyệt đơn nghỉ phép" onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
       <div className={s.modalForm}>
         <div className={s.reviewCard}>
           <p className={s.reviewCardTitle}>{request.userName}</p>
@@ -1016,7 +1018,7 @@ function OvertimeFormModal({ onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Tạo đơn tăng ca" onClose={onClose} maxWidth="640px">
+    <Modal title="Tạo đơn tăng ca" onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}
         <div className={s.formGrid}>
@@ -1097,7 +1099,7 @@ function ReviewOvertimeModal({ request, onClose, onSaved }) {
   }
 
   return (
-    <Modal title="Xét duyệt đơn tăng ca" onClose={onClose}>
+    <Modal title="Xét duyệt đơn tăng ca" onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
       <div className={s.modalForm}>
         <div className={`${s.reviewCard} ${s.reviewCardPurple}`}>
           <p className={s.reviewCardTitle}>{request.userName}</p>

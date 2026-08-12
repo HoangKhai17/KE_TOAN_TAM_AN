@@ -167,16 +167,55 @@ function dateDiff(a, b) {
   return Math.round((db - da) / 86_400_000)
 }
 
+// ── Helpers cho aggregate + hàm điều kiện / liên bảng ───────────────────────────
+// Token liên bảng {def!col} resolve thành MẢNG (cả cột bảng kia). Các helper dưới
+// cho phép hàm nhận cả mảng lẫn vô hướng.
+function toArr(v) { return Array.isArray(v) ? v : (v == null ? [] : [v]) }
+function flat1(a) { const out = []; for (const x of a) { if (Array.isArray(x)) out.push(...x); else out.push(x) } return out }
+function numOr0(x) { return isNumeric(x) ? toNum(x) : 0 }   // bỏ qua ô rỗng/không phải số
+// Tiêu chí kiểu Excel: số/chuỗi khớp đúng; hoặc chuỗi mở đầu bằng toán tử >,>=,<,<=,<>,=
+function makeCriterion(crit) {
+  if (typeof crit === 'string') {
+    const m = crit.match(/^\s*(<=|>=|<>|=|<|>)\s*(.*)$/)
+    if (m) {
+      const op = m[1], rhs = m[2].trim()
+      return (cell) => {
+        switch (op) {
+          case '=':  return looseEq(cell, rhs)
+          case '<>': return !looseEq(cell, rhs)
+          case '<':  return cmp(cell, rhs) < 0
+          case '<=': return cmp(cell, rhs) <= 0
+          case '>':  return cmp(cell, rhs) > 0
+          case '>=': return cmp(cell, rhs) >= 0
+          default:   return false
+        }
+      }
+    }
+  }
+  return (cell) => looseEq(cell, crit)   // khớp đúng
+}
+
 const FUNCS = {
   IF:        (a) => { if (a.length < 2) throw new FormulaError('#ERR'); return toBool(a[0]) ? a[1] : (a.length >= 3 ? a[2] : false) },
   AND:       (a) => a.every(toBool),
   OR:        (a) => a.some(toBool),
   NOT:       (a) => !toBool(a[0]),
-  SUM:       (a) => a.reduce((s, x) => s + toNum(x), 0),
-  MIN:       (a) => Math.min(...a.map(toNum)),
-  MAX:       (a) => Math.max(...a.map(toNum)),
-  AVG:       (a) => (a.length ? a.reduce((s, x) => s + toNum(x), 0) / a.length : 0),
+  SUM:       (a) => flat1(a).reduce((s, x) => s + toNum(x), 0),
+  MIN:       (a) => Math.min(...flat1(a).map(toNum)),
+  MAX:       (a) => Math.max(...flat1(a).map(toNum)),
+  AVG:       (a) => { const f = flat1(a); return f.length ? f.reduce((s, x) => s + toNum(x), 0) / f.length : 0 },
   AVERAGE:   (a) => FUNCS.AVG(a),
+  COUNT:     (a) => flat1(a).filter(isNumeric).length,
+  // ── Điều kiện + liên bảng ──
+  // SUMIF(vùng, tiêu_chí, [vùng_tổng]) — cộng vùng_tổng tại các dòng vùng khớp tiêu chí.
+  SUMIF:     (a) => { const rng = toArr(a[0]), sum = a.length >= 3 ? toArr(a[2]) : toArr(a[0]); const p = makeCriterion(a[1]); let s = 0; for (let i = 0; i < rng.length; i++) if (p(rng[i])) s += numOr0(sum[i]); return s },
+  COUNTIF:   (a) => { const rng = toArr(a[0]); const p = makeCriterion(a[1]); let c = 0; for (const x of rng) if (p(x)) c++; return c },
+  AVERAGEIF: (a) => { const rng = toArr(a[0]), av = a.length >= 3 ? toArr(a[2]) : toArr(a[0]); const p = makeCriterion(a[1]); let s = 0, c = 0; for (let i = 0; i < rng.length; i++) if (p(rng[i]) && isNumeric(av[i])) { s += toNum(av[i]); c++ } return c ? s / c : 0 },
+  // SUMIFS(vùng_tổng, vùng1, tiêu_chí1, vùng2, tiêu_chí2, …)
+  SUMIFS:    (a) => { const sum = toArr(a[0]); const pairs = []; for (let i = 1; i + 1 < a.length; i += 2) pairs.push([toArr(a[i]), makeCriterion(a[i + 1])]); let s = 0; for (let i = 0; i < sum.length; i++) { let ok = true; for (const [rng, p] of pairs) if (!p(rng[i])) { ok = false; break } if (ok) s += numOr0(sum[i]) } return s },
+  // LOOKUP/VLOOKUP(giá_trị, vùng_khoá, vùng_trả) — khớp ĐÚNG đầu tiên → giá trị cùng dòng; không thấy → '' .
+  LOOKUP:    (a) => { const key = a[0], look = toArr(a[1]), res = a.length >= 3 ? toArr(a[2]) : toArr(a[1]); for (let i = 0; i < look.length; i++) if (looseEq(look[i], key)) return res[i] ?? ''; return '' },
+  VLOOKUP:   (a) => FUNCS.LOOKUP(a),
   ROUND:     (a) => { const f = Math.pow(10, a.length > 1 ? toNum(a[1]) : 0); return Math.round(toNum(a[0]) * f) / f },
   ROUNDUP:   (a) => { const f = Math.pow(10, a.length > 1 ? toNum(a[1]) : 0); return Math.ceil(toNum(a[0]) * f) / f },
   ROUNDDOWN: (a) => { const f = Math.pow(10, a.length > 1 ? toNum(a[1]) : 0); return Math.floor(toNum(a[0]) * f) / f },
@@ -252,6 +291,14 @@ export function evaluateFormula(expression, resolve) {
     if (e && e.__formulaError) return { value: null, error: e.__formulaError }
     return { value: null, error: '#ERR' }
   }
+}
+
+// Tách token tham chiếu: "defId!col" → { table:'defId', col:'col' }; "col" → { table:null, col:'col' }.
+// Dùng cho token LIÊN BẢNG {defId!col_key}. Tách theo dấu '!' ĐẦU TIÊN.
+export function splitRef(key) {
+  const k = String(key ?? '')
+  const i = k.indexOf('!')
+  return i === -1 ? { table: null, col: k } : { table: k.slice(0, i), col: k.slice(i + 1) }
 }
 
 // Danh sách col_key được tham chiếu — dùng cho builder (kiểm cột lạ) & phát hiện phụ thuộc.

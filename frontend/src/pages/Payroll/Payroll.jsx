@@ -3,6 +3,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Loader2, DollarSign } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import PaginationFooter from '../../components/layout/PaginationFooter'
 import Modal from '../../components/ui/Modal'
 import DateBox from '../../components/ui/DateBox'
 import { useAuthStore } from '../../stores/authStore'
@@ -176,10 +177,25 @@ export default function Payroll() {
   const periods    = listQuery.data?.periods ?? []
   const pagination = listQuery.data?.pagination ?? { total: 0, totalPages: 1 }
   const loading    = listQuery.isFetching
+  const paginationFrom = pagination.total === 0 ? 0 : (page - 1) * 24 + 1
+  const paginationTo = Math.min(page * 24, pagination.total)
   useEffect(() => { if (listQuery.isError) addToast('Không thể tải danh sách kỳ lương', 'error') }, [listQuery.errorUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <AppLayout>
+    <AppLayout footer={(
+      <PaginationFooter
+        total={pagination.total}
+        from={paginationFrom}
+        to={paginationTo}
+        itemLabel="kỳ lương"
+        page={page}
+        pageSize={24}
+        totalPages={pagination.totalPages}
+        pageSizeOptions={[24]}
+        loading={loading}
+        onPageChange={setPage}
+      />
+    )}>
       <div className={s.page}>
         <div className={s.pageHeader}>
           <div>
@@ -271,28 +287,6 @@ export default function Payroll() {
                 </tbody>
               </table>
 
-              {pagination.totalPages > 1 && (
-                <div className={s.paginationBar}>
-                  <span className={s.paginationInfo}>
-                    Tổng: {pagination.total} kỳ lương
-                  </span>
-                  <div className={s.paginationBtns}>
-                    <button className={s.paginationBtn} onClick={() => setPage(1)} disabled={page === 1}>«</button>
-                    <button className={s.paginationBtn} onClick={() => setPage((p) => p - 1)} disabled={page === 1}>‹</button>
-                    {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => i + 1).map((n) => (
-                      <button
-                        key={n}
-                        className={`${s.paginationBtn} ${page === n ? s.paginationBtnActive : ''}`}
-                        onClick={() => setPage(n)}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                    <button className={s.paginationBtn} onClick={() => setPage((p) => p + 1)} disabled={page === pagination.totalPages}>›</button>
-                    <button className={s.paginationBtn} onClick={() => setPage(pagination.totalPages)} disabled={page === pagination.totalPages}>»</button>
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
