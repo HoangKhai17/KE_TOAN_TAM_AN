@@ -5287,6 +5287,13 @@
   color: var(--color-text-strong);
   font-weight: var(--fw-medium);
 }
+
+/* Bảng dữ liệu tùy chỉnh: lưới dọc mờ giúp dò dữ liệu theo cột dễ hơn.
+   Chỉ scope trong .hdldTable để không thay đổi các table khác của Company Detail. */
+.hdldTable th:not(:last-child),
+.hdldTable td:not(:last-child) {
+  border-right: 1px solid var(--color-border-soft);
+}
 .hdldTable .archInlineTdEditable:hover {
   background: var(--color-info-surface) !important;
 }

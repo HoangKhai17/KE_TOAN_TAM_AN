@@ -65,8 +65,8 @@ const CHART_TICK = {
   staffName: { fontSize: 10, fill: DASHBOARD_COLORS.axisStrong, fontWeight: 500 },
 }
 const CHART_LEGEND = {
-  trend:    { fontSize: 12, paddingTop: 8 },
-  workload: { fontSize: 12, paddingTop: 4 },
+  trend:    { fontSize: 10, paddingTop: 6 },
+  workload: { fontSize: 10, paddingTop: 4 },
 }
 const BAR_RADIUS    = [4, 4, 0, 0]
 const AREA_DOT      = { r: 5, fill: DASHBOARD_COLORS.primary, strokeWidth: 2, stroke: DASHBOARD_COLORS.white }
