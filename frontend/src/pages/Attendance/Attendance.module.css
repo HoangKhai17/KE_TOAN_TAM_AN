@@ -222,7 +222,7 @@
 
 .card {
   background: var(--color-surface);
-  border: 1.5px solid var(--color-primary-bg-strong);
+  border: 1px solid var(--color-primary-bg-strong);
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
@@ -230,7 +230,7 @@
 
 .section {
   background: var(--color-surface);
-  border: 1.5px solid var(--color-primary-bg-strong);
+  border: 1px solid var(--color-primary-bg-strong);
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
@@ -268,13 +268,13 @@
 
 .table thead tr {
   background: var(--gradient-table-head);
-  border-bottom: 1.5px solid var(--color-primary-bg-strong);
+  border-bottom: 1px solid var(--color-primary-bg-strong);
 }
 
 .table th {
   padding: 7px 8px;
   text-align: left;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-extrabold);
   color: var(--color-primary-deep);
   white-space: nowrap;
@@ -347,7 +347,7 @@
 .formInput {
   height: 36px;
   padding: 0 10px;
-  border: 1.5px solid var(--color-border-muted);
+  border: 1px solid var(--color-border-muted);
   border-radius: 7px;
   font-size: var(--fs-2xs);
   font-family: inherit;
@@ -365,7 +365,7 @@
 .formSelect {
   height: 36px;
   padding: 0 10px;
-  border: 1.5px solid var(--color-border-muted);
+  border: 1px solid var(--color-border-muted);
   border-radius: 7px;
   font-size: var(--fs-2xs);
   font-family: inherit;
@@ -383,7 +383,7 @@
 
 .formTextarea {
   padding: 8px 10px;
-  border: 1.5px solid var(--color-border-muted);
+  border: 1px solid var(--color-border-muted);
   border-radius: 7px;
   font-size: var(--fs-2xs);
   font-family: inherit;
@@ -403,9 +403,9 @@
 .errorBox {
   padding: 10px 14px;
   background: var(--color-danger-bg);
-  border: 1.5px solid var(--color-danger-bg);
+  border: 1px solid var(--color-danger-bg);
   border-radius: 7px;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   color: var(--color-danger);
 }
 
@@ -424,10 +424,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 56px 24px;
+  gap: 8px;
+  padding: 32px 14px;
   color: var(--color-muted);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
 }
 
@@ -437,10 +437,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 7px 8px;
   border-top: 1px solid var(--color-surface-muted);
   background: var(--color-bg-soft);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
 }
 
 .paginationInfo { color: var(--color-muted); }
@@ -448,13 +448,13 @@
 .paginationBtns { display: flex; gap: 3px; }
 
 .paginationBtn {
-  min-width: 30px;
-  height: 30px;
+  min-width: 26px;
+  height: 26px;
   padding: 0 6px;
   border: 1.5px solid var(--color-border-muted);
   border-radius: 6px;
   background: var(--color-white);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   color: var(--color-text-soft);
   cursor: pointer;
   transition: background 0.12s;
@@ -475,12 +475,12 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   background: var(--color-surface);
-  border: 1.5px solid var(--color-primary-bg-strong);
+  border: 1px solid var(--color-primary-bg-strong);
   border-radius: 10px;
-  padding: 12px 20px;
-  margin-bottom: 14px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -492,14 +492,14 @@
 }
 
 .summaryVal {
-  font-size: var(--fs-2xl);
+  font-size: var(--fs-md);
   font-weight: var(--fw-extrabold);
   line-height: 1;
 }
 
 .summaryLbl {
-  font-size: var(--fs-xs);
-  color: var(--color-muted-soft);
+  font-size: var(--fs-2xs);
+  color: var(--color-text-soft);
   font-weight: var(--fw-semibold);
   margin-top: 3px;
   white-space: nowrap;
@@ -507,7 +507,7 @@
 
 .summarySep {
   width: 1px;
-  height: 38px;
+  height: 26px;
   background: var(--color-border-muted);
   flex-shrink: 0;
 }
@@ -535,9 +535,9 @@
   font-weight: var(--fw-extrabold);
   color: var(--color-primary-deep);
   background: var(--gradient-table-head);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1.5px solid var(--color-primary-bg-strong);
+  text-transform: none;
+  letter-spacing: 0;
+  border-bottom: 1px solid var(--color-primary-bg-strong);
   border-right: 1px solid var(--color-primary-bg-strong);
 }
 
@@ -715,11 +715,11 @@
   align-self: flex-start;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-5);
-  border: 1.5px solid var(--status-border);
+  border: 1px solid var(--status-border);
   border-radius: var(--radius-pill);
   background: var(--status-bg);
   color: var(--status-color);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-bold);
   white-space: nowrap;
 }
@@ -735,13 +735,13 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-7);
+  padding: 7px 12px;
   margin: 0 0 var(--space-1);
-  border: 1.5px solid var(--color-success-bg);
+  border: 1px solid var(--color-success-bg);
   border-radius: var(--radius-md);
   background: var(--color-success-bg-soft);
   color: var(--color-success-dark);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
 }
 
@@ -753,7 +753,7 @@
 .sectionTitleMeta {
   margin-left: var(--space-3);
   color: var(--color-muted);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
 }
 
@@ -774,7 +774,7 @@
 .btnCompact {
   height: 28px;
   padding: 0 var(--space-3);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
 }
 
 .btnShort {
@@ -782,8 +782,8 @@
 }
 
 .tableStrong {
-  color: var(--color-text-soft);
-  font-weight: var(--fw-semibold);
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
 }
 
 .tableSemibold {
@@ -866,7 +866,7 @@
 }
 
 .calendarGridEnhanced > :nth-child(n + 8) {
-  min-height: 124px;
+  min-height: 96px;
   border: 1px solid rgba(37, 99, 235, 0.18);
   background-color: var(--color-surface);
 }
@@ -876,8 +876,8 @@
 }
 
 .calendarDayEnhanced {
-  gap: 5px;
-  padding: 9px 10px;
+  gap: 3px;
+  padding: 7px 8px;
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.02);
 }
 
@@ -991,7 +991,7 @@
   color: var(--color-primary-deep);
   font-size: var(--fs-xs);
   font-weight: var(--fw-extrabold);
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .metricPositive {
@@ -1034,20 +1034,20 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-3) var(--space-7);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
 }
 
 .detailLabel {
   margin-bottom: var(--space-1);
-  color: var(--color-muted-soft);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-  text-transform: uppercase;
+  color: var(--color-text-soft);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-regular);
+  text-transform: none;
 }
 
 .detailValue {
-  color: var(--color-text-soft);
-  font-weight: var(--fw-bold);
+  color: var(--color-text-strong);
+  font-weight: var(--fw-medium);
 }
 
 .detailValueWarning { color: var(--color-warning-amber); }
@@ -1090,10 +1090,10 @@
 
 .reviewCard {
   padding: var(--space-5) var(--space-6);
-  border: 1.5px solid var(--color-primary-bg-strong);
+  border: 1px solid var(--color-primary-bg-strong);
   border-radius: var(--radius-md);
   background: var(--color-bg-soft);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
 }
 
 .reviewCardPurple {
@@ -1130,11 +1130,11 @@
 
 .estimateBox {
   padding: var(--space-3) var(--space-5);
-  border: 1.5px solid var(--color-status-review-bg);
+  border: 1px solid var(--color-status-review-bg);
   border-radius: var(--radius-md);
   background: var(--color-purple-bg-soft);
   color: var(--color-purple-bright);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
 }
 
@@ -1202,4 +1202,64 @@
   margin-top: var(--space-1);
   color: var(--color-muted-soft);
   font-style: italic;
+}
+
+@media (max-width: 900px) {
+  .pageHeader {
+    margin-bottom: 10px;
+  }
+
+  .tabBar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .filterBar {
+    padding: 8px 10px;
+  }
+
+  .calendarGridEnhanced > :nth-child(n + 8) {
+    min-height: 88px;
+  }
+
+  .calendarDayTime,
+  .calendarDayExtra {
+    font-size: var(--fs-3xs);
+  }
+}
+
+@media (max-width: 700px) {
+  .pageTitle {
+    font-size: var(--fs-xl);
+  }
+
+  .tab {
+    padding: 7px 10px;
+  }
+
+  .formGrid,
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryBar {
+    justify-content: space-between;
+  }
+
+  .summarySep {
+    display: none;
+  }
+
+  .calendarGridEnhanced {
+    min-width: 680px;
+  }
+
+  .calendarSectionEnhanced {
+    overflow-x: auto;
+  }
+
+  .paginationBar {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
 }

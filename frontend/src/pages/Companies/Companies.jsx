@@ -1580,7 +1580,8 @@ export function CompanyFormModal({ company, onClose, onSaved }) {
     <Modal
       title={isEdit ? 'Chỉnh sửa thông tin công ty' : 'Thêm khách hàng mới'}
       onClose={onClose}
-      wide
+      width="min(1120px, calc(100vw - 40px))"
+      maxWidth="1120px"
     >
       <form onSubmit={handleSubmit} className={s.modalForm}>
         {error && <div className={s.errorBox}>{error}</div>}

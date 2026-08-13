@@ -260,14 +260,19 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   const selectedType = taskTypes.find((t) => t.id === form.taskTypeId)
 
   return (
-    <Modal title="Tạo công việc mới" onClose={onClose} wide>
+    <Modal
+      title="Tạo công việc mới"
+      onClose={onClose}
+      width="min(1120px, calc(100vw - 40px))"
+      maxWidth="1120px"
+    >
       {error && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13 }}>
+        <div className={s.taskFormErrorBox}>
           {error}
         </div>
       )}
 
-      <div className={s.formGrid} style={{ gap: 14 }}>
+      <div className={s.formGrid}>
 
         {/* Title */}
         <div className={`${s.formGroup} ${s.span2}`}>
@@ -339,7 +344,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
             onChange={(ids) => setForm((p) => ({ ...p, collaboratorIds: ids }))}
             excludeId={form.assignedToId}
           />
-          <p style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 3 }}>
+          <p className={s.taskFormHelper}>
             Đồng nghiệp cùng xem &amp; xử lý công việc này (ngoài người phụ trách chính)
           </p>
         </div>
@@ -396,7 +401,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
             className={s.formInput}
             placeholder="Ví dụ: 7"
           />
-          <p style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 3 }}>
+          <p className={s.taskFormHelper}>
             Số ngày tối đa để hoàn thành theo chuẩn dịch vụ
           </p>
         </div>
@@ -408,7 +413,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
             value={form.description}
             onChange={set('description')}
             className={s.formTextarea}
-            style={{ height: 96 }}
+            rows={4}
             placeholder="Mô tả chi tiết công việc..."
           />
         </div>
@@ -427,7 +432,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
                 <strong>Riêng tư</strong> — chỉ quản lý xem, ẩn với nhân sự phụ trách công ty
               </span>
             </label>
-            <p style={{ fontSize: 11, color: 'var(--color-muted)', margin: '3px 0 0 24px' }}>
+            <p className={`${s.taskFormHelper} ${s.taskFormVisibilityHint}`}>
               Chỉ admin, người được giao và người hỗ trợ thấy công việc này. Nhân sự quản lý công ty sẽ không thấy.
             </p>
           </div>
@@ -599,7 +604,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           ) : (
             <div className={s.fmClAdd} style={{ cursor: 'pointer' }} onClick={() => setShowLinkForm(true)}>
               <Plus size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>Thêm link đính kèm...</span>
+              <span className={s.taskFormAddLinkText}>Thêm link đính kèm...</span>
             </div>
           )}
         </div>
