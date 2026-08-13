@@ -2609,19 +2609,20 @@
 
 .scModalGrid {
   display: grid;
-  grid-template-columns: 1fr 220px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 16px;
   align-items: start;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 820px) {
   .scModalGrid { grid-template-columns: 1fr; }
+  .scModalRight { position: static; }
 }
 
 .scModalLeft {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .scModalRight {
@@ -2632,18 +2633,18 @@
 /* ── Edit mode — task type display ───────────────────────── */
 
 .scEditTypeLabel {
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-regular);
+  color: var(--color-text-soft);
+  text-transform: none;
+  letter-spacing: 0;
   margin-bottom: 4px;
 }
 
 .scEditTypeName {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: #111827;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  color: var(--color-text-strong);
   padding: 7px 10px;
   background: #f9fafb;
   border-radius: 7px;
@@ -2653,19 +2654,19 @@
 /* ── Recurrence config section ───────────────────────────── */
 
 .scConfigSection {
-  background: #f9fafb;
-  border: 1px solid #e9edf2;
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-border-soft);
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 10px 14px;
 }
 
 .scConfigSectionTitle {
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 10px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-strong);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 8px;
 }
 
 /* ── Task filter bar (CompanyTasksTab) ───────────────────── */
@@ -2974,20 +2975,20 @@
 }
 
 .scConfigLabel {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: #374151;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-regular);
+  color: var(--color-text-soft);
 }
 
 .scConfigInput {
   height: 34px;
   padding: 0 10px;
-  border: 1.5px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 500;
-  color: #1f2937;
+  color: var(--color-text-strong);
   background: #fff;
   outline: none;
   box-sizing: border-box;
@@ -3007,12 +3008,12 @@
 .scConfigSelect {
   height: 34px;
   padding: 0 28px 0 10px;
-  border: 1.5px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 500;
-  color: #1f2937;
+  color: var(--color-text-strong);
   background: #fff;
   outline: none;
   appearance: none;
@@ -3037,7 +3038,7 @@
 }
 
 .scConfigInfo {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 500;
   color: #4b5563;
   background: #eff6ff;
@@ -3058,12 +3059,12 @@
   min-width: 36px;
   height: 34px;
   padding: 0 6px;
-  border: 1.5px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
   background: #fff;
   color: #6b7280;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
@@ -3093,12 +3094,12 @@
 .scDatesAddBtn {
   height: 34px;
   padding: 0 12px;
-  border: 1.5px solid rgba(15, 52, 94, 0.3);
+  border: 1px solid rgba(15, 52, 94, 0.3);
   border-radius: 7px;
   background: rgba(15, 52, 94, 0.05);
   color: #0f345e;
   font-family: 'Montserrat', sans-serif;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -3131,7 +3132,7 @@
 }
 
 .scDateText {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: #374151;
   font-variant-numeric: tabular-nums;
@@ -3151,7 +3152,7 @@
 .scDateRemove:hover { color: #ef4444; }
 
 .scDatesEmpty {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   color: #9ca3af;
   font-weight: 500;
   padding: 6px 0;
@@ -3160,10 +3161,10 @@
 /* ── Preview panel ───────────────────────────────────────── */
 
 .scPreviewPanel {
-  background: #f8fafc;
-  border: 1px solid #e9edf2;
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-border-soft);
   border-radius: 10px;
-  padding: 14px;
+  padding: 10px 12px;
   height: 100%;
 }
 
@@ -3175,12 +3176,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 10px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-strong);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 8px;
 }
 
 .scPreviewList {
@@ -3217,14 +3218,14 @@
 }
 
 .scPreviewDate {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: #374151;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  color: var(--color-text-strong);
   font-variant-numeric: tabular-nums;
 }
 
 .scPreviewEmpty {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   color: #9ca3af;
   font-weight: 500;
   padding: 8px 0;
@@ -6990,17 +6991,17 @@
 
 /* ── Lịch định kỳ: chọn bước checklist áp dụng (Phương án A) ─────────────────── */
 .scStepPickHint {
-  font-size: var(--fs-xs);
-  color: var(--color-table-muted);
+  font-size: var(--fs-2xs);
+  color: var(--color-muted);
   margin-bottom: 6px;
 }
 .scStepPickList {
   max-height: 220px;
   overflow-y: auto;
-  border: 1.5px solid var(--color-border-soft, #e2e8f0);
+  border: 1px solid var(--color-border-soft, #e2e8f0);
   border-radius: 8px;
   padding: 6px;
-  background: #f8fbff;
+  background: var(--color-bg-soft);
 }
 .scStepPickItem {
   display: flex;
@@ -7008,14 +7009,14 @@
   gap: 8px;
   padding: 5px 6px;
   border-radius: 6px;
-  font-size: var(--fs-sm);
-  color: var(--color-text-soft, #475569);
+  font-size: var(--fs-2xs);
+  color: var(--color-text-strong);
   cursor: pointer;
 }
 .scStepPickItem:hover { background: #eff6ff; }
 .scStepPickItem input { margin-top: 2px; flex-shrink: 0; cursor: pointer; }
 .scStepPickChild { margin-left: 22px; border-left: 2px solid #dbeafe; }
-.scStepPickMain { font-weight: var(--fw-semibold); color: var(--color-text-strong, #1e293b); }
+.scStepPickMain { font-weight: var(--fw-medium); color: var(--color-text-strong, #1e293b); }
 
 /* ── Bảng DANH SÁCH khách hàng: ưu tiên CUỘN NGANG, không bóp cột ──────────────
    Bảng này có 13 cột. Trước đây .table{width:100%} ép mọi cột co lại nên chữ

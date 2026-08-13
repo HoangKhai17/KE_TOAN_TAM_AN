@@ -895,7 +895,8 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
         <Modal
           title={modal.mode === 'create' ? 'Tạo lịch định kỳ' : 'Chỉnh sửa lịch định kỳ'}
           onClose={() => setModal(null)}
-          wide
+          width="min(1040px, calc(100vw - 40px))"
+          maxWidth="1040px"
         >
           <div className={s.scModalGrid}>
 
