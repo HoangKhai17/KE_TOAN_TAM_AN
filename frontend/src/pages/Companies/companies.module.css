@@ -6747,6 +6747,10 @@
 /* ── Companies header: action button group ── */
 .pageHeaderActions { display: flex; align-items: center; gap: 8px; }
 
+.ovPage .pageHeader { gap: 12px; margin-bottom: 12px; }
+.ovPage .pageTitle { color: var(--color-text-strong); }
+.ovPage .pageSubtitle { font-size: var(--fs-2xs); color: var(--color-text-soft); }
+
 /* ── Company Overview page ─────────────────────────────────────────────────── */
 .ovEmptyPage {
   display: flex;
@@ -6756,8 +6760,8 @@
   gap: 12px;
   padding: 64px 16px;
   text-align: center;
-  color: var(--color-muted);
-  font-size: var(--fs-sm);
+  color: var(--color-text-soft);
+  font-size: var(--fs-xs);
 }
 
 /* Chips bật/tắt nhóm */
@@ -6765,31 +6769,31 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .ovChip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 5px 11px;
-  border: 1.5px solid var(--color-border-soft, #e2e8f0);
-  background: #fff;
-  color: var(--color-muted);
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
+  color: var(--color-text-soft);
   border-radius: 999px;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   cursor: pointer;
   transition: all var(--duration-fast);
   opacity: 0.6;
 }
 .ovChipOn {
-  border-color: #93c5fd;
-  background: linear-gradient(180deg, #f0f6ff 0%, #dbeafe 100%);
-  color: #1e3a8a;
+  border-color: var(--color-primary-ring);
+  background: var(--gradient-table-head);
+  color: var(--color-primary-deep);
   opacity: 1;
 }
 .ovChipCount {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-bold);
   padding: 0 6px;
   border-radius: 999px;
@@ -6802,17 +6806,17 @@
   flex-wrap: wrap;
   gap: 4px;
   border-bottom: 2px solid var(--color-border-soft, #e2e8f0);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .ovTab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 14px;
+  padding: 8px 14px;
   border: none;
   background: none;
-  color: var(--color-muted);
-  font-size: var(--fs-sm);
+  color: var(--color-text-soft);
+  font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -6825,7 +6829,7 @@
   border-bottom-color: var(--color-primary);
 }
 .ovTabCount {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-bold);
   padding: 1px 7px;
   border-radius: 999px;
@@ -6850,43 +6854,46 @@
   gap: 7px;
   padding: 0 10px;
   height: 34px;
-  border: 1.5px solid var(--color-border-soft, #e2e8f0);
+  border: 1px solid var(--color-border-soft);
   border-radius: 8px;
-  background: #fff;
-  color: var(--color-muted);
+  background: var(--color-surface);
+  color: var(--color-text-soft);
   min-width: 260px;
 }
 .ovSearch input {
   border: none;
   outline: none;
   background: none;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-2xs);
   width: 100%;
   color: var(--color-text-strong);
 }
-.ovCount { font-size: var(--fs-sm); color: var(--color-muted); }
+.ovCount { font-size: var(--fs-2xs); color: var(--color-text-soft); }
 
 .ovEmpty {
   padding: 40px 16px;
   text-align: center;
-  color: var(--color-muted);
-  font-size: var(--fs-sm);
-  background: #f8fbff;
-  border: 1.5px dashed var(--color-border-soft, #dbeafe);
+  color: var(--color-muted-subtle);
+  font-size: var(--fs-xs);
+  background: var(--color-bg-soft);
+  border: 1px dashed var(--color-border-soft);
   border-radius: var(--radius-lg);
 }
 
 /* Bảng overview */
-.ovTable { font-size: var(--fs-sm); }
+.ovTable { font-size: var(--fs-xs); }
 .ovTable th, .ovTable td {
   white-space: nowrap;
   vertical-align: top;
+  padding: 7px 8px;
 }
+.ovTable th { color: var(--color-primary-deep); font-size: var(--fs-2xs); font-weight: 800; }
+.ovTable td { color: var(--color-text-strong); font-weight: var(--fw-medium); }
 .ovCell { white-space: pre-wrap; max-width: 360px; }
-.ovSttCol { width: 44px; text-align: right; color: var(--color-muted); }
+.ovSttCol { width: 44px; text-align: right; color: var(--color-muted-subtle); }
 .ovCompanyLink {
   color: var(--color-primary);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-medium);
   text-decoration: none;
 }
 .ovCompanyLink:hover { text-decoration: underline; }
@@ -6897,11 +6904,11 @@
   align-items: center;
   gap: 4px;
   padding: 3px 9px;
-  border: 1.5px solid #93c5fd;
-  background: #f0f6ff;
-  color: #1e3a8a;
+  border: 1px solid var(--color-primary-ring);
+  background: var(--color-primary-bg);
+  color: var(--color-primary-deep);
   border-radius: 6px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   cursor: pointer;
 }

@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import {
   LayoutGrid, ArrowLeft, Loader2, Download, Search, Eye, Copy, Check,
-  ChevronLeft, ChevronRight, Building2,
+  Building2,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import PaginationFooter from '../../components/layout/PaginationFooter'
 import { useToastStore } from '../../stores/toastStore'
 import { overviewCompanies, exportCompanies } from '../../api/companies'
 import { revealCredential } from '../../api/credentials'
@@ -92,6 +93,8 @@ export default function CompanyOverview() {
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
   const safePage   = Math.min(page, totalPages)
   const pageRows   = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const pageFrom   = filteredRows.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
+  const pageTo     = Math.min(safePage * PAGE_SIZE, filteredRows.length)
 
   const pwColIndex = activeSection?.key === 'credentials'
     ? activeSection.columns.indexOf('Mật khẩu')
@@ -165,8 +168,21 @@ export default function CompanyOverview() {
   }
 
   return (
-    <AppLayout>
-      <div className={s.page}>
+    <AppLayout footer={(
+      <PaginationFooter
+        total={filteredRows.length}
+        from={pageFrom}
+        to={pageTo}
+        itemLabel="dòng"
+        page={safePage}
+        pageSize={PAGE_SIZE}
+        totalPages={totalPages}
+        pageSizeOptions={[PAGE_SIZE]}
+        loading={loading}
+        onPageChange={setPage}
+      />
+    )}>
+      <div className={`${s.page} ${s.ovPage}`}>
 
         {/* Header */}
         <div className={s.pageHeader}>
@@ -314,26 +330,6 @@ export default function CompanyOverview() {
                   </div>
                 )}
 
-                {/* Phân trang */}
-                {totalPages > 1 && (
-                  <div className={s.ovPager}>
-                    <button
-                      className={s.btnOutline}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={safePage <= 1}
-                    >
-                      <ChevronLeft size={14} /> Trước
-                    </button>
-                    <span className={s.ovPagerInfo}>Trang {safePage}/{totalPages}</span>
-                    <button
-                      className={s.btnOutline}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={safePage >= totalPages}
-                    >
-                      Sau <ChevronRight size={14} />
-                    </button>
-                  </div>
-                )}
               </>
             )}
           </>

@@ -46,7 +46,7 @@ export function cellText(col, row, columns = [], filesByCell = null) {
 }
 
 // ── Export modal: chọn cột + preview (giống flow tab cũ) ──────────────────────
-function ExportModal({ def, columns, rows, company, filesByCell, onClose }) {
+function ExportModal({ def, columns, rows, company, filesByCell, clusterDefs = [], companyId, onClose }) {
   // Trường thông tin công ty (giá trị giống nhau mọi dòng) — tùy chọn xuất
   const extraFields = [
     { key: '__row_id',         label: 'ID dòng',           perRow: (r) => r.id },
@@ -61,6 +61,10 @@ function ExportModal({ def, columns, rows, company, filesByCell, onClose }) {
   ]))
   function toggle(k) { setSelected((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n }) }
 
+  const isCluster = (clusterDefs?.length ?? 0) > 1   // có bảng cha–con
+  const [exportCluster, setExportCluster] = useState(isCluster)
+  const [exporting, setExporting] = useState(false)
+
   // Thứ tự xuất: STT → trường công ty (đã chọn) → cột bảng (đã chọn)
   const outFields = [
     ...extraFields.filter((f) => selected.has(f.key)),
@@ -68,35 +72,75 @@ function ExportModal({ def, columns, rows, company, filesByCell, onClose }) {
   ]
   const cellOf = (f, r) => (f.col ? cellText(f.col, r, columns, filesByCell) : (f.perRow ? f.perRow(r) : f.value))
 
-  function doExport() {
-    const header = ['STT', ...outFields.map((f) => f.label)]
-    const body = rows.map((r, i) => [i + 1, ...outFields.map((f) => cellOf(f, r))])
-    const aoa = [header, ...body]
-    const ws = XLSX.utils.aoa_to_sheet(aoa)
-
-    // Format theo yêu cầu KH: font Aptos Narrow cỡ 11 + border mọi ô có dữ liệu (header + các dòng dữ liệu)
+  // Kẻ border + font cho 1 sheet (giữ đúng format cũ theo yêu cầu KH: Aptos Narrow 11 + border).
+  function styleSheet(ws, nRows, nCols) {
     const thin = { style: 'thin', color: { rgb: 'FF000000' } }
     const border = { top: thin, bottom: thin, left: thin, right: thin }
-    const nRows = aoa.length
-    const nCols = header.length
     for (let r = 0; r < nRows; r++) {
       for (let c = 0; c < nCols; c++) {
         const addr = XLSX.utils.encode_cell({ r, c })
-        if (!ws[addr]) ws[addr] = { t: 's', v: '' }   // ô rỗng vẫn kẻ border
-        ws[addr].s = {
-          font: { name: 'Aptos Narrow', sz: 11, bold: r === 0 },
-          border,
-          alignment: { vertical: 'center', wrapText: false },
-        }
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' }
+        ws[addr].s = { font: { name: 'Aptos Narrow', sz: 11, bold: r === 0 }, border, alignment: { vertical: 'center', wrapText: false } }
       }
     }
-    // Bảo đảm vùng dữ liệu bao trùm mọi ô vừa tạo
     ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: nRows - 1, c: nCols - 1 } })
+  }
 
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, def.name.substring(0, 30))
-    XLSX.writeFile(wb, `${def.tableKey}_${(company.name || company.id).replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`)
-    onClose()
+  const totalActive = (f) => f.col && f.col.options?.showTotal && (f.col.dataType === 'number' || f.col.dataType === 'formula')
+
+  // Dựng 1 sheet: header + [dòng Tổng nếu có cột showTotal] + dữ liệu.
+  function buildSheet(dCols, dRows, dFields, dFiles) {
+    const header = ['STT', ...dFields.map((f) => f.label)]
+    const aoa = [header]
+    if (dFields.some(totalActive)) {
+      aoa.push(['Tổng', ...dFields.map((f) => {
+        if (!totalActive(f)) return ''
+        let sum = 0
+        for (const r of dRows) { const n = numericValue(r, f.col, dCols); if (n != null && !Number.isNaN(n)) sum += n }
+        return sum
+      })])
+    }
+    dRows.forEach((r, i) => {
+      aoa.push([i + 1, ...dFields.map((f) => (f.col ? cellText(f.col, r, dCols, dFiles) : (f.perRow ? f.perRow(r) : f.value)))])
+    })
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    styleSheet(ws, aoa.length, header.length)
+    return ws
+  }
+  const sheetName = (name) => String(name || 'Sheet').substring(0, 30)
+
+  async function doExport() {
+    setExporting(true)
+    try {
+      const exportDefs = exportCluster && isCluster ? clusterDefs : [def]
+      // Nạp rows mọi bảng trong cụm (dùng cho sheet + cho công thức liên bảng). Bảng hiện tại đã có.
+      const rowsByDefId = { [def.id]: rows }
+      for (const d of (clusterDefs.length ? clusterDefs : [def])) {
+        if (!rowsByDefId[d.id]) rowsByDefId[d.id] = await api.listRows(companyId, d.id).catch(() => [])
+      }
+      // Map công thức liên bảng: tableKey → { rows, columns } (cả cụm)
+      const crossMap = {}
+      for (const d of (clusterDefs.length ? clusterDefs : [def])) {
+        crossMap[d.tableKey] = { rows: rowsByDefId[d.id] ?? [], columns: (d.columns || []).filter((c) => c.isActive !== false) }
+      }
+
+      const wb = XLSX.utils.book_new()
+      for (const d of exportDefs) {
+        // Bảng hiện tại: dùng cột đã gộp (global + company) khớp lựa chọn; bảng khác: cột global.
+        const dCols = d.id === def.id ? columns : (d.columns || []).filter((c) => c.isActive !== false)
+        const dRows = rowsByDefId[d.id] ?? []
+        // Bảng hiện tại dùng lựa chọn cột của user; bảng khác trong cụm xuất toàn bộ cột.
+        const dFields = d.id === def.id ? outFields : dCols.map((c) => ({ key: c.colKey, label: c.label, col: c }))
+        const dFiles = d.id === def.id ? filesByCell : null
+        setCrossTables(crossMap)   // để công thức (kể cả liên bảng) tính đúng khi xuất
+        XLSX.utils.book_append_sheet(wb, buildSheet(dCols, dRows, dFields, dFiles), sheetName(d.name))
+      }
+      const stamp = new Date().toISOString().slice(0, 10)
+      const safeCompany = (company.name || company.id).replace(/\s+/g, '_')
+      const base = exportCluster && isCluster ? `${clusterDefs[0]?.tableKey || def.tableKey}_cum` : def.tableKey
+      XLSX.writeFile(wb, `${base}_${safeCompany}_${stamp}.xlsx`)
+      onClose()
+    } finally { setExporting(false) }
   }
 
   const previewRows = rows.slice(0, 8)
@@ -139,11 +183,19 @@ function ExportModal({ def, columns, rows, company, filesByCell, onClose }) {
           </div>
         </div>
         <div className={s.hdldExportFooter}>
-          <span className={s.hdldExportCount}>{selected.size} trường · {rows.length} dòng</span>
+          <span className={s.hdldExportCount}>
+            {selected.size} trường · {rows.length} dòng
+            {isCluster && (
+              <label style={{ marginLeft: 14, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                <input type="checkbox" checked={exportCluster} onChange={(e) => setExportCluster(e.target.checked)} />
+                Xuất cả cụm cha–con ({clusterDefs.length} bảng → {clusterDefs.length} sheet)
+              </label>
+            )}
+          </span>
           <div className={s.modalActions}>
-            <button type="button" className={s.btnOutline} onClick={onClose}>Huỷ</button>
-            <button type="button" className={s.btnNavy} onClick={doExport} disabled={outFields.length === 0}>
-              <Download size={13} /> Xuất Excel
+            <button type="button" className={s.btnOutline} onClick={onClose} disabled={exporting}>Huỷ</button>
+            <button type="button" className={s.btnNavy} onClick={doExport} disabled={outFields.length === 0 || exporting}>
+              {exporting ? <Loader2 size={13} className={s.spin} /> : <Download size={13} />} Xuất Excel
             </button>
           </div>
         </div>
@@ -1456,7 +1508,8 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
 
       {showExport && (
         <ExportModal def={def} columns={columns} rows={rows} company={company}
-          filesByCell={filesByCell} onClose={() => setShowExport(false)} />
+          filesByCell={filesByCell} clusterDefs={clusterDefs} companyId={companyId}
+          onClose={() => setShowExport(false)} />
       )}
       {showImport && (
         <ExcelImportModal
