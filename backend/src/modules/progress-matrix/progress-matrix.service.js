@@ -9,6 +9,7 @@
 
 const { query } = require('../../config/db')
 const ExcelJS = require('exceljs')
+const { applyStandardStyle } = require('../export/excel-renderer')
 
 // Danh sách quy trình (task_type) cho dropdown — kèm số bước checklist
 async function listTaskTypes() {
@@ -496,6 +497,11 @@ async function exportMatrix(matrix, includeSet) {
   for (let i = idCount + 1; i <= totalCols; i++) ws.getColumn(i).width = 15
   ws.views = [{ state: 'frozen', xSplit: idCount, ySplit: dataStartRow - 1 }]
 
+  // Chuẩn hoá font Calibri 11 + border đen mọi ô; GIỮ nền/màu tiêu đề + header nhóm (headerRows:0),
+  // GIỮ freeze đa tầng đã set ở trên (freeze:false). Khôi phục cỡ tiêu đề (bị ép về 11).
+  applyStandardStyle(ws, { headerRows: 0, freeze: false })
+  ws.getCell(1, 1).font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FF1e3a8a' } }
+
   return wb.xlsx.writeBuffer()
 }
 
@@ -566,6 +572,11 @@ async function buildSummaryExcel(data, includeSet) {
   ws.getColumn(1).width = 30
   for (let i = 2; i <= totalCols; i++) ws.getColumn(i).width = 18
   ws.views = [{ state: 'frozen', ySplit: 2 }]
+
+  // Chuẩn hoá font Calibri 11 + border đen mọi ô; GIỮ nền tiêu đề + header xanh (headerRows:0),
+  // GIỮ freeze (freeze:false). Khôi phục cỡ tiêu đề.
+  applyStandardStyle(ws, { headerRows: 0, freeze: false })
+  ws.getCell(1, 1).font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FF1e3a8a' } }
 
   return wb.xlsx.writeBuffer()
 }

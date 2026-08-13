@@ -316,48 +316,19 @@ async function exportStaffExcel({ fields = [], role, status, search } = {}) {
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet('Nhân viên')
 
-  const headerRow = ws.addRow(activeFields.map((f) => FIELD_LABELS[f] ?? f))
-  headerRow.eachCell((cell) => {
-    cell.font      = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }
-    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }
-    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
-    cell.border    = {
-      top:    { style: 'thin', color: { argb: 'FFBFDBFE' } },
-      bottom: { style: 'thin', color: { argb: 'FFBFDBFE' } },
-      left:   { style: 'thin', color: { argb: 'FFBFDBFE' } },
-      right:  { style: 'thin', color: { argb: 'FFBFDBFE' } },
-    }
-  })
-  ws.getRow(1).height = 32
+  const { applyStandardStyle } = require('../export/excel-renderer')
 
-  rows.forEach((row, idx) => {
-    const dataRow = ws.addRow(activeFields.map((f) => getCellValue(row, f)))
-    const isEven  = idx % 2 === 0
-    dataRow.eachCell((cell) => {
-      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: isEven ? 'FFFFFFFF' : 'FFF8FAFC' } }
-      cell.alignment = { vertical: 'middle', wrapText: true }
-      cell.border    = {
-        top:    { style: 'hair', color: { argb: 'FFE2E8F0' } },
-        bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } },
-        left:   { style: 'hair', color: { argb: 'FFE2E8F0' } },
-        right:  { style: 'hair', color: { argb: 'FFE2E8F0' } },
-      }
-    })
-    dataRow.height = 22
-  })
+  ws.addRow(activeFields.map((f) => FIELD_LABELS[f] ?? f))
+  rows.forEach((row) => { ws.addRow(activeFields.map((f) => getCellValue(row, f))) })
 
+  // Auto-width theo nội dung (giữ tiện ích cũ)
   activeFields.forEach((f, i) => {
-    const col    = ws.getColumn(i + 1)
     const header = FIELD_LABELS[f] ?? f
-    const maxLen = Math.max(
-      header.length + 4,
-      ...rows.map((row) => String(getCellValue(row, f)).length)
-    )
-    col.width = Math.min(Math.max(maxLen + 2, 12), 50)
+    const maxLen = Math.max(header.length + 4, ...rows.map((row) => String(getCellValue(row, f)).length))
+    ws.getColumn(i + 1).width = Math.min(Math.max(maxLen + 2, 12), 50)
   })
 
-  ws.views = [{ state: 'frozen', ySplit: 1 }]
-
+  applyStandardStyle(ws, { headerRows: 1 })   // style chuẩn dùng chung (Calibri 11 + border + header)
   return wb.xlsx.writeBuffer()
 }
 

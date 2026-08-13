@@ -1,4 +1,5 @@
 const { query } = require('../../config/db')
+const { applyStandardStyle } = require('../export/excel-renderer')
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
@@ -290,6 +291,7 @@ async function exportMonthlyReportExcel(month, year, res) {
   const filename = `BaoCao_ChamCong_T${pad(month)}_${year}.xlsx`
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  workbook.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
   await workbook.xlsx.write(res)
 }
 
@@ -347,6 +349,7 @@ async function exportCustomSummary({ month, year, fields, res }) {
   const filename = `TongHop_ChamCong_T${pad(m)}_${y}.xlsx`
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+  workbook.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
   await workbook.xlsx.write(res)
 }
 
@@ -505,6 +508,7 @@ async function exportDetailRecords({ month, year, fields, res }) {
   const filename = `ChiTiet_ChamCong_T${pad(m)}_${y}.xlsx`
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+  workbook.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
   await workbook.xlsx.write(res)
 }
 

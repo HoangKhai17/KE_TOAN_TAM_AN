@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus, Trash2, Paperclip, Download, Upload, Filter } from 'lucide-react'
-import * as XLSX from 'xlsx-js-style'
+import { exportXlsx } from '../../utils/exportXlsx'
 import * as contractsApi from '../../api/contracts'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -434,12 +434,18 @@ export default function CompanyContractsCard({ companyId, canEdit = true }) {
     return out.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
   }, [rows, cellText])
 
-  function doExport() {
-    const header = [...CONTRACT_COLS.map((c) => c.label), 'File đính kèm']
-    const aoa = [header, ...displayed.map((r) => [...CONTRACT_COLS.map((c) => cellText(r, c)), r.fileCount > 0 ? `${r.fileCount} file` : ''])]
-    const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = header.map(() => ({ wch: 20 }))
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'HopDong')
-    XLSX.writeFile(wb, `hop_dong_dich_vu_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  async function doExport() {
+    const exCols = [
+      ...CONTRACT_COLS.map((c) => ({ label: c.label, type: c.type === 'date' ? 'date' : 'text', width: c.width ? Math.max(10, Math.round(c.width / 7)) : undefined })),
+      { label: 'File đính kèm', type: 'text' },
+    ]
+    const exRows = displayed.map((r) => [
+      ...CONTRACT_COLS.map((c) => (c.type === 'date' ? (r[c.key] ? String(r[c.key]).slice(0, 10) : '') : cellText(r, c))),
+      r.fileCount > 0 ? `${r.fileCount} file` : '',
+    ])
+    try {
+      await exportXlsx({ filename: `hop_dong_dich_vu_${new Date().toISOString().slice(0, 10)}`, sheets: [{ name: 'Hợp đồng dịch vụ', columns: exCols, rows: exRows }] })
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Xuất Excel thất bại', 'error') }
   }
 
   const importFixedCols = [

@@ -1,6 +1,7 @@
 const { query } = require('../../config/db')
 const ExcelJS = require('exceljs')
 const { getNextOccurrence } = require('../../utils/recurrence.calculator')
+const { applyStandardStyle } = require('../export/excel-renderer')
 
 // ── 0. Overview ───────────────────────────────────────────────────────────────
 
@@ -486,6 +487,7 @@ async function exportToExcel(type, data) {
     styleHeader(ws)
   }
 
+  wb.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
   return wb.xlsx.writeBuffer()
 }
 

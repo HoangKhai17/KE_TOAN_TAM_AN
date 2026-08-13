@@ -2,6 +2,7 @@ const { query } = require('../../config/db')
 const audit     = require('../../lib/audit')
 const ExcelJS   = require('exceljs')
 const { assertEndNotBeforeStart } = require('../../utils/dateRange')
+const { applyStandardStyle } = require('../export/excel-renderer')
 
 function periodToDto(row) {
   return {
@@ -404,6 +405,7 @@ async function exportExcelCustom(periodId, { fields = [], includeDetailSheet = f
   const filename = `BangLuong_T${String(period.period_month).padStart(2, '0')}_${period.period_year}.xlsx`
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  workbook.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
   await workbook.xlsx.write(res)
 }
 
@@ -475,6 +477,7 @@ async function exportExcel(periodId, res) {
   const filename = `BangLuong_T${String(period.period_month).padStart(2, '0')}_${period.period_year}.xlsx`
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  workbook.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
   await workbook.xlsx.write(res)
 }
 

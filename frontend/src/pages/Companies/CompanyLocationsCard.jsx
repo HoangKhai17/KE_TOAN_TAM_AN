@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus, Trash2, Paperclip, Download, Upload, Filter } from 'lucide-react'
-import * as XLSX from 'xlsx-js-style'
+import { exportXlsx } from '../../utils/exportXlsx'
 import * as locationsApi from '../../api/locations'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -461,18 +461,19 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
     return out.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
   }, [rows, cellText])
 
-  // ── Export Excel ──────────────────────────────────────────────────────────────
-  function doExport() {
-    const header = [...LOC_COLS.map((c) => c.label), 'File đính kèm']
-    const aoa = [header, ...displayed.map((r) => [
-      ...LOC_COLS.map((c) => cellText(r, c)),
+  // ── Export Excel (dùng chung: backend format chuẩn) ─────────────────────────────
+  async function doExport() {
+    const exCols = [
+      ...LOC_COLS.map((c) => ({ label: c.label, type: c.type === 'date' ? 'date' : 'text', width: 18 })),
+      { label: 'File đính kèm', type: 'text' },
+    ]
+    const exRows = displayed.map((r) => [
+      ...LOC_COLS.map((c) => (c.type === 'date' ? (r[c.key] ? String(r[c.key]).slice(0, 10) : '') : cellText(r, c))),
       r.fileCount > 0 ? `${r.fileCount} file` : '',
-    ])]
-    const ws = XLSX.utils.aoa_to_sheet(aoa)
-    ws['!cols'] = header.map(() => ({ wch: 18 }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'DiaDiem')
-    XLSX.writeFile(wb, `dia_diem_kinh_doanh_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    ])
+    try {
+      await exportXlsx({ filename: `dia_diem_kinh_doanh_${new Date().toISOString().slice(0, 10)}`, sheets: [{ name: 'Địa điểm kinh doanh', columns: exCols, rows: exRows }] })
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Xuất Excel thất bại', 'error') }
   }
 
   // ── Import (nhãn tiếng Việt → option_key) ────────────────────────────────────

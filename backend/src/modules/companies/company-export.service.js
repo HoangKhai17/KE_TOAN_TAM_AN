@@ -13,6 +13,7 @@ const ExcelJS  = require('exceljs')
 const archiver = require('archiver')
 const { query } = require('../../config/db')
 const { decrypt } = require('../../utils/encrypt')
+const { applyStandardStyle } = require('../export/excel-renderer')
 
 // ── Fixed sections ─────────────────────────────────────────────────────────────
 const SECTION_LABELS = {
@@ -419,6 +420,7 @@ async function exportCompanies({ companyIds, sections, defIds = [], includeCrede
         const body = rows.map((r, i) => [i + 1, ...cols.map((c) => safe(genCell(c, r.data)))])
         addSheet(wb, def.name, used, header, body)
       }
+      wb.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
       const buffer = await wb.xlsx.writeBuffer()
       let fname = safeFile(company.name, company.id) + '.xlsx'
       let n = 2
@@ -459,6 +461,7 @@ async function exportCompanies({ companyIds, sections, defIds = [], includeCrede
     }
     addSheet(wb, def.name, used, header, body)
   }
+  wb.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
   const buffer = await wb.xlsx.writeBuffer()
   return { buffer: Buffer.from(buffer), filename: `TongHop_CongTy_${stamp}.xlsx`, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
 }

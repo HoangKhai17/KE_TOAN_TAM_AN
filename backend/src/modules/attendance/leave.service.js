@@ -2,6 +2,7 @@ const { query } = require('../../config/db')
 const { createAndEmit } = require('../../lib/notify')
 const { calculateAttendanceRecord } = require('./attendance.service')
 const { assertEndNotBeforeStart } = require('../../utils/dateRange')
+const { applyStandardStyle } = require('../export/excel-renderer')
 
 // ── DTO ───────────────────────────────────────────────────────────────────────
 
@@ -337,6 +338,7 @@ async function exportLeaveRecords({ from, to, status, userId, fields, res }) {
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', 'attachment; filename="leave_export.xlsx"')
+  workbook.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
   await workbook.xlsx.write(res)
   res.end()
 }

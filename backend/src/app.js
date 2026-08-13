@@ -174,6 +174,7 @@ function createApp() {
   app.use('/api/schedules',  require('./modules/schedules/schedules.router'))
   app.use('/api/tasks',          require('./modules/tasks/tasks.router'))
   app.use('/api/system-configs', require('./modules/system-configs/system-configs.router'))
+  app.use('/api/export',         require('./modules/export/export.router'))   // Xuất Excel dùng chung (style chuẩn)
 
   // Phase 9 — Credential Vault (nested under company)
   app.use('/api/companies/:companyId/credentials', require('./modules/credentials/credentials.router'))

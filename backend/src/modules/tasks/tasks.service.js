@@ -5,6 +5,7 @@ const { checkBlockers } = require('./dependencies.service')
 const { createAndEmit, emitData } = require('../../lib/notify')
 const { countPendingByTask, listClientRequests } = require('../client-requests/clientRequests.service')
 const enums = require('../../lib/enums')
+const { applyStandardStyle } = require('../export/excel-renderer')
 
 function cdrToTaskDto(cdr) {
   return {
@@ -1057,6 +1058,7 @@ function buildTasksExcel({ sheetName = 'Cong viec', columns = [], rows = [] }) {
     ws.getColumn(i + 1).width = Math.min(Math.max(maxLen + 2, 12), 55)
   })
   ws.views = [{ state: 'frozen', ySplit: 1 }]
+  wb.worksheets.forEach((ws) => applyStandardStyle(ws, { headerRows: 1 }))
   return wb.xlsx.writeBuffer()
 }
 
