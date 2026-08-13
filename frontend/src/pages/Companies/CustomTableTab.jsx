@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Plus, Trash2, Filter, Loader2, Download, Upload, X, ExternalLink, Paperclip, FileUp } from 'lucide-react'
+import { Plus, Trash2, Filter, Loader2, Download, Upload, X, ExternalLink, Paperclip, FileUp, RefreshCw } from 'lucide-react'
 // xlsx-js-style: bản drop-in cùng API SheetJS nhưng ghi được style (font/border).
 // SheetJS community ('xlsx') không hỗ trợ style khi ghi file.
 import * as XLSX from 'xlsx-js-style'
@@ -765,6 +765,7 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
   const [deletingRow, setDeletingRow]   = useState(null)
   const [showExport, setShowExport]     = useState(false)
   const [showImport, setShowImport]     = useState(false)
+  const [syncing, setSyncing]           = useState(false)   // đồng bộ nhóm (pivot)
   const [pageSize, setPageSize]         = useState(PAGE_SIZE)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
@@ -881,6 +882,29 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
   const reloadFiles = useCallback(() => {
     api.listDefFiles(companyId, def.id).then(setFiles).catch(() => {})
   }, [companyId, def.id])
+
+  // ── Pivot: đồng bộ dòng nhóm từ bảng cha ─────────────────────────────────────
+  const isPivot = !!def.groupConfig?.enabled
+  async function handleSyncGroups(silent = false) {
+    setSyncing(true)
+    try {
+      const { added, removed } = await api.syncGroups(companyId, def.id)
+      const list = await api.listRows(companyId, def.id)
+      setRows(list)
+      if (!silent) addToast(`Đồng bộ nhóm: thêm ${added}${removed ? `, xoá ${removed}` : ''} dòng`, 'success')
+    } catch (e) {
+      if (!silent) addToast(e.response?.data?.error?.message ?? 'Không đồng bộ được nhóm', 'error')
+    } finally { setSyncing(false) }
+  }
+  // Tự động đồng bộ khi mở tab (nếu bật autoSync). Ref chặn chạy 2 lần (StrictMode dev / re-render).
+  const autoSyncedRef = useRef(null)
+  useEffect(() => {
+    if (!def.groupConfig?.enabled || !def.groupConfig?.autoSync) return
+    if (autoSyncedRef.current === def.id) return
+    autoSyncedRef.current = def.id
+    handleSyncGroups(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [def.id])
 
   // Nhóm file theo ô "rowId|colKey" — tránh N+1 khi render
   const filesByCell = useMemo(() => {
@@ -1231,6 +1255,12 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
           </button>
         )}
         <div className={s.hdldToolbarRight}>
+          {canEdit && isPivot && (
+            <button className={`${s.btnOutline} ${s.hdldToolbarBtn}`} onClick={() => handleSyncGroups(false)}
+              disabled={syncing} title="Sinh dòng theo các nhóm (Chương/Tiểu mục…) khác nhau ở bảng cha">
+              {syncing ? <Loader2 size={13} className={s.spin} /> : <RefreshCw size={13} />} Đồng bộ nhóm
+            </button>
+          )}
           <button className={`${s.btnOutline} ${s.hdldToolbarBtn} ${s.hdldExportBtn}`} onClick={() => setShowExport(true)} disabled={loading || rows.length === 0}>
             <Download size={13} /> Xuất Excel
           </button>

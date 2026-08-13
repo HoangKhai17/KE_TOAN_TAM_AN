@@ -15,17 +15,43 @@ const TONES = ['success', 'warning', 'danger', 'info', 'muted']
 const row = { display: 'flex', alignItems: 'center', gap: 8 }
 
 // ── Def create/edit modal ─────────────────────────────────────────────────────
-function DefModal({ def, parentDefId, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: def?.name ?? '', icon: def?.icon ?? '', description: def?.description ?? '' })
+function DefModal({ def, parentDefId, parentDef, onClose, onSaved }) {
+  const gc = def?.groupConfig
+  const [form, setForm] = useState({
+    name: def?.name ?? '', icon: def?.icon ?? '', description: def?.description ?? '',
+    groupEnabled: gc?.enabled ?? false,
+    groupKeys: (Array.isArray(gc?.keys) && gc.keys.length) ? gc.keys : [{ childCol: '', parentCol: '' }],
+    autoSync: gc?.autoSync ?? false,
+    removeOrphans: gc?.removeOrphans ?? false,
+  })
   const [saving, setSaving] = useState(false)
   const addToast = useToastStore((st) => st.toast)
   const isChild = !def && !!parentDefId
+  // Chỉ bảng CON (đang sửa) mới có pivot; cần biết cột bảng cha để map khoá.
+  const isEditingChild = !!def?.parentDefId && !!parentDef
+  const KEYABLE = (c) => ['text', 'select', 'number', 'date'].includes(c.dataType)
+  const childKeyCols  = (def?.columns || []).filter(KEYABLE)
+  const parentKeyCols = (parentDef?.columns || []).filter(KEYABLE)
+
+  const setKey = (i, field, val) => setForm((f) => ({ ...f, groupKeys: f.groupKeys.map((k, j) => j === i ? { ...k, [field]: val } : k) }))
+  const addKey = () => setForm((f) => ({ ...f, groupKeys: [...f.groupKeys, { childCol: '', parentCol: '' }] }))
+  const removeKey = (i) => setForm((f) => ({ ...f, groupKeys: f.groupKeys.filter((_, j) => j !== i) }))
+
   async function save() {
     if (!form.name.trim()) return
     setSaving(true)
     try {
-      const saved = def ? await api.updateDef(def.id, form)
-        : await api.createDef(parentDefId ? { ...form, parentDefId } : form)
+      const body = { name: form.name, icon: form.icon, description: form.description }
+      if (isEditingChild) {
+        body.groupConfig = {
+          enabled: !!form.groupEnabled,
+          keys: form.groupKeys.filter((k) => k.childCol && k.parentCol),
+          autoSync: !!form.autoSync,
+          removeOrphans: !!form.removeOrphans,
+        }
+      }
+      const saved = def ? await api.updateDef(def.id, body)
+        : await api.createDef(parentDefId ? { ...body, parentDefId } : body)
       onSaved(saved)
     } catch (e) { addToast(e.response?.data?.error?.message ?? 'Không thể lưu bảng', 'error') } finally { setSaving(false) }
   }
@@ -44,6 +70,50 @@ function DefModal({ def, parentDefId, onClose, onSaved }) {
           <input className={s.settingsInput} value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
         </label>
+
+        {isEditingChild && (
+          <div style={{ border: '1px solid var(--color-border-muted)', borderRadius: 8, padding: 10, display: 'grid', gap: 10 }}>
+            <label style={{ ...row }}>
+              <input type="checkbox" checked={form.groupEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, groupEnabled: e.target.checked }))} />
+              <b>Bảng gom nhóm (Pivot) từ bảng cha «{parentDef.name}»</b>
+            </label>
+            {form.groupEnabled && (
+              <>
+                <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-muted)' }}>
+                  Ghép cột khoá: mỗi cặp (Chương, Tiểu mục…) khác nhau ở bảng cha sẽ tự sinh 1 dòng bên bảng này.
+                </div>
+                {form.groupKeys.map((k, i) => (
+                  <div key={i} style={{ ...row, gap: 6 }}>
+                    <select className={s.settingsInput} style={{ flex: 1 }} value={k.childCol}
+                      onChange={(e) => setKey(i, 'childCol', e.target.value)}>
+                      <option value="">— Cột bảng này —</option>
+                      {childKeyCols.map((c) => <option key={c.colKey} value={c.colKey}>{c.label}</option>)}
+                    </select>
+                    <span style={{ color: 'var(--color-muted)' }}>←</span>
+                    <select className={s.settingsInput} style={{ flex: 1 }} value={k.parentCol}
+                      onChange={(e) => setKey(i, 'parentCol', e.target.value)}>
+                      <option value="">— Cột bảng cha —</option>
+                      {parentKeyCols.map((c) => <option key={c.colKey} value={c.colKey}>{c.label}</option>)}
+                    </select>
+                    <button className={s.btnOutline} type="button" onClick={() => removeKey(i)} title="Bỏ"><Trash2 size={13} /></button>
+                  </div>
+                ))}
+                <button className={s.btnOutline} type="button" onClick={addKey} style={{ justifySelf: 'start' }}><Plus size={13} /> Thêm cột khoá</button>
+                <label style={{ ...row }}>
+                  <input type="checkbox" checked={form.autoSync}
+                    onChange={(e) => setForm((f) => ({ ...f, autoSync: e.target.checked }))} />
+                  Tự động đồng bộ khi mở tab
+                </label>
+                <label style={{ ...row }}>
+                  <input type="checkbox" checked={form.removeOrphans}
+                    onChange={(e) => setForm((f) => ({ ...f, removeOrphans: e.target.checked }))} />
+                  Xoá dòng thừa (nhóm không còn ở bảng cha)
+                </label>
+              </>
+            )}
+          </div>
+        )}
       </div>
       <div style={{ ...row, justifyContent: 'flex-end', marginTop: 16 }}>
         <button className={s.btnOutline} onClick={onClose} disabled={saving}>Huỷ</button>
@@ -532,6 +602,7 @@ export default function CompanyTablesSection() {
 
       {defModal && (
         <DefModal def={defModal.def} parentDefId={defModal.parentDefId}
+          parentDef={defModal.def?.parentDefId ? defs.find((d) => d.id === defModal.def.parentDefId) : null}
           onClose={() => setDefModal(null)} onSaved={() => { setDefModal(null); reload() }} />
       )}
       {colModal && selDef && (

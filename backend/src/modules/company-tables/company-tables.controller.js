@@ -97,6 +97,13 @@ async function upsertRows(req, res, next) {
   } catch (e) { next(e) }
 }
 
+async function syncGroups(req, res, next) {
+  try {
+    const { companyId, defId } = req.params
+    res.json({ success: true, data: await svc.syncGroups(defId, companyId, req.user) })
+  } catch (e) { next(e) }
+}
+
 // ── Per-company columns (ownership) ───────────────────────────────────────────
 async function listCompanyColumns(req, res, next) {
   try {
@@ -122,5 +129,5 @@ module.exports = {
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listRows, createRow, updateRow, deleteRow, reorderRows, batchRows, upsertRows,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,
-  listDefFiles,
+  listDefFiles, syncGroups,
 }

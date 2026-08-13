@@ -70,6 +70,11 @@ export async function upsertRows(companyId, defId, matchKey, rows) {
   const { data } = await api.post(`/companies/${companyId}/tables/${defId}/rows/upsert`, { matchKey, rows })
   return data.data  // { inserted, updated, failed, errors }
 }
+// Pivot: tự sinh dòng bảng con từ các cặp khoá khác nhau ở bảng cha
+export async function syncGroups(companyId, defId) {
+  const { data } = await api.post(`/companies/${companyId}/tables/${defId}/rows/sync-groups`)
+  return data.data  // { added, removed }
+}
 
 // ── File (cột kiểu 'file') ────────────────────────────────────────────────────
 // Gộp toàn bộ file của bảng trong 1 công ty → [{id,rowId,colKey,fileName,mimeType,sizeBytes,...}]

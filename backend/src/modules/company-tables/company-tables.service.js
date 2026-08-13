@@ -72,6 +72,7 @@ function defToDto(d, columns) {
     icon: d.icon ?? null, sortOrder: d.sort_order, isActive: d.is_active,
     allowCompanyColumns: d.allow_company_columns, isSystem: d.is_system,
     parentDefId: d.parent_def_id ?? null,   // null = bảng cấp cao; có = bảng con (sub-tab)
+    groupConfig: d.group_config ?? null,     // cấu hình "gom nhóm (pivot)" từ bảng cha
     createdAt: d.created_at, updatedAt: d.updated_at,
     columns: columns ? columns.map(colToDto) : undefined,
   }
@@ -150,6 +151,7 @@ async function updateDef(id, body) {
   if (body.sortOrder !== undefined)   push('sort_order', body.sortOrder)
   if (body.isActive !== undefined)    push('is_active', body.isActive)
   if (body.allowCompanyColumns !== undefined) push('allow_company_columns', body.allowCompanyColumns)
+  if (body.groupConfig !== undefined) push('group_config', body.groupConfig ? JSON.stringify(body.groupConfig) : null)
   if (!fields.length) { const e = new Error('Không có gì để cập nhật'); e.status = 400; throw e }
   push('updated_at', new Date())
   vals.push(id)
@@ -480,10 +482,107 @@ async function upsertRows(defId, companyId, user, matchKey, rowsData) {
   return { inserted, updated, failed, errors }
 }
 
+// ── Đồng bộ NHÓM (Pivot): tự sinh dòng bảng con từ các cặp khoá khác nhau ở bảng cha ──
+// group_config = { enabled, keys:[{childCol,parentCol}], autoSync, removeOrphans }.
+async function syncGroups(childDefId, companyId, user) {
+  await assertAccess(companyId, user)
+  const { rows: defRows } = await query(
+    'SELECT id, parent_def_id, group_config FROM company_table_defs WHERE id = $1', [childDefId])
+  if (!defRows.length) { const e = new Error('Không tìm thấy bảng'); e.status = 404; throw e }
+  const def = defRows[0]
+  const cfg = def.group_config
+  if (!cfg || !cfg.enabled || !Array.isArray(cfg.keys) || cfg.keys.length === 0) {
+    const e = new Error('Bảng chưa bật gom nhóm (pivot)'); e.status = 400; throw e
+  }
+  if (!def.parent_def_id) { const e = new Error('Bảng không có bảng cha'); e.status = 400; throw e }
+
+  const { rows: parentRows } = await query(
+    'SELECT data FROM company_table_rows WHERE def_id = $1 AND company_id = $2', [def.parent_def_id, companyId])
+
+  const norm = (v) => String(v ?? '').trim()
+  const keyChildCols = new Set(cfg.keys.map((k) => k.childCol))
+  const hasExtra = (r) => Object.entries(r.data || {}).some(([k, v]) => !keyChildCols.has(k) && norm(v) !== '')
+  const keyOf = (data, side) => cfg.keys.map((k) => norm(data?.[side === 'p' ? k.parentCol : k.childCol])).join('')
+
+  // Cặp khoá DISTINCT ở cha (bỏ cặp rỗng toàn bộ)
+  const parentTuples = new Map()   // key → [values theo thứ tự cfg.keys]
+  for (const r of parentRows) {
+    if (cfg.keys.every((k) => norm(r.data?.[k.parentCol]) === '')) continue
+    const key = keyOf(r.data, 'p')
+    if (!parentTuples.has(key)) parentTuples.set(key, cfg.keys.map((k) => norm(r.data?.[k.parentCol])))
+  }
+  const columns = await getColumnsForCompany(childDefId, companyId)
+  const client = await getClient()
+  let added = 0, removed = 0
+  try {
+    await client.query('BEGIN')
+    // Khoa tuan tu theo (bang con + cong ty): chong 2 lan dong bo chay chong gay nhan doi.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`ctbl_sync:${childDefId}:${companyId}`])
+
+    // Doc dong con SAU khi co khoa -> luon thay trang thai moi nhat.
+    const { rows: childRows } = await client.query(
+      'SELECT id, data FROM company_table_rows WHERE def_id = $1 AND company_id = $2 ORDER BY position, created_at',
+      [childDefId, companyId])
+
+    // Gom dong con theo khoa + DEDUP (giu 1 dong/nhom, uu tien dong co du lieu ngoai khoa nhu Ghi chu).
+    const childByKey = new Map()
+    for (const r of childRows) {
+      const key = keyOf(r.data, 'c')
+      if (!childByKey.has(key)) childByKey.set(key, [])
+      childByKey.get(key).push(r)
+    }
+    for (const [, list] of childByKey) {
+      if (list.length <= 1) continue
+      const keep = list.find(hasExtra) ?? list[0]
+      for (const r of list) {
+        if (r.id === keep.id) continue
+        await client.query('DELETE FROM company_table_rows WHERE id = $1', [r.id])
+        await attachmentsSvc.removeAllForEntity('company_table_row', r.id)
+        removed++
+      }
+    }
+
+    // Them nhom cha CON THIEU ben con
+    const { rows: posRows } = await client.query(
+      'SELECT COALESCE(MAX(position), -1) + 1 AS next FROM company_table_rows WHERE def_id = $1 AND company_id = $2',
+      [childDefId, companyId])
+    let pos = posRows[0].next
+    for (const [key, values] of parentTuples) {
+      if (childByKey.has(key)) continue
+      const data = {}
+      cfg.keys.forEach((k, idx) => { data[k.childCol] = values[idx] })
+      const clean = sanitizeData(data, columns)
+      const { rows: ins } = await client.query(
+        'INSERT INTO company_table_rows (def_id, company_id, data, position, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+        [childDefId, companyId, JSON.stringify(clean), pos++, user.id])
+      childByKey.set(key, [{ id: ins[0].id, data }])
+      added++
+    }
+
+    // Xoa dong THUA (nhom khong con o cha)
+    if (cfg.removeOrphans) {
+      for (const [key, list] of childByKey) {
+        if (parentTuples.has(key)) continue
+        for (const r of list) {
+          if (!r.id) continue
+          await client.query('DELETE FROM company_table_rows WHERE id = $1', [r.id])
+          await attachmentsSvc.removeAllForEntity('company_table_row', r.id)
+          removed++
+        }
+      }
+    }
+
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK'); throw err
+  } finally { client.release() }
+  return { added, removed }
+}
+
 module.exports = {
   listDefs, getDef, createDef, updateDef, deleteDef, reorderDefs,
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,
   listRows, createRow, updateRow, deleteRow, reorderRows, batchCreateRows, upsertRows,
-  listDefFiles,
+  listDefFiles, syncGroups,
 }

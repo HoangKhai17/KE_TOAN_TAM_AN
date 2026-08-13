@@ -18,6 +18,7 @@ router.get('/:defId/files', ...auth, ctrl.listDefFiles)
 router.patch('/:defId/rows/reorder', ...auth, ctrl.reorderRows)
 router.post('/:defId/rows/batch',    ...auth, ctrl.batchRows)
 router.post('/:defId/rows/upsert',   ...auth, ctrl.upsertRows)
+router.post('/:defId/rows/sync-groups', ...auth, ctrl.syncGroups)   // Pivot: tự sinh dòng từ bảng cha
 router.get('/:defId/rows',           ...auth, ctrl.listRows)
 router.post('/:defId/rows',          ...auth, ctrl.createRow)
 router.patch('/:defId/rows/:rowId',  ...auth, ctrl.updateRow)
