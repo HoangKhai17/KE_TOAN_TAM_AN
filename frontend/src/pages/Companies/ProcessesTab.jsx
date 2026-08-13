@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
-import { Plus, Trash2, Pencil, Loader2, Workflow, FileText, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Pencil, Loader2, Workflow, FileText, AlertTriangle, Archive } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import * as api from '../../api/companyProcesses'
 import DocumentTypesSection from './DocumentTypesSection'
+import OriginalDocumentsSection from './OriginalDocumentsSection'
 import NotesSection from './NotesSection'
 import s from './companies.module.css'
 
@@ -16,7 +17,8 @@ const ProcessFlowEditor = lazy(() => import('./ProcessFlowEditor'))
 // Các mục con của tab (swap bằng segmented) — cùng cấp với Quy trình
 const SECTIONS = [
   { key: 'process',   label: 'Quy trình',          icon: Workflow },
-  { key: 'documents', label: 'Chứng từ phát sinh',  icon: FileText },
+  { key: 'documents', label: 'Chứng từ KH cung cấp cho Tâm An',  icon: FileText },
+  { key: 'originalDocs', label: 'KH lưu HS gốc tại Cty', icon: Archive },
   { key: 'notes',     label: 'Điều cần lưu ý',      icon: AlertTriangle },
 ]
 
@@ -145,6 +147,10 @@ export default function ProcessesTab({ company }) {
 
       {section === 'documents' && (
         <DocumentTypesSection companyId={company.id} canEdit={canEdit} />
+      )}
+
+      {section === 'originalDocs' && (
+        <OriginalDocumentsSection companyId={company.id} canEdit={canEdit} />
       )}
 
       {section === 'notes' && (

@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Plus, Trash2, Filter, Loader2, Download, Upload, X, ExternalLink, Paperclip, FileUp, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, Filter, Loader2, Download, Upload, X, ExternalLink, Paperclip, FileUp, RefreshCw, Eye } from 'lucide-react'
 import * as api from '../../api/companyTables'
 import { exportXlsx } from '../../utils/exportXlsx'
-import { uploadFile, downloadFile, deleteFile, formatSize, ACCEPT_ATTR, MAX_FILE_BYTES } from '../../api/attachments'
+import { uploadFile, downloadFile, deleteFile, formatSize, canPreview, ACCEPT_ATTR, MAX_FILE_BYTES } from '../../api/attachments'
+import AttachmentPreviewModal from './AttachmentPreviewModal'
 import { evaluateFormula, extractRefs, splitRef } from '../../utils/formula'
 import { normalizeClipboardGrid, parseClipboardGrid } from '../../utils/clipboardGrid'
 import Modal from '../../components/ui/Modal'
@@ -742,6 +743,7 @@ function FileCell({ col, row, files, canEdit, onChanged, addToast }) {
   const multiple = col.options?.multiple !== false
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
+  const [previewFile, setPreviewFile] = useState(null)
   const list = files ?? []
 
   async function pick(e) {
@@ -772,6 +774,9 @@ function FileCell({ col, row, files, canEdit, onChanged, addToast }) {
               onClick={() => downloadFile(f.id, f.fileName)}>
               <Paperclip size={11} /> {f.fileName}
             </button>
+            {canPreview(f.mimeType) && (
+              <button className={s.ctblIconBtn} title="Xem trước" onClick={() => setPreviewFile(f)}><Eye size={11} /></button>
+            )}
             {canEdit && <button className={s.ctblIconBtn} title="Xoá file" onClick={() => remove(f)}><X size={11} /></button>}
           </span>
         ))}
@@ -783,6 +788,9 @@ function FileCell({ col, row, files, canEdit, onChanged, addToast }) {
         {list.length === 0 && !canEdit && <span className={s.archInlineEmpty}>—</span>}
         <input ref={inputRef} type="file" accept={ACCEPT_ATTR} style={{ display: 'none' }} onChange={pick} />
       </div>
+      {previewFile && (
+        <AttachmentPreviewModal file={previewFile} title={previewFile.fileName} onClose={() => setPreviewFile(null)} />
+      )}
     </td>
   )
 }

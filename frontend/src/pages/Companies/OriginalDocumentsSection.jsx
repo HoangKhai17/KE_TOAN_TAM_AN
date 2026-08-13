@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus, Trash2, Check, X, Loader2, Filter } from 'lucide-react'
-import * as docTypeApi from '../../api/documentTypes'
+import * as origDocApi from '../../api/originalDocuments'
 import { useToastStore } from '../../stores/toastStore'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import InlineTableCell from '../../components/ui/InlineTableCell'
@@ -16,12 +16,12 @@ function emptyDraft() {
   return { name: '', category: '', frequency: '', source: '', note: '' }
 }
 // Hàng nhập liệu ở cấp cao nhất để input không bị remount → giữ focus.
-function DocTypeEditRow({ draft, setF, save, cancel, saving }) {
+function OrigDocEditRow({ draft, setF, save, cancel, saving }) {
   return (
     <tr className={s.locEditRow}>
       <td /><td /><td />
-      <td><input className={s.locInput} value={draft.name} onChange={setF('name')} placeholder="VD: Hóa đơn đầu vào" /></td>
-      <td><input className={s.locInput} value={draft.category} onChange={setF('category')} placeholder="VD: Đầu vào" /></td>
+      <td><input className={s.locInput} value={draft.name} onChange={setF('name')} placeholder="VD: Giấy phép kinh doanh (bản gốc)" /></td>
+      <td><input className={s.locInput} value={draft.category} onChange={setF('category')} placeholder="VD: Pháp lý" /></td>
       <td><input className={s.locInput} value={draft.source} onChange={setF('source')} placeholder="VD: Khách gửi" /></td>
       <td><input className={s.locInput} value={draft.frequency} onChange={setF('frequency')} placeholder="VD: Hàng tháng" /></td>
       <td><input className={s.locInput} value={draft.note} onChange={setF('note')} placeholder="Ghi chú" /></td>
@@ -37,7 +37,7 @@ function DocTypeEditRow({ draft, setF, save, cancel, saving }) {
   )
 }
 
-export default function DocumentTypesSection({ companyId, canEdit = true }) {
+export default function OriginalDocumentsSection({ companyId, canEdit = true }) {
   const confirmDelete = useDeleteConfirm()
   const addToast = useToastStore((st) => st.toast)
 
@@ -72,26 +72,26 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
   useEffect(() => { setPage(1) }, [colFilters, sortState, pageSize])
   useCompanyFooter(loading ? null : {
     total: docTotal, from: (safePage - 1) * pageSize + 1, to: Math.min(safePage * pageSize, docTotal),
-    page: safePage, pageSize, totalPages: docTotalPages, itemLabel: 'chứng từ',
+    page: safePage, pageSize, totalPages: docTotalPages, itemLabel: 'hồ sơ',
     onPageChange: setPage, onPageSizeChange: setPageSize,
   })
 
   const selection = useRowSelection({ rows: displayedRows })
   const reorder = useRowReorder({
     rows, setRows, enabled: canEdit && editingId == null && activeCell == null && Object.keys(colFilters).length === 0 && !sortState.col && docTotalPages === 1,
-    onError: () => addToast('Không thể lưu thứ tự chứng từ', 'error'),
+    onError: () => addToast('Không thể lưu thứ tự hồ sơ', 'error'),
     onPersist: (ordered, previous) => Promise.all(ordered
       .map((row, index) => ({ row, index }))
       .filter(({ row, index }) => previous[index]?.id !== row.id)
-      .map(({ row, index }) => docTypeApi.updateDocumentType(companyId, row.id, { sortOrder: index }))),
+      .map(({ row, index }) => origDocApi.updateOriginalDocument(companyId, row.id, { sortOrder: index }))),
   })
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setRows(await docTypeApi.listDocumentTypes(companyId))
+      setRows(await origDocApi.listOriginalDocuments(companyId))
     } catch {
-      addToast('Không tải được danh sách chứng từ', 'error')
+      addToast('Không tải được danh sách hồ sơ', 'error')
     } finally {
       setLoading(false)
     }
@@ -105,7 +105,7 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
   const setF = (k) => (e) => setDraft((p) => ({ ...p, [k]: e.target.value }))
 
   async function save() {
-    if (!draft.name.trim()) { addToast('Vui lòng nhập tên chứng từ', 'error'); return }
+    if (!draft.name.trim()) { addToast('Vui lòng nhập tên hồ sơ', 'error'); return }
     setSaving(true)
     try {
       const body = {
@@ -115,13 +115,13 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
         source: draft.source.trim() || null,
         note: draft.note.trim() || null,
       }
-      if (editingId === 'new') await docTypeApi.createDocumentType(companyId, body)
-      else                     await docTypeApi.updateDocumentType(companyId, editingId, body)
-      addToast(editingId === 'new' ? 'Đã thêm chứng từ' : 'Đã cập nhật chứng từ', 'success')
+      if (editingId === 'new') await origDocApi.createOriginalDocument(companyId, body)
+      else                     await origDocApi.updateOriginalDocument(companyId, editingId, body)
+      addToast(editingId === 'new' ? 'Đã thêm hồ sơ' : 'Đã cập nhật hồ sơ', 'success')
       cancel()
       await load()
     } catch (err) {
-      addToast(err.response?.data?.error?.message ?? 'Không lưu được chứng từ', 'error')
+      addToast(err.response?.data?.error?.message ?? 'Không lưu được hồ sơ', 'error')
     } finally {
       setSaving(false)
     }
@@ -129,7 +129,7 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
 
   async function saveCell(row, field, value) {
     try {
-      const updated = await docTypeApi.updateDocumentType(companyId, row.id, { [field]: value || null })
+      const updated = await origDocApi.updateOriginalDocument(companyId, row.id, { [field]: value || null })
       setRows((current) => current.map((item) => item.id === row.id ? { ...item, ...updated, [field]: value || null } : item))
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không lưu được thay đổi', 'error')
@@ -140,12 +140,12 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
   async function createFromFirstCell(value) {
     if (!value?.trim()) return null
     try {
-      const created = await docTypeApi.createDocumentType(companyId, { name: value.trim() })
+      const created = await origDocApi.createOriginalDocument(companyId, { name: value.trim() })
       setRows((current) => [...current, created])
-      addToast('Đã thêm chứng từ', 'success')
+      addToast('Đã thêm hồ sơ', 'success')
       return { rowId: created.id }
     } catch (err) {
-      addToast(err.response?.data?.error?.message ?? 'Không thêm được chứng từ', 'error')
+      addToast(err.response?.data?.error?.message ?? 'Không thêm được hồ sơ', 'error')
       throw err
     }
   }
@@ -194,24 +194,24 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
   }
 
   async function remove(row) {
-    if (!(await confirmDelete({ title: 'Xóa chứng từ', message: <>Bạn có chắc chắn muốn xóa chứng từ <strong>“{row.name}”</strong>?</> }))) return
+    if (!(await confirmDelete({ title: 'Xóa hồ sơ', message: <>Bạn có chắc chắn muốn xóa hồ sơ <strong>“{row.name}”</strong>?</> }))) return
     try {
-      await docTypeApi.deleteDocumentType(companyId, row.id)
-      addToast('Đã xoá chứng từ', 'success')
+      await origDocApi.deleteOriginalDocument(companyId, row.id)
+      addToast('Đã xoá hồ sơ', 'success')
       await load()
     } catch (err) {
-      addToast(err.response?.data?.error?.message ?? 'Không xoá được chứng từ', 'error')
+      addToast(err.response?.data?.error?.message ?? 'Không xoá được hồ sơ', 'error')
     }
   }
 
   async function removeSelected() {
-    if (!selection.selectedCount || !(await confirmDelete({ title: 'Xóa chứng từ', message: <>Bạn có chắc chắn muốn xóa <strong>{selection.selectedCount}</strong> chứng từ đã chọn?</>, confirmLabel: `Xóa ${selection.selectedCount} mục` }))) return
+    if (!selection.selectedCount || !(await confirmDelete({ title: 'Xóa hồ sơ', message: <>Bạn có chắc chắn muốn xóa <strong>{selection.selectedCount}</strong> hồ sơ đã chọn?</>, confirmLabel: `Xóa ${selection.selectedCount} mục` }))) return
     const ids = [...selection.selectedIds]
-    const results = await Promise.allSettled(ids.map((id) => docTypeApi.deleteDocumentType(companyId, id)))
+    const results = await Promise.allSettled(ids.map((id) => origDocApi.deleteOriginalDocument(companyId, id)))
     const deleted = new Set(ids.filter((_, index) => results[index].status === 'fulfilled'))
     setRows((current) => current.filter((row) => !deleted.has(row.id)))
     selection.remove(deleted)
-    addToast(`Đã xoá ${deleted.size}/${ids.length} chứng từ`, deleted.size ? 'success' : 'error')
+    addToast(`Đã xoá ${deleted.size}/${ids.length} hồ sơ`, deleted.size ? 'success' : 'error')
   }
 
   const colSpan = 9
@@ -222,7 +222,7 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
       {canEdit && (
         <div className={s.procSectionBar}>
           {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={removeSelected}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
-          <button className={s.credAddBtn} onClick={startAdd}><Plus size={13} /> Thêm chứng từ</button>
+          <button className={s.credAddBtn} onClick={startAdd}><Plus size={13} /> Thêm hồ sơ</button>
         </div>
       )}
       <div className={s.credTableWrap}>
@@ -241,7 +241,7 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
               <DragHeaderCell />
               <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
               <IndexHeaderCell />
-              <FilterHeader colKey="name">Tên chứng từ</FilterHeader>
+              <FilterHeader colKey="name">Tên hồ sơ</FilterHeader>
               <FilterHeader colKey="category">Phân loại</FilterHeader>
               <FilterHeader colKey="source">Nguồn cung cấp</FilterHeader>
               <FilterHeader colKey="frequency">Tần suất</FilterHeader>
@@ -253,7 +253,7 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
             {loading ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Đang tải…</td></tr>
             ) : displayedRows.length === 0 && editingId !== 'new' ? (
-              <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có chứng từ phát sinh. Nhấn “Thêm chứng từ”.</td></tr>
+              <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có hồ sơ gốc. Nhấn “Thêm hồ sơ”.</td></tr>
             ) : (
               pageRows.map((r, index) => (
                 <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
