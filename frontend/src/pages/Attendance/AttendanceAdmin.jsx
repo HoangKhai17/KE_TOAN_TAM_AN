@@ -18,6 +18,7 @@ import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
+import { useLeavePolicies, LEAVE_LABELS, dayPartSuffix } from './leavePolicies'
 import * as usersApi from '../../api/users'
 import * as payrollApi from '../../api/payroll'
 import s from './Attendance.module.css'
@@ -134,14 +135,7 @@ function buildDeviceMap(summaryList) {
   return map
 }
 
-const LEAVE_TYPE = {
-  annual:        'Nghỉ phép năm',
-  sick:          'Nghỉ ốm',
-  compensatory:  'Nghỉ bù',
-  unpaid:        'Nghỉ không lương',
-  business_trip: 'Công tác',
-  wfh:           'Làm từ xa',
-}
+// Loại nghỉ nay lấy động từ bảng leave_policies — xem ./leavePolicies.js
 
 const STATUS_CLASS = {
   present:        'status_present',
@@ -195,20 +189,9 @@ function fmtCurrency(n) {
   return Number(n).toLocaleString('vi-VN') + ' ₫'
 }
 
-function countWeekdays(startDate, endDate) {
-  if (!startDate || !endDate) return 0
-  const [sy, sm, sd] = String(startDate).slice(0, 10).split('-').map(Number)
-  const [ey, em, ed] = String(endDate).slice(0, 10).split('-').map(Number)
-  const cur = new Date(sy, sm - 1, sd)
-  const end = new Date(ey, em - 1, ed)
-  let n = 0
-  while (cur <= end) {
-    const dow = cur.getDay()
-    if (dow !== 0 && dow !== 6) n++
-    cur.setDate(cur.getDate() + 1)
-  }
-  return n
-}
+// (Đã bỏ countWeekdays: hàm này loại trừ thứ 7 cứng nên đếm SAI với công ty làm
+//  thứ 7. Số ngày công của đơn nghỉ nay chỉ lấy từ backend — nơi duy nhất biết
+//  cấu hình ca thứ 7 và lịch làm việc riêng của từng nhân viên.)
 
 function buildCalendar(year, month, recordMap, holidaySet = new Set()) {
   const first       = new Date(year, month - 1, 1)
@@ -449,7 +432,8 @@ const SUMMARY_FIELDS = [
   { key: 'jobTitle',        label: 'Chức danh',                           group: 'Nhân viên' },
   { key: 'actualWorkDays',  label: 'Ngày công thực tế',                   group: 'Ngày công' },
   { key: 'leavePaidDays',   label: 'Nghỉ có lương',                       group: 'Ngày công' },
-  { key: 'totalWork',       label: 'Tổng công',                           group: 'Ngày công' },
+  { key: 'unpaidLeaveDays', label: 'Nghỉ không lương',                    group: 'Ngày công' },
+  { key: 'totalWork',       label: 'Tổng công tính lương',                group: 'Ngày công' },
   { key: 'absentDays',      label: 'Ngày vắng',                           group: 'Ngày công' },
   { key: 'lateCount',       label: 'Số lần đi muộn',                      group: 'Kỷ luật & OT' },
   { key: 'earlyCount',      label: 'Số lần về sớm',                       group: 'Kỷ luật & OT' },
@@ -482,8 +466,9 @@ const _STATUS_VI  = {
 }
 
 function getSummaryCell(row, key) {
+  // Tổng công tính lương = công thực tế + nghỉ CÓ lương (không gồm nghỉ không lương)
   if (key === 'totalWork')                            return ((row.actualWorkDays ?? 0) + (row.leavePaidDays ?? 0)).toFixed(1)
-  if (['actualWorkDays', 'leavePaidDays'].includes(key)) return Number(row[key] ?? 0).toFixed(1)
+  if (['actualWorkDays', 'leavePaidDays', 'unpaidLeaveDays'].includes(key)) return Number(row[key] ?? 0).toFixed(1)
   if (key === 'approvedOtHours')                      return Number(row[key] ?? 0).toFixed(1)
   return row[key] ?? '—'
 }
@@ -1677,13 +1662,15 @@ function AttendanceConfirmModal({ month, year, staffList, onClose }) {
 
         // per-staff summaries using report data (correct sources, matching Report tab exactly)
         const sums = staffOnly.map((user) => {
-          const rep       = reportMap[user.id] ?? {}
-          const workDays  = Number(rep.actualWorkDays ?? 0)
-          const leaveDays = Number(rep.leavePaidDays  ?? 0)
+          const rep        = reportMap[user.id] ?? {}
+          const workDays   = Number(rep.actualWorkDays  ?? 0)
+          const leaveDays  = Number(rep.leavePaidDays   ?? 0)
+          const unpaidDays = Number(rep.unpaidLeaveDays ?? 0)
           return {
             id:         user.id,
             workDays,
             leaveDays,
+            unpaidDays,
             totalWork:  workDays + leaveDays,
             absentDays: Number(rep.absentDays    ?? 0),
             lateCnt:    Number(rep.lateCount     ?? 0),
@@ -1801,6 +1788,7 @@ function AttendanceConfirmModal({ month, year, staffList, onClose }) {
                           <div className={sa.confirmNameStats}>
                             <span className={sa.confirmStatChip}>{Number(sum.workDays ?? 0).toFixed(1)} TT</span>
                             {(sum.leaveDays ?? 0) > 0 && <span className={`${sa.confirmStatChip} ${sa.confirmStatChipLeave}`}>{Number(sum.leaveDays).toFixed(1)} NP</span>}
+                            {(sum.unpaidDays ?? 0) > 0 && <span className={`${sa.confirmStatChip} ${sa.confirmStatChipWarn}`} title="Nghỉ không lương — không tính vào tổng công">{Number(sum.unpaidDays).toFixed(1)} KL</span>}
                             <span className={`${sa.confirmStatChip} ${sa.confirmStatChipTotal}`}>{Number(sum.totalWork ?? 0).toFixed(1)} TC</span>
                             {(sum.absentDays ?? 0) > 0 && <span className={`${sa.confirmStatChip} ${sa.confirmStatChipDanger}`}>{sum.absentDays} vắng</span>}
                             {(sum.lateCnt ?? 0) > 0    && <span className={`${sa.confirmStatChip} ${sa.confirmStatChipWarn}`}>{sum.lateCnt} muộn</span>}
@@ -2217,12 +2205,10 @@ const LEAVE_EXPORT_DEFAULT = ['userName', 'leaveType', 'startDate', 'endDate', '
 
 function getLeaveCell(row, key) {
   switch (key) {
-    case 'leaveType':     return LEAVE_TYPE[row.leaveType]           ?? row.leaveType
+    case 'leaveType':     return LEAVE_LABELS[row.leaveType]           ?? row.leaveType
     case 'startDate':     return fmtDateVI(row.startDate)
     case 'endDate':       return fmtDateVI(row.endDate)
-    case 'totalDays':     return row.totalDays > 0
-                            ? `${row.totalDays} ngày`
-                            : `${countWeekdays(row.startDate, row.endDate)} ngày`
+    case 'totalDays':     return `${Number(row.totalDays ?? 0)} ngày`
     case 'statusLabel':   return LEAVE_STATUS_CFG[row.status]?.label ?? row.status
     case 'reason':        return row.reason         ?? '—'
     case 'approvalNote':  return row.approvalNote   ?? '—'
@@ -2488,6 +2474,8 @@ function AdminLeaveTab({ staffList }) {
   const [pagination,     setPagination]     = useState({ total: 0, totalPages: 1 })
   const [loading,        setLoading]        = useState(true)
   const [reviewTarget,   setReviewTarget]   = useState(null)
+  const [revokeTarget,   setRevokeTarget]   = useState(null)
+  useLeavePolicies()   // nạp bảng nhãn loại nghỉ (điền LEAVE_LABELS)
   const [availableYears, setAvailableYears] = useState([_CY])
   const [filterYear,     setFilterYear]     = useState(_CY)
   const [filterMonth,    setFilterMonth]    = useState(_CM)
@@ -2626,10 +2614,10 @@ function AdminLeaveTab({ staffList }) {
                   return (
                   <tr key={req.id}>
                     <td className={s.tableStrong}>{req.userName}</td>
-                    <td>{LEAVE_TYPE[req.leaveType] ?? req.leaveType}</td>
+                    <td>{LEAVE_LABELS[req.leaveType] ?? req.leaveType}</td>
                     <td>{fmtDateVI(req.startDate)}</td>
                     <td>{fmtDateVI(req.endDate)}</td>
-                    <td className={s.tablePrimary}>{req.totalDays > 0 ? req.totalDays : countWeekdays(req.startDate, req.endDate)} ngày</td>
+                    <td className={s.tablePrimary}>{Number(req.totalDays ?? 0)} ngày{dayPartSuffix(req.dayPart, req.hours)}</td>
                     <td>
                       <span className={`${s.statusPill} ${getRequestStatusClass(req.status)}`}>
                         {st.label}
@@ -2637,7 +2625,7 @@ function AdminLeaveTab({ staffList }) {
                     </td>
                     <td className={s.tableReason}>{req.reason ?? '—'}</td>
                     <td className={s.adminNoteCell}>
-                      {req.status === 'rejected' && req.rejectionNote
+                      {(req.status === 'rejected' || req.status === 'cancelled') && req.rejectionNote
                         ? <span className={s.adminNoteReject}>{req.rejectionNote}</span>
                         : req.status === 'approved' && req.approvalNote
                           ? <span className={s.adminNoteApprove}>{req.approvalNote}</span>
@@ -2651,6 +2639,15 @@ function AdminLeaveTab({ staffList }) {
                           onClick={() => setReviewTarget(req)}
                         >
                           Xét duyệt
+                        </button>
+                      )}
+                      {req.status === 'approved' && (
+                        <button
+                          className={`${s.btnDanger} ${s.btnCompact}`}
+                          onClick={() => setRevokeTarget(req)}
+                          title="Thu hồi đơn đã duyệt (dùng khi duyệt nhầm)"
+                        >
+                          Thu hồi
                         </button>
                       )}
                     </td>
@@ -2684,6 +2681,14 @@ function AdminLeaveTab({ staffList }) {
         />
       )}
 
+      {revokeTarget && (
+        <RevokeLeaveModal
+          request={revokeTarget}
+          onClose={() => setRevokeTarget(null)}
+          onSaved={() => { setRevokeTarget(null); load() }}
+        />
+      )}
+
       {exportOpen && (
         <LeaveExportModal
           year={filterYear}
@@ -2705,14 +2710,26 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
   const [note,   setNote]   = useState('')
   const [saving, setSaving] = useState(false)
 
-  async function handleApprove() {
+  // Duyệt vượt quỹ phép: backend trả 409 kèm code LEAVE_BALANCE_EXCEEDED.
+  // Không chặn cứng — hỏi lại admin, nếu đồng ý thì gửi force và backend ghi rõ
+  // "[Duyệt vượt quỹ ...]" vào ghi chú để còn dấu vết.
+  async function handleApprove(force = false) {
     setSaving(true)
     try {
-      await attendanceApi.approveLeaveRequest(request.id, { approvalNote: note || undefined })
+      await attendanceApi.approveLeaveRequest(request.id, {
+        approvalNote: note || undefined,
+        ...(force ? { force: true } : {}),
+      })
       addToast('Đã duyệt đơn nghỉ phép', 'success')
       onSaved()
     } catch (err) {
-      addToast(err.response?.data?.error?.message ?? 'Không thể duyệt', 'error')
+      const e = err.response?.data?.error
+      if (!force && e?.code === 'LEAVE_BALANCE_EXCEEDED') {
+        setSaving(false)
+        if (window.confirm(`${e.message}\n\nVẫn duyệt đơn này?`)) return handleApprove(true)
+        return
+      }
+      addToast(e?.message ?? 'Không thể duyệt', 'error')
       setSaving(false)
     }
   }
@@ -2734,9 +2751,9 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
       <div className={s.modalForm}>
         <div className={s.reviewCard}>
           <p className={s.reviewCardTitle}>{request.userName}</p>
-          <p className={s.reviewCardText}>{LEAVE_TYPE[request.leaveType] ?? request.leaveType}</p>
+          <p className={s.reviewCardText}>{LEAVE_LABELS[request.leaveType] ?? request.leaveType}</p>
           <p className={s.reviewCardText}>
-            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({request.totalDays > 0 ? request.totalDays : countWeekdays(request.startDate, request.endDate)} ngày)
+            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({Number(request.totalDays ?? 0)} ngày)
           </p>
           {request.reason && (
             <p className={s.reviewCardNote}>{request.reason}</p>
@@ -2749,7 +2766,68 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
         <div className={s.modalActions}>
           <button type="button" onClick={onClose} className={s.btnSecondary} disabled={saving}>Đóng</button>
           <button className={s.btnDanger} disabled={saving} onClick={handleReject}><X size={13} /> Từ chối</button>
-          <button className={s.btnSuccess} disabled={saving} onClick={handleApprove}><Check size={13} /> Duyệt</button>
+          <button className={s.btnSuccess} disabled={saving} onClick={() => handleApprove()}><Check size={13} /> Duyệt</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ── RevokeLeaveModal ──────────────────────────────────────────────────────────
+// Thu hồi đơn ĐÃ DUYỆT (duyệt nhầm). Bắt buộc nhập lý do — cùng chuẩn với
+// reset check-out. Sau khi thu hồi, các ngày trong khoảng đơn được tính lại
+// theo log chấm công thực tế.
+
+function RevokeLeaveModal({ request, onClose, onSaved }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleRevoke() {
+    if (!reason.trim()) {
+      addToast('Vui lòng nhập lý do thu hồi', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      await attendanceApi.revokeLeaveRequest(request.id, { reason: reason.trim() })
+      addToast('Đã thu hồi đơn nghỉ phép', 'success')
+      onSaved()
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể thu hồi đơn', 'error')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title="Thu hồi đơn nghỉ phép" onClose={onClose} width={ATTENDANCE_MODAL_WIDTH}>
+      <div className={s.modalForm}>
+        <div className={s.reviewCard}>
+          <p className={s.reviewCardTitle}>{request.userName}</p>
+          <p className={s.reviewCardText}>{LEAVE_LABELS[request.leaveType] ?? request.leaveType}</p>
+          <p className={s.reviewCardText}>
+            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({Number(request.totalDays ?? 0)} ngày)
+          </p>
+          <p className={s.reviewCardNote}>
+            Đơn sẽ chuyển về trạng thái “Đã huỷ”. Các ngày trong khoảng trên được tính lại
+            theo giờ chấm công thực tế — ngày không có check-in sẽ thành “Vắng mặt”.
+          </p>
+        </div>
+        <div className={s.formGroup}>
+          <label className={`${s.formLabel} ${s.req}`}>Lý do thu hồi</label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className={s.formTextarea}
+            rows={2}
+            placeholder="Ví dụ: duyệt nhầm đơn, nhân viên đã đi làm lại..."
+          />
+        </div>
+        <div className={s.modalActions}>
+          <button type="button" onClick={onClose} className={s.btnSecondary} disabled={saving}>Đóng</button>
+          <button className={s.btnDanger} disabled={saving || !reason.trim()} onClick={handleRevoke}>
+            <X size={13} /> Thu hồi đơn
+          </button>
         </div>
       </div>
     </Modal>
@@ -3149,12 +3227,15 @@ function ReportTab({ year, month }) {
   const totals = useMemo(() => {
     if (!rows.length) return null
     return rows.reduce((acc, r) => {
-      const work  = Number(r.actualWorkDays ?? r.workDays ?? 0)
-      const leave = Number(r.leavePaidDays  ?? r.leaveDays ?? 0)
+      const work   = Number(r.actualWorkDays  ?? r.workDays ?? 0)
+      const leave  = Number(r.leavePaidDays   ?? r.leaveDays ?? 0)
+      const unpaid = Number(r.unpaidLeaveDays ?? 0)
       return {
-        employees: acc.employees + 1,
-        workDays:  acc.workDays  + work,
-        leaveDays: acc.leaveDays + leave,
+        employees:  acc.employees + 1,
+        workDays:   acc.workDays  + work,
+        leaveDays:  acc.leaveDays + leave,
+        unpaidDays: acc.unpaidDays + unpaid,
+        // Tổng công tính lương — KHÔNG cộng nghỉ không lương
         total:     acc.total     + work + leave,
         absent:    acc.absent    + Number(r.absentDays ?? 0),
         late:      acc.late      + Number(r.lateCount  ?? r.lateDays ?? 0),
@@ -3162,7 +3243,7 @@ function ReportTab({ year, month }) {
         otHours:   acc.otHours   + Number(r.approvedOtHours ?? 0),
         perfect:   acc.perfect   + (Number(r.absentDays ?? 0) === 0 && Number(r.lateCount ?? 0) === 0 ? 1 : 0),
       }
-    }, { employees: 0, workDays: 0, leaveDays: 0, total: 0, absent: 0, late: 0, early: 0, otHours: 0, perfect: 0 })
+    }, { employees: 0, workDays: 0, leaveDays: 0, unpaidDays: 0, total: 0, absent: 0, late: 0, early: 0, otHours: 0, perfect: 0 })
   }, [rows])
 
   return (
@@ -3208,11 +3289,15 @@ function ReportTab({ year, month }) {
               </div>
               <div className={`${sa.reportStat} ${sa.reportStatSuccess}`}>
                 <div className={sa.reportStatNum}>{totals.total.toFixed(1)}</div>
-                <div className={sa.reportStatLbl}>Tổng công (ngày)</div>
+                <div className={sa.reportStatLbl}>Tổng công tính lương</div>
               </div>
               <div className={`${sa.reportStat} ${sa.reportStatPrimary}`}>
                 <div className={sa.reportStatNum}>{totals.leaveDays.toFixed(1)}</div>
                 <div className={sa.reportStatLbl}>Nghỉ có lương</div>
+              </div>
+              <div className={`${sa.reportStat} ${totals.unpaidDays > 0 ? sa.reportStatWarning : ''}`}>
+                <div className={sa.reportStatNum}>{totals.unpaidDays.toFixed(1)}</div>
+                <div className={sa.reportStatLbl}>Nghỉ không lương</div>
               </div>
               <div className={`${sa.reportStat} ${totals.absent > 0 ? sa.reportStatDanger : ''}`}>
                 <div className={sa.reportStatNum}>{totals.absent}</div>
@@ -3246,8 +3331,9 @@ function ReportTab({ year, month }) {
                     <th>Nhân viên</th>
                     <th>Chức danh</th>
                     <th className={s.summarySuccess}>Ngày công TT</th>
-                    <th className={s.summaryPrimary}>Nghỉ (TL)</th>
-                    <th>Tổng công</th>
+                    <th className={s.summaryPrimary}>Nghỉ có lương</th>
+                    <th className={s.summaryWarning}>Nghỉ không lương</th>
+                    <th>Tổng công tính lương</th>
                     <th className={s.summaryDanger}>Vắng</th>
                     <th className={s.summaryWarning}>Đi muộn</th>
                     <th className={s.detailValueWarningDark}>Về sớm</th>
@@ -3256,9 +3342,10 @@ function ReportTab({ year, month }) {
                 </thead>
                 <tbody>
                   {rows.map((r, i) => {
-                    const work  = Number(r.actualWorkDays ?? r.workDays ?? 0)
-                    const leave = Number(r.leavePaidDays  ?? r.leaveDays ?? 0)
-                    const total = work + leave
+                    const work   = Number(r.actualWorkDays  ?? r.workDays ?? 0)
+                    const leave  = Number(r.leavePaidDays   ?? r.leaveDays ?? 0)
+                    const unpaid = Number(r.unpaidLeaveDays ?? 0)
+                    const total  = work + leave
                     const absent = Number(r.absentDays ?? 0)
                     const late   = Number(r.lateCount ?? r.lateDays ?? 0)
                     const ot     = Number(r.approvedOtHours ?? 0)
@@ -3274,6 +3361,7 @@ function ReportTab({ year, month }) {
                         <td className={s.tableMuted}>{r.jobTitle ?? '—'}</td>
                         <td className={s.tableSuccess}>{work.toFixed(1)}</td>
                         <td className={leave > 0 ? s.tablePrimary : s.tableMuted}>{leave.toFixed(1)}</td>
+                        <td className={unpaid > 0 ? s.tableWarning : s.tableMuted}>{unpaid.toFixed(1)}</td>
                         <td className={s.tableSemibold}>{total.toFixed(1)}</td>
                         <td className={absent > 0 ? s.tableDanger : s.tableMuted}>{absent}</td>
                         <td className={late > 0 ? s.tableWarning : s.tableMuted}>{late}</td>
@@ -3289,6 +3377,7 @@ function ReportTab({ year, month }) {
                       <td colSpan={2} className={s.tableTotalLabel}>Tổng cộng</td>
                       <td className={s.tableSuccess}>{totals.workDays.toFixed(1)}</td>
                       <td className={s.tableBold}>{totals.leaveDays.toFixed(1)}</td>
+                      <td className={totals.unpaidDays > 0 ? s.tableWarning : s.tableMuted}>{totals.unpaidDays.toFixed(1)}</td>
                       <td className={s.tableSemibold}>{totals.total.toFixed(1)}</td>
                       <td className={totals.absent > 0 ? s.tableDanger : s.tableMuted}>{totals.absent}</td>
                       <td className={totals.late > 0 ? s.tableWarning : s.tableMuted}>{totals.late}</td>

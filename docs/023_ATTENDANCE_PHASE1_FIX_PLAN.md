@@ -1,7 +1,14 @@
 # 023 — Chấm công: Kế hoạch sửa lỗi Giai đoạn 1
 
-> **Trạng thái:** CHỜ DUYỆT — chưa thực hiện
+> **Trạng thái:** ✅ ĐÃ TRIỂN KHAI CODE (14/08/2026) — chờ chạy checklist nghiệm thu ở mục 4
 > **Ngày lập:** 14/08/2026
+>
+> **Khác biệt so với plan khi thi công** (chi tiết ở mục 8):
+> - Gom 4 bản sao SQL vào module dùng chung `aggregate.sql.js` ngay ở GĐ1 (plan định để GĐ2)
+> - Thêm dọn `leave_request_id` khi ngày không còn thuộc đơn nghỉ nào
+> - Thêm `ORDER BY created_at` cho truy vấn tìm đơn nghỉ phủ ngày (trước đó `LIMIT 1` không xác định)
+> - Sửa `payroll.upsertRecord` phân biệt "gửi danh sách rỗng" vs "không gửi trường"
+> - Mốc ngày `attendance.strict_unpaid_from` hiện **để trống** = áp dụng toàn bộ lịch sử
 > **Phạm vi:** Sửa lỗi logic module chấm công. KHÔNG đổi schema, KHÔNG migration.
 > **Giai đoạn 2** (nghỉ nửa ngày, bảng chính sách, tách cột đơn vị công) nằm ngoài tài liệu này.
 
@@ -337,6 +344,92 @@ và `base_salary` nhập tay ⇒ **không có nguy cơ lương tự nhảy số.
 | Dữ liệu sai do thao tác | Restore từ dump ở bước 0 |
 
 Không cần downtime. Không ảnh hưởng đăng nhập / phân quyền / check-in trong lúc deploy.
+
+---
+
+## 8. Nhật ký thi công (14/08/2026)
+
+### File đã đổi
+
+**Backend**
+| File | Việc |
+|------|------|
+| `modules/attendance/aggregate.sql.js` | **MỚI** — nơi duy nhất định nghĩa biểu thức tổng hợp công + đọc config mốc ngày |
+| `modules/attendance/attendance.service.js` | Đảo Step 5 (nghỉ phép) lên trước Step 5.5 (admin); guard `is_adjusted`; gỡ `leave_request_id` mồ côi; 2 truy vấn tổng hợp dùng `summaryColumns` |
+| `modules/attendance/report.service.js` | 2 truy vấn tổng hợp dùng `summaryColumns`; `total_paid_days` không cộng nghỉ KL; 2 export thêm cột |
+| `modules/attendance/leave.service.js` | Tách `recalcRange()`; thêm `revokeLeaveRequest()` |
+| `modules/attendance/leave.router.js` | `PUT /leave-requests/:id/revoke` (admin) + openapi |
+| `modules/attendance/settings.service.js` | Thêm khoá `attendance.strict_unpaid_from` (có validate YYYY-MM-DD) |
+| `modules/attendance/attendance.controller.js` | Nhận `strictUnpaidFrom` ('' là giá trị hợp lệ) |
+| `modules/attendance/attendance.router.js` | openapi cho khoá mới |
+| `modules/payroll/payroll.service.js` | `components` MERGE thay vì ghi đè + phân biệt danh sách rỗng |
+| `utils/emailTemplates.js` | Thêm dòng `{{unpaid_days}}`, đổi nhãn "Tổng công tính lương" |
+
+**Frontend**
+| File | Việc |
+|------|------|
+| `api/attendance.js` | `revokeLeaveRequest()` |
+| `pages/Attendance/AttendanceAdmin.jsx` | Nút + modal Thu hồi; cột "Nghỉ không lương" ở bảng báo cáo, thẻ thống kê, chip xem trước email, danh sách cột export |
+| `pages/Settings/AttendanceConfigSection.jsx` | Ô cấu hình mốc áp dụng (DateBox + Lưu + Xoá mốc) |
+
+### Quyết định phát sinh cần biết
+
+1. **Gom SQL sớm hơn plan.** Việc sửa đúng 4 bản sao bằng tay là nguồn lỗi lớn hơn giá trị của kỷ luật phạm vi, nên tạo `aggregate.sql.js` ngay. KHÔNG phải view DB (vẫn không migration) — chỉ là hằng chuỗi JS dùng chung.
+
+2. **`COALESCE(..., FALSE)` là bắt buộc** trong vị ngữ unpaid. Ngày lễ / ngày đi làm không gắn đơn nghỉ → `lr.leave_type IS NULL` → phép so sánh trả NULL → `NOT NULL` = NULL → FILTER sẽ loại nhầm cả ngày lễ khỏi công hưởng lương. Đây là bẫy dễ bỏ sót nhất của fix này.
+
+3. **Mốc ngày truyền dạng `$n::date IS NULL`**, JS đổi `''` → `null`. Không dùng `$n = ''` vì SQL không đảm bảo short-circuit và `''::date` sẽ ném lỗi.
+
+4. **Gỡ `leave_request_id` khi ngày không còn đơn nghỉ.** Không có bước này, đơn bị thu hồi để lại FK mồ côi và fix 3 sẽ phân loại nhầm ngày đi làm bình thường thành nghỉ không lương. Phát hiện khi ghép Fix 3 với Fix 4.
+
+5. **Email template có thể cần cập nhật tay.** `getTemplate()` ưu tiên bản lưu trong `system_configs`; nếu admin đã sửa template thì bản DB KHÔNG có `{{unpaid_days}}` → phải vào Cài đặt › Mẫu email lưu lại.
+
+### Đã kiểm chứng trên DB local (14/08/2026)
+
+Chạy thật trên `ke_toan_tam_an-postgres-1` + `ke_toan_tam_an-backend-1`.
+
+| Hạng mục | Kết quả |
+|----------|---------|
+| `node --check` 8 file BE, require 9 module + `app.js` | Pass |
+| `npm run build` frontend | Pass |
+| Mọi class CSS mới dùng (`sa.confirmStatChipWarn`, `s.summaryWarning`, `s.tableWarning`, `s.req`, `s.btnOutline`…) | Tồn tại |
+| Số cột bảng báo cáo | thead 10 / tbody 10 / tfoot 2+8 — khớp |
+| **Bản ghi mồ côi** (`on_leave` mà `leave_request_id IS NULL`) | **0** — không phát sinh việc xử lý tay |
+| `getMonthlyReport` + `getAttendanceSummary` chạy thật | Pass, hai hàm cho số **khớp nhau** |
+| Đối chiếu cũ/mới | T7: nghỉ 7.0 → 2.0 có lương + 5.0 không lương · T8: 3.0 → 1.0 + 2.0 — **bảo toàn tổng, không thất thoát** |
+| Bẫy `COALESCE` | Chứng minh bằng SQL: `NOT (NULL='unpaid')` = NULL (loại nhầm), `NOT COALESCE(…,FALSE)` = TRUE (đúng) |
+| 2 export Excel sinh + đọc lại | Pass — có cột "Nghỉ không lương", "Tổng công tính lương" |
+| `PUT /leave-requests/:id/revoke` | 401 (đã đăng ký, đúng như `/approve`) |
+| Validate mốc ngày sai định dạng | Chặn đúng, HTTP 400 |
+
+**Lỗi thật đã phát hiện & xử lý trong lúc kiểm chứng:**
+1. `/revoke` ban đầu trả **404** — container backend chạy bản cũ trong bộ nhớ (code có mount nhưng process chưa nạp lại). Đã `docker compose restart backend` → 401. **Khi deploy phải restart backend, không chỉ copy code.**
+2. **Template email đã bị tuỳ biến trong `system_configs` và KHÔNG có `{{unpaid_days}}`** → dòng nghỉ không lương sẽ không hiện trong email. Sửa `DEFAULTS` trong code không có tác dụng vì `getTemplate()` ưu tiên bản DB. Phải vá bản DB hoặc sửa qua Cài đặt › Mẫu email. **CHƯA XỬ LÝ.**
+
+### Kiểm thử end-to-end qua HTTP (14/08/2026) — **40 PASS / 0 FAIL**
+
+Chạy bằng token JWT thật, gọi đúng các endpoint mà giao diện gọi → phủ router + phân quyền + service.
+Script: `scratchpad/qa_phase1.js` (Fix 1–4) và `qa_phase1b.js` (Fix 5 + hồi quy).
+
+| Nhóm | Kết quả |
+|------|---------|
+| **Fix 1** | Admin tạo+duyệt đơn nghỉ → ngày đó `on_leave` (trước fix: `present` 1.0 công), `leave_request_id` được gắn |
+| **Fix 2** | Nhập tay giờ 08:00–17:00 → duyệt đơn nghỉ phủ ngày đó → giờ vào/ra + status **giữ nguyên**, `leave_request_id` vẫn gắn |
+| **Fix 3** | Duyệt đơn `unpaid` → nghỉ KL 0→1, nghỉ CL **không đổi**, tổng công tính lương **không tăng**; `/report` khớp `/records/summary` |
+| **Fix 4** | Thiếu lý do→422 · nhân viên thu hồi→403 · admin→200 · đơn `cancelled` · `[Thu hồi]` trong note · ngày về `absent` · FK gỡ về NULL · báo cáo về số cũ · thu hồi lần 2→404 |
+| **Fix 5** | `attendance_summary` có `unpaid_leave_days`; `total_paid_days` = TT + nghỉ CL · sửa lương → summary **còn** · sync lại → `allowanceItems` **còn** · xoá hết phụ cấp → thật sự rỗng |
+| **Hồi quy** | Check-in/out, `/today`, reset check-out, tạo+duyệt OT, danh sách chấm công, danh sách đơn nghỉ — đều bình thường |
+
+**Dọn dẹp:** xoá 3 đơn nghỉ test, 3 bản ghi ngày tương lai, 6 payroll_records, mọi log/adjustment gắn dấu.
+Đối chiếu: `leave_requests` 9→9 · `attendance_records` 188→188 · `payroll_records` 0→0 · mồ côi 0. **DB về đúng nguyên trạng.**
+
+**Ghi chú kỹ thuật:** `payroll.schema.js` đặt `allowanceItems: z.array(...).optional().default([])` → sau validate luôn là mảng, nên nhánh `sentItems` trong `upsertRecord` thực tế luôn đúng. Không phải lỗi, nhưng nếu sau này bỏ `.default([])` thì nhánh đó mới phát huy tác dụng.
+
+**Còn phải làm tay (không tự động kiểm chứng được):**
+- **Bấm nút thật trong trình duyệt** — dự án chưa có Playwright/Cypress nên không tự động hoá được phần render: nút "Thu hồi" có hiện trên dòng đơn đã duyệt không, modal có mở không, cột "Nghỉ không lương" có hiển thị đúng không, ô cấu hình mốc ngày trong Cài đặt có lưu được không.
+- **Gửi email xác nhận thật** (cần template DB đã có `{{unpaid_days}}`).
+
+**Ghi nhận thêm:** `saturdayMode = workday` — công ty CÓ làm thứ 7. Xác nhận lỗi `countWorkingDays` bỏ sót thứ 7 (`dow !== 6`) là có thật và đang ảnh hưởng: mọi đơn nghỉ trải qua thứ 7 đều thiếu ngày. Thuộc phạm vi GĐ2.
 
 ---
 

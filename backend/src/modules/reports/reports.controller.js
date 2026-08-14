@@ -1,10 +1,19 @@
 const svc = require('./reports.service')
 
+// YYYY-MM-DD theo GIỜ ĐỊA PHƯƠNG (TZ tiến trình = Asia/Ho_Chi_Minh) — KHÔNG dùng
+// toISOString (UTC) vì sẽ lệch ngày lúc nửa đêm.
+function ymdLocal(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function defaultDateRange() {
   const to   = new Date()
   const from = new Date()
   from.setMonth(from.getMonth() - 3)
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
+  return { from: ymdLocal(from), to: ymdLocal(to) }
 }
 
 async function getStaffPerformance(req, res, next) {
@@ -82,7 +91,7 @@ async function exportReport(req, res, next) {
 
     let data
     const now = new Date()
-    const defaultRange = { from: new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) }
+    const defaultRange = { from: ymdLocal(new Date(now.getFullYear(), now.getMonth() - 2, 1)), to: ymdLocal(now) }
     const q = req.query
 
     if      (type === 'staff')    data = await svc.staffPerformance({ ...defaultRange, ...q })
@@ -95,7 +104,7 @@ async function exportReport(req, res, next) {
     const buffer = await svc.exportToExcel(type, data)
 
     const names = { staff: 'hieu-suat-nhan-su', company: 'tinh-trang-khach-hang', sla: 'tuan-thu-sla', aging: 'ton-dong', velocity: 'hieu-suat', forecast: 'du-bao' }
-    const filename = `${names[type]}-${now.toISOString().slice(0, 10)}.xlsx`
+    const filename = `${names[type]}-${ymdLocal(now)}.xlsx`
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)

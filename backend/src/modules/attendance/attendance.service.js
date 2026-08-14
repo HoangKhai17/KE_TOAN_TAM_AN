@@ -1,6 +1,7 @@
 const { query }                          = require('../../config/db')
 const { sendMail }                       = require('../../utils/mailer')
 const { getTemplate, renderTemplate }    = require('../../utils/emailTemplates')
+const { DAILY_VIEW, summaryColumns, getStrictUnpaidFrom } = require('./aggregate.sql')
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,35 @@ async function resolveWorkSchedule(date) {
   }
 }
 
+// ── Helpers cho phép tính đơn vị công ─────────────────────────────────────────
+
+// Làm tròn 3 chữ số — khớp NUMERIC(4,3) của cột đơn vị công. Cần thiết vì
+// paid_rate 0.75 × nửa ngày = 0.375, và phép cộng số thực dễ sinh đuôi 0.30000000004.
+const round3 = (n) => Math.round(n * 1000) / 1000
+
+// Số giờ chuẩn của ca: ưu tiên required_hours khai báo, nếu không thì suy ra từ
+// giờ bắt đầu/kết thúc trừ nghỉ trưa. Fallback 8h khi ca chưa cấu hình gì.
+function deriveRequiredHours(ws) {
+  if (ws?.required_hours != null) return parseFloat(ws.required_hours)
+  if (ws?.start_time && ws?.end_time) {
+    const [sh, sm] = ws.start_time.split(':').map(Number)
+    const [eh, em] = ws.end_time.split(':').map(Number)
+    const h = (eh * 60 + em - sh * 60 - sm) / 60 - (ws.break_minutes ?? 60) / 60
+    if (h > 0) return h
+  }
+  return 8
+}
+
+// Quy đổi thời lượng đơn nghỉ ra đơn vị công (tối đa 1.0 cho một ngày).
+function unitsFromDayPart(dayPart, hours, requiredHours) {
+  switch (dayPart) {
+    case 'morning':
+    case 'afternoon': return 0.5
+    case 'hours':     return round3(Math.min(1, (parseFloat(hours) || 0) / (requiredHours || 8)))
+    default:          return 1.0   // 'full' và mọi giá trị lạ
+  }
+}
+
 // ── Core Calculation ──────────────────────────────────────────────────────────
 
 async function calculateAttendanceRecord(userId, date) {
@@ -111,189 +141,202 @@ async function calculateAttendanceRecord(userId, date) {
   // Step 2: day off → no record needed
   if (ws.is_day_off) return null
 
-  // Step 4: public holiday
+  const requiredHours = deriveRequiredHours(ws)
+
+  // Step 3: public holiday — nghỉ HƯỞNG LƯƠNG, không phải công thực tế
   const holidayRes = await query(
     'SELECT name FROM public_holidays WHERE holiday_date = $1',
     [date]
   )
   if (holidayRes.rows.length > 0) {
     const { rows } = await query(
-      `INSERT INTO attendance_records (user_id, work_date, shift_id, status, work_units, is_holiday)
-       VALUES ($1, $2, $3, 'holiday', 1.0, TRUE)
+      `INSERT INTO attendance_records
+         (user_id, work_date, shift_id, status, work_units, paid_leave_units, unpaid_leave_units, is_holiday)
+       VALUES ($1, $2, $3, 'holiday', 0, 1.0, 0, TRUE)
        ON CONFLICT (user_id, work_date) DO UPDATE SET
-         status = 'holiday', work_units = 1.0, is_holiday = TRUE,
-         shift_id = $3, updated_at = NOW()
+         status = 'holiday', work_units = 0, paid_leave_units = 1.0, unpaid_leave_units = 0,
+         is_holiday = TRUE, shift_id = $3, updated_at = NOW()
        RETURNING *`,
       [userId, date, ws.shift_id ?? null]
     )
     return toRecordDto(rows[0])
   }
 
-  // Step 4.5: admin users get full attendance automatically — no check-in required.
-  // check_in/out times are derived from the shift's configured start/end times.
-  const userRoleRes = await query('SELECT role FROM users WHERE id = $1', [userId])
-  if (userRoleRes.rows[0]?.role === 'admin') {
-    let adminCheckIn   = null
-    let adminCheckOut  = null
-    let adminActualHrs = null
-
-    if (ws.start_time) adminCheckIn  = `${date} ${ws.start_time}`
-    if (ws.end_time)   adminCheckOut = `${date} ${ws.end_time}`
-    if (ws.start_time && ws.end_time) {
-      const [sh, sm] = ws.start_time.split(':').map(Number)
-      const [eh, em] = ws.end_time.split(':').map(Number)
-      adminActualHrs = Math.max(0, (eh * 60 + em - sh * 60 - sm) / 60 - (ws.break_minutes ?? 60) / 60)
-    }
-
-    const { rows } = await query(
-      `INSERT INTO attendance_records
-         (user_id, work_date, shift_id, check_in_time, check_out_time, actual_hours,
-          late_minutes, early_minutes, status, work_units, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 'present', 1.0, 'Tự động - Admin')
-       ON CONFLICT (user_id, work_date) DO UPDATE SET
-         status         = CASE WHEN attendance_records.is_adjusted THEN attendance_records.status         ELSE 'present'         END,
-         work_units     = CASE WHEN attendance_records.is_adjusted THEN attendance_records.work_units     ELSE 1.0               END,
-         check_in_time  = CASE WHEN attendance_records.is_adjusted THEN attendance_records.check_in_time  ELSE $4               END,
-         check_out_time = CASE WHEN attendance_records.is_adjusted THEN attendance_records.check_out_time ELSE $5               END,
-         actual_hours   = CASE WHEN attendance_records.is_adjusted THEN attendance_records.actual_hours   ELSE $6               END,
-         late_minutes   = CASE WHEN attendance_records.is_adjusted THEN attendance_records.late_minutes   ELSE 0                END,
-         early_minutes  = CASE WHEN attendance_records.is_adjusted THEN attendance_records.early_minutes  ELSE 0                END,
-         notes          = CASE WHEN attendance_records.is_adjusted THEN attendance_records.notes          ELSE 'Tự động - Admin' END,
-         shift_id       = $3,
-         updated_at     = NOW()
-       RETURNING *`,
-      [userId, date, ws.shift_id ?? null, adminCheckIn, adminCheckOut, adminActualHrs]
-    )
-    return toRecordDto(rows[0])
-  }
-
-  // Step 5: approved leave covers this date
+  // Step 4: đơn nghỉ đã duyệt phủ ngày này + chính sách của loại nghỉ đó
   const leaveRes = await query(
-    `SELECT id, leave_type FROM leave_requests
-     WHERE user_id = $1 AND status = 'approved'
-       AND start_date <= $2 AND end_date >= $2
+    `SELECT lr.id, lr.leave_type, lr.day_part, lr.hours,
+            p.is_paid, p.paid_rate, p.counts_as_work, p.maps_to_status
+     FROM leave_requests lr
+     LEFT JOIN leave_policies p ON p.leave_type = lr.leave_type
+     WHERE lr.user_id = $1 AND lr.status = 'approved'
+       AND lr.start_date <= $2 AND lr.end_date >= $2
+     ORDER BY lr.created_at
      LIMIT 1`,
     [userId, date]
   )
-  if (leaveRes.rows.length > 0) {
-    const leave = leaveRes.rows[0]
-    // Map leave_type → attendance_status (enum only has on_leave/business_trip/wfh)
-    const leaveStatusMap = { business_trip: 'business_trip', wfh: 'wfh' }
-    const attendanceStatus = leaveStatusMap[leave.leave_type] ?? 'on_leave'
-    const { rows } = await query(
-      `INSERT INTO attendance_records (user_id, work_date, shift_id, status, work_units, leave_request_id)
-       VALUES ($1, $2, $3, $4, 1.0, $5)
-       ON CONFLICT (user_id, work_date) DO UPDATE SET
-         status = $4, work_units = 1.0, leave_request_id = $5,
-         shift_id = $3, updated_at = NOW()
-       RETURNING *`,
-      [userId, date, ws.shift_id ?? null, attendanceStatus, leave.id]
-    )
-    return toRecordDto(rows[0])
+  const leave = leaveRes.rows[0] ?? null
+
+  // Chính sách mặc định khi loại nghỉ chưa được cấu hình: nghỉ có lương nguyên ngày.
+  const policy = leave
+    ? {
+        isPaid:       leave.is_paid       ?? true,
+        paidRate:     leave.paid_rate     != null ? parseFloat(leave.paid_rate) : 1,
+        countsAsWork: leave.counts_as_work ?? false,
+        mapsToStatus: leave.maps_to_status ?? 'on_leave',
+      }
+    : null
+
+  // Step 5: quy đổi thời lượng đơn nghỉ ra ĐƠN VỊ CÔNG
+  //   full = 1.0 · morning/afternoon = 0.5 · hours = số giờ / giờ chuẩn của ca
+  let leaveUnits  = 0   // phần NGHỈ (annual/sick/unpaid…)
+  let workFromLeave = 0 // phần vẫn tính là ĐANG LÀM VIỆC (wfh, công tác)
+  if (leave) {
+    const u = unitsFromDayPart(leave.day_part, leave.hours, requiredHours)
+    if (policy.countsAsWork) workFromLeave = u
+    else                     leaveUnits    = u
   }
 
-  // Step 6: get MIN(check_in) and MAX(check_out) from logs
-  const timesRes = await query(
-    `SELECT
-       MIN(logged_at) FILTER (WHERE log_type = 'check_in')  AS check_in_time,
-       MAX(logged_at) FILTER (WHERE log_type = 'check_out') AS check_out_time
-     FROM attendance_logs
-     WHERE user_id = $1 AND logged_at::date = $2`,
-    [userId, date]
-  )
-  const checkInTime  = timesRes.rows[0].check_in_time  ?? null
-  const checkOutTime = timesRes.rows[0].check_out_time ?? null
+  // Step 6: công thực tế — chỉ tính cho phần ngày CÒN LẠI sau khi trừ đơn nghỉ.
+  // Đây là điểm khác căn bản so với bản cũ: trước đây đơn nghỉ GHI ĐÈ cả ngày,
+  // nên "nửa ngày làm + nửa ngày nghỉ" không thể biểu diễn được.
+  const remaining = round3(1 - leaveUnits - workFromLeave)
 
-  // No check-in → absent
-  if (!checkInTime) {
-    const { rows } = await query(
-      `INSERT INTO attendance_records (user_id, work_date, shift_id, status, work_units,
-         check_in_time, check_out_time)
-       VALUES ($1, $2, $3, 'absent', 0.0, NULL, NULL)
-       ON CONFLICT (user_id, work_date) DO UPDATE SET
-         status = 'absent', work_units = 0.0,
-         check_in_time = NULL, check_out_time = NULL,
-         shift_id = $3, updated_at = NOW()
-       RETURNING *`,
-      [userId, date, ws.shift_id ?? null]
-    )
-    return toRecordDto(rows[0])
+  let workUnits     = workFromLeave
+  let checkInTime   = null
+  let checkOutTime  = null
+  let actualHours   = null
+  let lateMinutes   = 0
+  let earlyMinutes  = 0
+  let timeStatus    = null
+
+  const userRoleRes = await query('SELECT role FROM users WHERE id = $1', [userId])
+  const isAdmin = userRoleRes.rows[0]?.role === 'admin'
+
+  if (remaining > 0.001) {
+    if (isAdmin) {
+      // Admin đủ công tự động — nhưng CHỈ phần ngày không nghỉ.
+      workUnits = round3(workUnits + remaining)
+      timeStatus = 'present'
+      if (ws.start_time) checkInTime  = `${date} ${ws.start_time}`
+      if (ws.end_time)   checkOutTime = `${date} ${ws.end_time}`
+      if (ws.start_time && ws.end_time) {
+        const [sh, sm] = ws.start_time.split(':').map(Number)
+        const [eh, em] = ws.end_time.split(':').map(Number)
+        actualHours = Math.max(0, (eh * 60 + em - sh * 60 - sm) / 60 - (ws.break_minutes ?? 60) / 60)
+      }
+    } else {
+      const timesRes = await query(
+        `SELECT
+           MIN(logged_at) FILTER (WHERE log_type = 'check_in')  AS check_in_time,
+           MAX(logged_at) FILTER (WHERE log_type = 'check_out') AS check_out_time
+         FROM attendance_logs
+         WHERE user_id = $1 AND logged_at::date = $2`,
+        [userId, date]
+      )
+      checkInTime  = timesRes.rows[0].check_in_time  ?? null
+      checkOutTime = timesRes.rows[0].check_out_time ?? null
+
+      if (checkInTime) {
+        // Nghỉ trưa trừ theo TỈ LỆ phần ngày còn phải làm: người nghỉ phép buổi chiều
+        // chỉ làm buổi sáng thì không ăn trọn 1 tiếng nghỉ trưa của cả ngày.
+        const breakHours = (ws.break_minutes ?? 60) / 60 * remaining
+        if (checkOutTime) {
+          const diffHours = (new Date(checkOutTime) - new Date(checkInTime)) / 3600000
+          actualHours = Math.max(0, diffHours - breakHours)
+        }
+
+        // Nghỉ có phép một phần ngày thì KHÔNG tính trễ/sớm ở phía được nghỉ:
+        // nghỉ phép buổi chiều mà bị gắn nhãn "Về sớm" là sai và gây oan cho nhân viên.
+        const partial     = leaveUnits > 0 && leaveUnits < 1
+        const skipLate    = partial && (leave?.day_part === 'morning'   || leave?.day_part === 'hours')
+        const skipEarly   = partial && (leave?.day_part === 'afternoon' || leave?.day_part === 'hours')
+
+        if (ws.start_time && !skipLate) {
+          const [sh, sm] = ws.start_time.split(':').map(Number)
+          const ciDate = new Date(checkInTime)
+          const shiftStart = new Date(ciDate)
+          shiftStart.setHours(sh, sm, 0, 0)
+          const diffMin = (ciDate - shiftStart) / 60000
+          const tol = ws.tolerance_in ?? 15
+          if (diffMin > tol) lateMinutes = Math.floor(diffMin - tol)
+        }
+        if (ws.end_time && checkOutTime && !skipEarly) {
+          const [eh, em] = ws.end_time.split(':').map(Number)
+          const coDate = new Date(checkOutTime)
+          const shiftEnd = new Date(coDate)
+          shiftEnd.setHours(eh, em, 0, 0)
+          const diffMin = (shiftEnd - coDate) / 60000
+          const tol = ws.tolerance_out ?? 15
+          if (diffMin > tol) earlyMinutes = Math.floor(diffMin - tol)
+        }
+
+        // Ngưỡng công theo tỉ lệ giờ làm — so với giờ chuẩn của PHẦN NGÀY CÒN LẠI,
+        // không phải cả ngày. Nghỉ phép buổi chiều rồi làm đủ buổi sáng thì phải
+        // được trọn 0.5 công; nếu so với 8 giờ cả ngày sẽ ra 0 công.
+        let logUnits = 0
+        const requiredForPortion = requiredHours * remaining
+        if (actualHours != null && requiredForPortion > 0) {
+          const ratio = actualHours / requiredForPortion
+          if (ratio >= 0.8)      logUnits = remaining
+          else if (ratio >= 0.5) logUnits = round3(remaining * 0.5)
+        }
+        workUnits = round3(workUnits + Math.min(logUnits, remaining))
+
+        if (lateMinutes > 0 && earlyMinutes > 0) timeStatus = 'late_and_early'
+        else if (lateMinutes > 0)                timeStatus = 'late'
+        else if (earlyMinutes > 0)               timeStatus = 'early_leave'
+        else                                     timeStatus = 'present'
+      }
+    }
   }
 
-  // Step 7: actual_hours (only after checkout)
-  let actualHours = null
-  const breakHours = (ws.break_minutes ?? 60) / 60
+  // Step 7: chia phần nghỉ theo chính sách hưởng lương
+  const paidLeaveUnits   = policy && policy.isPaid ? round3(leaveUnits * policy.paidRate) : 0
+  const unpaidLeaveUnits = round3(leaveUnits - paidLeaveUnits)
 
-  if (checkOutTime) {
-    const diffHours = (new Date(checkOutTime) - new Date(checkInTime)) / 3600000
-    actualHours = Math.max(0, diffHours - breakHours)
-  }
+  // Step 8: status giờ chỉ là NHÃN HIỂN THỊ — mọi phép tính công đọc từ các cột đơn vị.
+  //   nghỉ trọn ngày            → nhãn của loại nghỉ
+  //   có đi làm (dù nửa ngày)   → nhãn theo giờ chấm công
+  //   không làm, có nghỉ một phần → nhãn của loại nghỉ
+  //   không làm, không nghỉ     → vắng mặt
+  let status
+  if (leave && leaveUnits >= 0.999)      status = policy.mapsToStatus
+  else if (workUnits > 0)                status = timeStatus ?? 'present'
+  else if (leaveUnits > 0)               status = policy.mapsToStatus
+  else                                   status = 'absent'
 
-  // Required hours from shift definition
-  let requiredHours = ws.required_hours != null ? parseFloat(ws.required_hours) : null
-  if (!requiredHours && ws.start_time && ws.end_time) {
-    const [sh, sm] = ws.start_time.split(':').map(Number)
-    const [eh, em] = ws.end_time.split(':').map(Number)
-    requiredHours = (eh * 60 + em - sh * 60 - sm) / 60 - breakHours
-  }
-
-  // Step 8: late_minutes and early_minutes
-  let lateMinutes  = 0
-  let earlyMinutes = 0
-
-  if (ws.start_time) {
-    const [sh, sm] = ws.start_time.split(':').map(Number)
-    const ciDate = new Date(checkInTime)
-    const shiftStart = new Date(ciDate)
-    shiftStart.setHours(sh, sm, 0, 0)
-    const diffMin = (ciDate - shiftStart) / 60000
-    const tol = ws.tolerance_in ?? 15
-    if (diffMin > tol) lateMinutes = Math.floor(diffMin - tol)
-  }
-
-  if (ws.end_time && checkOutTime) {
-    const [eh, em] = ws.end_time.split(':').map(Number)
-    const coDate = new Date(checkOutTime)
-    const shiftEnd = new Date(coDate)
-    shiftEnd.setHours(eh, em, 0, 0)
-    const diffMin = (shiftEnd - coDate) / 60000
-    const tol = ws.tolerance_out ?? 15
-    if (diffMin > tol) earlyMinutes = Math.floor(diffMin - tol)
-  }
-
-  // Step 9: work_units
-  let workUnits = 0.0
-  if (actualHours != null && requiredHours) {
-    const ratio = actualHours / requiredHours
-    if (ratio >= 0.8)      workUnits = 1.0
-    else if (ratio >= 0.5) workUnits = 0.5
-  }
-
-  // Step 10: status
-  let status = 'present'
-  if (lateMinutes > 0 && earlyMinutes > 0) status = 'late_and_early'
-  else if (lateMinutes > 0)  status = 'late'
-  else if (earlyMinutes > 0) status = 'early_leave'
-
-  // Step 11: upsert
+  // Step 9: upsert. is_adjusted đóng băng phần admin đã sửa tay (giờ vào/ra, công
+  // thực tế, nhãn) nhưng KHÔNG đóng băng phần nghỉ — đơn nghỉ duyệt sau là thông tin
+  // mới hợp lệ, và leave_request_id luôn phải phản ánh đúng thực tế.
   const { rows } = await query(
     `INSERT INTO attendance_records
        (user_id, work_date, shift_id, check_in_time, check_out_time, actual_hours,
-        late_minutes, early_minutes, work_units, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        late_minutes, early_minutes, work_units, paid_leave_units, unpaid_leave_units,
+        status, leave_request_id, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
      ON CONFLICT (user_id, work_date) DO UPDATE SET
-       shift_id      = $3,
-       check_in_time = $4,
-       check_out_time= $5,
-       actual_hours  = $6,
-       late_minutes  = $7,
-       early_minutes = $8,
-       work_units    = $9,
-       status        = $10,
-       updated_at    = NOW()
+       shift_id       = $3,
+       check_in_time  = CASE WHEN attendance_records.is_adjusted THEN attendance_records.check_in_time  ELSE $4  END,
+       check_out_time = CASE WHEN attendance_records.is_adjusted THEN attendance_records.check_out_time ELSE $5  END,
+       actual_hours   = CASE WHEN attendance_records.is_adjusted THEN attendance_records.actual_hours   ELSE $6  END,
+       late_minutes   = CASE WHEN attendance_records.is_adjusted THEN attendance_records.late_minutes   ELSE $7  END,
+       early_minutes  = CASE WHEN attendance_records.is_adjusted THEN attendance_records.early_minutes  ELSE $8  END,
+       -- Giữ điều chỉnh tay của admin, NHƯNG vẫn phải lọt trần 1.0: nếu ngày đó
+       -- sau này được duyệt nghỉ nửa/cả ngày thì phần công thực tế phải co lại,
+       -- nếu không CHECK sẽ chặn và cả lần tính lại bị huỷ.
+       work_units     = CASE WHEN attendance_records.is_adjusted
+                             THEN LEAST(attendance_records.work_units, 1.0 - $10 - $11)
+                             ELSE $9 END,
+       status         = CASE WHEN attendance_records.is_adjusted THEN attendance_records.status         ELSE $12 END,
+       notes          = CASE WHEN attendance_records.is_adjusted THEN attendance_records.notes          ELSE $14 END,
+       paid_leave_units   = $10,
+       unpaid_leave_units = $11,
+       leave_request_id   = $13,
+       updated_at         = NOW()
      RETURNING *`,
     [userId, date, ws.shift_id ?? null, checkInTime, checkOutTime, actualHours,
-     lateMinutes, earlyMinutes, workUnits, status]
+     lateMinutes, earlyMinutes, workUnits, paidLeaveUnits, unpaidLeaveUnits,
+     status, leave?.id ?? null, isAdmin && remaining > 0.001 ? 'Tự động - Admin' : null]
   )
   return toRecordDto(rows[0])
 }
@@ -433,23 +476,19 @@ async function getAttendanceSummary({ userId, month, year }) {
   const lastDay = new Date(y, m, 0).getDate()
   const to   = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-  const extraCond = userId ? 'AND ar.user_id = $3' : ''
-  const params    = userId ? [from, to, userId] : [from, to]
+  const cutoff    = await getStrictUnpaidFrom()
+  const params    = userId ? [from, to, cutoff, userId] : [from, to, cutoff]
+  const extraCond = userId ? 'AND ar.user_id = $4' : ''
 
   const { rows } = await query(
     `SELECT
        u.id         AS user_id,
        u.name       AS user_name,
        u.job_title,
-       COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('present','late','early_leave','late_and_early')), 0) AS actual_work_days,
-       COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('on_leave','wfh','business_trip','holiday')),       0) AS leave_paid_days,
-       COUNT(*) FILTER (WHERE ar.status = 'absent')                                                                  AS absent_days,
-       COUNT(*) FILTER (WHERE ar.status = 'late')                                                                    AS late_count,
-       COUNT(*) FILTER (WHERE ar.status IN ('early_leave','late_and_early'))                                         AS early_count,
-       COALESCE(SUM(ar.ot_hours), 0)                                                                                 AS total_ot_hours,
-       COUNT(ar.id)                                                                                                  AS total_records
+       ${summaryColumns('$3')},
+       COUNT(ar.id) AS total_records
      FROM users u
-     LEFT JOIN attendance_records ar
+     LEFT JOIN ${DAILY_VIEW} ar
        ON ar.user_id = u.id AND ar.work_date BETWEEN $1 AND $2
        ${extraCond}
      WHERE u.status IN ('active','on_leave')
@@ -462,8 +501,9 @@ async function getAttendanceSummary({ userId, month, year }) {
     userId:        r.user_id,
     userName:      r.user_name,
     jobTitle:      r.job_title,
-    actualWorkDays: parseFloat(r.actual_work_days),
-    leavePaidDays:  parseFloat(r.leave_paid_days),
+    actualWorkDays:  parseFloat(r.actual_work_days),
+    leavePaidDays:   parseFloat(r.leave_paid_days),
+    unpaidLeaveDays: parseFloat(r.unpaid_leave_days),
     absentDays:     parseInt(r.absent_days,    10),
     lateCount:      parseInt(r.late_count,     10),
     earlyCount:     parseInt(r.early_count,    10),
@@ -568,17 +608,13 @@ async function sendAttendanceConfirmation({ month, year }) {
     query(
       `SELECT
          u.id AS user_id,
-         COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('present','late','early_leave','late_and_early')), 0) AS actual_work_days,
-         COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('on_leave','wfh','business_trip','holiday')),       0) AS leave_paid_days,
-         COUNT(*) FILTER (WHERE ar.status = 'absent')                                     AS absent_days,
-         COUNT(*) FILTER (WHERE ar.status = 'late')                                       AS late_count,
-         COUNT(*) FILTER (WHERE ar.status IN ('early_leave','late_and_early'))             AS early_count
+         ${summaryColumns('$3')}
        FROM users u
-       LEFT JOIN attendance_records ar
+       LEFT JOIN ${DAILY_VIEW} ar
          ON ar.user_id = u.id AND ar.work_date BETWEEN $1 AND $2
        WHERE u.role = 'staff' AND u.status IN ('active','on_leave')
        GROUP BY u.id`,
-      [from, to]
+      [from, to, await getStrictUnpaidFrom()]
     ),
     // Approved OT from overtime_requests (same source as Report tab)
     query(
@@ -617,8 +653,10 @@ async function sendAttendanceConfirmation({ month, year }) {
   await Promise.all(users.map(async (user) => {
     const records  = recsByUser[user.id] ?? []
     const summary  = summaryMap.get(user.id)
-    const workDays  = parseFloat(summary?.actual_work_days ?? 0)
-    const leaveDays = parseFloat(summary?.leave_paid_days  ?? 0)
+    const workDays   = parseFloat(summary?.actual_work_days  ?? 0)
+    const leaveDays  = parseFloat(summary?.leave_paid_days   ?? 0)
+    const unpaidDays = parseFloat(summary?.unpaid_leave_days ?? 0)
+    // Tổng công hưởng lương KHÔNG gồm nghỉ không lương
     const totalWork = workDays + leaveDays
     const absentDays = parseInt(summary?.absent_days ?? 0, 10)
     const lateCnt    = parseInt(summary?.late_count  ?? 0, 10)
@@ -631,6 +669,7 @@ async function sendAttendanceConfirmation({ month, year }) {
       month_year:       monthYear,
       work_days:        workDays.toFixed(1),
       leave_days:       leaveDays.toFixed(1),
+      unpaid_days:      unpaidDays.toFixed(1),
       total_work:       totalWork.toFixed(1),
       absent_days:      String(absentDays),
       late_count:       String(lateCnt),

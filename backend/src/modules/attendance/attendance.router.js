@@ -297,8 +297,9 @@ router.delete('/holidays/:id', ...admin, ctrl.deleteHoliday)
  *             schema:
  *               type: object
  *               properties:
- *                 saturdayShiftId: { type: string, format: uuid, nullable: true }
- *                 saturdayMode:    { type: string, enum: [dayoff, workday] }
+ *                 saturdayShiftId:  { type: string, format: uuid, nullable: true }
+ *                 saturdayMode:     { type: string, enum: [dayoff, workday] }
+ *                 strictUnpaidFrom: { type: string, format: date, nullable: true, description: "Mốc áp dụng quy tắc nghỉ không lương không tính công. null = toàn bộ lịch sử." }
  *   patch:
  *     tags: [Attendance]
  *     summary: Update attendance system settings (admin)
@@ -309,7 +310,8 @@ router.delete('/holidays/:id', ...admin, ctrl.deleteHoliday)
  *           schema:
  *             type: object
  *             properties:
- *               saturdayShiftId: { type: string, format: uuid, nullable: true }
+ *               saturdayShiftId:  { type: string, format: uuid, nullable: true }
+ *               strictUnpaidFrom: { type: string, format: date, nullable: true, description: "'' = áp dụng toàn bộ lịch sử" }
  *     responses:
  *       200:
  *         description: Updated settings

@@ -226,6 +226,8 @@ function ShiftsTab() {
   const [setDefBusy, setSetDefBusy] = useState(null) // shiftId being set as default
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting,  setDeleting]  = useState(null)
+  const [strictFrom,     setStrictFrom]     = useState('')
+  const [strictFromBusy, setStrictFromBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -237,6 +239,7 @@ function ShiftsTab() {
       setShifts(Array.isArray(data) ? data : [])
       setDefaultId(cfg.defaultShiftId ?? null)
       setSatId(cfg.saturdayShiftId ?? null)
+      setStrictFrom(cfg.strictUnpaidFrom ?? '')
     } catch {
       addToast('Không thể tải danh sách ca làm việc', 'error')
     } finally {
@@ -315,6 +318,54 @@ function ShiftsTab() {
               · Thứ 7: <strong>{shifts.find((sh) => sh.id === satId)?.name ?? '—'}</strong>
             </span>
           )}
+        </div>
+      )}
+
+      {/* Mốc áp dụng quy tắc nghỉ không lương */}
+      {!loading && (
+        <div style={{ marginBottom: 12, padding: '10px 12px', background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, color: '#334155', fontWeight: 600 }}>
+              Áp dụng “nghỉ không lương không tính công” từ ngày:
+            </span>
+            <div style={{ width: 150 }}>
+              <DateBox
+                value={strictFrom}
+                onChange={setStrictFrom}
+                placeholder="Toàn bộ lịch sử"
+                block
+              />
+            </div>
+            <button
+              className={s.btnSave}
+              disabled={strictFromBusy}
+              onClick={async () => {
+                setStrictFromBusy(true)
+                try {
+                  await attendanceApi.updateAttendanceSettings({ strictUnpaidFrom: strictFrom ?? '' })
+                  addToast('Đã lưu mốc áp dụng', 'success')
+                  load()
+                } catch (err) {
+                  addToast(err.response?.data?.error?.message ?? 'Không thể lưu mốc áp dụng', 'error')
+                } finally { setStrictFromBusy(false) }
+              }}
+            >
+              Lưu
+            </button>
+            {strictFrom && (
+              <button
+                className={s.btnOutline}
+                disabled={strictFromBusy}
+                onClick={() => setStrictFrom('')}
+              >
+                Xoá mốc
+              </button>
+            )}
+          </div>
+          <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b' }}>
+            Để trống = áp dụng cho toàn bộ lịch sử (báo cáo các tháng cũ sẽ đổi số).
+            Đặt một ngày = chỉ áp dụng từ ngày đó trở đi, số liệu trước mốc giữ nguyên cách tính cũ.
+          </p>
         </div>
       )}
 

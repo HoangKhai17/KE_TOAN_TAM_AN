@@ -1263,3 +1263,41 @@
     flex-wrap: wrap;
   }
 }
+
+/* ── Thời lượng nghỉ (cả ngày / sáng / chiều / theo giờ) ─────────────────── */
+
+.formHint {
+  margin: 5px 0 0;
+  font-size: var(--fs-3xs);
+  color: var(--color-text-soft);
+}
+
+.dayPartRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dayPartChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border: 1px solid var(--color-border-muted);
+  border-radius: 7px;
+  font-size: var(--fs-2xs);
+  color: var(--color-text-strong);
+  background: var(--color-white);
+  cursor: pointer;
+  user-select: none;
+}
+
+.dayPartChip:hover { border-color: var(--color-primary); }
+
+.dayPartChip input { margin: 0; cursor: pointer; }
+
+.dayPartChipActive {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
+  font-weight: var(--fw-medium);
+}

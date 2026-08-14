@@ -17,7 +17,9 @@ export async function exportReport(type, params = {}) {
   const url  = window.URL.createObjectURL(new Blob([res.data]))
   const link = document.createElement('a')
   link.href  = url
-  link.setAttribute('download', `${type}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  const today = new Date()
+  const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  link.setAttribute('download', `${type}-${stamp}.xlsx`)
   document.body.appendChild(link)
   link.click()
   link.remove()

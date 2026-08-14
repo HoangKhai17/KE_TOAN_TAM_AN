@@ -107,6 +107,15 @@ export const approveLeaveRequest = (id, body = {}) =>
 export const rejectLeaveRequest = (id, body = {}) =>
   api.put(`/leave-requests/${id}/reject`, body).then(r => r.data)
 
+export const listLeavePolicies = () =>
+  api.get('/leave-requests/policies').then(r => r.data)
+
+export const getLeaveBalance = (params) =>
+  api.get('/leave-requests/balance', { params }).then(r => r.data)
+
+export const revokeLeaveRequest = (id, body = {}) =>
+  api.put(`/leave-requests/${id}/revoke`, body).then(r => r.data)
+
 export const cancelLeaveRequest = (id) =>
   api.delete(`/leave-requests/${id}/cancel`).then(r => r.data)
 

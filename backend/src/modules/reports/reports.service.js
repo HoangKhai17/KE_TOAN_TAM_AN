@@ -2,15 +2,18 @@ const { query } = require('../../config/db')
 const ExcelJS = require('exceljs')
 const { getNextOccurrence } = require('../../utils/recurrence.calculator')
 const { applyStandardStyle } = require('../export/excel-renderer')
+const enums = require('../../lib/enums')
 
 // ── 0. Overview ───────────────────────────────────────────────────────────────
 
 async function overviewReport({ from, to, prevFrom, prevTo }) {
   const hasPrev = Boolean(prevFrom && prevTo)
 
-  const [curStats, prevStats, trend, prevTrend, byTaskType, byStatus, byAssignee] = await Promise.all([
-    query(`
-      SELECT
+  // Lọc KỲ = OVERLAP khoảng ngày hiệu lực của task với [from,to] — ĐỒNG BỘ Dashboard/Tasks
+  // (thay cho created_at cũ). $1 = from, $2 = to.
+  const OVERLAP   = `(COALESCE(start_date, due_date) <= $2 AND COALESCE(due_date, start_date) >= $1)`
+  const OVERLAP_T = `(COALESCE(t.start_date, t.due_date) <= $2 AND COALESCE(t.due_date, t.start_date) >= $1)`
+  const statCols = `
         COUNT(*)                                                                    AS total,
         COUNT(*) FILTER (WHERE status = 'completed')                               AS completed,
         COUNT(*) FILTER (WHERE status = 'pending')                                 AS pending,
@@ -18,40 +21,27 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
         COUNT(*) FILTER (WHERE status = 'on_hold')                                 AS on_hold,
         COUNT(*) FILTER (WHERE status = 'pending_review')                          AS pending_review,
         COUNT(*) FILTER (WHERE status = 'needs_revision')                          AS needs_revision,
-        COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed')  AS overdue
-      FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
-    `, [from, to]),
+        COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed')  AS overdue`
+
+  const [curStats, prevStats, trend, prevTrend, byTaskType, byStatus, byAssignee] = await Promise.all([
+    query(`SELECT ${statCols} FROM tasks WHERE ${OVERLAP}`, [from, to]),
 
     hasPrev
-      ? query(`
-          SELECT
-            COUNT(*)                                                                    AS total,
-            COUNT(*) FILTER (WHERE status = 'completed')                               AS completed,
-            COUNT(*) FILTER (WHERE status = 'pending')                                 AS pending,
-            COUNT(*) FILTER (WHERE status = 'in_progress')                             AS in_progress,
-            COUNT(*) FILTER (WHERE status = 'on_hold')                                 AS on_hold,
-            COUNT(*) FILTER (WHERE status = 'pending_review')                          AS pending_review,
-            COUNT(*) FILTER (WHERE status = 'needs_revision')                          AS needs_revision,
-            COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed')  AS overdue
-          FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
-        `, [prevFrom, prevTo])
+      ? query(`SELECT ${statCols} FROM tasks WHERE ${OVERLAP}`, [prevFrom, prevTo])
       : Promise.resolve({ rows: [{}] }),
 
+    // Xu hướng = việc HOÀN THÀNH theo NGÀY (completed_at) trong kỳ — khớp biểu đồ Dashboard
     query(`
-      SELECT created_at::date AS date,
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE status = 'completed') AS completed
-      FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
-      GROUP BY created_at::date ORDER BY date
+      SELECT completed_at::date AS date, COUNT(*) AS completed
+      FROM tasks WHERE status = 'completed' AND completed_at::date BETWEEN $1 AND $2
+      GROUP BY completed_at::date ORDER BY date
     `, [from, to]),
 
     hasPrev
       ? query(`
-          SELECT created_at::date AS date,
-            COUNT(*) AS total,
-            COUNT(*) FILTER (WHERE status = 'completed') AS completed
-          FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
-          GROUP BY created_at::date ORDER BY date
+          SELECT completed_at::date AS date, COUNT(*) AS completed
+          FROM tasks WHERE status = 'completed' AND completed_at::date BETWEEN $1 AND $2
+          GROUP BY completed_at::date ORDER BY date
         `, [prevFrom, prevTo])
       : Promise.resolve({ rows: [] }),
 
@@ -61,13 +51,13 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
         COUNT(*) FILTER (WHERE t.status = 'completed') AS completed
       FROM tasks t
       LEFT JOIN task_types tt ON tt.id = t.task_type_id
-      WHERE t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
+      WHERE ${OVERLAP_T}
       GROUP BY tt.id, tt.name ORDER BY total DESC LIMIT 10
     `, [from, to]),
 
     query(`
       SELECT status AS label, COUNT(*) AS total
-      FROM tasks WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
+      FROM tasks WHERE ${OVERLAP}
       GROUP BY status ORDER BY total DESC
     `, [from, to]),
 
@@ -78,10 +68,36 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
         ROUND(COUNT(*) FILTER (WHERE t.status = 'completed') * 100.0 / NULLIF(COUNT(*), 0), 1) AS rate
       FROM tasks t
       LEFT JOIN users u ON u.id = t.assigned_to
-      WHERE t.created_at >= $1::date AND t.created_at < ($2::date + INTERVAL '1 day')
+      WHERE ${OVERLAP_T}
       GROUP BY u.id, u.name ORDER BY total DESC LIMIT 10
     `, [from, to]),
   ])
+
+  // ── Thống kê THEO LOẠI VIỆC (Truyền thống / Yêu cầu KH / Nội bộ) — đủ 3 loại như Dashboard ──
+  // Truyền thống: overlap start/due. CDR/IA: theo deadline_date trong kỳ (2 loại này chỉ có 1 mốc hạn).
+  const [tradD, cdrD, iaD] = await Promise.all([
+    query(`SELECT COUNT(*) AS total,
+             COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+             COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') AS overdue
+           FROM tasks WHERE ${OVERLAP}`, [from, to]),
+    query(`SELECT COUNT(*) AS total,
+             COUNT(*) FILTER (WHERE status = 'received') AS completed,
+             COUNT(*) FILTER (WHERE deadline_date < CURRENT_DATE AND status NOT IN ('received','not_required')) AS overdue
+           FROM client_document_requests WHERE deadline_date BETWEEN $1 AND $2`, [from, to]),
+    query(`SELECT COUNT(*) AS total,
+             COUNT(*) FILTER (WHERE status = 'done') AS completed,
+             COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND deadline_date < CURRENT_DATE) AS overdue
+           FROM internal_assignments WHERE deadline_date BETWEEN $1 AND $2 AND status <> 'cancelled'`, [from, to]),
+  ])
+  const domRow = (res, key, label) => {
+    const r = res.rows[0] || {}
+    return { key, label, total: parseInt(r.total, 10) || 0, completed: parseInt(r.completed, 10) || 0, overdue: parseInt(r.overdue, 10) || 0 }
+  }
+  const byDomain = [
+    domRow(tradD, 'traditional', 'Truyền thống'),
+    domRow(cdrD,  'cdr',         'Yêu cầu KH'),
+    domRow(iaD,   'ia',          'Nội bộ'),
+  ]
 
   const c = curStats.rows[0] || {}
   const p = prevStats.rows[0] || {}
@@ -104,11 +120,12 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
       needsRevision: { value: parseInt(c.needs_revision, 10) || 0, change: hasPrev ? pctChange(c.needs_revision, p.needs_revision) : null },
       overdue:   { value: parseInt(c.overdue, 10) || 0,   change: hasPrev ? pctChange(c.overdue, p.overdue) : null },
     },
-    trend:      trend.rows.map((r) => ({ date: r.date, total: parseInt(r.total, 10), completed: parseInt(r.completed, 10) })),
-    prevTrend:  prevTrend.rows.map((r) => ({ date: r.date, total: parseInt(r.total, 10), completed: parseInt(r.completed, 10) })),
+    trend:      trend.rows.map((r) => ({ date: r.date, total: parseInt(r.completed, 10), completed: parseInt(r.completed, 10) })),
+    prevTrend:  prevTrend.rows.map((r) => ({ date: r.date, total: parseInt(r.completed, 10), completed: parseInt(r.completed, 10) })),
     byTaskType: byTaskType.rows.map((r) => ({ label: r.label || '(Không có)', total: parseInt(r.total, 10), completed: parseInt(r.completed, 10) })),
     byStatus:   byStatus.rows.map((r) => ({ label: r.label, total: parseInt(r.total, 10) })),
     byAssignee: byAssignee.rows.map((r) => ({ label: r.label || '(Không có)', total: parseInt(r.total, 10), completed: parseInt(r.completed, 10), rate: parseFloat(r.rate) || 0 })),
+    byDomain,
   }
 }
 
@@ -122,23 +139,20 @@ async function staffPerformance({ from, to, staffIds }) {
     staffFilter = `AND u.id = ANY($${params.length})`
   }
 
-  // Đo theo THROUGHPUT (khớp Dashboard/SLA/Velocity):
-  //   completed/on_time/avg_hours = việc HOÀN THÀNH trong kỳ (completed_at)
-  //   overdue = ảnh chụp hiện tại (đang trễ)
-  //   total = việc xử lý liên quan kỳ = (hoàn thành trong kỳ) + (đang mở) → completion_rate có nghĩa
+  // ĐỒNG BỘ Dashboard/Tasks: lọc KỲ theo OVERLAP + đếm theo TRẠNG THÁI.
+  //   total = việc thuộc kỳ (mọi trạng thái); completed = trong kỳ & status='completed';
+  //   on_time = trong kỳ, đã xong, completed_at <= due_date; overdue = trong kỳ & quá hạn & chưa xong.
+  const wl = `(COALESCE(t.start_date, t.due_date) <= $2 AND COALESCE(t.due_date, t.start_date) >= $1)`
   const { rows } = await query(`
     SELECT
       u.id, u.name, u.job_title,
-      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)
-        + COUNT(t.id) FILTER (WHERE t.status != 'completed')                              AS total,
-      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)                    AS completed,
-      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2 AND t.completed_at::date <= t.due_date) AS on_time,
-      COUNT(t.id) FILTER (WHERE t.due_date < CURRENT_DATE AND t.status != 'completed')     AS overdue,
-      ROUND(COALESCE(AVG(t.actual_hours) FILTER (WHERE t.actual_hours > 0 AND t.completed_at::date BETWEEN $1 AND $2), 0), 1) AS avg_hours,
-      ROUND(
-        COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2) * 100.0
-        / NULLIF(COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)
-                 + COUNT(t.id) FILTER (WHERE t.status != 'completed'), 0), 1)              AS completion_rate
+      COUNT(t.id) FILTER (WHERE ${wl})                                             AS total,
+      COUNT(t.id) FILTER (WHERE ${wl} AND t.status = 'completed')                  AS completed,
+      COUNT(t.id) FILTER (WHERE ${wl} AND t.status = 'completed' AND t.completed_at::date <= t.due_date) AS on_time,
+      COUNT(t.id) FILTER (WHERE ${wl} AND t.due_date < CURRENT_DATE AND t.status != 'completed') AS overdue,
+      ROUND(COALESCE(AVG(t.actual_hours) FILTER (WHERE ${wl} AND t.status = 'completed' AND t.actual_hours > 0), 0), 1) AS avg_hours,
+      ROUND(COUNT(t.id) FILTER (WHERE ${wl} AND t.status = 'completed') * 100.0
+            / NULLIF(COUNT(t.id) FILTER (WHERE ${wl}), 0), 1)                       AS completion_rate
     FROM users u
     LEFT JOIN tasks t ON t.assigned_to = u.id
     -- Gồm cả admin: admin cũng được giao việc / phụ trách công ty như nhân viên
@@ -170,20 +184,19 @@ async function companyStatus({ from, to, companyIds }) {
     companyFilter = `AND c.id = ANY($${params.length})`
   }
 
-  // Throughput: completed = hoàn thành trong kỳ; open/overdue = ảnh chụp hiện tại;
-  // total = (hoàn thành trong kỳ) + (đang mở) → khớp biểu đồ stack completed + open.
+  // ĐỒNG BỘ Dashboard/Tasks: lọc KỲ theo OVERLAP + đếm theo TRẠNG THÁI.
+  //   total = việc thuộc kỳ; completed = trong kỳ & xong; open = trong kỳ & chưa xong;
+  //   overdue = trong kỳ & quá hạn & chưa xong. (total = completed + open)
+  const wl = `(COALESCE(t.start_date, t.due_date) <= $2 AND COALESCE(t.due_date, t.start_date) >= $1)`
   const { rows } = await query(`
     SELECT
       c.id, c.name, c.tax_code,
-      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)
-        + COUNT(t.id) FILTER (WHERE t.status != 'completed')                              AS total,
-      COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)                    AS completed,
-      COUNT(t.id) FILTER (WHERE t.status != 'completed')                                  AS open_count,
-      COUNT(t.id) FILTER (WHERE t.due_date < CURRENT_DATE AND t.status != 'completed')     AS overdue,
-      ROUND(
-        COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2) * 100.0
-        / NULLIF(COUNT(t.id) FILTER (WHERE t.completed_at::date BETWEEN $1 AND $2)
-                 + COUNT(t.id) FILTER (WHERE t.status != 'completed'), 0), 1)              AS completion_rate
+      COUNT(t.id) FILTER (WHERE ${wl})                                             AS total,
+      COUNT(t.id) FILTER (WHERE ${wl} AND t.status = 'completed')                  AS completed,
+      COUNT(t.id) FILTER (WHERE ${wl} AND t.status != 'completed')                 AS open_count,
+      COUNT(t.id) FILTER (WHERE ${wl} AND t.due_date < CURRENT_DATE AND t.status != 'completed') AS overdue,
+      ROUND(COUNT(t.id) FILTER (WHERE ${wl} AND t.status = 'completed') * 100.0
+            / NULLIF(COUNT(t.id) FILTER (WHERE ${wl}), 0), 1)                       AS completion_rate
     FROM companies c
     LEFT JOIN tasks t ON t.company_id = c.id
     WHERE c.status != 'terminated' ${companyFilter}
@@ -460,7 +473,10 @@ async function exportToExcel(type, data) {
       { header: 'Số ngày mở',      key: 'daysOpen',        width: 12 },
       { header: 'Số ngày quá hạn', key: 'daysOverdue',     width: 16 },
     ]
-    data.forEach((r) => ws.addRow(r))
+    // Phân giải nhãn trạng thái/ưu tiên theo danh mục động (khách tự đặt) — tránh ghi mã thô
+    const stMap = Object.fromEntries((await enums.getOptions('task_status')).map((o) => [o.key, o.label]))
+    const prMap = Object.fromEntries((await enums.getOptions('task_priority')).map((o) => [o.key, o.label]))
+    data.forEach((r) => ws.addRow({ ...r, status: stMap[r.status] ?? r.status, priority: prMap[r.priority] ?? r.priority }))
     styleHeader(ws)
 
   } else if (type === 'velocity') {

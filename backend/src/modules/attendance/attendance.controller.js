@@ -286,10 +286,12 @@ async function sendConfirmation(req, res, next) {
 
 async function updateSettings(req, res, next) {
   try {
-    const { defaultShiftId, saturdayShiftId } = req.body
+    const { defaultShiftId, saturdayShiftId, strictUnpaidFrom } = req.body
     const result = await settingsSvc.updateAttendanceSettings({
       defaultShiftId:  defaultShiftId  ?? undefined,
       saturdayShiftId: saturdayShiftId ?? undefined,
+      // '' là giá trị HỢP LỆ (= áp dụng toàn bộ lịch sử) nên không dùng ?? undefined
+      strictUnpaidFrom: strictUnpaidFrom === undefined ? undefined : (strictUnpaidFrom ?? ''),
       updatedBy: req.user.id,
     })
     res.json(result)

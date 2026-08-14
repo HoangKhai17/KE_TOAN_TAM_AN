@@ -69,14 +69,29 @@ router.get('/',  ...auth, async (req, res, next) => {
 
 router.post('/', ...auth, async (req, res, next) => {
   try {
-    const { leaveType, startDate, endDate, reason } = req.body
+    const { leaveType, startDate, endDate, reason, dayPart, hours } = req.body
     if (!leaveType || !startDate || !endDate) {
       return res.status(400).json({ error: { message: 'leaveType, startDate và endDate là bắt buộc' } })
     }
     const request = await svc.createLeaveRequest({
       userId: req.user.id, leaveType, startDate, endDate, reason,
+      dayPart: dayPart ?? 'full', hours: hours ?? null,
     })
     res.status(201).json(request)
+  } catch (err) { next(err) }
+})
+
+// Chính sách từng loại nghỉ — nguồn cho dropdown ở giao diện (thay hardcode).
+router.get('/policies', ...auth, async (req, res, next) => {
+  try { res.json(await svc.listLeavePolicies()) } catch (err) { next(err) }
+})
+
+// Quỹ phép năm. Nhân viên chỉ xem của mình; admin xem tất cả hoặc lọc theo người.
+router.get('/balance', ...auth, async (req, res, next) => {
+  try {
+    const isAdmin = req.user.role === 'admin'
+    const userId  = isAdmin ? (req.query.userId || undefined) : req.user.id
+    res.json(await svc.getLeaveBalance({ userId, year: req.query.year }))
   } catch (err) { next(err) }
 })
 
@@ -107,6 +122,25 @@ router.post('/', ...auth, async (req, res, next) => {
  *     responses:
  *       200: { description: Rejected }
  *       404: { description: Not found or already reviewed }
+ * /leave-requests/{id}/revoke:
+ *   put:
+ *     tags: [Leave]
+ *     summary: Revoke an already-approved leave request (admin). Recalculates attendance for covered dates.
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               reason: { type: string, description: "Lý do thu hồi — bắt buộc, lưu vào rejection_note với tiền tố [Thu hồi]" }
+ *     responses:
+ *       200: { description: Revoked, attendance_records recalculated }
+ *       404: { description: Not found or not in approved state }
+ *       422: { description: Missing reason }
  * /leave-requests/{id}/cancel:
  *   delete:
  *     tags: [Leave]
@@ -129,8 +163,8 @@ router.get('/export-custom', ...admin, async (req, res, next) => {
 
 router.put('/:id/approve', ...admin, async (req, res, next) => {
   try {
-    const { approvalNote } = req.body ?? {}
-    const request = await svc.approveLeaveRequest(req.params.id, req.user.id, approvalNote)
+    const { approvalNote, force } = req.body ?? {}
+    const request = await svc.approveLeaveRequest(req.params.id, req.user.id, approvalNote, { force: force === true })
     res.json(request)
   } catch (err) { next(err) }
 })
@@ -139,6 +173,14 @@ router.put('/:id/reject', ...admin, async (req, res, next) => {
   try {
     const { rejectionNote } = req.body
     const request = await svc.rejectLeaveRequest(req.params.id, { rejectionNote, reviewedBy: req.user.id })
+    res.json(request)
+  } catch (err) { next(err) }
+})
+
+router.put('/:id/revoke', ...admin, async (req, res, next) => {
+  try {
+    const { reason } = req.body ?? {}
+    const request = await svc.revokeLeaveRequest(req.params.id, { reason, actorId: req.user.id })
     res.json(request)
   } catch (err) { next(err) }
 })

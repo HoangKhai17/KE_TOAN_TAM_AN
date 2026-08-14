@@ -16,6 +16,7 @@ import AppLayout from '../../components/layout/AppLayout'
 import DateBox from '../../components/ui/DateBox'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
+import { useEnumsStore } from '../../hooks/useEnums'
 import {
   getOverviewReport,
   getStaffReport, getCompanyReport, getSlaReport,
@@ -146,6 +147,9 @@ export default function Reports() {
 
   const isForecast = activeTab === 'forecast'
   const isOverview = activeTab === 'overview'
+
+  // Nạp danh mục động (nhãn trạng thái/ưu tiên do khách tự đặt) — nếu chưa tải
+  useEffect(() => { useEnumsStore.getState().load() }, [])
 
   // ── Báo cáo — React Query (cache theo tab + tham số; báo cáo đổi chậm nên staleTime dài) ──
   const reportQuery = useQuery({
@@ -368,8 +372,11 @@ function TabContent({ tab, data, compare }) {
 
 // ── OverviewTab ───────────────────────────────────────────────────────────────
 function OverviewTab({ data, compare }) {
-  const { stats, trend, prevTrend, byTaskType, byStatus, byAssignee } = data
+  const { stats, trend, prevTrend, byTaskType, byStatus, byAssignee, byDomain } = data
   const statValue = (key) => stats?.[key]?.value ?? 0
+  const getLabel = useEnumsStore((st) => st.getLabel)
+  useEnumsStore((st) => st.loaded)  // re-render khi danh mục động tải xong
+  const statusLabel = (k) => getLabel('task_status', k, STATUS_LABEL[k])
   const statChange = (key) => stats?.[key]?.change ?? null
 
   const trendChart = trend.map((d, i) => ({
@@ -381,14 +388,32 @@ function OverviewTab({ data, compare }) {
   return (
     <div className={s.tabContent}>
       <div className={s.statsGrid}>
-        <StatCard icon={FileText}     label="Tổng tasks"      value={statValue('total')}          change={statChange('total')}          color="blue"   />
-        <StatCard icon={CheckCircle2} label="Đã hoàn thành"   value={statValue('completed')}      change={statChange('completed')}      color="green"  />
-        <StatCard icon={Timer}        label="Chờ xử lý"       value={statValue('pending')}        change={statChange('pending')}        color="slate"  />
-        <StatCard icon={Clock3}       label="Đang thực hiện"  value={statValue('inProgress')}     change={statChange('inProgress')}     color="blue"   />
-        <StatCard icon={AlertTriangle} label="Tạm hoãn"       value={statValue('onHold')}         change={statChange('onHold')}         color="amber"  />
-        <StatCard icon={ShieldCheck}  label="Chờ duyệt"       value={statValue('pendingReview')}  change={statChange('pendingReview')}  color="purple" />
-        <StatCard icon={AlertCircle}  label="Xem lại"         value={statValue('needsRevision')}  change={statChange('needsRevision')}  color="red"    />
+        <StatCard icon={FileText}     label="Tổng tasks"                    value={statValue('total')}          change={statChange('total')}          color="blue"   />
+        <StatCard icon={CheckCircle2} label={statusLabel('completed')}      value={statValue('completed')}      change={statChange('completed')}      color="green"  />
+        <StatCard icon={Timer}        label={statusLabel('pending')}        value={statValue('pending')}        change={statChange('pending')}        color="slate"  />
+        <StatCard icon={Clock3}       label={statusLabel('in_progress')}    value={statValue('inProgress')}     change={statChange('inProgress')}     color="blue"   />
+        <StatCard icon={AlertTriangle} label={statusLabel('on_hold')}       value={statValue('onHold')}         change={statChange('onHold')}         color="amber"  />
+        <StatCard icon={ShieldCheck}  label={statusLabel('pending_review')} value={statValue('pendingReview')}  change={statChange('pendingReview')}  color="purple" />
+        <StatCard icon={AlertCircle}  label={statusLabel('needs_revision')} value={statValue('needsRevision')}  change={statChange('needsRevision')}  color="red"    />
       </div>
+
+      {byDomain?.length > 0 && (
+        <div className={s.section}>
+          <h3 className={s.sectionTitle}>Theo loại công việc</h3>
+          <div className={s.domainGrid}>
+            {byDomain.map((d) => (
+              <div key={d.key} className={s.domainCard}>
+                <div className={s.domainCardLabel}>{d.label}</div>
+                <div className={s.domainCardTotal}>{d.total}</div>
+                <div className={s.domainCardSub}>
+                  <span className={s.domainDone}>✓ {d.completed} hoàn thành</span>
+                  <span className={s.domainOverdue}>⚠ {d.overdue} quá hạn</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={s.section}>
         <div className={s.sectionHead}>
@@ -433,7 +458,7 @@ function OverviewTab({ data, compare }) {
           {byStatus.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart
-                data={byStatus.map((r) => ({ ...r, label: STATUS_LABEL[r.label] ?? r.label }))}
+                data={byStatus.map((r) => ({ ...r, label: statusLabel(r.label) }))}
                 margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -681,6 +706,10 @@ function SlaTab({ data }) {
 
 // ── AgingTab ──────────────────────────────────────────────────────────────────
 function AgingTab({ data }) {
+  const getLabel = useEnumsStore((st) => st.getLabel)
+  useEnumsStore((st) => st.loaded)  // re-render khi danh mục động tải xong
+  const statusLabel   = (k) => getLabel('task_status', k, STATUS_LABEL[k])
+  const priorityLabel = (k) => getLabel('task_priority', k, PRIORITY_LABEL[k])
   if (!data?.length) return <EmptyState />
   const overdue = data.filter((r) => r.daysOverdue > 0).length
   const gt30    = data.filter((r) => r.daysOpen > 30).length
@@ -717,12 +746,12 @@ function AgingTab({ data }) {
                   <td className={s.muted}>{r.taskTypeName || '—'}</td>
                   <td>
                     <span className={s.statusBadge} style={STATUS_CSS[r.status]}>
-                      {STATUS_LABEL[r.status] ?? r.status}
+                      {statusLabel(r.status)}
                     </span>
                   </td>
                   <td>
                     <span className={s.priorityBadge} style={PRIORITY_CSS[r.priority]}>
-                      {PRIORITY_LABEL[r.priority] ?? r.priority}
+                      {priorityLabel(r.priority)}
                     </span>
                   </td>
                   <td className={s.num}><span className={r.daysOpen > 30 ? s.warn : ''}>{r.daysOpen}d</span></td>

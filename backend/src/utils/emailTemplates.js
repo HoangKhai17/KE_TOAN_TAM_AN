@@ -129,8 +129,12 @@ DEFAULTS.email_tpl_attendance_confirmation = WRAPPER(`
       <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#4338ca">Nghỉ có lương (NP/WFH/Lễ)</td>
       <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#4338ca">{{leave_days}} ngày</td>
     </tr>
+    <tr>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#b45309">Nghỉ không lương</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:600;color:#b45309">{{unpaid_days}} ngày</td>
+    </tr>
     <tr style="background:#f0fdf4">
-      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#166534;font-weight:700">Tổng công</td>
+      <td style="padding:9px 14px;border:1px solid #e2e8f0;color:#166534;font-weight:700">Tổng công tính lương</td>
       <td style="padding:9px 14px;border:1px solid #e2e8f0;text-align:right;font-weight:700;color:#166534">{{total_work}} ngày</td>
     </tr>
     <tr>

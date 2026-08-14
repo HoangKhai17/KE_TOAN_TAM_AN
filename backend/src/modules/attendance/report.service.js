@@ -1,5 +1,6 @@
 const { query } = require('../../config/db')
 const { applyStandardStyle } = require('../export/excel-renderer')
+const { DAILY_VIEW, summaryColumns, getStrictUnpaidFrom } = require('./aggregate.sql')
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
@@ -69,26 +70,23 @@ async function getMonthlyReport({ month, year }) {
   const lastDay = new Date(y, m, 0).getDate()
   const to   = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
+  const cutoff = await getStrictUnpaidFrom()
+
   const [{ rows: attRows }, { rows: otRows }] = await Promise.all([
     query(
       `SELECT
          u.id         AS user_id,
          u.name       AS user_name,
          u.job_title,
-         COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('present','late','early_leave','late_and_early')), 0) AS actual_work_days,
-         COALESCE(SUM(ar.work_units) FILTER (WHERE ar.status IN ('on_leave','wfh','business_trip','holiday')),       0) AS leave_paid_days,
-         COUNT(*) FILTER (WHERE ar.status = 'absent')    AS absent_days,
-         COUNT(*) FILTER (WHERE ar.status = 'late')      AS late_count,
-         COUNT(*) FILTER (WHERE ar.status IN ('early_leave','late_and_early')) AS early_count,
-         COALESCE(SUM(ar.ot_hours), 0)                   AS total_ot_hours,
-         COUNT(ar.id)                                     AS total_records
+         ${summaryColumns('$3')},
+         COUNT(ar.id) AS total_records
        FROM users u
-       LEFT JOIN attendance_records ar
+       LEFT JOIN ${DAILY_VIEW} ar
          ON ar.user_id = u.id AND ar.work_date BETWEEN $1 AND $2
        WHERE u.status IN ('active','on_leave')
        GROUP BY u.id, u.name, u.job_title
        ORDER BY u.name`,
-      [from, to]
+      [from, to, cutoff]
     ),
     // Raw approved OT hours (giờ thực tế đã duyệt, từ overtime_requests)
     query(
@@ -113,6 +111,7 @@ async function getMonthlyReport({ month, year }) {
     jobTitle:        r.job_title,
     actualWorkDays:  parseFloat(r.actual_work_days),
     leavePaidDays:   parseFloat(r.leave_paid_days),
+    unpaidLeaveDays: parseFloat(r.unpaid_leave_days),
     absentDays:      parseInt(r.absent_days,   10),
     lateCount:       parseInt(r.late_count,    10),
     earlyCount:      parseInt(r.early_count,   10),
@@ -164,15 +163,12 @@ async function syncAttendanceToPayroll(payrollPeriodId) {
   // Batch: aggregate attendance + OT for ALL employees in 2 queries (not 2×N)
   const [{ rows: attAggRows }, { rows: otAggRows }] = await Promise.all([
     query(
-      `SELECT user_id,
-         COALESCE(SUM(work_units) FILTER (WHERE status IN ('present','late','early_leave','late_and_early')), 0) AS actual_work_days,
-         COALESCE(SUM(work_units) FILTER (WHERE status IN ('on_leave','wfh','business_trip','holiday')),       0) AS leave_paid_days,
-         COUNT(*) FILTER (WHERE status = 'absent') AS absent_days,
-         COUNT(*) FILTER (WHERE status = 'late')   AS late_count
-       FROM attendance_records
-       WHERE work_date BETWEEN $1 AND $2 AND user_id = ANY($3::uuid[])
-       GROUP BY user_id`,
-      [from, to, empIds]
+      `SELECT ar.user_id,
+         ${summaryColumns('$4')}
+       FROM ${DAILY_VIEW} ar
+       WHERE ar.work_date BETWEEN $1 AND $2 AND ar.user_id = ANY($3::uuid[])
+       GROUP BY ar.user_id`,
+      [from, to, empIds, await getStrictUnpaidFrom()]
     ),
     query(
       `SELECT user_id,
@@ -196,6 +192,8 @@ async function syncAttendanceToPayroll(payrollPeriodId) {
     const summary = {
       actual_work_days:  parseFloat(att.actual_work_days  ?? 0),
       leave_paid_days:   parseFloat(att.leave_paid_days   ?? 0),
+      unpaid_leave_days: parseFloat(att.unpaid_leave_days ?? 0),
+      // Công tính lương = công thực tế + nghỉ CÓ lương. Nghỉ không lương KHÔNG cộng vào.
       total_paid_days:   parseFloat(att.actual_work_days  ?? 0) + parseFloat(att.leave_paid_days ?? 0),
       absent_days:       parseInt(att.absent_days  ?? 0, 10),
       late_count:        parseInt(att.late_count   ?? 0, 10),
@@ -246,8 +244,9 @@ async function exportMonthlyReportExcel(month, year, res) {
     { header: 'Họ tên',               key: 'userName',        width: 24 },
     { header: 'Chức danh',            key: 'jobTitle',        width: 18 },
     { header: 'Ngày công TT',         key: 'actualWorkDays',  width: 14 },
-    { header: 'Nghỉ có lương (TL)',   key: 'leavePaidDays',   width: 16 },
-    { header: 'Tổng công',            key: 'totalWork',       width: 12 },
+    { header: 'Nghỉ có lương',        key: 'leavePaidDays',   width: 16 },
+    { header: 'Nghỉ không lương',     key: 'unpaidLeaveDays', width: 17 },
+    { header: 'Tổng công tính lương', key: 'totalWork',       width: 20 },
     { header: 'Vắng',                 key: 'absentDays',      width: 8  },
     { header: 'Đi muộn (lần)',        key: 'lateCount',       width: 13 },
     { header: 'Về sớm (lần)',         key: 'earlyCount',      width: 13 },
@@ -268,6 +267,7 @@ async function exportMonthlyReportExcel(month, year, res) {
       jobTitle:        r.jobTitle ?? '—',
       actualWorkDays:  r.actualWorkDays,
       leavePaidDays:   r.leavePaidDays,
+      unpaidLeaveDays: r.unpaidLeaveDays,
       totalWork:       r.actualWorkDays + r.leavePaidDays,
       absentDays:      r.absentDays,
       lateCount:       r.lateCount,
@@ -276,8 +276,8 @@ async function exportMonthlyReportExcel(month, year, res) {
     })
   })
 
-  // Number format for decimal columns
-  ;[4, 5, 6, 10].forEach((c) => { sheet.getColumn(c).numFmt = '0.0' })
+  // Number format for decimal columns (Ngày công TT, Nghỉ CL, Nghỉ KL, Tổng công, OT)
+  ;[4, 5, 6, 7, 11].forEach((c) => { sheet.getColumn(c).numFmt = '0.0' })
 
   // Zebra rows
   sheet.eachRow((row, rowNum) => {
@@ -310,7 +310,8 @@ async function exportCustomSummary({ month, year, fields, res }) {
     { key: 'jobTitle',        header: 'Chức danh',           width: 20 },
     { key: 'actualWorkDays',  header: 'Ngày công TT',        width: 14 },
     { key: 'leavePaidDays',   header: 'Nghỉ có lương',       width: 16 },
-    { key: 'totalWork',       header: 'Tổng công',           width: 12 },
+    { key: 'unpaidLeaveDays', header: 'Nghỉ không lương',    width: 17 },
+    { key: 'totalWork',       header: 'Tổng công tính lương',width: 20 },
     { key: 'absentDays',      header: 'Vắng',                width: 8  },
     { key: 'lateCount',       header: 'Đi muộn (lần)',       width: 14 },
     { key: 'earlyCount',      header: 'Về sớm (lần)',        width: 14 },

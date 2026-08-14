@@ -14,6 +14,8 @@ function toDto(r) {
     leaveType:     r.leave_type,
     startDate:     r.start_date,
     endDate:       r.end_date,
+    dayPart:       r.day_part ?? 'full',
+    hours:         r.hours != null ? parseFloat(r.hours) : null,
     totalDays:     parseFloat(r.total_days),
     reason:        r.reason,
     status:        r.status,
@@ -29,30 +31,141 @@ function toDto(r) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function countWorkingDays(startDate, endDate) {
-  const holidayRes = await query(
-    'SELECT holiday_date FROM public_holidays WHERE holiday_date BETWEEN $1 AND $2',
-    [startDate, endDate]
-  )
-  const holidays = new Set(
-    holidayRes.rows.map((r) => {
-      const d = r.holiday_date instanceof Date ? r.holiday_date : new Date(r.holiday_date)
-      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
-    })
-  )
+// Đếm số ngày công thực sự bị tiêu tốn trong khoảng [startDate, endDate].
+//
+// Phải khớp ĐÚNG với quy tắc của calculateAttendanceRecord, nếu không total_days
+// của đơn sẽ lệch với số ngày attendance_records thực sự chuyển thành nghỉ:
+//   - Chủ nhật: luôn nghỉ
+//   - Thứ 7:    nghỉ CHỈ KHI chưa cấu hình attendance.saturday_shift_id
+//               (trước đây hardcode `dow !== 6` → công ty làm T7 bị đếm THIẾU ngày)
+//   - Ngày lễ:  không tính (đã được trả lương qua status='holiday')
+//   - work_schedules: override riêng của từng nhân viên thắng mọi quy tắc trên
+//
+// Nạp tất cả dữ liệu cần thiết trong 3 truy vấn song song rồi lặp trong JS —
+// không truy vấn theo từng ngày.
+async function countWorkingDays(startDate, endDate, userId = null) {
+  const ymd = (d) => {
+    const o = d instanceof Date ? d : new Date(d)
+    return `${o.getUTCFullYear()}-${String(o.getUTCMonth() + 1).padStart(2, '0')}-${String(o.getUTCDate()).padStart(2, '0')}`
+  }
+
+  const [holidayRes, cfgRes, wsRes] = await Promise.all([
+    query(
+      'SELECT holiday_date FROM public_holidays WHERE holiday_date BETWEEN $1 AND $2',
+      [startDate, endDate]
+    ),
+    query(
+      `SELECT key, value FROM system_configs
+       WHERE key IN ('attendance.default_shift_id', 'attendance.saturday_shift_id')`
+    ),
+    userId
+      ? query(
+          `SELECT work_date, is_day_off FROM work_schedules
+           WHERE user_id = $1 AND work_date BETWEEN $2 AND $3`,
+          [userId, startDate, endDate]
+        )
+      : Promise.resolve({ rows: [] }),
+  ])
+
+  const holidays = new Set(holidayRes.rows.map((r) => ymd(r.holiday_date)))
+  const cfg = Object.fromEntries(cfgRes.rows.map((r) => [r.key, r.value ?? '']))
+  const saturdayIsWorkday = Boolean(cfg['attendance.saturday_shift_id'])
+  const overrides = new Map(wsRes.rows.map((r) => [ymd(r.work_date), r.is_day_off]))
 
   const [sy, sm, sd] = startDate.split('-').map(Number)
   const [ey, em, ed] = endDate.split('-').map(Number)
   const cur = new Date(sy, sm - 1, sd)
   const end = new Date(ey, em - 1, ed)
+
   let count = 0
   while (cur <= end) {
-    const dow     = cur.getDay()
     const dateStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
-    if (dow !== 0 && dow !== 6 && !holidays.has(dateStr)) count++
+    const dow = cur.getDay() // 0=CN, 6=T7
+
+    let isWorkday
+    if (overrides.has(dateStr)) {
+      isWorkday = !overrides.get(dateStr)          // override của NV thắng
+    } else if (dow === 0) {
+      isWorkday = false                            // Chủ nhật
+    } else if (dow === 6) {
+      isWorkday = saturdayIsWorkday                // Thứ 7 theo cấu hình
+    } else {
+      isWorkday = true
+    }
+
+    if (isWorkday && !holidays.has(dateStr)) count++
     cur.setDate(cur.getDate() + 1)
   }
   return count
+}
+
+// Chặn đơn nghỉ chồng ngày với đơn đang chờ duyệt / đã duyệt của cùng nhân viên.
+// Lý do: calculateAttendanceRecord chỉ lấy MỘT đơn cho mỗi ngày (ORDER BY created_at
+// LIMIT 1) → hai đơn chồng nhau thì đơn sau bị bỏ qua âm thầm, và quỹ phép (GĐ2 nhóm C)
+// sẽ bị trừ hai lần cho cùng một ngày.
+async function assertNoOverlappingLeave(userId, startDate, endDate, dayPart = 'full') {
+  const { rows } = await query(
+    `SELECT l.id, l.leave_type, l.start_date, l.end_date, l.status, l.day_part
+     FROM leave_requests l
+     WHERE l.user_id = $1
+       AND l.status IN ('pending', 'approved')
+       AND l.start_date <= $3 AND l.end_date >= $2
+     ORDER BY l.start_date`,
+    [userId, startDate, endDate]
+  )
+
+  // Hai đơn nửa ngày KHÁC BUỔI trên cùng một ngày là hợp lệ (sáng phép năm +
+  // chiều nghỉ bù). Mọi tổ hợp còn lại đều chồng lấn.
+  const conflict = rows.find((c) => {
+    if (dayPart === 'morning'   && c.day_part === 'afternoon') return false
+    if (dayPart === 'afternoon' && c.day_part === 'morning')   return false
+    return true
+  })
+
+  if (conflict) {
+    const label = conflict.status === 'approved' ? 'đã duyệt' : 'đang chờ duyệt'
+    throw Object.assign(
+      new Error(
+        `Khoảng ngày này trùng với một đơn nghỉ ${label} (${conflict.leave_type}: ` +
+        `${toDateStr(conflict.start_date)} → ${toDateStr(conflict.end_date)}). ` +
+        `Vui lòng huỷ hoặc thu hồi đơn cũ trước.`
+      ),
+      { status: 409 }
+    )
+  }
+}
+
+// Chính sách của một loại nghỉ. Loại chưa cấu hình → mặc định nghỉ có lương nguyên ngày.
+async function getLeavePolicy(leaveType) {
+  const { rows } = await query('SELECT * FROM leave_policies WHERE leave_type = $1', [leaveType])
+  return rows[0] ?? {
+    leave_type: leaveType, label: leaveType, is_paid: true, paid_rate: 1,
+    allow_half_day: true, deduct_balance: false, counts_as_work: false,
+    maps_to_status: 'on_leave',
+  }
+}
+
+// Hệ số ngày công của một đơn theo thời lượng nghỉ.
+// 'hours' quy đổi theo giờ chuẩn của ca — lấy từ ca mặc định hệ thống.
+async function dayPartFactor(dayPart, hours) {
+  if (dayPart === 'morning' || dayPart === 'afternoon') return 0.5
+  if (dayPart === 'hours') {
+    const { rows } = await query(
+      `SELECT s.required_hours, s.start_time, s.end_time, s.break_minutes
+       FROM system_configs c
+       JOIN shifts s ON s.id::text = c.value
+       WHERE c.key = 'attendance.default_shift_id'`
+    )
+    const s = rows[0]
+    let req = s?.required_hours != null ? parseFloat(s.required_hours) : null
+    if (!req && s?.start_time && s?.end_time) {
+      const [sh, sm] = s.start_time.split(':').map(Number)
+      const [eh, em] = s.end_time.split(':').map(Number)
+      req = (eh * 60 + em - sh * 60 - sm) / 60 - (s.break_minutes ?? 60) / 60
+    }
+    return Math.min(1, (parseFloat(hours) || 0) / (req || 8))
+  }
+  return 1
 }
 
 async function notifyAdmins(title, body) {
@@ -66,6 +179,42 @@ function toDateStr(d) {
   if (!d) return null
   const obj = d instanceof Date ? d : new Date(d)
   return `${obj.getUTCFullYear()}-${String(obj.getUTCMonth() + 1).padStart(2, '0')}-${String(obj.getUTCDate()).padStart(2, '0')}`
+}
+
+// Tính lại attendance_records cho mọi ngày trong [startDate, endDate].
+// Dùng chung cho duyệt đơn (gắn ngày nghỉ) và thu hồi đơn (trả ngày về thực tế).
+// Mỗi ngày độc lập nên chạy song song; lỗi một ngày không chặn các ngày còn lại.
+async function recalcRange(userId, startDate, endDate) {
+  const [sy, sm, sd] = toDateStr(startDate).split('-').map(Number)
+  const [ey, em, ed] = toDateStr(endDate).split('-').map(Number)
+  const cur = new Date(sy, sm - 1, sd)
+  const end = new Date(ey, em - 1, ed)
+  const dates = []
+  while (cur <= end) {
+    dates.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`)
+    cur.setDate(cur.getDate() + 1)
+  }
+  // KHÔNG nuốt lỗi im lặng: trước đây `.catch(() => {})` khiến một lần tính lại
+  // thất bại (vd vi phạm ràng buộc trần công) trông như đã thành công — đơn nghỉ
+  // được duyệt nhưng bảng chấm công không đổi, và không ai biết.
+  const results = await Promise.all(
+    dates.map((d) =>
+      calculateAttendanceRecord(userId, d)
+        .then(() => null)
+        .catch((err) => {
+          console.error(`[recalcRange] Lỗi tính lại chấm công ${userId} ${d}: ${err.message}`)
+          return d
+        })
+    )
+  )
+  const failed = results.filter(Boolean)
+  if (failed.length) {
+    throw Object.assign(
+      new Error(`Không tính lại được chấm công cho ${failed.length}/${dates.length} ngày (${failed.join(', ')}). Vui lòng kiểm tra lại.`),
+      { status: 500 }
+    )
+  }
+  return dates.length
 }
 
 // ── Service functions ─────────────────────────────────────────────────────────
@@ -109,14 +258,52 @@ async function listLeaveRequests({ userId, status, leaveType, from, to, page = 1
   return { requests: rows.map(toDto), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } }
 }
 
-async function createLeaveRequest({ userId, leaveType, startDate, endDate, reason }) {
+async function createLeaveRequest({ userId, leaveType, startDate, endDate, reason, dayPart = 'full', hours = null }) {
   assertEndNotBeforeStart(startDate, endDate, 'Ngày kết thúc nghỉ không được nhỏ hơn ngày bắt đầu')
-  const totalDays = await countWorkingDays(startDate, endDate)
+
+  const VALID_PARTS = ['full', 'morning', 'afternoon', 'hours']
+  if (!VALID_PARTS.includes(dayPart)) {
+    throw Object.assign(new Error('Thời lượng nghỉ không hợp lệ'), { status: 400 })
+  }
+
+  const policy = await getLeavePolicy(leaveType)
+  if (dayPart !== 'full') {
+    if (!policy.allow_half_day) {
+      throw Object.assign(
+        new Error(`"${policy.label}" không hỗ trợ nghỉ nửa ngày / theo giờ`),
+        { status: 422 }
+      )
+    }
+    if (String(startDate) !== String(endDate)) {
+      throw Object.assign(
+        new Error('Nghỉ nửa ngày hoặc theo giờ chỉ áp dụng cho đơn trong MỘT ngày'),
+        { status: 422 }
+      )
+    }
+    if (dayPart === 'hours' && !(parseFloat(hours) > 0)) {
+      throw Object.assign(new Error('Vui lòng nhập số giờ nghỉ'), { status: 422 })
+    }
+  }
+
+  await assertNoOverlappingLeave(userId, startDate, endDate, dayPart)
+
+  const workingDays = await countWorkingDays(startDate, endDate, userId)
+  if (workingDays === 0) {
+    throw Object.assign(
+      new Error('Khoảng ngày đã chọn không có ngày làm việc nào (chỉ gồm ngày nghỉ tuần hoặc ngày lễ)'),
+      { status: 422 }
+    )
+  }
+
+  // Đơn nửa ngày luôn gói trong 1 ngày (đã chặn ở trên) nên nhân hệ số là đủ.
+  const factor    = await dayPartFactor(dayPart, hours)
+  const totalDays = Math.round(workingDays * factor * 1000) / 1000
 
   const { rows } = await query(
-    `INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, total_days, reason)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [userId, leaveType, startDate, endDate, totalDays, reason ?? null]
+    `INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, total_days, reason, day_part, hours)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [userId, leaveType, startDate, endDate, totalDays, reason ?? null,
+     dayPart, dayPart === 'hours' ? parseFloat(hours) : null]
   )
 
   const userRes  = await query('SELECT name FROM users WHERE id = $1', [userId])
@@ -129,7 +316,75 @@ async function createLeaveRequest({ userId, leaveType, startDate, endDate, reaso
   return toDto(rows[0])
 }
 
-async function approveLeaveRequest(id, approvedBy, approvalNote) {
+// Danh sách chính sách nghỉ đang hoạt động — nguồn cho dropdown ở giao diện,
+// thay cho object LEAVE_TYPE hardcode ở 2 file frontend.
+async function listLeavePolicies() {
+  const { rows } = await query(
+    `SELECT leave_type, label, is_paid, paid_rate, allow_half_day,
+            deduct_balance, counts_as_work, maps_to_status, sort_order
+     FROM leave_policies WHERE is_active ORDER BY sort_order, label`
+  )
+  return rows.map((r) => ({
+    leaveType:     r.leave_type,
+    label:         r.label,
+    isPaid:        r.is_paid,
+    paidRate:      parseFloat(r.paid_rate),
+    allowHalfDay:  r.allow_half_day,
+    deductBalance: r.deduct_balance,
+    countsAsWork:  r.counts_as_work,
+    mapsToStatus:  r.maps_to_status,
+  }))
+}
+
+async function getLeaveBalance({ userId, year } = {}) {
+  const yr = parseInt(year, 10) || new Date().getFullYear()
+  const params = [yr]
+  let cond = ''
+  if (userId) { params.push(userId); cond = `AND user_id = $${params.length}` }
+  const { rows } = await query(
+    `SELECT user_id, user_name, year, entitled_days, used_days, remaining_days
+     FROM v_leave_balance WHERE year = $1 ${cond} ORDER BY user_name`,
+    params
+  )
+  return rows.map((r) => ({
+    userId:        r.user_id,
+    userName:      r.user_name,
+    year:          r.year,
+    entitledDays:  parseFloat(r.entitled_days),
+    usedDays:      parseFloat(r.used_days),
+    remainingDays: parseFloat(r.remaining_days),
+  }))
+}
+
+async function approveLeaveRequest(id, approvedBy, approvalNote, { force = false } = {}) {
+  // Chặn duyệt vượt quỹ phép — chỉ với loại nghỉ có deduct_balance (mặc định: phép năm).
+  // Admin có thể ép duyệt bằng force=true, khi đó ghi rõ vào ghi chú để còn dấu vết.
+  const { rows: pre } = await query(
+    `SELECT lr.user_id, lr.total_days, lr.leave_type, lr.start_date,
+            p.deduct_balance, p.label
+     FROM leave_requests lr
+     LEFT JOIN leave_policies p ON p.leave_type = lr.leave_type
+     WHERE lr.id = $1 AND lr.status = 'pending'`,
+    [id]
+  )
+  if (pre[0]?.deduct_balance) {
+    const yr = new Date(pre[0].start_date).getUTCFullYear()
+    const [bal] = await getLeaveBalance({ userId: pre[0].user_id, year: yr })
+    const need = parseFloat(pre[0].total_days)
+    if (bal && need > bal.remainingDays) {
+      if (!force) {
+        throw Object.assign(
+          new Error(
+            `Vượt quỹ ${pre[0].label ?? pre[0].leave_type} năm ${yr}: ` +
+            `còn ${bal.remainingDays} ngày, đơn xin ${need} ngày.`
+          ),
+          { status: 409, code: 'LEAVE_BALANCE_EXCEEDED' }
+        )
+      }
+      approvalNote = `[Duyệt vượt quỹ: còn ${bal.remainingDays}, xin ${need}] ${approvalNote ?? ''}`.trim()
+    }
+  }
+
   const { rows } = await query(
     `UPDATE leave_requests
      SET status = 'approved', approved_by = $1, approved_at = NOW(),
@@ -141,20 +396,8 @@ async function approveLeaveRequest(id, approvedBy, approvalNote) {
   if (!rows[0]) throw Object.assign(new Error('Leave request not found or already reviewed'), { status: 404 })
   const leave = rows[0]
 
-  // Recalculate attendance for every day in the leave period (parallel — each day is independent)
-  const [sy, sm, sd] = toDateStr(leave.start_date).split('-').map(Number)
-  const endStr = toDateStr(leave.end_date)
-  const [ey, em, ed] = endStr.split('-').map(Number)
-  const cur = new Date(sy, sm - 1, sd)
-  const end = new Date(ey, em - 1, ed)
-  const datesToRecalc = []
-  while (cur <= end) {
-    datesToRecalc.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`)
-    cur.setDate(cur.getDate() + 1)
-  }
-  await Promise.all(
-    datesToRecalc.map((d) => calculateAttendanceRecord(leave.user_id, d).catch(() => {}))
-  )
+  // Recalculate attendance for every day in the leave period
+  await recalcRange(leave.user_id, leave.start_date, leave.end_date)
 
   await createAndEmit(
     leave.user_id, 'task_status_changed',
@@ -185,6 +428,41 @@ async function rejectLeaveRequest(id, { rejectionNote, reviewedBy }) {
   )
 
   return toDto(rows[0])
+}
+
+// Thu hồi một đơn ĐÃ DUYỆT (admin) — dành cho ca duyệt nhầm.
+// reject/cancel chỉ áp dụng cho đơn 'pending' nên trước đây đơn đã duyệt là ngõ cụt.
+// Dùng lại giá trị enum 'cancelled' sẵn có (không cần migration), phân biệt với
+// "NV tự huỷ" bằng tiền tố [Thu hồi] trong rejection_note.
+async function revokeLeaveRequest(id, { reason, actorId }) {
+  if (!reason || !String(reason).trim()) {
+    throw Object.assign(new Error('Vui lòng nhập lý do thu hồi đơn'), { status: 422 })
+  }
+
+  const { rows } = await query(
+    `UPDATE leave_requests
+     SET status = 'cancelled', approved_by = $1, approved_at = NOW(),
+         rejection_note = $2, updated_at = NOW()
+     WHERE id = $3 AND status = 'approved'
+     RETURNING *`,
+    [actorId, `[Thu hồi] ${String(reason).trim()}`, id]
+  )
+  if (!rows[0]) {
+    throw Object.assign(new Error('Không tìm thấy đơn đã duyệt để thu hồi'), { status: 404 })
+  }
+  const leave = rows[0]
+
+  // Trả các ngày trong khoảng đơn về trạng thái thực tế theo log chấm công
+  await recalcRange(leave.user_id, leave.start_date, leave.end_date)
+
+  await createAndEmit(
+    leave.user_id, 'task_status_changed',
+    'Đơn nghỉ phép bị thu hồi',
+    `Đơn nghỉ ${leave.leave_type} từ ${toDateStr(leave.start_date)} đến ${toDateStr(leave.end_date)} đã bị thu hồi. Lý do: ${String(reason).trim()}`,
+    null
+  )
+
+  return toDto(leave)
 }
 
 async function cancelLeaveRequest(id, userId) {
@@ -343,4 +621,10 @@ async function exportLeaveRecords({ from, to, status, userId, fields, res }) {
   res.end()
 }
 
-module.exports = { listLeaveRequests, createLeaveRequest, approveLeaveRequest, rejectLeaveRequest, cancelLeaveRequest, exportLeaveRecords }
+module.exports = {
+  listLeaveRequests, createLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
+  revokeLeaveRequest, cancelLeaveRequest, exportLeaveRecords,
+  listLeavePolicies, getLeaveBalance,
+  // Export để script bảo trì / kiểm thử tính lại total_days của đơn cũ
+  countWorkingDays,
+}

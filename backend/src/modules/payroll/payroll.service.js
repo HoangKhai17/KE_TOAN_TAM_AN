@@ -220,9 +220,11 @@ async function upsertRecord(periodId, data, actorId) {
     ? bonusItems.reduce((s, i) => s + (i.amount ?? 0), 0)
     : bonusLegacy
 
-  const components = (allowanceItems.length > 0 || bonusItems.length > 0)
-    ? { allowanceItems, bonusItems }
-    : null
+  // Vì components giờ được MERGE (không ghi đè), phải phân biệt "client gửi danh sách
+  // rỗng" (= xoá hết phụ cấp) với "client không gửi trường này" (= giữ nguyên).
+  // Chỉ ca sau mới trả null để merge bỏ qua.
+  const sentItems = Array.isArray(data.allowanceItems) || Array.isArray(data.bonusItems)
+  const components = sentItems ? { allowanceItems, bonusItems } : null
 
   const { rows: [record] } = await query(
     `INSERT INTO payroll_records
@@ -244,7 +246,10 @@ async function upsertRecord(periodId, data, actorId) {
        bhtn_employer = EXCLUDED.bhtn_employer,
        pit_deduction = EXCLUDED.pit_deduction,
        other_deductions = EXCLUDED.other_deductions,
-       components = EXCLUDED.components,
+       -- MERGE thay vì ghi đè: components còn chứa 'attendance_summary' do
+       -- syncAttendanceToPayroll ghi vào. Gán '=' sẽ xoá mất khối đó.
+       components = COALESCE(payroll_records.components, '{}'::jsonb)
+                    || COALESCE(EXCLUDED.components, '{}'::jsonb),
        notes = EXCLUDED.notes,
        updated_at = NOW()
      RETURNING *`,

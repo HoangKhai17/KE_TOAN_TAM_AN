@@ -47,6 +47,14 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+// Nhãn trạng thái 1 ô bước checklist (dùng cho bộ lọc header cột bước) — 4 mức
+function stepStateLabel(cell) {
+  if (!cell || cell.present === false) return 'Không áp dụng'
+  if (cell.done) return 'Hoàn thành'
+  if (cell.isGroup && cell.present && !cell.done) return 'Đang dở'
+  return 'Chưa hoàn thành'
+}
+
 // ── Lọc/sắp xếp header cột (client-side, tái dùng ColumnFilterDropdown) ──────────
 // colDefs: [{ key, label, type: 'text'|'enum'|'dateRange'|'numberRange', get(row) }]
 function useHeaderFilters(rows, colDefs) {
@@ -108,7 +116,8 @@ function useHeaderFilters(rows, colDefs) {
     e.stopPropagation()
     if (popup?.colKey === colKey) { setPopup(null); return }
     const r = e.currentTarget.getBoundingClientRect()
-    setPopup({ colKey, top: r.bottom + 4, left: r.left })
+    // Cột bước có thể nằm sát mép phải → kẹp lại cho popup không tràn khỏi màn hình
+    setPopup({ colKey, top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 280) })
   }
   function handleFilterChange(colKey, val) {
     setColFilters((p) => { const n = { ...p }; if (val == null) delete n[colKey]; else n[colKey] = val; return n })
@@ -189,12 +198,19 @@ function MatrixTable({ matrix }) {
     }
   }
 
-  // Lọc/sắp xếp trên 3 cột định danh cố định (Tên KH, MST, NV quản lý).
-  const colDefs = useMemo(() => [
-    { key: 'companyName',  label: 'Tên khách hàng', type: 'text', get: (r) => r.companyName },
-    { key: 'taxCode',      label: 'Mã số thuế',     type: 'text', get: (r) => r.taxCode || '' },
-    { key: 'assigneeName', label: 'NV quản lý',     type: 'enum', get: (r) => r.assigneeName || '—' },
-  ], [])
+  // Lọc/sắp xếp: 3 cột định danh cố định + MỖI cột bước checklist (enum theo trạng thái ô).
+  const colDefs = useMemo(() => {
+    const base = [
+      { key: 'companyName',  label: 'Tên khách hàng', type: 'text', get: (r) => r.companyName },
+      { key: 'taxCode',      label: 'Mã số thuế',     type: 'text', get: (r) => r.taxCode || '' },
+      { key: 'assigneeName', label: 'NV quản lý',     type: 'enum', get: (r) => r.assigneeName || '—' },
+    ]
+    const stepCols = columns.map((c, i) => ({
+      key: `step:${i}`, label: c.stepText, type: 'enum',
+      get: (r) => stepStateLabel(r.cells[i]),
+    }))
+    return [...base, ...stepCols]
+  }, [columns])
   const hf = useHeaderFilters(matrix.rows, colDefs)
   const stepColCount = columns.length
 
@@ -212,12 +228,12 @@ function MatrixTable({ matrix }) {
                 {groupRuns.map((run, idx) => (
                   run.group
                     ? <th key={idx} colSpan={run.span} className={`${s.th} ${s.thGroup}`}>{run.group}</th>
-                    : <th key={idx} rowSpan={2} className={`${s.th} ${s.thStep}`}>{columns[run.start].stepText}</th>
+                    : <ThFilter key={idx} colKey={`step:${run.start}`} hf={hf} rowSpan={2} className={`${s.th} ${s.thStep}`}>{columns[run.start].stepText}</ThFilter>
                 ))}
               </tr>
               <tr>
                 {columns.map((c, i) => c.group
-                  ? <th key={i} className={`${s.th} ${s.thStep} ${s.thStepChild}`}>{c.stepText}</th>
+                  ? <ThFilter key={i} colKey={`step:${i}`} hf={hf} className={`${s.th} ${s.thStep} ${s.thStepChild}`}>{c.stepText}</ThFilter>
                   : null)}
               </tr>
             </>
@@ -227,15 +243,15 @@ function MatrixTable({ matrix }) {
               <th className={`${s.th} ${s.colPeriod}`}>Đợt (hạn)</th>
               <ThFilter colKey="taxCode"      hf={hf} className={`${s.th} ${s.colTax}`}>Mã số thuế</ThFilter>
               <ThFilter colKey="assigneeName" hf={hf} className={`${s.th} ${s.colStaff}`}>NV quản lý</ThFilter>
-              {columns.map((c) => (
-                <th key={c.stepOrder + c.stepText} className={`${s.th} ${s.thStep}`}>
+              {columns.map((c, i) => (
+                <ThFilter key={c.stepOrder + c.stepText} colKey={`step:${i}`} hf={hf} className={`${s.th} ${s.thStep}`}>
                   {c.stepText}
                   {c.isGroup && c.childCount > 0 && (
                     <span className={s.groupBadge} title={`Gồm ${c.childCount} mục con: ${(c.childNames || []).join(' · ')}`}>
                       {' '}({c.childCount} mục)
                     </span>
                   )}
-                </th>
+                </ThFilter>
               ))}
             </tr>
           )}

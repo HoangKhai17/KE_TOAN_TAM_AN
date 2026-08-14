@@ -81,11 +81,17 @@ async function resolveWsForDate(userId, workDate) {
 
 // ── Inline recalculation after time adjustment ────────────────────────────────
 
-async function recalcTimes(userId, workDate, checkInTime, checkOutTime, currentStatus = 'present') {
+// GĐ2: ngày có thể đã gánh sẵn phần NGHỈ (nửa ngày phép). Công thực tế chỉ được
+// chiếm phần còn lại, nếu không sẽ vi phạm CHECK tổng ≤ 1.0 và báo cáo tính dư công.
+// leaveUnits = paid_leave_units + unpaid_leave_units hiện có của bản ghi.
+async function recalcTimes(userId, workDate, checkInTime, checkOutTime, currentStatus = 'present', leaveUnits = 0) {
   const ws = await resolveWsForDate(userId, workDate)
+  const remaining = Math.max(0, Math.round((1 - leaveUnits) * 1000) / 1000)
 
   let actualHours = null
-  const breakHours = ws ? (ws.break_minutes ?? 60) / 60 : 1
+  // Nghỉ trưa trừ theo tỉ lệ phần ngày còn phải làm (xem ghi chú cùng chủ đề
+  // trong attendance.service.calculateAttendanceRecord).
+  const breakHours = (ws ? (ws.break_minutes ?? 60) / 60 : 1) * remaining
 
   if (checkInTime && checkOutTime) {
     const diffHours = (new Date(checkOutTime) - new Date(checkInTime)) / 3600000
@@ -117,11 +123,13 @@ async function recalcTimes(userId, workDate, checkInTime, checkOutTime, currentS
     if (diffMin > tol) earlyMinutes = Math.floor(diffMin - tol)
   }
 
+  // Tỉ lệ so với giờ chuẩn của PHẦN NGÀY CÒN LẠI, và không bao giờ vượt phần đó.
   let workUnits = 0.0
-  if (actualHours != null && requiredHours) {
-    const ratio = actualHours / requiredHours
-    if (ratio >= 0.8)      workUnits = 1.0
-    else if (ratio >= 0.5) workUnits = 0.5
+  const requiredForPortion = (requiredHours || 0) * remaining
+  if (actualHours != null && requiredForPortion > 0) {
+    const ratio = actualHours / requiredForPortion
+    if (ratio >= 0.8)      workUnits = remaining
+    else if (ratio >= 0.5) workUnits = Math.round(remaining * 0.5 * 1000) / 1000
   }
 
   let status = currentStatus
@@ -169,7 +177,8 @@ async function adjustAttendanceRecord(id, { field, newValue, reason, adjustedBy 
     const newCheckOut = field === 'check_out_time' ? new Date(newValue) : record.check_out_time
 
     const { actualHours, lateMinutes, earlyMinutes, workUnits, status } =
-      await recalcTimes(record.user_id, record.work_date, newCheckIn, newCheckOut, record.status)
+      await recalcTimes(record.user_id, record.work_date, newCheckIn, newCheckOut, record.status,
+        Number(record.paid_leave_units ?? 0) + Number(record.unpaid_leave_units ?? 0))
 
     const { rows } = await query(
       `UPDATE attendance_records SET
@@ -189,20 +198,35 @@ async function adjustAttendanceRecord(id, { field, newValue, reason, adjustedBy 
   }
 
   if (field === 'status') {
-    const workUnitsForStatus = {
-      on_leave: 1.0, wfh: 1.0, business_trip: 1.0, holiday: 1.0,
-      absent: 0.0, unscheduled: 0.0,
+    // GĐ2: đổi status phải ghi vào ĐÚNG cột đơn vị công, không dồn hết vào work_units.
+    //   on_leave / holiday  → nghỉ HƯỞNG LƯƠNG (không phải công thực tế)
+    //   wfh / business_trip → vẫn là ĐANG LÀM VIỆC
+    //   absent / unscheduled→ không công
+    // Đặt tay như thế này luôn là NGUYÊN NGÀY; muốn nửa ngày thì dùng đơn nghỉ.
+    const UNITS_FOR_STATUS = {
+      on_leave:      { work: 0,   paid: 1.0, unpaid: 0 },
+      holiday:       { work: 0,   paid: 1.0, unpaid: 0 },
+      wfh:           { work: 1.0, paid: 0,   unpaid: 0 },
+      business_trip: { work: 1.0, paid: 0,   unpaid: 0 },
+      absent:        { work: 0,   paid: 0,   unpaid: 0 },
+      unscheduled:   { work: 0,   paid: 0,   unpaid: 0 },
     }
-    const workUnits = workUnitsForStatus[newValue] ?? record.work_units
+    const u = UNITS_FOR_STATUS[newValue] ?? {
+      work:   record.work_units,
+      paid:   record.paid_leave_units,
+      unpaid: record.unpaid_leave_units,
+    }
 
     const { rows } = await query(
       `UPDATE attendance_records SET
-         status      = $1,
-         work_units  = $2,
-         is_adjusted = TRUE,
-         updated_at  = NOW()
-       WHERE id = $3 RETURNING *`,
-      [newValue, workUnits, id]
+         status             = $1,
+         work_units         = $2,
+         paid_leave_units   = $3,
+         unpaid_leave_units = $4,
+         is_adjusted        = TRUE,
+         updated_at         = NOW()
+       WHERE id = $5 RETURNING *`,
+      [newValue, u.work, u.paid, u.unpaid, id]
     )
     return toRecordDto(rows[0])
   }
@@ -262,7 +286,8 @@ async function manualAdjust(recordId, { checkInTime, checkOutTime, reason, adjus
 
   // Recalc using system config
   const { actualHours, lateMinutes, earlyMinutes, workUnits, status } =
-    await recalcTimes(record.user_id, record.work_date, newCheckIn, newCheckOut, record.status)
+    await recalcTimes(record.user_id, record.work_date, newCheckIn, newCheckOut, record.status,
+        Number(record.paid_leave_units ?? 0) + Number(record.unpaid_leave_units ?? 0))
 
   const { rows } = await query(
     `UPDATE attendance_records SET

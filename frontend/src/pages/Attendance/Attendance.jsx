@@ -9,6 +9,7 @@ import Modal from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
+import { useLeavePolicies, LEAVE_LABELS, DAY_PARTS, dayPartSuffix } from './leavePolicies'
 import { useCompanyOptions } from '../../hooks/useReferenceData'
 import DateBox from '../../components/ui/DateBox'
 import s from './Attendance.module.css'
@@ -39,14 +40,7 @@ const STATUS_CFG = {
   unscheduled:    { label: 'Ngoài lịch', bg: 'var(--color-bg-soft)', color: 'var(--color-muted-soft)', border: 'var(--color-border)', dashed: true },
 }
 
-const LEAVE_TYPE = {
-  annual:        'Nghỉ phép năm',
-  sick:          'Nghỉ ốm',
-  compensatory:  'Nghỉ bù',
-  unpaid:        'Nghỉ không lương',
-  business_trip: 'Công tác',
-  wfh:           'Làm từ xa',
-}
+// Loại nghỉ nay lấy động từ bảng leave_policies — xem ./leavePolicies.js
 
 const LEAVE_STATUS = {
   pending:   { label: 'Chờ duyệt', bg: 'var(--color-accent-bg-soft)', color: 'var(--color-warning-amber)' },
@@ -109,20 +103,8 @@ function fmtDateVI(iso) {
   return `${d}/${m}/${y}`
 }
 
-function countWeekdays(startDate, endDate) {
-  if (!startDate || !endDate) return 0
-  const [sy, sm, sd] = String(startDate).slice(0, 10).split('-').map(Number)
-  const [ey, em, ed] = String(endDate).slice(0, 10).split('-').map(Number)
-  const cur = new Date(sy, sm - 1, sd)
-  const end = new Date(ey, em - 1, ed)
-  let n = 0
-  while (cur <= end) {
-    const dow = cur.getDay()
-    if (dow !== 0 && dow !== 6) n++
-    cur.setDate(cur.getDate() + 1)
-  }
-  return n
-}
+// (Đã bỏ countWeekdays — xem ghi chú cùng tên ở AttendanceAdmin.jsx:
+//  loại trừ thứ 7 cứng nên đếm sai; số ngày công nay chỉ lấy từ backend.)
 
 function buildCalendar(year, month, recordMap) {
   const first      = new Date(year, month - 1, 1)
@@ -162,6 +144,9 @@ export default function Attendance() {
   const user    = useAuthStore((st) => st.user)
   const isAdmin = user?.role === 'admin'
   const now     = new Date()
+
+  // Nạp bảng nhãn loại nghỉ một lần cho cả trang (điền LEAVE_LABELS)
+  useLeavePolicies()
 
   const [activeTab, setActiveTab] = useState('calendar')
   const [year,      setYear]      = useState(now.getFullYear())
@@ -602,10 +587,10 @@ function LeaveTab({ isAdmin, year, month, userId }) {
                   return (
                     <tr key={req.id}>
                       {isAdmin && <td className={s.tableStrong}>{req.userName}</td>}
-                      <td>{LEAVE_TYPE[req.leaveType] ?? req.leaveType}</td>
+                      <td>{LEAVE_LABELS[req.leaveType] ?? req.leaveType}</td>
                       <td>{fmtDateVI(req.startDate)}</td>
                       <td>{fmtDateVI(req.endDate)}</td>
-                      <td className={s.tablePrimary}>{req.totalDays > 0 ? req.totalDays : countWeekdays(req.startDate, req.endDate)} ngày</td>
+                      <td className={s.tablePrimary}>{Number(req.totalDays ?? 0)} ngày{dayPartSuffix(req.dayPart, req.hours)}</td>
                       <td className={s.tableReason}>{req.reason ?? '—'}</td>
                       <td>
                         <span className={`${s.statusPill} ${getRequestStatusClass(req.status)}`}>
@@ -688,9 +673,31 @@ function LeaveTab({ isAdmin, year, month, userId }) {
 function LeaveFormModal({ onClose, onSaved }) {
   const addToast = useToastStore((st) => st.toast)
   const today    = new Date().toISOString().slice(0, 10)
-  const [form,   setForm]   = useState({ leaveType: 'annual', startDate: today, endDate: today, reason: '' })
+  const { policies, policyOf } = useLeavePolicies()
+  const [form,   setForm]   = useState({ leaveType: 'annual', startDate: today, endDate: today, reason: '', dayPart: 'full', hours: '' })
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState(null)
+  const [balance, setBalance] = useState(null)
+
+  const policy    = policyOf(form.leaveType)
+  const oneDay    = form.startDate && form.startDate === form.endDate
+  // Nghỉ nửa ngày / theo giờ chỉ mở khi chính sách cho phép VÀ đơn gói trong 1 ngày
+  const canSplit  = Boolean(policy?.allowHalfDay) && oneDay
+
+  // Quỹ phép chỉ có ý nghĩa với loại nghỉ bị trừ quỹ (mặc định: phép năm)
+  useEffect(() => {
+    if (!policy?.deductBalance) { setBalance(null); return }
+    let cancelled = false
+    attendanceApi.getLeaveBalance({ year: new Date(form.startDate || today).getFullYear() })
+      .then((rows) => { if (!cancelled) setBalance(Array.isArray(rows) ? rows[0] ?? null : null) })
+      .catch(() => { if (!cancelled) setBalance(null) })
+    return () => { cancelled = true }
+  }, [form.leaveType, form.startDate, policy?.deductBalance]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Đổi sang loại không cho nửa ngày, hoặc kéo dài thành nhiều ngày → về "cả ngày"
+  useEffect(() => {
+    if (!canSplit && form.dayPart !== 'full') setForm((p) => ({ ...p, dayPart: 'full', hours: '' }))
+  }, [canSplit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function set(field) { return (e) => setForm((p) => ({ ...p, [field]: e.target.value })) }
 
@@ -698,9 +705,13 @@ function LeaveFormModal({ onClose, onSaved }) {
     e.preventDefault()
     if (!form.startDate || !form.endDate) { setError('Vui lòng chọn ngày'); return }
     if (form.endDate < form.startDate)   { setError('Ngày kết thúc phải sau ngày bắt đầu'); return }
+    if (form.dayPart === 'hours' && !(parseFloat(form.hours) > 0)) { setError('Vui lòng nhập số giờ nghỉ'); return }
     setError(null); setSaving(true)
     try {
-      await attendanceApi.createLeaveRequest(form)
+      await attendanceApi.createLeaveRequest({
+        ...form,
+        hours: form.dayPart === 'hours' ? parseFloat(form.hours) : null,
+      })
       addToast('Đã tạo đơn xin nghỉ phép', 'success')
       onSaved()
     } catch (err) {
@@ -715,8 +726,17 @@ function LeaveFormModal({ onClose, onSaved }) {
         <div className={s.formGroup}>
           <label className={`${s.formLabel} ${s.req}`}>Loại nghỉ</label>
           <select value={form.leaveType} onChange={set('leaveType')} className={s.formSelect}>
-            {Object.entries(LEAVE_TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {policies.map((p) => (
+              <option key={p.leaveType} value={p.leaveType}>
+                {p.label}{p.isPaid ? '' : ' — không hưởng lương'}
+              </option>
+            ))}
           </select>
+          {balance && (
+            <p className={s.formHint}>
+              Quỹ phép năm {balance.year}: còn <strong>{balance.remainingDays}</strong>/{balance.entitledDays} ngày
+            </p>
+          )}
         </div>
         <div className={s.formGrid}>
           <div className={s.formGroup}>
@@ -728,6 +748,35 @@ function LeaveFormModal({ onClose, onSaved }) {
             <DateBox value={form.endDate ?? ''} onChange={(v) => setForm((p) => ({ ...p, endDate: v }))} min={form.startDate || ''} block />
           </div>
         </div>
+        {canSplit && (
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Thời lượng nghỉ</label>
+            <div className={s.dayPartRow}>
+              {DAY_PARTS.map((dp) => (
+                <label key={dp.value} className={`${s.dayPartChip} ${form.dayPart === dp.value ? s.dayPartChipActive : ''}`}>
+                  <input
+                    type="radio"
+                    name="dayPart"
+                    value={dp.value}
+                    checked={form.dayPart === dp.value}
+                    onChange={set('dayPart')}
+                  />
+                  {dp.label}
+                </label>
+              ))}
+            </div>
+            {form.dayPart === 'hours' && (
+              <input
+                type="number" min="0.5" step="0.5"
+                value={form.hours}
+                onChange={set('hours')}
+                className={s.formInput}
+                placeholder="Số giờ nghỉ, ví dụ 2"
+                style={{ marginTop: 8, maxWidth: 220 }}
+              />
+            )}
+          </div>
+        )}
         <div className={s.formGroup}>
           <label className={s.formLabel}>Lý do</label>
           <textarea value={form.reason} onChange={set('reason')} className={s.formTextarea} rows={3} placeholder="Lý do xin nghỉ phép..." />
@@ -780,9 +829,9 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
       <div className={s.modalForm}>
         <div className={s.reviewCard}>
           <p className={s.reviewCardTitle}>{request.userName}</p>
-          <p className={s.reviewCardText}>{LEAVE_TYPE[request.leaveType] ?? request.leaveType}</p>
+          <p className={s.reviewCardText}>{LEAVE_LABELS[request.leaveType] ?? request.leaveType}</p>
           <p className={s.reviewCardText}>
-            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({request.totalDays > 0 ? request.totalDays : countWeekdays(request.startDate, request.endDate)} ngày)
+            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({Number(request.totalDays ?? 0)} ngày)
           </p>
           {request.reason && (
             <p className={s.reviewCardNote}>{request.reason}</p>
@@ -1174,7 +1223,8 @@ function SummaryTab({ year, month, userId }) {
                 <th>Nhân viên</th>
                 <th>Chức danh</th>
                 <th className={s.summarySuccess}>Ngày công</th>
-                <th className={s.summaryPrimary}>Nghỉ (trả lương)</th>
+                <th className={s.summaryPrimary}>Nghỉ có lương</th>
+                <th className={s.summaryWarning}>Nghỉ không lương</th>
                 <th className={s.summaryDanger}>Vắng</th>
                 <th className={s.summaryWarning}>Đi muộn</th>
                 <th className={s.detailValueWarningDark}>Về sớm</th>
@@ -1188,6 +1238,7 @@ function SummaryTab({ year, month, userId }) {
                   <td className={s.tableMuted}>{r.jobTitle ?? '—'}</td>
                   <td className={s.tableSuccess}>{r.actualWorkDays}</td>
                   <td className={s.tableMuted}>{r.leavePaidDays}</td>
+                  <td className={(r.unpaidLeaveDays ?? 0) > 0 ? s.tableWarning : s.tableMuted}>{r.unpaidLeaveDays ?? 0}</td>
                   <td className={r.absentDays > 0 ? s.tableDanger : s.tableMuted}>{r.absentDays}</td>
                   <td className={r.lateCount > 0 ? s.tableWarning : s.tableMuted}>{r.lateCount}</td>
                   <td className={s.tableMuted}>{r.earlyCount}</td>
