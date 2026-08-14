@@ -17,13 +17,18 @@ const { applyStandardStyle } = require('../export/excel-renderer')
 
 // ── Fixed sections ─────────────────────────────────────────────────────────────
 const SECTION_LABELS = {
-  overview:           'Tổng quan',
-  tasks:              'Công việc',
-  'client-requests':  'Yêu cầu KH',
-  schedules:          'Lịch định kỳ',
-  documents:          'Tài liệu',
-  notes:              'Ghi chú',
-  credentials:        'Tài khoản hệ thống',
+  overview:             'Tổng quan',
+  locations:            'Địa điểm kinh doanh',
+  contracts:            'Hợp đồng dịch vụ',
+  tasks:                'Công việc',
+  'client-requests':    'Yêu cầu KH',
+  schedules:            'Lịch định kỳ',
+  documents:            'Tài liệu',
+  'document-types':     'Chứng từ phát sinh',
+  'original-documents': 'KH lưu HS gốc tại Cty',
+  notes:                'Ghi chú nhanh',
+  'important-notes':    'Điều cần lưu ý',
+  credentials:          'Tài khoản hệ thống',
 }
 const FIXED_SECTION_KEYS = Object.keys(SECTION_LABELS)
 
@@ -35,6 +40,7 @@ const TASK_PRIORITY_VI  = { urgent: 'Khẩn cấp', high: 'Cao', medium: 'Trung 
 const TASK_SOURCE_VI    = { manual: 'Thủ công', auto: 'Tự động' }
 const CDR_STATUS_VI     = { pending: 'Chờ nộp', overdue: 'Quá hạn', received: 'Đã nhận', not_required: 'Không yêu cầu', dismissed: 'Đã bỏ qua', submitted: 'Đã gửi' }
 const RECURRENCE_VI     = { monthly: 'Hàng tháng', quarterly: 'Hàng quý', yearly: 'Hàng năm', weekly: 'Hàng tuần', custom: 'Tuỳ chỉnh' }
+const ASSIGNMENT_PRIORITY_VI = { urgent: 'Khẩn cấp', high: 'Cao', normal: 'Bình thường', low: 'Thấp' }
 
 // ── Formatting helpers ──────────────────────────────────────────────────────────
 function fmtDate(v) {
@@ -60,6 +66,34 @@ function customFieldsText(fields) {
   if (!Array.isArray(fields)) return ''
   return fields.filter((f) => f && String(f.name || '').trim())
     .map((f) => `${f.name}: ${f.value ?? ''}`).join('\n')
+}
+
+// ── Hợp đồng dịch vụ: số ngày còn lại + trạng thái (mirror CompanyContractsCard) ──
+const CONTRACT_STATUS_LABEL = {
+  active: 'Đang hoạt động', renew: 'Gia hạn hợp đồng', expired: 'Hết hạn hợp đồng',
+  renewed: 'Đã gia hạn hợp đồng', stopped: 'Ngưng dịch vụ',
+}
+function contractRawDays(endDate) {
+  if (!endDate) return null
+  const end = new Date(String(endDate).slice(0, 10) + 'T00:00:00')
+  if (isNaN(end.getTime())) return null
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  return Math.round((end - today) / 86_400_000)
+}
+// Chọn tay ('renewed'/'stopped') hoặc không có ngày kết thúc → ẩn số ngày.
+function contractDaysRemaining(r) {
+  if (r.status_override || !r.end_date) return ''
+  const d = contractRawDays(r.end_date)
+  return d == null ? '' : d
+}
+function contractStatusLabel(r) {
+  let st = r.status_override
+  if (!st) {
+    const d = contractRawDays(r.end_date)
+    if (d == null) return ''
+    st = d < 0 ? 'expired' : d <= 45 ? 'renew' : 'active'
+  }
+  return CONTRACT_STATUS_LABEL[st] ?? st
 }
 
 // ── Computed engine (mirror of frontend CustomTableTab) ─────────────────────────
@@ -111,7 +145,12 @@ function genCell(col, data) {
 async function loadLbl() {
   let map = {}
   try {
-    const { rows } = await query(`SELECT type_key, option_key, label FROM enum_options WHERE is_active = TRUE`)
+    // enum_options.type_id → enum_types.type_key (KHÔNG có cột type_key trong enum_options).
+    const { rows } = await query(
+      `SELECT et.type_key, eo.option_key, eo.label
+       FROM enum_options eo JOIN enum_types et ON et.id = eo.type_id
+       WHERE eo.is_active = TRUE`
+    )
     for (const r of rows) { (map[r.type_key] ??= {})[r.option_key] = r.label }
   } catch { map = {} }
   return (type, key, fb) => {
@@ -138,9 +177,33 @@ function columnsFor(key, lbl) {
         { header: 'Ngày bắt đầu HĐ',   get: (r) => fmtDate(r.service_start_date) },
         { header: 'Nhân sự phụ trách', get: (r) => safe(r.assigned_staff_name) },
         { header: 'Trạng thái HĐ',     get: (r) => lbl('company_status', r.status, COMPANY_STATUS_VI) },
+        { header: 'Ưu tiên',           get: (r) => (r.is_priority ? 'Có' : '') },
         { header: 'Thông tin bổ sung', get: (r) => customFieldsText(r.custom_fields) },
         { header: 'Ghi chú',           get: (r) => safe(r.notes) },
         { header: 'Ngày tạo',          get: (r) => fmtDate(r.created_at) },
+      ]
+    case 'locations':
+      return [
+        { header: 'Loại GP',              get: (r) => lbl('location_type', r.location_type) },
+        { header: 'Tên trụ sở / Địa điểm KD', get: (r) => safe(r.name) },
+        { header: 'MST',                  get: (r) => safe(r.tax_code) },
+        { header: 'Ngày TL/thay đổi GD',  get: (r) => fmtDate(r.license_established_date) },
+        { header: 'Địa chỉ',              get: (r) => safe(r.address) },
+        { header: 'PP hạch toán',         get: (r) => lbl('accounting_form', r.accounting_form) },
+        { header: 'Chức năng',            get: (r) => safe(r.location_function) },
+        { header: 'Trạng thái',           get: (r) => lbl('location_status', r.status) },
+        { header: 'Ngày bắt đầu',         get: (r) => fmtDate(r.start_date) },
+        { header: 'Ngày kết thúc',        get: (r) => fmtDate(r.end_date) },
+        { header: 'Ghi chú thay đổi',     get: (r) => safe(r.notes) },
+      ]
+    case 'contracts':
+      return [
+        { header: 'Loại',                    get: (r) => lbl('contract_type', r.contract_type) },
+        { header: 'Nội dung công việc',      get: (r) => safe(r.content) },
+        { header: 'Ngày bắt đầu',            get: (r) => fmtDate(r.start_date) },
+        { header: 'Ngày kết thúc',           get: (r) => fmtDate(r.end_date) },
+        { header: 'Số ngày còn lại theo HĐ', get: (r) => contractDaysRemaining(r) },
+        { header: 'Trạng thái',              get: (r) => contractStatusLabel(r) },
       ]
     case 'tasks':
       return [
@@ -170,16 +233,42 @@ function columnsFor(key, lbl) {
         { header: 'Định kỳ',        get: (r) => RECURRENCE_VI[r.recurrence_type] ?? safe(r.recurrence_type) },
         { header: 'Phụ trách',      get: (r) => safe(r.assigned_staff_name) },
         { header: 'Hạn (số ngày)',  get: (r) => safe(r.deadline_offset_days) },
+        { header: 'Trần ngày',      get: (r) => safe(r.max_due_day) },
         { header: 'SLA (ngày)',     get: (r) => safe(r.override_sla_days) },
+        { header: 'Ghi chú',        get: (r) => safe(r.notes) },
         { header: 'Trạng thái',     get: (r) => (r.is_active ? 'Đang hoạt động' : 'Tạm dừng') },
       ]
     case 'documents':
       return [
-        { header: 'Tên tài liệu', get: (r) => safe(r.name) },
-        { header: 'Danh mục',     get: (r) => safe(r.category) },
-        { header: 'URL',          get: (r) => safe(r.url) },
-        { header: 'Mô tả',        get: (r) => safe(r.description) },
-        { header: 'Ngày tạo',     get: (r) => fmtDate(r.created_at) },
+        { header: 'Tên tài liệu',   get: (r) => safe(r.name) },
+        { header: 'Danh mục',       get: (r) => safe(r.category) },
+        { header: 'Kỳ',             get: (r) => safe(r.period) },
+        { header: 'URL',            get: (r) => safe(r.url) },
+        { header: 'Tệp đính kèm',   get: (r) => safe(r.attachment_file_name) },
+        { header: 'Mô tả',          get: (r) => safe(r.description) },
+        { header: 'Ngày tạo',       get: (r) => fmtDate(r.created_at) },
+      ]
+    case 'document-types':
+      return [
+        { header: 'Tên chứng từ',   get: (r) => safe(r.name) },
+        { header: 'Phân loại',      get: (r) => safe(r.category) },
+        { header: 'Nguồn cung cấp', get: (r) => safe(r.source) },
+        { header: 'Tần suất',       get: (r) => safe(r.frequency) },
+        { header: 'Ghi chú',        get: (r) => safe(r.note) },
+      ]
+    case 'original-documents':
+      return [
+        { header: 'Tên hồ sơ',      get: (r) => safe(r.name) },
+        { header: 'Phân loại',      get: (r) => safe(r.category) },
+        { header: 'Nguồn cung cấp', get: (r) => safe(r.source) },
+        { header: 'Tần suất',       get: (r) => safe(r.frequency) },
+        { header: 'Ghi chú',        get: (r) => safe(r.note) },
+      ]
+    case 'important-notes':
+      return [
+        { header: 'Nội dung', get: (r) => safe(r.content) },
+        { header: 'Mức độ',   get: (r) => lbl('assignment_priority', r.severity, ASSIGNMENT_PRIORITY_VI) },
+        { header: 'Ghim',     get: (r) => (r.is_pinned ? 'Có' : '') },
       ]
     case 'notes':
       return [
@@ -207,6 +296,21 @@ function columnsFor(key, lbl) {
 // ── Data fetchers (IN-list — 1 query per section, all companies) ─────────────────
 async function fetchSection(key, companyIds, includeCredentials) {
   switch (key) {
+    case 'locations':
+      return (await query(
+        `SELECT company_id, location_type, name, tax_code, license_established_date, address,
+                accounting_form, location_function, status, start_date, end_date, notes
+         FROM company_locations WHERE company_id = ANY($1)
+         ORDER BY company_id, sort_order, created_at`,
+        [companyIds],
+      )).rows
+    case 'contracts':
+      return (await query(
+        `SELECT company_id, contract_type, content, start_date, end_date, status_override
+         FROM company_service_contracts WHERE company_id = ANY($1)
+         ORDER BY company_id, sort_order, created_at`,
+        [companyIds],
+      )).rows
     case 'tasks':
       return (await query(
         `SELECT t.company_id, t.title, t.status, t.priority, t.source, t.created_at, t.due_date, t.period_label,
@@ -239,7 +343,8 @@ async function fetchSection(key, companyIds, includeCredentials) {
     case 'schedules':
       return (await query(
         `SELECT s.company_id, tt.name AS task_type_name, s.recurrence_type, s.recurrence_config,
-                u.name AS assigned_staff_name, s.deadline_offset_days, s.override_sla_days, s.is_active
+                u.name AS assigned_staff_name, s.deadline_offset_days, s.max_due_day,
+                s.override_sla_days, s.notes, s.is_active
          FROM customer_task_schedules s
          LEFT JOIN task_types tt ON tt.id = s.task_type_id
          LEFT JOIN users u ON u.id = s.assigned_staff_id
@@ -249,9 +354,33 @@ async function fetchSection(key, companyIds, includeCredentials) {
       )).rows
     case 'documents':
       return (await query(
-        `SELECT company_id, name, category, url, description, created_at
-         FROM documents WHERE company_id = ANY($1)
-         ORDER BY company_id, created_at DESC`,
+        `SELECT d.company_id, d.name, d.category, d.period, d.url, d.description, d.created_at,
+                a.file_name AS attachment_file_name
+         FROM documents d
+         LEFT JOIN attachments a ON a.id = d.attachment_id
+         WHERE d.company_id = ANY($1)
+         ORDER BY d.company_id, d.created_at DESC`,
+        [companyIds],
+      )).rows
+    case 'document-types':
+      return (await query(
+        `SELECT company_id, name, category, source, frequency, note
+         FROM company_document_types WHERE company_id = ANY($1)
+         ORDER BY company_id, sort_order, created_at`,
+        [companyIds],
+      )).rows
+    case 'original-documents':
+      return (await query(
+        `SELECT company_id, name, category, source, frequency, note
+         FROM company_original_documents WHERE company_id = ANY($1)
+         ORDER BY company_id, sort_order, created_at`,
+        [companyIds],
+      )).rows
+    case 'important-notes':
+      return (await query(
+        `SELECT company_id, content, severity, is_pinned
+         FROM company_important_notes WHERE company_id = ANY($1)
+         ORDER BY company_id, is_pinned DESC, sort_order, created_at`,
         [companyIds],
       )).rows
     case 'notes':

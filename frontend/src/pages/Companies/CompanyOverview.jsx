@@ -366,7 +366,13 @@ export default function CompanyOverview() {
                                   </td>
                                 )
                               }
-                              return <td key={ci} className={s.ovCell}>{String(cell ?? '')}</td>
+                              // Cột thường: cắt gọn 1 dòng + '…' (hover xem đầy đủ) để nội dung dài không phá layout
+                              const text = String(cell ?? '')
+                              return (
+                                <td key={ci} className={s.ovCell}>
+                                  <span className={s.ovCellClip} title={text}>{text}</span>
+                                </td>
+                              )
                             })}
                           </tr>
                         ))}

@@ -7017,7 +7017,17 @@
 }
 .ovTable th { color: var(--color-primary-deep); font-size: var(--fs-2xs); font-weight: 800; }
 .ovTable td { color: var(--color-text-strong); font-weight: var(--fw-medium); }
-.ovCell { white-space: pre-wrap; max-width: 360px; }
+.ovCell { max-width: 360px; }
+/* Cắt gọn nội dung 1 dòng + dấu '…' — span inline-block TÔN TRỌNG max-width (td thì không
+   trong table-layout: auto). Hover title xem đầy đủ. */
+.ovCellClip {
+  display: inline-block;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
+}
 .ovSttCol { width: 44px; text-align: right; color: var(--color-muted-subtle); }
 .ovCompanyLink {
   color: var(--color-primary);
