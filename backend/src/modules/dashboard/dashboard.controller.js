@@ -1,13 +1,20 @@
 const svc = require('./dashboard.service')
 
+// YYYY-MM-DD theo GIỜ ĐỊA PHƯƠNG của tiến trình (TZ = Asia/Ho_Chi_Minh) — KHÔNG dùng
+// toISOString (UTC) vì sẽ lệch ngày. Đây chỉ là fallback khi client không gửi from/to.
+function ymdLocal(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 function defaultDates(from, to) {
   const today = new Date()
-  const defTo  = today.toISOString().slice(0, 10)
-  const defFrom = new Date(today)
-  defFrom.setDate(defFrom.getDate() - 27)
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  const lastOfMonth  = new Date(today.getFullYear(), today.getMonth() + 1, 0)
   return {
-    from: from || defFrom.toISOString().slice(0, 10),
-    to:   to   || defTo,
+    from: from || ymdLocal(firstOfMonth),
+    to:   to   || ymdLocal(lastOfMonth),
   }
 }
 

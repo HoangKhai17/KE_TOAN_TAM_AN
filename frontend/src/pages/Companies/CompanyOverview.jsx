@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import {
   LayoutGrid, ArrowLeft, Loader2, Download, Search, Eye, Copy, Check,
-  Building2,
+  Building2, SlidersHorizontal, ChevronDown,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import PaginationFooter from '../../components/layout/PaginationFooter'
@@ -44,6 +44,8 @@ export default function CompanyOverview() {
   const [hidden, setHidden]           = useState(() => new Set())  // section keys ẩn
   const [search, setSearch]           = useState('')
   const [page, setPage]               = useState(1)
+  const [filterOpen, setFilterOpen]   = useState(false)
+  const filterRef = useRef(null)
 
   // Reveal mật khẩu: credentialId -> password
   const [revealed, setRevealed]   = useState({})
@@ -80,6 +82,22 @@ export default function CompanyOverview() {
 
   // Reset trang + tìm kiếm khi đổi tab
   useEffect(() => { setPage(1); setSearch('') }, [activeSection?.key])
+
+  useEffect(() => {
+    if (!filterOpen) return undefined
+    function handlePointerDown(event) {
+      if (!filterRef.current?.contains(event.target)) setFilterOpen(false)
+    }
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setFilterOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [filterOpen])
 
   const filteredRows = useMemo(() => {
     if (!activeSection) return []
@@ -188,7 +206,7 @@ export default function CompanyOverview() {
         <div className={s.pageHeader}>
           <div className={s.pageTitleGroup}>
             <h1 className={s.pageTitle}>
-              <LayoutGrid size={20} style={{ marginRight: 8, verticalAlign: '-3px' }} />
+              <LayoutGrid size={20} />
               Tổng quan dữ liệu công ty
             </h1>
             <p className={s.pageSubtitle}>
@@ -215,18 +233,45 @@ export default function CompanyOverview() {
           <div className={s.ovEmptyPage}><p>Không có dữ liệu để hiển thị.</p></div>
         ) : (
           <>
-            {/* Chips bật/tắt nhóm */}
-            <div className={s.ovChips}>
-              {sections.map((sec) => (
-                <button
-                  key={sec.key}
-                  className={`${s.ovChip} ${hidden.has(sec.key) ? '' : s.ovChipOn}`}
-                  onClick={() => toggleSection(sec.key)}
-                  title={hidden.has(sec.key) ? 'Hiện nhóm' : 'Ẩn nhóm'}
-                >
-                  {sec.label} <span className={s.ovChipCount}>{sec.rows.length}</span>
-                </button>
-              ))}
+            {/* Bộ lọc nhóm hiển thị — popover nổi, không đẩy table xuống */}
+            <div className={s.ovSectionFilter} ref={filterRef}>
+              <button
+                type="button"
+                className={`${s.ovFilterButton} ${filterOpen ? s.ovFilterButtonOpen : ''}`}
+                onClick={() => setFilterOpen((open) => !open)}
+                aria-expanded={filterOpen}
+              >
+                <SlidersHorizontal size={13} />
+                Bộ lọc
+                <span className={s.ovFilterBadge}>{visibleTabs.length}/{sections.length}</span>
+                <ChevronDown size={12} className={filterOpen ? s.ovFilterChevronOpen : ''} />
+              </button>
+
+              {filterOpen && (
+                <div className={s.ovFilterPopover}>
+                  <div className={s.ovFilterPopoverHead}>
+                    <span>Nhóm dữ liệu hiển thị</span>
+                    <button type="button" onClick={() => setHidden(new Set())}>Hiện tất cả</button>
+                  </div>
+                  <div className={s.ovFilterOptions}>
+                    {sections.map((sec) => {
+                      const visible = !hidden.has(sec.key)
+                      return (
+                        <button
+                          type="button"
+                          key={sec.key}
+                          className={`${s.ovFilterOption} ${visible ? s.ovFilterOptionActive : ''}`}
+                          onClick={() => toggleSection(sec.key)}
+                        >
+                          <span className={s.ovFilterCheck}>{visible && <Check size={11} />}</span>
+                          <span className={s.ovFilterOptionLabel}>{sec.label}</span>
+                          <span className={s.ovFilterOptionCount}>{sec.rows.length}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Tabs */}

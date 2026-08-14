@@ -599,6 +599,12 @@
   color: var(--text);
 }
 
+/* Nút icon đang bật (vd toàn màn hình) */
+.headerIconBtnActive {
+  background: var(--primary-soft, var(--border-soft));
+  color: var(--primary, var(--text));
+}
+
 .headerBadge {
   position: absolute;
   top: 5px;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -7,8 +7,8 @@ import {
 } from 'recharts'
 import {
   Building2, ClipboardList, AlertTriangle, CheckCircle2,
-  TrendingUp, ArrowRight, Loader2,
-  Maximize2, Minimize2, User, Calendar as CalendarIcon,
+  ArrowRight, Loader2,
+  User, Calendar as CalendarIcon,
   FileText, Users, SendHorizonal,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
@@ -99,11 +99,11 @@ const STATUS_LABEL = {
 }
 
 const RANGE_OPTIONS = [
-  { key: 'today', label: 'Hôm nay' },
-  { key: '7d',   label: '7 ngày'  },
-  { key: '28d',  label: '28 ngày' },
+  { key: 'today', label: 'Hôm nay'   },
+  { key: '7d',    label: '7 ngày'    },
+  { key: 'month', label: 'Tháng này' },
 ]
-const RANGE_SUB = { today: 'Hôm nay', '7d': '7 ngày gần nhất', '28d': '4 tuần gần nhất' }
+const RANGE_SUB = { today: 'Hôm nay', '7d': '7 ngày gần nhất', month: 'Tháng hiện tại' }
 
 const TASK_TYPE_TABS = [
   { key: 'traditional', label: 'Truyền thống', icon: ClipboardList },
@@ -112,18 +112,26 @@ const TASK_TYPE_TABS = [
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+// YYYY-MM-DD theo GIỜ ĐỊA PHƯƠNG (không dùng toISOString vì đó là UTC → lệch ngày lúc sáng sớm)
+function ymdLocal(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 function getRangeDates(range) {
-  const to   = new Date()
-  const from = new Date()
+  const now = new Date()
+  let from = new Date(now)
+  let to   = new Date(now)
   if (range === '7d') {
     from.setDate(from.getDate() - 6)
-  } else if (range === '28d') {
-    from.setDate(from.getDate() - 27)
+  } else if (range === 'month') {
+    // CẢ tháng hiện tại (đầu → cuối tháng) — khớp bộ lọc "Kỳ" ở trang Công việc
+    from = new Date(now.getFullYear(), now.getMonth(), 1)
+    to   = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   }
-  return {
-    from: from.toISOString().slice(0, 10),
-    to:   to.toISOString().slice(0, 10),
-  }
+  // 'today' → from = to = hôm nay
+  return { from: ymdLocal(from), to: ymdLocal(to) }
 }
 
 function fmtWeek(dateStr) {
@@ -265,11 +273,12 @@ function buildKpiCards({ activeTaskType, summary, isStaff, loading, range, navig
       tone:  s.kpiPurple,
     },
     {
-      label: 'Tuân thủ SLA',
-      value: loading ? null : (summary ? `${summary.slaComplianceRate}%` : '—'),
-      sub:   isStaff ? 'đúng / trước hạn của tôi' : 'hoàn thành đúng / trước hạn',
-      icon:  TrendingUp,
-      tone:  s.kpiCyan,
+      label:  'Đến hạn hôm nay',
+      value:  val(summary?.dueToday),
+      sub:    isStaff ? 'việc của tôi trong ngày' : 'cần xử lý trong ngày',
+      icon:   CalendarIcon,
+      tone:   s.kpiCyan,
+      urgent: (summary?.dueToday ?? 0) > 0,
     },
   ]
 }
@@ -305,21 +314,9 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   const queryClient = useQueryClient()
-  const [range,          setRange]          = useState('28d')
-  const [isFullscreen,   setIsFullscreen]   = useState(false)
+  const [range,          setRange]          = useState('month')
   const [activeTaskType, setActiveTaskType] = useState('traditional')
   const syncTimer = useRef(null)
-
-  useEffect(() => {
-    function onFsChange() { setIsFullscreen(!!document.fullscreenElement) }
-    document.addEventListener('fullscreenchange', onFsChange)
-    return () => document.removeEventListener('fullscreenchange', onFsChange)
-  }, [])
-
-  function toggleFullscreen() {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {})
-    else document.exitFullscreen().catch(() => {})
-  }
 
   // ── Dashboard — React Query (cache theo range/loại CV + giữ data cũ khi đổi) ──
   const dashQuery = useQuery({
@@ -381,13 +378,6 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          <button
-            className={`${s.fullscreenBtn} ${isFullscreen ? s.fullscreenActive : ''}`}
-            onClick={toggleFullscreen}
-            title={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
-          >
-            {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
         </div>
       </div>
 

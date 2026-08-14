@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Menu, Bell, ChevronDown, User, LogOut, Search, Plus, CheckCheck, StickyNote } from 'lucide-react'
+import { Menu, Bell, ChevronDown, User, LogOut, Search, Plus, CheckCheck, StickyNote, Maximize2, Minimize2 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useNotificationStore } from '../../stores/notificationStore'
 import { logout } from '../../api/auth'
@@ -84,8 +84,20 @@ export default function Header({ onMenuToggle }) {
   const [bellOpen, setBellOpen]         = useState(false)
   const [notesOpen, setNotesOpen]       = useState(false)
   const [searchQuery, setSearchQuery]   = useState('')
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const bellRef = useRef(null)
   const crumbs  = useBreadcrumb()
+
+  // Toàn màn hình — điều khiển ở header nên dùng được ở MỌI trang (fullscreen cả <html>)
+  useEffect(() => {
+    function onFsChange() { setIsFullscreen(!!document.fullscreenElement) }
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {})
+    else document.exitFullscreen().catch(() => {})
+  }
 
   // Bootstrap: load unread count + recent 10 notifications
   useEffect(() => {
@@ -193,6 +205,16 @@ export default function Header({ onMenuToggle }) {
 
         {/* Check-in widget */}
         <CheckInWidget />
+
+        {/* Toàn màn hình (global — dùng ở mọi trang) */}
+        <button
+          className={`${s.headerIconBtn} ${isFullscreen ? s.headerIconBtnActive : ''}`}
+          aria-label="Toàn màn hình"
+          title={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
+          onClick={toggleFullscreen}
+        >
+          {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+        </button>
 
         {/* Quick notes */}
         <button

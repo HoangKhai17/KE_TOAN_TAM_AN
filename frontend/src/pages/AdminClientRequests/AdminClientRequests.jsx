@@ -185,12 +185,17 @@ function CdrFormModal({ companies, staffList = [], ownerId, initial, onClose, on
   }
 
   return (
-    <Modal title={initial ? 'Chỉnh sửa yêu cầu' : 'Tạo yêu cầu tài liệu'} onClose={onClose} maxWidth={900}>
-      <form onSubmit={handleSubmit} className={s.formBody}>
-        {err && <div className={s.formError}>{err}</div>}
+    <Modal
+      title={initial ? 'Chỉnh sửa yêu cầu' : 'Tạo yêu cầu tài liệu'}
+      onClose={onClose}
+      width="min(1040px, calc(100vw - 40px))"
+      maxWidth="1040px"
+    >
+      <form onSubmit={handleSubmit} className={`${s.formBody} ${s.cdrFormBody}`}>
+        {err && <div className={`${s.formError} ${s.cdrFormFull}`}>{err}</div>}
 
         {!initial && (
-          <div className={s.formGroup}>
+          <div className={`${s.formGroup} ${s.cdrFormFull}`}>
             <label className={s.formLabelReq}>Công ty *</label>
             <FilterCompanyPicker
               companies={companies}
@@ -204,18 +209,18 @@ function CdrFormModal({ companies, staffList = [], ownerId, initial, onClose, on
         )}
 
         {initial && (
-          <div className={s.formCompanyInfo}>
+          <div className={`${s.formCompanyInfo} ${s.cdrFormFull}`}>
             <Building2 size={12} /> {initial.companyName ?? '—'}
           </div>
         )}
 
-        <div className={s.formGroup}>
+        <div className={`${s.formGroup} ${s.cdrFormFull}`}>
           <label className={s.formLabelReq}>Tên tài liệu yêu cầu *</label>
           <input type="text" value={form.documentName} onChange={(e) => set('documentName', e.target.value)}
             className={s.formInput} placeholder="VD: Bảng lương tháng 5/2025" autoFocus={!!initial} />
         </div>
 
-        <div className={s.formRow2}>
+        <div className={`${s.formRow2} ${s.cdrFormFull}`}>
           <div className={s.formGroup}>
             <label className={s.formLabel}>Kỳ kế toán</label>
             <input type="text" value={form.periodLabel} onChange={(e) => set('periodLabel', e.target.value)}
@@ -242,18 +247,18 @@ function CdrFormModal({ companies, staffList = [], ownerId, initial, onClose, on
             onChange={(ids) => set('collaboratorIds', ids)}
             excludeId={excludeOwnerId}
           />
-          <p style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 3 }}>
+          <p className={s.formHelper}>
             Đồng nghiệp cùng theo dõi &amp; xử lý yêu cầu này (ngoài người phụ trách chính)
           </p>
         </div>
 
-        <div className={s.formGroup}>
+        <div className={`${s.formGroup} ${s.cdrFormFull}`}>
           <label className={s.formLabel}>Mô tả / hướng dẫn</label>
           <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3}
             className={s.formTextarea} placeholder="Hướng dẫn cho khách hàng khi điền form..." />
         </div>
 
-        <div className={s.formActions}>
+        <div className={`${s.formActions} ${s.cdrFormFull}`}>
           <button type="button" onClick={onClose} className={s.btnSecondary} disabled={saving}>Huỷ</button>
           <button type="submit" disabled={saving} className={s.btnPrimary}>
             {saving ? <Loader2 size={13} className={s.spinIcon} /> : <Plus size={13} />}
