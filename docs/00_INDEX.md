@@ -59,6 +59,7 @@ Bộ tài liệu này bao gồm:
 | 19 | [019_GENERIC_COMPANY_TABLES.md](./019_GENERIC_COMPANY_TABLES.md) | Bảng báo cáo tùy biến do admin tạo (Pha 1–3) — schema động, computed, migrate tab bespoke | 📝 Đề xuất thiết kế |
 | 21 | [021_DON_RAC_HE_THONG.md](./021_DON_RAC_HE_THONG.md) | Dọn rác & retention — refresh_tokens, audit_logs, notifications; job cleanup, cảnh báo phân trang | 📝 Đề xuất — chưa triển khai |
 | 22 | [022_TEST_SO_DO_QUY_TRINH.md](./022_TEST_SO_DO_QUY_TRINH.md) | Kịch bản kiểm thử canvas sơ đồ quy trình — hình, đường kẻ, định dạng, hoàn tác, điều hướng, phân quyền | ✅ Dùng để test tay |
+| 23 | [023_ATTENDANCE_PHASE1_FIX_PLAN.md](./023_ATTENDANCE_PHASE1_FIX_PLAN.md) | Chấm công GĐ1 — 5 fix logic: admin nghỉ phép, đè điều chỉnh tay, nghỉ không lương ăn công, thu hồi đơn, payroll ghi đè | ⏸️ Chờ duyệt — chưa thực hiện |
 
 **Chưa bao gồm** (sẽ bổ sung giai đoạn sau):
 - UI/UX Wireframe chi tiết
