@@ -853,7 +853,9 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
   const widthsRef = useRef({})
   function resizeCol(col, dx) {
     setColWidths((prev) => {
-      const w = Math.max(70, (prev[col.colKey] ?? col.width ?? 160) + dx)
+      // Cho phép cột co nhỏ hơn tiêu đề: header sẽ tự xuống dòng, chỉ giữ
+      // ngưỡng kỹ thuật đủ chỗ cho filter và tay nắm resize.
+      const w = Math.max(48, (prev[col.colKey] ?? col.width ?? 160) + dx)
       widthsRef.current[col.colKey] = w
       return { ...prev, [col.colKey]: w }
     })
@@ -1367,7 +1369,16 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
                     const active = hasColFilter(col.colKey) || sortState.col === col.colKey
                     const w = colWidths[col.colKey] ?? col.width ?? undefined
                     return (
-                      <th key={col.colKey} className={s.ctblTh} style={w ? { '--hdld-col-w': `${w}px`, width: `${w}px` } : undefined}>
+                      <th
+                        key={col.colKey}
+                        className={`${s.ctblTh} ${s.ctblThResizable}`}
+                        style={w ? {
+                          '--hdld-col-w': `${w}px`,
+                          width: `${w}px`,
+                          minWidth: `${w}px`,
+                          maxWidth: `${w}px`,
+                        } : undefined}
+                      >
                         <div className={s.hdldThInner}>
                           <span className={s.hdldThLabel}>{col.label}{col.required && ' *'}</span>
                           <button data-hdld-filter-btn

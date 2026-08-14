@@ -5280,6 +5280,7 @@
 /* Override width:100% so table expands beyond container → tableScroll shows scrollbar */
 .hdldTable {
   width: max-content; min-width: 100%;
+  table-layout: fixed;
   font-size: var(--fs-2xs);
 }
 .hdldTable th {
@@ -5419,11 +5420,15 @@
 /* th inner: label + filter button side by side */
 .hdldThInner {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
+  min-width: 0;
 }
 
-.hdldThLabel { flex: 1; }
+.hdldThLabel {
+  flex: 1;
+  min-width: 0;
+}
 
 /* Sort indicator appended to label via class */
 .hdldSortAsc::after  { content: ' ↑'; opacity: 0.9; }
@@ -6509,6 +6514,18 @@
 
 /* ── Generic Company Tables — resizable th (admin drag) ── */
 .ctblTh { position: relative; }
+.hdldTable .ctblThResizable {
+  width: var(--hdld-col-w, 160px);
+  min-width: var(--hdld-col-w, 160px);
+  max-width: var(--hdld-col-w, 160px);
+  white-space: normal;
+}
+.hdldTable .ctblThResizable .hdldThLabel {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.3;
+}
 .ctblTh:hover .archColResizeHandle { background: rgba(37, 99, 235, 0.18); }
 
 /* ── Công việc tab: header actions + view toggle (Danh sách / Kanban) ── */
