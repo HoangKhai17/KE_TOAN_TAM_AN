@@ -325,7 +325,18 @@
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8080/api/health)",
       "Bash(mkdir -p C:/Users/ACER/AppData/Local/Temp/claude/d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM-AN/09646431-7d7a-43a7-b4a3-fd7f64435124/scratchpad/e2e)",
       "Bash(npm i *)",
-      "Bash(npx playwright *)"
+      "Bash(npx playwright *)",
+      "Bash(QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' QA_STAFF_PASS='Ketoan01@12345' npx playwright test explore.spec.js --reporter=list)",
+      "Bash(QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' QA_STAFF_PASS='Ketoan01@12345' npx playwright test staff.spec.js --reporter=list --workers=1)",
+      "Bash(QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test explore-admin.spec.js --reporter=list)",
+      "Bash(MSYS_NO_PATHCONV=1 docker compose exec -T -e E=nguyenhoangkhai.010103@gmail.com -e P=Treviet@606 backend node -e ' *)",
+      "Bash(QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test debug-login.spec.js --reporter=list)",
+      "Bash(MSYS_NO_PATHCONV=1 docker compose exec -T -e E=ketoan01@dvkttaman.vn -e P=Ketoan01@12345 backend node -e ' *)",
+      "Bash(QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' QA_STAFF_PASS='Ketoan01@12345' QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test --project=setup)",
+      "Bash(QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' QA_STAFF_PASS='Ketoan01@12345' QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test --project=admin)",
+      "Bash(QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test admin.spec.js)",
+      "Bash(rm -f helper.js)",
+      "Bash(QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' QA_STAFF_PASS='Ketoan01@12345' npx playwright test staff.spec.js)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

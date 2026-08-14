@@ -1425,7 +1425,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                         statusClass,
                       ].filter(Boolean).join(' ')}
                       onClick={() => !isFuture && setSelectedDay({ dateStr, record })}
-                      title={cfg?.label}
+                      title={describeRecord(record, cfg)}
                     >
                       <span className={`${s.calendarDayNum} ${isToday ? s.calendarDayNumToday : ''}`}>
                         {dayNum}
