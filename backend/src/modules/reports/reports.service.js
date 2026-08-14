@@ -4,10 +4,28 @@ const { getNextOccurrence } = require('../../utils/recurrence.calculator')
 const { applyStandardStyle } = require('../export/excel-renderer')
 const enums = require('../../lib/enums')
 
+// ── RBAC: phạm vi TASK của NHÂN SỰ (khớp Dashboard/Tasks) ─────────────────────
+// Staff chỉ thấy: việc ĐƯỢC GIAO cho mình, HOẶC thuộc công ty mình PHỤ TRÁCH
+// (trừ task 'private'), HOẶC được nhờ HỖ TRỢ. `p` = placeholder '$N' chứa userId.
+function staffTaskScope(alias, p) {
+  const a = alias ? `${alias}.` : ''
+  return `(${a}assigned_to = ${p}
+      OR (${a}visibility <> 'private' AND ${a}company_id IN (SELECT id FROM companies WHERE assigned_staff_id = ${p}))
+      OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = ${a}id AND tc.user_id = ${p}))`
+}
+const isStaffRole = (user) => Boolean(user && user.role === 'staff')
+
 // ── 0. Overview ───────────────────────────────────────────────────────────────
 
-async function overviewReport({ from, to, prevFrom, prevTo }) {
+async function overviewReport({ from, to, prevFrom, prevTo, user }) {
   const hasPrev = Boolean(prevFrom && prevTo)
+
+  // RBAC: staff chỉ thấy phạm vi của mình ($3 = userId). Admin = toàn bộ.
+  const isStaff = isStaffRole(user)
+  const scope  = isStaff ? ` AND ${staffTaskScope('', '$3')}` : ''
+  const scopeT = isStaff ? ` AND ${staffTaskScope('t', '$3')}` : ''
+  const pCur  = isStaff ? [from, to, user.id] : [from, to]
+  const pPrev = isStaff ? [prevFrom, prevTo, user.id] : [prevFrom, prevTo]
 
   // Lọc KỲ = OVERLAP khoảng ngày hiệu lực của task với [from,to] — ĐỒNG BỘ Dashboard/Tasks
   // (thay cho created_at cũ). $1 = from, $2 = to.
@@ -24,25 +42,25 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
         COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed')  AS overdue`
 
   const [curStats, prevStats, trend, prevTrend, byTaskType, byStatus, byAssignee] = await Promise.all([
-    query(`SELECT ${statCols} FROM tasks WHERE ${OVERLAP}`, [from, to]),
+    query(`SELECT ${statCols} FROM tasks WHERE ${OVERLAP}${scope}`, pCur),
 
     hasPrev
-      ? query(`SELECT ${statCols} FROM tasks WHERE ${OVERLAP}`, [prevFrom, prevTo])
+      ? query(`SELECT ${statCols} FROM tasks WHERE ${OVERLAP}${scope}`, pPrev)
       : Promise.resolve({ rows: [{}] }),
 
     // Xu hướng = việc HOÀN THÀNH theo NGÀY (completed_at) trong kỳ — khớp biểu đồ Dashboard
     query(`
       SELECT completed_at::date AS date, COUNT(*) AS completed
-      FROM tasks WHERE status = 'completed' AND completed_at::date BETWEEN $1 AND $2
+      FROM tasks WHERE status = 'completed' AND completed_at::date BETWEEN $1 AND $2${scope}
       GROUP BY completed_at::date ORDER BY date
-    `, [from, to]),
+    `, pCur),
 
     hasPrev
       ? query(`
           SELECT completed_at::date AS date, COUNT(*) AS completed
-          FROM tasks WHERE status = 'completed' AND completed_at::date BETWEEN $1 AND $2
+          FROM tasks WHERE status = 'completed' AND completed_at::date BETWEEN $1 AND $2${scope}
           GROUP BY completed_at::date ORDER BY date
-        `, [prevFrom, prevTo])
+        `, pPrev)
       : Promise.resolve({ rows: [] }),
 
     query(`
@@ -51,15 +69,15 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
         COUNT(*) FILTER (WHERE t.status = 'completed') AS completed
       FROM tasks t
       LEFT JOIN task_types tt ON tt.id = t.task_type_id
-      WHERE ${OVERLAP_T}
+      WHERE ${OVERLAP_T}${scopeT}
       GROUP BY tt.id, tt.name ORDER BY total DESC LIMIT 10
-    `, [from, to]),
+    `, pCur),
 
     query(`
       SELECT status AS label, COUNT(*) AS total
-      FROM tasks WHERE ${OVERLAP}
+      FROM tasks WHERE ${OVERLAP}${scope}
       GROUP BY status ORDER BY total DESC
-    `, [from, to]),
+    `, pCur),
 
     query(`
       SELECT u.name AS label,
@@ -68,26 +86,29 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
         ROUND(COUNT(*) FILTER (WHERE t.status = 'completed') * 100.0 / NULLIF(COUNT(*), 0), 1) AS rate
       FROM tasks t
       LEFT JOIN users u ON u.id = t.assigned_to
-      WHERE ${OVERLAP_T}
+      WHERE ${OVERLAP_T}${scopeT}
       GROUP BY u.id, u.name ORDER BY total DESC LIMIT 10
-    `, [from, to]),
+    `, pCur),
   ])
 
   // ── Thống kê THEO LOẠI VIỆC (Truyền thống / Yêu cầu KH / Nội bộ) — đủ 3 loại như Dashboard ──
   // Truyền thống: overlap start/due. CDR/IA: theo deadline_date trong kỳ (2 loại này chỉ có 1 mốc hạn).
+  // Scope theo vai trò: CDR (staff = mình tạo), IA (staff = mình là người nhận)
+  const cdrScope = isStaff ? ` AND requested_by = $3` : ''
+  const iaScope  = isStaff ? ` AND EXISTS (SELECT 1 FROM internal_assignment_assignees iaa WHERE iaa.assignment_id = internal_assignments.id AND iaa.user_id = $3)` : ''
   const [tradD, cdrD, iaD] = await Promise.all([
     query(`SELECT COUNT(*) AS total,
              COUNT(*) FILTER (WHERE status = 'completed') AS completed,
              COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') AS overdue
-           FROM tasks WHERE ${OVERLAP}`, [from, to]),
+           FROM tasks WHERE ${OVERLAP}${scope}`, pCur),
     query(`SELECT COUNT(*) AS total,
              COUNT(*) FILTER (WHERE status = 'received') AS completed,
              COUNT(*) FILTER (WHERE deadline_date < CURRENT_DATE AND status NOT IN ('received','not_required')) AS overdue
-           FROM client_document_requests WHERE deadline_date BETWEEN $1 AND $2`, [from, to]),
+           FROM client_document_requests WHERE deadline_date BETWEEN $1 AND $2${cdrScope}`, pCur),
     query(`SELECT COUNT(*) AS total,
              COUNT(*) FILTER (WHERE status = 'done') AS completed,
              COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND deadline_date < CURRENT_DATE) AS overdue
-           FROM internal_assignments WHERE deadline_date BETWEEN $1 AND $2 AND status <> 'cancelled'`, [from, to]),
+           FROM internal_assignments WHERE deadline_date BETWEEN $1 AND $2 AND status <> 'cancelled'${iaScope}`, pCur),
   ])
   const domRow = (res, key, label) => {
     const r = res.rows[0] || {}
@@ -131,12 +152,17 @@ async function overviewReport({ from, to, prevFrom, prevTo }) {
 
 // ── 1. Staff Performance ──────────────────────────────────────────────────────
 
-async function staffPerformance({ from, to, staffIds }) {
+async function staffPerformance({ from, to, staffIds, user }) {
   const params = [from, to]
   let staffFilter = ''
   if (staffIds && staffIds.length) {
     params.push(staffIds)
     staffFilter = `AND u.id = ANY($${params.length})`
+  }
+  // RBAC: staff chỉ thấy CHÍNH MÌNH
+  if (isStaffRole(user)) {
+    params.push(user.id)
+    staffFilter += ` AND u.id = $${params.length}`
   }
 
   // ĐỒNG BỘ Dashboard/Tasks: lọc KỲ theo OVERLAP + đếm theo TRẠNG THÁI.
@@ -176,12 +202,17 @@ async function staffPerformance({ from, to, staffIds }) {
 
 // ── 2. Company Status ─────────────────────────────────────────────────────────
 
-async function companyStatus({ from, to, companyIds }) {
+async function companyStatus({ from, to, companyIds, user }) {
   const params = [from, to]
   let companyFilter = ''
   if (companyIds && companyIds.length) {
     params.push(companyIds)
     companyFilter = `AND c.id = ANY($${params.length})`
+  }
+  // RBAC: staff chỉ thấy công ty MÌNH PHỤ TRÁCH
+  if (isStaffRole(user)) {
+    params.push(user.id)
+    companyFilter += ` AND c.assigned_staff_id = $${params.length}`
   }
 
   // ĐỒNG BỘ Dashboard/Tasks: lọc KỲ theo OVERLAP + đếm theo TRẠNG THÁI.
@@ -218,7 +249,7 @@ async function companyStatus({ from, to, companyIds }) {
 
 // ── 3. SLA Compliance ─────────────────────────────────────────────────────────
 
-async function slaCompliance({ from, to, groupBy = 'staff' }) {
+async function slaCompliance({ from, to, groupBy = 'staff', user }) {
   // GROUP BY id (không phải tên) để không gộp nhầm 2 thực thể trùng tên
   const allowedGroups = {
     staff:     { id: 'u.id',  label: 'u.name' },
@@ -227,6 +258,11 @@ async function slaCompliance({ from, to, groupBy = 'staff' }) {
   }
   const g = allowedGroups[groupBy] || allowedGroups.staff
   const labelExpr = g.label
+
+  // RBAC: staff chỉ tính trên task trong phạm vi của mình
+  const params = [from, to]
+  let scopeSql = ''
+  if (isStaffRole(user)) { params.push(user.id); scopeSql = ` AND ${staffTaskScope('t', '$' + params.length)}` }
 
   const { rows } = await query(`
     SELECT
@@ -242,11 +278,11 @@ async function slaCompliance({ from, to, groupBy = 'staff' }) {
     LEFT JOIN task_types tt ON tt.id = t.task_type_id
     WHERE t.status = 'completed'
       AND t.completed_at >= $1::date AND t.completed_at < ($2::date + INTERVAL '1 day')
-      AND t.due_date IS NOT NULL
+      AND t.due_date IS NOT NULL${scopeSql}
     GROUP BY ${g.id}, ${labelExpr}
     ORDER BY total DESC
     LIMIT 20
-  `, [from, to])
+  `, params)
 
   return rows.map((r) => ({
     label:    r.label || '(Không có)',
@@ -260,12 +296,14 @@ async function slaCompliance({ from, to, groupBy = 'staff' }) {
 
 // ── 4. Aging (open tasks sorted by age) ──────────────────────────────────────
 
-async function aging({ assignedTo, companyId }) {
+async function aging({ assignedTo, companyId, user }) {
   const params = []
   const conds = [`t.status != 'completed'`]
 
   if (assignedTo) { params.push(assignedTo); conds.push(`t.assigned_to = $${params.length}`) }
   if (companyId)  { params.push(companyId);  conds.push(`t.company_id  = $${params.length}`) }
+  // RBAC: staff chỉ thấy việc trong phạm vi của mình
+  if (isStaffRole(user)) { params.push(user.id); conds.push(staffTaskScope('t', `$${params.length}`)) }
 
   const where = conds.join(' AND ')
 
@@ -303,9 +341,14 @@ async function aging({ assignedTo, companyId }) {
 
 // ── 5. Velocity ───────────────────────────────────────────────────────────────
 
-async function velocity({ from, to, period = 'week' }) {
+async function velocity({ from, to, period = 'week', user }) {
   const allowedPeriods = ['week', 'month']
   const pg_period = allowedPeriods.includes(period) ? period : 'week'
+
+  // RBAC: staff chỉ thấy việc mình hoàn thành ($1=period, $2=from, $3=to, $4=userId)
+  const params = [pg_period, from, to]
+  let scopeSql = ''
+  if (isStaffRole(user)) { params.push(user.id); scopeSql = ` AND ${staffTaskScope('', '$' + params.length)}` }
 
   const { rows } = await query(`
     SELECT
@@ -318,10 +361,10 @@ async function velocity({ from, to, period = 'week' }) {
       ), 1) AS avg_days_to_complete
     FROM tasks
     WHERE status = 'completed'
-      AND completed_at >= $2::date AND completed_at < ($3::date + INTERVAL '1 day')
+      AND completed_at >= $2::date AND completed_at < ($3::date + INTERVAL '1 day')${scopeSql}
     GROUP BY period
     ORDER BY period
-  `, [pg_period, from, to])
+  `, params)
 
   return rows.map((r) => ({
     period:             r.period,
@@ -332,9 +375,17 @@ async function velocity({ from, to, period = 'week' }) {
 
 // ── 6. Forecast ───────────────────────────────────────────────────────────────
 
-async function forecast({ month, year }) {
+async function forecast({ month, year, user }) {
   const targetMonth = parseInt(month, 10)
   const targetYear  = parseInt(year, 10)
+
+  // RBAC: staff chỉ dự báo lịch của công ty MÌNH PHỤ TRÁCH (hoặc lịch giao cho mình)
+  const params = []
+  let scopeSql = ''
+  if (isStaffRole(user)) {
+    params.push(user.id)
+    scopeSql = ` AND (c.assigned_staff_id = $${params.length} OR cs.assigned_staff_id = $${params.length})`
+  }
 
   const { rows: schedules } = await query(`
     SELECT
@@ -348,9 +399,9 @@ async function forecast({ month, year }) {
     JOIN companies  c  ON c.id  = cs.company_id
     LEFT JOIN users u  ON u.id  = cs.assigned_staff_id
     WHERE cs.is_active = TRUE
-      AND c.status != 'terminated'
+      AND c.status != 'terminated'${scopeSql}
     ORDER BY c.name, tt.name
-  `)
+  `, params)
 
   const result = []
   const monthStart = new Date(targetYear, targetMonth - 1, 1)

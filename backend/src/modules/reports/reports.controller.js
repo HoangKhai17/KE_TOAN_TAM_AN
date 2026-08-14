@@ -21,7 +21,7 @@ async function getStaffPerformance(req, res, next) {
     const { from, to, staffIds } = req.query
     const range = from && to ? { from, to } : defaultDateRange()
     const ids = staffIds ? (Array.isArray(staffIds) ? staffIds : [staffIds]) : null
-    const data = await svc.staffPerformance({ ...range, staffIds: ids })
+    const data = await svc.staffPerformance({ ...range, staffIds: ids, user: req.user })
     res.json(data)
   } catch (err) { next(err) }
 }
@@ -31,7 +31,7 @@ async function getCompanyStatus(req, res, next) {
     const { from, to, companyIds } = req.query
     const range = from && to ? { from, to } : defaultDateRange()
     const ids = companyIds ? (Array.isArray(companyIds) ? companyIds : [companyIds]) : null
-    const data = await svc.companyStatus({ ...range, companyIds: ids })
+    const data = await svc.companyStatus({ ...range, companyIds: ids, user: req.user })
     res.json(data)
   } catch (err) { next(err) }
 }
@@ -40,7 +40,7 @@ async function getSlaCompliance(req, res, next) {
   try {
     const { from, to, groupBy = 'staff' } = req.query
     const range = from && to ? { from, to } : defaultDateRange()
-    const data = await svc.slaCompliance({ ...range, groupBy })
+    const data = await svc.slaCompliance({ ...range, groupBy, user: req.user })
     res.json(data)
   } catch (err) { next(err) }
 }
@@ -48,7 +48,7 @@ async function getSlaCompliance(req, res, next) {
 async function getAging(req, res, next) {
   try {
     const { assignedTo, companyId } = req.query
-    const data = await svc.aging({ assignedTo, companyId })
+    const data = await svc.aging({ assignedTo, companyId, user: req.user })
     res.json(data)
   } catch (err) { next(err) }
 }
@@ -57,7 +57,7 @@ async function getVelocity(req, res, next) {
   try {
     const { from, to, period = 'week' } = req.query
     const range = from && to ? { from, to } : defaultDateRange()
-    const data = await svc.velocity({ ...range, period })
+    const data = await svc.velocity({ ...range, period, user: req.user })
     res.json(data)
   } catch (err) { next(err) }
 }
@@ -67,7 +67,7 @@ async function getForecast(req, res, next) {
     const now = new Date()
     const month = req.query.month || now.getMonth() + 2  // next month default
     const year  = req.query.year  || now.getFullYear()
-    const data = await svc.forecast({ month, year })
+    const data = await svc.forecast({ month, year, user: req.user })
     res.json(data)
   } catch (err) { next(err) }
 }
@@ -76,7 +76,7 @@ async function getOverview(req, res, next) {
   try {
     const { from, to, prevFrom, prevTo } = req.query
     const range = from && to ? { from, to } : defaultDateRange()
-    const data = await svc.overviewReport({ ...range, prevFrom, prevTo })
+    const data = await svc.overviewReport({ ...range, prevFrom, prevTo, user: req.user })
     res.json(data)
   } catch (err) { next(err) }
 }

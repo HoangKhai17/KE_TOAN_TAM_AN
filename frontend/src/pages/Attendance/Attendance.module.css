@@ -1301,3 +1301,54 @@
   box-shadow: var(--shadow-focus);
   font-weight: var(--fw-medium);
 }
+
+/* ── Phân rã ngày công trong modal chi tiết ───────────────────────────────
+   Một ngày = 1.0, chia cho công thực tế / nghỉ có lương / nghỉ không lương.
+   Cần thiết vì `status` là nhãn gộp, không nói được ngày đó tính công thế nào. */
+
+.unitBreakdown {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-muted);
+}
+
+.unitBar {
+  display: flex;
+  height: 22px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+.unitSegWork   { background: var(--color-success-dark); }
+.unitSegPaid   { background: var(--color-primary); }
+.unitSegUnpaid { background: var(--color-warning-amber); }
+
+.unitLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 9px;
+  font-size: var(--fs-3xs);
+  color: var(--color-text-soft);
+}
+
+.unitLegend span { display: inline-flex; align-items: center; gap: 5px; }
+.unitLegend b { color: var(--color-text-strong); font-weight: var(--fw-semibold); }
+
+.unitLegend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.unitDotWork   { background: var(--color-success-dark); }
+.unitDotPaid   { background: var(--color-primary); }
+.unitDotUnpaid { background: var(--color-warning-amber); }
+
+.unitTotal {
+  margin-left: auto;
+  padding-left: 12px;
+  border-left: 1px solid var(--color-border-muted);
+}

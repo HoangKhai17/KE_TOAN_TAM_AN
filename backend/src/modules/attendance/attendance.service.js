@@ -18,8 +18,18 @@ function toRecordDto(r) {
     actualHours:     r.actual_hours  != null ? parseFloat(r.actual_hours) : null,
     lateMinutes:     r.late_minutes  ?? 0,
     earlyMinutes:    r.early_minutes ?? 0,
-    workUnits:       r.work_units    != null ? parseFloat(r.work_units) : 0,
+    // Ba nguồn công tách bạch + cột tính lương dẫn xuất. Giao diện phải hiện đủ,
+    // nếu không người dùng chỉ thấy "0 công" mà không hiểu vì sao.
+    workUnits:        r.work_units         != null ? parseFloat(r.work_units)         : 0,
+    paidLeaveUnits:   r.paid_leave_units   != null ? parseFloat(r.paid_leave_units)   : 0,
+    unpaidLeaveUnits: r.unpaid_leave_units != null ? parseFloat(r.unpaid_leave_units) : 0,
+    payableUnits:     r.payable_units      != null ? parseFloat(r.payable_units)      : 0,
     status:          r.status,
+    // Loại nghỉ CỤ THỂ + buổi nghỉ — status chỉ là nhãn gộp ('on_leave' dùng chung
+    // cho phép năm, nghỉ ốm, nghỉ bù lẫn nghỉ không lương) nên không đủ để hiển thị.
+    leaveType:       r.leave_type   ?? null,
+    leaveLabel:      r.leave_label  ?? null,
+    dayPart:         r.day_part     ?? null,
     isAdjusted:      r.is_adjusted,
     isHoliday:       r.is_holiday,
     leaveRequestId:  r.leave_request_id,
@@ -395,7 +405,7 @@ async function getToday(userId) {
     ),
     query(
       `SELECT ar.*, s.name AS shift_name
-       FROM attendance_records ar
+       FROM ${DAILY_VIEW} ar
        LEFT JOIN shifts s ON ar.shift_id = s.id
        WHERE ar.user_id = $1 AND ar.work_date = $2`,
       [userId, dateStr]
@@ -441,21 +451,15 @@ async function listAttendanceRecords({ userId, month, year, from: fromOverride, 
   const where  = conditions.join(' AND ')
   const offset = (page - 1) * limit
 
-  // Single query with window COUNT — eliminates the separate COUNT(*) round-trip
-  // LEFT JOIN overtime_requests to surface approved OT per day (ar.ot_hours may be 0)
+  // Đọc từ v_attendance_daily: đã gộp sẵn loại nghỉ, buổi nghỉ và giờ OT đã duyệt,
+  // nên danh sách hiện được "Nghỉ không lương (buổi sáng)" thay vì chỉ "Nghỉ phép".
   const { rows } = await query(
     `SELECT ar.*, u.name AS user_name, s.name AS shift_name,
-            COALESCE(ot_day.approved_ot, ar.ot_hours, 0) AS effective_ot_hours,
+            ar.ot_hours AS effective_ot_hours,
             COUNT(*) OVER() AS _total
-     FROM attendance_records ar
+     FROM ${DAILY_VIEW} ar
      JOIN  users u ON ar.user_id  = u.id
      LEFT JOIN shifts s ON ar.shift_id = s.id
-     LEFT JOIN (
-       SELECT user_id, ot_date, SUM(ot_hours) AS approved_ot
-       FROM overtime_requests
-       WHERE status = 'approved' AND ot_date BETWEEN $1 AND $2
-       GROUP BY user_id, ot_date
-     ) ot_day ON ot_day.user_id = ar.user_id AND ot_day.ot_date = ar.work_date
      WHERE ${where}
      ORDER BY ar.work_date DESC, u.name
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,

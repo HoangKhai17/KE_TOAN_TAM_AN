@@ -311,7 +311,21 @@
       "Bash(MSYS_NO_PATHCONV=1 docker compose cp \"C:/Users/ACER/AppData/Local/Temp/claude/d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM-AN/09646431-7d7a-43a7-b4a3-fd7f64435124/scratchpad/qa_groupBC.js\" backend:/tmp/qa_groupBC.js)",
       "Bash(MSYS_NO_PATHCONV=1 docker compose exec -T backend node /tmp/qa_groupBC.js)",
       "Bash(node --check backend/src/modules/attendance/attendance.service.js)",
-      "Bash(node --check backend/src/modules/attendance/adjustments.service.js)"
+      "Bash(node --check backend/src/modules/attendance/adjustments.service.js)",
+      "Bash(awk 'NR>=2640 && NR<=2665' frontend/src/pages/Attendance/AttendanceAdmin.jsx)",
+      "Bash(awk 'NR>=2666 && NR<=2700' frontend/src/pages/Attendance/AttendanceAdmin.jsx)",
+      "Bash(awk 'NR>=2990 && NR<=3020' frontend/src/pages/Attendance/AttendanceAdmin.jsx)",
+      "Bash(MSYS_NO_PATHCONV=1 docker compose cp \"C:/Users/ACER/AppData/Local/Temp/claude/d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM-AN/09646431-7d7a-43a7-b4a3-fd7f64435124/scratchpad/qa_display.js\" backend:/tmp/qa_display.js)",
+      "Bash(MSYS_NO_PATHCONV=1 docker compose exec -T backend node /tmp/qa_display.js)",
+      "Bash(MSYS_NO_PATHCONV=1 docker compose cp \"C:/Users/ACER/AppData/Local/Temp/claude/d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM-AN/09646431-7d7a-43a7-b4a3-fd7f64435124/scratchpad/qa_rbac.js\" backend:/tmp/qa_rbac.js)",
+      "Bash(MSYS_NO_PATHCONV=1 docker compose exec -T -e QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' -e QA_STAFF_PASS='Ketoan01@12345' backend node /tmp/qa_rbac.js)",
+      "Bash(MSYS_NO_PATHCONV=1 docker compose exec -T -e QA_STAFF_EMAIL=ketoan01@dvkttaman.vn -e QA_STAFF_PASS=Ketoan01@12345 backend node -e ' *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} — %{size_download} bytes\\\\n\" http://localhost/)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} — %{size_download} bytes\\\\n\" http://localhost:8080/)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8080/api/health)",
+      "Bash(mkdir -p C:/Users/ACER/AppData/Local/Temp/claude/d--WorkSpace-ADA-Bamboo-PROJECT-BBOTECH-KE-TOAN-TAM-AN/09646431-7d7a-43a7-b4a3-fd7f64435124/scratchpad/e2e)",
+      "Bash(npm i *)",
+      "Bash(npx playwright *)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",

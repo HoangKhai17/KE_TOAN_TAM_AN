@@ -18,7 +18,7 @@ import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
-import { useLeavePolicies, LEAVE_LABELS, dayPartSuffix } from './leavePolicies'
+import { useLeavePolicies, LEAVE_LABELS, dayPartSuffix, dayPartLabel } from './leavePolicies'
 import * as usersApi from '../../api/users'
 import * as payrollApi from '../../api/payroll'
 import s from './Attendance.module.css'
@@ -155,6 +155,25 @@ const REQUEST_STATUS_CLASS = {
   approved:  'request_approved',
   rejected:  'request_rejected',
   cancelled: 'request_cancelled',
+}
+
+// Mô tả đầy đủ một ngày công để rê chuột xem — nhãn status là nhãn GỘP
+// ('on_leave' dùng chung cho phép năm, nghỉ ốm, nghỉ bù lẫn nghỉ không lương)
+// nên riêng nó không đủ để người xem hiểu ngày đó được tính công thế nào.
+function describeRecord(record, cfg) {
+  if (!record) return undefined
+  const head = record.leaveLabel ?? cfg?.label ?? record.status
+  const part = record.dayPart && record.dayPart !== 'full'
+    ? ` (${dayPartLabel(record.dayPart).toLowerCase()})` : ''
+  const bits = []
+  if (record.workUnits > 0)        bits.push(`công thực tế ${record.workUnits}`)
+  if (record.paidLeaveUnits > 0)   bits.push(`nghỉ có lương ${record.paidLeaveUnits}`)
+  if (record.unpaidLeaveUnits > 0) bits.push(`nghỉ không lương ${record.unpaidLeaveUnits}`)
+  const detail = bits.length ? `
+${bits.join(' · ')}` : ''
+  const total  = record.payableUnits != null ? `
+Tính lương: ${record.payableUnits} công` : ''
+  return `${head}${part}${detail}${total}`
 }
 
 function getStatusClass(status) {
@@ -397,8 +416,12 @@ function TodayTab({ staffList }) {
                     <td className={s.tableMuted}>{user.jobTitle ?? '—'}</td>
                     <td>
                       {cfg ? (
-                        <span className={`${s.statusPill} ${getStatusClass(rec.status)}`}>
-                          {cfg.label}
+                        <span className={`${s.statusPill} ${getStatusClass(rec.status)}`}
+                              title={describeRecord(rec, cfg)}>
+                          {rec.leaveLabel ?? cfg.label}
+                          {rec.dayPart && rec.dayPart !== 'full' && (
+                            <span style={{ opacity: .8 }}> · {dayPartLabel(rec.dayPart).toLowerCase()}</span>
+                          )}
                         </span>
                       ) : (
                         <span className={`${s.statusPill} ${getStatusClass('absent')}`}>
@@ -1407,7 +1430,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                       <span className={`${s.calendarDayNum} ${isToday ? s.calendarDayNumToday : ''}`}>
                         {dayNum}
                       </span>
-                      {cfg && <span className={`${s.calendarDayLabel} ${sa.adminCalendarLabel}`}>{cfg.label}</span>}
+                      {cfg && <span className={`${s.calendarDayLabel} ${sa.adminCalendarLabel}`} title={describeRecord(record, cfg)}>{record.leaveLabel ?? cfg.label}</span>}
                       {record?.lateMinutes > 0 && (
                         <span className={`${s.calendarDayExtra} ${s.summaryWarning}`}>
                           Muộn {record.lateMinutes}p
@@ -1519,7 +1542,7 @@ function AdminCalendarTab({ year, month, staffList, adminUserId }) {
                               tableStatusClass,
                             ].filter(Boolean).join(' ')}
                             onClick={() => isClickable && setTableDay({ dateStr, userId: user.id, record })}
-                            title={cfg ? `${user.name} — ${cfg.label}` : undefined}
+                            title={cfg ? `${user.name} — ${describeRecord(record, cfg)}` : undefined}
                           >
                             {cfg && (
                               <div className={sa.allStaffCellContent}>
@@ -1970,7 +1993,13 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
             <div className={s.detailHeader}>
               {cfg ? (
                 <div className={`${s.statusPill} ${getStatusClass(record.status)}`}>
-                  {cfg.label}
+                  {/* Ưu tiên tên loại nghỉ CỤ THỂ: status 'on_leave' dùng chung cho
+                      phép năm, nghỉ ốm, nghỉ bù lẫn nghỉ không lương — hiện "Nghỉ phép"
+                      cho một đơn nghỉ không lương là gây hiểu nhầm nghiêm trọng. */}
+                  {record.leaveLabel ?? cfg.label}
+                  {record.dayPart && record.dayPart !== 'full' && (
+                    <span style={{ opacity: .8 }}> · {dayPartLabel(record.dayPart).toLowerCase()}</span>
+                  )}
                 </div>
               ) : (
                 <div className={s.detailEmpty}>Chưa có dữ liệu</div>
@@ -1994,7 +2023,6 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
                 record?.actualHours != null ? ['GIỜ THỰC TẾ', `${Number(record.actualHours).toFixed(1)}h`] : null,
                 record?.lateMinutes  > 0    ? ['ĐI MUỘN',     `${record.lateMinutes} phút`]                : null,
                 record?.earlyMinutes > 0    ? ['VỀ SỚM',      `${record.earlyMinutes} phút`]               : null,
-                record?.workUnits    != null ? ['NGÀY CÔNG',   `${record.workUnits} công`]                  : null,
               ].filter(Boolean).map(([label, val]) => (
                 <div key={label}>
                   <div className={s.detailLabel}>{label}</div>
@@ -2002,6 +2030,32 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
                 </div>
               ))}
             </div>
+
+            {/* Phân rã ngày công. Trước đây chỉ hiện một số "công" duy nhất, nên một
+                ngày nghỉ không lương buổi sáng hiện "0 công" mà không nói vì sao —
+                người xem không phân biệt được với ngày vắng mặt. */}
+            {record && (
+              <div className={s.unitBreakdown}>
+                <div className={s.unitBar} role="img"
+                     aria-label={`Công thực tế ${record.workUnits}, nghỉ có lương ${record.paidLeaveUnits}, nghỉ không lương ${record.unpaidLeaveUnits}`}>
+                  {record.workUnits > 0 && (
+                    <span className={s.unitSegWork}   style={{ width: `${record.workUnits * 100}%` }} />
+                  )}
+                  {record.paidLeaveUnits > 0 && (
+                    <span className={s.unitSegPaid}   style={{ width: `${record.paidLeaveUnits * 100}%` }} />
+                  )}
+                  {record.unpaidLeaveUnits > 0 && (
+                    <span className={s.unitSegUnpaid} style={{ width: `${record.unpaidLeaveUnits * 100}%` }} />
+                  )}
+                </div>
+                <div className={s.unitLegend}>
+                  <span><i className={s.unitDotWork} />Công thực tế <b>{record.workUnits}</b></span>
+                  <span><i className={s.unitDotPaid} />Nghỉ có lương <b>{record.paidLeaveUnits}</b></span>
+                  <span><i className={s.unitDotUnpaid} />Nghỉ không lương <b>{record.unpaidLeaveUnits}</b></span>
+                  <span className={s.unitTotal}>Tính lương <b>{record.payableUnits} công</b></span>
+                </div>
+              </div>
+            )}
 
             {record?.notes && (
               <div className={s.mutedNote}>{record.notes}</div>
@@ -2208,7 +2262,7 @@ function getLeaveCell(row, key) {
     case 'leaveType':     return LEAVE_LABELS[row.leaveType]           ?? row.leaveType
     case 'startDate':     return fmtDateVI(row.startDate)
     case 'endDate':       return fmtDateVI(row.endDate)
-    case 'totalDays':     return `${Number(row.totalDays ?? 0)} ngày`
+    case 'totalDays':     return `${Number(row.totalDays ?? 0)} ngày${dayPartSuffix(row.dayPart, row.hours)}`
     case 'statusLabel':   return LEAVE_STATUS_CFG[row.status]?.label ?? row.status
     case 'reason':        return row.reason         ?? '—'
     case 'approvalNote':  return row.approvalNote   ?? '—'
@@ -2753,7 +2807,7 @@ function ReviewLeaveModal({ request, onClose, onSaved }) {
           <p className={s.reviewCardTitle}>{request.userName}</p>
           <p className={s.reviewCardText}>{LEAVE_LABELS[request.leaveType] ?? request.leaveType}</p>
           <p className={s.reviewCardText}>
-            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({Number(request.totalDays ?? 0)} ngày)
+            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({Number(request.totalDays ?? 0)} ngày{dayPartSuffix(request.dayPart, request.hours)})
           </p>
           {request.reason && (
             <p className={s.reviewCardNote}>{request.reason}</p>
@@ -2806,7 +2860,7 @@ function RevokeLeaveModal({ request, onClose, onSaved }) {
           <p className={s.reviewCardTitle}>{request.userName}</p>
           <p className={s.reviewCardText}>{LEAVE_LABELS[request.leaveType] ?? request.leaveType}</p>
           <p className={s.reviewCardText}>
-            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({Number(request.totalDays ?? 0)} ngày)
+            {fmtDateVI(request.startDate)} → {fmtDateVI(request.endDate)} ({Number(request.totalDays ?? 0)} ngày{dayPartSuffix(request.dayPart, request.hours)})
           </p>
           <p className={s.reviewCardNote}>
             Đơn sẽ chuyển về trạng thái “Đã huỷ”. Các ngày trong khoảng trên được tính lại

@@ -209,6 +209,8 @@ export default function Reports() {
 
   const currentYear = new Date().getFullYear()
   const currentRange = computeRange(preset, customFrom, customTo)
+  // Staff không xem báo cáo so sánh chéo nhân sự → ẩn tab "Nhân sự" (dữ liệu các tab khác đã scope theo staff)
+  const visibleTabs = TABS.filter((t) => t.id !== 'staff' || isAdmin)
 
   return (
     <AppLayout title="Báo cáo">
@@ -216,7 +218,7 @@ export default function Reports() {
 
         {/* ── Tab nav ── */}
         <div className={s.tabBar}>
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {visibleTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               className={`${s.tab} ${activeTab === id ? s.tabActive : ''}`}
@@ -277,7 +279,8 @@ export default function Reports() {
                   ))}
                 </select>
                 <select className={s.filterSelect} value={forecastYear} onChange={(e) => setForecastYear(Number(e.target.value))}>
-                  {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
+                  {/* Dự báo = tương lai → năm hiện tại + 2 năm tới (tự động theo năm hiện tại) */}
+                  {[currentYear, currentYear + 1, currentYear + 2].map((y) => (
                     <option key={y} value={y}>{y}</option>
                   ))}
                 </select>
