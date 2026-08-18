@@ -336,7 +336,12 @@
       "Bash(QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' QA_STAFF_PASS='Ketoan01@12345' QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test --project=admin)",
       "Bash(QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test admin.spec.js)",
       "Bash(rm -f helper.js)",
-      "Bash(QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' QA_STAFF_PASS='Ketoan01@12345' npx playwright test staff.spec.js)"
+      "Bash(QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' QA_STAFF_PASS='Ketoan01@12345' npx playwright test staff.spec.js)",
+      "Bash(QA_STAFF_EMAIL='ketoan01@dvkttaman.vn' QA_STAFF_PASS='Ketoan01@12345' npx playwright test staff-write.spec.js)",
+      "Bash(QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test admin-write.spec.js)",
+      "Bash(awk 'NR>=2560 && NR<=2620' frontend/src/pages/Attendance/AttendanceAdmin.jsx)",
+      "Bash(QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test final.spec.js)",
+      "Bash(QA_ADMIN_EMAIL='nguyenhoangkhai.010103@gmail.com' QA_ADMIN_PASS='Treviet@606' npx playwright test quota.spec.js)"
     ],
     "additionalDirectories": [
       "d:\\WorkSpace_ADA_Bamboo\\PROJECT_BBOTECH\\KE_TOAN_TAM_AN\\.husky",
