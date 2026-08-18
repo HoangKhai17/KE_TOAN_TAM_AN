@@ -173,7 +173,8 @@ function dateDiff(a, b) {
 function toArr(v) { return Array.isArray(v) ? v : (v == null ? [] : [v]) }
 function flat1(a) { const out = []; for (const x of a) { if (Array.isArray(x)) out.push(...x); else out.push(x) } return out }
 function numOr0(x) { return isNumeric(x) ? toNum(x) : 0 }   // bỏ qua ô rỗng/không phải số
-// Tiêu chí kiểu Excel: số/chuỗi khớp đúng; hoặc chuỗi mở đầu bằng toán tử >,>=,<,<=,<>,=
+// Tiêu chí kiểu Excel: số/chuỗi khớp đúng; hoặc chuỗi mở đầu bằng toán tử >,>=,<,<=,<>,=;
+// hoặc CHỨA KÝ TỰ ĐẠI DIỆN * (chuỗi bất kỳ) / ? (1 ký tự) — khớp KHÔNG phân biệt hoa/thường.
 function makeCriterion(crit) {
   if (typeof crit === 'string') {
     const m = crit.match(/^\s*(<=|>=|<>|=|<|>)\s*(.*)$/)
@@ -190,6 +191,12 @@ function makeCriterion(crit) {
           default:   return false
         }
       }
+    }
+    // Ký tự đại diện: * → .* ; ? → . (escape các ký tự regex khác); khớp toàn chuỗi, bỏ hoa/thường.
+    if (crit.includes('*') || crit.includes('?')) {
+      const pattern = crit.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')
+      const rx = new RegExp(`^${pattern}$`, 'i')
+      return (cell) => rx.test(toStr(cell))
     }
   }
   return (cell) => looseEq(cell, crit)   // khớp đúng
@@ -226,9 +233,27 @@ const FUNCS = {
   LEN:       (a) => toStr(a[0]).length,
   TODAY:     () => todayISO(),
   DATEDIFF:  (a) => dateDiff(a[0], a[1]),
+  // ── Vị trí dòng (dùng cho chống trùng như COUNTIFS…=1 của Excel) ──
+  // ROW(): số thứ tự dòng hiện tại (1-based).
+  ROW:       (a, ctx) => (ctx && ctx.rowIndex >= 0 ? ctx.rowIndex : 0) + 1,
+  // ISLAST(vùng_khoá1, giá_trị1, [vùng_khoá2, giá_trị2, …]): TRUE nếu dòng hiện tại là
+  // dòng CUỐI CÙNG (theo thứ tự bảng) trong nhóm khớp toàn bộ các cặp khoá → hiện 1 lần/nhóm.
+  ISLAST:    (a, ctx) => {
+    const idx = ctx && ctx.rowIndex >= 0 ? ctx.rowIndex : -1
+    if (idx < 0) return true
+    const pairs = []
+    for (let i = 0; i + 1 < a.length; i += 2) pairs.push([toArr(a[i]), a[i + 1]])
+    const n = pairs.length ? pairs[0][0].length : 0
+    for (let i = idx + 1; i < n; i++) {
+      let match = true
+      for (const [arr, val] of pairs) if (!looseEq(arr[i], val)) { match = false; break }
+      if (match) return false   // còn dòng SAU cùng nhóm → chưa phải dòng cuối
+    }
+    return true
+  },
 }
 
-function evalNode(node, resolve) {
+function evalNode(node, resolve, ctx) {
   switch (node.kind) {
     case 'num': return node.value
     case 'str': return node.value
@@ -238,19 +263,19 @@ function evalNode(node, resolve) {
       if (v === undefined) throw new FormulaError('#REF')
       return v
     }
-    case 'unary': { const v = toNum(evalNode(node.operand, resolve)); return node.op === '-' ? -v : v }
-    case 'bin': return evalBin(node, resolve)
+    case 'unary': { const v = toNum(evalNode(node.operand, resolve, ctx)); return node.op === '-' ? -v : v }
+    case 'bin': return evalBin(node, resolve, ctx)
     case 'call': {
       const fn = FUNCS[node.name]
       if (!fn) throw new FormulaError('#NAME')
-      return fn(node.args.map((a) => evalNode(a, resolve)))
+      return fn(node.args.map((a) => evalNode(a, resolve, ctx)), ctx)
     }
     default: throw new FormulaError('#ERR')
   }
 }
-function evalBin(node, resolve) {
-  const l = evalNode(node.left, resolve)
-  const r = evalNode(node.right, resolve)
+function evalBin(node, resolve, ctx) {
+  const l = evalNode(node.left, resolve, ctx)
+  const r = evalNode(node.right, resolve, ctx)
   switch (node.op) {
     case '+': return toNum(l) + toNum(r)
     case '-': return toNum(l) - toNum(r)
@@ -281,10 +306,10 @@ function getAst(expression) {
 
 // resolve(colKey) → giá trị (number|string|null) nếu cột tồn tại; undefined nếu KHÔNG có cột.
 // resolve được phép ném lỗi có thuộc tính __formulaError (vd '#CYCLE') để báo lỗi riêng.
-export function evaluateFormula(expression, resolve) {
+export function evaluateFormula(expression, resolve, ctx = null) {
   try {
     if (expression == null || String(expression).trim() === '') return { value: null, error: null }
-    const value = evalNode(getAst(String(expression)), resolve)
+    const value = evalNode(getAst(String(expression)), resolve, ctx)
     return { value, error: null }
   } catch (e) {
     if (e instanceof FormulaError) return { value: null, error: e.code }

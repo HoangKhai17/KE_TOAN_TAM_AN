@@ -126,7 +126,7 @@ function DefModal({ def, parentDefId, parentDef, onClose, onSaved }) {
 }
 
 // ── Column create/edit modal ──────────────────────────────────────────────────
-function ColumnModal({ defColumns, column, onClose, onSaved, otherDefs = [] }) {
+function ColumnModal({ defColumns, column, onClose, onSaved, otherDefs = [], selfTableKey = null }) {
   const addToast = useToastStore((st) => st.toast)
   const [form, setForm] = useState({
     label: column?.label ?? '', dataType: column?.dataType ?? 'text',
@@ -159,6 +159,8 @@ function ColumnModal({ defColumns, column, onClose, onSaved, otherDefs = [] }) {
     defNameByKey[d.tableKey] = d.name
     for (const c of (d.columns || [])) crossKeys.add(`${d.tableKey}!${c.colKey}`)
   }
+  // Cho phép tham chiếu cả cột CHÍNH bảng này {selfKey!col} (gộp chéo dòng: SUMIFS/COUNTIF…)
+  if (selfTableKey) for (const c of defColumns) crossKeys.add(`${selfTableKey}!${c.colKey}`)
   const prettyRef = (k) => {
     if (!k.includes('!')) return k
     const [tKey, col] = [k.slice(0, k.indexOf('!')), k.slice(k.indexOf('!') + 1)]
@@ -336,7 +338,7 @@ function ColumnModal({ defColumns, column, onClose, onSaved, otherDefs = [] }) {
               </div>
             )}
             <div style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', lineHeight: 1.5 }}>
-              Hàm: IF AND OR NOT SUM MIN MAX AVG COUNT ROUND ABS CONCAT LEN TODAY DATEDIFF · Điều kiện &amp; liên bảng: SUMIF COUNTIF AVERAGEIF SUMIFS LOOKUP VLOOKUP · Toán tử: + − × / % ^ &amp; = &lt;&gt; &lt; &lt;= &gt; &gt;= · Cột cùng bảng {'{col_key}'}; cột bảng khác bấm nút "Liên bảng" ở trên.
+              Hàm: IF AND OR NOT SUM MIN MAX AVG COUNT ROUND ABS CONCAT LEN TODAY DATEDIFF ROW ISLAST · Điều kiện &amp; liên bảng: SUMIF COUNTIF AVERAGEIF SUMIFS LOOKUP VLOOKUP (tiêu chí hỗ trợ ký tự đại diện *…*) · ISLAST(vùng_khoá, giá_trị, …)=dòng cuối nhóm (chống trùng) · Toán tử: + − × / % ^ &amp; = &lt;&gt; &lt; &lt;= &gt; &gt;= · Cột cùng bảng {'{col_key}'}; cột bảng khác (kể cả CHÍNH bảng này) bấm nút "Liên bảng" ở trên.
             </div>
           </div>
         )}
@@ -609,6 +611,7 @@ export default function CompanyTablesSection() {
         <ColumnModal
           defColumns={Object.assign(selDef.columns ?? [], { _defId: selDef.id })}
           otherDefs={clusterOtherDefs}
+          selfTableKey={selDef.tableKey}
           column={colModal.column}
           onClose={() => setColModal(null)}
           onSaved={() => { setColModal(null); reload() }}

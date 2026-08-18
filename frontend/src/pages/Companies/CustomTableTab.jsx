@@ -321,7 +321,11 @@ function makeResolver(row, columns, cross = null) {
   return resolve
 }
 function evalFormula(col, row, columns) {
-  return evaluateFormula(col.computedConfig?.expression, makeResolver(row, columns, _crossTables))
+  // Chỉ số dòng hiện tại (theo THỨ TỰ BẢNG) — cho hàm ISLAST/ROW chống trùng.
+  // Tìm chính dòng này trong mảng rows của bảng nó (self nằm trong _crossTables theo tableKey).
+  let rowIndex = -1
+  if (_crossTables) for (const t of Object.values(_crossTables)) { const i = t.rows.indexOf(row); if (i !== -1) { rowIndex = i; break } }
+  return evaluateFormula(col.computedConfig?.expression, makeResolver(row, columns, _crossTables), { rowIndex })
 }
 function formatFormulaValue(v) {
   if (v == null) return ''
@@ -911,7 +915,9 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
 
   // Đưa dữ liệu bảng ngoài vào holder module-level TRƯỚC khi các helper (displayLabel/
   // sortKey/render cell) chạy trong render này. Chỉ 1 CustomTableTab mount nên an toàn.
-  setCrossTables(otherTables)
+  // GỒM CẢ chính bảng này (self) → cho phép công thức gộp CHÉO DÒNG cùng bảng: {tableKey!col}
+  // (vd SUMIFS trên cột của chính bảng). resolveOtherCell chặn cross-lồng-cross nên không recursion.
+  setCrossTables({ ...otherTables, [def.tableKey]: { rows, columns } })
 
   // Có cột 'file' không → mới cần tải danh sách file (tránh gọi thừa)
   const defHasFile = useMemo(
