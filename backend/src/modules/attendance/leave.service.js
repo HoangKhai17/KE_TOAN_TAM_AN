@@ -238,8 +238,17 @@ async function listLeaveRequests({ userId, status, leaveType, from, to, page = 1
     conditions.push(`l.status::text IN (${statuses.map((_, i) => `$${start + i}`).join(', ')})`)
   }
   if (leaveType) { params.push(leaveType); conditions.push(`l.leave_type = $${params.length}`) }
-  if (from)      { params.push(from);      conditions.push(`l.start_date >= $${params.length}`) }
-  if (to)        { params.push(to);        conditions.push(`l.end_date   <= $${params.length}`) }
+  // Lọc theo KỲ = GIAO NHAU (overlap): đơn hiện ở tháng nào mà khoảng [start, end] có DÍNH vào
+  // tháng đó → đơn vắt qua 2 tháng (vd 30/08–01/09) hiện ở CẢ hai. (start_date <= to AND end_date >= from)
+  if (from && to) {
+    params.push(from); const pf = params.length
+    params.push(to);   const pt = params.length
+    conditions.push(`l.start_date <= $${pt} AND l.end_date >= $${pf}`)
+  } else if (from) {
+    params.push(from); conditions.push(`l.end_date >= $${params.length}`)
+  } else if (to) {
+    params.push(to);   conditions.push(`l.start_date <= $${params.length}`)
+  }
 
   const where = conditions.join(' AND ')
 
@@ -476,6 +485,19 @@ async function cancelLeaveRequest(id, userId) {
   return toDto(rows[0])
 }
 
+// Xóa HẲN đơn nghỉ — chỉ khi CHƯA duyệt (status='pending'); chủ đơn hoặc admin.
+async function deleteLeaveRequest(id, user) {
+  const { rows } = await query('SELECT id, user_id, status FROM leave_requests WHERE id = $1', [id])
+  const r = rows[0]
+  if (!r) throw Object.assign(new Error('Không tìm thấy đơn nghỉ phép'), { status: 404 })
+  if (r.status !== 'pending') throw Object.assign(new Error('Chỉ xóa được đơn CHƯA duyệt'), { status: 400 })
+  const isAdmin = user && user.role === 'admin'
+  if (!isAdmin && r.user_id !== user.id) {
+    throw Object.assign(new Error('Bạn chỉ được xóa đơn nghỉ của mình'), { status: 403 })
+  }
+  await query('DELETE FROM leave_requests WHERE id = $1', [id])
+}
+
 async function exportLeaveRecords({ from, to, status, userId, fields, res }) {
   const ExcelJS = require('exceljs')
 
@@ -623,7 +645,7 @@ async function exportLeaveRecords({ from, to, status, userId, fields, res }) {
 
 module.exports = {
   listLeaveRequests, createLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
-  revokeLeaveRequest, cancelLeaveRequest, exportLeaveRecords,
+  revokeLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, exportLeaveRecords,
   listLeavePolicies, getLeaveBalance,
   // Export để script bảo trì / kiểm thử tính lại total_days của đơn cũ
   countWorkingDays,

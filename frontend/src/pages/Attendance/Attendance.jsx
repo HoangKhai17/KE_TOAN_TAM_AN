@@ -12,6 +12,7 @@ import * as attendanceApi from '../../api/attendance'
 import { useLeavePolicies, LEAVE_LABELS, DAY_PARTS, dayPartSuffix, dayPartLabel } from './leavePolicies'
 import { useCompanyOptions } from '../../hooks/useReferenceData'
 import DateBox from '../../components/ui/DateBox'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import s from './Attendance.module.css'
 
 const ATTENDANCE_MODAL_WIDTH = '760px'
@@ -556,6 +557,7 @@ function DayDetailModal({ dateStr, record, onClose }) {
 
 function LeaveTab({ isAdmin, year, month, userId }) {
   const addToast = useToastStore((st) => st.toast)
+  const confirmDelete = useDeleteConfirm()
   const [page,         setPage]         = useState(1)
   const [showForm,     setShowForm]     = useState(false)
   const [reviewTarget, setReviewTarget] = useState(null)
@@ -582,6 +584,17 @@ function LeaveTab({ isAdmin, year, month, userId }) {
       listQuery.refetch()
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể huỷ', 'error')
+    }
+  }
+
+  async function handleDelete(id) {
+    if (!(await confirmDelete({ title: 'Xóa đơn nghỉ phép', message: 'Xóa hẳn đơn nghỉ phép này? Thao tác không thể hoàn tác.' }))) return
+    try {
+      await attendanceApi.deleteLeaveRequest(id)
+      addToast('Đã xóa đơn nghỉ phép', 'success')
+      listQuery.refetch()
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể xóa', 'error')
     }
   }
 
@@ -665,6 +678,15 @@ function LeaveTab({ isAdmin, year, month, userId }) {
                               onClick={() => handleCancel(req.id)}
                             >
                               Huỷ
+                            </button>
+                          )}
+                          {req.status === 'pending' && (
+                            <button
+                              className={`${s.btnOutline} ${s.btnCompact}`}
+                              onClick={() => handleDelete(req.id)}
+                              title="Xóa hẳn đơn (chỉ khi chưa duyệt)"
+                            >
+                              Xóa
                             </button>
                           )}
                         </div>

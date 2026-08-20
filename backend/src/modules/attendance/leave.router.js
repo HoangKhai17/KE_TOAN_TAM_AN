@@ -192,4 +192,12 @@ router.delete('/:id/cancel', ...auth, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// Xóa hẳn đơn nghỉ (chỉ khi CHƯA duyệt) — chủ đơn hoặc admin
+router.delete('/:id', ...auth, async (req, res, next) => {
+  try {
+    await svc.deleteLeaveRequest(req.params.id, req.user)
+    res.status(204).end()
+  } catch (err) { next(err) }
+})
+
 module.exports = router

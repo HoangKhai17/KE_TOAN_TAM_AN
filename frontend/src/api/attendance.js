@@ -119,6 +119,10 @@ export const revokeLeaveRequest = (id, body = {}) =>
 export const cancelLeaveRequest = (id) =>
   api.delete(`/leave-requests/${id}/cancel`).then(r => r.data)
 
+// Xóa hẳn đơn nghỉ (chỉ khi CHƯA duyệt)
+export const deleteLeaveRequest = (id) =>
+  api.delete(`/leave-requests/${id}`).then(r => r.data)
+
 // ── Overtime Requests ─────────────────────────────────────────────────────────
 
 export const listOvertimeRequests = (params) =>
