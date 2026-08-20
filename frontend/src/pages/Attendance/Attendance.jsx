@@ -680,11 +680,11 @@ function LeaveTab({ isAdmin, year, month, userId }) {
                               Huỷ
                             </button>
                           )}
-                          {req.status === 'pending' && (
+                          {(req.status === 'pending' || req.status === 'cancelled') && (
                             <button
                               className={`${s.btnOutline} ${s.btnCompact}`}
                               onClick={() => handleDelete(req.id)}
-                              title="Xóa hẳn đơn (chỉ khi chưa duyệt)"
+                              title="Xóa hẳn đơn (khi chưa duyệt hoặc đã huỷ)"
                             >
                               Xóa
                             </button>

@@ -485,12 +485,14 @@ async function cancelLeaveRequest(id, userId) {
   return toDto(rows[0])
 }
 
-// Xóa HẲN đơn nghỉ — chỉ khi CHƯA duyệt (status='pending'); chủ đơn hoặc admin.
+// Xóa HẲN đơn nghỉ — chỉ khi CHƯA duyệt (pending) hoặc ĐÃ HUỶ (cancelled); chủ đơn hoặc admin.
 async function deleteLeaveRequest(id, user) {
   const { rows } = await query('SELECT id, user_id, status FROM leave_requests WHERE id = $1', [id])
   const r = rows[0]
   if (!r) throw Object.assign(new Error('Không tìm thấy đơn nghỉ phép'), { status: 404 })
-  if (r.status !== 'pending') throw Object.assign(new Error('Chỉ xóa được đơn CHƯA duyệt'), { status: 400 })
+  if (r.status !== 'pending' && r.status !== 'cancelled') {
+    throw Object.assign(new Error('Chỉ xóa được đơn CHƯA duyệt hoặc ĐÃ HUỶ'), { status: 400 })
+  }
   const isAdmin = user && user.role === 'admin'
   if (!isAdmin && r.user_id !== user.id) {
     throw Object.assign(new Error('Bạn chỉ được xóa đơn nghỉ của mình'), { status: 403 })
