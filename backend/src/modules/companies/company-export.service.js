@@ -258,11 +258,8 @@ function columnsFor(key, lbl) {
       ]
     case 'original-documents':
       return [
-        { header: 'Tên hồ sơ',      get: (r) => safe(r.name) },
-        { header: 'Phân loại',      get: (r) => safe(r.category) },
-        { header: 'Nguồn cung cấp', get: (r) => safe(r.source) },
-        { header: 'Tần suất',       get: (r) => safe(r.frequency) },
-        { header: 'Ghi chú',        get: (r) => safe(r.note) },
+        { header: 'Tên hồ sơ', get: (r) => safe(r.name) },
+        { header: 'Ghi chú',   get: (r) => safe(String(r.note ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()) },
       ]
     case 'important-notes':
       return [
@@ -371,7 +368,7 @@ async function fetchSection(key, companyIds, includeCredentials) {
       )).rows
     case 'original-documents':
       return (await query(
-        `SELECT company_id, name, category, source, frequency, note
+        `SELECT company_id, name, note
          FROM company_original_documents WHERE company_id = ANY($1)
          ORDER BY company_id, sort_order, created_at`,
         [companyIds],

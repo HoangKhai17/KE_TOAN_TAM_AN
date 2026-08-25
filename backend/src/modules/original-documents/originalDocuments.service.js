@@ -5,9 +5,6 @@ function toDto(row) {
     id:        row.id,
     companyId: row.company_id,
     name:      row.name,
-    category:  row.category ?? null,
-    frequency: row.frequency ?? null,
-    source:    row.source ?? null,
     note:      row.note ?? null,
     sortOrder: row.sort_order,
     createdBy: row.created_by,
@@ -40,16 +37,16 @@ async function listOriginalDocuments(companyId, user) {
 async function createOriginalDocument(companyId, data, user) {
   await assertCompanyAccess(companyId, user)
   const actorId = user.id
-  const { name, category, frequency, source, note, sortOrder } = data
+  const { name, note, sortOrder } = data
   const order = sortOrder ?? Number((await query(
     'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM company_original_documents WHERE company_id = $1', [companyId]
   )).rows[0].next)
   const { rows: [row] } = await query(
     `INSERT INTO company_original_documents
-       (company_id, name, category, frequency, source, note, sort_order, created_by, updated_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8)
+       (company_id, name, note, sort_order, created_by, updated_by)
+     VALUES ($1,$2,$3,$4,$5,$5)
      RETURNING *`,
-    [companyId, name, category ?? null, frequency ?? null, source ?? null, note ?? null, order, actorId]
+    [companyId, name, note ?? null, order, actorId]
   )
   return toDto(row)
 }
@@ -64,8 +61,7 @@ async function updateOriginalDocument(companyId, id, data, user) {
   if (!existing) throw Object.assign(new Error('Original document not found'), { status: 404 })
 
   const map = {
-    name: 'name', category: 'category', frequency: 'frequency',
-    source: 'source', note: 'note', sortOrder: 'sort_order',
+    name: 'name', note: 'note', sortOrder: 'sort_order',
   }
   const updates = ['updated_by = $1', 'updated_at = NOW()']
   const params  = [actorId]

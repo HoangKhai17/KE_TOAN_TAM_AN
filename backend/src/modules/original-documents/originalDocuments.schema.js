@@ -1,21 +1,15 @@
 const { z } = require('zod')
 
-// Các cột phân loại (category/frequency/source) là text tự do — không enum.
+// Cấu trúc rút gọn: chỉ Tên hồ sơ + Ghi chú (Ghi chú dạng rich-text HTML).
 const createOriginalDocumentSchema = z.object({
   name:      z.string().min(1).max(200),
-  category:  z.string().max(100).optional().nullable(),
-  frequency: z.string().max(100).optional().nullable(),
-  source:    z.string().max(100).optional().nullable(),
-  note:      z.string().max(2000).optional().nullable(),
+  note:      z.string().max(500_000).optional().nullable(),
   sortOrder: z.number().int().optional(),
 })
 
 const updateOriginalDocumentSchema = z.object({
   name:      z.string().min(1).max(200).optional(),
-  category:  z.string().max(100).optional().nullable(),
-  frequency: z.string().max(100).optional().nullable(),
-  source:    z.string().max(100).optional().nullable(),
-  note:      z.string().max(2000).optional().nullable(),
+  note:      z.string().max(500_000).optional().nullable(),
   sortOrder: z.number().int().optional(),
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })
 

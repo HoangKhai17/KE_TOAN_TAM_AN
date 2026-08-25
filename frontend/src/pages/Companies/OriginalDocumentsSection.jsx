@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Trash2, Check, X, Loader2, Filter } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
+import { Plus, Trash2, Check, X, Loader2, Filter, Pencil } from 'lucide-react'
 import * as origDocApi from '../../api/originalDocuments'
 import { useToastStore } from '../../stores/toastStore'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import Modal from '../../components/ui/Modal'
 import InlineTableCell from '../../components/ui/InlineTableCell'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import RichTextView from '../../components/ui/RichTextView'
 import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
@@ -12,28 +14,43 @@ import {
 import { useCompanyFooter } from './companyFooter'
 import s from './companies.module.css'
 
-function emptyDraft() {
-  return { name: '', category: '', frequency: '', source: '', note: '' }
+// Editor nặng (TipTap) chỉ tải khi mở modal sửa Ghi chú
+const RichTextEditor = lazy(() => import('../../components/ui/RichTextEditor'))
+
+function isHtmlEmpty(html) {
+  if (!html) return true
+  return !html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
 }
-// Hàng nhập liệu ở cấp cao nhất để input không bị remount → giữ focus.
-function OrigDocEditRow({ draft, setF, save, cancel, saving }) {
+
+// ── Modal sửa Ghi chú (rich-text) cho 1 hồ sơ ──────────────────────────────────
+function NoteEditModal({ companyId, row, onSave, onClose }) {
+  const [html, setHtml]     = useState(row.note || '')
+  const [saving, setSaving] = useState(false)
+  async function handleSave() {
+    setSaving(true)
+    try { await onSave(html) } catch { /* toasted */ } finally { setSaving(false) }
+  }
   return (
-    <tr className={s.locEditRow}>
-      <td /><td /><td />
-      <td><input className={s.locInput} value={draft.name} onChange={setF('name')} placeholder="VD: Giấy phép kinh doanh (bản gốc)" /></td>
-      <td><input className={s.locInput} value={draft.category} onChange={setF('category')} placeholder="VD: Pháp lý" /></td>
-      <td><input className={s.locInput} value={draft.source} onChange={setF('source')} placeholder="VD: Khách gửi" /></td>
-      <td><input className={s.locInput} value={draft.frequency} onChange={setF('frequency')} placeholder="VD: Hàng tháng" /></td>
-      <td><input className={s.locInput} value={draft.note} onChange={setF('note')} placeholder="Ghi chú" /></td>
-      <td className={s.locCenter}>
-        <div className={s.credRowActions}>
-          <button className={s.locBtnSave} onClick={save} disabled={saving} title="Lưu">
-            {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />}
-          </button>
-          <button className={s.locBtnCancel} onClick={cancel} disabled={saving} title="Huỷ"><X size={13} /></button>
+    <Modal title={`Ghi chú — ${row.name}`} onClose={onClose} wide>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(88vh - 216px)', minHeight: 300,
+          border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+          <Suspense fallback={<div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-muted)' }}><Loader2 size={16} className={s.spin} /> Đang tải trình soạn thảo…</div>}>
+            <RichTextEditor
+              value={html} onChange={setHtml} editable companyId={companyId}
+              autoFocus minHeight={200} className="rte-fill"
+              placeholder="Nhập ghi chú cho hồ sơ này… (dán được ảnh, bảng, hoặc Markdown)"
+            />
+          </Suspense>
         </div>
-      </td>
-    </tr>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className={s.btnOutline} onClick={onClose} disabled={saving}>Huỷ</button>
+          <button className={s.btnPrimary} onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />} Lưu
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -43,15 +60,14 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
 
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
-  const [editingId, setEditingId] = useState(null)   // null | 'new' | <id>
-  const [draft, setDraft]       = useState(emptyDraft)
-  const [saving, setSaving]     = useState(false)
   const [activeCell, setActiveCell] = useState(null)
+  const [noteEdit, setNoteEdit] = useState(null)   // hồ sơ đang sửa ghi chú
   const [colFilters, setColFilters] = useState({})
   const [sortState, setSortState] = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup] = useState(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+
   const displayedRows = useMemo(() => {
     let result = [...rows]
     for (const [key, value] of Object.entries(colFilters)) {
@@ -78,7 +94,7 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
 
   const selection = useRowSelection({ rows: displayedRows })
   const reorder = useRowReorder({
-    rows, setRows, enabled: canEdit && editingId == null && activeCell == null && Object.keys(colFilters).length === 0 && !sortState.col && docTotalPages === 1,
+    rows, setRows, enabled: canEdit && activeCell == null && Object.keys(colFilters).length === 0 && !sortState.col && docTotalPages === 1,
     onError: () => addToast('Không thể lưu thứ tự hồ sơ', 'error'),
     onPersist: (ordered, previous) => Promise.all(ordered
       .map((row, index) => ({ row, index }))
@@ -100,32 +116,6 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
   useEffect(() => { load() }, [load])
 
   function startAdd() { setActiveCell({ rowId: 'new', colKey: 'name' }) }
-  function cancel() { setEditingId(null); setDraft(emptyDraft()) }
-
-  const setF = (k) => (e) => setDraft((p) => ({ ...p, [k]: e.target.value }))
-
-  async function save() {
-    if (!draft.name.trim()) { addToast('Vui lòng nhập tên hồ sơ', 'error'); return }
-    setSaving(true)
-    try {
-      const body = {
-        name: draft.name.trim(),
-        category: draft.category.trim() || null,
-        frequency: draft.frequency.trim() || null,
-        source: draft.source.trim() || null,
-        note: draft.note.trim() || null,
-      }
-      if (editingId === 'new') await origDocApi.createOriginalDocument(companyId, body)
-      else                     await origDocApi.updateOriginalDocument(companyId, editingId, body)
-      addToast(editingId === 'new' ? 'Đã thêm hồ sơ' : 'Đã cập nhật hồ sơ', 'success')
-      cancel()
-      await load()
-    } catch (err) {
-      addToast(err.response?.data?.error?.message ?? 'Không lưu được hồ sơ', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   async function saveCell(row, field, value) {
     try {
@@ -150,7 +140,19 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
     }
   }
 
-  const editableColumns = ['name', 'category', 'source', 'frequency', 'note']
+  async function saveNote(row, html) {
+    try {
+      const body = { note: isHtmlEmpty(html) ? null : html }
+      const updated = await origDocApi.updateOriginalDocument(companyId, row.id, body)
+      setRows((current) => current.map((item) => item.id === row.id ? { ...item, ...updated, note: body.note } : item))
+      setNoteEdit(null)
+      addToast('Đã lưu ghi chú', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không lưu được ghi chú', 'error')
+      throw err
+    }
+  }
+
   function setColumnFilter(colKey, value) {
     setColFilters((current) => {
       const next = { ...current }
@@ -169,28 +171,19 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
     const active = colFilters[colKey] != null || sortState.col === colKey
     return <th><div className={s.hdldThInner}><span className={s.hdldThLabel}>{children}</span><button data-colfilter-btn className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`} onClick={(event) => openColumnFilter(colKey, event)} title="Lọc / Sắp xếp"><Filter size={10} /></button></div></th>
   }
-  function navigateCell(rowId, colKey, direction, result) {
+  // Điều hướng ô Tên (chỉ còn cột này inline). Enter/Tab → dòng kế; dòng cuối → dòng nhập mới.
+  function navigateCell(rowId, direction, result) {
     if (direction === 'cancel') { setActiveCell(null); return }
     const actualRowId = result?.rowId ?? rowId
     const rowIndex = rows.findIndex((row) => row.id === actualRowId)
-    const columnIndex = editableColumns.indexOf(colKey)
-    if (direction === 'next') {
-      if (columnIndex < editableColumns.length - 1 && actualRowId !== 'new') return setActiveCell({ rowId: actualRowId, colKey: editableColumns[columnIndex + 1] })
-      const nextRow = rows[rowIndex + 1]
-      return setActiveCell({ rowId: nextRow?.id ?? 'new', colKey: 'name' })
-    }
     if (direction === 'prev') {
-      if (columnIndex > 0 && actualRowId !== 'new') return setActiveCell({ rowId: actualRowId, colKey: editableColumns[columnIndex - 1] })
       const previousRow = rows[rowIndex - 1]
-      return setActiveCell(previousRow ? { rowId: previousRow.id, colKey: 'note' } : null)
+      return setActiveCell(previousRow ? { rowId: previousRow.id, colKey: 'name' } : null)
     }
-    if (direction === 'down') {
-      // Vừa tạo dòng mới từ ô nhập → mở NGAY một dòng nhập mới để nhập liên tục (Enter → Enter…)
-      if (result?.rowId) return setActiveCell({ rowId: 'new', colKey: 'name' })
-      // Xuống cùng cột ở dòng kế; nếu đang ở dòng cuối → mở dòng nhập mới (ở cột Tên)
-      const nextRow = rows[rowIndex + 1]
-      setActiveCell(nextRow ? { rowId: nextRow.id, colKey } : { rowId: 'new', colKey: 'name' })
-    }
+    // next / down
+    if (result?.rowId) return setActiveCell({ rowId: 'new', colKey: 'name' })
+    const nextRow = rows[rowIndex + 1]
+    setActiveCell(nextRow ? { rowId: nextRow.id, colKey: 'name' } : { rowId: 'new', colKey: 'name' })
   }
 
   async function remove(row) {
@@ -214,8 +207,7 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
     addToast(`Đã xoá ${deleted.size}/${ids.length} hồ sơ`, deleted.size ? 'success' : 'error')
   }
 
-  const colSpan = 9
-  const editRowProps = { draft, setF, save, cancel, saving }
+  const colSpan = 6
 
   return (
     <div>
@@ -229,11 +221,8 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
         <table className={s.credTable}>
           <colgroup>
             <col className={s.dataTableColDrag} /><col className={s.dataTableColSelect} /><col className={s.dataTableColIndex} />
-            <col style={{ width: '26%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '18%' }} />
+            <col style={{ width: '34%' }} />
+            <col style={{ width: '58%' }} />
             <col style={{ width: '8%' }} />
           </colgroup>
           <thead>
@@ -242,47 +231,56 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
               <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
               <IndexHeaderCell />
               <FilterHeader colKey="name">Tên hồ sơ</FilterHeader>
-              <FilterHeader colKey="category">Phân loại</FilterHeader>
-              <FilterHeader colKey="source">Nguồn cung cấp</FilterHeader>
-              <FilterHeader colKey="frequency">Tần suất</FilterHeader>
-              <FilterHeader colKey="note">Ghi chú</FilterHeader>
+              <th><div className={s.hdldThInner}><span className={s.hdldThLabel}>Ghi chú</span></div></th>
               <th style={{ textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Đang tải…</td></tr>
-            ) : displayedRows.length === 0 && editingId !== 'new' ? (
+            ) : displayedRows.length === 0 && activeCell?.rowId !== 'new' ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có hồ sơ gốc. Nhấn “Thêm hồ sơ”.</td></tr>
             ) : (
               pageRows.map((r, index) => (
                 <tr key={r.id} {...reorder.rowProps(r.id)} className={reorder.dragOverId === r.id ? s.dataTableRowDragOver : ''}>
-                    <DragRowCell enabled={canEdit && editingId == null} handleProps={reorder.handleProps(r.id)} />
-                    <SelectionRowCell checked={selection.selectedIds.has(r.id)} onToggle={() => selection.toggle(r.id)} />
-                    <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
-                    {editableColumns.map((field) => <td key={field}><InlineTableCell value={r[field]} required={field === 'name'} multiline canEdit={canEdit} active={activeCell?.rowId === r.id && activeCell?.colKey === field} onActivate={() => setActiveCell({ rowId: r.id, colKey: field })} onSave={(value) => saveCell(r, field, value)} onNavigate={(direction) => navigateCell(r.id, field, direction)} /></td>)}
-                    <td className={s.locCenter}>
+                  <DragRowCell enabled={canEdit && activeCell == null} handleProps={reorder.handleProps(r.id)} />
+                  <SelectionRowCell checked={selection.selectedIds.has(r.id)} onToggle={() => selection.toggle(r.id)} />
+                  <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
+                  <td><InlineTableCell value={r.name} required multiline canEdit={canEdit} active={activeCell?.rowId === r.id && activeCell?.colKey === 'name'} onActivate={() => setActiveCell({ rowId: r.id, colKey: 'name' })} onSave={(value) => saveCell(r, 'name', value)} onNavigate={(direction) => navigateCell(r.id, direction)} /></td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0, maxHeight: 132, overflow: 'auto' }}>
+                        {isHtmlEmpty(r.note)
+                          ? <span style={{ color: 'var(--color-muted)' }}>—</span>
+                          : <RichTextView html={r.note} />}
+                      </div>
                       {canEdit && (
-                        <div className={s.credRowActions}>
-                          <button className={`${s.iconBtnSm} ${s.iconBtnDanger}`} onClick={() => remove(r)} title="Xoá"><Trash2 size={13} /></button>
-                        </div>
+                        <button className={`${s.iconBtnSm}`} onClick={() => setNoteEdit(r)} title="Sửa ghi chú" style={{ flexShrink: 0 }}><Pencil size={13} /></button>
                       )}
-                    </td>
-                  </tr>
+                    </div>
+                  </td>
+                  <td className={s.locCenter}>
+                    {canEdit && (
+                      <div className={s.credRowActions}>
+                        <button className={`${s.iconBtnSm} ${s.iconBtnDanger}`} onClick={() => remove(r)} title="Xoá"><Trash2 size={13} /></button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
               ))
             )}
             {canEdit && activeCell?.rowId === 'new' && (
               <tr className={s.excelNewRow}>
                 <td /><td /><td />
-                <td><InlineTableCell key={`newrow-${rows.length}`} value="" required multiline active={activeCell?.rowId === 'new' && activeCell?.colKey === 'name'} onActivate={() => setActiveCell({ rowId: 'new', colKey: 'name' })} onSave={createFromFirstCell} onNavigate={(direction, result) => navigateCell('new', 'name', direction, result)} /></td>
-                <td colSpan={4} />
-                <td />
+                <td><InlineTableCell key={`newrow-${rows.length}`} value="" required multiline active={activeCell?.rowId === 'new' && activeCell?.colKey === 'name'} onActivate={() => setActiveCell({ rowId: 'new', colKey: 'name' })} onSave={createFromFirstCell} onNavigate={(direction, result) => navigateCell('new', direction, result)} /></td>
+                <td colSpan={2} />
               </tr>
             )}
           </tbody>
         </table>
       </div>
       {filterPopup && <ColumnFilterDropdown colKey={filterPopup.colKey} filterType="text" allRows={rows} currentFilter={colFilters[filterPopup.colKey] ?? null} sortState={sortState} onSort={(col, dir) => { setSortState({ col, dir }); setFilterPopup(null) }} onFilterChange={setColumnFilter} onClose={() => setFilterPopup(null)} style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }} />}
+      {noteEdit && <NoteEditModal companyId={companyId} row={noteEdit} onSave={(html) => saveNote(noteEdit, html)} onClose={() => setNoteEdit(null)} />}
     </div>
   )
 }
