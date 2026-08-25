@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
-import ReactQuill from 'react-quill-new'
-import 'react-quill-new/dist/quill.snow.css'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import DOMPurify from 'dompurify'
+import RichTextView from '../../components/ui/RichTextView'
+
+// Editor nặng (TipTap) chỉ tải khi mở modal Thêm/Sửa ghi chú → không phình bundle chính
+const RichTextEditor = lazy(() => import('../../components/ui/RichTextEditor'))
 import {
   StickyNote, Plus, Pencil, Trash2, Pin, PinOff,
   Loader2, Check, X, Filter, Search, RotateCcw,
@@ -20,18 +22,6 @@ import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import { useCompanyFooter } from './companyFooter'
 import s from './companies.module.css'
-
-// ── Quill config ───────────────────────────────────────────────────────────────
-
-const QUILL_MODULES = {
-  toolbar: [
-    [{ header: [1, 2, false] }],
-    ['bold', 'italic', 'underline'],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    ['link', 'clean'],
-  ],
-}
-const QUILL_FORMATS = ['header', 'bold', 'italic', 'underline', 'list', 'bullet', 'link']
 
 const CLAMP_PX = 58
 
@@ -78,7 +68,7 @@ const CUR_MONTH = String(new Date().getMonth() + 1)
 
 // ── NoteEditorModal ────────────────────────────────────────────────────────────
 
-function NoteEditorModal({ initialNote, onSave, onClose }) {
+function NoteEditorModal({ initialNote, companyId, onSave, onClose }) {
   const isEdit = !!initialNote
   const [html, setHtml]     = useState(initialNote?.content ?? '')
   const [saving, setSaving] = useState(false)
@@ -102,15 +92,20 @@ function NoteEditorModal({ initialNote, onSave, onClose }) {
       wide
     >
       <div className={s.noteEditorModalBody}>
-        <div className={s.noteEditorWrap}>
-          <ReactQuill
-            value={html}
-            onChange={setHtml}
-            modules={QUILL_MODULES}
-            formats={QUILL_FORMATS}
-            placeholder="Nhập nội dung ghi chú..."
-            theme="snow"
-          />
+        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(88vh - 216px)', minHeight: 300,
+          border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+          <Suspense fallback={<div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-muted)' }}><Loader2 size={16} className={s.spin} /> Đang tải trình soạn thảo…</div>}>
+            <RichTextEditor
+              value={html}
+              onChange={setHtml}
+              editable
+              companyId={companyId}
+              autoFocus
+              minHeight={200}
+              className="rte-fill"
+              placeholder="Nhập nội dung ghi chú... (dán được ảnh, bảng, hoặc Markdown)"
+            />
+          </Suspense>
         </div>
         <div className={s.noteEditorModalFooter}>
           <button className={s.btnOutline} onClick={onClose} disabled={saving}>
@@ -145,14 +140,6 @@ function NoteTableRow({ note, index, canReorder = true, selection, reorder, curr
     setOverflows(el.scrollHeight > CLAMP_PX + 4)
   }, [note.content])
 
-  // Backward compat: old records are plain text (no HTML tags)
-  const isHtml = /<[a-z][\s\S]*>/i.test(note.content)
-  const rawHtml = isHtml
-    ? note.content
-    : `<p>${note.content.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`
-  // Sanitize trước khi render — chống stored XSS (loại <script>, onerror, javascript: …)
-  const displayHtml = DOMPurify.sanitize(rawHtml)
-
   return (
     <tr {...reorder.rowProps(note.id)} className={`${note.isPinned ? s.noteTableRowPinned : ''} ${reorder.dragOverId === note.id ? s.dataTableRowDragOver : ''}`}>
       <DragRowCell enabled={canReorder} handleProps={reorder.handleProps(note.id)} />
@@ -167,8 +154,9 @@ function NoteTableRow({ note, index, canReorder = true, selection, reorder, curr
         <div
           ref={contentRef}
           className={`${s.noteHtmlContent} ${!expanded ? s.noteContentClamped : ''}`}
-          dangerouslySetInnerHTML={{ __html: displayHtml }}
-        />
+        >
+          <RichTextView html={note.content} />
+        </div>
         {(overflows || expanded) && (
           <button className={s.noteExpandBtn} onClick={() => setExpanded((v) => !v)}>
             {expanded ? 'Thu gọn ▴' : 'Xem thêm ▾'}
@@ -630,6 +618,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
       {/* Add modal */}
       {showAdd && (
         <NoteEditorModal
+          companyId={companyId}
           onSave={handleAdd}
           onClose={() => setShowAdd(false)}
         />
@@ -639,6 +628,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
       {editTarget && (
         <NoteEditorModal
           initialNote={editTarget}
+          companyId={companyId}
           onSave={handleEdit}
           onClose={() => setEditTarget(null)}
         />
