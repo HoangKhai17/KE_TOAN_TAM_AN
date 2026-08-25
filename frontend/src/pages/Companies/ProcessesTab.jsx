@@ -10,9 +10,8 @@ import OriginalDocumentsSection from './OriginalDocumentsSection'
 import NotesSection from './NotesSection'
 import s from './companies.module.css'
 
-// LAZY LOAD: React Flow (~60KB) chỉ tải khi người dùng thực sự mở tab này.
-// Ai không xem sơ đồ thì không phải tải thêm gì.
-const ProcessFlowEditor = lazy(() => import('./ProcessFlowEditor'))
+// LAZY LOAD: trình soạn thảo tài liệu (TipTap) chỉ tải khi mở tab này.
+const ProcessDocEditor = lazy(() => import('./ProcessDocEditor'))
 
 // Các mục con của tab (swap bằng segmented) — cùng cấp với Quy trình
 const SECTIONS = [
@@ -32,14 +31,23 @@ export default function ProcessesTab({ company }) {
   const [section, setSection] = useState('process')   // mục con đang xem
   const [processes, setProcesses] = useState([])
   const [selectedId, setSelectedId] = useState(null)
-  const [graph, setGraph]   = useState(null)
+  const [current, setCurrent]   = useState(null)      // quy trình đang xem (kèm content)
   const [loading, setLoading] = useState(true)
-  const [loadingGraph, setLoadingGraph] = useState(false)
+  const [loadingDoc, setLoadingDoc] = useState(false)
+  const [docDirty, setDocDirty] = useState(false)     // tài liệu có thay đổi chưa lưu?
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [renameTarget, setRenameTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
+
+  // Chặn rời quy trình đang sửa khi còn thay đổi chưa lưu
+  const guardSwitch = useCallback(() => {
+    if (!docDirty) return true
+    // eslint-disable-next-line no-alert
+    if (window.confirm('Bỏ các thay đổi chưa lưu ở quy trình này?')) { setDocDirty(false); return true }
+    return false
+  }, [docDirty])
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -54,16 +62,22 @@ export default function ProcessesTab({ company }) {
 
   useEffect(() => { loadList() }, [loadList])
 
+  // Tải nội dung quy trình đang chọn (kèm content HTML)
   useEffect(() => {
-    if (!selectedId) { setGraph(null); return }
+    if (!selectedId) { setCurrent(null); return undefined }
     let cancelled = false
-    setLoadingGraph(true)
-    api.getGraph(company.id, selectedId)
-      .then((g) => { if (!cancelled) setGraph(g) })
-      .catch(() => { if (!cancelled) addToast('Không tải được sơ đồ', 'error') })
-      .finally(() => { if (!cancelled) setLoadingGraph(false) })
+    setLoadingDoc(true)
+    api.getProcess(company.id, selectedId)
+      .then((p) => { if (!cancelled) setCurrent(p) })
+      .catch(() => { if (!cancelled) addToast('Không tải được nội dung quy trình', 'error') })
+      .finally(() => { if (!cancelled) setLoadingDoc(false) })
     return () => { cancelled = true }
   }, [company.id, selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function selectProcess(id) {
+    if (id === selectedId || !guardSwitch()) return
+    setSelectedId(id)
+  }
 
   async function handleCreate() {
     if (!newName.trim()) return
@@ -85,6 +99,7 @@ export default function ProcessesTab({ company }) {
     try {
       const p = await api.updateProcess(company.id, renameTarget.id, { name: renameTarget.name.trim() })
       setProcesses((prev) => prev.map((x) => x.id === p.id ? { ...x, name: p.name } : x))
+      if (current?.id === p.id) setCurrent((c) => ({ ...c, name: p.name }))
       setRenameTarget(null)
       addToast('Đã đổi tên quy trình', 'success')
     } catch (err) {
@@ -98,7 +113,7 @@ export default function ProcessesTab({ company }) {
       await api.deleteProcess(company.id, deleteTarget.id)
       const rest = processes.filter((p) => p.id !== deleteTarget.id)
       setProcesses(rest)
-      if (selectedId === deleteTarget.id) setSelectedId(rest[0]?.id ?? null)
+      if (selectedId === deleteTarget.id) { setDocDirty(false); setSelectedId(rest[0]?.id ?? null) }
       setDeleteTarget(null)
       addToast('Đã xoá quy trình', 'success')
     } catch (err) {
@@ -106,9 +121,16 @@ export default function ProcessesTab({ company }) {
     } finally { setBusy(false) }
   }
 
+  // Sau khi lưu nội dung: cập nhật cờ hasContent + mốc thời gian trong danh sách
+  function handleSaved(updated) {
+    setCurrent(updated)
+    setProcesses((prev) => prev.map((p) => p.id === updated.id
+      ? { ...p, hasContent: updated.hasContent, updatedAt: updated.updatedAt } : p))
+  }
+
   return (
     <div className={s.procTab}>
-      {/* Segmented: chuyển giữa các mục cùng cấp (Quy trình / Chứng từ / Lưu ý) */}
+      {/* Segmented: chuyển giữa các mục cùng cấp */}
       <div className={s.procSeg}>
         {SECTIONS.map((sec) => {
           const Icon = sec.icon
@@ -135,9 +157,9 @@ export default function ProcessesTab({ company }) {
         ) : (
           <ProcessSection
             company={company} canEdit={canEdit}
-            processes={processes} selectedId={selectedId} setSelectedId={setSelectedId}
-            graph={graph} setGraph={setGraph} loadingGraph={loadingGraph}
-            setProcesses={setProcesses}
+            processes={processes} selectedId={selectedId} onSelect={selectProcess}
+            current={current} loadingDoc={loadingDoc} onDirtyChange={setDocDirty}
+            onSaved={handleSaved}
             onCreate={() => setShowCreate(true)}
             onRename={(p) => setRenameTarget({ id: p.id, name: p.name })}
             onDelete={(p) => setDeleteTarget(p)}
@@ -198,7 +220,7 @@ export default function ProcessesTab({ company }) {
         open={Boolean(deleteTarget)}
         title="Xóa quy trình"
         message={deleteTarget ? <>Bạn có chắc chắn muốn xóa quy trình <strong>“{deleteTarget.name}”</strong>?</> : null}
-        warning="Toàn bộ các bước và mũi tên trong sơ đồ sẽ bị xóa."
+        warning="Toàn bộ nội dung tài liệu của quy trình sẽ bị xóa."
         loading={busy}
         onCancel={() => !busy && setDeleteTarget(null)}
         onConfirm={handleDelete}
@@ -207,14 +229,14 @@ export default function ProcessesTab({ company }) {
   )
 }
 
-// ── Mục Quy trình: chip chọn quy trình (ngang) + canvas full-width ─────────────
+// ── Mục Quy trình: chip chọn quy trình + tài liệu full-width ──────────────────
 function ProcessSection({
-  company, canEdit, processes, selectedId, setSelectedId,
-  graph, setGraph, loadingGraph, setProcesses, onCreate, onRename, onDelete,
+  company, canEdit, processes, selectedId, onSelect,
+  current, loadingDoc, onDirtyChange, onSaved, onCreate, onRename, onDelete,
 }) {
   return (
     <div>
-      {/* Chip chọn quy trình — thay cho cột trái 230px, trả full chiều ngang cho canvas */}
+      {/* Chip chọn quy trình */}
       <div className={s.procChipBar}>
         {processes.map((p) => {
           const active = selectedId === p.id
@@ -222,13 +244,12 @@ function ProcessSection({
             <div
               key={p.id}
               className={`${s.procChip} ${active ? s.procChipActive : ''}`}
-              onClick={() => setSelectedId(p.id)}
+              onClick={() => onSelect(p.id)}
             >
               <Workflow size={13} style={{ flexShrink: 0 }} />
               <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {p.name}
               </span>
-              {p.nodeCount > 0 && <span className={s.procChipCount}>{p.nodeCount}</span>}
               {canEdit && (
                 <span className={s.procChipBtns}>
                   <button title="Đổi tên" className={s.procChipIcon}
@@ -247,34 +268,30 @@ function ProcessSection({
         )}
       </div>
 
-      {/* Canvas / sơ đồ — full chiều ngang */}
+      {/* Tài liệu quy trình — full chiều ngang */}
       {!selectedId ? (
         <div className={s.placeholderTab}>
           <div className={s.placeholderIcon}><Workflow size={24} /></div>
           <p className={s.placeholderTitle}>Chưa có quy trình nào</p>
           <p className={s.placeholderDesc}>
             {canEdit
-              ? 'Nhấn "Thêm quy trình" để vẽ sơ đồ quy trình làm việc cho khách hàng này.'
-              : 'Nhân sự phụ trách công ty này chưa tạo sơ đồ quy trình.'}
+              ? 'Nhấn "Thêm quy trình" để soạn tài liệu quy trình làm việc cho khách hàng này.'
+              : 'Nhân sự phụ trách công ty này chưa tạo quy trình.'}
           </p>
         </div>
-      ) : loadingGraph || !graph ? (
-        <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải sơ đồ…</div>
+      ) : loadingDoc || !current ? (
+        <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải nội dung…</div>
       ) : (
         <Suspense fallback={
-          <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải trình vẽ…</div>
+          <div className={s.loadingShort}><Loader2 size={18} className={s.spinIcon} /> Đang tải trình soạn thảo…</div>
         }>
-          <ProcessFlowEditor
+          <ProcessDocEditor
+            key={current.id}
             companyId={company.id}
-            process={graph.process}
-            initialNodes={graph.nodes}
-            initialEdges={graph.edges}
+            process={current}
             canEdit={canEdit}
-            onSaved={(res) => {
-              setGraph(res)
-              setProcesses((prev) => prev.map((p) => p.id === res.process.id
-                ? { ...p, nodeCount: res.nodes.length } : p))
-            }}
+            onDirtyChange={onDirtyChange}
+            onSaved={onSaved}
           />
         </Suspense>
       )}

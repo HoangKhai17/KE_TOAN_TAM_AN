@@ -15,6 +15,13 @@ async function createProcess(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function getProcess(req, res, next) {
+  try {
+    const process = await svc.getProcess(req.params.companyId, req.params.processId)
+    res.json({ success: true, data: { process } })
+  } catch (err) { next(err) }
+}
+
 async function updateProcess(req, res, next) {
   try {
     const process = await svc.updateProcess(req.params.companyId, req.params.processId, req.body, req.user)
@@ -29,20 +36,6 @@ async function deleteProcess(req, res, next) {
   } catch (err) { next(err) }
 }
 
-async function getGraph(req, res, next) {
-  try {
-    const graph = await svc.getGraph(req.params.companyId, req.params.processId)
-    res.json({ success: true, data: graph })
-  } catch (err) { next(err) }
-}
-
-async function saveGraph(req, res, next) {
-  try {
-    const graph = await svc.saveGraph(req.params.companyId, req.params.processId, req.body, req.user)
-    res.json({ success: true, data: graph })
-  } catch (err) { next(err) }
-}
-
 module.exports = {
-  listProcesses, createProcess, updateProcess, deleteProcess, getGraph, saveGraph,
+  listProcesses, getProcess, createProcess, updateProcess, deleteProcess,
 }

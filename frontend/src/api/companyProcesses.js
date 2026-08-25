@@ -1,10 +1,16 @@
 import api from './axios'
 
-// Sơ đồ quy trình làm việc theo từng công ty
+// Quy trình làm việc theo từng công ty — mỗi quy trình là MỘT TÀI LIỆU rich-text.
 
 export async function listProcesses(companyId) {
   const { data } = await api.get(`/companies/${companyId}/processes`)
   return data.data.processes
+}
+
+// Lấy 1 quy trình KÈM nội dung (content HTML) cho trình soạn thảo
+export async function getProcess(companyId, processId) {
+  const { data } = await api.get(`/companies/${companyId}/processes/${processId}`)
+  return data.data.process
 }
 
 export async function createProcess(companyId, body) {
@@ -12,6 +18,7 @@ export async function createProcess(companyId, body) {
   return data.data.process
 }
 
+// Cập nhật tên/mô tả/thứ tự HOẶC nội dung tài liệu (kèm expectedUpdatedAt chống ghi đè)
 export async function updateProcess(companyId, processId, body) {
   const { data } = await api.patch(`/companies/${companyId}/processes/${processId}`, body)
   return data.data.process
@@ -19,15 +26,4 @@ export async function updateProcess(companyId, processId, body) {
 
 export async function deleteProcess(companyId, processId) {
   await api.delete(`/companies/${companyId}/processes/${processId}`)
-}
-
-export async function getGraph(companyId, processId) {
-  const { data } = await api.get(`/companies/${companyId}/processes/${processId}/graph`)
-  return data.data   // { process, nodes, edges }
-}
-
-// Lưu TOÀN BỘ sơ đồ (nút + cạnh) trong 1 lần
-export async function saveGraph(companyId, processId, body) {
-  const { data } = await api.put(`/companies/${companyId}/processes/${processId}/graph`, body)
-  return data.data
 }
