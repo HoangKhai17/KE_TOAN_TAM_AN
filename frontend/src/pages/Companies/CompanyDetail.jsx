@@ -20,6 +20,7 @@ import SchedulesTab from './SchedulesTab'
 import CredentialsTab from './CredentialsTab'
 import DocumentsTab from './DocumentsTab'
 import NotesTab from './NotesTab'
+import NotesSection from './NotesSection'
 import ClientRequestsTab from './ClientRequestsTab'
 import CustomTableTab from './CustomTableTab'
 import OverviewTab, { StaffCard } from './CompanyOverviewTab'
@@ -34,13 +35,14 @@ import s from './companies.module.css'
 
 const TABS = [
   { id: 'overview',          label: 'Tổng quan',         icon: BarChart2 },
-  { id: 'documents',         label: 'Tài liệu',           icon: FileText },
   { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
   { id: 'processes',         label: 'Quy trình',          icon: Workflow },
   { id: 'schedules',         label: 'Lịch định kỳ',       icon: CalendarDays },
   { id: 'tasks',             label: 'Công việc',          icon: ListTodo },
   { id: 'client-requests',   label: 'Yêu cầu KH',        icon: ClipboardList },
   { id: 'notes',             label: 'Ghi chú',            icon: StickyNote },
+  { id: 'important-notes',   label: 'Điều cần lưu ý',     icon: AlertTriangle },
+  { id: 'documents',         label: 'Tài liệu',           icon: FileText },
 ]
 
 // ── 2 chế độ của trang chi tiết KH ─────────────────────────────────────────────
@@ -190,6 +192,7 @@ export default function CompanyDetail() {
   useEffect(() => { refetchCustomDefs() }, [refetchCustomDefs])
 
   const [noteCount, setNoteCount]         = useState(0)
+  const [importantNoteCount, setImportantNoteCount] = useState(0)
   const [, setOverviewTick]   = useState(0)
   const [showEdit, setShowEdit]           = useState(false)
   const [showTerminate, setShowTerminate] = useState(false)
@@ -398,6 +401,9 @@ export default function CompanyDetail() {
             {tid === 'notes' && noteCount > 0 && (
               <span className={s.tabCount}>{noteCount}</span>
             )}
+            {tid === 'important-notes' && importantNoteCount > 0 && (
+              <span className={s.tabCount}>{importantNoteCount}</span>
+            )}
           </button>
         ))}
         {isTablesMode && topDefs.map((d) => (
@@ -463,6 +469,13 @@ export default function CompanyDetail() {
       )}
       {activeTab === 'notes' && (
         <NotesTab company={company} onNoteCountChange={setNoteCount} />
+      )}
+      {activeTab === 'important-notes' && (
+        <NotesSection
+          companyId={company.id}
+          canEdit={isAdmin || company.assignedStaffId === currentUser?.id}
+          onCountChange={setImportantNoteCount}
+        />
       )}
       {activeTab.startsWith('ct_') && activeDef && (
         <CustomTableTab key={activeDef.id} def={activeDef} company={company} onDefUpdated={refetchCustomDefs} clusterDefs={clusterDefs} />

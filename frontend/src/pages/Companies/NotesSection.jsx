@@ -50,7 +50,7 @@ function NoteEditRow({ draft, setF, save, cancel, saving, severityOpts }) {
   )
 }
 
-export default function NotesSection({ companyId, canEdit = true }) {
+export default function NotesSection({ companyId, canEdit = true, onCountChange }) {
   const confirmDelete = useDeleteConfirm()
   const getOptions = useEnumsStore((st) => st.getOptions)
   const getLabel   = useEnumsStore((st) => st.getLabel)
@@ -122,6 +122,9 @@ export default function NotesSection({ companyId, canEdit = true }) {
   }, [companyId, addToast])
 
   useEffect(() => { load() }, [load])
+
+  // Báo số lượng lưu ý ra ngoài (badge trên tab)
+  useEffect(() => { onCountChange?.(rows.length) }, [rows.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function startAdd() { setActiveCell({ rowId: 'new', colKey: 'content' }) }
   function cancel() { setEditingId(null); setDraft(emptyDraft(defSeverity)) }
@@ -272,7 +275,7 @@ export default function NotesSection({ companyId, canEdit = true }) {
           <tbody>
             {loading ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Đang tải…</td></tr>
-            ) : displayedRows.length === 0 && editingId !== 'new' ? (
+            ) : displayedRows.length === 0 && activeCell?.rowId !== 'new' ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có điều cần lưu ý. Nhấn “Thêm lưu ý”.</td></tr>
             ) : (
               pageRows.map((r, index) => (
