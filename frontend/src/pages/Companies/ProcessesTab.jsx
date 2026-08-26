@@ -126,6 +126,24 @@ export default function ProcessesTab({ company }) {
       ? { ...p, hasContent: updated.hasContent, updatedAt: updated.updatedAt } : p))
   }
 
+  // Kéo-thả đổi thứ tự chip: cập nhật tại chỗ + lưu position cho các mục thay đổi
+  async function handleReorder(orderedIds) {
+    const map = new Map(processes.map((p) => [p.id, p]))
+    const ordered = orderedIds.map((id) => map.get(id)).filter(Boolean)
+    setProcesses(ordered)   // hiển thị ngay
+    const calls = ordered
+      .map((p, i) => (p.position === i ? null : api.updateProcess(company.id, p.id, { position: i })))
+      .filter(Boolean)
+    if (!calls.length) return
+    try {
+      await Promise.all(calls)
+      setProcesses(ordered.map((p, i) => ({ ...p, position: i })))
+    } catch {
+      addToast('Không lưu được thứ tự quy trình', 'error')
+      loadList()
+    }
+  }
+
   return (
     <div className={s.procTab}>
       {/* Segmented: chuyển giữa các mục cùng cấp */}
@@ -156,6 +174,7 @@ export default function ProcessesTab({ company }) {
           <ProcessSection
             company={company} canEdit={canEdit}
             processes={processes} selectedId={selectedId} onSelect={selectProcess}
+            onReorder={handleReorder}
             current={current} loadingDoc={loadingDoc} onDirtyChange={setDocDirty}
             onSaved={handleSaved}
             onCreate={() => setShowCreate(true)}
@@ -225,12 +244,30 @@ export default function ProcessesTab({ company }) {
 
 // ── Mục Quy trình: chip chọn quy trình + tài liệu full-width ──────────────────
 function ProcessSection({
-  company, canEdit, processes, selectedId, onSelect,
+  company, canEdit, processes, selectedId, onSelect, onReorder,
   current, loadingDoc, onDirtyChange, onSaved, onCreate, onRename, onDelete,
 }) {
+  const [dragId, setDragId] = useState(null)   // chip đang kéo
+  const [overId, setOverId] = useState(null)   // chip đang được kéo tới
+
+  function handleDrop(targetId) {
+    if (dragId && dragId !== targetId) {
+      const ids = processes.map((p) => p.id)
+      const from = ids.indexOf(dragId)
+      const to   = ids.indexOf(targetId)
+      if (from !== -1 && to !== -1) {
+        const next = [...ids]
+        next.splice(from, 1)
+        next.splice(to, 0, dragId)
+        onReorder(next)
+      }
+    }
+    setDragId(null); setOverId(null)
+  }
+
   return (
     <div>
-      {/* Chip chọn quy trình */}
+      {/* Chip chọn quy trình — kéo-thả để đổi thứ tự */}
       <div className={s.procChipBar}>
         {processes.map((p) => {
           const active = selectedId === p.id
@@ -238,7 +275,18 @@ function ProcessSection({
             <div
               key={p.id}
               className={`${s.procChip} ${active ? s.procChipActive : ''}`}
+              style={{
+                cursor: canEdit ? 'grab' : 'pointer',
+                opacity: dragId === p.id ? 0.4 : 1,
+                outline: (overId === p.id && dragId && dragId !== p.id) ? '2px dashed var(--color-accent)' : undefined,
+                outlineOffset: 1,
+              }}
               onClick={() => onSelect(p.id)}
+              draggable={canEdit}
+              onDragStart={(e) => { setDragId(p.id); e.dataTransfer.effectAllowed = 'move' }}
+              onDragEnd={() => { setDragId(null); setOverId(null) }}
+              onDragOver={(e) => { if (dragId) { e.preventDefault(); if (overId !== p.id) setOverId(p.id) } }}
+              onDrop={(e) => { e.preventDefault(); handleDrop(p.id) }}
             >
               <Workflow size={13} style={{ flexShrink: 0 }} />
               <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
