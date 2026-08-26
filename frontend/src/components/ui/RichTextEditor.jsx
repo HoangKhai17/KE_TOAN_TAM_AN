@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import { mergeAttributes, Extension } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -159,6 +160,100 @@ const cellAttrs = {
 const CellWithBg   = TableCell.extend({ addAttributes() { return { ...this.parent?.(), ...cellAttrs } } })
 const HeaderWithBg = TableHeader.extend({ addAttributes() { return { ...this.parent?.(), ...cellAttrs } } })
 
+// Chiều cao HÀNG bảng — lưu style height trên <tr> (thư viện bảng chỉ hỗ trợ kéo cột)
+const RowWithHeight = TableRow.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      height: {
+        default: null,
+        parseHTML: (el) => { const h = el.style.height; return h ? parseInt(h, 10) : null },
+        renderHTML: (attrs) => (attrs.height ? { style: `height: ${attrs.height}px` } : {}),
+      },
+    }
+  },
+})
+
+// KÉO MÉP DƯỚI của hàng để đổi chiều cao (giống kéo mép cột của bảng).
+// Rê chuột tới sát mép dưới 1 hàng → con trỏ ↕; kéo → cập nhật style height của <tr>,
+// thả ra thì ghi vào thuộc tính height của node hàng (lưu được).
+const RowResize = Extension.create({
+  name: 'rowResize',
+  addProseMirrorPlugins() {
+    const ZONE = 6 // px: vùng bắt được mép hàng
+    return [new Plugin({
+      key: new PluginKey('rowResize'),
+      view(view) {
+        let drag = null   // { rowPos, startY, startH }
+        const rowInfo = (e) => {
+          const el = e.target
+          const trEl = el && el.closest ? el.closest('tr') : null
+          if (!trEl || !view.dom.contains(trEl)) return null
+          return { trEl, rect: trEl.getBoundingClientRect() }
+        }
+        const nearBottom = (e, rect) => Math.abs(e.clientY - rect.bottom) <= ZONE
+        const findRowPos = (trEl) => {
+          try {
+            const $p = view.state.doc.resolve(view.posAtDOM(trEl, 0))
+            for (let d = $p.depth; d > 0; d -= 1) {
+              if ($p.node(d).type.name === 'tableRow') return $p.before(d)
+            }
+          } catch { /* ignore */ }
+          return null
+        }
+        const applyHeight = (rowPos, h, record) => {
+          const node = view.state.doc.nodeAt(rowPos)
+          if (!node) return
+          const tr = view.state.tr.setNodeMarkup(rowPos, undefined, { ...node.attrs, height: h })
+          if (!record) tr.setMeta('addToHistory', false)
+          view.dispatch(tr)
+        }
+        const onMove = (e) => {
+          if (drag) {
+            const h = Math.max(20, Math.round(drag.startH + (e.clientY - drag.startY)))
+            applyHeight(drag.rowPos, h, false)   // cập nhật LIVE qua ProseMirror
+            return
+          }
+          if (!view.editable) return
+          const info = rowInfo(e)
+          view.dom.style.cursor = (info && nearBottom(e, info.rect)) ? 'row-resize' : ''
+        }
+        const onUp = () => {
+          if (!drag) return
+          const node = view.state.doc.nodeAt(drag.rowPos)
+          if (node && node.attrs.height) applyHeight(drag.rowPos, node.attrs.height, true) // ghi 1 bước hoàn tác
+          drag = null
+          view.dom.style.cursor = ''
+          window.removeEventListener('mousemove', onMove)
+          window.removeEventListener('mouseup', onUp)
+        }
+        const onDown = (e) => {
+          if (!view.editable) return
+          const info = rowInfo(e)
+          if (!info || !nearBottom(e, info.rect)) return
+          const rowPos = findRowPos(info.trEl)
+          if (rowPos == null) return
+          e.preventDefault()
+          e.stopPropagation()   // chặn ProseMirror bắt đầu bôi-chọn-ô
+          drag = { rowPos, startY: e.clientY, startH: info.rect.height }
+          window.addEventListener('mousemove', onMove)
+          window.addEventListener('mouseup', onUp)
+        }
+        view.dom.addEventListener('mousemove', onMove)
+        view.dom.addEventListener('mousedown', onDown, true)   // capture: chạy TRƯỚC ProseMirror
+        return {
+          destroy() {
+            view.dom.removeEventListener('mousemove', onMove)
+            view.dom.removeEventListener('mousedown', onDown, true)
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+          },
+        }
+      },
+    })]
+  },
+})
+
 // Kiểu đánh số cho danh sách có thứ tự (1. / a. / i. / A. …) — thêm attribute vào
 // node orderedList sẵn có (không cần thay thế extension của StarterKit).
 const OrderedListStyle = Extension.create({
@@ -240,7 +335,8 @@ function buildExtensions(placeholder) {
     OrderedListStyle,
     Placeholder.configure({ placeholder: placeholder || 'Nhập nội dung…' }),
     Table.configure({ resizable: true }),
-    TableRow, HeaderWithBg, CellWithBg,
+    RowWithHeight, HeaderWithBg, CellWithBg,
+    RowResize,
   ]
 }
 
