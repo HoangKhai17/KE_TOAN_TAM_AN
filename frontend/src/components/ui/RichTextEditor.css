@@ -109,9 +109,23 @@
 .rte-doc h1 { font-size: 1.6em; font-weight: 800; margin: .6em 0 .3em; }
 .rte-doc h2 { font-size: 1.3em; font-weight: 700; margin: .6em 0 .3em; }
 .rte-doc h3 { font-size: 1.12em; font-weight: 700; margin: .5em 0 .25em; }
+.rte-doc h4 { font-size: 1.05em; font-weight: 700; margin: .5em 0 .2em; }
+.rte-doc h5 { font-size: 1em;    font-weight: 700; margin: .4em 0 .2em; }
+.rte-doc h6 { font-size: .95em;  font-weight: 700; color: var(--color-text-soft, #475569); margin: .4em 0 .2em; }
 .rte-doc p { margin: .4em 0; }
+/* Khai báo lại list-style (reset toàn cục của app bỏ dấu chấm/số) */
 .rte-doc ul, .rte-doc ol { padding-left: 1.5em; margin: .4em 0; }
+.rte-doc ul { list-style: disc; }
+.rte-doc ul ul { list-style: circle; }
+.rte-doc ul ul ul { list-style: square; }
+.rte-doc ol { list-style: decimal; }
 .rte-doc li { margin: .15em 0; }
+
+/* Đánh số NHIỀU CẤP kiểu 1 / 1.1 / 1.1.1 (dùng CSS counter trên ::marker) */
+.rte-doc ol[data-multilevel],
+.rte-doc ol[data-multilevel] ol { counter-reset: rteitem; }
+.rte-doc ol[data-multilevel] li { counter-increment: rteitem; }
+.rte-doc ol[data-multilevel] li::marker { content: counters(rteitem, ".") ". "; font-weight: 600; }
 .rte-doc blockquote {
   border-left: 3px solid var(--color-accent, #2563eb);
   margin: .5em 0; padding: .1em 0 .1em 12px;
@@ -160,3 +174,135 @@
 
 /* Chế độ chỉ-đọc: bỏ padding thừa, không scroll riêng */
 .rte-view { padding: 0; }
+
+/* Select trên thanh công cụ (font / cỡ chữ / giãn dòng / kiểu số) */
+.rte-select {
+  height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-soft, #334155);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+/* Ô cỡ chữ tự nhập */
+.rte-sizewrap { display: inline-flex; }
+.rte-sizeinput {
+  width: 52px;
+  height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-soft, #334155);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  padding: 0 4px;
+}
+
+/* Thư viện danh sách (xổ xuống kiểu Word) */
+.rte-listmenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 190px;
+  padding: 4px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .15);
+}
+.rte-listitem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text, #0f172a);
+  text-align: left;
+}
+.rte-listitem:hover { background: var(--color-hover, #eef2f7); }
+.rte-listitem.on { background: var(--color-accent-bg-soft, #e0edff); color: var(--color-accent, #2563eb); }
+.rte-listprev { width: 30px; text-align: center; font-weight: 700; color: var(--color-text-soft, #475569); flex-shrink: 0; }
+
+/* Bảng ký hiệu đặc biệt */
+.rte-symbolmenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 2px;
+  padding: 8px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .15);
+}
+.rte-symbol {
+  width: 26px; height: 26px;
+  border: none; background: none; border-radius: 4px;
+  cursor: pointer; font-size: 15px; line-height: 1;
+}
+.rte-symbol:hover { background: var(--color-hover, #eef2f7); }
+
+/* Ảnh: tay cầm kéo giãn 8 hướng (trong editor) */
+.rte-img { margin: 2px 3px; }
+.rte-img-handle {
+  position: absolute;
+  width: 11px; height: 11px;
+  background: var(--color-accent, #2563eb);
+  border: 2px solid #fff;
+  border-radius: 2px;
+  z-index: 3;
+}
+
+/* Bảng chọn số dòng × số cột */
+.rte-tablepick {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  padding: 8px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .15);
+}
+.rte-tablegrid { display: flex; flex-direction: column; gap: 2px; }
+.rte-tablerow { display: flex; gap: 2px; }
+.rte-tablecellpick {
+  width: 16px; height: 16px;
+  border: 1px solid var(--color-border); border-radius: 2px; cursor: pointer;
+}
+.rte-tablecellpick.on { background: var(--color-accent, #2563eb); border-color: var(--color-accent, #2563eb); }
+.rte-tablepicklabel { margin-top: 6px; text-align: center; font-size: 12px; font-weight: 600; color: var(--color-text-soft, #334155); }
+
+/* Thanh đếm từ / ký tự */
+.rte-countbar {
+  padding: 4px 12px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-soft, #f8fafc);
+  font-size: 11px;
+  color: var(--color-muted, #94a3b8);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Danh sách công việc (checkbox) */
+.rte-doc ul[data-type="taskList"] { list-style: none; padding-left: .3em; margin: .4em 0; }
+.rte-doc ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 8px; margin: .15em 0; }
+.rte-doc ul[data-type="taskList"] li > label { margin-top: 3px; user-select: none; flex-shrink: 0; }
+.rte-doc ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
+.rte-doc ul[data-type="taskList"] li > div > p { margin: 0; }
+.rte-doc ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--color-muted, #94a3b8); text-decoration: line-through; }
