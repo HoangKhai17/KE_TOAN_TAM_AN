@@ -20,6 +20,7 @@ const RichTextEditor = lazy(() => import('../../components/ui/RichTextEditor'))
 
 function isHtmlEmpty(html) {
   if (!html) return true
+  if (/<(img|table|hr|iframe|input)\b/i.test(html)) return false
   return !html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
 }
 

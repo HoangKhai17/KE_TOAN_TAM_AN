@@ -26,7 +26,7 @@ import {
   Baseline, Highlighter, PaintBucket, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Subscript as SubIcon, Superscript as SupIcon, IndentIncrease, IndentDecrease, ChevronDown,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Combine, Split, PanelTop, PanelLeft, CaseSensitive, Sigma, ImageIcon, Upload,
+  Combine, Split, PanelTop, PanelLeft, CaseSensitive, Sigma, ImageIcon, Upload, Grid3x3,
 } from 'lucide-react'
 import Modal from './Modal'
 import { useToastStore } from '../../stores/toastStore'
@@ -254,6 +254,21 @@ const RowResize = Extension.create({
   },
 })
 
+// Kiểu VIỀN của bảng (all / none / outside / outside-thick / horizontal) — lưu
+// data-border trên <table>, CSS quyết định cách vẽ viền (xem .css).
+const TableWithBorder = Table.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      borderStyle: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-border') || null,
+        renderHTML: (attrs) => (attrs.borderStyle ? { 'data-border': attrs.borderStyle } : {}),
+      },
+    }
+  },
+})
+
 // Kiểu đánh số cho danh sách có thứ tự (1. / a. / i. / A. …) — thêm attribute vào
 // node orderedList sẵn có (không cần thay thế extension của StarterKit).
 const OrderedListStyle = Extension.create({
@@ -314,6 +329,37 @@ const ParagraphIndent = Extension.create({
   },
 })
 
+// TableView (NodeView của extension-table) KHÔNG áp lại thuộc tính khi update →
+// đổi borderStyle không phản ánh lên thẻ <table> trong editor. Plugin này đồng bộ
+// data-border từ node xuống DOM sau mỗi thay đổi (để CSS kiểu viền ăn ngay).
+const TableBorderSync = Extension.create({
+  name: 'tableBorderSync',
+  addProseMirrorPlugins() {
+    return [new Plugin({
+      key: new PluginKey('tableBorderSync'),
+      view(view) {
+        const sync = () => {
+          view.state.doc.descendants((node, pos) => {
+            if (node.type.name !== 'table') return true
+            const dom = view.nodeDOM(pos)
+            const tableEl = dom && (dom.tagName === 'TABLE'
+              ? dom
+              : (dom.querySelector ? dom.querySelector('table') : null))
+            if (tableEl) {
+              const bs = node.attrs.borderStyle
+              if (bs) tableEl.setAttribute('data-border', bs)
+              else tableEl.removeAttribute('data-border')
+            }
+            return false   // không đi sâu vào trong bảng
+          })
+        }
+        setTimeout(sync, 0)
+        return { update: sync }
+      },
+    })]
+  },
+})
+
 function buildExtensions(placeholder) {
   return [
     StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
@@ -334,9 +380,10 @@ function buildExtensions(placeholder) {
     CharacterCount,
     OrderedListStyle,
     Placeholder.configure({ placeholder: placeholder || 'Nhập nội dung…' }),
-    Table.configure({ resizable: true }),
+    TableWithBorder.configure({ resizable: true }),
     RowWithHeight, HeaderWithBg, CellWithBg,
     RowResize,
+    TableBorderSync,
   ]
 }
 
@@ -688,6 +735,48 @@ function SymbolMenu({ editor }) {
   )
 }
 
+// Menu kiểu VIỀN bảng (giống Borders của Word)
+const BORDER_OPTIONS = [
+  { key: 'all',           label: 'Tất cả viền' },
+  { key: 'none',          label: 'Không viền' },
+  { key: 'outside',       label: 'Viền ngoài' },
+  { key: 'outside-thick', label: 'Viền ngoài đậm' },
+  { key: 'horizontal',    label: 'Chỉ đường ngang' },
+]
+function BorderMenu({ editor }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+  const cur = editor.getAttributes('table').borderStyle || 'all'
+  const apply = (key) => {
+    setOpen(false)
+    editor.chain().focus().updateAttributes('table', { borderStyle: key === 'all' ? null : key }).run()
+  }
+  return (
+    <span className="rte-colorwrap" ref={ref}>
+      <button type="button" className="rte-btn" title="Kiểu viền bảng"
+        onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen((v) => !v)}>
+        <Grid3x3 size={15} /><ChevronDown size={11} />
+      </button>
+      {open && (
+        <div className="rte-listmenu" style={{ left: 'auto', right: 0 }} onMouseDown={(e) => e.preventDefault()}>
+          {BORDER_OPTIONS.map((o) => (
+            <button key={o.key} type="button"
+              className={`rte-listitem ${cur === o.key ? 'on' : ''}`} onClick={() => apply(o.key)}>
+              <span style={{ whiteSpace: 'nowrap' }}>{o.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  )
+}
+
 function Toolbar({ editor, onInsertImage, onOpenMarkdown, onImportWord, allowImage }) {
   useEditorTick(editor)
   if (!editor) return null
@@ -774,6 +863,7 @@ function Toolbar({ editor, onInsertImage, onOpenMarkdown, onImportWord, allowIma
         <TB title="Tách ô" onClick={() => editor.chain().focus().splitCell().run()}><Split size={15} /></TB>
         <TB title="Bật/tắt hàng tiêu đề" onClick={() => editor.chain().focus().toggleHeaderRow().run()}><PanelTop size={15} /></TB>
         <TB title="Bật/tắt cột tiêu đề" onClick={() => editor.chain().focus().toggleHeaderColumn().run()}><PanelLeft size={15} /></TB>
+        <BorderMenu editor={editor} />
         <TB title="Xoá bảng" onClick={() => editor.chain().focus().deleteTable().run()}><Trash2 size={15} /></TB>
       </>}
       {editor.isActive('image') && <>

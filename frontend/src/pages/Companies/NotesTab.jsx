@@ -27,6 +27,8 @@ import s from './companies.module.css'
 
 function isHtmlEmpty(html) {
   if (!html) return true
+  // Có ảnh / bảng / đường kẻ / checkbox… → coi là CÓ nội dung dù không có chữ
+  if (/<(img|table|hr|iframe|input)\b/i.test(html)) return false
   return !html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
 }
 
