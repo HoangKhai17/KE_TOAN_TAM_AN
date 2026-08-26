@@ -26,7 +26,7 @@ import {
   Baseline, Highlighter, PaintBucket, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Subscript as SubIcon, Superscript as SupIcon, IndentIncrease, IndentDecrease, ChevronDown,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Combine, Split, PanelTop, PanelLeft, CaseSensitive, Sigma, ImageIcon,
+  Combine, Split, PanelTop, PanelLeft, CaseSensitive, Sigma, ImageIcon, Upload,
 } from 'lucide-react'
 import Modal from './Modal'
 import { useToastStore } from '../../stores/toastStore'
@@ -688,7 +688,7 @@ function SymbolMenu({ editor }) {
   )
 }
 
-function Toolbar({ editor, onInsertImage, onOpenMarkdown, allowImage }) {
+function Toolbar({ editor, onInsertImage, onOpenMarkdown, onImportWord, allowImage }) {
   useEditorTick(editor)
   if (!editor) return null
   const inTable = editor.isActive('table')
@@ -784,6 +784,7 @@ function Toolbar({ editor, onInsertImage, onOpenMarkdown, allowImage }) {
       <CaseMenu editor={editor} />
       <SymbolMenu editor={editor} />
       {allowImage && <TB title="Chèn ảnh" onClick={onInsertImage}><ImagePlus size={15} /></TB>}
+      <TB title="Nhập file Word (.docx)" onClick={onImportWord}><Upload size={15} /></TB>
       <TB title="Dán Markdown" onClick={onOpenMarkdown}><FileCode2 size={15} /></TB>
       <TB title="Xoá định dạng" onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}><RemoveFormatting size={15} /></TB>
     </div>
@@ -813,6 +814,14 @@ function MarkdownModal({ onInsert, onClose }) {
   )
 }
 
+// base64 → Blob (để upload ảnh trong file Word lên kho attachments)
+function base64ToBlob(b64, type) {
+  const bin = atob(b64)
+  const arr = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i += 1) arr[i] = bin.charCodeAt(i)
+  return new Blob([arr], { type: type || 'image/png' })
+}
+
 // Thanh đếm số từ / ký tự ở chân editor
 function CharCountBar({ editor }) {
   useEditorTick(editor)
@@ -830,6 +839,7 @@ export default function RichTextEditor({
   const addToast = useToastStore((st) => st.toast)
   const [showMarkdown, setShowMarkdown] = useState(false)
   const fileRef = useRef(null)
+  const docxRef = useRef(null)
 
   const editor = useEditor({
     editable,
@@ -883,6 +893,35 @@ export default function RichTextEditor({
     editor.chain().focus().insertContent(html).run()
   }
 
+  // Nhập file Word (.docx): mammoth chuyển sang HTML; ảnh trong file → upload attachments
+  const handleImportWord = useCallback(async (file) => {
+    if (!editor || !file) return
+    if (!/\.docx$/i.test(file.name)) { addToast('Chỉ hỗ trợ file Word .docx', 'error'); return }
+    addToast('Đang chuyển đổi file Word…', 'info')
+    try {
+      const mammoth = (await import('mammoth')).default   // tải thư viện khi cần
+      const arrayBuffer = await file.arrayBuffer()
+      const convertImage = mammoth.images.imgElement(async (image) => {
+        if (!companyId) return {}   // không có nơi lưu ảnh → bỏ ảnh
+        try {
+          const b64 = await image.read('base64')
+          const blob = base64ToBlob(b64, image.contentType)
+          if (blob.size > MAX_FILE_BYTES) return {}
+          const imgFile = new File([blob], 'word-image', { type: image.contentType || 'image/png' })
+          const att = await uploadFile('company', companyId, imgFile)
+          return { 'data-att-id': att.id }
+        } catch { return {} }
+      })
+      const result = await mammoth.convertToHtml({ arrayBuffer }, { convertImage })
+      const html = (result?.value || '').trim()
+      if (!html) { addToast('File Word rỗng hoặc không đọc được', 'error'); return }
+      editor.chain().focus().insertContent(html).run()
+      addToast('Đã nhập nội dung từ Word', 'success')
+    } catch {
+      addToast('Không đọc được file Word', 'error')
+    }
+  }, [editor, companyId, addToast])
+
   return (
     <div className={`rte ${className}`}>
       {editable && showToolbar && (
@@ -891,6 +930,7 @@ export default function RichTextEditor({
           allowImage={Boolean(companyId)}
           onInsertImage={() => fileRef.current?.click()}
           onOpenMarkdown={() => setShowMarkdown(true)}
+          onImportWord={() => docxRef.current?.click()}
         />
       )}
       <div className="rte-content rte-doc" style={{ '--rte-min-h': typeof minHeight === 'number' ? `${minHeight}px` : minHeight }}>
@@ -899,6 +939,8 @@ export default function RichTextEditor({
       {editable && showToolbar && <CharCountBar editor={editor} />}
       <input ref={fileRef} type="file" accept="image/*" hidden
         onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAndInsert(f); e.target.value = '' }} />
+      <input ref={docxRef} type="file" accept=".docx" hidden
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportWord(f); e.target.value = '' }} />
       {showMarkdown && <MarkdownModal onInsert={insertMarkdown} onClose={() => setShowMarkdown(false)} />}
     </div>
   )

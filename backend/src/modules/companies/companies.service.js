@@ -627,10 +627,16 @@ async function listNotes(companyId, user) {
   }))
 }
 
+// Giới hạn nội dung ghi chú (đồng bộ Quy trình / HS gốc). Ghi chú là rich-text HTML
+// nên đặt rộng; vượt thì BÁO LỖI thay vì cắt âm thầm (tránh cắt giữa thẻ → vỡ HTML).
+const NOTE_MAX_LEN = 500_000
+
 async function createNote(companyId, { content, isPinned = false }, user) {
   await assertCompanyAccess(companyId, user)
-  // S4: cap note length
-  const trimmed = content.trim().slice(0, 10000)
+  const trimmed = content.trim()
+  if (trimmed.length > NOTE_MAX_LEN) {
+    throw Object.assign(new Error(`Nội dung ghi chú quá dài (tối đa ${NOTE_MAX_LEN.toLocaleString('vi-VN')} ký tự)`), { status: 400 })
+  }
   const { rows: [row] } = await query(
     `INSERT INTO company_notes (company_id, content, is_pinned, sort_order, created_by)
      VALUES ($1, $2, $3, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM company_notes WHERE company_id = $1), $4)
@@ -653,7 +659,13 @@ async function updateNote(companyId, noteId, { content, isPinned, sortOrder }, u
   await assertCompanyAccess(companyId, user)
   const sets = []
   const vals = []
-  if (content  !== undefined) { sets.push(`content = $${sets.length + 1}`);   vals.push(content.trim().slice(0, 10000)) }
+  if (content  !== undefined) {
+    const t = content.trim()
+    if (t.length > NOTE_MAX_LEN) {
+      throw Object.assign(new Error(`Nội dung ghi chú quá dài (tối đa ${NOTE_MAX_LEN.toLocaleString('vi-VN')} ký tự)`), { status: 400 })
+    }
+    sets.push(`content = $${sets.length + 1}`); vals.push(t)
+  }
   if (isPinned !== undefined) { sets.push(`is_pinned = $${sets.length + 1}`); vals.push(isPinned) }
   if (sortOrder !== undefined) { sets.push(`sort_order = $${sets.length + 1}`); vals.push(sortOrder) }
   if (!sets.length) throw new Error('Nothing to update')
