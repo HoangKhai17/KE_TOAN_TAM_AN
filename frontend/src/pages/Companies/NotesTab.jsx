@@ -1,14 +1,16 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import DOMPurify from 'dompurify'
-import RichTextView from '../../components/ui/RichTextView'
+import ClampedRichText from '../../components/ui/ClampedRichText'
+import RichTextViewerModal from '../../components/ui/RichTextViewerModal'
 
 // Editor nặng (TipTap) chỉ tải khi mở modal Thêm/Sửa ghi chú → không phình bundle chính
 const RichTextEditor = lazy(() => import('../../components/ui/RichTextEditor'))
 import {
-  StickyNote, Plus, Pencil, Trash2, Pin, PinOff,
+  StickyNote, Plus, Pencil, Trash2, Paperclip,
   Loader2, Check, X, Filter, Search, RotateCcw,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
+import AttachmentManagerModal from './AttachmentManagerModal'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import PeriodPicker from '../Tasks/PeriodPicker'
 import { resolvePeriodRange } from '../Tasks/taskUtils'
@@ -22,8 +24,6 @@ import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import { useCompanyFooter } from './companyFooter'
 import s from './companies.module.css'
-
-const CLAMP_PX = 58
 
 function isHtmlEmpty(html) {
   if (!html) return true
@@ -45,21 +45,26 @@ function stripHtml(str) {
   return DOMPurify.sanitize(String(str), { ALLOWED_TAGS: [] }).replace(/\s+/g, ' ').trim()
 }
 function noteColFilterType(colKey) {
-  if (colKey === 'isPinned' || colKey === 'authorName') return 'enum'
-  if (colKey === 'updatedAt') return 'dateRange'
-  return 'text' // content
+  if (colKey === 'authorName') return 'enum'
+  if (colKey === 'updatedAt' || colKey === 'createdAt') return 'dateRange'
+  return 'text' // content, period
 }
-// Ngày dùng để lọc/sắp xếp cột "Cập nhật" (ưu tiên ngày sửa, chưa sửa thì ngày tạo).
-function noteColRawDate(note) { return note.updatedAt || note.createdAt }
+// Ngày dùng để lọc/sắp xếp theo TỪNG cột ngày.
+function noteColRawDate(note) { return note.updatedAt || note.createdAt }   // cột "Cập nhật"
+function noteColDate(note, colKey) {
+  if (colKey === 'createdAt') return note.createdAt
+  return noteColRawDate(note)   // updatedAt (fallback createdAt)
+}
 function noteColDisplayLabel(note, colKey) {
-  if (colKey === 'isPinned')   return note.isPinned ? 'Ghim' : '—'
+  if (colKey === 'period')     return note.period || '—'
   if (colKey === 'authorName') return note.authorName || '(Không rõ)'
+  if (colKey === 'createdAt')  return fmtDateTime(note.createdAt)
   if (colKey === 'updatedAt')  return fmtDateTime(noteColRawDate(note))
   return stripHtml(note.content) // content
 }
 function noteColSortKey(note, colKey) {
   if (colKey === 'updatedAt') return noteColRawDate(note) || ''  // ISO → so sánh chuỗi đúng thứ tự thời gian
-  if (colKey === 'isPinned')  return note.isPinned ? 1 : 0
+  if (colKey === 'createdAt') return note.createdAt || ''
   return noteColDisplayLabel(note, colKey).toLowerCase()
 }
 
@@ -71,13 +76,14 @@ const CUR_MONTH = String(new Date().getMonth() + 1)
 function NoteEditorModal({ initialNote, companyId, onSave, onClose }) {
   const isEdit = !!initialNote
   const [html, setHtml]     = useState(initialNote?.content ?? '')
+  const [period, setPeriod] = useState(initialNote?.period ?? '')
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
     if (isHtmlEmpty(html)) return
     setSaving(true)
     try {
-      await onSave(html)
+      await onSave(html, period)
     } catch {
       // error already toasted by caller
     } finally {
@@ -92,7 +98,17 @@ function NoteEditorModal({ initialNote, companyId, onSave, onClose }) {
       wide
     >
       <div className={s.noteEditorModalBody}>
-        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(88vh - 216px)', minHeight: 300,
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-soft)', whiteSpace: 'nowrap' }}>Kỳ</label>
+          <input
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            placeholder="VD: Quý 2/2026, Tháng 7, Cả năm…"
+            maxLength={100}
+            style={{ flex: 1, height: 34, padding: '0 10px', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 13 }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(88vh - 268px)', minHeight: 260,
           border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
           <Suspense fallback={<div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-muted)' }}><Loader2 size={16} className={s.spin} /> Đang tải trình soạn thảo…</div>}>
             <RichTextEditor
@@ -127,47 +143,35 @@ function NoteEditorModal({ initialNote, companyId, onSave, onClose }) {
 
 // ── NoteCard ───────────────────────────────────────────────────────────────────
 
-function NoteTableRow({ note, index, canReorder = true, selection, reorder, currentUserId, isAdmin, onEdit, onDelete, onTogglePin }) {
+function NoteTableRow({ note, index, canReorder = true, selection, reorder, currentUserId, isAdmin, onView, onEdit, onDelete, onFiles }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [expanded, setExpanded]           = useState(false)
-  const [overflows, setOverflows]         = useState(false)
-  const contentRef = useRef(null)
   const canEdit = note.createdBy === currentUserId || isAdmin
 
-  useEffect(() => {
-    const el = contentRef.current
-    if (!el) return
-    setOverflows(el.scrollHeight > CLAMP_PX + 4)
-  }, [note.content])
-
   return (
-    <tr {...reorder.rowProps(note.id)} className={`${note.isPinned ? s.noteTableRowPinned : ''} ${reorder.dragOverId === note.id ? s.dataTableRowDragOver : ''}`}>
+    <tr {...reorder.rowProps(note.id)} className={reorder.dragOverId === note.id ? s.dataTableRowDragOver : ''}>
       <DragRowCell enabled={canReorder} handleProps={reorder.handleProps(note.id)} />
       {canEdit
         ? <SelectionRowCell checked={selection.selectedIds.has(note.id)} onToggle={() => selection.toggle(note.id)} />
         : <td />}
       <IndexRowCell index={index + 1} />
-      <td className={s.notePinCell}>
-        {note.isPinned ? <span className={s.notePinnedBadge}><Pin size={10} /> Ghim</span> : <span className={s.noteMuted}>—</span>}
+      <td>
+        {note.period ? <span>{note.period}</span> : <span className={s.noteMuted}>—</span>}
       </td>
       <td className={s.noteContentCell}>
-        <div
-          ref={contentRef}
-          className={`${s.noteHtmlContent} ${!expanded ? s.noteContentClamped : ''}`}
-        >
-          <RichTextView html={note.content} />
-        </div>
-        {(overflows || expanded) && (
-          <button className={s.noteExpandBtn} onClick={() => setExpanded((v) => !v)}>
-            {expanded ? 'Thu gọn ▴' : 'Xem thêm ▾'}
-          </button>
-        )}
+        <ClampedRichText html={note.content} maxHeight={96} onExpand={() => onView(note)} />
+      </td>
+      <td style={{ textAlign: 'center' }}>
+        <button className={s.noteActionBtn} title="File đính kèm" onClick={() => onFiles(note)}>
+          <Paperclip size={13} />
+          {note.fileCount > 0 && <span className={s.locFileCount}>{note.fileCount}</span>}
+        </button>
       </td>
       <td>
         <div className={s.noteAuthorRow}>
           <span className={s.noteAuthorName}>{note.authorName}</span>
         </div>
       </td>
+      <td className={s.noteTimeCell}>{fmtDateTime(note.createdAt)}</td>
       <td className={s.noteTimeCell}>
         <span>{fmtDateTime(note.updatedAt !== note.createdAt ? note.updatedAt : note.createdAt)}</span>
         {note.updatedAt !== note.createdAt && <span className={s.noteEdited}>(đã sửa)</span>}
@@ -191,13 +195,6 @@ function NoteTableRow({ note, index, canReorder = true, selection, reorder, curr
               </>
             ) : (
               <>
-                <button
-                  className={`${s.noteActionBtn} ${s.noteActionBtnPin}`}
-                  onClick={() => onTogglePin(note.id, !note.isPinned)}
-                  title={note.isPinned ? 'Bỏ ghim' : 'Ghim ghi chú'}
-                >
-                  {note.isPinned ? <PinOff size={12} /> : <Pin size={12} />}
-                </button>
                 <button
                   className={`${s.noteActionBtn} ${s.noteActionBtnEdit}`}
                   onClick={() => onEdit(note)}
@@ -234,6 +231,8 @@ export default function NotesTab({ company, onNoteCountChange }) {
   const [loading,     setLoading]     = useState(true)
   const [showAdd,     setShowAdd]     = useState(false)
   const [editTarget,  setEditTarget]  = useState(null)  // note object being edited
+  const [viewTarget,  setViewTarget]  = useState(null)  // note object being viewed (full)
+  const [filesFor,    setFilesFor]    = useState(null)  // note whose attachments are open
   const [page, setPage]     = useState(1)
   const [pageSize, setPageSize] = useState(20)
 
@@ -244,7 +243,8 @@ export default function NotesTab({ company, onNoteCountChange }) {
 
   // Thanh lọc phía trên: Kỳ (theo ngày Cập nhật) + Người ghi + Từ khoá.
   // Mặc định "Tất cả thời gian" (year/month/from/to đều rỗng) để KHÔNG ẩn ghi chú cũ.
-  const [pYear, setPYear]   = useState('')
+  // Mặc định lọc theo NĂM HIỆN TẠI (dựa trên ngày Cập nhật của ghi chú)
+  const [pYear, setPYear]   = useState(CUR_YEAR)
   const [pMonth, setPMonth] = useState('')
   const [pFrom, setPFrom]   = useState('')
   const [pTo, setPTo]       = useState('')
@@ -296,10 +296,10 @@ export default function NotesTab({ company, onNoteCountChange }) {
 
   const displayed = useMemo(() => {
     let result = [...notes]
-    // Thanh lọc trên: Từ khoá (nội dung) + Người ghi + Kỳ (ngày Cập nhật)
+    // Thanh lọc trên: Tìm theo KỲ + Người ghi + khoảng thời gian (ngày Cập nhật)
     if (searchInput.trim()) {
       const q = searchInput.toLowerCase()
-      result = result.filter((r) => stripHtml(r.content).toLowerCase().includes(q))
+      result = result.filter((r) => (r.period || '').toLowerCase().includes(q))
     }
     if (authorFilter) result = result.filter((r) => (r.authorName || '') === authorFilter)
     if (periodRange.from || periodRange.to) {
@@ -323,7 +323,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
       } else if (ft === 'dateRange') {
         if (fv && (fv.from || fv.to)) {
           result = result.filter((r) => {
-            const raw = noteColRawDate(r); if (!raw) return false
+            const raw = noteColDate(r, colKey); if (!raw) return false
             const d = String(raw).substring(0, 10)
             if (fv.from && d < fv.from) return false
             if (fv.to   && d > fv.to)   return false
@@ -386,7 +386,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
   }
   const anyFilterActive = topFilterActive || hasAnyColFilter || Boolean(sortColState.col)
   function resetFilters() {
-    setPYear(''); setPMonth(''); setPFrom(''); setPTo('')
+    setPYear(CUR_YEAR); setPMonth(''); setPFrom(''); setPTo('')   // về NĂM HIỆN TẠI (mặc định)
     setAuthorFilter(''); setSearchInput('')
     setColFilters({}); setSortColState({ col: null, dir: 'asc' })
     setFilterPopup(null); setPage(1)
@@ -408,9 +408,9 @@ export default function NotesTab({ company, onNoteCountChange }) {
 
   useEffect(() => { load() }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleAdd(html) {
+  async function handleAdd(html, period) {
     try {
-      const note = await companiesApi.createNote(companyId, { content: html })
+      const note = await companiesApi.createNote(companyId, { content: html, period })
       setNotes((prev) => [...prev, note])
       setShowAdd(false)
       addToast('Đã thêm ghi chú', 'success')
@@ -420,9 +420,9 @@ export default function NotesTab({ company, onNoteCountChange }) {
     }
   }
 
-  async function handleEdit(html) {
+  async function handleEdit(html, period) {
     try {
-      const updated = await companiesApi.updateNote(companyId, editTarget.id, { content: html })
+      const updated = await companiesApi.updateNote(companyId, editTarget.id, { content: html, period })
       setNotes((prev) => prev.map((n) => n.id === editTarget.id ? { ...n, ...updated } : n))
       setEditTarget(null)
       addToast('Đã cập nhật ghi chú', 'success')
@@ -450,18 +450,6 @@ export default function NotesTab({ company, onNoteCountChange }) {
     setNotes((current) => current.filter((note) => !deleted.has(note.id)))
     selection.remove(deleted)
     addToast(`Đã xoá ${deleted.size}/${ids.length} ghi chú`, deleted.size ? 'success' : 'error')
-  }
-
-  async function handleTogglePin(noteId, isPinned) {
-    try {
-      const updated = await companiesApi.updateNote(companyId, noteId, { isPinned })
-      setNotes((prev) => {
-        const list = prev.map((n) => n.id === noteId ? { ...n, ...updated } : n)
-        return [...list].sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0))
-      })
-    } catch {
-      addToast('Không thể cập nhật', 'error')
-    }
   }
 
   // Header cột có nút lọc/sắp xếp (funnel) — dùng chung style với các bảng khác
@@ -524,7 +512,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
                 className={s.searchInput}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Tìm nội dung ghi chú..."
+                placeholder="Tìm theo Kỳ..."
               />
             </div>
             {anyFilterActive && (
@@ -569,9 +557,11 @@ export default function NotesTab({ company, onNoteCountChange }) {
           <table className={s.noteTable}>
             <colgroup>
               <col className={s.dataTableColDrag} /><col className={s.dataTableColSelect} /><col className={s.dataTableColIndex} />
-              <col className={s.noteColPin} />
+              <col style={{ width: 120 }} />
               <col className={s.noteColContent} />
+              <col style={{ width: 84 }} />
               <col className={s.noteColAuthor} />
+              <col className={s.noteColUpdated} />
               <col className={s.noteColUpdated} />
               <col className={s.noteColActions} />
             </colgroup>
@@ -580,9 +570,11 @@ export default function NotesTab({ company, onNoteCountChange }) {
                 <DragHeaderCell />
                 <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
                 <IndexHeaderCell />
-                <FilterTh colKey="isPinned">Ghim</FilterTh>
+                <FilterTh colKey="period">Kỳ</FilterTh>
                 <FilterTh colKey="content">Nội dung ghi chú</FilterTh>
+                <th style={{ textAlign: 'center' }}>Đính kèm</th>
                 <FilterTh colKey="authorName">Người ghi</FilterTh>
+                <FilterTh colKey="createdAt">Ngày tạo</FilterTh>
                 <FilterTh colKey="updatedAt">Cập nhật</FilterTh>
                 <th className={s.noteActionsCell}>Thao tác</th>
               </tr>
@@ -598,14 +590,15 @@ export default function NotesTab({ company, onNoteCountChange }) {
                   reorder={reorder}
                   currentUserId={currentUser?.id}
                   isAdmin={isAdmin}
+                  onView={setViewTarget}
                   onEdit={setEditTarget}
                   onDelete={handleDelete}
-                  onTogglePin={handleTogglePin}
+                  onFiles={setFilesFor}
                 />
               ))}
               {pageNotes.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px 8px', color: 'var(--color-muted)', fontSize: 'var(--fs-sm)' }}>
+                  <td colSpan={10} style={{ textAlign: 'center', padding: '24px 8px', color: 'var(--color-muted)', fontSize: 'var(--fs-sm)' }}>
                     Không có ghi chú khớp bộ lọc.
                   </td>
                 </tr>
@@ -631,6 +624,30 @@ export default function NotesTab({ company, onNoteCountChange }) {
           companyId={companyId}
           onSave={handleEdit}
           onClose={() => setEditTarget(null)}
+        />
+      )}
+
+      {/* File đính kèm của một ghi chú */}
+      {filesFor && (
+        <AttachmentManagerModal
+          module="company_note"
+          entityId={filesFor.id}
+          title="File đính kèm — Ghi chú"
+          canEdit={filesFor.createdBy === currentUser?.id || isAdmin}
+          onClose={() => setFilesFor(null)}
+          onChanged={(count) => setNotes((prev) => prev.map((n) => n.id === filesFor.id ? { ...n, fileCount: count } : n))}
+        />
+      )}
+
+      {/* Xem đầy đủ nội dung ghi chú */}
+      {viewTarget && (
+        <RichTextViewerModal
+          title="Ghi chú nội bộ"
+          html={viewTarget.content}
+          onEdit={(viewTarget.createdBy === currentUser?.id || isAdmin)
+            ? () => { const n = viewTarget; setViewTarget(null); setEditTarget(n) }
+            : undefined}
+          onClose={() => setViewTarget(null)}
         />
       )}
 

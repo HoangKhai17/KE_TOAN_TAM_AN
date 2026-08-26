@@ -6,7 +6,8 @@ import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import Modal from '../../components/ui/Modal'
 import InlineTableCell from '../../components/ui/InlineTableCell'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
-import RichTextView from '../../components/ui/RichTextView'
+import ClampedRichText from '../../components/ui/ClampedRichText'
+import RichTextViewerModal from '../../components/ui/RichTextViewerModal'
 import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
@@ -62,6 +63,7 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
   const [loading, setLoading]   = useState(true)
   const [activeCell, setActiveCell] = useState(null)
   const [noteEdit, setNoteEdit] = useState(null)   // hồ sơ đang sửa ghi chú
+  const [noteView, setNoteView] = useState(null)   // hồ sơ đang xem đầy đủ ghi chú
   const [colFilters, setColFilters] = useState({})
   const [sortState, setSortState] = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup] = useState(null)
@@ -249,10 +251,10 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
                   <td><InlineTableCell value={r.name} required multiline canEdit={canEdit} active={activeCell?.rowId === r.id && activeCell?.colKey === 'name'} onActivate={() => setActiveCell({ rowId: r.id, colKey: 'name' })} onSave={(value) => saveCell(r, 'name', value)} onNavigate={(direction) => navigateCell(r.id, direction)} /></td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                      <div style={{ flex: 1, minWidth: 0, maxHeight: 132, overflow: 'auto' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         {isHtmlEmpty(r.note)
                           ? <span style={{ color: 'var(--color-muted)' }}>—</span>
-                          : <RichTextView html={r.note} />}
+                          : <ClampedRichText html={r.note} maxHeight={96} onExpand={() => setNoteView(r)} />}
                       </div>
                       {canEdit && (
                         <button className={`${s.iconBtnSm}`} onClick={() => setNoteEdit(r)} title="Sửa ghi chú" style={{ flexShrink: 0 }}><Pencil size={13} /></button>
@@ -281,6 +283,14 @@ export default function OriginalDocumentsSection({ companyId, canEdit = true }) 
       </div>
       {filterPopup && <ColumnFilterDropdown colKey={filterPopup.colKey} filterType="text" allRows={rows} currentFilter={colFilters[filterPopup.colKey] ?? null} sortState={sortState} onSort={(col, dir) => { setSortState({ col, dir }); setFilterPopup(null) }} onFilterChange={setColumnFilter} onClose={() => setFilterPopup(null)} style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }} />}
       {noteEdit && <NoteEditModal companyId={companyId} row={noteEdit} onSave={(html) => saveNote(noteEdit, html)} onClose={() => setNoteEdit(null)} />}
+      {noteView && (
+        <RichTextViewerModal
+          title={`Ghi chú — ${noteView.name}`}
+          html={noteView.note}
+          onEdit={canEdit ? () => { const row = noteView; setNoteView(null); setNoteEdit(row) } : undefined}
+          onClose={() => setNoteView(null)}
+        />
+      )}
     </div>
   )
 }

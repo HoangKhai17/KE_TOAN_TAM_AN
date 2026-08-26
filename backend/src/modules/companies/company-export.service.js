@@ -269,8 +269,8 @@ function columnsFor(key, lbl) {
       ]
     case 'notes':
       return [
+        { header: 'Kỳ',        get: (r) => safe(r.period) },
         { header: 'Nội dung',  get: (r) => stripHtml(r.content) },
-        { header: 'Ghim',      get: (r) => (r.is_pinned ? 'Có' : '') },
         { header: 'Người tạo', get: (r) => safe(r.author_name) },
         { header: 'Ngày tạo',  get: (r) => fmtDateTime(r.created_at) },
         { header: 'Cập nhật',  get: (r) => fmtDateTime(r.updated_at) },
@@ -382,11 +382,11 @@ async function fetchSection(key, companyIds, includeCredentials) {
       )).rows
     case 'notes':
       return (await query(
-        `SELECT n.company_id, n.content, n.is_pinned, n.created_at, n.updated_at, u.name AS author_name
+        `SELECT n.company_id, n.content, n.period, n.created_at, n.updated_at, u.name AS author_name
          FROM company_notes n
          LEFT JOIN users u ON u.id = n.created_by
          WHERE n.company_id = ANY($1)
-         ORDER BY n.company_id, n.is_pinned DESC, n.created_at DESC`,
+         ORDER BY n.company_id, n.sort_order, n.created_at DESC`,
         [companyIds],
       )).rows
     case 'credentials': {

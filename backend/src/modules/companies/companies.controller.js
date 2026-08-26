@@ -108,9 +108,9 @@ async function listNotes(req, res, next) {
 
 async function createNote(req, res, next) {
   try {
-    const { content, isPinned } = req.body
+    const { content, period } = req.body
     if (!content?.trim()) return res.status(400).json({ success: false, error: { message: 'Nội dung không được trống' } })
-    const note = await svc.createNote(req.params.id, { content, isPinned }, req.user)
+    const note = await svc.createNote(req.params.id, { content, period }, req.user)
     res.status(201).json({ success: true, data: { note } })
   } catch (err) { next(err) }
 }

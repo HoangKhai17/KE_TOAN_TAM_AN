@@ -15,8 +15,8 @@ const ProcessDocEditor = lazy(() => import('./ProcessDocEditor'))
 // Các mục con của tab (swap bằng segmented) — cùng cấp với Quy trình
 const SECTIONS = [
   { key: 'process',   label: 'Quy trình',          icon: Workflow },
+  { key: 'originalDocs', label: 'HS gốc lưu tại KH', icon: Archive },
   { key: 'documents', label: 'Chứng từ KH cung cấp cho Tâm An',  icon: FileText },
-  { key: 'originalDocs', label: 'KH lưu HS gốc tại Cty', icon: Archive },
 ]
 
 export default function ProcessesTab({ company }) {
