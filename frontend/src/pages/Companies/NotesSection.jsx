@@ -1,17 +1,63 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, Trash2, Check, X, Loader2, Pin, Filter } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
+import { Plus, Trash2, Check, X, Loader2, Filter, Pencil } from 'lucide-react'
 import * as notesApi from '../../api/companyNotes'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import InlineTableCell from '../../components/ui/InlineTableCell'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import Modal from '../../components/ui/Modal'
+import ClampedRichText from '../../components/ui/ClampedRichText'
+import RichTextViewerModal from '../../components/ui/RichTextViewerModal'
 import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
 } from '../../components/ui/data-table'
 import { useCompanyFooter } from './companyFooter'
 import s from './companies.module.css'
+
+// Editor nặng (TipTap) chỉ tải khi mở modal soạn nội dung
+const RichTextEditor = lazy(() => import('../../components/ui/RichTextEditor'))
+
+function isHtmlEmpty(html) {
+  if (!html) return true
+  if (/<(img|table|hr|iframe|input)\b/i.test(html)) return false
+  return !html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
+}
+function stripHtml(html) {
+  return String(html ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// ── Modal soạn NỘI DUNG (rich-text) cho một điều cần lưu ý ─────────────────────
+function NoteContentModal({ companyId, initialHtml, onSave, onClose }) {
+  const [html, setHtml]     = useState(initialHtml ?? '')
+  const [saving, setSaving] = useState(false)
+  async function handleSave() {
+    if (isHtmlEmpty(html)) return
+    setSaving(true)
+    try { await onSave(html) } catch { /* toasted */ } finally { setSaving(false) }
+  }
+  return (
+    <Modal title={initialHtml ? 'Chỉnh sửa nội dung' : 'Thêm điều cần lưu ý'} onClose={onClose} wide>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(88vh - 216px)', minHeight: 300,
+          border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+          <Suspense fallback={<div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-muted)' }}><Loader2 size={16} className={s.spin} /> Đang tải trình soạn thảo…</div>}>
+            <RichTextEditor value={html} onChange={setHtml} editable companyId={companyId}
+              autoFocus minHeight={200} className="rte-fill"
+              placeholder="Nhập nội dung điều cần lưu ý… (dán được ảnh, bảng, hoặc Markdown)" />
+          </Suspense>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className={s.btnOutline} onClick={onClose} disabled={saving}>Huỷ</button>
+          <button className={s.btnPrimary} onClick={handleSave} disabled={saving || isHtmlEmpty(html)}>
+            {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />} Lưu
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 // Màu badge mức độ theo key của enum assignment_priority (dùng lại, không tạo enum mới)
 const SEVERITY_STYLE = {
@@ -59,24 +105,28 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
   const severityOpts = getOptions('assignment_priority')
   const defSeverity  = severityOpts.some((o) => o.key === 'normal') ? 'normal' : (severityOpts[0]?.key ?? 'normal')
 
+  // Nhóm (tab) lấy từ enum ĐỘNG → thêm nhóm ở Settings là tự có tab mới
+  const groupOpts = getOptions('important_note_group')
+  const defGroup  = groupOpts[0]?.key ?? 'customer'
+
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
   const [editingId, setEditingId] = useState(null)   // null | 'new' | <id>
   const [draft, setDraft]       = useState(() => emptyDraft(defSeverity))
   const [saving, setSaving]     = useState(false)
+  const [activeGroup, setActiveGroup] = useState(null)   // tab nhóm đang xem
+  const [editTarget, setEditTarget]   = useState(null)   // note đang soạn nội dung ('new' | note)
+  const [viewTarget, setViewTarget]   = useState(null)   // note đang xem đầy đủ
   const [activeCell, setActiveCell] = useState(null)
   const [colFilters, setColFilters] = useState({})
   const [sortState, setSortState] = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup] = useState(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const displayValue = useCallback((row, key) => {
-    if (key === 'severity') return getLabel('assignment_priority', row.severity, row.severity)
-    if (key === 'isPinned') return row.isPinned ? 'Đã ghim' : 'Chưa ghim'
-    return String(row[key] ?? '')
-  }, [getLabel])
+  const curGroup = activeGroup ?? defGroup   // tab hiện tại (mặc định nhóm đầu)
+  const displayValue = useCallback((row, key) => (key === 'content' ? stripHtml(row.content) : String(row[key] ?? '')), [])
   const displayedRows = useMemo(() => {
-    let result = [...rows]
+    let result = rows.filter((row) => (row.noteGroup ?? 'customer') === curGroup)   // lọc theo TAB
     for (const [key, value] of Object.entries(colFilters)) {
       if (value instanceof Set && value.size) result = result.filter((row) => value.has(displayValue(row, key)))
       else if (typeof value === 'string' && value.trim()) {
@@ -86,14 +136,14 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
     }
     if (sortState.col) result.sort((a, b) => displayValue(a, sortState.col).localeCompare(displayValue(b, sortState.col), 'vi', { numeric: true }) * (sortState.dir === 'asc' ? 1 : -1))
     return result
-  }, [rows, colFilters, sortState, displayValue])
+  }, [rows, colFilters, sortState, displayValue, curGroup])
 
   // Phân trang client-side → footer trang
   const noteTotal      = displayedRows.length
   const noteTotalPages = Math.max(1, Math.ceil(noteTotal / pageSize))
   const safePage       = Math.min(page, noteTotalPages)
   const pageRows       = displayedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
-  useEffect(() => { setPage(1) }, [colFilters, sortState, pageSize])
+  useEffect(() => { setPage(1) }, [colFilters, sortState, pageSize, curGroup])
   useCompanyFooter(loading ? null : {
     total: noteTotal, from: (safePage - 1) * pageSize + 1, to: Math.min(safePage * pageSize, noteTotal),
     page: safePage, pageSize, totalPages: noteTotalPages, itemLabel: 'lưu ý',
@@ -143,7 +193,7 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
         severity: draft.severity || defSeverity,
         isPinned: draft.isPinned,
       }
-      if (editingId === 'new') await notesApi.createNote(companyId, body)
+      if (editingId === 'new') await notesApi.createNote(companyId, { ...body, noteGroup: curGroup })
       else                     await notesApi.updateNote(companyId, editingId, body)
       addToast(editingId === 'new' ? 'Đã thêm lưu ý' : 'Đã cập nhật lưu ý', 'success')
       cancel()
@@ -166,10 +216,24 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
     }
   }
 
+  // Lưu nội dung (rich-text) từ modal — thêm mới thì gán vào nhóm của tab đang xem
+  async function handleSaveContent(html) {
+    try {
+      if (editTarget === 'new') await notesApi.createNote(companyId, { content: html, noteGroup: curGroup })
+      else                      await notesApi.updateNote(companyId, editTarget.id, { content: html })
+      setEditTarget(null)
+      await load()
+      addToast('Đã lưu điều cần lưu ý', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không lưu được', 'error')
+      throw err
+    }
+  }
+
   async function createFromFirstCell(value) {
     if (!value?.trim()) return null
     try {
-      const created = await notesApi.createNote(companyId, { content: value.trim(), severity: defSeverity, isPinned: false })
+      const created = await notesApi.createNote(companyId, { content: value.trim(), severity: defSeverity, noteGroup: curGroup, isPinned: false })
       setRows((current) => [...current, created])
       addToast('Đã thêm lưu ý', 'success')
       return { rowId: created.id }
@@ -179,7 +243,7 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
     }
   }
 
-  const editableColumns = ['content', 'severity']
+  const editableColumns = ['content', 'resolution']
   function setColumnFilter(colKey, value) {
     setColFilters((current) => {
       const next = { ...current }
@@ -211,7 +275,7 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
     if (direction === 'prev') {
       if (columnIndex > 0 && actualRowId !== 'new') return setActiveCell({ rowId: actualRowId, colKey: editableColumns[columnIndex - 1] })
       const previousRow = rows[rowIndex - 1]
-      return setActiveCell(previousRow ? { rowId: previousRow.id, colKey: 'severity' } : null)
+      return setActiveCell(previousRow ? { rowId: previousRow.id, colKey: 'resolution' } : null)
     }
     if (direction === 'down') {
       if (result?.rowId) return setActiveCell(null)
@@ -241,25 +305,45 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
     addToast(`Đã xoá ${deleted.size}/${ids.length} lưu ý`, deleted.size ? 'success' : 'error')
   }
 
-  const colSpan = 7
+  const colSpan = 6
   const editRowProps = { draft, setF, save, cancel, saving, severityOpts }
 
   return (
     <div>
-      {canEdit && (
-        <div className={s.procSectionBar}>
-          {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={removeSelected}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
-          <button className={s.credAddBtn} onClick={startAdd}><Plus size={13} /> Thêm lưu ý</button>
-        </div>
-      )}
+      {/* Tab nhóm (trái) + nút Thêm lưu ý (phải) trên CÙNG một hàng */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        {groupOpts.length > 0 && (
+          <div className={s.procSeg} style={{ marginBottom: 0 }}>
+            {groupOpts.map((g) => {
+              const count = rows.filter((r) => (r.noteGroup ?? 'customer') === g.key).length
+              return (
+                <button
+                  key={g.key}
+                  className={`${s.procSegBtn} ${curGroup === g.key ? s.procSegBtnActive : ''}`}
+                  onClick={() => setActiveGroup(g.key)}
+                >
+                  {g.label}
+                  {count > 0 && <span className={s.procSegBadge}>{count}</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {canEdit && (
+          <div className={s.procSectionBar} style={{ marginLeft: 'auto', marginBottom: 0 }}>
+            {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={removeSelected}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
+            <button className={s.credAddBtn} onClick={() => setEditTarget('new')}><Plus size={13} /> Thêm lưu ý</button>
+          </div>
+        )}
+      </div>
       <div className={s.credTableWrap}>
         <table className={s.credTable}>
           <colgroup>
             <col className={s.dataTableColDrag} /><col className={s.dataTableColSelect} /><col className={s.dataTableColIndex} />
-            <col style={{ width: '58%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '12%' }} />
-            <col style={{ width: '12%' }} />
+            <col style={{ width: '48%' }} />
+            <col style={{ width: '42%' }} />
+            <col style={{ width: '10%' }} />
           </colgroup>
           <thead>
             <tr>
@@ -267,15 +351,14 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
               <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
               <IndexHeaderCell />
               <FilterHeader colKey="content">Nội dung</FilterHeader>
-              <FilterHeader colKey="severity">Mức độ</FilterHeader>
-              <FilterHeader colKey="isPinned">Ghim</FilterHeader>
+              <FilterHeader colKey="resolution">Hiện trạng / Hướng khắc phục</FilterHeader>
               <th style={{ textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Đang tải…</td></tr>
-            ) : displayedRows.length === 0 && activeCell?.rowId !== 'new' ? (
+            ) : displayedRows.length === 0 ? (
               <tr><td colSpan={colSpan} className={s.locEmpty}>Chưa có điều cần lưu ý. Nhấn “Thêm lưu ý”.</td></tr>
             ) : (
               pageRows.map((r, index) => (
@@ -283,25 +366,19 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
                     <DragRowCell enabled={canEdit && editingId == null} handleProps={reorder.handleProps(r.id)} />
                     <SelectionRowCell checked={selection.selectedIds.has(r.id)} onToggle={() => selection.toggle(r.id)} />
                     <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
-                    <td><InlineTableCell value={r.content} required multiline canEdit={canEdit} active={activeCell?.rowId === r.id && activeCell?.colKey === 'content'} onActivate={() => setActiveCell({ rowId: r.id, colKey: 'content' })} onSave={(value) => saveCell(r, 'content', value)} onNavigate={(direction) => navigateCell(r.id, 'content', direction)} /></td>
                     <td>
-                      <InlineTableCell
-                        value={r.severity}
-                        type="select"
-                        options={severityOpts}
-                        canEdit={canEdit}
-                        active={activeCell?.rowId === r.id && activeCell?.colKey === 'severity'}
-                        onActivate={() => setActiveCell({ rowId: r.id, colKey: 'severity' })}
-                        displayValue={<span className={s.locStatus} style={SEVERITY_STYLE[r.severity] ?? SEVERITY_STYLE.normal}>{getLabel('assignment_priority', r.severity, r.severity)}</span>}
-                        onSave={(value) => saveCell(r, 'severity', value)}
-                        onNavigate={(direction) => navigateCell(r.id, 'severity', direction)}
-                      />
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {isHtmlEmpty(r.content)
+                            ? <span style={{ color: 'var(--color-muted)' }}>—</span>
+                            : <ClampedRichText html={r.content} maxHeight={96} onExpand={() => setViewTarget(r)} />}
+                        </div>
+                        {canEdit && (
+                          <button className={s.iconBtnSm} onClick={() => setEditTarget(r)} title="Sửa nội dung" style={{ flexShrink: 0 }}><Pencil size={13} /></button>
+                        )}
+                      </div>
                     </td>
-                    <td className={s.locCenter}>
-                      <button type="button" className={s.inlinePinButton} disabled={!canEdit} onClick={() => saveCell(r, 'isPinned', !r.isPinned)} title={r.isPinned ? 'Bỏ ghim' : 'Ghim'}>
-                        {r.isPinned ? <Pin size={14} className={s.locStar} fill="currentColor" /> : <Pin size={14} />}
-                      </button>
-                    </td>
+                    <td><InlineTableCell value={r.resolution} multiline canEdit={canEdit} active={activeCell?.rowId === r.id && activeCell?.colKey === 'resolution'} onActivate={() => setActiveCell({ rowId: r.id, colKey: 'resolution' })} onSave={(value) => saveCell(r, 'resolution', value)} onNavigate={(direction) => navigateCell(r.id, 'resolution', direction)} /></td>
                     <td className={s.locCenter}>
                       {canEdit && (
                         <div className={s.credRowActions}>
@@ -312,17 +389,30 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
                   </tr>
               ))
             )}
-            {canEdit && activeCell?.rowId === 'new' && (
-              <tr className={s.excelNewRow}>
-                <td /><td /><td />
-                <td><InlineTableCell value="" required multiline active={activeCell?.rowId === 'new' && activeCell?.colKey === 'content'} onActivate={() => setActiveCell({ rowId: 'new', colKey: 'content' })} onSave={createFromFirstCell} onNavigate={(direction, result) => navigateCell('new', 'content', direction, result)} /></td>
-                <td colSpan={3} />
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
-      {filterPopup && <ColumnFilterDropdown colKey={filterPopup.colKey} filterType={filterPopup.colKey === 'content' ? 'text' : 'enum'} allRows={rows} getDisplayLabel={displayValue} currentFilter={colFilters[filterPopup.colKey] ?? null} sortState={sortState} onSort={(col, dir) => { setSortState({ col, dir }); setFilterPopup(null) }} onFilterChange={setColumnFilter} onClose={() => setFilterPopup(null)} style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }} />}
+      {filterPopup && <ColumnFilterDropdown colKey={filterPopup.colKey} filterType="text" allRows={rows} getDisplayLabel={displayValue} currentFilter={colFilters[filterPopup.colKey] ?? null} sortState={sortState} onSort={(col, dir) => { setSortState({ col, dir }); setFilterPopup(null) }} onFilterChange={setColumnFilter} onClose={() => setFilterPopup(null)} style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }} />}
+
+      {/* Modal soạn nội dung (thêm / sửa) */}
+      {editTarget && (
+        <NoteContentModal
+          companyId={companyId}
+          initialHtml={editTarget === 'new' ? '' : editTarget.content}
+          onSave={handleSaveContent}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
+
+      {/* Xem đầy đủ nội dung */}
+      {viewTarget && (
+        <RichTextViewerModal
+          title="Điều cần lưu ý"
+          html={viewTarget.content}
+          onEdit={canEdit ? () => { const n = viewTarget; setViewTarget(null); setEditTarget(n) } : undefined}
+          onClose={() => setViewTarget(null)}
+        />
+      )}
     </div>
   )
 }

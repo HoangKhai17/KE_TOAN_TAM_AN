@@ -101,7 +101,7 @@
 
 /* ── Kiểu NỘI DUNG dùng chung cho cả editor lẫn chỉ-đọc (.rte-doc) ── */
 .rte-doc {
-  font-size: 14px;
+  font-size: var(--fs-2xs, 11.5px);   /* khớp font dữ liệu mặc định của app (11.5px) */
   line-height: 1.6;
   color: var(--color-text, #0f172a);
   word-break: break-word;

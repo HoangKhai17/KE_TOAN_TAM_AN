@@ -263,9 +263,9 @@ function columnsFor(key, lbl) {
       ]
     case 'important-notes':
       return [
-        { header: 'Nội dung', get: (r) => safe(r.content) },
-        { header: 'Mức độ',   get: (r) => lbl('assignment_priority', r.severity, ASSIGNMENT_PRIORITY_VI) },
-        { header: 'Ghim',     get: (r) => (r.is_pinned ? 'Có' : '') },
+        { header: 'Nhóm',                      get: (r) => lbl('important_note_group', r.note_group, {}) },
+        { header: 'Nội dung',                  get: (r) => safe(r.content) },
+        { header: 'Hiện trạng/Hướng khắc phục', get: (r) => safe(r.resolution) },
       ]
     case 'notes':
       return [
@@ -375,9 +375,9 @@ async function fetchSection(key, companyIds, includeCredentials) {
       )).rows
     case 'important-notes':
       return (await query(
-        `SELECT company_id, content, severity, is_pinned
+        `SELECT company_id, content, resolution, note_group
          FROM company_important_notes WHERE company_id = ANY($1)
-         ORDER BY company_id, is_pinned DESC, sort_order, created_at`,
+         ORDER BY company_id, note_group, sort_order, created_at`,
         [companyIds],
       )).rows
     case 'notes':

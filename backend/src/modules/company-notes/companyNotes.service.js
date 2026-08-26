@@ -4,9 +4,11 @@ function toDto(row) {
   return {
     id:        row.id,
     companyId: row.company_id,
-    content:   row.content,
-    severity:  row.severity,
-    isPinned:  row.is_pinned,
+    content:    row.content,
+    resolution: row.resolution ?? null,
+    severity:   row.severity,
+    noteGroup:  row.note_group ?? 'customer',
+    isPinned:   row.is_pinned,
     sortOrder: row.sort_order,
     createdBy: row.created_by,
     updatedBy: row.updated_by ?? null,
@@ -39,16 +41,16 @@ async function listNotes(companyId, user) {
 async function createNote(companyId, data, user) {
   await assertCompanyAccess(companyId, user)
   const actorId = user.id
-  const { content, severity = 'normal', isPinned = false, sortOrder } = data
+  const { content, resolution = null, severity = 'normal', noteGroup = 'customer', isPinned = false, sortOrder } = data
   const order = sortOrder ?? Number((await query(
     'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM company_important_notes WHERE company_id = $1', [companyId]
   )).rows[0].next)
   const { rows: [row] } = await query(
     `INSERT INTO company_important_notes
-       (company_id, content, severity, is_pinned, sort_order, created_by, updated_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$6)
+       (company_id, content, resolution, severity, note_group, is_pinned, sort_order, created_by, updated_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8)
      RETURNING *`,
-    [companyId, content, severity, isPinned, order, actorId]
+    [companyId, content, resolution, severity, noteGroup, isPinned, order, actorId]
   )
   return toDto(row)
 }
@@ -63,7 +65,7 @@ async function updateNote(companyId, id, data, user) {
   if (!existing) throw Object.assign(new Error('Note not found'), { status: 404 })
 
   const map = {
-    content: 'content', severity: 'severity', isPinned: 'is_pinned', sortOrder: 'sort_order',
+    content: 'content', resolution: 'resolution', severity: 'severity', noteGroup: 'note_group', isPinned: 'is_pinned', sortOrder: 'sort_order',
   }
   const updates = ['updated_by = $1', 'updated_at = NOW()']
   const params  = [actorId]
