@@ -188,6 +188,24 @@
 .rte-doc table[data-border="horizontal"] td,
 .rte-doc table[data-border="horizontal"] th { border: none; border-bottom: 1px solid #94a3b8; }
 
+/* Nút góc trên-trái: chọn cả bảng (Excel/Sheets) — hiện khi rê chuột vào bảng */
+.rte-content .tableWrapper { position: relative; }
+.rte-table-select {
+  position: absolute;
+  top: 0; left: 0;
+  width: 16px; height: 16px;
+  display: none;
+  align-items: center; justify-content: center;
+  background: var(--color-accent-bg-soft, #e0edff);
+  border: 1px solid var(--color-accent, #2563eb);
+  border-radius: 0 0 5px 0;
+  color: var(--color-accent, #2563eb);
+  font-size: 10px; line-height: 1;
+  cursor: pointer; z-index: 6; user-select: none;
+}
+.rte-content .tableWrapper:hover > .rte-table-select { display: flex; }
+.rte-table-select:hover { background: var(--color-accent, #2563eb); color: #fff; }
+
 /* Chế độ chỉ-đọc: bỏ padding thừa, không scroll riêng */
 .rte-view { padding: 0; }
 

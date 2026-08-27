@@ -24,16 +24,29 @@ function isHtmlEmpty(html) {
   return !html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
 }
 
+const DISCARD_CONFIRM = {
+  title: 'Bỏ thay đổi chưa lưu?',
+  message: 'Các thay đổi bạn vừa soạn sẽ bị mất nếu không lưu.',
+  warning: null, confirmLabel: 'Bỏ thay đổi', cancelLabel: 'Tiếp tục soạn',
+}
+
 // ── Modal sửa Ghi chú (rich-text) cho 1 hồ sơ ──────────────────────────────────
 function NoteEditModal({ companyId, row, onSave, onClose }) {
+  const confirmDiscard = useDeleteConfirm()
   const [html, setHtml]     = useState(row.note || '')
   const [saving, setSaving] = useState(false)
+  const dirty = html !== (row.note || '')
   async function handleSave() {
     setSaving(true)
     try { await onSave(html) } catch { /* toasted */ } finally { setSaving(false) }
   }
+  async function requestClose() {
+    if (saving) return
+    if (dirty && !(await confirmDiscard(DISCARD_CONFIRM))) return
+    onClose()
+  }
   return (
-    <Modal title={`Ghi chú — ${row.name}`} onClose={onClose} wide>
+    <Modal title={`Ghi chú — ${row.name}`} onClose={requestClose} wide>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(88vh - 216px)', minHeight: 300,
           border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -46,7 +59,7 @@ function NoteEditModal({ companyId, row, onSave, onClose }) {
           </Suspense>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button className={s.btnOutline} onClick={onClose} disabled={saving}>Huỷ</button>
+          <button className={s.btnOutline} onClick={requestClose} disabled={saving}>Huỷ</button>
           <button className={s.btnPrimary} onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />} Lưu
           </button>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { Plus, Trash2, Pencil, Loader2, Workflow, FileText, Archive } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import * as api from '../../api/companyProcesses'
@@ -39,13 +40,7 @@ export default function ProcessesTab({ company }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  // Chặn rời quy trình đang sửa khi còn thay đổi chưa lưu
-  const guardSwitch = useCallback(() => {
-    if (!docDirty) return true
-    // eslint-disable-next-line no-alert
-    if (window.confirm('Bỏ các thay đổi chưa lưu ở quy trình này?')) { setDocDirty(false); return true }
-    return false
-  }, [docDirty])
+  const confirmDiscard = useDeleteConfirm()
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -72,8 +67,14 @@ export default function ProcessesTab({ company }) {
     return () => { cancelled = true }
   }, [company.id, selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function selectProcess(id) {
-    if (id === selectedId || !guardSwitch()) return
+  async function selectProcess(id) {
+    if (id === selectedId) return
+    if (docDirty && !(await confirmDiscard({
+      title: 'Bỏ thay đổi chưa lưu?',
+      message: 'Các thay đổi ở quy trình này chưa được lưu và sẽ bị mất.',
+      warning: null, confirmLabel: 'Bỏ thay đổi', cancelLabel: 'Tiếp tục soạn',
+    }))) return
+    setDocDirty(false)
     setSelectedId(id)
   }
 

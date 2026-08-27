@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import { mergeAttributes, Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { CellSelection, TableMap } from '@tiptap/pm/tables'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -26,7 +27,7 @@ import {
   Baseline, Highlighter, PaintBucket, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Subscript as SubIcon, Superscript as SupIcon, IndentIncrease, IndentDecrease, ChevronDown,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
-  Combine, Split, PanelTop, PanelLeft, CaseSensitive, Sigma, ImageIcon, Upload, Grid3x3,
+  Combine, Split, PanelTop, PanelLeft, CaseSensitive, Sigma, ImageIcon, Upload, Grid3x3, BoxSelect,
 } from 'lucide-react'
 import Modal from './Modal'
 import { useToastStore } from '../../stores/toastStore'
@@ -360,6 +361,71 @@ const TableBorderSync = Extension.create({
   },
 })
 
+// Nút GÓC TRÊN-TRÁI của bảng → click chọn CẢ BẢNG (giống Excel/Sheets), rồi có thể
+// xoá / đổi màu / kẻ viền cho toàn bảng mà không cần bôi đen thủ công.
+const TableSelectHandle = Extension.create({
+  name: 'tableSelectHandle',
+  addCommands() {
+    return {
+      selectWholeTable: () => ({ state, dispatch, tr }) => {
+        const { $from } = state.selection
+        let tablePos = null, tableNode = null
+        for (let d = $from.depth; d >= 0; d -= 1) {
+          if ($from.node(d).type.name === 'table') { tableNode = $from.node(d); tablePos = $from.before(d); break }
+        }
+        if (tablePos == null) return false
+        const map = TableMap.get(tableNode)
+        const start = tablePos + 1
+        const cells = map.cellsInRect({ left: 0, top: 0, right: map.width, bottom: map.height })
+        if (!cells.length) return false
+        if (dispatch) dispatch(tr.setSelection(CellSelection.create(state.doc, start + cells[0], start + cells[cells.length - 1])))
+        return true
+      },
+    }
+  },
+  addProseMirrorPlugins() {
+    return [new Plugin({
+      key: new PluginKey('tableSelectHandle'),
+      view(view) {
+        const selectWholeTable = (wrapper) => {
+          const tbody = wrapper.querySelector('tbody')
+          if (!tbody) return
+          let pos
+          try { pos = view.posAtDOM(tbody, 0) } catch { return }
+          const $pos = view.state.doc.resolve(pos)
+          let tablePos = null, tableNode = null
+          for (let d = $pos.depth; d >= 0; d -= 1) {
+            if ($pos.node(d).type.name === 'table') { tableNode = $pos.node(d); tablePos = $pos.before(d); break }
+          }
+          if (tablePos == null) return
+          const map = TableMap.get(tableNode)
+          const start = tablePos + 1
+          const cells = map.cellsInRect({ left: 0, top: 0, right: map.width, bottom: map.height })
+          if (!cells.length) return
+          const sel = CellSelection.create(view.state.doc, start + cells[0], start + cells[cells.length - 1])
+          view.dispatch(view.state.tr.setSelection(sel))
+          view.focus()
+        }
+        const decorate = () => {
+          if (!view.editable) return
+          view.dom.querySelectorAll('.tableWrapper').forEach((wrapper) => {
+            if (wrapper.querySelector('.rte-table-select')) return
+            wrapper.style.position = 'relative'
+            const btn = document.createElement('div')
+            btn.className = 'rte-table-select'
+            btn.title = 'Chọn cả bảng'
+            btn.textContent = '▧'
+            btn.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); selectWholeTable(wrapper) })
+            wrapper.appendChild(btn)
+          })
+        }
+        setTimeout(decorate, 0)
+        return { update: decorate }
+      },
+    })]
+  },
+})
+
 function buildExtensions(placeholder) {
   return [
     StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
@@ -384,6 +450,7 @@ function buildExtensions(placeholder) {
     RowWithHeight, HeaderWithBg, CellWithBg,
     RowResize,
     TableBorderSync,
+    TableSelectHandle,
   ]
 }
 
@@ -851,6 +918,7 @@ function Toolbar({ editor, onInsertImage, onOpenMarkdown, onImportWord, allowIma
       <Sep />
       <TablePicker onPick={(rows, cols) => editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run()} />
       {inTable && <>
+        <TB title="Chọn cả bảng" onClick={() => editor.chain().focus().selectWholeTable().run()}><BoxSelect size={15} /></TB>
         <TB title="Thêm hàng dưới" onClick={() => editor.chain().focus().addRowAfter().run()}><Rows3 size={15} /></TB>
         <TB title="Thêm cột phải" onClick={() => editor.chain().focus().addColumnAfter().run()}><Columns3 size={15} /></TB>
         <TB title="Xoá hàng" onClick={() => editor.chain().focus().deleteRow().run()}>−<Rows3 size={13} /></TB>

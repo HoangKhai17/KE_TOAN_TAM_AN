@@ -1,15 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Pencil, Save, X, Loader2, Maximize2, Minimize2 } from 'lucide-react'
 import { useToastStore } from '../../stores/toastStore'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import RichTextEditor from '../../components/ui/RichTextEditor'
 import RichTextView from '../../components/ui/RichTextView'
 import * as api from '../../api/companyProcesses'
 import './ProcessDocEditor.css'
 
+// Tuỳ chọn cho dialog cảnh báo "bỏ thay đổi chưa lưu" (dùng chung useDeleteConfirm)
+const DISCARD_CONFIRM = {
+  title: 'Bỏ thay đổi chưa lưu?',
+  message: 'Các thay đổi bạn vừa soạn sẽ bị mất nếu không lưu.',
+  warning: null,
+  confirmLabel: 'Bỏ thay đổi',
+  cancelLabel: 'Tiếp tục soạn',
+}
+
 // Vỏ Quy trình: khung Xem/Sửa + toàn màn hình + Lưu/Huỷ + chống ghi đè (409).
 // Lõi soạn thảo tái sử dụng component chung RichTextEditor / RichTextView.
 export default function ProcessDocEditor({ companyId, process, canEdit, onSaved, onDirtyChange }) {
   const addToast = useToastStore((st) => st.toast)
+  const confirmDiscard = useDeleteConfirm()
   const [editing, setEditing] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -62,8 +73,8 @@ export default function ProcessDocEditor({ companyId, process, canEdit, onSaved,
     } finally { setSaving(false) }
   }
 
-  function handleCancel() {
-    if (dirty && !window.confirm('Bỏ các thay đổi chưa lưu?')) return
+  async function handleCancel() {
+    if (dirty && !(await confirmDiscard(DISCARD_CONFIRM))) return
     setContent(process.content || '')      // hoàn nguyên
     setDirtyBoth(false)
     setEditing(false)

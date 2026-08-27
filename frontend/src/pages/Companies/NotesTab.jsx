@@ -73,13 +73,27 @@ function noteColSortKey(note, colKey) {
 const CUR_YEAR  = String(new Date().getFullYear())
 const CUR_MONTH = String(new Date().getMonth() + 1)
 
+const DISCARD_CONFIRM = {
+  title: 'Bỏ thay đổi chưa lưu?',
+  message: 'Các thay đổi bạn vừa soạn sẽ bị mất nếu không lưu.',
+  warning: null, confirmLabel: 'Bỏ thay đổi', cancelLabel: 'Tiếp tục soạn',
+}
+
 // ── NoteEditorModal ────────────────────────────────────────────────────────────
 
 function NoteEditorModal({ initialNote, companyId, onSave, onClose }) {
   const isEdit = !!initialNote
+  const confirmDiscard = useDeleteConfirm()
   const [html, setHtml]     = useState(initialNote?.content ?? '')
   const [period, setPeriod] = useState(initialNote?.period ?? '')
   const [saving, setSaving] = useState(false)
+  const dirty = html !== (initialNote?.content ?? '') || period !== (initialNote?.period ?? '')
+
+  async function requestClose() {
+    if (saving) return
+    if (dirty && !(await confirmDiscard(DISCARD_CONFIRM))) return
+    onClose()
+  }
 
   async function handleSave() {
     if (isHtmlEmpty(html)) return
@@ -96,7 +110,7 @@ function NoteEditorModal({ initialNote, companyId, onSave, onClose }) {
   return (
     <Modal
       title={isEdit ? 'Chỉnh sửa ghi chú' : 'Thêm ghi chú nội bộ'}
-      onClose={onClose}
+      onClose={requestClose}
       wide
     >
       <div className={s.noteEditorModalBody}>
@@ -126,7 +140,7 @@ function NoteEditorModal({ initialNote, companyId, onSave, onClose }) {
           </Suspense>
         </div>
         <div className={s.noteEditorModalFooter}>
-          <button className={s.btnOutline} onClick={onClose} disabled={saving}>
+          <button className={s.btnOutline} onClick={requestClose} disabled={saving}>
             Huỷ
           </button>
           <button
