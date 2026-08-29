@@ -53,6 +53,11 @@ export async function assignStaff(companyId, body) {
   return data.data
 }
 
+export async function unassignStaff(companyId) {
+  const { data } = await api.post(`/companies/${companyId}/unassign`)
+  return data.data
+}
+
 export async function getActivityLog(companyId, { page = 1, limit = 10 } = {}) {
   const { data } = await api.get(`/companies/${companyId}/activity`, { params: { page, limit } })
   return { activities: data.data.activities, total: data.data.total }

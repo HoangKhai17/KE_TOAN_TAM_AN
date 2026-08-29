@@ -255,6 +255,7 @@ router.get('/:id/assignments', ...auth, ctrl.getAssignments)
  *       422: { description: Staff must be active with role=staff }
  */
 router.post('/:id/assign', ...admin, validate(assignStaffSchema), ctrl.assignStaff)
+router.post('/:id/unassign', ...admin, ctrl.unassignStaff)
 
 /**
  * @openapi

@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  Building2, UserPlus, Loader2, Users, SlidersHorizontal, Pencil,
+  Building2, UserPlus, UserMinus, Loader2, Users, SlidersHorizontal, Pencil,
   Plus, Trash2, Check, X, Calendar,
 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import DateBox from '../../components/ui/DateBox'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useToastStore } from '../../stores/toastStore'
 import * as companiesApi from '../../api/companies'
 import * as usersApi from '../../api/users'
@@ -379,6 +380,7 @@ export function StaffCard({ company, isAdmin, onAssigned, inline = false }) {
         {showModal && (
           <AssignStaffModal
             companyId={company.id}
+            currentStaff={staff}
             onClose={() => setShowModal(false)}
             onAssigned={() => { setShowModal(false); onAssigned() }}
           />
@@ -437,8 +439,9 @@ export function StaffCard({ company, isAdmin, onAssigned, inline = false }) {
 
 // ── AssignStaffModal ───────────────────────────────────────────────────────────
 
-function AssignStaffModal({ companyId, onClose, onAssigned }) {
+function AssignStaffModal({ companyId, currentStaff, onClose, onAssigned }) {
   const addToast          = useToastStore((st) => st.toast)
+  const confirmUnassign   = useDeleteConfirm()
   const [staffList, setStaffList]   = useState([])
   const [loadingStaff, setLoadingStaff] = useState(true)
   const [staffId, setStaffId]       = useState('')
@@ -453,6 +456,26 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
       .then(({ users }) => setStaffList(users))
       .finally(() => setLoadingStaff(false))
   }, [])
+
+  async function handleUnassign() {
+    if (!(await confirmUnassign({
+      title: 'Gỡ nhân sự phụ trách?',
+      message: currentStaff ? `Gỡ "${currentStaff.name}" khỏi vai trò phụ trách công ty này?` : 'Gỡ nhân sự phụ trách công ty này?',
+      warning: 'Công ty sẽ về trạng thái “Chưa phân công”.',
+      confirmLabel: 'Gỡ phụ trách', cancelLabel: 'Huỷ',
+    }))) return
+    setError(null)
+    setLoading(true)
+    try {
+      await companiesApi.unassignStaff(companyId)
+      addToast('Đã gỡ nhân sự phụ trách', 'success')
+      onAssigned()
+    } catch (err) {
+      setError(err.response?.data?.error?.message ?? 'Không thể gỡ phụ trách')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -518,6 +541,11 @@ function AssignStaffModal({ companyId, onClose, onAssigned }) {
         </div>
 
         <div className={s.modalActions}>
+          {currentStaff && (
+            <button type="button" onClick={handleUnassign} disabled={loading} className={s.btnDanger} style={{ marginRight: 'auto' }}>
+              <UserMinus size={13} /> Gỡ phụ trách
+            </button>
+          )}
           <button type="button" onClick={onClose} className={s.btnOutline}>Huỷ</button>
           <button type="submit" disabled={loading || loadingStaff} className={s.btnPrimary}>
             {loading ? <Loader2 size={13} className={s.spin} /> : <UserPlus size={13} />}

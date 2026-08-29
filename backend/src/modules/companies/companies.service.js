@@ -426,10 +426,14 @@ async function getAssignments(companyId, user) {
 }
 
 async function deleteCompany(id, actorId, ipAddress, userAgent) {
-  // Check for any tasks linked to this company
+  const { rows: [company] } = await query(
+    'SELECT id, name, assigned_staff_id FROM companies WHERE id = $1', [id]
+  )
+  if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
+
+  // Chặn 1: đã phát sinh CÔNG VIỆC (tasks có FK NO ACTION → cũng chặn ở tầng DB).
   const { rows: tasks } = await query(
-    'SELECT id FROM tasks WHERE company_id = $1 LIMIT 1',
-    [id]
+    'SELECT id FROM tasks WHERE company_id = $1 LIMIT 1', [id]
   )
   if (tasks.length > 0) {
     throw Object.assign(
@@ -438,28 +442,21 @@ async function deleteCompany(id, actorId, ipAddress, userAgent) {
     )
   }
 
-  // Check for any assignment history
-  const { rows: assignments } = await query(
-    'SELECT id FROM staff_company_assignments WHERE company_id = $1 LIMIT 1',
-    [id]
-  )
-  if (assignments.length > 0) {
+  // Chặn 2: đang CÓ nhân sự phụ trách hiện tại. (Lịch sử phân công CŨ — nếu đã gỡ
+  // phụ trách — sẽ tự xoá theo cascade, nên KHÔNG chặn theo lịch sử nữa.)
+  if (company.assigned_staff_id) {
     throw Object.assign(
-      new Error('Không thể xoá công ty đã có lịch sử phân công nhân sự. Hãy chuyển trạng thái sang "Đã kết thúc" thay thế.'),
+      new Error('Không thể xoá công ty đang có nhân sự phụ trách. Hãy gỡ phụ trách trước khi xoá (hoặc dùng "Kết thúc HĐ").'),
       { status: 409 }
     )
   }
 
-  const { rows } = await query(
-    'DELETE FROM companies WHERE id = $1 RETURNING id, name',
-    [id]
-  )
-  if (!rows[0]) throw Object.assign(new Error('Company not found'), { status: 404 })
+  await query('DELETE FROM companies WHERE id = $1', [id])   // cascade dọn lịch sử phân công + dữ liệu con
 
   await audit.log({
     userId: actorId, action: 'company.deleted',
     targetType: 'company', targetId: id,
-    meta: { name: rows[0].name },
+    meta: { name: company.name },
     ipAddress, userAgent,
   })
   emitData('data:company', { action: 'deleted', id, actorId })
@@ -548,6 +545,53 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
     await Promise.all(notifyPromises)
     emitData('data:company', { action: 'updated', id: companyId, actorId })
     return { assignmentId: newAssignment.id, staffId, startDate: assignDate }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+// Gỡ hẳn nhân sự phụ trách (đưa assigned_staff_id về NULL) + đóng bản ghi phân công đang mở.
+async function unassignStaff(companyId, actorId, ipAddress, userAgent) {
+  const { rows: [company] } = await query('SELECT id, name, assigned_staff_id FROM companies WHERE id = $1', [companyId])
+  if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
+  const previousStaffId = company.assigned_staff_id
+  if (!previousStaffId) return { staffId: null }   // vốn đã không có ai phụ trách
+
+  const endDate = new Date().toISOString().slice(0, 10)
+  const client = await getClient()
+  try {
+    await client.query('BEGIN')
+    await client.query(
+      `UPDATE staff_company_assignments SET end_date = $1 WHERE company_id = $2 AND end_date IS NULL`,
+      [endDate, companyId]
+    )
+    await client.query(
+      `UPDATE companies SET assigned_staff_id = NULL, updated_at = NOW() WHERE id = $1`,
+      [companyId]
+    )
+    await client.query('COMMIT')
+
+    await audit.log({
+      userId: actorId, action: 'company.staff_unassigned',
+      targetType: 'company', targetId: companyId,
+      meta: { staffId: previousStaffId, companyName: company.name },
+      ipAddress, userAgent,
+    })
+
+    const { rows: [actor] } = await query('SELECT name FROM users WHERE id = $1', [actorId])
+    if (previousStaffId !== actorId) {
+      await createAndEmit(
+        previousStaffId, 'task_status_changed',
+        'Thay đổi phân công công ty',
+        `Bạn không còn phụ trách công ty "${company.name}" nữa`, null,
+      )
+      sendCompanyAssignmentEmail({ staffId: previousStaffId, companyName: company.name, assignerName: actor?.name, startDate: endDate, type: 'unassigned' })
+    }
+    emitData('data:company', { action: 'updated', id: companyId, actorId })
+    return { staffId: null }
   } catch (err) {
     await client.query('ROLLBACK')
     throw err
@@ -720,6 +764,7 @@ module.exports = {
   deleteCompany,
   getAssignments,
   assignStaff,
+  unassignStaff,
   getActivityLog,
   listNotes,
   createNote,

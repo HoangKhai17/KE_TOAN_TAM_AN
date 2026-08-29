@@ -90,6 +90,13 @@ async function assignStaff(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function unassignStaff(req, res, next) {
+  try {
+    const result = await svc.unassignStaff(req.params.id, req.user.id, req.ip, req.headers['user-agent'])
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
 async function getActivityLog(req, res, next) {
   try {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit ?? '10', 10)))
@@ -187,4 +194,4 @@ async function overviewCompanies(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listCompanies, setCompanyOrder, setCompanyPin, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote, exportCompanies, overviewCompanies }
+module.exports = { listCompanies, setCompanyOrder, setCompanyPin, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, unassignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote, exportCompanies, overviewCompanies }
