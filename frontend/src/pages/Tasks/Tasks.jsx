@@ -1140,12 +1140,17 @@ function ListView({
 
 const CUR_YEAR  = String(new Date().getFullYear())
 const CUR_MONTH = String(new Date().getMonth() + 1)
-const INIT_DATES = yearMonthToDates(CUR_YEAR, CUR_MONTH)
+// Mặc định = cả NĂM hiện tại (tháng để trống). Vẫn lọc theo due_date như cũ,
+// chỉ mở rộng phạm vi từ "tháng hiện tại" → "năm hiện tại" (01/01 → 31/12).
+const INIT_MONTH = ''
+const INIT_DATES = yearMonthToDates(CUR_YEAR, INIT_MONTH)
 
-// Nâng lên v2 khi ĐỔI MẶC ĐỊNH sắp xếp (sang 'Ưu tiên xử lý'). Phiên cũ đã lưu
-// 'created_at:desc' trong sessionStorage nên nếu giữ nguyên khoá thì người dùng
-// sẽ không bao giờ thấy mặc định mới — cứ tưởng thay đổi không có tác dụng.
-const FILTER_KEY = 'tasks_filter_v2'
+// Nâng khoá khi ĐỔI MẶC ĐỊNH bộ lọc. Phiên cũ đã lưu giá trị mặc định cũ trong
+// sessionStorage nên nếu giữ nguyên khoá thì người dùng sẽ không bao giờ thấy mặc
+// định mới — cứ tưởng thay đổi không có tác dụng.
+//   v2: đổi mặc định sắp xếp sang 'Ưu tiên xử lý'.
+//   v3: đổi mặc định kỳ từ "tháng hiện tại" → "năm hiện tại".
+const FILTER_KEY = 'tasks_filter_v3'
 
 function loadSavedFilters() {
   try { return JSON.parse(sessionStorage.getItem(FILTER_KEY)) ?? {} }
@@ -1208,7 +1213,7 @@ export default function Tasks() {
 
   // Date filters — default: current month
   const [yearFilter,  setYearFilter]  = useState(initF.yearFilter  ?? CUR_YEAR)
-  const [monthFilter, setMonthFilter] = useState(initF.monthFilter ?? CUR_MONTH)
+  const [monthFilter, setMonthFilter] = useState(initF.monthFilter ?? INIT_MONTH)
   const [dueDateFrom, setDueDateFrom] = useState(initF.dueDateFrom ?? INIT_DATES.from)
   const [dueDateTo,   setDueDateTo]   = useState(initF.dueDateTo   ?? INIT_DATES.to)
 
@@ -1610,7 +1615,7 @@ export default function Tasks() {
     setCompanyFilter([]); setStaffFilter([]); setStaffIncludeSupport(false); setCreatorFilter([]); setSupportFilter([])
     setStatusFilter([]); setPriorityFilter([])
     setSourceFilter([]); setIsOverdue(false); setScheduleToday(false)
-    setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
+    setYearFilter(CUR_YEAR); setMonthFilter(INIT_MONTH)
     setDueDateFrom(INIT_DATES.from)
     setDueDateTo(INIT_DATES.to)
     setSortValue('work_priority:asc')
@@ -2106,7 +2111,7 @@ export default function Tasks() {
               {(yearFilter || monthFilter) && (
                 <span className={s.filterChip}>
                   {monthFilter && yearFilter ? `T${monthFilter}/${yearFilter}` : yearFilter ? `Năm ${yearFilter}` : `T${monthFilter}`}
-                  <button className={s.filterChipRemove} onClick={() => { setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH); const { from, to } = yearMonthToDates(CUR_YEAR, CUR_MONTH); setDueDateFrom(from); setDueDateTo(to); setPage(1) }}>×</button>
+                  <button className={s.filterChipRemove} onClick={() => { setYearFilter(CUR_YEAR); setMonthFilter(INIT_MONTH); const { from, to } = yearMonthToDates(CUR_YEAR, INIT_MONTH); setDueDateFrom(from); setDueDateTo(to); setPage(1) }}>×</button>
                 </span>
               )}
               {companyFilter.map((cid) => (
