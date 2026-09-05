@@ -20,6 +20,8 @@ import * as companyTablesApi from '../../api/companyTables'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
 import DateBox from './DateBox'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import s from './companies.module.css'
 
 // ── Constants (fallbacks while enum API loads) ─────────────────────────────────
@@ -318,147 +320,7 @@ function getCompanySortKey(row, colKey) {
   }
 }
 
-function CoEnumFilterSection({ colKey, allRows, currentFilter, onFilterChange, onClose }) {
-  const allValues = useMemo(() => {
-    const seen = new Set()
-    const vals = []
-    for (const row of allRows) {
-      const lbl = getCompanyDisplayLabel(row, colKey)
-      if (!seen.has(lbl)) { seen.add(lbl); vals.push(lbl) }
-    }
-    return vals.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
-  }, [allRows, colKey])
-
-  const selected = useMemo(
-    () => (!currentFilter ? new Set(allValues) : currentFilter),
-    [currentFilter, allValues]
-  )
-
-  function toggleValue(val) {
-    const next = new Set(selected)
-    next.has(val) ? next.delete(val) : next.add(val)
-    onFilterChange(colKey, next.size === allValues.length ? null : next)
-  }
-  function toggleAll() {
-    onFilterChange(colKey, selected.size === allValues.length ? new Set() : null)
-  }
-
-  const allChecked  = selected.size === allValues.length
-  const noneChecked = selected.size === 0
-
-  return (
-    <>
-      <label className={s.hdldDdSelectAll}>
-        <input type="checkbox" checked={allChecked}
-          ref={(el) => { if (el) el.indeterminate = !allChecked && !noneChecked }}
-          onChange={toggleAll} />
-        Chọn tất cả ({allValues.length})
-      </label>
-      <div className={s.hdldDdValueList}>
-        {allValues.map((val) => (
-          <label key={val} className={s.hdldDdValueItem}>
-            <input type="checkbox" checked={selected.has(val)} onChange={() => toggleValue(val)} />
-            <span className={s.hdldDdValueText}>{val}</span>
-          </label>
-        ))}
-      </div>
-      <div className={s.hdldDdFooter}>
-        <button className={s.hdldDdClearBtn} onClick={() => { onFilterChange(colKey, null); onClose() }}>
-          Xoá bộ lọc
-        </button>
-      </div>
-    </>
-  )
-}
-
-function CoTextFilterSection({ colKey, currentFilter, onFilterChange }) {
-  const [query, setQuery] = useState(typeof currentFilter === 'string' ? currentFilter : '')
-  const inputRef = useRef(null)
-  useEffect(() => { inputRef.current?.focus() }, [])
-  return (
-    <div className={s.hdldDdFilterSection}>
-      <input ref={inputRef} type="text" className={s.hdldDdInput} placeholder="Tìm kiếm..."
-        value={query}
-        onChange={(e) => { setQuery(e.target.value); onFilterChange(colKey, e.target.value.trim() || null) }} />
-      {query && (
-        <div className={s.hdldDdFooter}>
-          <button className={s.hdldDdClearBtn} onClick={() => { setQuery(''); onFilterChange(colKey, null) }}>
-            Xoá bộ lọc
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CoNumberRangeFilterSection({ colKey, currentFilter, onFilterChange }) {
-  const [minVal, setMinVal] = useState(currentFilter?.min ?? '')
-  const [maxVal, setMaxVal] = useState(currentFilter?.max ?? '')
-  function apply(mn, mx) { onFilterChange(colKey, mn !== '' || mx !== '' ? { min: mn, max: mx } : null) }
-  return (
-    <div className={s.hdldDdFilterSection}>
-      <div className={s.hdldDdRangeGroup}>
-        <div className={s.hdldDdRangeRow}>
-          <span className={s.hdldDdRangeLabel}>Tối thiểu</span>
-          <input type="number" className={s.hdldDdInput} placeholder="0" value={minVal}
-            onChange={(e) => { setMinVal(e.target.value); apply(e.target.value, maxVal) }} />
-        </div>
-        <div className={s.hdldDdRangeRow}>
-          <span className={s.hdldDdRangeLabel}>Tối đa</span>
-          <input type="number" className={s.hdldDdInput} placeholder="∞" value={maxVal}
-            onChange={(e) => { setMaxVal(e.target.value); apply(minVal, e.target.value) }} />
-        </div>
-      </div>
-      {(minVal !== '' || maxVal !== '') && (
-        <div className={s.hdldDdFooter}>
-          <button className={s.hdldDdClearBtn}
-            onClick={() => { setMinVal(''); setMaxVal(''); onFilterChange(colKey, null) }}>
-            Xoá bộ lọc
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CoColumnFilterDropdown({ colKey, allRows, currentFilter, sortState, onSort, onFilterChange, onClose, style }) {
-  const dropRef    = useRef(null)
-  const filterType = getCompanyColumnFilterType(colKey)
-
-  useEffect(() => {
-    function handler(e) {
-      if (dropRef.current && !dropRef.current.contains(e.target)) {
-        if (!e.target.closest('[data-hdld-filter-btn]')) onClose()
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
-
-  const activeAsc  = sortState.col === colKey && sortState.dir === 'asc'
-  const activeDesc = sortState.col === colKey && sortState.dir === 'desc'
-
-  return (
-    <div ref={dropRef} className={s.hdldFilterDropdown} style={style}>
-      <div className={s.hdldDdSortSection}>
-        <button className={`${s.hdldDdSortBtn} ${activeAsc ? s.hdldDdSortBtnActive : ''}`}
-          onClick={() => onSort(colKey, 'asc')}>↑&nbsp; Sắp xếp A → Z</button>
-        <button className={`${s.hdldDdSortBtn} ${activeDesc ? s.hdldDdSortBtnActive : ''}`}
-          onClick={() => onSort(colKey, 'desc')}>↓&nbsp; Sắp xếp Z → A</button>
-      </div>
-      {filterType === 'enum' && (
-        <CoEnumFilterSection colKey={colKey} allRows={allRows} currentFilter={currentFilter}
-          onFilterChange={onFilterChange} onClose={onClose} />
-      )}
-      {filterType === 'text' && (
-        <CoTextFilterSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
-      )}
-      {filterType === 'numberRange' && (
-        <CoNumberRangeFilterSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
-      )}
-    </div>
-  )
-}
+// Dropdown lọc/sắp header cột dùng chung ui/ColumnFilterDropdown (đã thay bản riêng).
 
 export default function Companies() {
   const navigate  = useNavigate()
@@ -616,26 +478,11 @@ export default function Companies() {
     let result = [...companies]
     for (const [colKey, filterVal] of Object.entries(colFilters)) {
       const ft = getCompanyColumnFilterType(colKey)
-      if (ft === 'enum') {
-        if (filterVal instanceof Set && filterVal.size > 0) {
-          result = result.filter((row) => filterVal.has(getCompanyDisplayLabel(row, colKey)))
-        }
-      } else if (ft === 'text') {
-        if (typeof filterVal === 'string' && filterVal.trim()) {
-          const q = filterVal.toLowerCase()
-          result = result.filter((row) => getCompanyDisplayLabel(row, colKey).toLowerCase().includes(q))
-        }
-      } else if (ft === 'numberRange') {
-        if (filterVal && (filterVal.min !== '' || filterVal.max !== '')) {
-          result = result.filter((row) => {
-            const num = Number(row[colKey] ?? 0)
-            if (isNaN(num)) return false
-            if (filterVal.min !== '' && num < parseFloat(filterVal.min)) return false
-            if (filterVal.max !== '' && num > parseFloat(filterVal.max)) return false
-            return true
-          })
-        }
-      }
+      if (!isColFilterActive(filterVal, ft)) continue
+      result = result.filter((row) => matchColFilter(filterVal, ft, {
+        label:  getCompanyDisplayLabel(row, colKey),
+        number: Number(row[colKey] ?? 0),
+      }))
     }
     if (sortState.col) {
       result.sort((a, b) => {
@@ -747,15 +594,9 @@ export default function Companies() {
       return next
     })
   }
-  function handleColSort(col, dir) { setSortState({ col, dir }) }
+  function handleColSort(col, dir) { setSortState(dir ? { col, dir } : { col: null, dir: 'asc' }) }
   function hasColFilter(colKey) {
-    const f = colFilters[colKey]
-    if (f == null) return false
-    const t = getCompanyColumnFilterType(colKey)
-    if (t === 'enum')        return f instanceof Set && f.size > 0
-    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
-    if (t === 'numberRange') return f.min !== '' || f.max !== ''
-    return false
+    return isColFilterActive(colFilters[colKey], getCompanyColumnFilterType(colKey))
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
 
@@ -808,7 +649,7 @@ export default function Companies() {
         <div className={s.hdldThInner}>
           <span className={s.hdldThLabel}>{children}</span>
           <button
-            data-hdld-filter-btn
+            data-hdld-filter-btn data-colfilter-btn
             className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`}
             onClick={(e) => openFilter(colKey, e)}
             title="Lọc / Sắp xếp"
@@ -1226,17 +1067,19 @@ export default function Companies() {
 
       {/* Column-header filter dropdown — position:fixed, outside table scroll */}
       {filterPopup && (
-        <CoColumnFilterDropdown
+        <ColumnFilterDropdown
           colKey={filterPopup.colKey}
+          filterType={getCompanyColumnFilterType(filterPopup.colKey)}
           allRows={companies}
+          getDisplayLabel={getCompanyDisplayLabel}
           currentFilter={colFilters[filterPopup.colKey] ?? null}
           sortState={sortState}
           onSort={handleColSort}
           onFilterChange={handleColFilterChange}
           onClose={() => setFilterPopup(null)}
           style={{
-            '--hdld-dd-top':  `${filterPopup.top}px`,
-            '--hdld-dd-left': `${filterPopup.left}px`,
+            '--cfd-top':  `${filterPopup.top}px`,
+            '--cfd-left': `${filterPopup.left}px`,
           }}
         />
       )}

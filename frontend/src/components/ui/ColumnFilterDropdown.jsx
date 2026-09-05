@@ -60,19 +60,22 @@ export default function ColumnFilterDropdown({
         </button>
       </div>
 
-      {filterType === 'enum' && (
-        <EnumSection allRows={allRows} colKey={colKey} getDisplayLabel={getDisplayLabel}
-          currentFilter={currentFilter} onFilterChange={onFilterChange} />
-      )}
-      {filterType === 'text' && (
-        <TextSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
-      )}
-      {filterType === 'dateRange' && (
-        <DateRangeSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
-      )}
-      {filterType === 'numberRange' && (
-        <NumberSection colKey={colKey} currentFilter={currentFilter} onFilterChange={onFilterChange} />
-      )}
+      {(() => {
+        // "Xoá bộ lọc" xoá luôn cả sort của cột này → truyền xuống mỗi section.
+        const colSorted = sortState?.col === colKey
+        const onClearSort = () => onSort(colKey, null)
+        const common = { colKey, currentFilter, onFilterChange, colSorted, onClearSort }
+        return (
+          <>
+            {filterType === 'enum' && (
+              <EnumSection allRows={allRows} getDisplayLabel={getDisplayLabel} {...common} />
+            )}
+            {filterType === 'text' && <TextSection {...common} />}
+            {filterType === 'dateRange' && <DateRangeSection {...common} />}
+            {filterType === 'numberRange' && <NumberSection {...common} />}
+          </>
+        )
+      })()}
     </div>
   )
 }
@@ -90,7 +93,7 @@ function ClearFooter({ disabled, onClear }) {
 }
 
 // ── Enum: value list kiểu Excel (đếm số lượng, ô trống, đảo chọn, sắp xếp) ───────
-function EnumSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilterChange }) {
+function EnumSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilterChange, colSorted, onClearSort }) {
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState('name') // 'name' | 'count'
 
@@ -161,7 +164,8 @@ function EnumSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilter
         {filtered.length === 0 && <div className={s.empty}>Không có giá trị</div>}
       </div>
 
-      <ClearFooter disabled={selected.size === 0} onClear={() => onFilterChange(colKey, null)} />
+      <ClearFooter disabled={selected.size === 0 && !colSorted}
+        onClear={() => { onFilterChange(colKey, null); onClearSort() }} />
     </div>
   )
 }
@@ -198,7 +202,7 @@ function numActive(state) {
 }
 
 // ── Text: bộ điều kiện (2 dòng, AND/OR) ──────────────────────────────────────────
-function TextSection({ colKey, currentFilter, onFilterChange }) {
+function TextSection({ colKey, currentFilter, onFilterChange, colSorted, onClearSort }) {
   const [state, setState] = useState(() => toTextConditions(currentFilter))
   const firstRef = useRef(null)
   useEffect(() => { firstRef.current?.focus() }, [])
@@ -238,13 +242,14 @@ function TextSection({ colKey, currentFilter, onFilterChange }) {
           </div>
         </div>
       ))}
-      <ClearFooter disabled={!textActive(state)} onClear={() => emit(toTextConditions(null))} />
+      <ClearFooter disabled={!textActive(state) && !colSorted}
+        onClear={() => { emit(toTextConditions(null)); onClearSort() }} />
     </div>
   )
 }
 
 // ── Number: bộ điều kiện (2 dòng, AND/OR) ────────────────────────────────────────
-function NumberSection({ colKey, currentFilter, onFilterChange }) {
+function NumberSection({ colKey, currentFilter, onFilterChange, colSorted, onClearSort }) {
   const [state, setState] = useState(() => toNumConditions(currentFilter))
 
   function emit(next) {
@@ -275,7 +280,8 @@ function NumberSection({ colKey, currentFilter, onFilterChange }) {
           </div>
         </div>
       ))}
-      <ClearFooter disabled={!numActive(state)} onClear={() => emit(toNumConditions(null))} />
+      <ClearFooter disabled={!numActive(state) && !colSorted}
+        onClear={() => { emit(toNumConditions(null)); onClearSort() }} />
     </div>
   )
 }
@@ -301,7 +307,7 @@ function quickRange(key) {
   return { from: '', to: '' }
 }
 
-function DateRangeSection({ colKey, currentFilter, onFilterChange }) {
+function DateRangeSection({ colKey, currentFilter, onFilterChange, colSorted, onClearSort }) {
   const [from, setFrom] = useState(currentFilter?.from ?? '')
   const [to, setTo]     = useState(currentFilter?.to ?? '')
   function update(nf, nt) {
@@ -326,7 +332,8 @@ function DateRangeSection({ colKey, currentFilter, onFilterChange }) {
           <DateBox block value={to} onChange={(v) => update(from, v)} />
         </div>
       </div>
-      <ClearFooter disabled={!from && !to} onClear={() => update('', '')} />
+      <ClearFooter disabled={!from && !to && !colSorted}
+        onClear={() => { update('', ''); onClearSort() }} />
     </div>
   )
 }

@@ -545,7 +545,7 @@ export default function DocumentsTab({ company }) {
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
 
-  function handleColSort(colKey, dir) { setSortState({ col: colKey, dir }); setFilterPopup(null) }
+  function handleColSort(colKey, dir) { setSortState(dir ? { col: colKey, dir } : { col: null, dir: 'asc' }); setFilterPopup(null) }
   function handleColFilterChange(colKey, val) {
     setColFilters((prev) => {
       const next = { ...prev }

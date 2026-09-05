@@ -13,6 +13,8 @@ import {
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
 } from '../../components/ui/data-table'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import s from './companies.module.css'
 
 const ATTACH_MODULE = 'company_location'
@@ -42,93 +44,7 @@ function filterTypeOf(col) {
   return 'text'
 }
 
-// ── Filter dropdown sections (tái dùng class hdld* trong companies.module.css) ──
-function EnumSection({ values, currentFilter, onChange, onClose }) {
-  const selected = useMemo(() => (!currentFilter ? new Set(values) : currentFilter), [currentFilter, values])
-  const allChecked  = selected.size === values.length
-  const noneChecked = selected.size === 0
-  function toggle(v) {
-    const next = new Set(selected); next.has(v) ? next.delete(v) : next.add(v)
-    onChange(next.size === values.length ? null : next)
-  }
-  return (
-    <>
-      <label className={s.hdldDdSelectAll}>
-        <input type="checkbox" checked={allChecked}
-          ref={(el) => { if (el) el.indeterminate = !allChecked && !noneChecked }}
-          onChange={() => onChange(allChecked ? new Set() : null)} />
-        Chọn tất cả ({values.length})
-      </label>
-      <div className={s.hdldDdValueList}>
-        {values.map((v) => (
-          <label key={v} className={s.hdldDdValueItem}>
-            <input type="checkbox" checked={selected.has(v)} onChange={() => toggle(v)} />
-            <span className={s.hdldDdValueText}>{v}</span>
-          </label>
-        ))}
-      </div>
-      <div className={s.hdldDdFooter}>
-        <button className={s.hdldDdClearBtn} onClick={() => { onChange(null); onClose() }}>Xoá bộ lọc</button>
-      </div>
-    </>
-  )
-}
-function TextSection({ currentFilter, onChange }) {
-  const [q, setQ] = useState(typeof currentFilter === 'string' ? currentFilter : '')
-  const ref = useRef(null)
-  useEffect(() => { ref.current?.focus() }, [])
-  return (
-    <div className={s.hdldDdFilterSection}>
-      <input ref={ref} type="text" className={s.hdldDdInput} placeholder="Tìm kiếm..."
-        value={q} onChange={(e) => { setQ(e.target.value); onChange(e.target.value.trim() || null) }} />
-      {q && <div className={s.hdldDdFooter}><button className={s.hdldDdClearBtn}
-        onClick={() => { setQ(''); onChange(null) }}>Xoá bộ lọc</button></div>}
-    </div>
-  )
-}
-function DateRangeSection({ currentFilter, onChange }) {
-  const [from, setFrom] = useState(currentFilter?.from ?? '')
-  const [to, setTo] = useState(currentFilter?.to ?? '')
-  const apply = (f, t) => onChange(f || t ? { from: f, to: t } : null)
-  return (
-    <div className={s.hdldDdFilterSection}>
-      <div className={s.hdldDdRangeGroup}>
-        <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Từ ngày</span>
-          <DateBox value={from} className={s.hdldDdDateBox}
-            onChange={(value) => { setFrom(value); apply(value, to) }} /></div>
-        <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Đến ngày</span>
-          <DateBox value={to} className={s.hdldDdDateBox}
-            onChange={(value) => { setTo(value); apply(from, value) }} /></div>
-      </div>
-      {(from || to) && <div className={s.hdldDdFooter}><button className={s.hdldDdClearBtn}
-        onClick={() => { setFrom(''); setTo(''); onChange(null) }}>Xoá bộ lọc</button></div>}
-    </div>
-  )
-}
-function ColumnFilterDropdown({ col, values, currentFilter, sortState, onSort, onChange, onClose, style }) {
-  const ref = useRef(null)
-  const ft = filterTypeOf(col)
-  useEffect(() => {
-    function h(e) {
-      if (ref.current && !ref.current.contains(e.target) && !e.target.closest('[data-hdld-filter-btn]')) onClose()
-    }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [onClose])
-  const asc = sortState.col === col.key && sortState.dir === 'asc'
-  const desc = sortState.col === col.key && sortState.dir === 'desc'
-  return (
-    <div ref={ref} className={s.hdldFilterDropdown} style={style}>
-      <div className={s.hdldDdSortSection}>
-        <button className={`${s.hdldDdSortBtn} ${asc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.key, 'asc')}>↑&nbsp; Sắp xếp A → Z</button>
-        <button className={`${s.hdldDdSortBtn} ${desc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.key, 'desc')}>↓&nbsp; Sắp xếp Z → A</button>
-      </div>
-      {ft === 'enum'      && <EnumSection values={values} currentFilter={currentFilter} onChange={onChange} onClose={onClose} />}
-      {ft === 'text'      && <TextSection currentFilter={currentFilter} onChange={onChange} />}
-      {ft === 'dateRange' && <DateRangeSection currentFilter={currentFilter} onChange={onChange} />}
-    </div>
-  )
-}
+// Dropdown lọc/sắp header cột dùng chung ui/ColumnFilterDropdown (đã thay bản riêng).
 
 // ── Ô nhập inline (enum/date/text/textarea) — click để sửa, blur/Enter tự lưu ──
 function LocEditableCell({ col, row: _row, value, enumOpts, getLabel, canEdit, active, onActivate, onSave, onNavigate }) {
@@ -315,6 +231,14 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
     return String(v)
   }, [getLabel])
 
+  // Nhãn cho bộ lọc header (enum: ô trống → '(Trống)'). Dùng cho dropdown chung + so khớp.
+  const getColLabel = useCallback((row, colKey) => {
+    const col = LOC_COLS.find((c) => c.key === colKey)
+    if (!col) return ''
+    const t = cellText(row, col)
+    return col.type === 'enum' ? (t || '(Trống)') : t
+  }, [cellText])
+
   // 1 query duy nhất (file_count đã gộp ở backend) → KHÔNG còn N+1 đếm file từng dòng.
   const load = useCallback(async () => {
     setLoading(true)
@@ -332,14 +256,11 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
     for (const [colKey, fv] of Object.entries(colFilters)) {
       const col = LOC_COLS.find((c) => c.key === colKey); if (!col) continue
       const ft = filterTypeOf(col)
-      if (ft === 'enum' && fv instanceof Set) {
-        out = out.filter((r) => fv.has(cellText(r, col) || '(Trống)'))
-      } else if (ft === 'text' && typeof fv === 'string') {
-        const q = fv.toLowerCase(); out = out.filter((r) => cellText(r, col).toLowerCase().includes(q))
-      } else if (ft === 'dateRange' && fv) {
-        out = out.filter((r) => { const d = r[colKey] ? String(r[colKey]).slice(0, 10) : ''
-          if (!d) return false; if (fv.from && d < fv.from) return false; if (fv.to && d > fv.to) return false; return true })
-      }
+      if (!isColFilterActive(fv, ft)) continue
+      out = out.filter((r) => matchColFilter(fv, ft, {
+        label: getColLabel(r, colKey),
+        date:  r[colKey],
+      }))
     }
     if (sortState.col) {
       const col = LOC_COLS.find((c) => c.key === sortState.col)
@@ -450,16 +371,9 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
     setColFilters((p) => { const n = { ...p }; if (val === null) delete n[colKey]; else n[colKey] = val; return n })
   }
   function hasFilter(colKey) {
-    const f = colFilters[colKey]; if (f == null) return false
-    if (f instanceof Set) return f.size > 0
-    if (typeof f === 'string') return f.length > 0
-    return !!(f.from || f.to)
+    const col = LOC_COLS.find((c) => c.key === colKey)
+    return col ? isColFilterActive(colFilters[colKey], filterTypeOf(col)) : false
   }
-  const enumValuesFor = useCallback((col) => {
-    const seen = new Set(), out = []
-    for (const r of rows) { const l = cellText(r, col) || '(Trống)'; if (!seen.has(l)) { seen.add(l); out.push(l) } }
-    return out.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
-  }, [rows, cellText])
 
   // ── Export Excel (dùng chung: backend format chuẩn) ─────────────────────────────
   async function doExport() {
@@ -567,7 +481,7 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
                   <th key={col.key}>
                     <div className={s.hdldThInner}>
                       <span className={s.hdldThLabel}>{col.label}</span>
-                      <button data-hdld-filter-btn
+                      <button data-hdld-filter-btn data-colfilter-btn
                         className={`${s.hdldFilterBtn} ${hasFilter(col.key) || sortState.col === col.key ? s.hdldFilterBtnActive : ''}`}
                         onClick={(e) => openFilter(col.key, e)} title="Lọc / Sắp xếp">
                         <Filter size={10} />
@@ -643,14 +557,16 @@ export default function CompanyLocationsCard({ companyId, canEdit = true }) {
         const col = LOC_COLS.find((c) => c.key === filterPopup.colKey)
         return (
           <ColumnFilterDropdown
-            col={col}
-            values={filterTypeOf(col) === 'enum' ? enumValuesFor(col) : []}
+            colKey={col.key}
+            filterType={filterTypeOf(col)}
+            allRows={rows}
+            getDisplayLabel={getColLabel}
             currentFilter={colFilters[filterPopup.colKey] ?? null}
             sortState={sortState}
-            onSort={(c, dir) => { setSortState({ col: c, dir }); setFilterPopup(null) }}
-            onChange={(val) => setColFilter(filterPopup.colKey, val)}
+            onSort={(c, dir) => { setSortState(dir ? { col: c, dir } : { col: null, dir: 'asc' }); setFilterPopup(null) }}
+            onFilterChange={(_k, val) => setColFilter(filterPopup.colKey, val)}
             onClose={() => setFilterPopup(null)}
-            style={{ '--hdld-dd-top': `${filterPopup.top}px`, '--hdld-dd-left': `${filterPopup.left}px` }}
+            style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }}
           />
         )
       })()}

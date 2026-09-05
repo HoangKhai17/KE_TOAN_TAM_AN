@@ -723,7 +723,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       return next
     })
   }
-  function handleSort(col, dir) { setSortState({ col, dir }) }
+  function handleSort(col, dir) { setSortState(dir ? { col, dir } : { col: null, dir: 'asc' }) }
   function hasColFilter(colKey) {
     return isColFilterActive(colFilters[colKey], getTaskColumnFilterType(colKey))
   }

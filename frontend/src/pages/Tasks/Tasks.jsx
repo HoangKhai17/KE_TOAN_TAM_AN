@@ -1655,7 +1655,7 @@ export default function Tasks() {
   function handleColFilterChange(colKey, val) {
     setColFilters((prev) => { const n = { ...prev }; if (val == null) delete n[colKey]; else n[colKey] = val; return n }); setPage(1)
   }
-  function handleColSort(col, dir) { setSortColState({ col, dir }); setFilterPopup(null) }
+  function handleColSort(col, dir) { setSortColState(dir ? { col, dir } : { col: null, dir: 'asc' }); setFilterPopup(null) }
 
   // Client-side filter + sort over the loaded working set
   const displayed = useMemo(() => {

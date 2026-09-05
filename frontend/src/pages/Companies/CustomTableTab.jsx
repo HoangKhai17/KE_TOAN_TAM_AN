@@ -11,6 +11,8 @@ import ExcelImportModal from '../../components/ui/ExcelImportModal'
 import { useCompanyFooter } from './companyFooter'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import DateBox from './DateBox'
+import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import {
   DragHeaderCell,
   DragRowCell,
@@ -418,121 +420,7 @@ function sortKey(row, col, columns = []) {
   return String(v ?? '').toLowerCase()
 }
 
-// ── Column-header filter sub-sections ─────────────────────────────────────────
-function EnumSection({ col, columns, allRows, currentFilter, onChange, onClose }) {
-  const allValues = useMemo(() => {
-    const seen = new Set(); const out = []
-    for (const r of allRows) { const l = displayLabel(r, col, columns); if (!seen.has(l)) { seen.add(l); out.push(l) } }
-    return out.sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }))
-  }, [allRows, col, columns])
-  const selected = useMemo(() => (!currentFilter ? new Set(allValues) : currentFilter), [currentFilter, allValues])
-  const allChecked = selected.size === allValues.length
-  const noneChecked = selected.size === 0
-  function toggle(v) {
-    const next = new Set(selected); next.has(v) ? next.delete(v) : next.add(v)
-    onChange(next.size === allValues.length ? null : next)
-  }
-  return (
-    <>
-      <label className={s.hdldDdSelectAll}>
-        <input type="checkbox" checked={allChecked}
-          ref={(el) => { if (el) el.indeterminate = !allChecked && !noneChecked }}
-          onChange={() => onChange(allChecked ? new Set() : null)} />
-        Chọn tất cả ({allValues.length})
-      </label>
-      <div className={s.hdldDdValueList}>
-        {allValues.map((v) => (
-          <label key={v} className={s.hdldDdValueItem}>
-            <input type="checkbox" checked={selected.has(v)} onChange={() => toggle(v)} />
-            <span className={s.hdldDdValueText}>{v}</span>
-          </label>
-        ))}
-      </div>
-      <div className={s.hdldDdFooter}>
-        <button className={s.hdldDdClearBtn} onClick={() => { onChange(null); onClose() }}>Xoá bộ lọc</button>
-      </div>
-    </>
-  )
-}
-function TextSection({ currentFilter, onChange }) {
-  const [q, setQ] = useState(typeof currentFilter === 'string' ? currentFilter : '')
-  const ref = useRef(null)
-  useEffect(() => { ref.current?.focus() }, [])
-  return (
-    <div className={s.hdldDdFilterSection}>
-      <input ref={ref} type="text" className={s.hdldDdInput} placeholder="Tìm kiếm..."
-        value={q} onChange={(e) => { setQ(e.target.value); onChange(e.target.value.trim() || null) }} />
-      {q && <div className={s.hdldDdFooter}><button className={s.hdldDdClearBtn}
-        onClick={() => { setQ(''); onChange(null) }}>Xoá bộ lọc</button></div>}
-    </div>
-  )
-}
-function DateRangeSection({ currentFilter, onChange }) {
-  const [from, setFrom] = useState(currentFilter?.from ?? '')
-  const [to, setTo] = useState(currentFilter?.to ?? '')
-  const apply = (f, t) => onChange(f || t ? { from: f, to: t } : null)
-  return (
-    <div className={s.hdldDdFilterSection}>
-      <div className={s.hdldDdRangeGroup}>
-        <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Từ ngày</span>
-          <DateBox value={from} className={s.hdldDdDateBox}
-            onChange={(value) => { setFrom(value); apply(value, to) }} /></div>
-        <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Đến ngày</span>
-          <DateBox value={to} className={s.hdldDdDateBox}
-            onChange={(value) => { setTo(value); apply(from, value) }} /></div>
-      </div>
-      {(from || to) && <div className={s.hdldDdFooter}><button className={s.hdldDdClearBtn}
-        onClick={() => { setFrom(''); setTo(''); onChange(null) }}>Xoá bộ lọc</button></div>}
-    </div>
-  )
-}
-function NumberRangeSection({ currentFilter, onChange }) {
-  const [mn, setMn] = useState(currentFilter?.min ?? '')
-  const [mx, setMx] = useState(currentFilter?.max ?? '')
-  const apply = (a, b) => onChange(a !== '' || b !== '' ? { min: a, max: b } : null)
-  return (
-    <div className={s.hdldDdFilterSection}>
-      <div className={s.hdldDdRangeGroup}>
-        <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Tối thiểu</span>
-          <input type="number" className={s.hdldDdInput} placeholder="0" value={mn}
-            onChange={(e) => { setMn(e.target.value); apply(e.target.value, mx) }} /></div>
-        <div className={s.hdldDdRangeRow}><span className={s.hdldDdRangeLabel}>Tối đa</span>
-          <input type="number" className={s.hdldDdInput} placeholder="∞" value={mx}
-            onChange={(e) => { setMx(e.target.value); apply(mn, e.target.value) }} /></div>
-      </div>
-      {(mn !== '' || mx !== '') && <div className={s.hdldDdFooter}><button className={s.hdldDdClearBtn}
-        onClick={() => { setMn(''); setMx(''); onChange(null) }}>Xoá bộ lọc</button></div>}
-    </div>
-  )
-}
-function ColumnFilterDropdown({ col, columns, allRows, currentFilter, sortState, onSort, onChange, onClose, style }) {
-  const ref = useRef(null)
-  const ft = columnFilterType(col)
-  useEffect(() => {
-    function h(e) {
-      if (ref.current && !ref.current.contains(e.target) && !e.target.closest('[data-hdld-filter-btn]')) onClose()
-    }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [onClose])
-  const asc = sortState.col === col.colKey && sortState.dir === 'asc'
-  const desc = sortState.col === col.colKey && sortState.dir === 'desc'
-  const isStt = col.colKey === '__stt'
-  const ascLabel  = isStt ? '↑  Cũ nhất → Mới nhất' : '↑  Sắp xếp A → Z'
-  const descLabel = isStt ? '↓  Mới nhất → Cũ nhất' : '↓  Sắp xếp Z → A'
-  return (
-    <div ref={ref} className={s.hdldFilterDropdown} style={style}>
-      <div className={s.hdldDdSortSection}>
-        <button className={`${s.hdldDdSortBtn} ${asc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.colKey, 'asc')}>{ascLabel}</button>
-        <button className={`${s.hdldDdSortBtn} ${desc ? s.hdldDdSortBtnActive : ''}`} onClick={() => onSort(col.colKey, 'desc')}>{descLabel}</button>
-      </div>
-      {ft === 'enum'        && <EnumSection col={col} columns={columns} allRows={allRows} currentFilter={currentFilter} onChange={onChange} onClose={onClose} />}
-      {ft === 'text'        && <TextSection currentFilter={currentFilter} onChange={onChange} />}
-      {ft === 'dateRange'   && <DateRangeSection currentFilter={currentFilter} onChange={onChange} />}
-      {ft === 'numberRange' && <NumberRangeSection currentFilter={currentFilter} onChange={onChange} />}
-    </div>
-  )
-}
+// Dropdown lọc/sắp header cột dùng chung ui/ColumnFilterDropdown (đã thay bản riêng).
 
 // ── Inline editable cell ──────────────────────────────────────────────────────
 // Ô nhập điều khiển bởi cha (active) — hỗ trợ Tab/Shift+Tab/Enter/Esc để nhập liền mạch như Excel
@@ -985,28 +873,12 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
       const col = columns.find((c) => c.colKey === colKey)
       if (!col) continue
       const ft = columnFilterType(col)
-      if (ft === 'enum' && fv instanceof Set && fv.size > 0) {
-        result = result.filter((r) => fv.has(displayLabel(r, col, columns)))
-      } else if (ft === 'text' && typeof fv === 'string' && fv.trim()) {
-        const q = fv.toLowerCase()
-        result = result.filter((r) => displayLabel(r, col, columns).toLowerCase().includes(q))
-      } else if (ft === 'dateRange' && fv && (fv.from || fv.to)) {
-        result = result.filter((r) => {
-          const raw = r.data?.[col.colKey]; if (!raw) return false
-          const d = String(raw).substring(0, 10)
-          if (fv.from && d < fv.from) return false
-          if (fv.to && d > fv.to) return false
-          return true
-        })
-      } else if (ft === 'numberRange' && fv && (fv.min !== '' || fv.max !== '')) {
-        result = result.filter((r) => {
-          const n = numericValue(r, col, columns)
-          if (n == null || isNaN(n)) return false
-          if (fv.min !== '' && n < parseFloat(fv.min)) return false
-          if (fv.max !== '' && n > parseFloat(fv.max)) return false
-          return true
-        })
-      }
+      if (!isColFilterActive(fv, ft)) continue
+      result = result.filter((r) => matchColFilter(fv, ft, {
+        label:  displayLabel(r, col, columns),
+        date:   r.data?.[col.colKey],
+        number: numericValue(r, col, columns),
+      }))
     }
     if (sortState.col) {
       const col = sortState.col === '__stt' ? { colKey: '__stt' } : columns.find((c) => c.colKey === sortState.col)
@@ -1068,14 +940,8 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
     setColFilters((prev) => { const n = { ...prev }; if (val === null) delete n[colKey]; else n[colKey] = val; return n })
   }
   function hasColFilter(colKey) {
-    const f = colFilters[colKey]; if (f == null) return false
     const col = columns.find((c) => c.colKey === colKey); if (!col) return false
-    const t = columnFilterType(col)
-    if (t === 'enum') return f instanceof Set && f.size > 0
-    if (t === 'text') return typeof f === 'string' && f.trim().length > 0
-    if (t === 'dateRange') return Boolean(f.from || f.to)
-    if (t === 'numberRange') return f.min !== '' || f.max !== ''
-    return false
+    return isColFilterActive(colFilters[colKey], columnFilterType(col))
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
   const isDefaultSort = sortState.col === '__stt' && sortState.dir === 'asc'
@@ -1364,7 +1230,7 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
                   <th className={`${s.hdldThStt} ${s.ctblTh}`}>
                     <div className={s.hdldThInner}>
                       <span className={s.hdldThLabel}>STT</span>
-                      <button data-hdld-filter-btn
+                      <button data-hdld-filter-btn data-colfilter-btn
                         className={`${s.hdldFilterBtn} ${sortState.col === '__stt' && !isDefaultSort ? s.hdldFilterBtnActive : ''}`}
                         onClick={(e) => openFilter('__stt', e)} title="Sắp xếp theo thứ tự">
                         <Filter size={10} />
@@ -1387,7 +1253,7 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
                       >
                         <div className={s.hdldThInner}>
                           <span className={s.hdldThLabel}>{col.label}{col.required && ' *'}</span>
-                          <button data-hdld-filter-btn
+                          <button data-hdld-filter-btn data-colfilter-btn
                             className={`${s.hdldFilterBtn} ${active ? s.hdldFilterBtnActive : ''}`}
                             onClick={(e) => openFilter(col.colKey, e)} title="Lọc / Sắp xếp">
                             <Filter size={10} />
@@ -1514,15 +1380,21 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
           ? { colKey: '__stt', label: 'STT' }
           : columns.find((c) => c.colKey === filterPopup.colKey)
         if (!col) return null
+        const isStt = col.colKey === '__stt'
         return (
           <ColumnFilterDropdown
-            col={col} columns={columns} allRows={rows}
+            colKey={col.colKey}
+            filterType={columnFilterType(col)}
+            allRows={rows}
+            getDisplayLabel={(row) => displayLabel(row, col, columns)}
             currentFilter={colFilters[filterPopup.colKey] ?? null}
             sortState={sortState}
-            onSort={(c, d) => setSortState({ col: c, dir: d })}
-            onChange={(val) => setFilter(filterPopup.colKey, val)}
+            sortAscLabel={isStt ? 'Cũ nhất → Mới nhất' : 'A → Z'}
+            sortDescLabel={isStt ? 'Mới nhất → Cũ nhất' : 'Z → A'}
+            onSort={(c, d) => setSortState(d ? { col: c, dir: d } : { col: '__stt', dir: 'asc' })}
+            onFilterChange={(_k, val) => setFilter(filterPopup.colKey, val)}
             onClose={() => setFilterPopup(null)}
-            style={{ '--hdld-dd-top': `${filterPopup.top}px`, '--hdld-dd-left': `${filterPopup.left}px` }}
+            style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }}
           />
         )
       })()}

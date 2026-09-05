@@ -690,7 +690,7 @@ export default function CredentialsTab({ company }) {
           getDisplayLabel={(row, key) => key === 'isActive' ? (row.isActive ? 'Đang kích hoạt' : 'Đã tắt') : String(row[key] ?? '')}
           currentFilter={colFilters[filterPopup.colKey] ?? null}
           sortState={sortState}
-          onSort={(col, dir) => { setSortState({ col, dir }); setFilterPopup(null) }}
+          onSort={(col, dir) => { setSortState(dir ? { col, dir } : { col: null, dir: 'asc' }); setFilterPopup(null) }}
           onFilterChange={updateColumnFilter}
           onClose={() => setFilterPopup(null)}
           style={{ '--cfd-top': `${filterPopup.top}px`, '--cfd-left': `${filterPopup.left}px` }}

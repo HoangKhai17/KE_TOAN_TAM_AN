@@ -106,7 +106,7 @@ function useHeaderFilters(rows, colDefs) {
   function handleFilterChange(colKey, val) {
     setColFilters((p) => { const n = { ...p }; if (val == null) delete n[colKey]; else n[colKey] = val; return n })
   }
-  function handleSort(col, dir) { setSortState({ col, dir }); setPopup(null) }
+  function handleSort(col, dir) { setSortState(dir ? { col, dir } : { col: null, dir: 'asc' }); setPopup(null) }
   function hasFilter(colKey) {
     return isColFilterActive(colFilters[colKey], byKey[colKey]?.type ?? 'text')
   }

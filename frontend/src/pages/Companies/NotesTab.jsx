@@ -375,7 +375,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
   function handleColFilterChange(colKey, val) {
     setColFilters((prev) => { const n = { ...prev }; if (val == null) delete n[colKey]; else n[colKey] = val; return n })
   }
-  function handleColSort(col, dir) { setSortColState({ col, dir }); setFilterPopup(null) }
+  function handleColSort(col, dir) { setSortColState(dir ? { col, dir } : { col: null, dir: 'asc' }); setFilterPopup(null) }
   function hasColFilter(colKey) {
     return isColFilterActive(colFilters[colKey], noteColFilterType(colKey))
   }
