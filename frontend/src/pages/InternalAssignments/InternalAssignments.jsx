@@ -25,6 +25,7 @@ import CreateEditAssignmentModal from './CreateEditAssignmentModal'
 import InternalNavTabs from './InternalNavTabs'
 import PeriodPicker from '../Tasks/PeriodPicker'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import DateBox from '../../components/ui/DateBox'
 import {
@@ -878,14 +879,7 @@ export default function InternalAssignments() {
 
   // ── Column-header filter: handlers + client-side displayed/pagination ─────────
   function hasColFilter(colKey) {
-    const f = colFilters[colKey]
-    if (f == null) return false
-    const t = iaColFilterType(colKey)
-    if (t === 'enum')        return f instanceof Set && f.size > 0
-    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
-    if (t === 'dateRange')   return Boolean(f.from || f.to)
-    if (t === 'numberRange') return f.min !== '' || f.max !== ''
-    return false
+    return isColFilterActive(colFilters[colKey], iaColFilterType(colKey))
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
   const hasColSort = sortColState.col !== null
@@ -905,34 +899,12 @@ export default function InternalAssignments() {
     let result = [...items]
     for (const [colKey, fv] of Object.entries(colFilters)) {
       const ft = iaColFilterType(colKey)
-      if (ft === 'enum') {
-        if (fv instanceof Set && fv.size > 0) result = result.filter((r) => fv.has(iaColDisplayLabel(r, colKey)))
-      } else if (ft === 'text') {
-        if (typeof fv === 'string' && fv.trim()) {
-          const q = fv.toLowerCase()
-          result = result.filter((r) => iaColDisplayLabel(r, colKey).toLowerCase().includes(q))
-        }
-      } else if (ft === 'dateRange') {
-        if (fv && (fv.from || fv.to)) {
-          result = result.filter((r) => {
-            const raw = iaColRawDate(r, colKey); if (!raw) return false
-            const d = String(raw).substring(0, 10)
-            if (fv.from && d < fv.from) return false
-            if (fv.to   && d > fv.to)   return false
-            return true
-          })
-        }
-      } else if (ft === 'numberRange') {
-        if (fv && (fv.min !== '' || fv.max !== '')) {
-          result = result.filter((r) => {
-            const num = progressPct(r)
-            if (num == null || isNaN(num)) return false
-            if (fv.min !== '' && num < parseFloat(fv.min)) return false
-            if (fv.max !== '' && num > parseFloat(fv.max)) return false
-            return true
-          })
-        }
-      }
+      if (!isColFilterActive(fv, ft)) continue
+      result = result.filter((r) => matchColFilter(fv, ft, {
+        label:  iaColDisplayLabel(r, colKey),
+        date:   iaColRawDate(r, colKey),
+        number: progressPct(r),
+      }))
     }
     if (sortColState.col) {
       result.sort((a, b) => {

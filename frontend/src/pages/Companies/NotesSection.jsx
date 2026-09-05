@@ -6,6 +6,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import InlineTableCell from '../../components/ui/InlineTableCell'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import Modal from '../../components/ui/Modal'
 import ClampedRichText from '../../components/ui/ClampedRichText'
 import RichTextViewerModal from '../../components/ui/RichTextViewerModal'
@@ -142,11 +143,9 @@ export default function NotesSection({ companyId, canEdit = true, onCountChange 
   const displayedRows = useMemo(() => {
     let result = rows.filter((row) => (row.noteGroup ?? 'customer') === curGroup)   // lọc theo TAB
     for (const [key, value] of Object.entries(colFilters)) {
-      if (value instanceof Set && value.size) result = result.filter((row) => value.has(displayValue(row, key)))
-      else if (typeof value === 'string' && value.trim()) {
-        const query = value.trim().toLocaleLowerCase('vi')
-        result = result.filter((row) => displayValue(row, key).toLocaleLowerCase('vi').includes(query))
-      }
+      const ft = value instanceof Set ? 'enum' : 'text'
+      if (!isColFilterActive(value, ft)) continue
+      result = result.filter((row) => matchColFilter(value, ft, { label: displayValue(row, key) }))
     }
     if (sortState.col) result.sort((a, b) => displayValue(a, sortState.col).localeCompare(displayValue(b, sortState.col), 'vi', { numeric: true }) * (sortState.dir === 'asc' ? 1 : -1))
     return result

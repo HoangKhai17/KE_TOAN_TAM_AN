@@ -17,6 +17,7 @@ import * as cdrApi from '../../api/clientRequests'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import CollaboratorPicker from '../Tasks/CollaboratorPicker'
 import PeriodPicker from '../Tasks/PeriodPicker'
 import {
@@ -1119,13 +1120,7 @@ export default function AdminClientRequests() {
 
   // ── Column-header filter: handlers + client-side displayed/pagination ─────────
   function hasColFilter(colKey) {
-    const f = colFilters[colKey]
-    if (f == null) return false
-    const t = cdrColFilterType(colKey)
-    if (t === 'enum')      return f instanceof Set && f.size > 0
-    if (t === 'text')      return typeof f === 'string' && f.trim().length > 0
-    if (t === 'dateRange') return Boolean(f.from || f.to)
-    return false
+    return isColFilterActive(colFilters[colKey], cdrColFilterType(colKey))
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
   const hasColSort = sortColState.col !== null
@@ -1144,24 +1139,11 @@ export default function AdminClientRequests() {
     let result = [...items]
     for (const [colKey, fv] of Object.entries(colFilters)) {
       const ft = cdrColFilterType(colKey)
-      if (ft === 'enum') {
-        if (fv instanceof Set && fv.size > 0) result = result.filter((r) => fv.has(cdrColDisplayLabel(r, colKey)))
-      } else if (ft === 'text') {
-        if (typeof fv === 'string' && fv.trim()) {
-          const q = fv.toLowerCase()
-          result = result.filter((r) => cdrColDisplayLabel(r, colKey).toLowerCase().includes(q))
-        }
-      } else if (ft === 'dateRange') {
-        if (fv && (fv.from || fv.to)) {
-          result = result.filter((r) => {
-            const raw = r.deadlineDate; if (!raw) return false
-            const d = String(raw).substring(0, 10)
-            if (fv.from && d < fv.from) return false
-            if (fv.to   && d > fv.to)   return false
-            return true
-          })
-        }
-      }
+      if (!isColFilterActive(fv, ft)) continue
+      result = result.filter((r) => matchColFilter(fv, ft, {
+        label: cdrColDisplayLabel(r, colKey),
+        date:  r.deadlineDate,
+      }))
     }
     if (sortColState.col) {
       result.sort((a, b) => {

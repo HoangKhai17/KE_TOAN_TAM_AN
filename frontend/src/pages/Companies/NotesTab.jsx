@@ -12,6 +12,7 @@ import {
 import Modal from '../../components/ui/Modal'
 import AttachmentManagerModal from './AttachmentManagerModal'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import PeriodPicker from '../Tasks/PeriodPicker'
 import { resolvePeriodRange } from '../Tasks/taskUtils'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
@@ -300,12 +301,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
   const selection = useRowSelection({ rows: selectableNotes })
 
   // ── Áp lọc + sắp xếp phía client rồi mới phân trang ─────────────────────────────
-  const hasAnyColFilter = Object.entries(colFilters).some(([k, v]) => {
-    const t = noteColFilterType(k)
-    if (t === 'enum')      return v instanceof Set && v.size > 0
-    if (t === 'dateRange') return v && (v.from || v.to)
-    return typeof v === 'string' && v.trim().length > 0
-  })
+  const hasAnyColFilter = Object.entries(colFilters).some(([k, v]) => isColFilterActive(v, noteColFilterType(k)))
   // Kỳ (thanh lọc trên) → khoảng ngày áp lên "Cập nhật"
   const periodRange = resolvePeriodRange({ year: pYear, month: pMonth, from: pFrom, to: pTo })
   const topFilterActive = Boolean(searchInput.trim() || authorFilter || periodRange.from || periodRange.to)
@@ -329,24 +325,11 @@ export default function NotesTab({ company, onNoteCountChange }) {
     }
     for (const [colKey, fv] of Object.entries(colFilters)) {
       const ft = noteColFilterType(colKey)
-      if (ft === 'enum') {
-        if (fv instanceof Set && fv.size > 0) result = result.filter((r) => fv.has(noteColDisplayLabel(r, colKey)))
-      } else if (ft === 'text') {
-        if (typeof fv === 'string' && fv.trim()) {
-          const q = fv.toLowerCase()
-          result = result.filter((r) => noteColDisplayLabel(r, colKey).toLowerCase().includes(q))
-        }
-      } else if (ft === 'dateRange') {
-        if (fv && (fv.from || fv.to)) {
-          result = result.filter((r) => {
-            const raw = noteColDate(r, colKey); if (!raw) return false
-            const d = String(raw).substring(0, 10)
-            if (fv.from && d < fv.from) return false
-            if (fv.to   && d > fv.to)   return false
-            return true
-          })
-        }
-      }
+      if (!isColFilterActive(fv, ft)) continue
+      result = result.filter((r) => matchColFilter(fv, ft, {
+        label: noteColDisplayLabel(r, colKey),
+        date:  noteColDate(r, colKey),
+      }))
     }
     if (sortColState.col) {
       result.sort((a, b) => {
@@ -394,11 +377,7 @@ export default function NotesTab({ company, onNoteCountChange }) {
   }
   function handleColSort(col, dir) { setSortColState({ col, dir }); setFilterPopup(null) }
   function hasColFilter(colKey) {
-    const f = colFilters[colKey]; if (f == null) return false
-    const t = noteColFilterType(colKey)
-    if (t === 'enum')      return f instanceof Set && f.size > 0
-    if (t === 'dateRange') return Boolean(f.from || f.to)
-    return typeof f === 'string' && f.trim().length > 0
+    return isColFilterActive(colFilters[colKey], noteColFilterType(colKey))
   }
   const anyFilterActive = topFilterActive || hasAnyColFilter || Boolean(sortColState.col)
   function resetFilters() {

@@ -9,6 +9,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { MultiSelectFilter } from './Companies'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import * as documentsApi from '../../api/documents'
 import * as attApi from '../../api/attachments'
 import AttachmentPreviewModal from './AttachmentPreviewModal'
@@ -487,24 +488,11 @@ export default function DocumentsTab({ company }) {
     let result = [...docs]
     for (const [colKey, fv] of Object.entries(colFilters)) {
       const t = docColType(colKey)
-      if (t === 'enum') {
-        if (fv instanceof Set && fv.size > 0) result = result.filter((r) => fv.has(docColLabel(r, colKey)))
-      } else if (t === 'text') {
-        if (typeof fv === 'string' && fv.trim()) {
-          const q = fv.toLowerCase()
-          result = result.filter((r) => docColLabel(r, colKey).toLowerCase().includes(q))
-        }
-      } else if (t === 'dateRange') {
-        if (fv && (fv.from || fv.to)) {
-          result = result.filter((r) => {
-            if (!r[colKey]) return false
-            const d = String(r[colKey]).substring(0, 10)
-            if (fv.from && d < fv.from) return false
-            if (fv.to && d > fv.to) return false
-            return true
-          })
-        }
-      }
+      if (!isColFilterActive(fv, t)) continue
+      result = result.filter((r) => matchColFilter(fv, t, {
+        label: docColLabel(r, colKey),
+        date:  r[colKey],
+      }))
     }
     if (sortState.col) {
       result.sort((a, b) => {
@@ -553,13 +541,7 @@ export default function DocumentsTab({ company }) {
   }
 
   function hasColFilter(colKey) {
-    const f = colFilters[colKey]
-    if (f == null) return false
-    const t = docColType(colKey)
-    if (t === 'enum')      return f instanceof Set && f.size > 0
-    if (t === 'text')      return typeof f === 'string' && f.trim().length > 0
-    if (t === 'dateRange') return Boolean(f.from || f.to)
-    return false
+    return isColFilterActive(colFilters[colKey], docColType(colKey))
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
 

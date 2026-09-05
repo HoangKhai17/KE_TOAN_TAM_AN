@@ -12,6 +12,7 @@ import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import DateBox from '../../components/ui/DateBox'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import { useCompanyFooter } from './companyFooter'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -664,40 +665,15 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     let result = [...tasks]
     for (const [colKey, filterVal] of Object.entries(colFilters)) {
       const ft = getTaskColumnFilterType(colKey)
-      if (ft === 'enum') {
-        if (filterVal instanceof Set && filterVal.size > 0) {
-          result = result.filter((row) => filterVal.has(colDisplayLabel(row, colKey)))
-        }
-      } else if (ft === 'text') {
-        if (typeof filterVal === 'string' && filterVal.trim()) {
-          const q = filterVal.toLowerCase()
-          result = result.filter((row) => colDisplayLabel(row, colKey).toLowerCase().includes(q))
-        }
-      } else if (ft === 'dateRange') {
-        if (filterVal && (filterVal.from || filterVal.to)) {
-          result = result.filter((row) => {
-            const raw = colKey === 'startDate' ? (row.startDate || row.createdAt) : row[colKey]
-            if (!raw) return false
-            const d = String(raw).substring(0, 10)
-            if (filterVal.from && d < filterVal.from) return false
-            if (filterVal.to   && d > filterVal.to)   return false
-            return true
-          })
-        }
-      } else if (ft === 'numberRange') {
-        if (filterVal && (filterVal.min !== '' || filterVal.max !== '')) {
-          result = result.filter((row) => {
-            const num = colKey === 'progress'     ? progressPct(row)
-                      : colKey === 'days'         ? calcDays(row)
-                      : colKey === 'plannedDays'  ? calcPlannedDays(row)
-                      : parseFloat(row[colKey])
-            if (num === null || num === undefined || isNaN(num)) return false
-            if (filterVal.min !== '' && num < parseFloat(filterVal.min)) return false
-            if (filterVal.max !== '' && num > parseFloat(filterVal.max)) return false
-            return true
-          })
-        }
-      }
+      if (!isColFilterActive(filterVal, ft)) continue
+      result = result.filter((row) => matchColFilter(filterVal, ft, {
+        label:  colDisplayLabel(row, colKey),
+        date:   colKey === 'startDate' ? (row.startDate || row.createdAt) : row[colKey],
+        number: colKey === 'progress'     ? progressPct(row)
+              : colKey === 'days'         ? calcDays(row)
+              : colKey === 'plannedDays'  ? calcPlannedDays(row)
+              : parseFloat(row[colKey]),
+      }))
     }
     if (sortState.col) {
       result.sort((a, b) => {
@@ -749,14 +725,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   }
   function handleSort(col, dir) { setSortState({ col, dir }) }
   function hasColFilter(colKey) {
-    const f = colFilters[colKey]
-    if (f == null) return false
-    const t = getTaskColumnFilterType(colKey)
-    if (t === 'enum')        return f instanceof Set && f.size > 0
-    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
-    if (t === 'dateRange')   return Boolean(f.from || f.to)
-    if (t === 'numberRange') return f.min !== '' || f.max !== ''
-    return false
+    return isColFilterActive(colFilters[colKey], getTaskColumnFilterType(colKey))
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
   const hasSortActive  = sortState.col !== null

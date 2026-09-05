@@ -24,6 +24,7 @@ import PeriodPicker from './PeriodPicker'
 import Modal from '../../components/ui/Modal'
 import DateBox from '../../components/ui/DateBox'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import {
   TASK_STATUSES, STATUS_LABELS, STATUS_CSS,
@@ -1640,14 +1641,7 @@ export default function Tasks() {
   }, [getLabel])
 
   function hasColFilter(colKey) {
-    const f = colFilters[colKey]
-    if (f == null) return false
-    const t = taskColFilterType(colKey)
-    if (t === 'enum')        return f instanceof Set && f.size > 0
-    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
-    if (t === 'dateRange')   return Boolean(f.from || f.to)
-    if (t === 'numberRange') return f.min !== '' || f.max !== ''
-    return false
+    return isColFilterActive(colFilters[colKey], taskColFilterType(colKey))
   }
   const colFilterCount = Object.keys(colFilters).filter(hasColFilter).length
   const hasColSort = sortColState.col !== null
@@ -1668,34 +1662,12 @@ export default function Tasks() {
     let result = [...tasks]
     for (const [colKey, fv] of Object.entries(colFilters)) {
       const ft = taskColFilterType(colKey)
-      if (ft === 'enum') {
-        if (fv instanceof Set && fv.size > 0) result = result.filter((r) => fv.has(colDisplayLabel(r, colKey)))
-      } else if (ft === 'text') {
-        if (typeof fv === 'string' && fv.trim()) {
-          const q = fv.toLowerCase()
-          result = result.filter((r) => colDisplayLabel(r, colKey).toLowerCase().includes(q))
-        }
-      } else if (ft === 'dateRange') {
-        if (fv && (fv.from || fv.to)) {
-          result = result.filter((r) => {
-            const raw = taskColRawDate(r, colKey); if (!raw) return false
-            const d = String(raw).substring(0, 10)
-            if (fv.from && d < fv.from) return false
-            if (fv.to   && d > fv.to)   return false
-            return true
-          })
-        }
-      } else if (ft === 'numberRange') {
-        if (fv && (fv.min !== '' || fv.max !== '')) {
-          result = result.filter((r) => {
-            const num = taskColRawNumber(r, colKey)
-            if (num == null || isNaN(num)) return false
-            if (fv.min !== '' && num < parseFloat(fv.min)) return false
-            if (fv.max !== '' && num > parseFloat(fv.max)) return false
-            return true
-          })
-        }
-      }
+      if (!isColFilterActive(fv, ft)) continue
+      result = result.filter((r) => matchColFilter(fv, ft, {
+        label:  colDisplayLabel(r, colKey),
+        date:   taskColRawDate(r, colKey),
+        number: taskColRawNumber(r, colKey),
+      }))
     }
     if (sortColState.col) {
       result.sort((a, b) => {

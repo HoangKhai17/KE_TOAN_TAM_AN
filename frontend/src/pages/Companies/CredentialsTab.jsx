@@ -10,6 +10,7 @@ import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useCompanyFooter } from './companyFooter'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import {
   DragHeaderCell,
   DragRowCell,
@@ -370,17 +371,12 @@ export default function CredentialsTab({ company }) {
       return String(row[key] ?? '')
     }
     for (const [key, value] of Object.entries(colFilters)) {
-      if (value instanceof Set && value.size) {
-        result = result.filter((row) => value.has(displayValue(row, key)))
-      } else if (typeof value === 'string' && value.trim()) {
-        const query = value.trim().toLocaleLowerCase('vi')
-        result = result.filter((row) => displayValue(row, key).toLocaleLowerCase('vi').includes(query))
-      } else if (key === 'updatedAt' && value && (value.from || value.to)) {
-        result = result.filter((row) => {
-          const date = String(row.updatedAt ?? '').slice(0, 10)
-          return date && (!value.from || date >= value.from) && (!value.to || date <= value.to)
-        })
-      }
+      const ft = key === 'isActive' ? 'enum' : key === 'updatedAt' ? 'dateRange' : 'text'
+      if (!isColFilterActive(value, ft)) continue
+      result = result.filter((row) => matchColFilter(value, ft, {
+        label: displayValue(row, key),
+        date:  row.updatedAt,
+      }))
     }
     if (sortState.col) {
       result.sort((a, b) => displayValue(a, sortState.col).localeCompare(displayValue(b, sortState.col), 'vi', { numeric: true }) * (sortState.dir === 'asc' ? 1 : -1))

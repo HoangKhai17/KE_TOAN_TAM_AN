@@ -3,6 +3,7 @@ import { Download, Loader2, LayoutGrid, AlertTriangle, Check, FileSpreadsheet, F
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
@@ -73,29 +74,12 @@ function useHeaderFilters(rows, colDefs) {
     let out = [...rows]
     for (const [k, fv] of Object.entries(colFilters)) {
       const c = byKey[k]; if (!c) continue
-      if (c.type === 'enum') {
-        if (fv instanceof Set && fv.size > 0) out = out.filter((r) => fv.has(getDisplay(r, k)))
-      } else if (c.type === 'text') {
-        if (typeof fv === 'string' && fv.trim()) {
-          const q = fv.toLowerCase()
-          out = out.filter((r) => getDisplay(r, k).toLowerCase().includes(q))
-        }
-      } else if (c.type === 'dateRange') {
-        if (fv && (fv.from || fv.to)) out = out.filter((r) => {
-          const raw = c.get(r); if (!raw) return false
-          const d = String(raw).slice(0, 10)
-          if (fv.from && d < fv.from) return false
-          if (fv.to   && d > fv.to)   return false
-          return true
-        })
-      } else if (c.type === 'numberRange') {
-        if (fv && (fv.min !== '' || fv.max !== '')) out = out.filter((r) => {
-          const n = Number(c.get(r)); if (n == null || isNaN(n)) return false
-          if (fv.min !== '' && n < parseFloat(fv.min)) return false
-          if (fv.max !== '' && n > parseFloat(fv.max)) return false
-          return true
-        })
-      }
+      if (!isColFilterActive(fv, c.type)) continue
+      out = out.filter((r) => matchColFilter(fv, c.type, {
+        label:  getDisplay(r, k),
+        date:   c.get(r),
+        number: Number(c.get(r)),
+      }))
     }
     if (sortState.col && byKey[sortState.col]) {
       const c = byKey[sortState.col]
@@ -124,13 +108,7 @@ function useHeaderFilters(rows, colDefs) {
   }
   function handleSort(col, dir) { setSortState({ col, dir }); setPopup(null) }
   function hasFilter(colKey) {
-    const f = colFilters[colKey]; if (f == null) return false
-    const t = byKey[colKey]?.type
-    if (t === 'enum')        return f instanceof Set && f.size > 0
-    if (t === 'text')        return typeof f === 'string' && f.trim().length > 0
-    if (t === 'dateRange')   return Boolean(f.from || f.to)
-    if (t === 'numberRange') return f.min !== '' || f.max !== ''
-    return false
+    return isColFilterActive(colFilters[colKey], byKey[colKey]?.type ?? 'text')
   }
   const typeOf = (colKey) => byKey[colKey]?.type ?? 'text'
   const activeCount = Object.keys(colFilters).filter(hasFilter).length

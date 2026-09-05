@@ -5,6 +5,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import InlineTableCell from '../../components/ui/InlineTableCell'
 import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
+import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import {
   DragHeaderCell, DragRowCell, IndexHeaderCell, IndexRowCell,
   SelectionHeaderCell, SelectionRowCell, useRowReorder, useRowSelection,
@@ -55,10 +56,8 @@ export default function DocumentTypesSection({ companyId, canEdit = true }) {
   const displayedRows = useMemo(() => {
     let result = [...rows]
     for (const [key, value] of Object.entries(colFilters)) {
-      if (typeof value === 'string' && value.trim()) {
-        const query = value.trim().toLocaleLowerCase('vi')
-        result = result.filter((row) => String(row[key] ?? '').toLocaleLowerCase('vi').includes(query))
-      }
+      if (!isColFilterActive(value, 'text')) continue
+      result = result.filter((row) => matchColFilter(value, 'text', { label: String(row[key] ?? '') }))
     }
     if (sortState.col) result.sort((a, b) => String(a[sortState.col] ?? '').localeCompare(String(b[sortState.col] ?? ''), 'vi', { numeric: true }) * (sortState.dir === 'asc' ? 1 : -1))
     return result
