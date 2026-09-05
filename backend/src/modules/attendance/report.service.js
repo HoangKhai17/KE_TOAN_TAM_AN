@@ -1,6 +1,7 @@
 const { query } = require('../../config/db')
 const { applyStandardStyle } = require('../export/excel-renderer')
 const { DAILY_VIEW, summaryColumns, getStrictUnpaidFrom } = require('./aggregate.sql')
+const { recomputeDate } = require('./attendance.service')
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,9 @@ async function createHoliday({ holidayDate, name, otMultiplier = 3.0 }) {
      RETURNING *`,
     [holidayDate, name, otMultiplier]
   )
+  // Ngày vừa được đặt là lễ → tính lại chấm công của ngày đó cho mọi nhân sự đã có
+  // bản ghi/log, để các bản ghi "đi làm" chuyển sang trạng thái nghỉ lễ cho nhất quán.
+  await recomputeDate(rows[0].holiday_date)
   return toHolidayDto(rows[0])
 }
 
@@ -55,10 +59,13 @@ async function updateHoliday(id, { name, otMultiplier }) {
 
 async function deleteHoliday(id) {
   const { rows } = await query(
-    'DELETE FROM public_holidays WHERE id = $1 RETURNING id',
+    'DELETE FROM public_holidays WHERE id = $1 RETURNING id, holiday_date',
     [id]
   )
   if (!rows[0]) throw Object.assign(new Error('Holiday not found'), { status: 404 })
+  // Ngày vừa bị gỡ khỏi danh sách lễ → tính lại chấm công để các bản ghi từng bị
+  // đóng băng "nghỉ lễ" trả về công thực tế theo log (hoặc vắng nếu không đi làm).
+  await recomputeDate(rows[0].holiday_date)
 }
 
 // ── Monthly Report ────────────────────────────────────────────────────────────

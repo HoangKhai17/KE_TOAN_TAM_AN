@@ -165,7 +165,13 @@ async function calculateAttendanceRecord(userId, date) {
        VALUES ($1, $2, $3, 'holiday', 0, 1.0, 0, TRUE)
        ON CONFLICT (user_id, work_date) DO UPDATE SET
          status = 'holiday', work_units = 0, paid_leave_units = 1.0, unpaid_leave_units = 0,
-         is_holiday = TRUE, shift_id = $3, updated_at = NOW()
+         is_holiday = TRUE, shift_id = $3,
+         -- Ngày lễ = nghỉ hưởng lương, KHÔNG có công thực tế → dọn sạch giờ vào/ra/trễ/sớm
+         -- cũ (vd bản ghi từng là present rồi ngày đó mới được đặt thành lễ), tránh ô "Lễ"
+         -- vẫn hiện IN/OUT gây hiểu nhầm.
+         check_in_time = NULL, check_out_time = NULL, actual_hours = NULL,
+         late_minutes = 0, early_minutes = 0,
+         updated_at = NOW()
        RETURNING *`,
       [userId, date, ws.shift_id ?? null]
     )
@@ -322,10 +328,14 @@ async function calculateAttendanceRecord(userId, date) {
     `INSERT INTO attendance_records
        (user_id, work_date, shift_id, check_in_time, check_out_time, actual_hours,
         late_minutes, early_minutes, work_units, paid_leave_units, unpaid_leave_units,
-        status, leave_request_id, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        status, leave_request_id, notes, is_holiday)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, FALSE)
      ON CONFLICT (user_id, work_date) DO UPDATE SET
        shift_id       = $3,
+       -- Tới nhánh này nghĩa là ngày KHÔNG phải lễ (nhánh lễ đã return sớm ở Step 3).
+       -- Phải hạ cờ lễ cũ, nếu không bản ghi từng bị đánh dấu lễ (do gỡ ngày lễ sai)
+       -- sẽ kẹt is_holiday = TRUE mãi.
+       is_holiday     = FALSE,
        check_in_time  = CASE WHEN attendance_records.is_adjusted THEN attendance_records.check_in_time  ELSE $4  END,
        check_out_time = CASE WHEN attendance_records.is_adjusted THEN attendance_records.check_out_time ELSE $5  END,
        actual_hours   = CASE WHEN attendance_records.is_adjusted THEN attendance_records.actual_hours   ELSE $6  END,
@@ -349,6 +359,29 @@ async function calculateAttendanceRecord(userId, date) {
      status, leave?.id ?? null, isAdmin && remaining > 0.001 ? 'Tự động - Admin' : null]
   )
   return toRecordDto(rows[0])
+}
+
+// Tính lại toàn bộ bản ghi chấm công của MỘT ngày, cho mọi nhân sự có bản ghi HOẶC
+// có log trong ngày đó. Dùng khi cấu hình ngày lễ thay đổi (thêm/gỡ) hoặc cần sửa
+// dữ liệu bị lệch. Vì calculateAttendanceRecord đọc giờ trực tiếp từ attendance_logs
+// và kiểm tra lại public_holidays nên chỉ cần gọi lại là dữ liệu tự khớp trạng thái mới.
+async function recomputeDate(date) {
+  const { rows } = await query(
+    `SELECT user_id FROM attendance_records WHERE work_date = $1
+     UNION
+     SELECT user_id FROM attendance_logs WHERE logged_at::date = $1`,
+    [date]
+  )
+  let recomputed = 0
+  for (const r of rows) {
+    try {
+      await calculateAttendanceRecord(r.user_id, date)
+      recomputed++
+    } catch (err) {
+      console.error(`[recomputeDate] Lỗi tính lại ${r.user_id} ${date}: ${err.message}`)
+    }
+  }
+  return { date, users: rows.length, recomputed }
 }
 
 // ── Check-in / Check-out ──────────────────────────────────────────────────────
@@ -747,6 +780,7 @@ async function getAttendanceLogs(userId, date) {
 
 module.exports = {
   calculateAttendanceRecord,
+  recomputeDate,
   checkIn,
   checkOut,
   getToday,
