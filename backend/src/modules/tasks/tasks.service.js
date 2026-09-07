@@ -354,6 +354,10 @@ const TASK_COLUMNS_SQL = {
   plannedDays:    { text: null, filter: '(CASE WHEN t.due_date IS NULL THEN NULL ELSE GREATEST(0, (t.due_date - COALESCE(t.start_date, t.created_at::date))) + 1 END)', kind: 'number' },
   progress:       { text: null, filter: '(CASE WHEN cl.checklist_total > 0 THEN ROUND(100.0 * cl.checklist_done / cl.checklist_total) ELSE NULL END)', kind: 'number', join: 'checklist' },
 }
+// Cột enum → loại enum để SẮP theo nhãn tiếng Việt (thay vì mã)
+const COL_ENUM_TYPE = { status: 'task_status', priority: 'task_priority', source: 'task_source' }
+// Bọc chuỗi thành literal SQL an toàn (nhãn enum lấy từ DB, vẫn escape ' để chắc chắn)
+function sqlLit(s) { return `'${String(s ?? '').replace(/'/g, "''")}'` }
 const COLVALS_VER_KEY = 'taskcolvals:ver'
 const COLVALS_TTL = 60          // giây — lưới an toàn; version-key mới là cơ chế chính
 const COLVALS_LIMIT = 1000      // trần số giá trị phân biệt trả về
@@ -696,7 +700,23 @@ async function listTasks(filters = {}) {
   if (typeof colSortObj === 'string') { try { colSortObj = JSON.parse(colSortObj) } catch { colSortObj = null } }
   if (colSortObj && colSortObj.col && TASK_COLUMNS_SQL[colSortObj.col]) {
     const dir = colSortObj.dir === 'desc' ? 'DESC' : 'ASC'
-    orderBy = `${TASK_COLUMNS_SQL[colSortObj.col].filter} ${dir} NULLS LAST, t.created_at DESC`
+    const meta = TASK_COLUMNS_SQL[colSortObj.col]
+    const fexpr = meta.filter
+    const enumType = COL_ENUM_TYPE[colSortObj.col]
+    let sortExpr = fexpr
+    let textLike = meta.kind === 'text'
+    if (enumType) {
+      // Cột enum: sắp theo NHÃN tiếng Việt (không phải mã) — dựng CASE map mã→nhãn.
+      const opts = await enums.getOptions(enumType)
+      if (opts.length) {
+        const whens = opts.map((o) => `WHEN ${sqlLit(o.key)} THEN ${sqlLit(o.label)}`).join(' ')
+        sortExpr = `CASE ${fexpr} ${whens} ELSE ${fexpr} END`
+      }
+      textLike = true
+    }
+    // Cột chữ/nhãn: dùng collation tiếng Việt để A→Z đúng (Đ, Ơ… đúng vị trí).
+    const coll = textLike ? ' COLLATE "vi-VN-x-icu"' : ''
+    orderBy = `${sortExpr}${coll} ${dir} NULLS LAST, t.created_at DESC`
   }
 
   const [countRes, statusCountsRes, { rows }] = await Promise.all([

@@ -1541,6 +1541,8 @@ export default function Tasks() {
     if (colKey === 'status')   return getLabel('task_status', value, STATUS_LABELS[value] ?? value)
     if (colKey === 'priority') return getLabel('task_priority', value, PRIORITY_LABELS[value] ?? value)
     if (colKey === 'source')   return getLabel('task_source', value, SOURCE_LABELS[value] ?? value)
+    // Cột ngày: server trả 'YYYY-MM-DD' → hiển thị dd/mm/yyyy (giữ value gốc để lọc)
+    if (colKey === 'dueDate' || colKey === 'startDate' || colKey === 'createdAt') return fmtDate(value)
     return value
   }, [getLabel])
 
