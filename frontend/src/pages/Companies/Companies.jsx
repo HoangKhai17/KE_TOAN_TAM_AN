@@ -289,7 +289,7 @@ function getCompanyColumnFilterType(colKey) {
 }
 // Cột có tab "Theo giá trị" phía server (backend có biểu thức text). Cột số không có.
 const CO_SERVER_VALUE_COLS = new Set([
-  'name', 'taxCode', 'assignedStaffName', 'status', 'businessType', 'industry', 'serviceStartDate',
+  'name', 'shortName', 'taxCode', 'assignedStaffName', 'status', 'businessType', 'industry', 'serviceStartDate',
 ])
 
 function getCompanyDisplayLabel(row, colKey) {

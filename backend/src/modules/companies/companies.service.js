@@ -69,6 +69,7 @@ function toDto(row) {
 // Map cột (khớp colKey của frontend Companies). text=null → không có value-list.
 const COMPANY_COLUMNS_SQL = {
   name:             { text: 'c.name',            filter: 'c.name', kind: 'text' },
+  shortName:        { text: `coalesce(c.short_name, '')`, filter: 'c.short_name', kind: 'text' },
   taxCode:          { text: `coalesce(c.tax_code, '')`, filter: 'c.tax_code', kind: 'text' },
   assignedStaffName:{ text: 'u.name',            filter: 'u.name', kind: 'text', join: 'staff' },
   status:           { text: 'c.status::text',    filter: 'c.status::text', kind: 'text' },
