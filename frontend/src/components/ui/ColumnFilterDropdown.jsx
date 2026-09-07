@@ -88,6 +88,7 @@ export default function ColumnFilterDropdown({
 
       {showValue && (
         <ValueSection allRows={allRows} colKey={colKey} getDisplayLabel={getDisplayLabel}
+          numeric={filterType === 'numberRange'} dateCol={filterType === 'dateRange'}
           currentFilter={valueFilter} onFilterChange={onFilterChange} colSorted={colSorted} onClearSort={onClearSort} />
       )}
       {showCondition && conditionKind === 'text' && (
@@ -162,8 +163,88 @@ function ValueGearMenu({ prefs, setPref }) {
   )
 }
 
+// Đọc số từ nhãn (hỗ trợ định dạng vi-VN "80.000.000" / "12,5" / "3")
+function parseViNumber(label) {
+  if (label == null) return null
+  let s = String(label).trim()
+  if (s === '' || s === '(Trống)') return null
+  s = s.replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.')
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
+// Đọc ngày từ nhãn — hỗ trợ "dd/mm/yyyy" LẪN ISO "yyyy-mm-dd[...]" (bỏ phần giờ)
+function parseViDate(label) {
+  const s = String(label ?? '').trim()
+  let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s)
+  if (m) { const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])); return isNaN(d.getTime()) ? null : d }
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s)
+  if (m) { const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])); return isNaN(d.getTime()) ? null : d }
+  return null
+}
+
+// Khoảng [from, to] (Date, 0h) của một mốc thời gian tương đối, so với hôm nay
+function dateRangePreset(key) {
+  const now = new Date(); now.setHours(0, 0, 0, 0)
+  const y = now.getFullYear(), mo = now.getMonth(), da = now.getDate()
+  const mk = (yy, mm, dd) => new Date(yy, mm, dd)
+  const dow = (now.getDay() + 6) % 7   // Thứ 2 = 0
+  const weekMon = (shift) => mk(y, mo, da - dow + shift * 7)
+  const weekOf = (shift) => { const s = weekMon(shift); return [s, mk(s.getFullYear(), s.getMonth(), s.getDate() + 6)] }
+  const q = Math.floor(mo / 3)
+  switch (key) {
+    case 'yesterday': return [mk(y, mo, da - 1), mk(y, mo, da - 1)]
+    case 'today':     return [now, now]
+    case 'tomorrow':  return [mk(y, mo, da + 1), mk(y, mo, da + 1)]
+    case 'lastWeek':  return weekOf(-1)
+    case 'thisWeek':  return weekOf(0)
+    case 'nextWeek':  return weekOf(1)
+    case 'lastMonth': return [mk(y, mo - 1, 1), mk(y, mo, 0)]
+    case 'thisMonth': return [mk(y, mo, 1), mk(y, mo + 1, 0)]
+    case 'nextMonth': return [mk(y, mo + 1, 1), mk(y, mo + 2, 0)]
+    case 'lastQuarter': return [mk(y, q * 3 - 3, 1), mk(y, q * 3, 0)]
+    case 'thisQuarter': return [mk(y, q * 3, 1), mk(y, q * 3 + 3, 0)]
+    case 'nextQuarter': return [mk(y, q * 3 + 3, 1), mk(y, q * 3 + 6, 0)]
+    case 'lastYear': return [mk(y - 1, 0, 1), mk(y - 1, 11, 31)]
+    case 'thisYear': return [mk(y, 0, 1), mk(y, 11, 31)]
+    case 'nextYear': return [mk(y + 1, 0, 1), mk(y + 1, 11, 31)]
+    default: return null
+  }
+}
+
+// Menu "Nâng cao" — các thao tác CHỌN NHANH trên value-list (như "More" của Excel)
+function ValueMoreMenu({ actions }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  const act = (fn) => { fn(); setOpen(false) }
+  return (
+    <div className={s.gearWrap} ref={ref}>
+      <button className={`${s.miniBtn} ${open ? s.miniBtnActive : ''}`} onClick={() => setOpen((o) => !o)}>Nâng cao ▾</button>
+      {open && (
+        <div className={s.gearMenu}>
+          {actions.map((a, i) => (
+            a.separator
+              ? <div key={`sep${i}`} className={s.gearSep} />
+              : (
+                <button key={a.label} className={`${s.gearItem} ${a.active ? s.gearItemActive : ''}`} disabled={a.disabled} onClick={() => act(a.run)}>
+                  <span className={s.gearCheck}>{a.active && <Check size={12} />}</span>{a.label}
+                </button>
+              )
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Lọc theo GIÁ TRỊ: value list kiểu Excel (đếm số lượng, ô trống, đảo chọn, sắp xếp) ──
-function ValueSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilterChange, colSorted, onClearSort }) {
+function ValueSection({ allRows, colKey, getDisplayLabel, numeric, dateCol, currentFilter, onFilterChange, colSorted, onClearSort }) {
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState('name') // 'name' | 'count'
   const [prefs, setPrefs] = useState(loadValuePrefs)
@@ -177,12 +258,18 @@ function ValueSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilte
       counts.set(v, (counts.get(v) ?? 0) + 1)
     }
     const arr = [...counts.entries()].map(([value, count]) => ({ value, count }))
-    arr.sort((a, b) => {
-      if (sortBy === 'count') return b.count - a.count || String(a.value).localeCompare(String(b.value), 'vi', { numeric: true })
+    const byName = (a, b) => {
+      if (dateCol) {   // cột ngày: so theo mốc thời gian, không theo chuỗi
+        const da = parseViDate(a.value), db = parseViDate(b.value)
+        if (da && db) return da - db
+        if (da) return -1
+        if (db) return 1
+      }
       return String(a.value).localeCompare(String(b.value), 'vi', { numeric: true })
-    })
+    }
+    arr.sort((a, b) => (sortBy === 'count' ? (b.count - a.count || byName(a, b)) : byName(a, b)))
     return arr
-  }, [allRows, colKey, getDisplayLabel, sortBy])
+  }, [allRows, colKey, getDisplayLabel, sortBy, dateCol])
 
   const allValues = useMemo(() => items.map((it) => it.value), [items])
   const selected = currentFilter instanceof Set ? currentFilter : new Set()
@@ -205,6 +292,57 @@ function ValueSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilte
     const next = new Set(allValues.filter((v) => !selected.has(v)))
     onFilterChange(colKey, next.size > 0 ? next : null)
   }
+  // Áp một TẬP giá trị làm bộ lọc; so sánh với lựa chọn hiện tại để biết preset nào đang active.
+  const applySet = (set) => onFilterChange(colKey, set.size > 0 ? new Set(set) : null)
+  const setsEqual = (a, b) => !!a && !!b && a.size === b.size && [...a].every((v) => b.has(v))
+  const setOf = (arr) => new Set(arr.map((it) => it.value))
+  const mkAction = (label, set, disabled = false) => ({
+    label, run: () => applySet(set),
+    disabled: disabled || set.size === 0,
+    active: !disabled && set.size > 0 && setsEqual(selected, set),
+  })
+
+  // Nhóm chung: trùng lặp (count>1) / duy nhất (count===1)
+  const dupSet  = useMemo(() => setOf(items.filter((it) => it.count > 1)),  [items]) // eslint-disable-line react-hooks/exhaustive-deps
+  const uniqSet = useMemo(() => setOf(items.filter((it) => it.count === 1)), [items]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Nhóm SỐ (chỉ cột số): Top 10 / Trên–Dưới TB / Chỉ số nguyên
+  const numItems = useMemo(() => (
+    numeric ? items.map((it) => ({ ...it, num: parseViNumber(it.value) })).filter((it) => it.num != null) : []
+  ), [numeric, items])
+  const numAvg = useMemo(() => {
+    if (numItems.length === 0) return null
+    let sum = 0, cnt = 0
+    for (const it of numItems) { sum += it.num * it.count; cnt += it.count }
+    return cnt ? sum / cnt : null
+  }, [numItems])
+  const numActions = numItems.length > 0 ? [
+    { separator: true },
+    mkAction('10 giá trị lớn nhất', setOf([...numItems].sort((a, b) => b.num - a.num).slice(0, 10))),
+    mkAction('Trên trung bình', setOf(numItems.filter((it) => numAvg != null && it.num > numAvg)), numAvg == null),
+    mkAction('Dưới trung bình', setOf(numItems.filter((it) => numAvg != null && it.num < numAvg)), numAvg == null),
+    mkAction('Chỉ số nguyên', setOf(numItems.filter((it) => Number.isInteger(it.num)))),
+  ] : []
+
+  // Nhóm NGÀY (chỉ cột ngày): chọn giá trị rơi vào mốc thời gian tương đối
+  const dateItems = useMemo(() => (
+    dateCol ? items.map((it) => ({ ...it, d: parseViDate(it.value) })).filter((it) => it.d != null) : []
+  ), [dateCol, items])
+  const dateSetOf = (key) => {
+    const r = dateRangePreset(key); if (!r) return new Set()
+    const [from, to] = r
+    return setOf(dateItems.filter((it) => it.d >= from && it.d <= to))
+  }
+  const DATE_PRESETS = [
+    ['Hôm qua', 'yesterday'], ['Hôm nay', 'today'], ['Ngày mai', 'tomorrow'],
+    ['Tuần trước', 'lastWeek'], ['Tuần này', 'thisWeek'], ['Tuần sau', 'nextWeek'],
+    ['Tháng trước', 'lastMonth'], ['Tháng này', 'thisMonth'], ['Tháng sau', 'nextMonth'],
+    ['Quý trước', 'lastQuarter'], ['Quý này', 'thisQuarter'], ['Quý sau', 'nextQuarter'],
+    ['Năm trước', 'lastYear'], ['Năm nay', 'thisYear'], ['Năm sau', 'nextYear'],
+  ]
+  const dateActions = dateItems.length > 0
+    ? [{ separator: true }, ...DATE_PRESETS.map(([label, key]) => mkAction(label, dateSetOf(key)))]
+    : []
 
   const showLabel = (v) => (String(v).trim() === '' ? '(Trống)' : v)
 
@@ -221,7 +359,13 @@ function ValueSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilte
         <button className={`${s.miniBtn} ${sortBy === 'name' ? s.miniBtnActive : ''}`} onClick={() => setSortBy('name')}>Tên</button>
         <button className={`${s.miniBtn} ${sortBy === 'count' ? s.miniBtnActive : ''}`} onClick={() => setSortBy('count')}>Số lượng</button>
         <span className={s.spacer} />
-        <button className={s.linkBtn} onClick={invert}>Đảo chọn</button>
+        <ValueMoreMenu actions={[
+          { label: 'Đảo chọn', run: invert },
+          mkAction('Chọn giá trị trùng lặp', dupSet),
+          mkAction('Chọn giá trị duy nhất', uniqSet),
+          ...numActions,
+          ...dateActions,
+        ]} />
         <ValueGearMenu prefs={prefs} setPref={setPref} />
       </div>
 
@@ -398,13 +542,15 @@ function DateRangeSection({ colKey, currentFilter, onFilterChange, colSorted, on
     setFrom(nf); setTo(nt)
     onFilterChange(colKey, (nf || nt) ? { from: nf, to: nt } : null)
   }
+  const isQuick = (key) => { const r = quickRange(key); return from === r.from && to === r.to }
+  const qcls = (key) => `${s.miniBtn} ${isQuick(key) ? s.miniBtnActive : ''}`
   return (
     <div className={s.section}>
       <div className={s.quickRow}>
-        <button className={s.miniBtn} onClick={() => update(...Object.values(quickRange('today')))}>Hôm nay</button>
-        <button className={s.miniBtn} onClick={() => update(...Object.values(quickRange('week')))}>Tuần này</button>
-        <button className={s.miniBtn} onClick={() => update(...Object.values(quickRange('month')))}>Tháng này</button>
-        <button className={s.miniBtn} onClick={() => update(...Object.values(quickRange('year')))}>Năm nay</button>
+        <button className={qcls('today')} onClick={() => update(...Object.values(quickRange('today')))}>Hôm nay</button>
+        <button className={qcls('week')}  onClick={() => update(...Object.values(quickRange('week')))}>Tuần này</button>
+        <button className={qcls('month')} onClick={() => update(...Object.values(quickRange('month')))}>Tháng này</button>
+        <button className={qcls('year')}  onClick={() => update(...Object.values(quickRange('year')))}>Năm nay</button>
       </div>
       <div className={s.rangeGroup}>
         <div className={s.rangeRow}>

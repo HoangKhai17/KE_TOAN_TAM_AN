@@ -1636,6 +1636,10 @@ export default function Tasks() {
       case 'latestComment':  return row.latestComment || '(Chưa có)'
       case 'status':         return taskStatusLabel(row, getLabel)
       case 'priority':       return getLabel('task_priority', row.priority, PRIORITY_LABELS[row.priority] ?? row.priority)
+      // Cột ngày: hiển thị dd/mm/yyyy (không phải ISO) trong danh sách giá trị
+      case 'startDate':      { const v = row.startDate || row.createdAt; return v ? fmtDate(v) : '(Trống)' }
+      case 'dueDate':        return row.dueDate   ? fmtDate(row.dueDate)   : '(Trống)'
+      case 'createdAt':      return row.createdAt ? fmtDate(row.createdAt) : '(Trống)'
       default: { const v = row[colKey]; return v != null && v !== '' ? String(v) : '(Trống)' }
     }
   }, [getLabel])

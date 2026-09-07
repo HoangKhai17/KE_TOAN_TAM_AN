@@ -148,6 +148,8 @@
   border-radius: 8px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
   padding: 4px;
+  max-height: 260px;
+  overflow-y: auto;
 }
 .gearItem {
   display: flex;
@@ -164,7 +166,11 @@
   font-size: var(--cfd-fs);
 }
 .gearItem:hover { background: var(--color-bg-soft, #f1f5f9); }
+.gearItemActive { color: var(--color-primary-deep, #1d4ed8); font-weight: 600; background: var(--color-primary-bg, #eff6ff); }
+.gearItem:disabled { opacity: 0.4; cursor: not-allowed; }
+.gearItem:disabled:hover { background: none; }
 .gearCheck { flex: 0 0 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--color-primary, #2563eb); }
+.gearSep { height: 1px; margin: 4px 6px; background: var(--color-border, #e2e8f0); }
 
 .totalRow {
   margin-top: 6px;
