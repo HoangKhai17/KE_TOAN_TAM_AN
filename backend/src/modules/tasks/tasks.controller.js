@@ -23,6 +23,25 @@ async function listTasks(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Danh sách GIÁ TRỊ theo cột cho header filter (server-side). Áp CÙNG phạm vi/bộ lọc
+// như listTasks (nhân sự chỉ thấy việc trong phạm vi mình).
+async function getColumnValues(req, res, next) {
+  try {
+    const { column, search, status, priority, ...rest } = req.query
+    const values = await svc.getColumnValues({
+      column,
+      search,
+      filters: {
+        status:       status   ? (Array.isArray(status)   ? status   : [status])   : undefined,
+        priority:     priority ? (Array.isArray(priority) ? priority : [priority]) : undefined,
+        ...rest,
+        staffScopeId: req.user.role === 'staff' ? req.user.id : undefined,
+      },
+    })
+    res.json({ success: true, data: { values } })
+  } catch (err) { next(err) }
+}
+
 async function exportTasksExcel(req, res, next) {
   try {
     // Frontend gửi cột + dữ liệu đã render đúng như bảng → backend chỉ định dạng.
@@ -280,7 +299,7 @@ async function deleteLink(req, res, next) {
 }
 
 module.exports = {
-  listTasks, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog,
+  listTasks, getColumnValues, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog,
   getAvailableYears, exportTasksExcel,
   listChecklist, addChecklistItem, updateChecklistItem, reorderChecklist, deleteChecklistItem,
   listDependencies, addDependency, removeDependency,

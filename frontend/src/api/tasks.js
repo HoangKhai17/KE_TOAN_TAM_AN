@@ -12,6 +12,13 @@ export async function getTaskYears() {
   return data.data.years  // number[]
 }
 
+// Danh sách giá trị theo cột cho header filter (server-side, có cache).
+// params = { column, search?, ...bộ lọc chung như listTasks (không gồm colFilters) }
+export async function getTaskColumnValues(params = {}) {
+  const { data } = await api.get('/tasks/meta/column-values', { params })
+  return data.data.values  // [{ value, count }]
+}
+
 // Xuất Excel: gửi cột + dữ liệu đã render (đúng như bảng) → nhận file Blob
 export async function exportTasksExcel(body) {
   const { data } = await api.post('/tasks/export', body, { responseType: 'blob', timeout: 120000 })

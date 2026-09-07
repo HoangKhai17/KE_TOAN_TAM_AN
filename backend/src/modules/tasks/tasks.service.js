@@ -1,4 +1,6 @@
+const crypto = require('crypto')
 const { query } = require('../../config/db')
+const { redis } = require('../../config/redis')
 const audit    = require('../../lib/audit')
 const activity = require('../../lib/activity')
 const { checkBlockers } = require('./dependencies.service')
@@ -215,6 +217,248 @@ async function notifyCollaboratorChanges({ toAdd, toRemove }, task, actorId) {
   await Promise.all(jobs)
 }
 
+// Dựng mệnh đề WHERE cho bảng tasks (audience='internal') từ các bộ lọc chung.
+// Trả về cả bản CHỈ-BASE (không status/priority — cho statusCounts) lẫn bản ĐẦY ĐỦ.
+// Tái dùng cho cả listTasks lẫn getColumnValues để 2 chỗ luôn khớp điều kiện.
+function buildTaskWhere(filters = {}) {
+  const {
+    companyId, assignedTo, createdBy, status, priority, source,
+    dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
+    forceAssignedTo, staffScopeId, collaboratorIds, assignedIncludeSupport,
+  } = filters
+
+  const collabArr = collaboratorIds == null
+    ? null
+    : (Array.isArray(collaboratorIds) ? collaboratorIds : [collaboratorIds]).filter(Boolean)
+  const hasCollabFilter = Array.isArray(collabArr) && collabArr.length > 0
+  const effectiveAssignedTo = forceAssignedTo ?? assignedTo
+  const includeSupport = assignedIncludeSupport === true || assignedIncludeSupport === 'true'
+
+  const baseConditions = ['1=1']
+  const baseParams = []
+
+  if (companyId && (!Array.isArray(companyId) || companyId.length > 0)) {
+    const arr = Array.isArray(companyId) ? companyId : [companyId]
+    baseParams.push(arr)
+    baseConditions.push(`t.company_id = ANY($${baseParams.length}::uuid[])`)
+  }
+  if (effectiveAssignedTo && (!Array.isArray(effectiveAssignedTo) || effectiveAssignedTo.length > 0)) {
+    const arr = Array.isArray(effectiveAssignedTo) ? effectiveAssignedTo : [effectiveAssignedTo]
+    baseParams.push(arr)
+    const p = baseParams.length
+    baseConditions.push(
+      includeSupport
+        ? `(t.assigned_to = ANY($${p}::uuid[])
+            OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = ANY($${p}::uuid[])))`
+        : `t.assigned_to = ANY($${p}::uuid[])`
+    )
+  }
+  if (createdBy && (!Array.isArray(createdBy) || createdBy.length > 0)) {
+    const arr = Array.isArray(createdBy) ? createdBy : [createdBy]
+    baseParams.push(arr)
+    baseConditions.push(`t.created_by = ANY($${baseParams.length}::uuid[])`)
+  }
+  if (staffScopeId) {
+    baseParams.push(staffScopeId)
+    const p = baseParams.length
+    baseConditions.push(
+      `(t.assigned_to = $${p}
+        OR (t.visibility <> 'private' AND t.company_id IN (SELECT id FROM companies WHERE assigned_staff_id = $${p}))
+        OR EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = $${p}))`
+    )
+  }
+  if (hasCollabFilter) {
+    baseParams.push(collabArr)
+    baseConditions.push(
+      `EXISTS (SELECT 1 FROM task_collaborators tc WHERE tc.task_id = t.id AND tc.user_id = ANY($${baseParams.length}::uuid[]))`
+    )
+  }
+  if (source) {
+    const arr = Array.isArray(source) ? source : [source]
+    baseParams.push(arr)
+    baseConditions.push(`t.source = ANY($${baseParams.length})`)
+  }
+  const scheduleTodayOn = scheduleToday === 'true' || scheduleToday === true
+  if (scheduleTodayOn) {
+    baseConditions.push(`t.status != 'completed' AND (t.due_date <= CURRENT_DATE OR t.start_date <= CURRENT_DATE)`)
+  } else if (dueDateFrom && dueDateTo) {
+    baseParams.push(dueDateTo)
+    baseConditions.push(`COALESCE(t.start_date, t.due_date) <= $${baseParams.length}`)
+    baseParams.push(dueDateFrom)
+    baseConditions.push(`COALESCE(t.due_date, t.start_date) >= $${baseParams.length}`)
+  } else if (dueDateFrom) {
+    baseParams.push(dueDateFrom)
+    baseConditions.push(`COALESCE(t.due_date, t.start_date) >= $${baseParams.length}`)
+  } else if (dueDateTo) {
+    baseParams.push(dueDateTo)
+    baseConditions.push(`COALESCE(t.start_date, t.due_date) <= $${baseParams.length}`)
+  }
+  if (periodLabel) { baseParams.push(periodLabel); baseConditions.push(`t.period_label = $${baseParams.length}`) }
+  if (!scheduleTodayOn && (isOverdue === 'true' || isOverdue === true)) {
+    baseConditions.push(`t.due_date < CURRENT_DATE AND t.status != 'completed'`)
+  }
+  if (search && search.trim()) {
+    baseParams.push(search.trim())
+    baseConditions.push(
+      `to_tsvector('simple', t.title || ' ' || coalesce(t.description, '')) @@ plainto_tsquery('simple', $${baseParams.length})`
+    )
+  }
+
+  const conditions = [...baseConditions]
+  const params = [...baseParams]
+  if (status) {
+    const arr = Array.isArray(status) ? status : [status]
+    params.push(arr)
+    conditions.push(`t.status = ANY($${params.length}::text[])`)
+  }
+  if (priority) {
+    const arr = Array.isArray(priority) ? priority : [priority]
+    params.push(arr)
+    conditions.push(`t.priority = ANY($${params.length}::text[])`)
+  }
+
+  return { baseConditions, baseParams, conditions, params }
+}
+
+// ── Danh sách GIÁ TRỊ theo cột (cho header filter phía server) + cache version-key ──
+// ── Map cột (DÙNG CHUNG cho value-list GĐ1 + lọc/sắp phía server GĐ2) ─────────────
+// Mỗi cột (khớp colKey của frontend Tasks) có:
+//   text   : biểu thức TEXT dùng cho value-list + so khớp "lọc theo giá trị" (null = không hỗ trợ value-list)
+//   filter : biểu thức dùng cho điều kiện range/số/text (date=kiểu date, number=kiểu numeric)
+//   kind   : 'text' | 'date' | 'number'
+//   join   : khoá join cần thêm (company/assignee/comment/checklist) — chỉ thêm khi cột được dùng
+// An toàn: chỉ nhận colKey trong map, không ghép chuỗi tự do từ input.
+const COL_JOINS = {
+  company:   'LEFT JOIN companies c ON c.id = t.company_id',
+  assignee:  'LEFT JOIN users ua ON ua.id = t.assigned_to',
+  comment:   `LEFT JOIN LATERAL (SELECT cm.content AS latest_comment FROM task_comments cm WHERE cm.task_id = t.id ORDER BY cm.created_at DESC LIMIT 1) lc ON TRUE`,
+  checklist: `LEFT JOIN LATERAL (
+    SELECT COUNT(*) FILTER (WHERE is_leaf) AS checklist_total,
+           COUNT(*) FILTER (WHERE is_leaf AND is_completed) AS checklist_done
+    FROM (SELECT is_completed, NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
+          FROM task_checklist_items WHERE task_id = t.id) z) cl ON TRUE`,
+}
+const TASK_COLUMNS_SQL = {
+  title:          { text: 't.title',                        filter: 't.title', kind: 'text' },
+  companyShort:   { text: 'COALESCE(c.short_name, c.name)',  filter: 'COALESCE(c.short_name, c.name)', kind: 'text', join: 'company' },
+  status:         { text: 't.status',                       filter: 't.status', kind: 'text' },
+  priority:       { text: 't.priority',                     filter: 't.priority', kind: 'text' },
+  source:         { text: 't.source',                       filter: 't.source', kind: 'text' },
+  periodLabel:    { text: 't.period_label',                 filter: 't.period_label', kind: 'text' },
+  assignedToName: { text: 'ua.name',                        filter: 'ua.name', kind: 'text', join: 'assignee' },
+  latestComment:  { text: 'lc.latest_comment',              filter: 'lc.latest_comment', kind: 'text', join: 'comment' },
+  dueDate:        { text: `to_char(t.due_date, 'YYYY-MM-DD')`,                        filter: 't.due_date', kind: 'date' },
+  startDate:      { text: `to_char(COALESCE(t.start_date, t.created_at), 'YYYY-MM-DD')`, filter: 'COALESCE(t.start_date, t.created_at::date)', kind: 'date' },
+  createdAt:      { text: `to_char(t.created_at, 'YYYY-MM-DD')`,                      filter: 't.created_at::date', kind: 'date' },
+  days:           { text: null, filter: '(GREATEST(0, (COALESCE(t.completed_at::date, CURRENT_DATE) - COALESCE(t.start_date, t.created_at::date))) + 1)', kind: 'number' },
+  plannedDays:    { text: null, filter: '(CASE WHEN t.due_date IS NULL THEN NULL ELSE GREATEST(0, (t.due_date - COALESCE(t.start_date, t.created_at::date))) + 1 END)', kind: 'number' },
+  progress:       { text: null, filter: '(CASE WHEN cl.checklist_total > 0 THEN ROUND(100.0 * cl.checklist_done / cl.checklist_total) ELSE NULL END)', kind: 'number', join: 'checklist' },
+}
+const COLVALS_VER_KEY = 'taskcolvals:ver'
+const COLVALS_TTL = 60          // giây — lưới an toàn; version-key mới là cơ chế chính
+const COLVALS_LIMIT = 1000      // trần số giá trị phân biệt trả về
+
+// Bump khi có bất kỳ thay đổi task → mọi cache key cũ thành rác, request sau tự tươi.
+async function bumpColValsVersion() {
+  try { await redis.incr(COLVALS_VER_KEY) } catch { /* redis lỗi → bỏ qua, coi như không cache */ }
+}
+
+async function getColumnValues({ column, search, filters = {} }) {
+  const cfg = TASK_COLUMNS_SQL[column]
+  if (!cfg || !cfg.text) { const e = new Error('Cột không hỗ trợ lọc theo giá trị'); e.status = 400; throw e }
+
+  let ver = '0'
+  try { ver = (await redis.get(COLVALS_VER_KEY)) || '0' } catch { /* redis lỗi */ }
+  const normSearch = (search && search.trim()) ? search.trim().toLowerCase() : ''
+  const hash = crypto.createHash('sha1')
+    .update(JSON.stringify({ filters, s: normSearch }))
+    .digest('hex').slice(0, 16)
+  const cacheKey = `taskcolvals:${ver}:${column}:${hash}`
+
+  try { const c = await redis.get(cacheKey); if (c) return JSON.parse(c) } catch { /* redis lỗi */ }
+
+  const { conditions, params } = buildTaskWhere(filters)
+  const p = [...params]
+  const joinSql = cfg.join ? COL_JOINS[cfg.join] : ''
+  let extra = ''
+  if (normSearch) { p.push(`%${normSearch}%`); extra = ` AND ${cfg.text} ILIKE $${p.length}` }
+  const sql = `
+    SELECT ${cfg.text} AS value, COUNT(*)::int AS count
+    FROM tasks t ${joinSql}
+    WHERE ${conditions.join(' AND ')}${extra}
+    GROUP BY ${cfg.text}
+    ORDER BY count DESC, value ASC
+    LIMIT ${COLVALS_LIMIT}`
+  const { rows } = await query(sql, p)
+  const values = rows.map((r) => ({ value: r.value, count: r.count }))
+
+  try { await redis.set(cacheKey, JSON.stringify(values), 'EX', COLVALS_TTL) } catch { /* redis lỗi */ }
+  return values
+}
+
+// ── Dịch colFilters (từ header filter) → điều kiện SQL an toàn ────────────────────
+// colFilters = { [colKey]: array(giá trị) | {conditions:[{op,value}],join} | {from,to} }
+// Trả về { conditions:[sql], params:[], joins:Set }. startIdx = số param đã dùng trước đó.
+const TEXT_OP_SQL = {
+  contains:    (e, ph) => `${e} ILIKE '%' || ${ph} || '%'`,
+  notContains: (e, ph) => `(${e} IS NULL OR ${e} NOT ILIKE '%' || ${ph} || '%')`,
+  equals:      (e, ph) => `lower(${e}) = lower(${ph})`,
+  notEquals:   (e, ph) => `(${e} IS NULL OR lower(${e}) <> lower(${ph}))`,
+  startsWith:  (e, ph) => `${e} ILIKE ${ph} || '%'`,
+  endsWith:    (e, ph) => `${e} ILIKE '%' || ${ph}`,
+}
+const NUM_OP_SQL = { eq: '=', ne: '<>', gt: '>', gte: '>=', lt: '<', lte: '<=' }
+
+function buildColFilterSql(colFilters, startIdx) {
+  const conditions = []
+  const params = []
+  const joins = new Set()
+  let idx = startIdx
+  const ph = () => `$${++idx}`   // placeholder kế tiếp
+
+  for (const [colKey, fv] of Object.entries(colFilters || {})) {
+    const cfg = TASK_COLUMNS_SQL[colKey]
+    if (!cfg || fv == null) continue
+    if (cfg.join) joins.add(cfg.join)
+
+    // 1) Lọc theo GIÁ TRỊ (mảng) — so khớp trên biểu thức TEXT
+    if (Array.isArray(fv)) {
+      if (fv.length === 0 || !cfg.text) continue
+      const nonNull = fv.filter((v) => v != null && v !== '')
+      const hasBlank = fv.some((v) => v == null || v === '')
+      const parts = []
+      if (nonNull.length) { params.push(nonNull); parts.push(`${cfg.text} = ANY(${ph()}::text[])`) }
+      if (hasBlank) parts.push(`(${cfg.text} IS NULL OR ${cfg.text} = '')`)
+      if (parts.length) conditions.push(`(${parts.join(' OR ')})`)
+      continue
+    }
+    // 2) Khoảng ngày { from, to }
+    if (cfg.kind === 'date' && (fv.from || fv.to)) {
+      if (fv.from) { params.push(fv.from); conditions.push(`${cfg.filter} >= ${ph()}`) }
+      if (fv.to)   { params.push(fv.to);   conditions.push(`${cfg.filter} <= ${ph()}`) }
+      continue
+    }
+    // 3) Bộ điều kiện { conditions:[{op,value}], join }
+    if (Array.isArray(fv.conditions)) {
+      const parts = []
+      for (const c of fv.conditions) {
+        if (!c || !c.op) continue
+        if (cfg.kind === 'number') {
+          if (String(c.value).trim() === '' || !(c.op in NUM_OP_SQL)) continue
+          params.push(parseFloat(c.value)); parts.push(`${cfg.filter} ${NUM_OP_SQL[c.op]} ${ph()}`)
+        } else {
+          if (c.op === 'blank')    { parts.push(`(${cfg.filter} IS NULL OR ${cfg.filter} = '')`); continue }
+          if (c.op === 'notBlank') { parts.push(`(${cfg.filter} IS NOT NULL AND ${cfg.filter} <> '')`); continue }
+          if (String(c.value).trim() === '' || !TEXT_OP_SQL[c.op]) continue
+          params.push(String(c.value)); parts.push(TEXT_OP_SQL[c.op](cfg.filter, ph()))
+        }
+      }
+      if (parts.length) conditions.push(`(${parts.join(fv.join === 'or' ? ' OR ' : ' AND ')})`)
+    }
+  }
+  return { conditions, params, joins }
+}
+
 async function listTasks(filters = {}) {
   const {
     page = 1, limit = 20,
@@ -401,7 +645,14 @@ async function listTasks(filters = {}) {
   }
 
   const baseWhere = baseConditions.join(' AND ')
-  const where     = conditions.join(' AND ')
+
+  // ── Bộ lọc theo CỘT (header filter, server-side) ────────────────────────────────
+  let colFiltersObj = filters.colFilters
+  if (typeof colFiltersObj === 'string') { try { colFiltersObj = JSON.parse(colFiltersObj) } catch { colFiltersObj = null } }
+  const colF = buildColFilterSql(colFiltersObj, params.length)
+  const finalParams = [...params, ...colF.params]
+  const finalWhere  = [...conditions, ...colF.conditions].join(' AND ')
+  const colJoinSql  = [...colF.joins].map((k) => COL_JOINS[k]).join(' ')
 
   const SORT_COLS = {
     created_at: 't.created_at',
@@ -436,17 +687,25 @@ async function listTasks(filters = {}) {
 
   // Chỉ nhóm-hoá mới cần chuỗi tiêu chí phụ; sắp theo ngày thì bản thân nó đã đủ mịn.
   const canPhu = ['work_priority', 'status', 'priority'].includes(sortBy)
-  const orderBy = canPhu
+  let orderBy = canPhu
     ? [`${SORT_COLS[sortBy]} ${huong}`, ...phu].join(', ')
     : `${SORT_COLS[sortBy] || 't.created_at'} ${huong}`
 
+  // Sắp xếp theo CỘT header (ưu tiên hơn sortBy mặc định nếu có)
+  let colSortObj = filters.colSort
+  if (typeof colSortObj === 'string') { try { colSortObj = JSON.parse(colSortObj) } catch { colSortObj = null } }
+  if (colSortObj && colSortObj.col && TASK_COLUMNS_SQL[colSortObj.col]) {
+    const dir = colSortObj.dir === 'desc' ? 'DESC' : 'ASC'
+    orderBy = `${TASK_COLUMNS_SQL[colSortObj.col].filter} ${dir} NULLS LAST, t.created_at DESC`
+  }
+
   const [countRes, statusCountsRes, { rows }] = await Promise.all([
-    query(`SELECT COUNT(*) FROM tasks t WHERE ${where}`, params),
+    query(`SELECT COUNT(*) FROM tasks t ${colJoinSql} WHERE ${finalWhere}`, finalParams),
     query(`SELECT t.status, COUNT(*) AS cnt FROM tasks t WHERE ${baseWhere} GROUP BY t.status`, baseParams),
     query(
-      `${TASK_SELECT} WHERE ${where} ORDER BY ${orderBy}
-       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, limit, offset]
+      `${TASK_SELECT} WHERE ${finalWhere} ORDER BY ${orderBy}
+       LIMIT $${finalParams.length + 1} OFFSET $${finalParams.length + 2}`,
+      [...finalParams, limit, offset]
     ),
   ])
 
@@ -561,6 +820,7 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   }
 
   emitData('data:task', { action: 'created', id: task.id, companyId, actorId })
+  void bumpColValsVersion()   // làm mới cache danh sách giá trị header filter
   return result
 }
 
@@ -790,6 +1050,7 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
   }
 
   emitData('data:task', { action: 'updated', id, companyId: result.companyId, actorId })
+  void bumpColValsVersion()
   return result
 }
 
@@ -814,6 +1075,7 @@ async function deleteTask(id, user, ipAddress, userAgent) {
   })
 
   emitData('data:task', { action: 'deleted', id, companyId: task.company_id, actorId })
+  void bumpColValsVersion()
 }
 
 async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userAgent, user = null) {
@@ -987,6 +1249,7 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
 
   await Promise.all(notifyPromises)
   emitData('data:task', { action: 'updated', id, companyId: result.companyId, actorId })
+  void bumpColValsVersion()
   return result
 }
 
@@ -1063,7 +1326,7 @@ function buildTasksExcel({ sheetName = 'Cong viec', columns = [], rows = [] }) {
 }
 
 module.exports = {
-  listTasks, getTaskById, createTask, updateTask, deleteTask,
+  listTasks, getColumnValues, getTaskById, createTask, updateTask, deleteTask,
   changeTaskStatus, getActivityLog, getAvailableYears,
   assertTaskAccess, buildTasksExcel,
 }

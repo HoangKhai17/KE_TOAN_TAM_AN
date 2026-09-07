@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useMemo, useRef } from 'react'
+import { Fragment, useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   DndContext, DragOverlay,
@@ -426,6 +426,13 @@ const TASK_LIST_COL_TYPE = {
   latestComment:  'text',
 }
 function taskColFilterType(colKey) { return TASK_LIST_COL_TYPE[colKey] ?? 'text' }
+
+// Cột CÓ tab "Theo giá trị" phía server (backend có biểu thức text). Cột tính toán
+// (days/plannedDays/progress) chỉ lọc theo điều kiện, không có value-list.
+const SERVER_VALUE_COLS = new Set([
+  'title', 'companyShort', 'status', 'priority', 'source', 'assignedToName',
+  'dueDate', 'startDate', 'createdAt', 'latestComment',
+])
 
 // Danh mục cột danh sách (thứ tự hiển thị + nhãn) — dùng cho render, bộ chọn cột, skeleton.
 // fixed: luôn hiện (không cho tắt).
@@ -1151,7 +1158,7 @@ const INIT_DATES = yearMonthToDates(CUR_YEAR, INIT_MONTH)
 // định mới — cứ tưởng thay đổi không có tác dụng.
 //   v2: đổi mặc định sắp xếp sang 'Ưu tiên xử lý'.
 //   v3: đổi mặc định kỳ từ "tháng hiện tại" → "năm hiện tại".
-const FILTER_KEY = 'tasks_filter_v3'
+const FILTER_KEY = 'tasks_filter_v4'
 
 function loadSavedFilters() {
   try { return JSON.parse(sessionStorage.getItem(FILTER_KEY)) ?? {} }
@@ -1170,7 +1177,8 @@ function serializeColFilters(cf) {
 function deserializeColFilters(obj) {
   const out = {}
   for (const [k, v] of Object.entries(obj || {})) {
-    out[k] = (taskColFilterType(k) === 'enum' && Array.isArray(v)) ? new Set(v) : v
+    // Mảng trong storage luôn là 1 Set đã bị JSON hoá (lọc-theo-giá-trị) → khôi phục Set.
+    out[k] = Array.isArray(v) ? new Set(v) : v
   }
   return out
 }
@@ -1241,6 +1249,8 @@ export default function Tasks() {
   const [colFilters, setColFilters]     = useState(() => deserializeColFilters(initF.colFilters))
   const [sortColState, setSortColState] = useState(initF.sortColState ?? { col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup]   = useState(null)
+  // Value-list server cho cột đang mở dropdown: { colKey, values, loading }
+  const [colVals, setColVals] = useState({ colKey: null, values: null, loading: false })
 
   // Ẩn/hiện cột — lưu sessionStorage (giữ sau F5)
   const [hiddenCols, setHiddenCols] = useState(loadHiddenCols)
@@ -1302,6 +1312,7 @@ export default function Tasks() {
   // Modals
   const [showCreate, setShowCreate]         = useState(false)
   const [showExport, setShowExport]         = useState(false)
+  const [exportRows, setExportRows]         = useState([])
   const [onHoldTarget, setOnHoldTarget]     = useState(null)
   const [deleteTarget, setDeleteTarget]     = useState(null)
   const [deleting, setDeleting]             = useState(false)
@@ -1432,7 +1443,15 @@ export default function Tasks() {
   }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, dueDateFrom, dueDateTo, scheduleToday, statsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tasks list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
-  // Tải "working set" (tối đa 500) rồi lọc/sắp/phân trang phía client (docs/018).
+  // Lọc/sắp/phân trang PHÍA SERVER cho view Danh sách (docs/018 · GĐ2). Board vẫn nạp
+  // trọn (tối đa 500) rồi gom nhóm phía client vì không có lọc theo cột.
+  const isListView = view === 'list'
+  // colFilters có Set (enum/value-list) → chuyển sang mảng để JSON hoá gửi server.
+  const serverColFilters = useMemo(() => {
+    const out = {}
+    for (const [k, v] of Object.entries(colFilters)) out[k] = v instanceof Set ? [...v] : v
+    return out
+  }, [colFilters])
   const listParams = useMemo(() => {
     const [sortBy, sortDir] = sortValue.split(':')
     // Kanban nguồn: mặc định ẩn việc đã "Hoàn thành" ngay ở tầng query (không phí
@@ -1463,12 +1482,16 @@ export default function Tasks() {
       dueDateFrom:   scheduleToday ? undefined : (dueDateFrom || undefined),
       dueDateTo:     scheduleToday ? undefined : (dueDateTo   || undefined),
       audience:    'internal',
-      limit:       500,
-      page:        1,
+      // List: phân trang server theo page/pageSize + bộ lọc/sắp theo CỘT.
+      // Board: nạp trọn (500) để gom nhóm client, không gửi colFilters/colSort.
+      limit:       isListView ? pageSize : 500,
+      page:        isListView ? page : 1,
+      colFilters:  isListView && Object.keys(serverColFilters).length ? JSON.stringify(serverColFilters) : undefined,
+      colSort:     isListView && sortColState.col ? JSON.stringify(sortColState) : undefined,
       sortBy,
       sortDir,
     }
-  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id, view]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id, view, isListView, page, pageSize, serverColFilters, sortColState]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const listQuery = useQuery({
     queryKey: ['tasks', 'list', listParams],
@@ -1496,6 +1519,45 @@ export default function Tasks() {
     setPagination(p ?? { page: 1, totalPages: 1, total: t.length })
     setSelectedIds(new Set())
   }, [listQuery.data])
+
+  // Nạp value-list từ server khi mở dropdown 1 cột (chỉ view Danh sách). Giá trị phản
+  // ánh các BỘ LỌC CHUNG hiện tại (kỳ/trạng thái/nhân sự…) — không gồm colFilters/sort.
+  useEffect(() => {
+    if (!filterPopup || view !== 'list') return undefined
+    const colKey = filterPopup.colKey
+    if (!SERVER_VALUE_COLS.has(colKey)) { setColVals({ colKey, values: [], loading: false }); return undefined }
+    let cancelled = false
+    setColVals({ colKey, values: null, loading: true })
+    const { page: _p, limit: _l, colFilters: _cf, colSort: _cs, sortBy: _sb, sortDir: _sd, ...baseParams } = listParams
+    tasksApi.getTaskColumnValues({ column: colKey, ...baseParams })
+      .then((values) => { if (!cancelled) setColVals({ colKey, values, loading: false }) })
+      .catch(() => { if (!cancelled) setColVals({ colKey, values: [], loading: false }) })
+    return () => { cancelled = true }
+  }, [filterPopup, view, listParams])
+
+  // Nhãn hiển thị cho value-list server: enum → nhãn tiếng Việt, còn lại giữ nguyên giá trị.
+  const taskValueLabel = useCallback((colKey) => (value) => {
+    if (value == null || value === '') return ''
+    if (colKey === 'status')   return getLabel('task_status', value, STATUS_LABELS[value] ?? value)
+    if (colKey === 'priority') return getLabel('task_priority', value, PRIORITY_LABELS[value] ?? value)
+    if (colKey === 'source')   return getLabel('task_source', value, SOURCE_LABELS[value] ?? value)
+    return value
+  }, [getLabel])
+
+  // Xuất Excel: list view lấy TOÀN BỘ dòng đã lọc (bỏ phân trang) để xuất đủ, không
+  // chỉ 1 trang; board/kanban dùng tập đang hiển thị.
+  async function openExport() {
+    if (isListView) {
+      const { page: _p, limit: _l, ...rest } = listParams
+      try {
+        const res = await tasksApi.listTasks({ ...rest, page: 1, limit: 5000 })
+        setExportRows(res.tasks || [])
+      } catch { setExportRows(pageRows) }
+    } else {
+      setExportRows(displayed)
+    }
+    setShowExport(true)
+  }
 
   // ── Date filter handlers ──────────────────────────────────────────────────────
 
@@ -1654,25 +1716,19 @@ export default function Tasks() {
     e.stopPropagation()
     if (filterPopup?.colKey === colKey) { setFilterPopup(null); return }
     const rect = e.currentTarget.getBoundingClientRect()
-    setFilterPopup({ colKey, top: rect.bottom + 4, left: rect.left })
+    // Kẹp mép phải để popup (rộng tối đa ~340px) không tràn/bị che ở cột cuối.
+    const left = Math.min(rect.left, window.innerWidth - 348)
+    setFilterPopup({ colKey, top: rect.bottom + 4, left: Math.max(8, left) })
   }
   function handleColFilterChange(colKey, val) {
     setColFilters((prev) => { const n = { ...prev }; if (val == null) delete n[colKey]; else n[colKey] = val; return n }); setPage(1)
   }
-  function handleColSort(col, dir) { setSortColState(dir ? { col, dir } : { col: null, dir: 'asc' }); setFilterPopup(null) }
+  function handleColSort(col, dir) { setSortColState(dir ? { col, dir } : { col: null, dir: 'asc' }); setPage(1); setFilterPopup(null) }
 
-  // Client-side filter + sort over the loaded working set
+  // Board/Export: chỉ SẮP XẾP phía client trên working set (board không có lọc theo cột;
+  // lọc theo cột là của view Danh sách và đã chạy phía server).
   const displayed = useMemo(() => {
-    let result = [...tasks]
-    for (const [colKey, fv] of Object.entries(colFilters)) {
-      const ft = taskColFilterType(colKey)
-      if (!isColFilterActive(fv, ft)) continue
-      result = result.filter((r) => matchColFilter(fv, ft, {
-        label:  colDisplayLabel(r, colKey),
-        date:   taskColRawDate(r, colKey),
-        number: taskColRawNumber(r, colKey),
-      }))
-    }
+    const result = [...tasks]
     if (sortColState.col) {
       result.sort((a, b) => {
         const ak = taskColSortKey(a, sortColState.col)
@@ -1683,17 +1739,17 @@ export default function Tasks() {
       })
     }
     return result
-  }, [tasks, colFilters, sortColState, colDisplayLabel])
+  }, [tasks, sortColState])
 
-  const totalCount = displayed.length
-
-  // Client pagination for the list view
-  const clientTotalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
-  const safePage = Math.min(page, clientTotalPages)
-  const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
-  const clientPagination = { total: displayed.length, totalPages: clientTotalPages, page: safePage }
-  const paginationFrom = displayed.length === 0 ? 0 : (safePage - 1) * pageSize + 1
-  const paginationTo = Math.min(safePage * pageSize, displayed.length)
+  // List: server đã lọc/sắp/phân trang → dùng thẳng `tasks` + `pagination` từ server.
+  const listTotal      = isListView ? (pagination.total ?? tasks.length) : displayed.length
+  const listTotalPages = isListView ? (pagination.totalPages ?? 1) : Math.max(1, Math.ceil(displayed.length / pageSize))
+  const safePage       = isListView ? (pagination.page ?? page) : Math.min(page, listTotalPages)
+  const pageRows       = isListView ? tasks : displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const totalCount     = listTotal
+  const clientPagination = { total: listTotal, totalPages: listTotalPages, page: safePage }
+  const paginationFrom = listTotal === 0 ? 0 : (safePage - 1) * pageSize + 1
+  const paginationTo   = Math.min(safePage * pageSize, listTotal)
   const footerDetails = [
     colFilterCount > 0 ? `${colFilterCount} lọc cột` : '',
     hasColSort ? 'đang sắp xếp' : '',
@@ -1880,7 +1936,7 @@ export default function Tasks() {
               {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             </button>
 
-            <button className={s.btnSecondary} onClick={() => setShowExport(true)} disabled={!totalCount}>
+            <button className={s.btnSecondary} onClick={openExport} disabled={!totalCount}>
               <FileDown size={14} /> Xuất Excel
             </button>
 
@@ -2219,8 +2275,12 @@ export default function Tasks() {
           <ColumnFilterDropdown
             colKey={filterPopup.colKey}
             filterType={taskColFilterType(filterPopup.colKey)}
-            allRows={tasks}
-            getDisplayLabel={colDisplayLabel}
+            serverMode
+            hasValueList={SERVER_VALUE_COLS.has(filterPopup.colKey)}
+            serverValues={colVals.colKey === filterPopup.colKey ? colVals.values : null}
+            loadingValues={colVals.colKey === filterPopup.colKey ? colVals.loading : true}
+            labelOf={taskValueLabel(filterPopup.colKey)}
+            totalRows={pagination.total}
             currentFilter={colFilters[filterPopup.colKey] ?? null}
             sortState={sortColState}
             onSort={handleColSort}
@@ -2267,7 +2327,7 @@ export default function Tasks() {
 
       {showExport && (
         <TaskExportModal
-          rows={displayed}
+          rows={exportRows}
           onClose={() => setShowExport(false)}
         />
       )}

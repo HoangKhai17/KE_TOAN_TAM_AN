@@ -28,6 +28,10 @@ export default function ColumnFilterDropdown({
   colKey, filterType, allRows = [], getDisplayLabel,
   currentFilter, sortState, onSort, onFilterChange, onClose, style,
   sortAscLabel = 'A → Z', sortDescLabel = 'Z → A',
+  // ── Chế độ SERVER (tuỳ chọn): value-list lấy từ API thay vì tính từ allRows ──
+  //   serverMode · hasValueList (cột có tab "Theo giá trị" không) · serverValues:[{value,count}]
+  //   loadingValues · labelOf(value)→nhãn · totalRows (tổng dòng cho badge)
+  serverMode = false, hasValueList = false, serverValues, loadingValues, labelOf, totalRows,
 }) {
   const ref = useRef(null)
 
@@ -47,7 +51,7 @@ export default function ColumnFilterDropdown({
 
   // Mô hình 2 tab như Excel: MỌI cột (trừ 'none') đều có "Theo giá trị" (nếu trang cấp
   // getDisplayLabel) + "Theo điều kiện" (toán tử theo kiểu cột).
-  const valueAvailable     = filterType !== 'none' && typeof getDisplayLabel === 'function'
+  const valueAvailable     = filterType !== 'none' && (serverMode ? hasValueList : typeof getDisplayLabel === 'function')
   const conditionAvailable = filterType !== 'none'
   const conditionKind = filterType === 'numberRange' ? 'number' : filterType === 'dateRange' ? 'date' : 'text'
   const showTabs = valueAvailable && conditionAvailable
@@ -89,6 +93,8 @@ export default function ColumnFilterDropdown({
       {showValue && (
         <ValueSection allRows={allRows} colKey={colKey} getDisplayLabel={getDisplayLabel}
           numeric={filterType === 'numberRange'} dateCol={filterType === 'dateRange'}
+          serverMode={serverMode} serverValues={serverValues} loadingValues={loadingValues}
+          labelOf={labelOf} totalRows={totalRows}
           currentFilter={valueFilter} onFilterChange={onFilterChange} colSorted={colSorted} onClearSort={onClearSort} />
       )}
       {showCondition && conditionKind === 'text' && (
@@ -244,20 +250,33 @@ function ValueMoreMenu({ actions }) {
 }
 
 // ── Lọc theo GIÁ TRỊ: value list kiểu Excel (đếm số lượng, ô trống, đảo chọn, sắp xếp) ──
-function ValueSection({ allRows, colKey, getDisplayLabel, numeric, dateCol, currentFilter, onFilterChange, colSorted, onClearSort }) {
+function ValueSection({ allRows, colKey, getDisplayLabel, numeric, dateCol, currentFilter, onFilterChange, colSorted, onClearSort,
+  serverMode, serverValues, loadingValues, labelOf, totalRows }) {
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState('name') // 'name' | 'count'
   const [prefs, setPrefs] = useState(loadValuePrefs)
   const setPref = (k, v) => { const n = { ...prefs, [k]: v }; setPrefs(n); saveValuePrefs(n) }
 
-  // Danh sách giá trị + số lượng từng giá trị
+  // Nhãn hiển thị của một giá trị (server: qua labelOf; client: value là chính nhãn)
+  const display = (v) => {
+    const lbl = (serverMode && labelOf) ? labelOf(v) : v
+    return String(lbl ?? '').trim() === '' ? '(Trống)' : lbl
+  }
+
+  // Danh sách giá trị + số lượng. Server: lấy thẳng từ API; Client: gom từ allRows.
   const items = useMemo(() => {
-    const counts = new Map()
-    for (const row of allRows) {
-      const v = getDisplayLabel(row, colKey) ?? ''
-      counts.set(v, (counts.get(v) ?? 0) + 1)
+    let arr
+    if (serverMode) {
+      arr = (serverValues || []).map((v) => ({ value: v.value ?? '', count: v.count }))
+    } else {
+      const counts = new Map()
+      for (const row of allRows) {
+        const v = getDisplayLabel(row, colKey) ?? ''
+        counts.set(v, (counts.get(v) ?? 0) + 1)
+      }
+      arr = [...counts.entries()].map(([value, count]) => ({ value, count }))
     }
-    const arr = [...counts.entries()].map(([value, count]) => ({ value, count }))
+    const nameOf = (it) => String((serverMode && labelOf) ? (labelOf(it.value) ?? '') : it.value)
     const byName = (a, b) => {
       if (dateCol) {   // cột ngày: so theo mốc thời gian, không theo chuỗi
         const da = parseViDate(a.value), db = parseViDate(b.value)
@@ -265,18 +284,18 @@ function ValueSection({ allRows, colKey, getDisplayLabel, numeric, dateCol, curr
         if (da) return -1
         if (db) return 1
       }
-      return String(a.value).localeCompare(String(b.value), 'vi', { numeric: true })
+      return nameOf(a).localeCompare(nameOf(b), 'vi', { numeric: true })
     }
     arr.sort((a, b) => (sortBy === 'count' ? (b.count - a.count || byName(a, b)) : byName(a, b)))
     return arr
-  }, [allRows, colKey, getDisplayLabel, sortBy, dateCol])
+  }, [serverMode, serverValues, labelOf, allRows, colKey, getDisplayLabel, sortBy, dateCol])
 
   const allValues = useMemo(() => items.map((it) => it.value), [items])
   const selected = currentFilter instanceof Set ? currentFilter : new Set()
   // Tìm NHIỀU từ khoá, cách nhau bằng dấu "," → khớp nếu chứa BẤT KỲ từ nào (như Excel)
   const keywords = q.split(',').map((k) => k.trim().toLocaleLowerCase('vi')).filter(Boolean)
   const filtered = keywords.length
-    ? items.filter((it) => { const l = String(it.value).toLocaleLowerCase('vi'); return keywords.some((k) => l.includes(k)) })
+    ? items.filter((it) => { const l = String(display(it.value)).toLocaleLowerCase('vi'); return keywords.some((k) => l.includes(k)) })
     : items
   const allChecked = allValues.length > 0 && selected.size === allValues.length
 
@@ -344,7 +363,7 @@ function ValueSection({ allRows, colKey, getDisplayLabel, numeric, dateCol, curr
     ? [{ separator: true }, ...DATE_PRESETS.map(([label, key]) => mkAction(label, dateSetOf(key)))]
     : []
 
-  const showLabel = (v) => (String(v).trim() === '' ? '(Trống)' : v)
+  const totalBadge = serverMode ? (totalRows ?? '') : allRows.length
 
   // Ghim mục đã chọn lên đầu (giữ nguyên thứ tự sắp xếp trong từng nhóm)
   const listed = prefs.pinSelected
@@ -374,22 +393,26 @@ function ValueSection({ allRows, colKey, getDisplayLabel, numeric, dateCol, curr
           ref={(el) => { if (el) el.indeterminate = selected.size > 0 && !allChecked }}
           onChange={toggleAll} />
         <span>Chọn tất cả</span>
-        {prefs.showCount && <span className={s.countBadge}>{allRows.length}</span>}
+        {prefs.showCount && <span className={s.countBadge}>{totalBadge}</span>}
       </label>
 
       <div className={s.valueList}>
-        {listed.map((it) => (
-          <label key={it.value} className={s.valueItem}>
-            <input type="checkbox" checked={selected.has(it.value)} onChange={() => toggle(it.value)} />
-            <span className={`${s.valueText} ${String(it.value).trim() === '' ? s.blankText : ''}`}>{showLabel(it.value)}</span>
-            {prefs.showCount && <span className={s.countBadge}>{it.count}</span>}
-          </label>
-        ))}
-        {listed.length === 0 && <div className={s.empty}>Không có giá trị</div>}
+        {serverMode && loadingValues && items.length === 0
+          ? <div className={s.empty}>Đang tải…</div>
+          : (<>
+              {listed.map((it) => (
+                <label key={it.value} className={s.valueItem}>
+                  <input type="checkbox" checked={selected.has(it.value)} onChange={() => toggle(it.value)} />
+                  <span className={`${s.valueText} ${String(it.value ?? '').trim() === '' ? s.blankText : ''}`}>{display(it.value)}</span>
+                  {prefs.showCount && <span className={s.countBadge}>{it.count}</span>}
+                </label>
+              ))}
+              {listed.length === 0 && <div className={s.empty}>Không có giá trị</div>}
+            </>)}
       </div>
 
       {prefs.showTotal && (
-        <div className={s.totalRow}>Tổng: {allRows.length} dòng · {allValues.length} giá trị</div>
+        <div className={s.totalRow}>Tổng: {totalBadge} dòng · {allValues.length} giá trị</div>
       )}
 
       <ClearFooter disabled={selected.size === 0 && !colSorted}

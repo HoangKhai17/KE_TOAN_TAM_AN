@@ -95,6 +95,8 @@ router.get('/', ...auth, ctrl.listTasks)
 // IMPORTANT: phải đặt trước /:id để 'export' / 'meta' không bị bắt làm ID
 router.post('/export', ...auth, ctrl.exportTasksExcel)
 router.get('/meta/years', ...auth, ctrl.getAvailableYears)
+// Danh sách giá trị theo cột cho header filter (server-side, có cache)
+router.get('/meta/column-values', ...auth, ctrl.getColumnValues)
 
 /**
  * @openapi
