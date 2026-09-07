@@ -45,7 +45,7 @@ const BUSINESS_TYPE_OPTIONS = Object.entries(BUSINESS_TYPE_LABELS).map(([value, 
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100]
 
-const FILTER_KEY = 'companies_filters'
+const FILTER_KEY = 'companies_filters_v2'   // v2: header filter chuyển server-side (colFilters đổi shape)
 function readSaved() {
   try { return JSON.parse(sessionStorage.getItem(FILTER_KEY) || '{}') } catch { return {} }
 }
@@ -58,7 +58,7 @@ function serializeColFilters(cf) {
 function deserializeColFilters(obj) {
   const out = {}
   for (const [k, v] of Object.entries(obj || {})) {
-    out[k] = (getCompanyColumnFilterType(k) === 'enum' && Array.isArray(v)) ? new Set(v) : v
+    out[k] = Array.isArray(v) ? new Set(v) : v   // mảng trong storage = Set đã JSON hoá
   }
   return out
 }
@@ -284,8 +284,13 @@ function saveHiddenCols(set) {
 function getCompanyColumnFilterType(colKey) {
   if (colKey === 'assignedStaffName' || colKey === 'status' || colKey === 'businessType') return 'enum'
   if (colKey === 'taskOpenCount' || colKey === 'taskOverdueCount') return 'numberRange'
+  if (colKey === 'serviceStartDate') return 'dateRange'
   return 'text'
 }
+// Cột có tab "Theo giá trị" phía server (backend có biểu thức text). Cột số không có.
+const CO_SERVER_VALUE_COLS = new Set([
+  'name', 'taxCode', 'assignedStaffName', 'status', 'businessType', 'industry', 'serviceStartDate',
+])
 
 function getCompanyDisplayLabel(row, colKey) {
   switch (colKey) {
@@ -354,6 +359,8 @@ export default function Companies() {
   // Chế độ "Thứ tự của tôi" (kéo-thả) + bộ lọc chỉ xem công ty đã ghim
   const [myOrderMode, setMyOrderMode] = useState(() => readSaved().myOrderMode ?? false)
   const [pinnedOnly,  setPinnedOnly]  = useState(() => readSaved().pinnedOnly  ?? false)
+  // Value-list server cho cột đang mở dropdown: { colKey, values, loading }
+  const [colVals, setColVals] = useState({ colKey: null, values: null, loading: false })
   const [filterPopup, setFilterPopup] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
   const filterPanelRef = useRef(null)
@@ -365,6 +372,7 @@ export default function Companies() {
   // Bulk export (admin-only)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [showExport, setShowExport]   = useState(false)
+  const [exportRows, setExportRows]   = useState([])
   const [customDefs, setCustomDefs]   = useState([])
 
   const hasActiveFilters = search || statusFilter.length > 0 || btFilter.length > 0 || staffFilter.length > 0
@@ -422,16 +430,31 @@ export default function Companies() {
 
   // ── Companies list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
   // Tải toàn bộ theo bộ lọc thô, rồi column-filter + phân trang phía client (docs/018).
-  const listParams = useMemo(() => ({
-    page: 1,
-    limit: 1000,
-    status:          statusFilter.length > 0 ? statusFilter.join(',') : undefined,
-    // btFilter chứa lẫn mã loại hình và mã nhóm (tiền tố 'g:') → tách làm 2 tham số
-    businessType:    btFilter.filter((v) => !isGroupValue(v)).join(',') || undefined,
-    businessGroup:   btFilter.filter(isGroupValue).map(stripGroup).join(',') || undefined,
-    search:          search || undefined,
-    assignedStaffId: isAdmin ? (staffFilter.length > 0 ? staffFilter.join(',') : undefined) : currentUser?.id,
-  }), [statusFilter, btFilter, staffFilter, search, isAdmin, currentUser?.id])
+  // Server-side khi duyệt bình thường; chế độ "Thứ tự của tôi" (kéo-thả) nạp full ở client.
+  const isServer = !myOrderMode
+  const serverColFilters = useMemo(() => {
+    const out = {}
+    for (const [k, v] of Object.entries(colFilters)) out[k] = v instanceof Set ? [...v] : v
+    return out
+  }, [colFilters])
+  const listParams = useMemo(() => {
+    const base = {
+      status:          statusFilter.length > 0 ? statusFilter.join(',') : undefined,
+      // btFilter chứa lẫn mã loại hình và mã nhóm (tiền tố 'g:') → tách làm 2 tham số
+      businessType:    btFilter.filter((v) => !isGroupValue(v)).join(',') || undefined,
+      businessGroup:   btFilter.filter(isGroupValue).map(stripGroup).join(',') || undefined,
+      search:          search || undefined,
+      assignedStaffId: isAdmin ? (staffFilter.length > 0 ? staffFilter.join(',') : undefined) : currentUser?.id,
+    }
+    if (!isServer) return { ...base, page: 1, limit: 1000 }   // kéo-thả: cần toàn bộ danh sách
+    return {
+      ...base,
+      page, limit,
+      pinnedOnly: pinnedOnly ? true : undefined,
+      colFilters: Object.keys(serverColFilters).length ? JSON.stringify(serverColFilters) : undefined,
+      colSort:    sortState.col ? JSON.stringify(sortState) : undefined,
+    }
+  }, [statusFilter, btFilter, staffFilter, search, isAdmin, currentUser?.id, isServer, page, limit, pinnedOnly, serverColFilters, sortState])
 
   const listQuery = useQuery({
     queryKey: ['companies', 'list', listParams],
@@ -448,6 +471,30 @@ export default function Companies() {
     setCompanies(listQuery.data.companies)
     setPagination(listQuery.data.pagination)
   }, [listQuery.data])
+
+  // Nạp value-list server khi mở dropdown 1 cột (phản ánh bộ lọc CHUNG hiện tại).
+  useEffect(() => {
+    if (!filterPopup) return undefined
+    const colKey = filterPopup.colKey
+    if (!CO_SERVER_VALUE_COLS.has(colKey)) { setColVals({ colKey, values: [], loading: false }); return undefined }
+    let cancelled = false
+    setColVals({ colKey, values: null, loading: true })
+    const { page: _p, limit: _l, colFilters: _cf, colSort: _cs, pinnedOnly: _po, ...baseParams } = listParams
+    companiesApi.getCompanyColumnValues({ column: colKey, ...baseParams })
+      .then((values) => { if (!cancelled) setColVals({ colKey, values, loading: false }) })
+      .catch(() => { if (!cancelled) setColVals({ colKey, values: [], loading: false }) })
+    return () => { cancelled = true }
+  }, [filterPopup, listParams])
+
+  // Nhãn hiển thị value-list: enum → nhãn tiếng Việt, ngày → dd/mm/yyyy, còn lại giữ nguyên.
+  const companyValueLabel = useCallback((colKey) => (value) => {
+    if (colKey === 'assignedStaffName') return (value == null || value === '') ? '(Chưa giao)' : value
+    if (value == null || value === '') return ''
+    if (colKey === 'status')       return getLabel('company_status', value, STATUS_LABELS[value] ?? value)
+    if (colKey === 'businessType') return getLabel('business_type', value, BUSINESS_TYPE_LABELS[value] ?? value)
+    if (colKey === 'serviceStartDate') return fmtDate(value)
+    return value
+  }, [getLabel])
 
   function resetFilters() {
     setSearchInput('')
@@ -473,21 +520,12 @@ export default function Companies() {
     setSelectedIds(checked ? new Set(pageRows.map((c) => c.id)) : new Set())
   }
 
-  // ── Client-side column-header filter + sort + pagination (docs/018) ───────────
+  // Chế độ "Thứ tự của tôi" (client): chỉ SẮP + lọc ghim trên tập đã nạp full.
+  // Lọc theo cột là của chế độ server (bình thường) → không áp ở đây.
   const displayed = useMemo(() => {
     let result = [...companies]
-    for (const [colKey, filterVal] of Object.entries(colFilters)) {
-      const ft = getCompanyColumnFilterType(colKey)
-      if (!isColFilterActive(filterVal, ft)) continue
-      result = result.filter((row) => matchColFilter(filterVal, ft, {
-        label:  getCompanyDisplayLabel(row, colKey),
-        number: Number(row[colKey] ?? 0),
-      }))
-    }
     if (sortState.col) {
       result.sort((a, b) => {
-        // Công ty ƯU TIÊN (đã ghim) luôn nổi lên đầu, kể cả khi đang sắp theo cột.
-        // Trong cùng nhóm ghim/không ghim mới so theo cột được chọn.
         if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1
         const ak = getCompanySortKey(a, sortState.col)
         const bk = getCompanySortKey(b, sortState.col)
@@ -500,7 +538,7 @@ export default function Companies() {
     }
     if (pinnedOnly) result = result.filter((row) => row.isPinned)
     return result
-  }, [companies, colFilters, sortState, pinnedOnly])
+  }, [companies, sortState, pinnedOnly])
 
   // ── Thứ tự của tôi (kéo-thả) + Ghim ưu tiên ──────────────────────────────────
 
@@ -567,16 +605,31 @@ export default function Companies() {
     + CO_COLUMNS.filter((c) => c.fixed || vis(c.key)).length
     + 1  // cột Hành động
 
-  const clientTotal      = displayed.length
-  const clientTotalPages = Math.max(1, Math.ceil(clientTotal / limit))
-  const safePage         = Math.min(page, clientTotalPages)
-  // Chế độ kéo-thả: hiện TOÀN BỘ danh sách để kéo tự do (không thể kéo qua trang khác)
-  const pageRows         = myOrderMode ? displayed : displayed.slice((safePage - 1) * limit, safePage * limit)
+  // Server (bình thường): dùng thẳng danh sách + phân trang từ server.
+  // Client (kéo-thả): hiện TOÀN BỘ để kéo tự do.
+  const clientTotal      = isServer ? (pagination.total ?? companies.length) : displayed.length
+  const clientTotalPages = isServer ? (pagination.totalPages ?? 1) : Math.max(1, Math.ceil(displayed.length / limit))
+  const safePage         = isServer ? (pagination.page ?? page) : Math.min(page, clientTotalPages)
+  const pageRows         = isServer ? companies : displayed
 
   const allPageSelected  = pageRows.length > 0 && pageRows.every((c) => selectedIds.has(c.id))
   const selectedCompanies = companies.filter((c) => selectedIds.has(c.id))
-  // Header button: nếu đã tick → xuất các công ty đã chọn; nếu chưa → xuất toàn bộ đang lọc
-  const exportTargets = selectedCompanies.length > 0 ? selectedCompanies : companies
+
+  // Mở export: có chọn → xuất công ty đã chọn; chưa chọn + server → lấy TOÀN BỘ đã lọc
+  // (không chỉ trang hiện tại); chế độ kéo-thả → dùng tập đã nạp full.
+  async function openExport() {
+    if (selectedCompanies.length > 0) { setExportRows(selectedCompanies); setShowExport(true); return }
+    if (isServer) {
+      const { page: _p, limit: _l, ...rest } = listParams
+      try {
+        const res = await companiesApi.listCompanies({ ...rest, page: 1, limit: 1000 })
+        setExportRows(res.companies || [])
+      } catch { setExportRows(companies) }
+    } else {
+      setExportRows(companies)
+    }
+    setShowExport(true)
+  }
 
   function openFilter(colKey, e) {
     e.stopPropagation()
@@ -593,8 +646,9 @@ export default function Companies() {
       else next[colKey] = val
       return next
     })
+    setPage(1)
   }
-  function handleColSort(col, dir) { setSortState(dir ? { col, dir } : { col: null, dir: 'asc' }) }
+  function handleColSort(col, dir) { setSortState(dir ? { col, dir } : { col: null, dir: 'asc' }); setPage(1) }
   function hasColFilter(colKey) {
     return isColFilterActive(colFilters[colKey], getCompanyColumnFilterType(colKey))
   }
@@ -720,7 +774,7 @@ export default function Companies() {
               className={s.btnOutline}
               onClick={() => navigate('/companies/overview', {
                 state: {
-                  companyIds: exportTargets.map((c) => c.id),
+                  companyIds: exportRows.map((c) => c.id),
                   defIds: customDefs.map((d) => d.id),
                   scopeLabel: selectedCompanies.length > 0 ? `${selectedCompanies.length} công ty đã chọn` : 'toàn bộ đang lọc',
                 },
@@ -778,7 +832,7 @@ export default function Companies() {
             </div>
 
             {/* Staff cũng được xuất — chỉ gồm công ty mình phụ trách (backend đã chốt quyền) */}
-            <button className={s.btnOutline} onClick={() => setShowExport(true)} disabled={companies.length === 0}>
+            <button className={s.btnOutline} onClick={openExport} disabled={companies.length === 0}>
               <Download size={14} /> Xuất Excel
             </button>
             {isAdmin && (
@@ -936,7 +990,7 @@ export default function Companies() {
           <div className={s.coBulkBar}>
             <span className={s.coBulkCount}>{selectedIds.size} công ty đã chọn</span>
             <span className={s.coBulkSpacer} />
-            <button className={s.btnPrimary} onClick={() => setShowExport(true)}>
+            <button className={s.btnPrimary} onClick={openExport}>
               <Download size={14} /> Xuất tổng hợp
             </button>
             <button className={s.btnOutline} onClick={() => setSelectedIds(new Set())}>Bỏ chọn</button>
@@ -1049,7 +1103,7 @@ export default function Companies() {
       {/* Export modal (admin) */}
       {showExport && (
         <CompanyExportModal
-          companies={exportTargets}
+          companies={exportRows}
           customDefs={customDefs}
           onClose={() => setShowExport(false)}
         />
@@ -1070,8 +1124,12 @@ export default function Companies() {
         <ColumnFilterDropdown
           colKey={filterPopup.colKey}
           filterType={getCompanyColumnFilterType(filterPopup.colKey)}
-          allRows={companies}
-          getDisplayLabel={getCompanyDisplayLabel}
+          serverMode
+          hasValueList={CO_SERVER_VALUE_COLS.has(filterPopup.colKey)}
+          serverValues={colVals.colKey === filterPopup.colKey ? colVals.values : null}
+          loadingValues={colVals.colKey === filterPopup.colKey ? colVals.loading : true}
+          labelOf={companyValueLabel(filterPopup.colKey)}
+          totalRows={pagination.total}
           currentFilter={colFilters[filterPopup.colKey] ?? null}
           sortState={sortState}
           onSort={handleColSort}

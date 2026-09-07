@@ -108,6 +108,9 @@ router.post('/export', ...auth, ctrl.exportCompanies)
 // Overview: xem tổng hợp dữ liệu trên hệ thống (JSON) — cùng RBAC như export
 router.post('/overview', ...auth, ctrl.overviewCompanies)
 
+// Danh sách giá trị theo cột cho header filter (server-side, có cache) — đặt trước '/:id'
+router.get('/meta/column-values', ...auth, ctrl.getColumnValues)
+
 // ── Tùy chọn danh sách RIÊNG của mỗi user: thứ tự kéo-thả + ghim ưu tiên ──────
 // LƯU Ý: '/order' phải khai báo TRƯỚC '/:id', nếu không sẽ bị khớp thành id='order'.
 router.patch('/order',    ...auth,  validate(setCompanyOrderSchema), ctrl.setCompanyOrder)

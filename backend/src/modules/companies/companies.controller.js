@@ -3,7 +3,7 @@ const exportSvc = require('./company-export.service')
 
 async function listCompanies(req, res, next) {
   try {
-    const { page = '1', limit = '20', status, businessType, businessGroup, assignedStaffId, search } = req.query
+    const { page = '1', limit = '20', status, businessType, businessGroup, assignedStaffId, search, colFilters, colSort, pinnedOnly } = req.query
     const parseMulti = (v) => v ? (Array.isArray(v) ? v.filter(Boolean) : v.split(',').filter(Boolean)) : []
     const result = await svc.listCompanies({
       page: Math.max(1, parseInt(page, 10)),
@@ -13,11 +13,31 @@ async function listCompanies(req, res, next) {
       businessGroup: parseMulti(businessGroup),
       assignedStaffId: parseMulti(assignedStaffId),
       search,
+      colFilters, colSort, pinnedOnly,
       forceStaffId: req.user.role === 'staff' ? req.user.id : undefined,
       // Tùy chọn thứ tự / ghim là RIÊNG của người đang đăng nhập
       currentUserId: req.user.id,
     })
     res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
+// Danh sách giá trị theo cột cho header filter (cùng phạm vi RBAC như list)
+async function getColumnValues(req, res, next) {
+  try {
+    const { column, search, status, businessType, businessGroup, assignedStaffId } = req.query
+    const parseMulti = (v) => v ? (Array.isArray(v) ? v.filter(Boolean) : v.split(',').filter(Boolean)) : []
+    const values = await svc.getCompanyColumnValues({
+      column, search,
+      filters: {
+        status: parseMulti(status),
+        businessType: parseMulti(businessType),
+        businessGroup: parseMulti(businessGroup),
+        assignedStaffId: parseMulti(assignedStaffId),
+        forceStaffId: req.user.role === 'staff' ? req.user.id : undefined,
+      },
+    })
+    res.json({ success: true, data: { values } })
   } catch (err) { next(err) }
 }
 
@@ -194,4 +214,4 @@ async function overviewCompanies(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listCompanies, setCompanyOrder, setCompanyPin, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, unassignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote, exportCompanies, overviewCompanies }
+module.exports = { listCompanies, getColumnValues, setCompanyOrder, setCompanyPin, getCompany, createCompany, updateCompany, terminateCompany, deleteCompany, getAssignments, assignStaff, unassignStaff, getActivityLog, listNotes, createNote, updateNote, deleteNote, exportCompanies, overviewCompanies }

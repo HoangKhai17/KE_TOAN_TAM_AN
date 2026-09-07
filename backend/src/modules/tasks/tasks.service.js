@@ -1,6 +1,5 @@
-const crypto = require('crypto')
 const { query } = require('../../config/db')
-const { redis } = require('../../config/redis')
+const cf = require('../../lib/columnFilter.server')
 const audit    = require('../../lib/audit')
 const activity = require('../../lib/activity')
 const { checkBlockers } = require('./dependencies.service')
@@ -356,111 +355,18 @@ const TASK_COLUMNS_SQL = {
 }
 // Cột enum → loại enum để SẮP theo nhãn tiếng Việt (thay vì mã)
 const COL_ENUM_TYPE = { status: 'task_status', priority: 'task_priority', source: 'task_source' }
-// Bọc chuỗi thành literal SQL an toàn (nhãn enum lấy từ DB, vẫn escape ' để chắc chắn)
-function sqlLit(s) { return `'${String(s ?? '').replace(/'/g, "''")}'` }
-const COLVALS_VER_KEY = 'taskcolvals:ver'
-const COLVALS_TTL = 60          // giây — lưới an toàn; version-key mới là cơ chế chính
-const COLVALS_LIMIT = 1000      // trần số giá trị phân biệt trả về
+const COLVALS_NS = 'taskcolvals'   // namespace cache (giữ nguyên tiền tố key đã dùng)
 
-// Bump khi có bất kỳ thay đổi task → mọi cache key cũ thành rác, request sau tự tươi.
-async function bumpColValsVersion() {
-  try { await redis.incr(COLVALS_VER_KEY) } catch { /* redis lỗi → bỏ qua, coi như không cache */ }
-}
+// Header filter server-side dùng HELPER CHUNG (lib/columnFilter.server) — mỗi module
+// chỉ khai báo map cột + WHERE nền, phần value-list/cache/dịch colFilters dùng chung.
+const bumpColValsVersion = () => cf.bumpVersion(COLVALS_NS)
 
 async function getColumnValues({ column, search, filters = {} }) {
-  const cfg = TASK_COLUMNS_SQL[column]
-  if (!cfg || !cfg.text) { const e = new Error('Cột không hỗ trợ lọc theo giá trị'); e.status = 400; throw e }
-
-  let ver = '0'
-  try { ver = (await redis.get(COLVALS_VER_KEY)) || '0' } catch { /* redis lỗi */ }
-  const normSearch = (search && search.trim()) ? search.trim().toLowerCase() : ''
-  const hash = crypto.createHash('sha1')
-    .update(JSON.stringify({ filters, s: normSearch }))
-    .digest('hex').slice(0, 16)
-  const cacheKey = `taskcolvals:${ver}:${column}:${hash}`
-
-  try { const c = await redis.get(cacheKey); if (c) return JSON.parse(c) } catch { /* redis lỗi */ }
-
   const { conditions, params } = buildTaskWhere(filters)
-  const p = [...params]
-  const joinSql = cfg.join ? COL_JOINS[cfg.join] : ''
-  let extra = ''
-  if (normSearch) { p.push(`%${normSearch}%`); extra = ` AND ${cfg.text} ILIKE $${p.length}` }
-  const sql = `
-    SELECT ${cfg.text} AS value, COUNT(*)::int AS count
-    FROM tasks t ${joinSql}
-    WHERE ${conditions.join(' AND ')}${extra}
-    GROUP BY ${cfg.text}
-    ORDER BY count DESC, value ASC
-    LIMIT ${COLVALS_LIMIT}`
-  const { rows } = await query(sql, p)
-  const values = rows.map((r) => ({ value: r.value, count: r.count }))
-
-  try { await redis.set(cacheKey, JSON.stringify(values), 'EX', COLVALS_TTL) } catch { /* redis lỗi */ }
-  return values
-}
-
-// ── Dịch colFilters (từ header filter) → điều kiện SQL an toàn ────────────────────
-// colFilters = { [colKey]: array(giá trị) | {conditions:[{op,value}],join} | {from,to} }
-// Trả về { conditions:[sql], params:[], joins:Set }. startIdx = số param đã dùng trước đó.
-const TEXT_OP_SQL = {
-  contains:    (e, ph) => `${e} ILIKE '%' || ${ph} || '%'`,
-  notContains: (e, ph) => `(${e} IS NULL OR ${e} NOT ILIKE '%' || ${ph} || '%')`,
-  equals:      (e, ph) => `lower(${e}) = lower(${ph})`,
-  notEquals:   (e, ph) => `(${e} IS NULL OR lower(${e}) <> lower(${ph}))`,
-  startsWith:  (e, ph) => `${e} ILIKE ${ph} || '%'`,
-  endsWith:    (e, ph) => `${e} ILIKE '%' || ${ph}`,
-}
-const NUM_OP_SQL = { eq: '=', ne: '<>', gt: '>', gte: '>=', lt: '<', lte: '<=' }
-
-function buildColFilterSql(colFilters, startIdx) {
-  const conditions = []
-  const params = []
-  const joins = new Set()
-  let idx = startIdx
-  const ph = () => `$${++idx}`   // placeholder kế tiếp
-
-  for (const [colKey, fv] of Object.entries(colFilters || {})) {
-    const cfg = TASK_COLUMNS_SQL[colKey]
-    if (!cfg || fv == null) continue
-    if (cfg.join) joins.add(cfg.join)
-
-    // 1) Lọc theo GIÁ TRỊ (mảng) — so khớp trên biểu thức TEXT
-    if (Array.isArray(fv)) {
-      if (fv.length === 0 || !cfg.text) continue
-      const nonNull = fv.filter((v) => v != null && v !== '')
-      const hasBlank = fv.some((v) => v == null || v === '')
-      const parts = []
-      if (nonNull.length) { params.push(nonNull); parts.push(`${cfg.text} = ANY(${ph()}::text[])`) }
-      if (hasBlank) parts.push(`(${cfg.text} IS NULL OR ${cfg.text} = '')`)
-      if (parts.length) conditions.push(`(${parts.join(' OR ')})`)
-      continue
-    }
-    // 2) Khoảng ngày { from, to }
-    if (cfg.kind === 'date' && (fv.from || fv.to)) {
-      if (fv.from) { params.push(fv.from); conditions.push(`${cfg.filter} >= ${ph()}`) }
-      if (fv.to)   { params.push(fv.to);   conditions.push(`${cfg.filter} <= ${ph()}`) }
-      continue
-    }
-    // 3) Bộ điều kiện { conditions:[{op,value}], join }
-    if (Array.isArray(fv.conditions)) {
-      const parts = []
-      for (const c of fv.conditions) {
-        if (!c || !c.op) continue
-        if (cfg.kind === 'number') {
-          if (String(c.value).trim() === '' || !(c.op in NUM_OP_SQL)) continue
-          params.push(parseFloat(c.value)); parts.push(`${cfg.filter} ${NUM_OP_SQL[c.op]} ${ph()}`)
-        } else {
-          if (c.op === 'blank')    { parts.push(`(${cfg.filter} IS NULL OR ${cfg.filter} = '')`); continue }
-          if (c.op === 'notBlank') { parts.push(`(${cfg.filter} IS NOT NULL AND ${cfg.filter} <> '')`); continue }
-          if (String(c.value).trim() === '' || !TEXT_OP_SQL[c.op]) continue
-          params.push(String(c.value)); parts.push(TEXT_OP_SQL[c.op](cfg.filter, ph()))
-        }
-      }
-      if (parts.length) conditions.push(`(${parts.join(fv.join === 'or' ? ' OR ' : ' AND ')})`)
-    }
-  }
-  return { conditions, params, joins }
+  return cf.getColumnValues(query, {
+    ns: COLVALS_NS, tableExpr: 'tasks t', columnMap: TASK_COLUMNS_SQL, joinsMap: COL_JOINS,
+    column, search, whereSql: conditions.join(' AND '), params, hashKey: filters,
+  })
 }
 
 async function listTasks(filters = {}) {
@@ -653,7 +559,7 @@ async function listTasks(filters = {}) {
   // ── Bộ lọc theo CỘT (header filter, server-side) ────────────────────────────────
   let colFiltersObj = filters.colFilters
   if (typeof colFiltersObj === 'string') { try { colFiltersObj = JSON.parse(colFiltersObj) } catch { colFiltersObj = null } }
-  const colF = buildColFilterSql(colFiltersObj, params.length)
+  const colF = cf.buildColFilterSql(TASK_COLUMNS_SQL, colFiltersObj, params.length)
   const finalParams = [...params, ...colF.params]
   const finalWhere  = [...conditions, ...colF.conditions].join(' AND ')
   const colJoinSql  = [...colF.joins].map((k) => COL_JOINS[k]).join(' ')
@@ -699,24 +605,18 @@ async function listTasks(filters = {}) {
   let colSortObj = filters.colSort
   if (typeof colSortObj === 'string') { try { colSortObj = JSON.parse(colSortObj) } catch { colSortObj = null } }
   if (colSortObj && colSortObj.col && TASK_COLUMNS_SQL[colSortObj.col]) {
-    const dir = colSortObj.dir === 'desc' ? 'DESC' : 'ASC'
-    const meta = TASK_COLUMNS_SQL[colSortObj.col]
-    const fexpr = meta.filter
+    // Cột enum: sắp theo NHÃN tiếng Việt (không phải mã) — dựng CASE map mã→nhãn.
+    let enumCaseExpr = null
     const enumType = COL_ENUM_TYPE[colSortObj.col]
-    let sortExpr = fexpr
-    let textLike = meta.kind === 'text'
     if (enumType) {
-      // Cột enum: sắp theo NHÃN tiếng Việt (không phải mã) — dựng CASE map mã→nhãn.
       const opts = await enums.getOptions(enumType)
       if (opts.length) {
-        const whens = opts.map((o) => `WHEN ${sqlLit(o.key)} THEN ${sqlLit(o.label)}`).join(' ')
-        sortExpr = `CASE ${fexpr} ${whens} ELSE ${fexpr} END`
+        const fexpr = TASK_COLUMNS_SQL[colSortObj.col].filter
+        const whens = opts.map((o) => `WHEN ${cf.sqlLit(o.key)} THEN ${cf.sqlLit(o.label)}`).join(' ')
+        enumCaseExpr = `CASE ${fexpr} ${whens} ELSE ${fexpr} END`
       }
-      textLike = true
     }
-    // Cột chữ/nhãn: dùng collation tiếng Việt để A→Z đúng (Đ, Ơ… đúng vị trí).
-    const coll = textLike ? ' COLLATE "vi-VN-x-icu"' : ''
-    orderBy = `${sortExpr}${coll} ${dir} NULLS LAST, t.created_at DESC`
+    orderBy = cf.buildColSortOrder(TASK_COLUMNS_SQL, colSortObj, { enumCaseExpr, tieBreak: 't.created_at DESC' })
   }
 
   const [countRes, statusCountsRes, { rows }] = await Promise.all([

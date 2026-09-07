@@ -1,4 +1,5 @@
 const { query, getClient } = require('../../config/db')
+const cf = require('../../lib/columnFilter.server')
 const audit = require('../../lib/audit')
 const enums = require('../../lib/enums')
 const { createAndEmit, emitData } = require('../../lib/notify')
@@ -64,60 +65,100 @@ function toDto(row) {
   }
 }
 
-async function listCompanies({ page = 1, limit = 20, status, businessType, businessGroup, assignedStaffId, search, forceStaffId, currentUserId } = {}) {
-  const offset = (page - 1) * limit
-  const conditions = ['1=1']
-  const filterParams = []
+// ── Header filter server-side (dùng helper chung) ────────────────────────────────
+// Map cột (khớp colKey của frontend Companies). text=null → không có value-list.
+const COMPANY_COLUMNS_SQL = {
+  name:             { text: 'c.name',            filter: 'c.name', kind: 'text' },
+  taxCode:          { text: `coalesce(c.tax_code, '')`, filter: 'c.tax_code', kind: 'text' },
+  assignedStaffName:{ text: 'u.name',            filter: 'u.name', kind: 'text', join: 'staff' },
+  status:           { text: 'c.status::text',    filter: 'c.status::text', kind: 'text' },
+  businessType:     { text: 'c.business_type::text', filter: 'c.business_type::text', kind: 'text' },
+  industry:         { text: `coalesce(c.industry, '')`, filter: 'c.industry', kind: 'text' },
+  serviceStartDate: { text: `to_char(c.service_start_date, 'YYYY-MM-DD')`, filter: 'c.service_start_date', kind: 'date' },
+  taskOpenCount:    { text: null, filter: 'tc.task_open_count', kind: 'number' },
+  taskOverdueCount: { text: null, filter: 'tc.task_overdue_count', kind: 'number' },
+}
+const COMPANY_ENUM_TYPE = { status: 'company_status', businessType: 'business_type' }
+const CO_JOINS = { staff: 'LEFT JOIN users u ON u.id = c.assigned_staff_id' }
+const CO_COLVALS_NS = 'cocolvals'
+const bumpCoColVals = () => cf.bumpVersion(CO_COLVALS_NS)
 
+// Dựng WHERE nền (bộ lọc chung) — tái dùng cho listCompanies lẫn getCompanyColumnValues.
+async function buildCompanyWhere({ status, businessType, businessGroup, assignedStaffId, forceStaffId, search, pinnedOnly } = {}) {
+  const conditions = ['1=1']
+  const params = []
   const toArr = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? [v] : [])
+
+  if (pinnedOnly === true || pinnedOnly === 'true') conditions.push('c.is_priority = TRUE')
 
   const statusArr = toArr(status)
   if (statusArr.length > 0) {
-    const start = filterParams.length + 1
-    statusArr.forEach((s) => filterParams.push(s))
+    const start = params.length + 1
+    statusArr.forEach((s) => params.push(s))
     conditions.push(`c.status IN (${statusArr.map((_, i) => `$${start + i}`).join(', ')})`)
   }
-
-  // Loại hình: nhận cả MÃ LOẠI HÌNH lẫn MÃ NHÓM. Nhóm được dịch ra danh sách loại
-  // hình rồi gộp chung — câu SQL vẫn là IN (...) như cũ, không đổi cách lọc.
-  // Chọn nhóm "Doanh nghiệp" = chọn TNHH + CP + DN tư nhân.
   const btArr = toArr(businessType)
   const bgArr = toArr(businessGroup)
   const tuNhom = bgArr.length ? await enums.expandGroupKeys('business_type', bgArr) : []
   const btAll = [...new Set([...btArr, ...tuNhom])]
   if (btAll.length > 0) {
-    const start = filterParams.length + 1
-    btAll.forEach((b) => filterParams.push(b))
-    // So sánh dạng TEXT: business_type có thể là loại admin tự thêm (metadata) chưa
-    // có trong enum gốc — nếu ép sang enum gốc sẽ crash "invalid input value". Ép
-    // ::text để giá trị lạ chỉ đơn giản không khớp, không làm sập query.
+    const start = params.length + 1
+    btAll.forEach((b) => params.push(b))
     conditions.push(`c.business_type::text IN (${btAll.map((_, i) => `$${start + i}`).join(', ')})`)
   } else if (bgArr.length > 0) {
-    // Chọn nhóm nhưng nhóm đó chưa có loại hình nào → không khớp công ty nào,
-    // KHÔNG được bỏ qua bộ lọc (nếu bỏ qua sẽ trả về toàn bộ danh sách, sai hẳn).
     conditions.push('FALSE')
   }
-
-  // forceStaffId (staff role) overrides assignedStaffId from query string
   const effectiveStaff = forceStaffId ? [forceStaffId] : toArr(assignedStaffId)
   if (effectiveStaff.length > 0) {
-    const start = filterParams.length + 1
-    effectiveStaff.forEach((id) => filterParams.push(id))
+    const start = params.length + 1
+    effectiveStaff.forEach((id) => params.push(id))
     conditions.push(`c.assigned_staff_id IN (${effectiveStaff.map((_, i) => `$${start + i}`).join(', ')})`)
   }
   if (search && search.trim()) {
-    // Khớp CHUỖI CON (ILIKE %..%) trên tên / tên viết tắt / MST — gõ một phần là ra,
-    // không bắt khớp nguyên từ như full-text cũ. Nhiều từ: mỗi từ phải khớp ở đâu đó (AND).
     for (const tok of search.trim().split(/\s+/)) {
-      filterParams.push(`%${tok}%`)
-      const p = filterParams.length
-      conditions.push(
-        `(c.name ILIKE $${p} OR coalesce(c.short_name, '') ILIKE $${p} OR coalesce(c.tax_code, '') ILIKE $${p})`
-      )
+      params.push(`%${tok}%`)
+      const p = params.length
+      conditions.push(`(c.name ILIKE $${p} OR coalesce(c.short_name, '') ILIKE $${p} OR coalesce(c.tax_code, '') ILIKE $${p})`)
     }
   }
+  return { conditions, params }
+}
 
-  const where = conditions.join(' AND ')
+// Danh sách giá trị theo cột cho header filter Companies (server-side, có cache).
+async function getCompanyColumnValues({ column, search, filters = {} }) {
+  const { conditions, params } = await buildCompanyWhere(filters)
+  return cf.getColumnValues(query, {
+    ns: CO_COLVALS_NS, tableExpr: 'companies c', columnMap: COMPANY_COLUMNS_SQL, joinsMap: CO_JOINS,
+    column, search, whereSql: conditions.join(' AND '), params, hashKey: filters,
+  })
+}
+
+async function listCompanies({ page = 1, limit = 20, status, businessType, businessGroup, assignedStaffId, search, forceStaffId, currentUserId, colFilters, colSort, pinnedOnly } = {}) {
+  const offset = (page - 1) * limit
+
+  const { conditions, params } = await buildCompanyWhere({ status, businessType, businessGroup, assignedStaffId, forceStaffId, search, pinnedOnly })
+  // Bộ lọc theo CỘT (header). Query list luôn có join u + tc nên không cần thêm join.
+  const colF = cf.buildColFilterSql(COMPANY_COLUMNS_SQL, cf.parseJson(colFilters), params.length)
+  const filterParams = [...params, ...colF.params]
+  const where = [...conditions, ...colF.conditions].join(' AND ')
+
+  // Sắp xếp theo CỘT header — luôn giữ công ty ưu tiên (is_priority) lên đầu.
+  let orderBy = 'c.is_priority DESC, cup.position ASC NULLS FIRST, c.created_at DESC'
+  const colSortObj = cf.parseJson(colSort)
+  if (colSortObj && colSortObj.col && COMPANY_COLUMNS_SQL[colSortObj.col]) {
+    let enumCaseExpr = null
+    const et = COMPANY_ENUM_TYPE[colSortObj.col]
+    if (et) {
+      const opts = await enums.getOptions(et)
+      if (opts.length) {
+        const fexpr = COMPANY_COLUMNS_SQL[colSortObj.col].filter
+        const whens = opts.map((o) => `WHEN ${cf.sqlLit(o.key)} THEN ${cf.sqlLit(o.label)}`).join(' ')
+        enumCaseExpr = `CASE ${fexpr} ${whens} ELSE ${fexpr} END`
+      }
+    }
+    const colOrder = cf.buildColSortOrder(COMPANY_COLUMNS_SQL, colSortObj, { enumCaseExpr, tieBreak: 'c.created_at DESC' })
+    if (colOrder) orderBy = `c.is_priority DESC, ${colOrder}`
+  }
 
   // Tham số cho JOIN tùy chọn riêng của user (đẩy sau các filter để không lệch chỉ số $n).
   // currentUserId = null → không khớp dòng nào → danh sách về đúng thứ tự mặc định cũ.
@@ -146,11 +187,7 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, busin
        FROM tasks tk WHERE tk.company_id = c.id
      ) tc ON TRUE
      WHERE ${where}
-     ORDER BY c.is_priority DESC,  -- công ty ưu tiên (admin đặt, dùng chung) luôn lên đầu
-              -- NULLS FIRST: công ty CHƯA có thứ tự (vd KH vừa thêm) nổi lên ĐẦU
-              -- để user kéo ngay vào vị trí mong muốn, thay vì phải tìm ở cuối danh sách.
-              cup.position ASC NULLS FIRST,
-              c.created_at DESC                     -- trong cùng nhóm: mới nhất trước
+     ORDER BY ${orderBy}
      LIMIT $${filterParams.length + 1} OFFSET $${filterParams.length + 2}`,
     dataParams
   )
@@ -196,7 +233,7 @@ async function setCompanyPin(companyId, isPinned, actorId = null) {
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
 
   await query('UPDATE companies SET is_priority = $2, updated_at = NOW() WHERE id = $1', [companyId, !!isPinned])
-  emitData('data:company', { action: 'updated', id: companyId, actorId })
+  emitData('data:company', { action: 'updated', id: companyId, actorId }); void bumpCoColVals()
   return { companyId, isPinned: !!isPinned }
 }
 
@@ -286,7 +323,7 @@ async function createCompany(data, actorId, ipAddress, userAgent) {
     })
   }
 
-  emitData('data:company', { action: 'created', id: rows[0].id, actorId })
+  emitData('data:company', { action: 'created', id: rows[0].id, actorId }); void bumpCoColVals()
   return getCompanyById(rows[0].id)
 }
 
@@ -378,7 +415,7 @@ async function updateCompany(id, data, actorId, ipAddress, userAgent, user = nul
     await Promise.all(notifyPromises)
   }
 
-  emitData('data:company', { action: 'updated', id, actorId })
+  emitData('data:company', { action: 'updated', id, actorId }); void bumpCoColVals()
   return getCompanyById(id)
 }
 
@@ -395,7 +432,7 @@ async function terminateCompany(id, actorId, ipAddress, userAgent) {
     userId: actorId, action: 'company.terminated',
     targetType: 'company', targetId: id, meta: { name: rows[0].name }, ipAddress, userAgent,
   })
-  emitData('data:company', { action: 'updated', id, actorId })
+  emitData('data:company', { action: 'updated', id, actorId }); void bumpCoColVals()
 }
 
 async function getAssignments(companyId, user) {
@@ -459,7 +496,7 @@ async function deleteCompany(id, actorId, ipAddress, userAgent) {
     meta: { name: company.name },
     ipAddress, userAgent,
   })
-  emitData('data:company', { action: 'deleted', id, actorId })
+  emitData('data:company', { action: 'deleted', id, actorId }); void bumpCoColVals()
 }
 
 async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddress, userAgent) {
@@ -543,7 +580,7 @@ async function assignStaff(companyId, staffId, actorId, startDate, notes, ipAddr
     }
 
     await Promise.all(notifyPromises)
-    emitData('data:company', { action: 'updated', id: companyId, actorId })
+    emitData('data:company', { action: 'updated', id: companyId, actorId }); void bumpCoColVals()
     return { assignmentId: newAssignment.id, staffId, startDate: assignDate }
   } catch (err) {
     await client.query('ROLLBACK')
@@ -590,7 +627,7 @@ async function unassignStaff(companyId, actorId, ipAddress, userAgent) {
       )
       sendCompanyAssignmentEmail({ staffId: previousStaffId, companyName: company.name, assignerName: actor?.name, startDate: endDate, type: 'unassigned' })
     }
-    emitData('data:company', { action: 'updated', id: companyId, actorId })
+    emitData('data:company', { action: 'updated', id: companyId, actorId }); void bumpCoColVals()
     return { staffId: null }
   } catch (err) {
     await client.query('ROLLBACK')
@@ -755,6 +792,7 @@ async function deleteNote(companyId, noteId, user) {
 
 module.exports = {
   listCompanies,
+  getCompanyColumnValues,
   setCompanyOrder,
   setCompanyPin,
   getCompanyById,

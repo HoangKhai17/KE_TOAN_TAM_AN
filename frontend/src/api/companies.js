@@ -5,6 +5,12 @@ export async function listCompanies(params = {}) {
   return data.data  // { companies, pagination }
 }
 
+// Danh sách giá trị theo cột cho header filter (server-side, có cache)
+export async function getCompanyColumnValues(params = {}) {
+  const { data } = await api.get('/companies/meta/column-values', { params })
+  return data.data.values  // [{ value, count }]
+}
+
 export async function getCompany(id) {
   const { data } = await api.get(`/companies/${id}`)
   return data.data.company
