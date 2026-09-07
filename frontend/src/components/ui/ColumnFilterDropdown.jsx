@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { ArrowUp, ArrowDown, FilterX } from 'lucide-react'
+import { ArrowUp, ArrowDown, FilterX, Settings2, Check } from 'lucide-react'
 import DateBox from './DateBox'
 import { TEXT_OPS, NUM_OPS } from './columnFilter'
 import s from './ColumnFilterDropdown.module.css'
@@ -120,10 +120,54 @@ function ClearFooter({ disabled, onClear }) {
   )
 }
 
+// ── Tuỳ chọn hiển thị của tab "Theo giá trị" (lưu localStorage, riêng mỗi trình duyệt) ──
+const VALUE_PREFS_KEY = 'cfd.valuePrefs'
+const DEFAULT_VALUE_PREFS = { showCount: true, showTotal: false, pinSelected: false }
+function loadValuePrefs() {
+  try { return { ...DEFAULT_VALUE_PREFS, ...(JSON.parse(localStorage.getItem(VALUE_PREFS_KEY)) || {}) } }
+  catch { return { ...DEFAULT_VALUE_PREFS } }
+}
+function saveValuePrefs(p) {
+  try { localStorage.setItem(VALUE_PREFS_KEY, JSON.stringify(p)) } catch { /* ignore */ }
+}
+
+// Menu bánh răng như Excel — bật/tắt cách hiển thị danh sách giá trị
+function ValueGearMenu({ prefs, setPref }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  const item = (key, label) => (
+    <button className={s.gearItem} onClick={() => setPref(key, !prefs[key])}>
+      <span className={s.gearCheck}>{prefs[key] && <Check size={12} />}</span>{label}
+    </button>
+  )
+  return (
+    <div className={s.gearWrap} ref={ref}>
+      <button className={`${s.miniBtn} ${s.gearBtn}`} title="Tuỳ chọn hiển thị" onClick={() => setOpen((o) => !o)}>
+        <Settings2 size={12} />
+      </button>
+      {open && (
+        <div className={s.gearMenu}>
+          {item('showCount', 'Hiện số lượng')}
+          {item('showTotal', 'Hiện tổng số dòng')}
+          {item('pinSelected', 'Ghim mục đã chọn lên đầu')}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Lọc theo GIÁ TRỊ: value list kiểu Excel (đếm số lượng, ô trống, đảo chọn, sắp xếp) ──
 function ValueSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilterChange, colSorted, onClearSort }) {
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState('name') // 'name' | 'count'
+  const [prefs, setPrefs] = useState(loadValuePrefs)
+  const setPref = (k, v) => { const n = { ...prefs, [k]: v }; setPrefs(n); saveValuePrefs(n) }
 
   // Danh sách giá trị + số lượng từng giá trị
   const items = useMemo(() => {
@@ -164,6 +208,11 @@ function ValueSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilte
 
   const showLabel = (v) => (String(v).trim() === '' ? '(Trống)' : v)
 
+  // Ghim mục đã chọn lên đầu (giữ nguyên thứ tự sắp xếp trong từng nhóm)
+  const listed = prefs.pinSelected
+    ? [...filtered.filter((it) => selected.has(it.value)), ...filtered.filter((it) => !selected.has(it.value))]
+    : filtered
+
   return (
     <div className={s.section}>
       <input className={s.input} placeholder="Tìm giá trị (nhiều từ, cách bằng dấu ,)" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -173,6 +222,7 @@ function ValueSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilte
         <button className={`${s.miniBtn} ${sortBy === 'count' ? s.miniBtnActive : ''}`} onClick={() => setSortBy('count')}>Số lượng</button>
         <span className={s.spacer} />
         <button className={s.linkBtn} onClick={invert}>Đảo chọn</button>
+        <ValueGearMenu prefs={prefs} setPref={setPref} />
       </div>
 
       <label className={s.selectAll}>
@@ -180,19 +230,23 @@ function ValueSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilte
           ref={(el) => { if (el) el.indeterminate = selected.size > 0 && !allChecked }}
           onChange={toggleAll} />
         <span>Chọn tất cả</span>
-        <span className={s.countBadge}>{allRows.length}</span>
+        {prefs.showCount && <span className={s.countBadge}>{allRows.length}</span>}
       </label>
 
       <div className={s.valueList}>
-        {filtered.map((it) => (
+        {listed.map((it) => (
           <label key={it.value} className={s.valueItem}>
             <input type="checkbox" checked={selected.has(it.value)} onChange={() => toggle(it.value)} />
             <span className={`${s.valueText} ${String(it.value).trim() === '' ? s.blankText : ''}`}>{showLabel(it.value)}</span>
-            <span className={s.countBadge}>{it.count}</span>
+            {prefs.showCount && <span className={s.countBadge}>{it.count}</span>}
           </label>
         ))}
-        {filtered.length === 0 && <div className={s.empty}>Không có giá trị</div>}
+        {listed.length === 0 && <div className={s.empty}>Không có giá trị</div>}
       </div>
+
+      {prefs.showTotal && (
+        <div className={s.totalRow}>Tổng: {allRows.length} dòng · {allValues.length} giá trị</div>
+      )}
 
       <ClearFooter disabled={selected.size === 0 && !colSorted}
         onClear={() => { onFilterChange(colKey, null); onClearSort() }} />

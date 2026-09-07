@@ -134,6 +134,47 @@
 }
 .linkBtn:hover { text-decoration: underline; }
 
+/* Menu bánh răng (tuỳ chọn hiển thị value-list) */
+.gearWrap { position: relative; flex: 0 0 auto; }
+.gearBtn { display: inline-flex; align-items: center; justify-content: center; padding: 3px 6px; }
+.gearMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  min-width: 190px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+  padding: 4px;
+}
+.gearItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 7px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text, #1e293b);
+  font-size: var(--cfd-fs);
+}
+.gearItem:hover { background: var(--color-bg-soft, #f1f5f9); }
+.gearCheck { flex: 0 0 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--color-primary, #2563eb); }
+
+.totalRow {
+  margin-top: 6px;
+  padding: 5px 4px 0;
+  border-top: 1px dashed var(--color-border, #e2e8f0);
+  color: var(--color-muted, #64748b);
+  font-size: var(--cfd-fs);
+  font-variant-numeric: tabular-nums;
+}
+
 .countBadge {
   margin-left: auto;
   color: var(--color-muted, #64748b);
