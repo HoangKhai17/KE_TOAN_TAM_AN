@@ -16,6 +16,15 @@ async function listAssignments(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Danh sách giá trị theo cột cho header filter (server-side, có cache)
+async function getColumnValues(req, res, next) {
+  try {
+    const { column, search, ...filters } = req.query
+    const values = await svc.getIaColumnValues(req.user.id, { column, search, filters })
+    res.json({ success: true, data: { values } })
+  } catch (err) { next(err) }
+}
+
 async function getStats(req, res, next) {
   try {
     const { deadlineFrom, deadlineTo } = req.query
@@ -184,7 +193,7 @@ async function deleteLink(req, res, next) {
 }
 
 module.exports = {
-  listAssignments, getStats, getYears, getAssignment,
+  listAssignments, getColumnValues, getStats, getYears, getAssignment,
   createAssignment, updateAssignment, deleteAssignment,
   sendAssignment, cancelAssignment, closeAssignment,
   acceptAssignment, progressAssignment, completeAssignment, rejectAssignment,

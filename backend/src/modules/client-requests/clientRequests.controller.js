@@ -14,6 +14,18 @@ async function listClientRequests(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Danh sách giá trị theo cột cho header filter (server-side, có cache)
+async function getColumnValues(req, res, next) {
+  try {
+    const { column, search, status, ...rest } = req.query
+    const values = await svc.getCdrColumnValues({
+      column, search,
+      filters: { status: status ? (Array.isArray(status) ? status : [status]) : undefined, ...rest },
+    })
+    res.json({ success: true, data: { values } })
+  } catch (err) { next(err) }
+}
+
 async function getClientRequest(req, res, next) {
   try {
     const item = await svc.getById(req.params.id)
@@ -128,6 +140,7 @@ async function getAvailableYears(req, res, next) {
 
 module.exports = {
   listClientRequests,
+  getColumnValues,
   getClientRequest,
   createClientRequest,
   updateClientRequest,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ClipboardList, Search, Filter, RotateCcw, Plus, Loader2,
@@ -828,6 +828,7 @@ export default function AdminClientRequests() {
   const [colFilters, setColFilters]     = useState({})
   const [sortColState, setSortColState] = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup]   = useState(null)
+  const [colVals, setColVals] = useState({ colKey: null, values: null, loading: false })
   const [searchQuery, setSearchQuery]         = useState(initF.searchQuery   ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(initF.searchQuery   ?? '')
   const [sortFilter, setSortFilter]           = useState(initF.sortFilter    ?? 'deadline_date:asc')
@@ -947,24 +948,34 @@ export default function AdminClientRequests() {
 
   // ── CDR list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
   // Tải working set 1 lần; lọc/sắp/phân trang phía client (docs/018).
+  // List view: lọc/sắp/phân trang PHÍA SERVER. Board: nạp working set (500) gom nhóm client.
+  const isServer = view === 'list'
+  const serverColFilters = useMemo(() => {
+    const out = {}
+    for (const [k, v] of Object.entries(colFilters)) out[k] = v instanceof Set ? [...v] : v
+    return out
+  }, [colFilters])
   const listParams = useMemo(() => {
     const [sortBy, sortDir] = sortFilter.split(':')
-    return {
+    const base = {
       status:           statusFilter.length  ? statusFilter.join(',')  : undefined,
       companyId:        companyFilter.length ? companyFilter.join(',') : undefined,
-      // Nhân viên: phạm vi = CDR mình tạo HOẶC mình hỗ trợ (staffScopeId). Admin: lọc theo NV (requestedBy).
       requestedBy:      isAdmin ? (staffFilter.length ? staffFilter.join(',') : undefined) : undefined,
       staffScopeId:     !isAdmin ? currentUser?.id : undefined,
       collaboratorIds:  supportFilter.length ? supportFilter.join(',') : undefined,
       search:           debouncedSearch || undefined,
       deadlineDateFrom: deadlineFrom  || undefined,
       deadlineDateTo:   deadlineTo    || undefined,
-      page: 1,
-      limit: 500,
-      sortBy,
-      sortDir,
+      sortBy, sortDir,
     }
-  }, [statusFilter, companyFilter, staffFilter, supportFilter, debouncedSearch, sortFilter, isAdmin, currentUser?.id, deadlineFrom, deadlineTo])
+    if (!isServer) return { ...base, page: 1, limit: 500 }
+    return {
+      ...base,
+      page, limit: pageSize,
+      colFilters: Object.keys(serverColFilters).length ? JSON.stringify(serverColFilters) : undefined,
+      colSort:    sortColState.col ? JSON.stringify(sortColState) : undefined,
+    }
+  }, [statusFilter, companyFilter, staffFilter, supportFilter, debouncedSearch, sortFilter, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, isServer, page, pageSize, serverColFilters, sortColState])
 
   const listQuery = useQuery({
     queryKey: ['cdr', 'list', listParams],
@@ -980,6 +991,27 @@ export default function AdminClientRequests() {
     setItems(listQuery.data.items ?? [])
     setPagination(listQuery.data.pagination ?? { total: 0, totalPages: 1 })
   }, [listQuery.data])
+
+  // Nạp value-list server khi mở dropdown (list view). Mọi cột CDR đều có value-list.
+  useEffect(() => {
+    if (!filterPopup || view !== 'list') return undefined
+    const colKey = filterPopup.colKey
+    let cancelled = false
+    setColVals({ colKey, values: null, loading: true })
+    const { page: _p, limit: _l, colFilters: _cf, colSort: _cs, sortBy: _sb, sortDir: _sd, ...baseParams } = listParams
+    cdrApi.getCdrColumnValues({ column: colKey, ...baseParams })
+      .then((values) => { if (!cancelled) setColVals({ colKey, values, loading: false }) })
+      .catch(() => { if (!cancelled) setColVals({ colKey, values: [], loading: false }) })
+    return () => { cancelled = true }
+  }, [filterPopup, view, listParams])
+
+  const cdrValueLabel = useCallback((colKey) => (value) => {
+    if (colKey === 'companyName') return (value == null || value === '') ? '(Không có)' : value
+    if (value == null || value === '') return ''
+    if (colKey === 'status')       return STATUS_LABEL[value] ?? value
+    if (colKey === 'deadlineDate') return fmtDate(value)
+    return value
+  }, [])
 
   // ── Row actions ──────────────────────────────────────────────────────────────
 
@@ -1128,38 +1160,18 @@ export default function AdminClientRequests() {
     e.stopPropagation()
     if (filterPopup?.colKey === colKey) { setFilterPopup(null); return }
     const rect = e.currentTarget.getBoundingClientRect()
-    setFilterPopup({ colKey, top: rect.bottom + 4, left: rect.left })
+    setFilterPopup({ colKey, top: rect.bottom + 4, left: Math.max(8, Math.min(rect.left, window.innerWidth - 348)) })
   }
   function handleColFilterChange(colKey, val) {
     setColFilters((prev) => { const n = { ...prev }; if (val == null) delete n[colKey]; else n[colKey] = val; return n }); setPage(1)
   }
-  function handleColSort(col, dir) { setSortColState(dir ? { col, dir } : { col: null, dir: 'asc' }); setFilterPopup(null) }
+  function handleColSort(col, dir) { setSortColState(dir ? { col, dir } : { col: null, dir: 'asc' }); setPage(1); setFilterPopup(null) }
 
-  const displayed = useMemo(() => {
-    let result = [...items]
-    for (const [colKey, fv] of Object.entries(colFilters)) {
-      const ft = cdrColFilterType(colKey)
-      if (!isColFilterActive(fv, ft)) continue
-      result = result.filter((r) => matchColFilter(fv, ft, {
-        label: cdrColDisplayLabel(r, colKey),
-        date:  r.deadlineDate,
-      }))
-    }
-    if (sortColState.col) {
-      result.sort((a, b) => {
-        const ak = cdrColSortKey(a, sortColState.col)
-        const bk = cdrColSortKey(b, sortColState.col)
-        if (typeof ak === 'number' && typeof bk === 'number') return sortColState.dir === 'asc' ? ak - bk : bk - ak
-        const cmp = String(ak).localeCompare(String(bk), 'vi', { numeric: true })
-        return sortColState.dir === 'asc' ? cmp : -cmp
-      })
-    }
-    return result
-  }, [items, colFilters, sortColState])
-
-  const clientTotalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
-  const safePage = Math.min(page, clientTotalPages)
-  const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
+  // Server đã lọc/sắp/phân trang (list). Board dùng `items` trực tiếp. Không lọc client nữa.
+  const listTotal        = isServer ? (pagination.total ?? items.length) : items.length
+  const clientTotalPages = isServer ? (pagination.totalPages ?? 1) : Math.max(1, Math.ceil(items.length / pageSize))
+  const safePage         = isServer ? (pagination.page ?? page) : 1
+  const pageRows         = items
 
   // ── Row selection + bulk delete ────────────────────────────────────────────
   const {
@@ -1227,8 +1239,8 @@ export default function AdminClientRequests() {
     { label: 'Không cần', value: stats?.not_required ?? 0, cls: s.statNotRequired },
   ]
 
-  const from = displayed.length === 0 ? 0 : (safePage - 1) * pageSize + 1
-  const to   = Math.min(safePage * pageSize, displayed.length)
+  const from = listTotal === 0 ? 0 : (safePage - 1) * pageSize + 1
+  const to   = Math.min(safePage * pageSize, listTotal)
   const footerDetails = [
     colFilterCount > 0 ? `${colFilterCount} lọc cột` : '',
     hasColSort ? 'đang sắp xếp' : '',
@@ -1239,7 +1251,7 @@ export default function AdminClientRequests() {
   return (
     <AppLayout footer={view === 'list' ? (
       <PaginationFooter
-        total={displayed.length}
+        total={listTotal}
         from={from}
         to={to}
         itemLabel="yêu cầu"
@@ -1550,7 +1562,7 @@ export default function AdminClientRequests() {
                         ))}
                       </tr>
                     ))
-                  ) : displayed.length === 0 ? (
+                  ) : listTotal === 0 ? (
                     <tr>
                       <td colSpan={11} className={s.td}>
                         <div className={s.emptyBox}>
@@ -1696,8 +1708,12 @@ export default function AdminClientRequests() {
           <ColumnFilterDropdown
             colKey={filterPopup.colKey}
             filterType={cdrColFilterType(filterPopup.colKey)}
-            allRows={items}
-            getDisplayLabel={cdrColDisplayLabel}
+            serverMode
+            hasValueList
+            serverValues={colVals.colKey === filterPopup.colKey ? colVals.values : null}
+            loadingValues={colVals.colKey === filterPopup.colKey ? colVals.loading : true}
+            labelOf={cdrValueLabel(filterPopup.colKey)}
+            totalRows={pagination.total}
             currentFilter={colFilters[filterPopup.colKey] ?? null}
             sortState={sortColState}
             onSort={handleColSort}

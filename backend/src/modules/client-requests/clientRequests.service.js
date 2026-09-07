@@ -1,6 +1,7 @@
 'use strict'
 const crypto = require('crypto')
 const { query } = require('../../config/db')
+const cf = require('../../lib/columnFilter.server')
 const { createAndEmit, emitData } = require('../../lib/notify')
 const { sendMail } = require('../../utils/mailer')
 const logger = require('../../config/logger')
@@ -111,28 +112,29 @@ const CDR_FROM = `
 
 const CDR_SELECT = `SELECT ${CDR_COLS} ${CDR_FROM}`
 
-async function listClientRequests(filters = {}) {
-  const {
-    page = 1, limit = 20,
-    companyId, taskId, requestedBy, status, deadlineDateFrom, deadlineDateTo,
-    search,
-    sortBy = 'created_at', sortDir = 'desc',
-    staffScopeId, collaboratorIds,
-  } = filters
+// ── Header filter server-side (helper chung) ─────────────────────────────────────
+const CDR_COLUMNS_SQL = {
+  documentName: { text: 'cdr.document_name',   filter: 'cdr.document_name', kind: 'text' },
+  companyName:  { text: 'c.name',              filter: 'c.name', kind: 'text' },
+  status:       { text: 'cdr.status::text',    filter: 'cdr.status::text', kind: 'text' },
+  periodLabel:  { text: 'cdr.period_label',    filter: 'cdr.period_label', kind: 'text' },
+  contactEmail: { text: 'cdr.reminded_email',  filter: 'cdr.reminded_email', kind: 'text' },
+  deadlineDate: { text: `to_char(cdr.deadline_date, 'YYYY-MM-DD')`, filter: 'cdr.deadline_date', kind: 'date' },
+}
+const CDR_COLVALS_NS = 'cdrcolvals'
+const bumpCdrColVals = () => cf.bumpVersion(CDR_COLVALS_NS)
 
-  const offset = (page - 1) * limit
+// WHERE nền (bộ lọc chung) — tái dùng cho list + column-values.
+function buildCdrWhere(filters = {}) {
+  const { companyId, taskId, requestedBy, status, deadlineDateFrom, deadlineDateTo, search, staffScopeId, collaboratorIds } = filters
   const conditions = ['1=1']
   const params = []
 
-  // Phạm vi nhân sự: CDR mình tạo (requested_by) HOẶC mình được nhờ HỖ TRỢ.
   if (staffScopeId) {
     params.push(staffScopeId)
     const p = params.length
-    conditions.push(
-      `(cdr.requested_by = $${p} OR EXISTS (SELECT 1 FROM client_request_collaborators crc WHERE crc.request_id = cdr.id AND crc.user_id = $${p}))`
-    )
+    conditions.push(`(cdr.requested_by = $${p} OR EXISTS (SELECT 1 FROM client_request_collaborators crc WHERE crc.request_id = cdr.id AND crc.user_id = $${p}))`)
   }
-  // Lọc "CV hỗ trợ": chỉ CDR mà 1 trong các user chỉ định là NGƯỜI HỖ TRỢ.
   const collabArr = collaboratorIds == null
     ? null
     : (Array.isArray(collaboratorIds) ? collaboratorIds : String(collaboratorIds).split(',').map((x) => x.trim()).filter(Boolean))
@@ -140,7 +142,6 @@ async function listClientRequests(filters = {}) {
     params.push(collabArr)
     conditions.push(`EXISTS (SELECT 1 FROM client_request_collaborators crc WHERE crc.request_id = cdr.id AND crc.user_id = ANY($${params.length}::uuid[]))`)
   }
-
   if (companyId) {
     const arr = Array.isArray(companyId) ? companyId : String(companyId).split(',').map((x) => x.trim()).filter(Boolean)
     if (arr.length) { params.push(arr); conditions.push(`cdr.company_id = ANY($${params.length}::uuid[])`) }
@@ -172,8 +173,27 @@ async function listClientRequests(filters = {}) {
     params.push(`%${search}%`)
     conditions.push(`(cdr.document_name ILIKE $${idx} OR cdr.reminded_email ILIKE $${idx})`)
   }
+  return { conditions, params }
+}
 
-  const where = conditions.join(' AND ')
+async function getCdrColumnValues({ column, search, filters = {} }) {
+  const { conditions, params } = buildCdrWhere(filters)
+  return cf.getColumnValues(query, {
+    ns: CDR_COLVALS_NS,
+    tableExpr: 'client_document_requests cdr LEFT JOIN companies c ON c.id = cdr.company_id',
+    columnMap: CDR_COLUMNS_SQL, joinsMap: {},
+    column, search, whereSql: conditions.join(' AND '), params, hashKey: filters,
+  })
+}
+
+async function listClientRequests(filters = {}) {
+  const { page = 1, limit = 20, sortBy = 'created_at', sortDir = 'desc', colFilters, colSort } = filters
+  const offset = (page - 1) * limit
+
+  const { conditions, params } = buildCdrWhere(filters)
+  const colF = cf.buildColFilterSql(CDR_COLUMNS_SQL, cf.parseJson(colFilters), params.length)
+  const allParams = [...params, ...colF.params]
+  const where = [...conditions, ...colF.conditions].join(' AND ')
 
   const SORT_COLS = {
     created_at:    'cdr.created_at',
@@ -181,15 +201,19 @@ async function listClientRequests(filters = {}) {
     updated_at:    'cdr.updated_at',
     document_name: 'cdr.document_name',
   }
-  const orderBy = `${SORT_COLS[sortBy] || 'cdr.created_at'} ${sortDir === 'asc' ? 'ASC' : 'DESC'}`
+  let orderBy = `${SORT_COLS[sortBy] || 'cdr.created_at'} ${sortDir === 'asc' ? 'ASC' : 'DESC'}`
+  const colSortObj = cf.parseJson(colSort)
+  if (colSortObj && colSortObj.col && CDR_COLUMNS_SQL[colSortObj.col]) {
+    orderBy = cf.buildColSortOrder(CDR_COLUMNS_SQL, colSortObj, { tieBreak: 'cdr.created_at DESC' })
+  }
 
   const { rows } = await query(
     `SELECT ${CDR_COLS}, COUNT(*) OVER() AS _total
      ${CDR_FROM}
      WHERE ${where}
      ORDER BY ${orderBy}
-     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, limit, offset]
+     LIMIT $${allParams.length + 1} OFFSET $${allParams.length + 2}`,
+    [...allParams, limit, offset]
   )
 
   const total = parseInt(rows[0]?._total ?? 0, 10)
@@ -240,12 +264,12 @@ async function createClientRequest(data, requestedBy) {
     const changes = await syncCdrCollaborators(row.id, collaboratorIds, requestedBy, requestedBy)
     const withCollab = await getById(row.id)
     await notifyCdrCollaboratorChanges(changes, withCollab, requestedBy)
-    emitData('data:cdr', { action: 'created', id: withCollab.id })
+    emitData('data:cdr', { action: 'created', id: withCollab.id }); void bumpCdrColVals()
     return withCollab
   }
 
   const item = await getById(row.id)
-  emitData('data:cdr', { action: 'created', id: item.id })
+  emitData('data:cdr', { action: 'created', id: item.id }); void bumpCdrColVals()
   return item
 }
 
@@ -298,7 +322,7 @@ async function updateClientRequest(id, data, actorId = null) {
   if (changes.toAdd.length || changes.toRemove.length) {
     await notifyCdrCollaboratorChanges(changes, item, actorId ?? existing.requested_by)
   }
-  emitData('data:cdr', { action: 'updated', id })
+  emitData('data:cdr', { action: 'updated', id }); void bumpCdrColVals()
   return item
 }
 
@@ -311,7 +335,7 @@ async function deleteClientRequest(id, userId, isAdmin = false) {
     throw Object.assign(new Error('Bạn không có quyền xóa yêu cầu này'), { status: 403 })
   }
   await query('DELETE FROM client_document_requests WHERE id = $1', [id])
-  emitData('data:cdr', { action: 'deleted', id })
+  emitData('data:cdr', { action: 'deleted', id }); void bumpCdrColVals()
 }
 
 async function receiveClientRequest(id, receivedBy) {
@@ -331,7 +355,7 @@ async function receiveClientRequest(id, receivedBy) {
   )
 
   const item = await getById(id)
-  emitData('data:cdr', { action: 'updated', id })
+  emitData('data:cdr', { action: 'updated', id }); void bumpCdrColVals()
   return item
 }
 
@@ -352,7 +376,7 @@ async function unreceiveClientRequest(id) {
   )
 
   const item = await getById(id)
-  emitData('data:cdr', { action: 'updated', id })
+  emitData('data:cdr', { action: 'updated', id }); void bumpCdrColVals()
   return item
 }
 
@@ -370,7 +394,7 @@ async function dismissClientRequest(id) {
   )
 
   const item = await getById(id)
-  emitData('data:cdr', { action: 'updated', id })
+  emitData('data:cdr', { action: 'updated', id }); void bumpCdrColVals()
   return item
 }
 
@@ -706,6 +730,7 @@ async function getAvailableYears() {
 
 module.exports = {
   listClientRequests,
+  getCdrColumnValues,
   getById,
   createClientRequest,
   updateClientRequest,

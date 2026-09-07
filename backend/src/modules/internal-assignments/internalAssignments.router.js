@@ -17,6 +17,7 @@ const adminOnly = [authenticate, requireRole('admin')]
 // ─── Meta ─────────────────────────────────────────────────────────────────────
 router.get('/meta/stats', ...auth, ctrl.getStats)
 router.get('/meta/years', ...auth, ctrl.getYears)
+router.get('/meta/column-values', ...auth, ctrl.getColumnValues)
 router.get('/',           ...auth, ctrl.listAssignments)
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────

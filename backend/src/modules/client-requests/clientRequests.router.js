@@ -20,6 +20,7 @@ const admin = [authenticate, requireRole('admin')]
 
 router.get('/',             ...auth, ctrl.listClientRequests)
 router.get('/meta/years',   ...auth, ctrl.getAvailableYears)
+router.get('/meta/column-values', ...auth, ctrl.getColumnValues)
 router.get('/stats',        ...auth, ctrl.getStats)
 router.post('/',            ...auth, validate(createClientRequestSchema), ctrl.createClientRequest)
 router.get('/:id',          ...auth, ctrl.getClientRequest)

@@ -6,6 +6,10 @@ import api from './axios'
 export const getClientRequests = (params) =>
   api.get('/client-requests', { params }).then((r) => r.data.data)
 
+export const getCdrColumnValues = (params = {}) =>
+  api.get('/client-requests/meta/column-values', { params }).then((r) => r.data.data.values)
+
+
 export const getClientRequest = (id) =>
   api.get(`/client-requests/${id}`).then((r) => r.data.data.item)
 

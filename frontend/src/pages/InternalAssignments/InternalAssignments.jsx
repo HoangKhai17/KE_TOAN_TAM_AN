@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 
 const EMPTY_ITEMS = []   // ref ổn định để useMemo phía dưới không recompute mỗi render
@@ -130,6 +130,11 @@ const IA_COL_TYPE = {
   latestComment: 'text',
 }
 function iaColFilterType(k) { return IA_COL_TYPE[k] ?? 'text' }
+// Cột có tab "Theo giá trị" server (mọi cột trừ progress = số).
+const IA_SERVER_VALUE_COLS = new Set([
+  'title', 'companyShort', 'startDate', 'deadlineDate', 'createdAt',
+  'status', 'priority', 'assignedToName', 'latestComment',
+])
 function iaColRawDate(it, k) {
   if (k === 'startDate') return it.startDate
   if (k === 'deadlineDate') return it.deadlineDate
@@ -751,6 +756,7 @@ export default function InternalAssignments() {
   const [colFilters, setColFilters]     = useState({})
   const [sortColState, setSortColState] = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup]   = useState(null)
+  const [colVals, setColVals] = useState({ colKey: null, values: null, loading: false })
 
   // Pagination
   const [pageSize, setPageSize] = useState(initF.pageSize ?? 20)
@@ -844,11 +850,16 @@ export default function InternalAssignments() {
 
   // ── Assignments list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
   // Tải working set 1 lần; lọc/sắp/phân trang phía client (docs/018).
+  // List view: lọc/sắp/phân trang PHÍA SERVER. Board: nạp working set (200) gom nhóm client.
+  const isServer = view === 'list'
+  const serverColFilters = useMemo(() => {
+    const out = {}
+    for (const [k, v] of Object.entries(colFilters)) out[k] = v instanceof Set ? [...v] : v
+    return out
+  }, [colFilters])
   const listParams = useMemo(() => {
     const [sortBy, sortDir] = sortValue.split(':')
     const params = {
-      page: 1,
-      limit: 200,
       search: search || undefined,
       deadlineFrom: deadlineFrom || undefined,
       deadlineTo:   deadlineTo   || undefined,
@@ -859,8 +870,14 @@ export default function InternalAssignments() {
     if (filterPriority.length)  params.priority = filterPriority.join(',')
     if (isAdmin && filterAssignees.length) params.assigneeIds = filterAssignees.join(',')
     if (!isAdmin && filterMyStatus)        params.myStatus    = filterMyStatus
-    return params
-  }, [search, sortValue, deadlineFrom, deadlineTo, filterStatus, filterPriority, filterAssignees, filterMyStatus, isAdmin])
+    if (!isServer) return { ...params, page: 1, limit: 200 }
+    return {
+      ...params,
+      page, limit: pageSize,
+      colFilters: Object.keys(serverColFilters).length ? JSON.stringify(serverColFilters) : undefined,
+      colSort:    sortColState.col ? JSON.stringify(sortColState) : undefined,
+    }
+  }, [search, sortValue, deadlineFrom, deadlineTo, filterStatus, filterPriority, filterAssignees, filterMyStatus, isAdmin, isServer, page, pageSize, serverColFilters, sortColState])
 
   const listQuery = useQuery({
     queryKey: ['assignments', 'list', listParams],
@@ -870,6 +887,28 @@ export default function InternalAssignments() {
   })
   const items   = listQuery.data?.items ?? EMPTY_ITEMS
   const loading = listQuery.isFetching
+
+  // Nạp value-list server khi mở dropdown (list view).
+  useEffect(() => {
+    if (!filterPopup || view !== 'list') return undefined
+    const colKey = filterPopup.colKey
+    if (!IA_SERVER_VALUE_COLS.has(colKey)) { setColVals({ colKey, values: [], loading: false }); return undefined }
+    let cancelled = false
+    setColVals({ colKey, values: null, loading: true })
+    const { page: _p, limit: _l, colFilters: _cf, colSort: _cs, sortBy: _sb, sortDir: _sd, ...baseParams } = listParams
+    api.getIaColumnValues({ column: colKey, ...baseParams })
+      .then((values) => { if (!cancelled) setColVals({ colKey, values, loading: false }) })
+      .catch(() => { if (!cancelled) setColVals({ colKey, values: [], loading: false }) })
+    return () => { cancelled = true }
+  }, [filterPopup, view, listParams])
+
+  const iaValueLabel = useCallback((colKey) => (value) => {
+    if (value == null || value === '') return ''
+    if (colKey === 'status')   return STATUS_LABELS[value] ?? value
+    if (colKey === 'priority') return PRIORITY_LABELS[value] ?? value
+    if (colKey === 'startDate' || colKey === 'deadlineDate' || colKey === 'createdAt') return fmtDate(value)
+    return value
+  }, [])
 
   // refresh stats (refreshKey) + làm mới cache danh sách
   function refresh() {
@@ -888,40 +927,19 @@ export default function InternalAssignments() {
     e.stopPropagation()
     if (filterPopup?.colKey === colKey) { setFilterPopup(null); return }
     const rect = e.currentTarget.getBoundingClientRect()
-    setFilterPopup({ colKey, top: rect.bottom + 4, left: rect.left })
+    setFilterPopup({ colKey, top: rect.bottom + 4, left: Math.max(8, Math.min(rect.left, window.innerWidth - 348)) })
   }
   function handleColFilterChange(colKey, val) {
     setColFilters((prev) => { const n = { ...prev }; if (val == null) delete n[colKey]; else n[colKey] = val; return n }); setPage(1)
   }
-  function handleColSort(col, dir) { setSortColState(dir ? { col, dir } : { col: null, dir: 'asc' }); setFilterPopup(null) }
+  function handleColSort(col, dir) { setSortColState(dir ? { col, dir } : { col: null, dir: 'asc' }); setPage(1); setFilterPopup(null) }
 
-  const displayed = useMemo(() => {
-    let result = [...items]
-    for (const [colKey, fv] of Object.entries(colFilters)) {
-      const ft = iaColFilterType(colKey)
-      if (!isColFilterActive(fv, ft)) continue
-      result = result.filter((r) => matchColFilter(fv, ft, {
-        label:  iaColDisplayLabel(r, colKey),
-        date:   iaColRawDate(r, colKey),
-        number: progressPct(r),
-      }))
-    }
-    if (sortColState.col) {
-      result.sort((a, b) => {
-        const ak = iaColSortKey(a, sortColState.col)
-        const bk = iaColSortKey(b, sortColState.col)
-        if (typeof ak === 'number' && typeof bk === 'number') return sortColState.dir === 'asc' ? ak - bk : bk - ak
-        const cmp = String(ak).localeCompare(String(bk), 'vi', { numeric: true })
-        return sortColState.dir === 'asc' ? cmp : -cmp
-      })
-    }
-    return result
-  }, [items, colFilters, sortColState])
-
-  const clientTotalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
-  const safePage = Math.min(page, clientTotalPages)
-  const pageRows = displayed.slice((safePage - 1) * pageSize, safePage * pageSize)
-  const clientPagination = { total: displayed.length, totalPages: clientTotalPages, page: safePage }
+  // Server đã lọc/sắp/phân trang (list). Board dùng `items` trực tiếp. Không lọc client nữa.
+  const pagination       = listQuery.data?.pagination ?? { total: items.length, totalPages: 1, page: 1 }
+  const clientTotalPages = isServer ? (pagination.totalPages ?? 1) : Math.max(1, Math.ceil(items.length / pageSize))
+  const safePage         = isServer ? (pagination.page ?? page) : 1
+  const pageRows         = items
+  const clientPagination = { total: isServer ? (pagination.total ?? items.length) : items.length, totalPages: clientTotalPages, page: safePage }
   const paginationFrom = clientPagination.total === 0 ? 0 : (safePage - 1) * pageSize + 1
   const paginationTo = Math.min(safePage * pageSize, clientPagination.total)
   const footerDetails = [
@@ -1417,8 +1435,12 @@ export default function InternalAssignments() {
           <ColumnFilterDropdown
             colKey={filterPopup.colKey}
             filterType={iaColFilterType(filterPopup.colKey)}
-            allRows={items}
-            getDisplayLabel={iaColDisplayLabel}
+            serverMode
+            hasValueList={IA_SERVER_VALUE_COLS.has(filterPopup.colKey)}
+            serverValues={colVals.colKey === filterPopup.colKey ? colVals.values : null}
+            loadingValues={colVals.colKey === filterPopup.colKey ? colVals.loading : true}
+            labelOf={iaValueLabel(filterPopup.colKey)}
+            totalRows={pagination.total}
             currentFilter={colFilters[filterPopup.colKey] ?? null}
             sortState={sortColState}
             onSort={handleColSort}

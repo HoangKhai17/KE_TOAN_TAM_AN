@@ -5,6 +5,11 @@ export async function listAssignments(params = {}) {
   return data.data  // { items, pagination }
 }
 
+export async function getIaColumnValues(params = {}) {
+  const { data } = await api.get('/internal-assignments/meta/column-values', { params })
+  return data.data.values  // [{ value, count }]
+}
+
 export async function getStats(params = {}) {
   const { data } = await api.get('/internal-assignments/meta/stats', { params })
   return data.data

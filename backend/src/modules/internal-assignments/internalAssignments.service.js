@@ -1,5 +1,7 @@
 'use strict'
 const { query }        = require('../../config/db')
+const cf               = require('../../lib/columnFilter.server')
+const enums            = require('../../lib/enums')
 const audit            = require('../../lib/audit')
 const { createAndEmit } = require('../../lib/notify')
 const { assertEndNotBeforeStart } = require('../../utils/dateRange')
@@ -128,42 +130,44 @@ async function getYears() {
 
 const VALID_SORT_COLS = ['created_at', 'deadline_date', 'priority', 'title', 'status', 'updated_at']
 
-async function listAssignments(actorId, actorRole, {
-  status, priority, companyId, assigneeId, assigneeIds, myStatus,
-  search, deadlineFrom, deadlineTo,
-  page = 1, limit = 20, sortBy = 'created_at', sortDir = 'desc',
-} = {}) {
-  const params  = []
-  const conds   = []
+// ── Header filter server-side (helper chung) ─────────────────────────────────────
+// Cột phức tạp (assignee/comment/progress) dùng subquery — no join thêm.
+const IA_ASSIGNEE_EXPR = `(SELECT string_agg(us.name, ', ' ORDER BY us.name) FROM internal_assignment_assignees iaa JOIN users us ON us.id = iaa.user_id WHERE iaa.assignment_id = ia.id)`
+const IA_LC_EXPR = `(SELECT iac.content FROM internal_assignment_comments iac WHERE iac.assignment_id = ia.id ORDER BY iac.created_at DESC LIMIT 1)`
+const IA_PROGRESS_EXPR = `(CASE WHEN (SELECT COUNT(*) FROM ia_checklist_items WHERE assignment_id = ia.id) > 0 THEN ROUND(100.0 * (SELECT COUNT(*) FILTER (WHERE is_done) FROM ia_checklist_items WHERE assignment_id = ia.id) / (SELECT COUNT(*) FROM ia_checklist_items WHERE assignment_id = ia.id)) ELSE NULL END)`
+const IA_COLUMNS_SQL = {
+  title:          { text: 'ia.title', filter: 'ia.title', kind: 'text' },
+  companyShort:   { text: 'COALESCE(c.short_name, c.name)', filter: 'COALESCE(c.short_name, c.name)', kind: 'text' },
+  status:         { text: 'ia.status::text', filter: 'ia.status::text', kind: 'text' },
+  priority:       { text: 'ia.priority::text', filter: 'ia.priority::text', kind: 'text' },
+  startDate:      { text: `to_char(ia.start_date, 'YYYY-MM-DD')`, filter: 'ia.start_date', kind: 'date' },
+  deadlineDate:   { text: `to_char(ia.deadline_date, 'YYYY-MM-DD')`, filter: 'ia.deadline_date', kind: 'date' },
+  createdAt:      { text: `to_char(ia.created_at, 'YYYY-MM-DD')`, filter: 'ia.created_at::date', kind: 'date' },
+  assignedToName: { text: IA_ASSIGNEE_EXPR, filter: IA_ASSIGNEE_EXPR, kind: 'text' },
+  latestComment:  { text: IA_LC_EXPR, filter: IA_LC_EXPR, kind: 'text' },
+  progress:       { text: null, filter: IA_PROGRESS_EXPR, kind: 'number' },
+}
+const IA_ENUM_TYPE = { status: 'assignment_status', priority: 'assignment_priority' }
+const IA_COLVALS_NS = 'iacolvals'
+const bumpIaColVals = () => cf.bumpVersion(IA_COLVALS_NS)
 
-  const safeSortBy  = VALID_SORT_COLS.includes(sortBy) ? sortBy : 'created_at'
-  const safeSortDir = sortDir?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
-  const safeLimit   = Math.min(200, Math.max(1, parseInt(limit, 10) || 20))
-  const offset      = (Math.max(1, parseInt(page, 10) || 1) - 1) * safeLimit
-
-  // Resolve multi-assignee: assigneeIds takes precedence, fallback to assigneeId
+// WHERE nền (bộ lọc chung) — tái dùng cho list + column-values. Trả conds[] + params[].
+function buildIaWhere(actorId, { status, priority, companyId, assigneeId, assigneeIds, myStatus, search, deadlineFrom, deadlineTo } = {}) {
+  const params = []
+  const conds  = []
   const resolvedAssigneeIds = assigneeIds
     ? (Array.isArray(assigneeIds) ? assigneeIds : String(assigneeIds).split(',').map((s) => s.trim()).filter(Boolean))
     : (assigneeId ? [assigneeId] : [])
-
   if (resolvedAssigneeIds.length > 0) {
     params.push(resolvedAssigneeIds)
-    conds.push(`EXISTS (
-      SELECT 1 FROM internal_assignment_assignees iaa2
-      WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = ANY($${params.length}::uuid[])
-    )`)
+    conds.push(`EXISTS (SELECT 1 FROM internal_assignment_assignees iaa2 WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = ANY($${params.length}::uuid[]))`)
   }
-
   if (myStatus) {
     params.push(actorId)
     const actorIdx = params.length
     params.push(myStatus)
-    conds.push(`EXISTS (
-      SELECT 1 FROM internal_assignment_assignees iaa2
-      WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = $${actorIdx} AND iaa2.status = $${params.length}
-    )`)
+    conds.push(`EXISTS (SELECT 1 FROM internal_assignment_assignees iaa2 WHERE iaa2.assignment_id = ia.id AND iaa2.user_id = $${actorIdx} AND iaa2.status = $${params.length})`)
   }
-
   if (status) {
     const arr = Array.isArray(status) ? status : String(status).split(',').map((x) => x.trim()).filter(Boolean)
     if (arr.length) { params.push(arr); conds.push(`ia.status::text = ANY($${params.length})`) }
@@ -172,29 +176,57 @@ async function listAssignments(actorId, actorRole, {
     const arr = Array.isArray(priority) ? priority : String(priority).split(',').map((x) => x.trim()).filter(Boolean)
     if (arr.length) { params.push(arr); conds.push(`ia.priority::text = ANY($${params.length})`) }
   }
-  if (companyId) {
-    params.push(companyId)
-    conds.push(`ia.company_id = $${params.length}`)
-  }
-  if (search) {
-    params.push(`%${search}%`)
-    conds.push(`ia.title ILIKE $${params.length}`)
-  }
+  if (companyId) { params.push(companyId); conds.push(`ia.company_id = $${params.length}`) }
+  if (search) { params.push(`%${search}%`); conds.push(`ia.title ILIKE $${params.length}`) }
   if (deadlineFrom && deadlineTo) {
-    params.push(deadlineTo)
-    conds.push(`ia.created_at::date <= $${params.length}`)
-    params.push(deadlineFrom)
-    conds.push(`(ia.deadline_date IS NULL OR ia.deadline_date >= $${params.length})`)
+    params.push(deadlineTo); conds.push(`ia.created_at::date <= $${params.length}`)
+    params.push(deadlineFrom); conds.push(`(ia.deadline_date IS NULL OR ia.deadline_date >= $${params.length})`)
   } else if (deadlineFrom) {
-    params.push(deadlineFrom)
-    conds.push(`(ia.deadline_date IS NULL OR ia.deadline_date >= $${params.length})`)
+    params.push(deadlineFrom); conds.push(`(ia.deadline_date IS NULL OR ia.deadline_date >= $${params.length})`)
   } else if (deadlineTo) {
-    params.push(deadlineTo)
-    conds.push(`ia.created_at::date <= $${params.length}`)
+    params.push(deadlineTo); conds.push(`ia.created_at::date <= $${params.length}`)
   }
+  return { conds, params }
+}
 
-  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
-  const order = `ORDER BY ia.${safeSortBy} ${safeSortDir}`
+async function getIaColumnValues(actorId, { column, search, filters = {} } = {}) {
+  const { conds, params } = buildIaWhere(actorId, filters)
+  return cf.getColumnValues(query, {
+    ns: IA_COLVALS_NS,
+    tableExpr: 'internal_assignments ia LEFT JOIN companies c ON c.id = ia.company_id',
+    columnMap: IA_COLUMNS_SQL, joinsMap: {},
+    column, search, whereSql: (conds.length ? conds.join(' AND ') : '1=1'), params, hashKey: { actorId, filters },
+  })
+}
+
+async function listAssignments(actorId, actorRole, filters = {}) {
+  const { page = 1, limit = 20, sortBy = 'created_at', sortDir = 'desc', colFilters, colSort } = filters
+  const safeSortBy  = VALID_SORT_COLS.includes(sortBy) ? sortBy : 'created_at'
+  const safeSortDir = sortDir?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+  const safeLimit   = Math.min(200, Math.max(1, parseInt(limit, 10) || 20))
+  const offset      = (Math.max(1, parseInt(page, 10) || 1) - 1) * safeLimit
+
+  const { conds, params } = buildIaWhere(actorId, filters)
+  const colF = cf.buildColFilterSql(IA_COLUMNS_SQL, cf.parseJson(colFilters), params.length)
+  const allParams = [...params, ...colF.params]
+  const allConds  = [...conds, ...colF.conditions]
+  const where = allConds.length ? `WHERE ${allConds.join(' AND ')}` : ''
+
+  let order = `ORDER BY ia.${safeSortBy} ${safeSortDir}`
+  const colSortObj = cf.parseJson(colSort)
+  if (colSortObj && colSortObj.col && IA_COLUMNS_SQL[colSortObj.col]) {
+    let enumCaseExpr = null
+    const et = IA_ENUM_TYPE[colSortObj.col]
+    if (et) {
+      const opts = await enums.getOptions(et)
+      if (opts.length) {
+        const fexpr = IA_COLUMNS_SQL[colSortObj.col].filter
+        const whens = opts.map((o) => `WHEN ${cf.sqlLit(o.key)} THEN ${cf.sqlLit(o.label)}`).join(' ')
+        enumCaseExpr = `CASE ${fexpr} ${whens} ELSE ${fexpr} END`
+      }
+    }
+    order = 'ORDER BY ' + cf.buildColSortOrder(IA_COLUMNS_SQL, colSortObj, { enumCaseExpr, tieBreak: 'ia.created_at DESC' })
+  }
 
   const { rows } = await query(
     `SELECT ia.*,
@@ -224,8 +256,8 @@ async function listAssignments(actorId, actorRole, {
      LEFT JOIN companies c ON c.id = ia.company_id
      ${where}
      ${order}
-     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, safeLimit, offset]
+     LIMIT $${allParams.length + 1} OFFSET $${allParams.length + 2}`,
+    [...allParams, safeLimit, offset]
   )
 
   const total = parseInt(rows[0]?._total ?? 0, 10)
@@ -334,7 +366,7 @@ async function createAssignment(data, actorId) {
     meta: { title },
   })
 
-  return getById(row.id, actorId, 'admin')
+  void bumpIaColVals(); return getById(row.id, actorId, 'admin')
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -439,7 +471,7 @@ async function updateAssignment(id, data, actorId) {
     targetType: 'internal_assignments', targetId: id, meta: { changes: data },
   })
 
-  return getById(id, actorId, 'admin')
+  void bumpIaColVals(); return getById(id, actorId, 'admin')
 }
 
 async function _upsertAssignees(assignmentId, userIds) {
@@ -506,7 +538,7 @@ async function sendAssignment(id, actorId) {
     targetType: 'internal_assignments', targetId: id,
   })
 
-  return getById(id, actorId, 'admin')
+  void bumpIaColVals(); return getById(id, actorId, 'admin')
 }
 
 // ─── Cancel ───────────────────────────────────────────────────────────────────
@@ -543,7 +575,7 @@ async function cancelAssignment(id, actorId) {
     userId: actorId, action: 'internal_assignment.cancelled',
     targetType: 'internal_assignments', targetId: id,
   })
-  return getById(id, actorId, 'admin')
+  void bumpIaColVals(); return getById(id, actorId, 'admin')
 }
 
 // ─── Close ────────────────────────────────────────────────────────────────────
@@ -574,7 +606,7 @@ async function closeAssignment(id, actorId) {
     userId: actorId, action: 'internal_assignment.closed',
     targetType: 'internal_assignments', targetId: id,
   })
-  return getById(id, actorId, 'admin')
+  void bumpIaColVals(); return getById(id, actorId, 'admin')
 }
 
 // ─── Staff actions ────────────────────────────────────────────────────────────
@@ -594,7 +626,7 @@ async function acceptAssignment(id, actorId) {
     [id, actorId]
   )
   await audit.log({ userId: actorId, action: 'internal_assignment.accepted', targetType: 'internal_assignments', targetId: id })
-  return getById(id, actorId, 'staff')
+  void bumpIaColVals(); return getById(id, actorId, 'staff')
 }
 
 async function progressAssignment(id, actorId) {
@@ -612,7 +644,7 @@ async function progressAssignment(id, actorId) {
     [id, actorId]
   )
   await audit.log({ userId: actorId, action: 'internal_assignment.in_progress', targetType: 'internal_assignments', targetId: id })
-  return getById(id, actorId, 'staff')
+  void bumpIaColVals(); return getById(id, actorId, 'staff')
 }
 
 async function completeAssignment(id, actorId, note) {
@@ -647,7 +679,7 @@ async function completeAssignment(id, actorId, note) {
   }
 
   await audit.log({ userId: actorId, action: 'internal_assignment.completed', targetType: 'internal_assignments', targetId: id })
-  return getById(id, actorId, 'staff')
+  void bumpIaColVals(); return getById(id, actorId, 'staff')
 }
 
 async function rejectAssignment(id, actorId, note) {
@@ -696,7 +728,7 @@ async function rejectAssignment(id, actorId, note) {
   }
 
   await audit.log({ userId: actorId, action: 'internal_assignment.rejected', targetType: 'internal_assignments', targetId: id, meta: { note } })
-  return getById(id, actorId, 'staff')
+  void bumpIaColVals(); return getById(id, actorId, 'staff')
 }
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
@@ -731,7 +763,7 @@ async function deleteComment(assignmentId, commentId, actorId, actorRole) {
 }
 
 module.exports = {
-  listAssignments, getStats, getYears, getById,
+  listAssignments, getIaColumnValues, getStats, getYears, getById,
   createAssignment, updateAssignment, deleteAssignment,
   sendAssignment, cancelAssignment, closeAssignment,
   acceptAssignment, progressAssignment, completeAssignment, rejectAssignment,
