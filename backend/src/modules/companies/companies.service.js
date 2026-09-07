@@ -143,7 +143,9 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, busin
   const filterParams = [...params, ...colF.params]
   const where = [...conditions, ...colF.conditions].join(' AND ')
 
-  // Sắp xếp theo CỘT header — luôn giữ công ty ưu tiên (is_priority) lên đầu.
+  // Thứ tự MẶC ĐỊNH: công ty ưu tiên (is_priority) lên đầu + thứ tự cá nhân.
+  // Khi bấm sort CỘT header → sắp THUẦN theo cột đó (KHÔNG ép ghim lên đầu nữa),
+  // để A→Z/Z→A đúng như người dùng mong đợi.
   let orderBy = 'c.is_priority DESC, cup.position ASC NULLS FIRST, c.created_at DESC'
   const colSortObj = cf.parseJson(colSort)
   if (colSortObj && colSortObj.col && COMPANY_COLUMNS_SQL[colSortObj.col]) {
@@ -158,7 +160,7 @@ async function listCompanies({ page = 1, limit = 20, status, businessType, busin
       }
     }
     const colOrder = cf.buildColSortOrder(COMPANY_COLUMNS_SQL, colSortObj, { enumCaseExpr, tieBreak: 'c.created_at DESC' })
-    if (colOrder) orderBy = `c.is_priority DESC, ${colOrder}`
+    if (colOrder) orderBy = colOrder
   }
 
   // Tham số cho JOIN tùy chọn riêng của user (đẩy sau các filter để không lệch chỉ số $n).
