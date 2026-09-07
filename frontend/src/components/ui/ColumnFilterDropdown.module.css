@@ -1,4 +1,6 @@
 .dropdown {
+  /* Cỡ chữ CHUNG của popup (gom 1 chỗ để dễ chỉnh khi thêm chức năng) */
+  --cfd-fs: 10.5px;
   position: fixed;
   top: var(--cfd-top);
   left: var(--cfd-left);
@@ -10,7 +12,7 @@
   border-radius: 10px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
   overflow: hidden;
-  font-size: var(--fs-2xs, 11.5px);
+  font-size: var(--cfd-fs);
 }
 
 /* Sort — 2 nút trên 1 hàng, ngăn bằng dấu | */
@@ -39,11 +41,32 @@
   border-radius: 6px;
   cursor: pointer;
   color: var(--color-text, #1e293b);
-  font-size: var(--fs-2xs, 11.5px);
+  font-size: var(--cfd-fs);
   white-space: nowrap;
 }
 .sortBtn:hover { background: var(--color-bg-soft, #f1f5f9); }
 .sortBtnActive { background: var(--color-primary-bg, #eff6ff); color: var(--color-primary-deep, #1d4ed8); font-weight: 600; }
+
+/* Tab: Theo giá trị | Theo điều kiện */
+.tabRow {
+  display: flex;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  padding: 0 4px;
+  gap: 2px;
+}
+.tab {
+  flex: 1 1 0;
+  padding: 8px 6px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  color: var(--color-muted, #64748b);
+  font-size: var(--cfd-fs);
+  font-weight: 600;
+}
+.tab:hover { color: var(--color-text, #1e293b); }
+.tabActive { color: var(--color-primary-deep, #1d4ed8); border-bottom-color: var(--color-primary, #2563eb); }
 
 /* Filter sections */
 .section { padding: 8px; }
@@ -54,7 +77,7 @@
   padding: 0 9px;
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 7px;
-  font-size: var(--fs-2xs, 11.5px);
+  font-size: var(--cfd-fs);
   outline: none;
 }
 .input:focus { border-color: var(--color-primary, #2563eb); box-shadow: 0 0 0 2px var(--color-primary-bg, #eff6ff); }
@@ -84,9 +107,9 @@
 
 .rangeGroup { display: flex; flex-direction: column; gap: 8px; }
 .rangeRow { display: flex; flex-direction: column; gap: 3px; }
-.rangeRow input { font-size: var(--fs-2xs, 11.5px); }
+.rangeRow input { font-size: var(--cfd-fs); }
 .rangeLabel {
-  font-size: var(--fs-2xs, 11.5px);
+  font-size: var(--cfd-fs);
   color: var(--color-muted, #64748b);
   font-weight: 600;
 }
@@ -100,21 +123,21 @@
   background: var(--color-surface, #fff);
   border-radius: 6px;
   cursor: pointer;
-  font-size: var(--fs-2xs, 0.6875rem);
+  font-size: var(--cfd-fs);
   color: var(--color-text, #1e293b);
 }
 .miniBtn:hover { background: var(--color-bg-soft, #f1f5f9); }
 .miniBtnActive { background: var(--color-primary-bg, #eff6ff); border-color: var(--color-primary, #2563eb); color: var(--color-primary-deep, #1d4ed8); font-weight: 600; }
 .linkBtn {
   background: none; border: none; cursor: pointer;
-  color: var(--color-primary, #2563eb); font-size: var(--fs-2xs, 0.6875rem); padding: 3px 4px;
+  color: var(--color-primary, #2563eb); font-size: var(--cfd-fs); padding: 3px 4px;
 }
 .linkBtn:hover { text-decoration: underline; }
 
 .countBadge {
   margin-left: auto;
   color: var(--color-muted, #64748b);
-  font-size: var(--fs-2xs, 0.6875rem);
+  font-size: var(--cfd-fs);
   font-variant-numeric: tabular-nums;
   padding-left: 8px;
 }
@@ -130,14 +153,14 @@
   padding: 0 6px;
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 7px;
-  font-size: var(--fs-2xs, 11.5px);
+  font-size: var(--cfd-fs);
   background: var(--color-surface, #fff);
   color: var(--color-text, #1e293b);
   cursor: pointer;
 }
 .opSelect:focus { outline: none; border-color: var(--color-primary, #2563eb); }
 .joinRow { display: flex; gap: 14px; padding: 8px 2px 2px; }
-.joinOpt { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: var(--fs-2xs, 11.5px); color: var(--color-text, #1e293b); }
+.joinOpt { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: var(--cfd-fs); color: var(--color-text, #1e293b); }
 
 /* Nút nhanh ngày */
 .quickRow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
@@ -160,7 +183,7 @@
   border-radius: 7px;
   color: var(--color-danger, #dc2626);
   cursor: pointer;
-  font-size: var(--fs-2xs, 11.5px);
+  font-size: var(--cfd-fs);
   font-weight: 600;
 }
 .clearBtn:hover { background: var(--color-danger-bg-hover, #fee2e2); }

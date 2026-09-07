@@ -74,31 +74,33 @@ function matchNumOp(cell, op, value) {
   }
 }
 
-// Filter này có đang lọc gì không (để đếm badge, quyết định xoá khỏi state…)
+// Filter này có đang lọc gì không (để đếm badge, quyết định xoá khỏi state…).
+// Dạng lọc được nhận diện theo SHAPE của value (Set = lọc-theo-giá-trị) trước, rồi
+// mới tới kiểu cột — nhờ đó 1 cột có thể lọc theo giá trị HOẶC theo điều kiện.
 export function isColFilterActive(value, type) {
   if (value == null) return false
-  if (type === 'enum')      return value instanceof Set && value.size > 0
+  if (value instanceof Set) return value.size > 0            // lọc theo giá trị (mọi cột)
   if (type === 'dateRange') return Boolean(value.from || value.to)
-  if (type === 'text') {
-    if (typeof value === 'string') return value.trim() !== ''
-    return activeConditions(value, TEXT_NOVALUE).length > 0
-  }
   if (type === 'numberRange') {
     if (value.conditions) return activeConditions(value, []).length > 0
     // legacy { min, max }
     return (value.min !== '' && value.min != null) || (value.max !== '' && value.max != null)
   }
+  // text hoặc enum → điều kiện dùng toán tử chữ
+  if (typeof value === 'string') return value.trim() !== ''
+  if (value.conditions) return activeConditions(value, TEXT_NOVALUE).length > 0
   return false
 }
 
 // So khớp 1 dòng với filter. cell = { label, number, date } tùy loại cột.
-//   label  : nhãn hiển thị (enum/text)
+//   label  : nhãn hiển thị (lọc theo giá trị / toán tử chữ)
 //   number : giá trị số (numberRange)
 //   date   : chuỗi ngày 'YYYY-MM-DD…' (dateRange)
 export function matchColFilter(value, type, cell) {
   if (!isColFilterActive(value, type)) return true
 
-  if (type === 'enum') return value.has(cell.label ?? '')
+  // Lọc theo GIÁ TRỊ (Set) — áp cho mọi cột, bất kể kiểu.
+  if (value instanceof Set) return value.has(cell.label ?? '')
 
   if (type === 'dateRange') {
     const d = cell.date ? String(cell.date).substring(0, 10) : ''
@@ -106,14 +108,6 @@ export function matchColFilter(value, type, cell) {
     if (value.from && d < value.from) return false
     if (value.to   && d > value.to)   return false
     return true
-  }
-
-  if (type === 'text') {
-    if (typeof value === 'string') return matchTextOp(cell.label, 'contains', value)
-    const conds = activeConditions(value, TEXT_NOVALUE)
-    if (conds.length === 0) return true
-    const results = conds.map((c) => matchTextOp(cell.label, c.op, c.value))
-    return value.join === 'or' ? results.some(Boolean) : results.every(Boolean)
   }
 
   if (type === 'numberRange') {
@@ -131,5 +125,10 @@ export function matchColFilter(value, type, cell) {
     return value.join === 'or' ? results.some(Boolean) : results.every(Boolean)
   }
 
-  return true
+  // text / enum → điều kiện toán tử chữ trên nhãn
+  if (typeof value === 'string') return matchTextOp(cell.label, 'contains', value)
+  const conds = activeConditions(value, TEXT_NOVALUE)
+  if (conds.length === 0) return true
+  const results = conds.map((c) => matchTextOp(cell.label, c.op, c.value))
+  return value.join === 'or' ? results.some(Boolean) : results.every(Boolean)
 }

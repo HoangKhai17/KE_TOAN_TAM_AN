@@ -41,6 +41,25 @@ export default function ColumnFilterDropdown({
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
+  // "Xoá bộ lọc" xoá luôn cả sort của cột này.
+  const colSorted = sortState?.col === colKey
+  const onClearSort = () => onSort(colKey, null)
+
+  // Mô hình 2 tab như Excel: MỌI cột (trừ 'none') đều có "Theo giá trị" (nếu trang cấp
+  // getDisplayLabel) + "Theo điều kiện" (toán tử theo kiểu cột).
+  const valueAvailable     = filterType !== 'none' && typeof getDisplayLabel === 'function'
+  const conditionAvailable = filterType !== 'none'
+  const conditionKind = filterType === 'numberRange' ? 'number' : filterType === 'dateRange' ? 'date' : 'text'
+  const showTabs = valueAvailable && conditionAvailable
+
+  // Filter đang lưu là Set → chế độ "giá trị"; ngược lại (string/{conditions}/{from,to}) → "điều kiện".
+  const isSetFilter = currentFilter instanceof Set
+  const [tab, setTab] = useState(isSetFilter ? 'value' : (currentFilter != null ? 'condition' : (valueAvailable ? 'value' : 'condition')))
+  const showValue     = valueAvailable     && (!showTabs || tab === 'value')
+  const showCondition = conditionAvailable && (!showTabs || tab === 'condition')
+  const valueFilter = isSetFilter ? currentFilter : null   // 2 chế độ tách shape, đổi tab không lẫn
+  const condFilter  = isSetFilter ? null : currentFilter
+
   return (
     <div ref={ref} className={s.dropdown} style={style}>
       {/* Sort — luôn hiển thị, 2 nút trên cùng 1 hàng, ngăn bằng dấu | */}
@@ -60,22 +79,31 @@ export default function ColumnFilterDropdown({
         </button>
       </div>
 
-      {(() => {
-        // "Xoá bộ lọc" xoá luôn cả sort của cột này → truyền xuống mỗi section.
-        const colSorted = sortState?.col === colKey
-        const onClearSort = () => onSort(colKey, null)
-        const common = { colKey, currentFilter, onFilterChange, colSorted, onClearSort }
-        return (
-          <>
-            {filterType === 'enum' && (
-              <EnumSection allRows={allRows} getDisplayLabel={getDisplayLabel} {...common} />
-            )}
-            {filterType === 'text' && <TextSection {...common} />}
-            {filterType === 'dateRange' && <DateRangeSection {...common} />}
-            {filterType === 'numberRange' && <NumberSection {...common} />}
-          </>
-        )
-      })()}
+      {showTabs && (
+        <div className={s.tabRow} role="tablist">
+          <button className={`${s.tab} ${tab === 'value' ? s.tabActive : ''}`} onClick={() => setTab('value')}>Theo giá trị</button>
+          <button className={`${s.tab} ${tab === 'condition' ? s.tabActive : ''}`} onClick={() => setTab('condition')}>Theo điều kiện</button>
+        </div>
+      )}
+
+      {showValue && (
+        <ValueSection allRows={allRows} colKey={colKey} getDisplayLabel={getDisplayLabel}
+          currentFilter={valueFilter} onFilterChange={onFilterChange} colSorted={colSorted} onClearSort={onClearSort} />
+      )}
+      {showCondition && conditionKind === 'text' && (
+        <TextSection colKey={colKey} currentFilter={condFilter} onFilterChange={onFilterChange} colSorted={colSorted} onClearSort={onClearSort} />
+      )}
+      {showCondition && conditionKind === 'number' && (
+        <NumberSection colKey={colKey} currentFilter={condFilter} onFilterChange={onFilterChange} colSorted={colSorted} onClearSort={onClearSort} />
+      )}
+      {showCondition && conditionKind === 'date' && (
+        <DateRangeSection colKey={colKey} currentFilter={condFilter} onFilterChange={onFilterChange} colSorted={colSorted} onClearSort={onClearSort} />
+      )}
+
+      {/* Cột chỉ-sắp-xếp (STT/File): vẫn cho xoá sort khi đang sắp */}
+      {filterType === 'none' && colSorted && (
+        <ClearFooter disabled={false} onClear={onClearSort} />
+      )}
     </div>
   )
 }
@@ -92,8 +120,8 @@ function ClearFooter({ disabled, onClear }) {
   )
 }
 
-// ── Enum: value list kiểu Excel (đếm số lượng, ô trống, đảo chọn, sắp xếp) ───────
-function EnumSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilterChange, colSorted, onClearSort }) {
+// ── Lọc theo GIÁ TRỊ: value list kiểu Excel (đếm số lượng, ô trống, đảo chọn, sắp xếp) ──
+function ValueSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilterChange, colSorted, onClearSort }) {
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState('name') // 'name' | 'count'
 
@@ -114,8 +142,10 @@ function EnumSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilter
 
   const allValues = useMemo(() => items.map((it) => it.value), [items])
   const selected = currentFilter instanceof Set ? currentFilter : new Set()
-  const filtered = q.trim()
-    ? items.filter((it) => String(it.value).toLocaleLowerCase('vi').includes(q.toLocaleLowerCase('vi')))
+  // Tìm NHIỀU từ khoá, cách nhau bằng dấu "," → khớp nếu chứa BẤT KỲ từ nào (như Excel)
+  const keywords = q.split(',').map((k) => k.trim().toLocaleLowerCase('vi')).filter(Boolean)
+  const filtered = keywords.length
+    ? items.filter((it) => { const l = String(it.value).toLocaleLowerCase('vi'); return keywords.some((k) => l.includes(k)) })
     : items
   const allChecked = allValues.length > 0 && selected.size === allValues.length
 
@@ -136,7 +166,7 @@ function EnumSection({ allRows, colKey, getDisplayLabel, currentFilter, onFilter
 
   return (
     <div className={s.section}>
-      <input className={s.input} placeholder="Tìm giá trị..." value={q} onChange={(e) => setQ(e.target.value)} />
+      <input className={s.input} placeholder="Tìm giá trị (nhiều từ, cách bằng dấu ,)" value={q} onChange={(e) => setQ(e.target.value)} />
 
       <div className={s.valueSortRow}>
         <button className={`${s.miniBtn} ${sortBy === 'name' ? s.miniBtnActive : ''}`} onClick={() => setSortBy('name')}>Tên</button>
