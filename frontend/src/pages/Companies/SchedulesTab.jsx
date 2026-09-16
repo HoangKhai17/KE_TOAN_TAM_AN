@@ -1,13 +1,13 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import { format, parseISO, addDays } from 'date-fns'
 import {
-  CalendarDays, Plus, Eye, Power, Pencil, Trash2, Loader2, AlertTriangle, RefreshCw,
+  CalendarDays, Plus, Eye, Power, Pencil, Trash2, Loader2, AlertTriangle, RefreshCw, ChevronDown, GitBranch,
 } from 'lucide-react'
 import * as schedulesApi from '../../api/schedules'
 import { listTaskTypes, getChecklist, getSubtaskTemplates } from '../../api/taskTypes'
 import { listUserOptions } from '../../api/users'
 import { listHolidays } from '../../api/attendance'
-import { getNextOccurrences } from '../../utils/recurrencePreview'
+import { getNextOccurrences, rollForwardToWorkday } from '../../utils/recurrencePreview'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
@@ -562,6 +562,20 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
     return () => { cancelled = true }
   }, [modal, form.taskTypeId])
 
+  // Kỳ SẮP TỚI (chưa đẩy CN/lễ) — mốc để xem trước ngày việc con, khớp cách generator tính.
+  const subPreviewOcc = useMemo(() => {
+    try {
+      const [iso] = getNextOccurrences(form.recurrenceType, form.recurrenceConfig, new Date(), 1)
+      return iso ? parseISO(iso) : null
+    } catch { return null }
+  }, [form.recurrenceType, JSON.stringify(form.recurrenceConfig)]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ngày việc con = ngày kỳ + offset, rồi ĐẨY khỏi CN/lễ (đúng như bộ sinh tự động).
+  function previewSubDate(offset) {
+    if (!subPreviewOcc) return '—'
+    return format(rollForwardToWorkday(addDays(subPreviewOcc, Math.max(0, offset)), holidaySet), 'dd/MM/yyyy')
+  }
+
   // Đặt offset (start|deadline) cho 1 việc con.
   function setSubOffset(subId, field, value) {
     const n = value === '' ? 0 : Math.max(0, parseInt(value, 10) || 0)
@@ -603,6 +617,23 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
   const [togglingId, setTogglingId] = useState(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+
+  // Mở rộng dòng để xem offset từng việc con (nạp mẫu việc con khi mở lần đầu)
+  const [expandedId, setExpandedId] = useState(null)
+  const [expandSubs, setExpandSubs] = useState({})   // { [scheduleId]: 'loading' | subs[] }
+  async function toggleExpand(sc) {
+    if (expandedId === sc.id) { setExpandedId(null); return }
+    setExpandedId(sc.id)
+    if (expandSubs[sc.id] === undefined) {
+      setExpandSubs((m) => ({ ...m, [sc.id]: 'loading' }))
+      try {
+        const subs = await getSubtaskTemplates(sc.taskTypeId)
+        setExpandSubs((m) => ({ ...m, [sc.id]: subs || [] }))
+      } catch {
+        setExpandSubs((m) => ({ ...m, [sc.id]: [] }))
+      }
+    }
+  }
 
   // Phân trang client-side → footer trang
   const schTotal      = schedules.length
@@ -853,17 +884,22 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
               </thead>
               <tbody>
                 {pageSchedules.map((sc, index) => (
-                  <tr key={sc.id} {...reorder.rowProps(sc.id)} className={reorder.dragOverId === sc.id ? s.dataTableRowDragOver : ''}>
+                  <Fragment key={sc.id}>
+                  <tr {...reorder.rowProps(sc.id)} className={reorder.dragOverId === sc.id ? s.dataTableRowDragOver : ''}>
                     <DragRowCell enabled={schTotalPages === 1} handleProps={reorder.handleProps(sc.id)} />
                     <SelectionRowCell checked={selection.selectedIds.has(sc.id)} onToggle={() => selection.toggle(sc.id)} />
                     <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
                     <td>
                       <div className={s.scTypeName}>{sc.taskTypeName}</div>
                       {sc.subtaskCount > 0 && (
-                        <span className={s.scDeadlineTag} style={{ marginTop: 4, display: 'inline-block', background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' }}
-                          title="Loại công việc này có việc con liên kết — mở lịch để đặt ngày bắt đầu/hạn cho từng con">
+                        <button type="button"
+                          className={s.scDeadlineTag}
+                          style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 3, cursor: 'pointer', background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', border: '1px solid var(--color-primary-ring)' }}
+                          onClick={() => toggleExpand(sc)}
+                          title="Xem/ẩn offset ngày bắt đầu & hạn của từng việc con">
                           {sc.subtaskCount} việc con
-                        </span>
+                          <ChevronDown size={11} style={{ transform: expandedId === sc.id ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+                        </button>
                       )}
                     </td>
                     <td>
@@ -940,6 +976,38 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                       </div>
                     </td>
                   </tr>
+
+                  {expandedId === sc.id && (
+                    <tr>
+                      <td colSpan={9} style={{ background: 'var(--color-bg-soft, #f8fafc)', padding: '10px 16px' }}>
+                        {expandSubs[sc.id] === 'loading' ? (
+                          <span style={{ fontSize: 12, color: 'var(--color-muted)' }}><Loader2 size={12} className={s.spin} /> Đang tải việc con…</span>
+                        ) : !Array.isArray(expandSubs[sc.id]) || expandSubs[sc.id].length === 0 ? (
+                          <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>Không có việc con.</span>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '.3px' }}>
+                              Việc con liên kết — offset tính từ ngày kỳ (ngày bắt đầu việc cha)
+                            </div>
+                            {expandSubs[sc.id].map((sub) => {
+                              const off = (sc.subtaskOffsets || {})[sub.id] || {}
+                              const start = Number.isInteger(off.start) ? off.start : 0
+                              const deadline = Number.isInteger(off.deadline) ? off.deadline : (sub.dueOffsetDays ?? 0)
+                              return (
+                                <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13 }}>
+                                  <GitBranch size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+                                  <span style={{ flex: '1 1 200px' }}>{sub.title}</span>
+                                  <span className={s.scDeadlineTag}>Bắt đầu kỳ +{start}d</span>
+                                  <span className={s.scDeadlineTag}>Hạn kỳ +{deadline}d</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -1015,29 +1083,42 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                 <div className={s.formField}>
                   <label className={s.formLabel}>Việc con liên kết ({templSubs.length})</label>
                   <div className={s.scStepPickHint}>
-                    Mỗi việc con là 1 công việc độc lập, có ngày bắt đầu &amp; hạn riêng — tính theo số ngày kể từ <b>ngày kỳ</b> (ngày bắt đầu việc cha), tự đẩy qua CN/lễ.
+                    Mỗi việc con là 1 công việc độc lập, có ngày bắt đầu &amp; hạn riêng.
+                    <b> Ngày = ngày kỳ + số ngày offset</b>, rồi tự đẩy sang ngày làm việc kế nếu rơi vào CN/lễ (thứ 7 vẫn tính).
+                    {subPreviewOcc && <> Xem trước theo <b>kỳ sắp tới {format(subPreviewOcc, 'dd/MM/yyyy')}</b>.</>}
                   </div>
                   <div style={{ border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', marginTop: 6 }}>
                     {templSubs.map((sub, i) => {
                       const o = (form.subtaskOffsets || {})[sub.id] || { start: 0, deadline: 0 }
                       const invalid = Number(o.deadline) < Number(o.start)
                       const inStyle = { width: 52, boxSizing: 'border-box', padding: '3px 6px', border: '1px solid var(--color-border)', borderRadius: 4, fontSize: 12, textAlign: 'center' }
+                      const startN = Number(o.start) || 0
+                      const dueN = Math.max(Number(o.deadline) || 0, startN)
                       return (
-                        <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 10px', borderTop: i ? '1px solid var(--color-border-soft)' : 'none' }}>
-                          <span style={{ flex: '1 1 160px', fontSize: 13 }}>
-                            {sub.title}
-                            {sub.steps?.length ? <span style={{ color: 'var(--color-muted)', fontSize: 11 }}> · {sub.steps.length} bước</span> : null}
-                          </span>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
-                            Bắt đầu kỳ +
-                            <input type="number" min="0" value={o.start} onChange={e => setSubOffset(sub.id, 'start', e.target.value)} style={inStyle} />
-                            ngày
-                          </label>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
-                            Hạn kỳ +
-                            <input type="number" min="0" value={o.deadline} onChange={e => setSubOffset(sub.id, 'deadline', e.target.value)} style={{ ...inStyle, borderColor: invalid ? '#ef4444' : 'var(--color-border)' }} />
-                            ngày
-                          </label>
+                        <div key={sub.id} style={{ padding: '8px 10px', borderTop: i ? '1px solid var(--color-border-soft)' : 'none' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <span style={{ flex: '1 1 160px', fontSize: 13, fontWeight: 600 }}>
+                              {sub.title}
+                              {sub.steps?.length ? <span style={{ color: 'var(--color-muted)', fontSize: 11, fontWeight: 400 }}> · {sub.steps.length} bước</span> : null}
+                            </span>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
+                              Bắt đầu kỳ +
+                              <input type="number" min="0" value={o.start} onChange={e => setSubOffset(sub.id, 'start', e.target.value)} style={inStyle} />
+                              ngày
+                            </label>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
+                              Hạn kỳ +
+                              <input type="number" min="0" value={o.deadline} onChange={e => setSubOffset(sub.id, 'deadline', e.target.value)} style={{ ...inStyle, borderColor: invalid ? '#ef4444' : 'var(--color-border)' }} />
+                              ngày
+                            </label>
+                          </div>
+                          {subPreviewOcc && (
+                            <div style={{ marginTop: 5, fontSize: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <span style={{ color: 'var(--color-muted)' }}>→ Kỳ {format(subPreviewOcc, 'dd/MM/yyyy')}:</span>
+                              <span className={s.scDeadlineTag} style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' }}>bắt đầu {previewSubDate(startN)}</span>
+                              <span className={s.scDeadlineTag} style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' }}>hạn {previewSubDate(dueN)}</span>
+                            </div>
+                          )}
                         </div>
                       )
                     })}

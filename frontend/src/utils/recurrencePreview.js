@@ -8,7 +8,7 @@ function isOffDay(date, holidaySet) {
   if (getDay(date) === 0) return true
   return holidaySet ? holidaySet.has(format(date, 'yyyy-MM-dd')) : false
 }
-function rollForwardToWorkday(date, holidaySet) {
+export function rollForwardToWorkday(date, holidaySet) {
   let d = date, guard = 0
   while (isOffDay(d, holidaySet) && guard++ < 366) d = addDays(d, 1)
   return d

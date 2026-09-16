@@ -291,7 +291,9 @@ async function listSubtaskTemplates(taskTypeId) {
     'SELECT * FROM task_type_subtask_templates WHERE task_type_id = $1 ORDER BY sort_order, created_at',
     [taskTypeId]
   )
-  return rows.map(toSubtaskDto)
+  // LƯU Ý: KHÔNG dùng rows.map(toSubtaskDto) — map truyền (row, index) nên index rơi vào tham số
+  // `steps`, gây "steps.map is not a function". Bọc lambda để chỉ truyền row.
+  return rows.map((r) => toSubtaskDto(r))
 }
 
 async function addSubtaskTemplate(taskTypeId, data = {}) {
