@@ -93,8 +93,30 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
     [taskTypeId]
   )
 
+  // Checklist RIÊNG của từng mẫu việc con — dùng để đồng bộ các VIỆC CON (không phải dùng
+  // checklist của loại CV cha). Khớp việc con ↔ mẫu con theo TIÊU ĐỀ (việc con không lưu
+  // subtask_template_id, tiêu đề chính là mối liên kết khi sinh ra).
+  const { rows: subTempls } = await query(
+    'SELECT id, title FROM task_type_subtask_templates WHERE task_type_id = $1', [taskTypeId])
+  const subTitleById = new Map(subTempls.map((s) => [s.id, s.title]))
+  const { rows: subStepRows } = subTempls.length
+    ? await query(
+      `SELECT subtask_template_id, id, step_order, step_text, level
+         FROM task_type_subtask_steps
+        WHERE subtask_template_id = ANY($1::uuid[])
+        ORDER BY step_order, id`,
+      [subTempls.map((s) => s.id)])
+    : { rows: [] }
+  const subStepsByTitle = new Map()   // tiêu đề việc con → [bước checklist riêng]
+  for (const st of subStepRows) {
+    const title = subTitleById.get(st.subtask_template_id)
+    if (!title) continue
+    if (!subStepsByTitle.has(title)) subStepsByTitle.set(title, [])
+    subStepsByTitle.get(title).push({ id: st.id, step_order: st.step_order, step_text: st.step_text, level: st.level })
+  }
+
   const { rows: tasks } = await query(
-    `SELECT t.id, t.title, t.status, t.period_label,
+    `SELECT t.id, t.title, t.status, t.period_label, t.parent_task_id,
             c.name AS company_name,
             COALESCE(cs.excluded_step_ids, '[]'::jsonb) AS excluded_step_ids
        FROM tasks t
@@ -136,13 +158,32 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
   for (const task of tasks) {
     const items = itemsByTask.get(task.id) ?? []
     const daXong = TRANG_THAI_DA_XONG.includes(task.status)
-    // Mặc định NẠP ĐỦ mọi bước của mẫu — mục đích của đồng bộ là làm công việc cũ
-    // khớp đúng quy trình hiện hành. Bật `theoLoaiTru` thì mới bỏ những bước mà
-    // lịch định kỳ của khách đó đã loại ra.
+    const laViecCon = task.parent_task_id != null
     const excluded = new Set((task.excluded_step_ids || []).map(String))
-    const stepsApDung = theoLoaiTru
-      ? mauSteps.filter((s) => !excluded.has(String(s.id)))
-      : mauSteps
+
+    // Chọn bộ bước MẪU đúng cho task:
+    //  · Việc CHA/độc lập → checklist của LOẠI CV (mặc định nạp đủ; bật theoLoaiTru mới bỏ bước
+    //    mà lịch của khách loại ra).
+    //  · Việc CON → checklist RIÊNG của mẫu việc con, khớp theo TIÊU ĐỀ. KHÔNG dùng checklist cha.
+    let stepsApDung
+    if (laViecCon) {
+      stepsApDung = subStepsByTitle.get(task.title)
+      // Không tìm được mẫu việc con khớp tiêu đề (mẫu đổi tên/xoá, hoặc con tạo tay) →
+      // BỎ QUA, tuyệt đối không xoá checklist riêng của con.
+      if (!stepsApDung) {
+        chiTiet.push({
+          taskId: task.id, congTy: task.company_name, ky: task.period_label, trangThai: task.status,
+          daXong, tieuDeCu: task.title, tieuDeMoi: task.title, doiTieuDe: false,
+          laViecCon: true, boQua: true, soBuocLoaiTru: 0, soBuocBoQuaLoaiTru: 0,
+          soMucCu: items.length, nap: [], matDi: [],
+        })
+        continue
+      }
+    } else {
+      stepsApDung = theoLoaiTru
+        ? mauSteps.filter((s) => !excluded.has(String(s.id)))
+        : mauSteps
+    }
 
     const daDung = new Set()
     const napMoi = []
@@ -213,7 +254,9 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
     soXoa += items.length
     soNap += napMoi.length
 
-    const titleMoi = buildTitle(extractPeriod(task.title), tt.name)
+    // Việc CON giữ NGUYÊN tiêu đề (tiêu đề con = tên mẫu con, không có [Kỳ]); chỉ việc
+    // cha/độc lập mới chuẩn hoá lại tiêu đề "[Kỳ] Tên loại".
+    const titleMoi = laViecCon ? task.title : buildTitle(extractPeriod(task.title), tt.name)
     const doiTitle = titleMoi !== task.title
     if (doiTitle) doiTitles.push({ id: task.id, title: titleMoi })
 
@@ -224,11 +267,12 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
       ky: task.period_label,
       trangThai: task.status,
       daXong,
+      laViecCon,
       tieuDeCu: task.title,
       tieuDeMoi: titleMoi,
       doiTieuDe: doiTitle,
-      soBuocLoaiTru: theoLoaiTru ? excluded.size : 0,
-      soBuocBoQuaLoaiTru: theoLoaiTru ? 0 : excluded.size,
+      soBuocLoaiTru: (!laViecCon && theoLoaiTru) ? excluded.size : 0,
+      soBuocBoQuaLoaiTru: (!laViecCon && !theoLoaiTru) ? excluded.size : 0,
       soMucCu: items.length,
       nap: rowNap,
       matDi,
