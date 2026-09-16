@@ -4803,3 +4803,16 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   border-color: var(--color-primary);
 }
 .groupChainBtnOn:hover { background: var(--color-primary-bg-strong); }
+
+/* Nhãn cha–con trên thẻ board / kanban nguồn (chỉ để phân biệt, không gom nhóm) */
+.boardChainTag {
+  display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
+  margin-top: 4px; font-size: var(--fs-3xs); font-weight: var(--fw-semibold);
+  color: var(--color-text-soft); background: var(--color-surface-muted);
+  border: 1px solid var(--color-border); border-radius: var(--radius-pill);
+  padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.boardChainTagChild {
+  color: var(--color-primary-dark); background: var(--color-primary-bg);
+  border-color: var(--color-primary-ring);
+}

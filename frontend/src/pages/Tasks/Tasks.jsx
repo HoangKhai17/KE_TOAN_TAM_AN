@@ -251,6 +251,17 @@ function BoardCardInner({ task, isAdmin, onDelete, onQuickView, showStatus = fal
         )}
       </div>
       {!hideCompany && company && <div className={s.boardCardCompany}>{company}</div>}
+      {/* Nhãn cha–con (chỉ để phân biệt trên thẻ, KHÔNG gom nhóm cột board) */}
+      {task.childrenTotal > 0 && (
+        <div className={s.boardChainTag} title={`Đầu chuỗi — có ${task.childrenTotal} việc con`}>
+          <ListTree size={10} /> {task.childrenTotal} việc con
+        </div>
+      )}
+      {task.parentTaskId && (
+        <div className={`${s.boardChainTag} ${s.boardChainTagChild}`} title={task.parentTitle ? `Thuộc việc cha: ${task.parentTitle}` : 'Việc con'}>
+          <CornerLeftUp size={10} /> {task.parentTitle || 'việc con'}
+        </div>
+      )}
       {/* Hàng: mức độ + nhân sự phụ trách + ngày (gọn 1 dòng để rút height) */}
       <div className={s.boardCardMeta}>
         <PriorityBadge priority={task.priority} />
