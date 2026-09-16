@@ -83,6 +83,10 @@ export async function updateSubtaskStep(id, subtaskId, stepId, body) {
 export async function deleteSubtaskStep(id, subtaskId, stepId) {
   await api.delete(`/task-types/${id}/subtasks/${subtaskId}/steps/${stepId}`)
 }
+export async function reorderSubtaskSteps(id, subtaskId, steps) {
+  const { data } = await api.post(`/task-types/${id}/subtasks/${subtaskId}/steps/reorder`, { steps })
+  return data.data.steps
+}
 
 // Custom Fields
 export async function getCustomFields(id) {

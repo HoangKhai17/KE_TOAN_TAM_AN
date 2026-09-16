@@ -121,6 +121,12 @@ async function deleteSubtaskStep(req, res, next) {
     res.status(204).end()
   } catch (err) { next(err) }
 }
+async function reorderSubtaskSteps(req, res, next) {
+  try {
+    const steps = await svc.reorderSubtaskSteps(req.params.id, req.params.subtaskId, req.body.steps)
+    res.json({ success: true, data: { steps } })
+  } catch (err) { next(err) }
+}
 
 async function reorderChecklist(req, res, next) {
   try {
@@ -187,7 +193,7 @@ module.exports = {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   getChecklist, addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
   listSubtaskTemplates, addSubtaskTemplate, updateSubtaskTemplate, deleteSubtaskTemplate,
-  addSubtaskStep, updateSubtaskStep, deleteSubtaskStep,
+  addSubtaskStep, updateSubtaskStep, deleteSubtaskStep, reorderSubtaskSteps,
   getCustomFields, addCustomField, updateCustomField, deleteCustomField,
   previewSyncTasks, applySyncTasks,
 }

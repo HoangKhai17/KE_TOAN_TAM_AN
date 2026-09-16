@@ -41,11 +41,15 @@ const updateSubtaskTemplateSchema = z.object({
   sortOrder:     z.number().int().min(0).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' })
 
-// Bước checklist của việc con định kỳ
-const subtaskStepSchema = z.object({ stepText: z.string().min(1).max(300) })
+// Bước checklist của việc con định kỳ (2 cấp như checklist cha)
+const subtaskStepSchema = z.object({
+  stepText: z.string().min(1).max(300),
+  level:    z.number().int().min(0).max(1).optional().default(0),
+})
 const updateSubtaskStepSchema = z.object({
   stepText:  z.string().min(1).max(300).optional(),
   stepOrder: z.number().int().min(1).optional(),
+  level:     z.number().int().min(0).max(1).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' })
 
 const reorderChecklistSchema = z.object({

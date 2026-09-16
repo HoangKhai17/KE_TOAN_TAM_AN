@@ -724,7 +724,7 @@ async function getTaskById(id, user = null) {
 }
 
 async function createTask(data, actorId, ipAddress, userAgent) {
-  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, collaboratorIds, parentTaskId } = data
+  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, collaboratorIds, parentTaskId, spawnSubtasks = true, subtaskTemplateId = null } = data
 
   // Ngày hết hạn KHÔNG được nhỏ hơn ngày bắt đầu (so sánh chuỗi YYYY-MM-DD hợp lệ).
   if (startDate && dueDate && dueDate < startDate) {
@@ -787,9 +787,19 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     ]
   )
 
-  // Copy checklist template from task type — mang theo source_step_id + source_parent_id (đóng băng cha-con).
-  // source_parent_id = id bước level-0 gần nhất PHÍA TRƯỚC (nếu bước hiện tại là con).
-  if (taskTypeId) {
+  // Copy checklist:
+  //  • Khi tạo TAY một việc con từ 1 mẫu việc con (subtaskTemplateId) → copy checklist RIÊNG của mẫu con đó.
+  //  • Ngược lại, nếu có loại công việc → copy checklist template của LOẠI (đóng băng cha-con qua source_*).
+  if (subtaskTemplateId) {
+    await query(
+      `INSERT INTO task_checklist_items (task_id, step_order, step_text, level)
+       SELECT $1, step_order, step_text, level
+       FROM task_type_subtask_steps WHERE subtask_template_id = $2
+       ORDER BY step_order, created_at`,
+      [task.id, subtaskTemplateId]
+    )
+  } else if (taskTypeId) {
+    // source_parent_id = id bước level-0 gần nhất PHÍA TRƯỚC (nếu bước hiện tại là con).
     await query(
       `INSERT INTO task_checklist_items
          (task_id, step_order, step_text, level, source_step_id, source_parent_id)
@@ -804,6 +814,39 @@ async function createTask(data, actorId, ipAddress, userAgent) {
        ORDER BY t.step_order`,
       [task.id, taskTypeId]
     )
+  }
+
+  // Việc con LIÊN KẾT từ template — chỉ khi task này là CẤP CAO (giữ 1 cấp cha–con).
+  // spawnSubtasks=false → BỎ tự đẻ (popup tạo tay tự lần lượt hỏi ngày từng con để mỗi con có hạn riêng).
+  // Mỗi con là task độc lập: kế thừa công ty/người phụ trách/hạn của cha, copy checklist riêng.
+  if (taskTypeId && !parentTaskId && spawnSubtasks && !subtaskTemplateId) {
+    const { rows: subs } = await query(
+      'SELECT id, title FROM task_type_subtask_templates WHERE task_type_id = $1 ORDER BY sort_order, created_at',
+      [taskTypeId]
+    )
+    for (const sub of subs) {
+      const { rows: [child] } = await query(
+        `INSERT INTO tasks
+           (title, description, company_id, task_type_id, parent_task_id, assigned_to, assigned_by,
+            start_date, due_date, priority, source, sla_days, created_by, visibility)
+         VALUES ($1,NULL,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         RETURNING id`,
+        [
+          sub.title, effectiveCompanyId, taskTypeId, task.id, assignedTo ?? null, actorId,
+          startDate ?? null, dueDate ?? null, priority, source, effectiveSlaDays, actorId, visibility,
+        ]
+      )
+      const { rows: subSteps } = await query(
+        'SELECT step_order, step_text, level FROM task_type_subtask_steps WHERE subtask_template_id = $1 ORDER BY step_order, created_at',
+        [sub.id]
+      )
+      for (const ss of subSteps) {
+        await query(
+          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level) VALUES ($1,$2,$3,$4)`,
+          [child.id, ss.step_order, ss.step_text, ss.level ?? 0]
+        )
+      }
+    }
   }
 
   await activity.logActivity(task.id, actorId, 'created', null, null, { title, companyId, taskTypeId })

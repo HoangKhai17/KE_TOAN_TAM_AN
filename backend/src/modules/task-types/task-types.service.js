@@ -27,7 +27,7 @@ function toStepDto(row) {
 
 // Việc con định kỳ (tách riêng khỏi checklist) — tiêu đề + hạn (offset) + checklist RIÊNG.
 function toSubStepDto(row) {
-  return { id: row.id, stepText: row.step_text, stepOrder: row.step_order }
+  return { id: row.id, stepText: row.step_text, stepOrder: row.step_order, level: row.level ?? 0 }
 }
 function toSubtaskDto(row, steps = []) {
   return {
@@ -346,13 +346,13 @@ async function assertSubtask(taskTypeId, subtaskId) {
 
 async function addSubtaskStep(taskTypeId, subtaskId, data = {}) {
   await assertSubtask(taskTypeId, subtaskId)
-  const { stepText } = data
+  const { stepText, level = 0 } = data
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_subtask_steps WHERE subtask_template_id = $1', [subtaskId])
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [row] } = await query(
-    'INSERT INTO task_type_subtask_steps (subtask_template_id, step_order, step_text) VALUES ($1,$2,$3) RETURNING *',
-    [subtaskId, nextOrder, stepText])
+    'INSERT INTO task_type_subtask_steps (subtask_template_id, step_order, step_text, level) VALUES ($1,$2,$3,$4) RETURNING *',
+    [subtaskId, nextOrder, stepText, level === 1 ? 1 : 0])
   return toSubStepDto(row)
 }
 
@@ -361,6 +361,7 @@ async function updateSubtaskStep(taskTypeId, subtaskId, stepId, data) {
   const updates = []; const params = []
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
+  if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(stepId, subtaskId)
   const { rows: [row] } = await query(
@@ -375,6 +376,21 @@ async function deleteSubtaskStep(taskTypeId, subtaskId, stepId) {
   const { rows: [row] } = await query(
     'DELETE FROM task_type_subtask_steps WHERE id = $1 AND subtask_template_id = $2 RETURNING id', [stepId, subtaskId])
   if (!row) throw Object.assign(new Error('Step not found'), { status: 404 })
+}
+
+async function reorderSubtaskSteps(taskTypeId, subtaskId, steps) {
+  await assertSubtask(taskTypeId, subtaskId)
+  const client = await getClient()
+  try {
+    await client.query('BEGIN')
+    await client.query('UPDATE task_type_subtask_steps SET step_order = step_order + 10000 WHERE subtask_template_id = $1', [subtaskId])
+    for (const st of steps) {
+      await client.query('UPDATE task_type_subtask_steps SET step_order = $1 WHERE id = $2 AND subtask_template_id = $3', [st.stepOrder, st.id, subtaskId])
+    }
+    await client.query('COMMIT')
+  } catch (err) { await client.query('ROLLBACK'); throw err } finally { client.release() }
+  const { rows } = await query('SELECT * FROM task_type_subtask_steps WHERE subtask_template_id = $1 ORDER BY step_order, created_at', [subtaskId])
+  return rows.map(toSubStepDto)
 }
 
 async function reorderChecklist(taskTypeId, steps) {
@@ -483,6 +499,6 @@ module.exports = {
   listTaskTypes, getTaskTypeById, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   getChecklist, addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
   listSubtaskTemplates, addSubtaskTemplate, updateSubtaskTemplate, deleteSubtaskTemplate,
-  addSubtaskStep, updateSubtaskStep, deleteSubtaskStep,
+  addSubtaskStep, updateSubtaskStep, deleteSubtaskStep, reorderSubtaskSteps,
   getCustomFields, addCustomField, updateCustomField, deleteCustomField,
 }

@@ -131,13 +131,13 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
       )
       // Copy checklist RIÊNG của việc con vào task con
       const { rows: subSteps } = await query(
-        'SELECT step_order, step_text FROM task_type_subtask_steps WHERE subtask_template_id = $1 ORDER BY step_order, created_at',
+        'SELECT step_order, step_text, level FROM task_type_subtask_steps WHERE subtask_template_id = $1 ORDER BY step_order, created_at',
         [s.id]
       )
       for (const ss of subSteps) {
         await query(
-          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level) VALUES ($1,$2,$3,0)`,
-          [child.id, ss.step_order, ss.step_text]
+          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level) VALUES ($1,$2,$3,$4)`,
+          [child.id, ss.step_order, ss.step_text, ss.level ?? 0]
         )
       }
       childrenCreated.push(child.id)

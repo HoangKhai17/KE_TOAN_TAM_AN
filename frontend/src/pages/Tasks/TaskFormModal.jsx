@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Info, Search, ChevronDown, ChevronLeft, ChevronRight, X, Plus, Link2, Trash2, GripVertical, Lock } from 'lucide-react'
+import { Info, Search, ChevronDown, ChevronLeft, ChevronRight, X, Plus, Link2, Trash2, GripVertical, Lock, GitBranch } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import DateBox from '../../components/ui/DateBox'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { createTask, addTaskChecklistItem, addTaskLink } from '../../api/tasks'
 import { listCompanies } from '../../api/companies'
 import { listUserOptions } from '../../api/users'
-import { listTaskTypes } from '../../api/taskTypes'
+import { listTaskTypes, getTaskType } from '../../api/taskTypes'
 import { useAuthStore } from '../../stores/authStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { PRIORITY_LABELS } from './taskUtils'
@@ -127,6 +127,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   const [companies, setCompanies] = useState([])
   const [users,     setUsers]     = useState([])
   const [taskTypes, setTaskTypes] = useState([])
+  const [typeDetail, setTypeDetail] = useState(null)   // chi tiết loại CV đang chọn (preview checklist + việc con)
   const [saving,    setSaving]    = useState(false)
   const [fe,        setFE]        = useState({})
   const [error,     setError]     = useState(null)
@@ -157,6 +158,16 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       .then(({ taskTypes: t }) => setTaskTypes(t)).catch(() => {})
     loadEnums()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Preview: khi chọn loại công việc → tải checklist + việc con liên kết của mẫu để xem trước.
+  useEffect(() => {
+    if (!form.taskTypeId) { setTypeDetail(null); return }
+    let cancelled = false
+    getTaskType(form.taskTypeId)
+      .then((tt) => { if (!cancelled) setTypeDetail(tt) })
+      .catch(() => { if (!cancelled) setTypeDetail(null) })
+    return () => { cancelled = true }
+  }, [form.taskTypeId])
 
   const set = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }))
 
@@ -218,9 +229,13 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
     if (!form.dueDate)      errs.dueDate = 'Vui lòng nhập ngày hết hạn'
     else if (form.startDate && form.dueDate < form.startDate)
       errs.dueDate = 'Ngày hết hạn không được nhỏ hơn ngày bắt đầu'
-    // Bắt buộc phải có checklist: hoặc thêm tay ≥1 bước, hoặc chọn loại công việc có sẵn checklist mẫu.
-    const hasTemplateChecklist = (selectedType?.checklistCount ?? 0) > 0
-    if (checklistItems.length === 0 && !hasTemplateChecklist && !isSubtask) {
+    // Bắt buộc phải có checklist: hoặc thêm tay ≥1 bước, hoặc chọn loại công việc có sẵn
+    // checklist / việc con liên kết (mẫu). Dùng chi tiết mẫu đã tải (typeDetail) cho chính xác.
+    const typeHasStructure = (typeDetail?.checklist?.length ?? 0) > 0 || (typeDetail?.subtaskTemplates?.length ?? 0) > 0
+    // Nếu đã chọn loại công việc: coi như mẫu sẽ cung cấp cấu trúc (bỏ bắt buộc). Khi chi tiết
+    // đã tải mà mẫu KHÔNG có gì thì mới bắt buộc nhập tay.
+    const hasTemplate = !!form.taskTypeId && (typeDetail == null || typeHasStructure)
+    if (checklistItems.length === 0 && !hasTemplate && !isSubtask) {
       errs.checklist = 'Công việc phải có ít nhất 1 bước checklist (thêm bên dưới hoặc chọn loại công việc có sẵn checklist).'
     }
     if (Object.keys(errs).length) { setFE(errs); return }
@@ -262,8 +277,6 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       setSaving(false)
     }
   }
-
-  const selectedType = taskTypes.find((t) => t.id === form.taskTypeId)
 
   return (
     <Modal
@@ -325,11 +338,34 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
             <option value="">-- Không có --</option>
             {taskTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
-          {selectedType?.checklistCount > 0 && (
-            <p className={s.formHint}>
-              <Info size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
-              {' '}{selectedType.checklistCount} bước checklist sẽ được sao chép
-            </p>
+          {typeDetail && (typeDetail.checklist?.length > 0 || typeDetail.subtaskTemplates?.length > 0) && (
+            <div style={{ marginTop: 8, padding: '8px 10px', border: '1px solid var(--color-border)', borderRadius: 6, background: 'var(--color-bg-soft, #f8fafc)', maxHeight: 180, overflowY: 'auto' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary-dark)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                <Info size={12} /> Sẽ tự tạo khi lưu:
+              </div>
+              {typeDetail.checklist?.length > 0 && (
+                <div style={{ marginBottom: typeDetail.subtaskTemplates?.length ? 8 : 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.3px', color: 'var(--color-muted)', marginBottom: 3 }}>Checklist ({typeDetail.checklist.length} bước)</div>
+                  {typeDetail.checklist.map((c) => (
+                    <div key={c.id} style={{ fontSize: 12, color: 'var(--color-text)', paddingLeft: c.level === 1 ? 16 : 0, lineHeight: 1.6 }}>
+                      {c.level === 1 ? '– ' : '• '}{c.stepText}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {typeDetail.subtaskTemplates?.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.3px', color: 'var(--color-muted)', marginBottom: 3 }}>Việc con liên kết ({typeDetail.subtaskTemplates.length})</div>
+                  {typeDetail.subtaskTemplates.map((sub) => (
+                    <div key={sub.id} style={{ fontSize: 12, color: 'var(--color-text)', lineHeight: 1.7, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <GitBranch size={11} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+                      {sub.title}
+                      {sub.steps?.length > 0 && <span style={{ fontSize: 10, color: 'var(--color-muted)' }}>· {sub.steps.length} bước</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

@@ -281,8 +281,9 @@ router.get('/:id/subtasks', ...auth, ctrl.listSubtaskTemplates)
 router.post('/:id/subtasks', ...admin, validate(subtaskTemplateSchema), ctrl.addSubtaskTemplate)
 router.patch('/:id/subtasks/:subtaskId', ...admin, validate(updateSubtaskTemplateSchema), ctrl.updateSubtaskTemplate)
 router.delete('/:id/subtasks/:subtaskId', ...admin, ctrl.deleteSubtaskTemplate)
-// Checklist riêng của việc con định kỳ
+// Checklist riêng của việc con định kỳ (2 cấp + kéo-thả như checklist cha)
 router.post('/:id/subtasks/:subtaskId/steps', ...admin, validate(subtaskStepSchema), ctrl.addSubtaskStep)
+router.post('/:id/subtasks/:subtaskId/steps/reorder', ...admin, validate(reorderChecklistSchema), ctrl.reorderSubtaskSteps)
 router.patch('/:id/subtasks/:subtaskId/steps/:stepId', ...admin, validate(updateSubtaskStepSchema), ctrl.updateSubtaskStep)
 router.delete('/:id/subtasks/:subtaskId/steps/:stepId', ...admin, ctrl.deleteSubtaskStep)
 

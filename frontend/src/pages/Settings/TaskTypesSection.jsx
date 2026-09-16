@@ -19,7 +19,7 @@ import {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
   addSubtaskTemplate, updateSubtaskTemplate, deleteSubtaskTemplate,
-  addSubtaskStep, updateSubtaskStep, deleteSubtaskStep,
+  addSubtaskStep, updateSubtaskStep, deleteSubtaskStep, reorderSubtaskSteps,
   addCustomField, deleteCustomField,
 } from '../../api/taskTypes'
 import SyncTasksModal from './SyncTasksModal'
@@ -250,7 +250,7 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
       {/* Expanded detail */}
       {isExpanded && (
         <div className={s.ttDetailPanel}>
-          {isDetailLoading ? (
+          {isDetailLoading && !detail ? (
             <div className={s.ttDetailLoading}>
               <Loader2 size={14} className={s.spin} /> Đang tải…
             </div>
@@ -360,7 +360,16 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
   )
 }
 
-function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
+// api mặc định của checklist cha; truyền `api` khác để tái dùng cho checklist việc con.
+const DEFAULT_CL_API = {
+  add: (tid, text) => addChecklistStep(tid, text),
+  update: (tid, stepId, body) => updateChecklistStep(tid, stepId, body),
+  del: (tid, stepId) => deleteChecklistStep(tid, stepId),
+  reorder: (tid, steps) => reorderChecklist(tid, steps),
+}
+
+function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, addPlaceholder }) {
+  const A = api ?? DEFAULT_CL_API
   const addToast = useToastStore((st) => st.toast)
   const [items, setItems]       = useState(checklist)
   const [saving, setSaving]     = useState(false)
@@ -379,81 +388,51 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
   async function handleDragEnd(event) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-
     const oldIdx  = items.findIndex((i) => i.id === active.id)
     const newIdx  = items.findIndex((i) => i.id === over.id)
     const reordered = arrayMove(items, oldIdx, newIdx)
     setItems(reordered)   // optimistic
-
     setSaving(true)
     try {
-      await reorderChecklist(taskTypeId, reordered.map((item, idx) => ({ id: item.id, stepOrder: idx + 1 })))
+      await A.reorder(taskTypeId, reordered.map((item, idx) => ({ id: item.id, stepOrder: idx + 1 })))
       onRefresh()
-    } catch {
-      setItems(checklist)  // revert
-      addToast('Không thể sắp xếp checklist', 'error')
-    }
+    } catch { setItems(checklist); addToast('Không thể sắp xếp checklist', 'error') }
     setSaving(false)
   }
 
   async function handleSaveEdit() {
     if (!editText.trim()) { setEditingId(null); return }
     setSaving(true)
-    try {
-      await updateChecklistStep(taskTypeId, editingId, { stepText: editText.trim() })
-      setEditingId(null)
-      onRefresh()
-    } catch {
-      addToast('Không thể cập nhật bước', 'error')
-    }
+    try { await A.update(taskTypeId, editingId, { stepText: editText.trim() }); setEditingId(null); onRefresh() }
+    catch { addToast('Không thể cập nhật bước', 'error') }
     setSaving(false)
   }
 
   async function handleDelete(stepId) {
     setSaving(true)
-    try {
-      await deleteChecklistStep(taskTypeId, stepId)
-      onRefresh()
-    } catch {
-      addToast('Không thể xóa bước', 'error')
-    }
+    try { await A.del(taskTypeId, stepId); onRefresh() }
+    catch { addToast('Không thể xóa bước', 'error') }
     setSaving(false)
   }
 
   async function handleToggleLevel(step) {
     setSaving(true)
-    try {
-      await updateChecklistStep(taskTypeId, step.id, { level: step.level === 1 ? 0 : 1 })
-      onRefresh()
-    } catch {
-      addToast('Không thể đổi cấp', 'error')
-    }
+    try { await A.update(taskTypeId, step.id, { level: step.level === 1 ? 0 : 1 }); onRefresh() }
+    catch { addToast('Không thể đổi cấp', 'error') }
     setSaving(false)
   }
 
   async function handleAdd() {
     const text = addText.trim()
     if (!text) return
-    if (text.length > 2000) { addToast('Bước không được quá 2000 ký tự', 'error'); return }
     setAdding(true)
-    try {
-      await addChecklistStep(taskTypeId, text)
-      setAddText('')
-      onRefresh()
-    } catch {
-      addToast('Không thể thêm bước', 'error')
-    }
+    try { await A.add(taskTypeId, text); setAddText(''); onRefresh() }
+    catch { addToast('Không thể thêm bước', 'error') }
     setAdding(false)
   }
 
-  return (
-    <div className={s.ttPanelSection}>
-      <div className={s.ttPanelTitle}>
-        <AlignLeft size={13} />
-        Checklist mẫu
-        {saving && <Loader2 size={12} className={`${s.spin} ${s.ttPanelSaving}`} />}
-      </div>
-
+  const inner = (
+    <>
       {items.length === 0 && <p className={s.ttPanelEmpty}>Chưa có bước nào.</p>}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -477,24 +456,32 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
 
       <div className={s.clAddRow}>
         <textarea
-          placeholder="Thêm bước mới… (Enter để thêm · Alt/Shift+Enter xuống dòng)"
+          placeholder={addPlaceholder ?? 'Thêm bước mới… (Enter để thêm · Alt/Shift+Enter xuống dòng)'}
           value={addText}
           onChange={(e) => setAddText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.altKey && !e.shiftKey) { e.preventDefault(); handleAdd() } }}
           className={s.clAddInput}
-          maxLength={2000}
+          maxLength={300}
           rows={2}
           style={{ resize: 'vertical' }}
         />
-        <button
-          onClick={handleAdd}
-          disabled={!addText.trim() || adding}
-          className={s.clAddBtn}
-          title="Thêm bước"
-        >
+        <button onClick={handleAdd} disabled={!addText.trim() || adding} className={s.clAddBtn} title="Thêm bước">
           {adding ? <Loader2 size={12} className={s.spin} /> : <Plus size={12} />}
         </button>
       </div>
+    </>
+  )
+
+  if (bare) return inner
+
+  return (
+    <div className={s.ttPanelSection}>
+      <div className={s.ttPanelTitle}>
+        <AlignLeft size={13} />
+        {title ?? 'Checklist mẫu'}
+        {saving && <Loader2 size={12} className={`${s.spin} ${s.ttPanelSaving}`} />}
+      </div>
+      {inner}
     </div>
   )
 }
@@ -518,9 +505,15 @@ const SS = {
 function SubtaskCard({ taskTypeId, subtask, expanded, onToggle, onRefresh }) {
   const addToast = useToastStore((st) => st.toast)
   const [title, setTitle]   = useState(subtask.title)
-  const [newStep, setNewStep] = useState('')
   useEffect(() => { setTitle(subtask.title) }, [subtask.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const steps = subtask.steps ?? []
+  // api checklist của việc con — bind vào subtask.id để tái dùng ChecklistPanel (drag/indent/edit).
+  const stepApi = {
+    add:     (tid, text)        => addSubtaskStep(tid, subtask.id, { stepText: text }),
+    update:  (tid, stepId, body) => updateSubtaskStep(tid, subtask.id, stepId, body),
+    del:     (tid, stepId)      => deleteSubtaskStep(tid, subtask.id, stepId),
+    reorder: (tid, list)        => reorderSubtaskSteps(tid, subtask.id, list),
+  }
 
   async function saveTitle() {
     const t = title.trim()
@@ -531,20 +524,6 @@ function SubtaskCard({ taskTypeId, subtask, expanded, onToggle, onRefresh }) {
   async function del() {
     try { await deleteSubtaskTemplate(taskTypeId, subtask.id); onRefresh() }
     catch { addToast('Không thể xóa việc con', 'error') }
-  }
-  async function addStep() {
-    const t = newStep.trim(); if (!t) return
-    try { await addSubtaskStep(taskTypeId, subtask.id, { stepText: t }); setNewStep(''); onRefresh() }
-    catch { addToast('Không thể thêm bước', 'error') }
-  }
-  async function saveStep(stepId, val, orig) {
-    const t = val.trim(); if (!t || t === orig) return
-    try { await updateSubtaskStep(taskTypeId, subtask.id, stepId, { stepText: t }); onRefresh() }
-    catch { addToast('Không thể sửa bước', 'error') }
-  }
-  async function delStep(stepId) {
-    try { await deleteSubtaskStep(taskTypeId, subtask.id, stepId); onRefresh() }
-    catch { addToast('Không thể xóa bước', 'error') }
   }
 
   return (
@@ -574,21 +553,15 @@ function SubtaskCard({ taskTypeId, subtask, expanded, onToggle, onRefresh }) {
           <div style={{ fontSize: 'var(--fs-3xs)', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '.3px', margin: '4px 0 6px' }}>
             Checklist của việc con này
           </div>
-          {steps.length === 0 && <p style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', margin: '2px 0 6px' }}>Chưa có bước nào.</p>}
-          {steps.map((st) => (
-            <div key={st.id} style={SS.stepRow}>
-              <span style={{ color: 'var(--color-muted)', flexShrink: 0 }}>•</span>
-              <input defaultValue={st.stepText} onBlur={(e) => saveStep(st.id, e.target.value, st.stepText)}
-                onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }} maxLength={300} style={SS.stepInput} />
-              <button className={`${s.clActionBtn} ${s.clDeleteBtn}`} onClick={() => delStep(st.id)} title="Xóa bước" style={{ flexShrink: 0 }}><X size={12} /></button>
-            </div>
-          ))}
-          <div style={{ ...SS.stepRow, marginTop: 4 }}>
-            <Plus size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
-            <input value={newStep} onChange={(e) => setNewStep(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStep() } }} placeholder="Thêm bước checklist…" maxLength={300} style={SS.stepInput} />
-            {newStep.trim() && <button type="button" className={s.subAddBtn} onClick={addStep}>Thêm</button>}
-          </div>
+          {/* Tái dùng ChecklistPanel (drag/indent 2 cấp/sửa tại chỗ) — đồng bộ với checklist cha */}
+          <ChecklistPanel
+            taskTypeId={taskTypeId}
+            checklist={steps}
+            onRefresh={onRefresh}
+            api={stepApi}
+            bare
+            addPlaceholder="Thêm bước checklist…"
+          />
         </div>
       )}
     </div>
@@ -614,12 +587,12 @@ function SubtaskTemplatePanel({ taskTypeId, subtasks, onRefresh }) {
 
   return (
     <div className={s.ttPanelSection} style={{ marginTop: 12 }}>
-      <div className={s.ttPanelTitle}><GitBranch size={13} /> Việc con định kỳ</div>
+      <div className={s.ttPanelTitle}><GitBranch size={13} /> Việc con liên kết</div>
       <p style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', margin: '0 0 10px' }}>
-        Mỗi thẻ là một việc con sẽ sinh cùng công việc cha khi tạo định kỳ — có <strong>checklist riêng</strong> của nó (mở thẻ để thêm bước). Hạn của việc con đặt ở <strong>Lịch định kỳ</strong> của từng công ty.
+        Mỗi thẻ là một việc con sẽ sinh kèm công việc cha — có <strong>checklist riêng</strong> của nó (mở thẻ để thêm bước). Hạn của việc con đặt ở <strong>Lịch định kỳ</strong> của từng công ty.
       </p>
 
-      {list.length === 0 && <p className={s.ttPanelEmpty}>Chưa có việc con định kỳ.</p>}
+      {list.length === 0 && <p className={s.ttPanelEmpty}>Chưa có việc con liên kết.</p>}
 
       {list.map((sub) => (
         <SubtaskCard key={sub.id} taskTypeId={taskTypeId} subtask={sub}

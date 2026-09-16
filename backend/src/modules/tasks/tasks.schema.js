@@ -21,6 +21,11 @@ const createTaskSchema = z.object({
   collaboratorIds: z.array(z.string().uuid()).optional(),
   // Việc cha (nếu tạo dưới dạng việc con của một chuỗi). Con kế thừa công ty của cha.
   parentTaskId: z.string().uuid().optional().nullable(),
+  // Có tự đẻ việc con LIÊN KẾT từ mẫu hay không. Mặc định true (giữ hành vi cũ cho lịch/định kỳ).
+  // Popup tạo tay gửi false để tự lần lượt hỏi ngày từng việc con (mỗi con nhập hạn riêng).
+  spawnSubtasks: z.boolean().optional(),
+  // Khi tạo TAY một việc con từ 1 mẫu việc con: copy checklist RIÊNG của mẫu đó (không phải checklist loại CV cha).
+  subtaskTemplateId: z.string().uuid().optional().nullable(),
 })
 
 const updateTaskSchema = z.object({
