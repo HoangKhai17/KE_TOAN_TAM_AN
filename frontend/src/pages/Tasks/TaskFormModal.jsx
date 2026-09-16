@@ -250,44 +250,37 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       errs.checklist = 'Công việc phải có ít nhất 1 bước checklist (thêm bên dưới hoặc chọn loại công việc có sẵn checklist).'
     }
     if (Object.keys(errs).length) { setFE(errs); return }
-    setError(null); setFE({}); setSaving(true)
-    try {
-      // Việc con LIÊN KẾT của mẫu: nếu ĐÃ tải được chi tiết mẫu → tự quản việc con ở frontend
-      // (spawnSubtasks=false) để lần lượt hỏi ngày RIÊNG từng con. Nếu KHÔNG tải được mẫu →
-      // để backend tự đẻ như cũ (tránh mất việc con).
-      const typeStructureKnown = !form.taskTypeId || typeDetail != null
-      const subs = (!isSubtask && form.taskTypeId && typeDetail) ? (typeDetail.subtaskTemplates ?? []) : []
-      const task = await createTask({
-        title:       form.title.trim(),
-        companyId:   form.companyId,
-        taskTypeId:  form.taskTypeId   || null,
-        assignedTo:  form.assignedToId || null,
-        startDate:   form.startDate    || null,
-        dueDate:     form.dueDate      || null,
-        priority:    form.priority,
-        slaDays:     form.slaDays ? Number(form.slaDays) : null,
-        description: form.description.trim() || null,
-        source:      form.source || 'manual',
-        collaboratorIds: form.collaboratorIds.filter((id) => id && id !== form.assignedToId),
-        // Chỉ gửi khi admin đặt riêng tư; backend mặc định 'company'.
-        ...(isAdmin && form.visibility === 'private' ? { visibility: 'private' } : {}),
-        // Tách việc con: gắn vào việc cha (con kế thừa công ty của cha ở backend).
-        ...(isSubtask ? { parentTaskId: parentTask.id } : {}),
-        // Frontend tự tạo việc con (chuỗi popup) khi biết mẫu → tắt tự đẻ ở backend.
-        spawnSubtasks: typeStructureKnown ? false : true,
+    setError(null); setFE({})
+
+    // Việc con LIÊN KẾT của mẫu (nếu ĐÃ tải được chi tiết mẫu).
+    const typeStructureKnown = !form.taskTypeId || typeDetail != null
+    const subs = (!isSubtask && form.taskTypeId && typeDetail) ? (typeDetail.subtaskTemplates ?? []) : []
+
+    // CÓ việc con → vào WIZARD nhiều bước. KHÔNG tạo gì ngay: cha + tất cả con chỉ được tạo ở
+    // bước cuối (Hoàn tất), nhờ vậy có thể ← quay lại sửa cả việc cha lẫn từng việc con.
+    if (subs.length > 0) {
+      const drafts = subs.map((sub) => ({
+        title: sub.title || '', assignedToId: form.assignedToId || '',
+        priority: form.priority, source: form.source || 'manual',
+        startDate: form.startDate || '', dueDate: '', skip: false, createdId: null,
+      }))
+      setChildChain({
+        subs, drafts, step: 1, openAfter,
+        parentForm: { ...form }, parentChecklist: checklistItems.slice(), parentLinks: linkItems.slice(),
+        parentCreated: null,
       })
+      loadDraft(drafts[0])
+      return
+    }
+
+    // KHÔNG có việc con → tạo ngay như cũ.
+    setSaving(true)
+    try {
+      const task = await createTask({ ...buildParentPayload(form), spawnSubtasks: typeStructureKnown ? false : true })
       for (const item of checklistItems) {
         await addTaskChecklistItem(task.id, { stepText: item.text, level: item.level ?? 0 })
       }
       await Promise.all(linkItems.map((l) => addTaskLink(task.id, { name: l.name, url: l.url })))
-      // Có việc con liên kết → CHUYỂN sang chuỗi nhập việc con (mỗi con 1 ngày hạn riêng).
-      if (subs.length > 0) {
-        setChildChain({ parent: task, companyId: form.companyId, taskTypeId: form.taskTypeId, subs, index: 0, openAfter })
-        setForm((p) => ({ ...p, title: subs[0].title || '', dueDate: '' }))
-        setChecklistItems([]); setLinkItems([]); setFE({}); setError(null)
-        setSaving(false)
-        return
-      }
       if (openAfter) onSavedAndOpen(task)
       else           onSaved(task)
     } catch (err) {
@@ -304,77 +297,172 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
     }
   }
 
-  // ── Chuỗi tạo việc con LIÊN KẾT ─────────────────────────────────────────────
-  // Mỗi việc con là 1 task ĐỘC LẬP với NGÀY HẠN RIÊNG do người tạo nhập. Backend copy
-  // checklist riêng của con theo subtaskTemplateId (không lấy checklist của loại CV cha).
-  function finishChain(chain) {
-    const c = chain ?? childChain
-    setChildChain(null)
-    if (!c) return
-    if (c.openAfter) onSavedAndOpen(c.parent)
-    else             onSaved(c.parent)
+  // Payload tạo việc CHA từ 1 snapshot form.
+  function buildParentPayload(pf) {
+    return {
+      title:       pf.title.trim(),
+      companyId:   pf.companyId,
+      taskTypeId:  pf.taskTypeId   || null,
+      assignedTo:  pf.assignedToId || null,
+      startDate:   pf.startDate    || null,
+      dueDate:     pf.dueDate      || null,
+      priority:    pf.priority,
+      slaDays:     pf.slaDays ? Number(pf.slaDays) : null,
+      description: pf.description.trim() || null,
+      source:      pf.source || 'manual',
+      collaboratorIds: pf.collaboratorIds.filter((id) => id && id !== pf.assignedToId),
+      ...(isAdmin && pf.visibility === 'private' ? { visibility: 'private' } : {}),
+      ...(isSubtask ? { parentTaskId: parentTask.id } : {}),
+      spawnSubtasks: false,   // wizard tự tạo việc con — tắt tự đẻ ở backend
+    }
   }
 
-  async function submitChild(skip) {
+  // ── WIZARD việc con LIÊN KẾT ────────────────────────────────────────────────
+  // step 0 = việc CHA; step 1..N = từng việc con. Chỉ tạo (cha + con) ở bước cuối.
+  function loadDraft(d) {
+    setForm((p) => ({
+      ...p, title: d.title, assignedToId: d.assignedToId,
+      priority: d.priority, source: d.source, startDate: d.startDate, dueDate: d.dueDate,
+    }))
+    setFE({}); setError(null)
+  }
+
+  // Khôi phục form về việc CHA (khi ← quay lại từ việc con đầu tiên).
+  function restoreParentForm(chain) {
+    setForm(chain.parentForm)
+    setChecklistItems(chain.parentChecklist)
+    setLinkItems(chain.parentLinks)
+    setFE({}); setError(null)
+  }
+
+  // Tạo CHA (nếu chưa) rồi tạo tất cả việc con chưa tạo. Lỗi giữa chừng → GIỮ phần đã tạo
+  // (parentCreated + createdId của con) để bấm lại "Hoàn tất" không nhân đôi.
+  async function commitWizard(drafts, chain) {
+    setError(null); setFE({}); setSaving(true)
+    let parentCreated = chain.parentCreated
+    const updated = drafts.slice()
+    try {
+      // 1) Việc cha (kèm checklist + link) — chỉ tạo 1 lần.
+      if (!parentCreated) {
+        const parent = await createTask(buildParentPayload(chain.parentForm))
+        for (const item of chain.parentChecklist) {
+          await addTaskChecklistItem(parent.id, { stepText: item.text, level: item.level ?? 0 })
+        }
+        await Promise.all(chain.parentLinks.map((l) => addTaskLink(parent.id, { name: l.name, url: l.url })))
+        parentCreated = parent
+        setChildChain({ ...chain, drafts: updated, parentCreated })
+      }
+      // 2) Việc con
+      for (let i = 0; i < updated.length; i++) {
+        const d = updated[i]
+        if (d.skip || d.createdId) continue
+        if (!d.title.trim() || !d.dueDate) {
+          setSaving(false)
+          setChildChain({ ...chain, drafts: updated, parentCreated, step: i + 1 })
+          loadDraft(updated[i])
+          setFE(!d.title.trim() ? { title: 'Tiêu đề không được để trống' } : { dueDate: 'Vui lòng nhập ngày hết hạn' })
+          return
+        }
+        const created = await createTask({
+          title: d.title.trim(), companyId: chain.parentForm.companyId, taskTypeId: chain.parentForm.taskTypeId || null,
+          parentTaskId: parentCreated.id, subtaskTemplateId: chain.subs[i].id,
+          assignedTo: d.assignedToId || null, startDate: d.startDate || null, dueDate: d.dueDate || null,
+          priority: d.priority, source: d.source || 'manual', spawnSubtasks: false,
+        })
+        updated[i] = { ...d, createdId: created.id }
+      }
+      setSaving(false)
+      setChildChain(null)
+      if (chain.openAfter) onSavedAndOpen(parentCreated)
+      else                 onSaved(parentCreated)
+    } catch (err) {
+      const errData = err.response?.data?.error
+      setError(errData?.message ?? 'Đã xảy ra lỗi, vui lòng thử lại')
+      setChildChain({ ...chain, drafts: updated, parentCreated })   // giữ tiến trình đã tạo (tránh nhân đôi khi thử lại)
+      setSaving(false)
+    }
+  }
+
+  // Điều hướng wizard việc con. mode: 'back' | 'skip' | 'next'.
+  async function stepChild(mode) {
     if (saving) return
-    const { parent, companyId, taskTypeId, subs, index } = childChain
-    if (!skip) {
+    const chain = childChain
+    if (!chain) return
+    const idx = chain.step - 1
+    const drafts = chain.drafts.slice()
+    const cur = {
+      ...drafts[idx],
+      title: form.title, assignedToId: form.assignedToId,
+      priority: form.priority, source: form.source, startDate: form.startDate, dueDate: form.dueDate,
+    }
+
+    if (mode === 'back') {
+      drafts[idx] = cur
+      if (chain.step === 1) {
+        const next = { ...chain, drafts, step: 0 }
+        setChildChain(next); restoreParentForm(next); return   // về việc cha
+      }
+      const ns = chain.step - 1
+      setChildChain({ ...chain, drafts, step: ns }); loadDraft(drafts[ns - 1]); return
+    }
+
+    if (mode === 'skip') {
+      cur.skip = true
+    } else {
       const errs = {}
       if (!form.title.trim()) errs.title = 'Tiêu đề không được để trống'
       if (!form.dueDate)      errs.dueDate = 'Vui lòng nhập ngày hết hạn'
       else if (form.startDate && form.dueDate < form.startDate)
         errs.dueDate = 'Ngày hết hạn không được nhỏ hơn ngày bắt đầu'
       if (Object.keys(errs).length) { setFE(errs); return }
-      setError(null); setFE({}); setSaving(true)
-      try {
-        await createTask({
-          title:       form.title.trim(),
-          companyId,
-          taskTypeId:  taskTypeId || null,
-          parentTaskId: parent.id,
-          subtaskTemplateId: subs[index].id,
-          assignedTo:  form.assignedToId || null,
-          startDate:   form.startDate || null,
-          dueDate:     form.dueDate || null,
-          priority:    form.priority,
-          source:      form.source || 'manual',
-          spawnSubtasks: false,
-        })
-      } catch (err) {
-        const errData = err.response?.data?.error
-        if (err.response?.status === 422 && errData?.details) {
-          const fe2 = {}
-          for (const d of errData.details) fe2[d.field] = d.message
-          setFE(fe2)
-        } else {
-          setError(errData?.message ?? 'Đã xảy ra lỗi, vui lòng thử lại')
-        }
-        setSaving(false)
-        return
-      }
-      setSaving(false)
+      cur.skip = false
     }
-    const next = index + 1
-    if (next < subs.length) {
-      setChildChain((c) => ({ ...c, index: next }))
-      setForm((p) => ({ ...p, title: subs[next].title || '', dueDate: '' }))
-      setFE({}); setError(null)
-    } else {
-      finishChain()
+    drafts[idx] = cur
+
+    if (chain.step < chain.subs.length) {
+      const ns = chain.step + 1
+      setChildChain({ ...chain, drafts, step: ns }); loadDraft(drafts[ns - 1]); return
     }
+    await commitWizard(drafts, chain)   // bước cuối → tạo cha + tất cả con
   }
 
-  // Đóng modal: nếu đang trong chuỗi việc con → vẫn báo đã tạo cha (+ con đã tạo) để danh sách refresh.
+  // Việc CHA trong wizard bấm "Tiếp →": xác thực, lưu snapshot cha, sang việc con 1.
+  function parentNext() {
+    if (saving || !childChain) return
+    const errs = {}
+    if (!form.title.trim()) errs.title = 'Tiêu đề không được để trống'
+    if (!form.companyId)    errs.companyId = 'Vui lòng chọn khách hàng'
+    if (!form.dueDate)      errs.dueDate = 'Vui lòng nhập ngày hết hạn'
+    else if (form.startDate && form.dueDate < form.startDate)
+      errs.dueDate = 'Ngày hết hạn không được nhỏ hơn ngày bắt đầu'
+    if (Object.keys(errs).length) { setFE(errs); return }
+    const next = {
+      ...childChain, step: 1,
+      parentForm: { ...form }, parentChecklist: checklistItems.slice(), parentLinks: linkItems.slice(),
+    }
+    setChildChain(next)
+    loadDraft(next.drafts[0])
+  }
+
+  // Đóng modal. Wizard: chưa tạo gì → huỷ hẳn; đã tạo cha (lỗi giữa chừng) → báo đã tạo để refresh.
   function handleClose() {
-    if (childChain) { finishChain(); return }
+    if (childChain) {
+      const parent = childChain.parentCreated
+      const openAfter = childChain.openAfter
+      setChildChain(null)
+      if (parent) { if (openAfter) onSavedAndOpen(parent); else onSaved(parent) }
+      else onClose()
+      return
+    }
     onClose()
   }
 
-  const curSub = childChain ? childChain.subs[childChain.index] : null
+  const inChildStep = !!childChain && childChain.step >= 1
+  const curSub = inChildStep ? childChain.subs[childChain.step - 1] : null
 
   return (
     <Modal
-      title={childChain ? 'Thêm việc con liên kết' : (isSubtask ? 'Tách thành việc con' : 'Tạo công việc mới')}
+      title={inChildStep ? 'Việc con liên kết' : (childChain ? 'Công việc cha' : (isSubtask ? 'Tách thành việc con' : 'Tạo công việc mới'))}
       onClose={handleClose}
       width="min(1120px, calc(100vw - 40px))"
       maxWidth="1120px"
@@ -385,13 +473,13 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         </div>
       )}
 
-      {childChain ? (
+      {inChildStep ? (
       <>
         <div
           className={s.taskFormErrorBox}
           style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', border: '1px solid var(--color-primary-ring)' }}
         >
-          Việc con <strong>{childChain.index + 1}/{childChain.subs.length}</strong> của: <strong>{childChain.parent.title}</strong>.
+          Việc con <strong>{childChain.step}/{childChain.subs.length}</strong> của: <strong>{childChain.parentForm.title}</strong>.
           {' '}Nhập <strong>ngày hết hạn riêng</strong> cho việc con này — mỗi con hoàn thành độc lập, hạn khác nhau là bình thường.
         </div>
 
@@ -470,12 +558,15 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         </div>
 
         <div className={s.formFooter}>
-          <button onClick={() => submitChild(true)} className={s.btnSecondary} disabled={saving} title="Không tạo việc con này">
+          <button onClick={() => stepChild('back')} className={s.btnSecondary} disabled={saving} style={{ marginRight: 'auto' }} title={childChain.step === 1 ? 'Quay lại việc cha' : 'Quay lại việc con trước'}>
+            {childChain.step === 1 ? '← Việc cha' : '← Quay lại'}
+          </button>
+          <button onClick={() => stepChild('skip')} className={s.btnSecondary} disabled={saving} title="Không tạo việc con này">
             Bỏ qua
           </button>
-          <button onClick={() => submitChild(false)} className={s.btnPrimary} disabled={saving}>
+          <button onClick={() => stepChild('next')} className={s.btnPrimary} disabled={saving}>
             {saving && <div className={s.spinner} style={{ width: 13, height: 13, borderWidth: 2, borderTopColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(255,255,255,0.25)' }} />}
-            {childChain.index + 1 < childChain.subs.length ? 'Lưu & việc con tiếp' : 'Lưu & hoàn tất'}
+            {childChain.step < childChain.subs.length ? 'Tiếp →' : 'Hoàn tất'}
           </button>
         </div>
       </>
@@ -488,6 +579,15 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         >
           Việc con của: <strong>{parentTask.title}</strong>
           {parentTask.companyName ? ` — ${parentTask.companyName}` : ''}. Việc con hoàn thành độc lập, có ngày hết hạn riêng.
+        </div>
+      )}
+
+      {childChain && (
+        <div
+          className={s.taskFormErrorBox}
+          style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', border: '1px solid var(--color-primary-ring)' }}
+        >
+          Bước <strong>1/{childChain.subs.length + 1}</strong> — Việc cha. Bấm <strong>Tiếp →</strong> để nhập từng việc con liên kết ({childChain.subs.length} việc). Chưa tạo gì cho tới khi bạn bấm <strong>Hoàn tất</strong>.
         </div>
       )}
 
@@ -854,15 +954,23 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       </div>
 
       <div className={s.formFooter}>
-        <button onClick={onClose} className={s.btnSecondary} disabled={saving}>Huỷ</button>
-        <button onClick={() => submit(false)} className={s.btnSecondary} disabled={saving}>
-          {saving && <div className={s.spinner} style={{ width: 13, height: 13, borderWidth: 2 }} />}
-          Tạo
-        </button>
-        <button onClick={() => submit(true)} className={s.btnPrimary} disabled={saving}>
-          {saving && <div className={s.spinner} style={{ width: 13, height: 13, borderWidth: 2, borderTopColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(255,255,255,0.25)' }} />}
-          Tạo và mở
-        </button>
+        <button onClick={handleClose} className={s.btnSecondary} disabled={saving}>Huỷ</button>
+        {childChain ? (
+          <button onClick={parentNext} className={s.btnPrimary} disabled={saving}>
+            Tiếp → (việc con)
+          </button>
+        ) : (
+          <>
+            <button onClick={() => submit(false)} className={s.btnSecondary} disabled={saving}>
+              {saving && <div className={s.spinner} style={{ width: 13, height: 13, borderWidth: 2 }} />}
+              Tạo
+            </button>
+            <button onClick={() => submit(true)} className={s.btnPrimary} disabled={saving}>
+              {saving && <div className={s.spinner} style={{ width: 13, height: 13, borderWidth: 2, borderTopColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(255,255,255,0.25)' }} />}
+              Tạo và mở
+            </button>
+          </>
+        )}
       </div>
       </>
       )}
