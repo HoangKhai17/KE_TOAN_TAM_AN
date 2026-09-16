@@ -4740,6 +4740,8 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
 }
 /* Ô tiêu đề của việc con: vạch màu trái + thụt lề nhẹ (không đổi border bảng) */
 .tdChild { box-shadow: inset 3px 0 0 var(--color-primary); padding-left: 18px; }
+/* Việc bị phụ thuộc (khi gom nhóm phụ thuộc): vạch hổ phách để phân biệt với cha–con */
+.tdDepChild { box-shadow: inset 3px 0 0 var(--color-warning-amber); padding-left: 18px; }
 
 /* Chuỗi việc con trong QuickView */
 .qvChainList { display: flex; flex-direction: column; gap: 6px; }
@@ -4806,8 +4808,8 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
 
 /* Nút bật/tắt "Gom nhóm cha–con" trong bộ lọc */
 .groupChainBtn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; height: 38px; padding: 0 12px; font: inherit;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  width: 100%; height: 38px; padding: 0 8px; font: inherit; white-space: nowrap;
   font-size: var(--fs-2xs); font-weight: var(--fw-semibold);
   border: 1px solid var(--color-border); border-radius: var(--radius-md);
   background: var(--color-surface); color: var(--color-text); cursor: pointer;

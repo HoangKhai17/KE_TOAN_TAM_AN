@@ -846,7 +846,7 @@ function ListView({
   onStatusChange, onPriorityChange, onDueDateChange, onDelete,
   isAdmin,
   sortColState, hasColFilter, onOpenColFilter,
-  hiddenCols,
+  hiddenCols, groupDep,
 }) {
   const getLabel    = useEnumsStore((st) => st.getLabel)
   const getOptions  = useEnumsStore((st) => st.getOptions)
@@ -953,8 +953,8 @@ function ListView({
                       onChange={() => onToggleSelect(t.id)}
                     />
                   </td>
-                  {/* Tiêu đề (không còn tên KH bên dưới) */}
-                  <td className={`${s.td} ${t.parentTaskId ? s.tdChild : ''}`}>
+                  {/* Tiêu đề — thụt lề: việc con (cha–con) hoặc việc bị phụ thuộc (khi gom nhóm phụ thuộc) */}
+                  <td className={`${s.td} ${t.parentTaskId ? s.tdChild : ((groupDep && t.depTotal > 0) ? s.tdDepChild : '')}`}>
                     <div className={`${s.taskTitle} ${overdue ? s.taskTitleOverdue : ''}`}>
                       {t.visibility === 'private' && (
                         <Lock size={11} className={s.titleLock} aria-label="Riêng tư"><title>Riêng tư — ẩn với nhân sự phụ trách công ty</title></Lock>
@@ -1270,6 +1270,8 @@ export default function Tasks() {
   const [sortValue, setSortValue] = useState(initF.sortValue ?? 'work_priority:asc')
   // Gom nhóm cha–con: nút bật/tắt riêng, GIỮ NGUYÊN sắp xếp đang chọn, chỉ gộp con dưới cha.
   const [groupByChain, setGroupByChain] = useState(initF.groupByChain ?? false)
+  // Gom nhóm phụ thuộc: gộp việc bị phụ thuộc xuống dưới "đàn anh chính" (loại trừ lẫn nhau với cha–con).
+  const [groupByDep, setGroupByDep] = useState(initF.groupByDep ?? false)
 
   // Other filters (status/priority/source are multi-select arrays)
   const [searchInput, setSearchInput]       = useState(initF.searchInput    ?? '')
@@ -1446,12 +1448,12 @@ export default function Tasks() {
   useEffect(() => {
     saveFilters({
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
-      sortValue, groupByChain, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter,
+      sortValue, groupByChain, groupByDep, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter,
       statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page,
       colFilters: serializeColFilters(colFilters), sortColState, filterCollapsed,
       filterLayoutVersion: 2,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, groupByChain, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, groupByChain, groupByDep, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1496,8 +1498,9 @@ export default function Tasks() {
   }, [colFilters])
   const listParams = useMemo(() => {
     const [sortBy, sortDir] = sortValue.split(':')
-    // Gom nhóm cha–con: chỉ áp ở chế độ danh sách. GIỮ NGUYÊN sortBy/sortDir đang chọn.
+    // Gom nhóm (cha–con / phụ thuộc): chỉ áp ở chế độ danh sách. GIỮ NGUYÊN sortBy/sortDir.
     const groupOn = isListView && groupByChain
+    const groupDepOn = isListView && groupByDep
     // Kanban nguồn: mặc định ẩn việc đã "Hoàn thành" ngay ở tầng query (không phí
     // ngạch working set 500 cho việc đã xong). Suy ra theo view — KHÔNG ghi vào
     // statusFilter dùng chung nên không rò sang view Danh sách/Board. Nếu user tự
@@ -1531,13 +1534,14 @@ export default function Tasks() {
       limit:       isListView ? pageSize : 500,
       page:        isListView ? page : 1,
       colFilters:  isListView && Object.keys(serverColFilters).length ? JSON.stringify(serverColFilters) : undefined,
-      // Khi gom nhóm cha–con: bỏ qua colSort (sort theo cột) để không đè thứ tự gom chuỗi.
-      colSort:     (!groupOn && isListView && sortColState.col) ? JSON.stringify(sortColState) : undefined,
+      // Khi gom nhóm (cha–con / phụ thuộc): bỏ qua colSort để không đè thứ tự gom nhóm.
+      colSort:     (!groupOn && !groupDepOn && isListView && sortColState.col) ? JSON.stringify(sortColState) : undefined,
       groupByChain: groupOn ? true : undefined,
+      groupByDep:   groupDepOn ? true : undefined,
       sortBy,
       sortDir,
     }
-  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, groupByChain, isAdmin, currentUser?.id, view, isListView, page, pageSize, serverColFilters, sortColState]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, groupByChain, groupByDep, isAdmin, currentUser?.id, view, isListView, page, pageSize, serverColFilters, sortColState]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const listQuery = useQuery({
     queryKey: ['tasks', 'list', listParams],
@@ -1729,7 +1733,7 @@ export default function Tasks() {
     setYearFilter(CUR_YEAR); setMonthFilter(INIT_MONTH)
     setDueDateFrom(INIT_DATES.from)
     setDueDateTo(INIT_DATES.to)
-    setSortValue('work_priority:asc'); setGroupByChain(false)
+    setSortValue('work_priority:asc'); setGroupByChain(false); setGroupByDep(false)
     setColFilters({}); setSortColState({ col: null, dir: 'asc' })
     setView('list'); setPageSize(20)
     setPage(1)
@@ -2182,20 +2186,34 @@ export default function Tasks() {
                     onChange={(v) => { setSourceFilter(v); setPage(1) }}
                   />
                 </div>
-                {/* Nút bật/tắt gom nhóm cha–con — giữ nguyên sắp xếp, chỉ gộp con dưới cha */}
+                {/* Nút bật/tắt gom nhóm — giữ nguyên sắp xếp, chỉ gộp con/việc phụ thuộc; loại trừ lẫn nhau */}
                 {isListView && (
                   <div className={s.filterGroup}>
-                    <label className={s.filterLabel}>Hiển thị</label>
-                    <button
-                      type="button"
-                      className={`${s.groupChainBtn} ${groupByChain ? s.groupChainBtnOn : ''}`}
-                      onClick={() => { setGroupByChain((v) => !v); setPage(1) }}
-                      title="Gộp việc con xuống ngay dưới việc cha (giữ nguyên sắp xếp đang chọn)"
-                    >
-                      <ListTree size={14} />
-                      Gom nhóm cha – con
-                      {groupByChain && <Check size={13} />}
-                    </button>
+                    <label className={s.filterLabel}>Hiển thị · gom nhóm</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        className={`${s.groupChainBtn} ${groupByChain ? s.groupChainBtnOn : ''}`}
+                        style={{ flex: 1 }}
+                        onClick={() => { const nv = !groupByChain; setGroupByChain(nv); if (nv) setGroupByDep(false); setPage(1) }}
+                        title="Gom nhóm cha – con: gộp việc con xuống ngay dưới việc cha (giữ nguyên sắp xếp)"
+                      >
+                        <ListTree size={13} />
+                        Cha – con
+                        {groupByChain && <Check size={12} />}
+                      </button>
+                      <button
+                        type="button"
+                        className={`${s.groupChainBtn} ${groupByDep ? s.groupChainBtnOn : ''}`}
+                        style={{ flex: 1 }}
+                        onClick={() => { const nv = !groupByDep; setGroupByDep(nv); if (nv) setGroupByChain(false); setPage(1) }}
+                        title="Gom nhóm phụ thuộc: gộp việc bị phụ thuộc xuống dưới việc phải xong trước (thụt vào)"
+                      >
+                        <Link2 size={13} />
+                        Phụ thuộc
+                        {groupByDep && <Check size={12} />}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2329,6 +2347,7 @@ export default function Tasks() {
             onDelete={isAdmin ? setDeleteTarget : null}
             isAdmin={isAdmin}
             sortColState={sortColState}
+            groupDep={groupByDep}
             hasColFilter={hasColFilter}
             onOpenColFilter={openColFilter}
             hiddenCols={hiddenCols}

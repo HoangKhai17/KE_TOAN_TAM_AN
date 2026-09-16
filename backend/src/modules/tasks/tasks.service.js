@@ -636,7 +636,7 @@ async function listTasks(filters = {}) {
   const phu = []
   if (sortBy !== 'priority') phu.push(`${SORT_COLS.priority} ASC`)
   if (sortBy !== 'due_date') phu.push('t.due_date ASC NULLS LAST')
-  if (sortBy !== 'created_at') phu.push('t.created_at DESC')
+  if (sortBy !== 'created_at') phu.push('t.created_at ASC')   // ngày tạo CŨ NHẤT lên trước
 
   // Chỉ nhóm-hoá mới cần chuỗi tiêu chí phụ; sắp theo ngày thì bản thân nó đã đủ mịn.
   const canPhu = ['work_priority', 'status', 'priority'].includes(sortBy)
@@ -659,24 +659,38 @@ async function listTasks(filters = {}) {
         enumCaseExpr = `CASE ${fexpr} ${whens} ELSE ${fexpr} END`
       }
     }
-    orderBy = cf.buildColSortOrder(TASK_COLUMNS_SQL, colSortObj, { enumCaseExpr, tieBreak: 't.created_at DESC' })
+    orderBy = cf.buildColSortOrder(TASK_COLUMNS_SQL, colSortObj, { enumCaseExpr, tieBreak: 't.created_at ASC' })
   }
 
-  // Chế độ GOM NHÓM cha–con (optional): GIỮ NGUYÊN sắp xếp đang chọn, chỉ gộp con
-  // xuống ngay dưới cha. Các CHUỖI vẫn xếp theo tiêu chí sort hiện tại — nhưng dùng
-  // giá trị của CHA làm đại diện (COALESCE(pt.x, t.x)) để cả chuỗi đứng cùng chỗ.
-  if (filters.groupByChain === true || filters.groupByChain === 'true') {
-    const REP_SORT = {
-      created_at: 'COALESCE(pt.created_at, t.created_at)',
-      due_date:   'COALESCE(pt.due_date, t.due_date)',
-      updated_at: 'COALESCE(pt.updated_at, t.updated_at)',
-      priority: `CASE COALESCE(pt.priority, t.priority) WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END`,
-      status:   `CASE COALESCE(pt.status, t.status) WHEN 'pending' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'on_hold' THEN 3 WHEN 'pending_review' THEN 4 WHEN 'needs_revision' THEN 5 WHEN 'completed' THEN 6 ELSE 7 END`,
-      work_priority: `CASE COALESCE(pt.status, t.status) WHEN 'needs_revision' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'pending' THEN 3 WHEN 'pending_review' THEN 4 WHEN 'on_hold' THEN 5 WHEN 'completed' THEN 6 ELSE 7 END`,
+  // Chế độ GOM NHÓM (cha–con / phụ thuộc): GIỮ NGUYÊN TOÀN BỘ tiêu chí sắp xếp mặc định
+  // (kể cả tie-break priority → hạn → ngày tạo), chỉ ĐÁNH GIÁ trên "đại diện" của nhóm
+  // (cha / đàn anh) rồi gộp con/việc phụ thuộc xuống ngay dưới. Nhờ vậy việc lẻ vẫn xếp
+  // y hệt mặc định (không bị đảo theo id), chỉ có các nhóm được kéo lại gần nhau.
+  const groupChainOn = filters.groupByChain === true || filters.groupByChain === 'true'
+  const groupDepOn2  = filters.groupByDep === true || filters.groupByDep === 'true'
+  if (groupChainOn || groupDepOn2) {
+    const rep       = groupDepOn2 ? 'bt' : 'pt'                                        // đại diện: đàn anh / cha
+    const groupKey  = groupDepOn2 ? 'COALESCE(db.blocker_id, t.id)' : 'COALESCE(t.parent_task_id, t.id)'
+    const childFlag = groupDepOn2 ? '(db.blocker_id IS NOT NULL)' : '(t.parent_task_id IS NOT NULL)'
+    // Bản ĐẠI DIỆN của từng biểu thức sort: thay t.x → COALESCE(rep.x, t.x)
+    const R = {
+      priority:      `CASE COALESCE(${rep}.priority, t.priority) WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END`,
+      status:        `CASE COALESCE(${rep}.status, t.status) WHEN 'pending' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'on_hold' THEN 3 WHEN 'pending_review' THEN 4 WHEN 'needs_revision' THEN 5 WHEN 'completed' THEN 6 ELSE 7 END`,
+      work_priority: `CASE COALESCE(${rep}.status, t.status) WHEN 'needs_revision' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'pending' THEN 3 WHEN 'pending_review' THEN 4 WHEN 'on_hold' THEN 5 WHEN 'completed' THEN 6 ELSE 7 END`,
+      created_at:    `COALESCE(${rep}.created_at, t.created_at)`,
+      due_date:      `COALESCE(${rep}.due_date, t.due_date)`,
+      updated_at:    `COALESCE(${rep}.updated_at, t.updated_at)`,
     }
-    const rep = REP_SORT[sortBy] || REP_SORT.created_at
-    const nulls = sortBy === 'due_date' ? ' NULLS LAST' : ''
-    orderBy = `${rep} ${huong}${nulls}, COALESCE(t.parent_task_id, t.id), (t.parent_task_id IS NOT NULL) ASC, t.due_date ASC NULLS LAST, t.id`
+    // Tiêu chí CHÍNH + các tie-break ĐÚNG như nhánh mặc định (chỉ khác: đánh giá trên đại diện)
+    const primary = `${R[sortBy] || R.created_at} ${huong}${sortBy === 'due_date' ? ' NULLS LAST' : ''}`
+    const repPhu = []
+    if (sortBy !== 'priority')   repPhu.push(`${R.priority} ASC`)
+    if (sortBy !== 'due_date')   repPhu.push(`${R.due_date} ASC NULLS LAST`)
+    if (sortBy !== 'created_at')  repPhu.push(`${R.created_at} ASC`)   // ngày tạo CŨ NHẤT lên trước
+    const canPhu2 = ['work_priority', 'status', 'priority'].includes(sortBy)
+    const repOrder = canPhu2 ? [primary, ...repPhu].join(', ') : primary
+    // Gộp nhóm: cùng đại diện → cùng chỗ; trong nhóm cha/đàn anh trước, rồi con theo hạn rồi ngày tạo cũ nhất.
+    orderBy = `${repOrder}, ${groupKey}, ${childFlag} ASC, t.due_date ASC NULLS LAST, t.created_at ASC, t.id`
   }
 
   const [countRes, statusCountsRes, { rows }] = await Promise.all([
