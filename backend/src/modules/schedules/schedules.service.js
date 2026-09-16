@@ -43,6 +43,8 @@ function toDto(row) {
     overrideSlaDays:    row.override_sla_days ?? null,
     maxDueDay:          row.max_due_day ?? null,   // trần "ngày N hàng tháng" do admin đặt
     excludedStepIds:    Array.isArray(row.excluded_step_ids) ? row.excluded_step_ids : [],
+    subtaskOffsets:     (row.subtask_offsets && typeof row.subtask_offsets === 'object') ? row.subtask_offsets : {},
+    subtaskCount:       row.subtask_count != null ? parseInt(row.subtask_count, 10) : undefined,
     notes:              row.notes ?? null,
     isActive:           row.is_active,
     lastGeneratedAt:    row.last_generated_at ?? null,
@@ -76,7 +78,8 @@ async function getScheduleCompanyId(id) {
 
 async function getScheduleById(id) {
   const { rows: [row] } = await query(
-    `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name
+    `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name,
+            (SELECT COUNT(*) FROM task_type_subtask_templates st WHERE st.task_type_id = s.task_type_id) AS subtask_count
      FROM customer_task_schedules s
      JOIN task_types tt ON tt.id = s.task_type_id
      LEFT JOIN users u  ON u.id  = s.assigned_staff_id
@@ -90,7 +93,8 @@ async function getScheduleById(id) {
 async function listSchedules(companyId) {
   await assertCompanyExists(companyId)
   const { rows } = await query(
-    `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name
+    `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name,
+            (SELECT COUNT(*) FROM task_type_subtask_templates st WHERE st.task_type_id = s.task_type_id) AS subtask_count
      FROM customer_task_schedules s
      JOIN task_types tt ON tt.id = s.task_type_id
      LEFT JOIN users u  ON u.id  = s.assigned_staff_id
@@ -107,7 +111,7 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
 
   const {
     taskTypeId, assignedStaffId, recurrenceType, recurrenceConfig,
-    deadlineOffsetDays = 0, overrideSlaDays, excludedStepIds = [], notes,
+    deadlineOffsetDays = 0, overrideSlaDays, excludedStepIds = [], subtaskOffsets = {}, notes,
   } = data
 
   const { rows: [tt] } = await query('SELECT id FROM task_types WHERE id = $1 AND is_active = TRUE', [taskTypeId])
@@ -116,15 +120,16 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
   const { rows: [schedule] } = await query(
     `INSERT INTO customer_task_schedules
        (company_id, task_type_id, assigned_staff_id, recurrence_type, recurrence_config,
-        deadline_offset_days, override_sla_days, excluded_step_ids, notes, sort_order, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
-       (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM customer_task_schedules WHERE company_id = $1),$10)
+        deadline_offset_days, override_sla_days, excluded_step_ids, subtask_offsets, notes, sort_order, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+       (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM customer_task_schedules WHERE company_id = $1),$11)
      RETURNING *`,
     [
       companyId, taskTypeId, assignedStaffId ?? null,
       recurrenceType, JSON.stringify(recurrenceConfig),
       deadlineOffsetDays, overrideSlaDays ?? null,
       JSON.stringify(Array.isArray(excludedStepIds) ? excludedStepIds : []),
+      JSON.stringify(subtaskOffsets && typeof subtaskOffsets === 'object' ? subtaskOffsets : {}),
       notes ?? null, actorId,
     ]
   )
@@ -177,6 +182,10 @@ async function updateSchedule(id, data, user, ipAddress, userAgent) {
   if (data.excludedStepIds !== undefined) {
     params.push(JSON.stringify(Array.isArray(data.excludedStepIds) ? data.excludedStepIds : []))
     updates.push(`excluded_step_ids = $${params.length}`)
+  }
+  if (data.subtaskOffsets !== undefined) {
+    params.push(JSON.stringify(data.subtaskOffsets && typeof data.subtaskOffsets === 'object' ? data.subtaskOffsets : {}))
+    updates.push(`subtask_offsets = $${params.length}`)
   }
 
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })

@@ -107,17 +107,26 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
   }
 
   // Đẻ VIỆC CON định kỳ — đọc từ bảng RIÊNG task_type_subtask_templates (đúng logic Tasks:
-  // checklist và việc con là 2 thứ tách bạch). Mỗi con là task ĐỘC LẬP, hạn riêng
-  // (= ngày kỳ + due_offset_days, đẩy qua CN/lễ). KHÔNG có phụ thuộc bước trước.
+  // checklist và việc con là 2 thứ tách bạch). Mỗi con là task ĐỘC LẬP với NGÀY BẮT ĐẦU + HẠN
+  // riêng = ngày kỳ + offset (đẩy qua CN/lễ). Offset lấy từ LỊCH (subtask_offsets) theo từng
+  // công ty; thiếu thì mặc định start=0, deadline=due_offset_days của template ?? 0.
+  // KHÔNG có phụ thuộc bước trước.
   const childrenCreated = []
   if (newTask) {
+    const subOffsets = (schedule.subtask_offsets && typeof schedule.subtask_offsets === 'object')
+      ? schedule.subtask_offsets : {}
     const { rows: subtasks } = await query(
       'SELECT id, title, due_offset_days FROM task_type_subtask_templates WHERE task_type_id = $1 ORDER BY sort_order, created_at',
       [schedule.task_type_id]
     )
     for (const s of subtasks) {
+      const off = subOffsets[s.id] || {}
+      const startOff    = Number.isInteger(off.start)    ? off.start    : 0
+      const deadlineOff = Number.isInteger(off.deadline) ? off.deadline : (s.due_offset_days ?? 0)
+      const childStartStr = format(
+        rollForwardToWorkday(addDays(forDate, startOff), holidaySet), 'yyyy-MM-dd')
       const childDueStr = format(
-        rollForwardToWorkday(addDays(forDate, s.due_offset_days ?? 0), holidaySet), 'yyyy-MM-dd')
+        rollForwardToWorkday(addDays(forDate, Math.max(deadlineOff, startOff)), holidaySet), 'yyyy-MM-dd')
       const { rows: [child] } = await query(
         `INSERT INTO tasks
            (title, company_id, task_type_id, customer_task_schedule_id, parent_task_id,
@@ -126,7 +135,7 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
          RETURNING id`,
         [
           s.title, schedule.company_id, schedule.task_type_id, schedule.id, newTask.id,
-          schedule.assigned_staff_id ?? null, startDateStr, childDueStr, periodLabel, sla, schedule.created_by,
+          schedule.assigned_staff_id ?? null, childStartStr, childDueStr, periodLabel, sla, schedule.created_by,
         ]
       )
       // Copy checklist RIÊNG của việc con vào task con

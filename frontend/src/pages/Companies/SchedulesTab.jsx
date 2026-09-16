@@ -4,7 +4,7 @@ import {
   CalendarDays, Plus, Eye, Power, Pencil, Trash2, Loader2, AlertTriangle, RefreshCw,
 } from 'lucide-react'
 import * as schedulesApi from '../../api/schedules'
-import { listTaskTypes, getChecklist } from '../../api/taskTypes'
+import { listTaskTypes, getChecklist, getSubtaskTemplates } from '../../api/taskTypes'
 import { listUserOptions } from '../../api/users'
 import { listHolidays } from '../../api/attendance'
 import { getNextOccurrences } from '../../utils/recurrencePreview'
@@ -106,6 +106,7 @@ function emptyForm() {
     deadlineOffsetDays: 0,
     overrideSlaDays: '',
     excludedStepIds: [],
+    subtaskOffsets: {},   // { <subtaskTemplateId>: { start, deadline } } — offset việc con theo lịch
     notes: '',
   }
 }
@@ -527,6 +528,7 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
   const [formErrors, setFormErrors] = useState({})
   const [saving,     setSaving]     = useState(false)
   const [templSteps, setTemplSteps] = useState([])   // checklist mẫu của loại CV đang chọn
+  const [templSubs,  setTemplSubs]  = useState([])   // việc con LIÊN KẾT của loại CV đang chọn
 
   // Nạp checklist mẫu khi mở modal / đổi loại công việc → để chọn bước áp dụng
   useEffect(() => {
@@ -537,6 +539,40 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
       .catch(() => { if (!cancelled) setTemplSteps([]) })
     return () => { cancelled = true }
   }, [modal, form.taskTypeId])
+
+  // Nạp việc con LIÊN KẾT của loại CV → để đặt offset ngày bắt đầu + hạn cho từng con.
+  useEffect(() => {
+    if (!modal || !form.taskTypeId) { setTemplSubs([]); return }
+    let cancelled = false
+    getSubtaskTemplates(form.taskTypeId)
+      .then((subs) => {
+        if (cancelled) return
+        setTemplSubs(subs || [])
+        // Điền offset mặc định cho con nào chưa có (KHÔNG đè giá trị đã lưu khi sửa).
+        setForm((f) => {
+          const cur = f.subtaskOffsets || {}
+          const next = { ...cur }
+          for (const sub of subs || []) {
+            if (!next[sub.id]) next[sub.id] = { start: 0, deadline: sub.dueOffsetDays ?? 0 }
+          }
+          return { ...f, subtaskOffsets: next }
+        })
+      })
+      .catch(() => { if (!cancelled) setTemplSubs([]) })
+    return () => { cancelled = true }
+  }, [modal, form.taskTypeId])
+
+  // Đặt offset (start|deadline) cho 1 việc con.
+  function setSubOffset(subId, field, value) {
+    const n = value === '' ? 0 : Math.max(0, parseInt(value, 10) || 0)
+    setForm((f) => ({
+      ...f,
+      subtaskOffsets: {
+        ...(f.subtaskOffsets || {}),
+        [subId]: { ...((f.subtaskOffsets || {})[subId] || { start: 0, deadline: 0 }), [field]: n },
+      },
+    }))
+  }
 
   // Bật/tắt 1 bước cho công ty này (mục chính kéo theo con; con áp dụng thì mục chính cũng áp dụng)
   function toggleStep(idx) {
@@ -643,6 +679,7 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
       deadlineOffsetDays: sc.deadlineOffsetDays ?? 0,
       overrideSlaDays:    sc.overrideSlaDays != null ? String(sc.overrideSlaDays) : '',
       excludedStepIds:    Array.isArray(sc.excludedStepIds) ? sc.excludedStepIds : [],
+      subtaskOffsets:     (sc.subtaskOffsets && typeof sc.subtaskOffsets === 'object') ? sc.subtaskOffsets : {},
       notes:              sc.notes || '',
     })
     setFormErrors({})
@@ -662,6 +699,19 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
       }
     }
 
+    // Offset việc con: chỉ gửi cho các con của mẫu hiện tại; ép số, đảm bảo hạn ≥ bắt đầu.
+    const subtaskOffsets = {}
+    for (const sub of templSubs) {
+      const o = (form.subtaskOffsets || {})[sub.id] || {}
+      const start = Math.max(0, parseInt(o.start, 10) || 0)
+      const deadline = parseInt(o.deadline, 10) || 0
+      if (deadline < start) {
+        setFormErrors({ submit: `Việc con "${sub.title}": Hạn (+${deadline}) không được nhỏ hơn ngày bắt đầu (+${start}).` })
+        return
+      }
+      subtaskOffsets[sub.id] = { start, deadline }
+    }
+
     setSaving(true)
     try {
       const payload = {
@@ -671,6 +721,7 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
         deadlineOffsetDays: Number(form.deadlineOffsetDays) || 0,
         overrideSlaDays:    form.overrideSlaDays !== '' ? parseInt(form.overrideSlaDays) : null,
         excludedStepIds:    form.excludedStepIds || [],
+        subtaskOffsets,
         notes:              form.notes || null,
       }
 
@@ -808,6 +859,12 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                     <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
                     <td>
                       <div className={s.scTypeName}>{sc.taskTypeName}</div>
+                      {sc.subtaskCount > 0 && (
+                        <span className={s.scDeadlineTag} style={{ marginTop: 4, display: 'inline-block', background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' }}
+                          title="Loại công việc này có việc con liên kết — mở lịch để đặt ngày bắt đầu/hạn cho từng con">
+                          {sc.subtaskCount} việc con
+                        </span>
+                      )}
                     </td>
                     <td>
                       <div className={s.scRecurrenceLabel}>{RECURRENCE_LABELS[sc.recurrenceType]}</div>
@@ -913,7 +970,7 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                   <select
                     className={`${s.formSelect} ${formErrors.taskTypeId ? s.formInputError : ''}`}
                     value={form.taskTypeId}
-                    onChange={e => setForm(f => ({ ...f, taskTypeId: e.target.value, excludedStepIds: [] }))}
+                    onChange={e => setForm(f => ({ ...f, taskTypeId: e.target.value, excludedStepIds: [], subtaskOffsets: {} }))}
                   >
                     <option value="">-- Chọn loại công việc --</option>
                     {taskTypes.map(tt => (
@@ -950,6 +1007,44 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                       )
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* Việc con LIÊN KẾT — đặt offset ngày bắt đầu + hạn cho từng con */}
+              {templSubs.length > 0 && (
+                <div className={s.formField}>
+                  <label className={s.formLabel}>Việc con liên kết ({templSubs.length})</label>
+                  <div className={s.scStepPickHint}>
+                    Mỗi việc con là 1 công việc độc lập, có ngày bắt đầu &amp; hạn riêng — tính theo số ngày kể từ <b>ngày kỳ</b> (ngày bắt đầu việc cha), tự đẩy qua CN/lễ.
+                  </div>
+                  <div style={{ border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', marginTop: 6 }}>
+                    {templSubs.map((sub, i) => {
+                      const o = (form.subtaskOffsets || {})[sub.id] || { start: 0, deadline: 0 }
+                      const invalid = Number(o.deadline) < Number(o.start)
+                      const inStyle = { width: 52, boxSizing: 'border-box', padding: '3px 6px', border: '1px solid var(--color-border)', borderRadius: 4, fontSize: 12, textAlign: 'center' }
+                      return (
+                        <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 10px', borderTop: i ? '1px solid var(--color-border-soft)' : 'none' }}>
+                          <span style={{ flex: '1 1 160px', fontSize: 13 }}>
+                            {sub.title}
+                            {sub.steps?.length ? <span style={{ color: 'var(--color-muted)', fontSize: 11 }}> · {sub.steps.length} bước</span> : null}
+                          </span>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
+                            Bắt đầu kỳ +
+                            <input type="number" min="0" value={o.start} onChange={e => setSubOffset(sub.id, 'start', e.target.value)} style={inStyle} />
+                            ngày
+                          </label>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
+                            Hạn kỳ +
+                            <input type="number" min="0" value={o.deadline} onChange={e => setSubOffset(sub.id, 'deadline', e.target.value)} style={{ ...inStyle, borderColor: invalid ? '#ef4444' : 'var(--color-border)' }} />
+                            ngày
+                          </label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {templSubs.some(sub => { const o = (form.subtaskOffsets || {})[sub.id] || {}; return Number(o.deadline) < Number(o.start) }) && (
+                    <div className={s.formError}>Hạn việc con không được nhỏ hơn ngày bắt đầu.</div>
+                  )}
                 </div>
               )}
 

@@ -6,6 +6,15 @@ const RECURRENCE_TYPES = [
   'monthly_last_day', 'quarterly', 'yearly', 'custom_dates', 'once',
 ]
 
+// Offset việc con: map { <subtaskTemplateId>: { start, deadline } }, offset ≥ 0 và deadline ≥ start.
+const subtaskOffsetsSchema = z.record(
+  z.string().uuid(),
+  z.object({
+    start:    z.number().int().min(0).max(3650),
+    deadline: z.number().int().min(0).max(3650),
+  }).refine((o) => o.deadline >= o.start, { message: 'Hạn việc con không được nhỏ hơn ngày bắt đầu' })
+)
+
 const createScheduleSchema = z.object({
   taskTypeId:         z.string().uuid('Invalid task type ID'),
   assignedStaffId:    z.string().uuid().optional().nullable(),
@@ -14,6 +23,7 @@ const createScheduleSchema = z.object({
   deadlineOffsetDays: z.number().int().min(0).default(0),
   overrideSlaDays:    z.number().int().min(1).optional().nullable(),
   excludedStepIds:    z.array(z.string().uuid()).optional().default([]),
+  subtaskOffsets:     subtaskOffsetsSchema.optional().default({}),
   notes:              z.string().max(500).optional().nullable(),
   sortOrder:          z.number().int().min(0).optional(),
 }).superRefine((d, ctx) => {
@@ -31,6 +41,7 @@ const updateScheduleSchema = z.object({
   deadlineOffsetDays: z.number().int().min(0).optional(),
   overrideSlaDays:    z.number().int().min(1).optional().nullable(),
   excludedStepIds:    z.array(z.string().uuid()).optional(),
+  subtaskOffsets:     subtaskOffsetsSchema.optional(),
   notes:              z.string().max(500).optional().nullable(),
   sortOrder:          z.number().int().min(0).optional(),
 }).superRefine((d, ctx) => {
