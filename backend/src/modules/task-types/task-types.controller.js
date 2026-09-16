@@ -73,6 +73,55 @@ async function deleteChecklistStep(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// ── Việc con định kỳ ──────────────────────────────────────────────────────────
+async function listSubtaskTemplates(req, res, next) {
+  try {
+    const subtasks = await svc.listSubtaskTemplates(req.params.id)
+    res.json({ success: true, data: { subtasks } })
+  } catch (err) { next(err) }
+}
+
+async function addSubtaskTemplate(req, res, next) {
+  try {
+    const subtask = await svc.addSubtaskTemplate(req.params.id, req.body)
+    res.status(201).json({ success: true, data: { subtask } })
+  } catch (err) { next(err) }
+}
+
+async function updateSubtaskTemplate(req, res, next) {
+  try {
+    const subtask = await svc.updateSubtaskTemplate(req.params.id, req.params.subtaskId, req.body)
+    res.json({ success: true, data: { subtask } })
+  } catch (err) { next(err) }
+}
+
+async function deleteSubtaskTemplate(req, res, next) {
+  try {
+    await svc.deleteSubtaskTemplate(req.params.id, req.params.subtaskId)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+// Checklist riêng của việc con định kỳ
+async function addSubtaskStep(req, res, next) {
+  try {
+    const step = await svc.addSubtaskStep(req.params.id, req.params.subtaskId, req.body)
+    res.status(201).json({ success: true, data: { step } })
+  } catch (err) { next(err) }
+}
+async function updateSubtaskStep(req, res, next) {
+  try {
+    const step = await svc.updateSubtaskStep(req.params.id, req.params.subtaskId, req.params.stepId, req.body)
+    res.json({ success: true, data: { step } })
+  } catch (err) { next(err) }
+}
+async function deleteSubtaskStep(req, res, next) {
+  try {
+    await svc.deleteSubtaskStep(req.params.id, req.params.subtaskId, req.params.stepId)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
 async function reorderChecklist(req, res, next) {
   try {
     const steps = await svc.reorderChecklist(req.params.id, req.body.steps)
@@ -137,6 +186,8 @@ async function applySyncTasks(req, res, next) {
 module.exports = {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   getChecklist, addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
+  listSubtaskTemplates, addSubtaskTemplate, updateSubtaskTemplate, deleteSubtaskTemplate,
+  addSubtaskStep, updateSubtaskStep, deleteSubtaskStep,
   getCustomFields, addCustomField, updateCustomField, deleteCustomField,
   previewSyncTasks, applySyncTasks,
 }

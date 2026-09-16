@@ -21,11 +21,22 @@ function toStepDto(row) {
     stepOrder: row.step_order,
     stepText:  row.step_text,
     level:     row.level ?? 0,
-    // Cấu hình "sinh thành việc con" khi tạo định kỳ (mặc định: bước checklist thường).
-    spawnAsSubtask: row.spawn_as_subtask ?? false,
-    dueOffsetDays:  row.due_offset_days ?? null,
-    dependsOnPrev:  row.depends_on_prev ?? false,
     createdAt: row.created_at,
+  }
+}
+
+// Việc con định kỳ (tách riêng khỏi checklist) — tiêu đề + hạn (offset) + checklist RIÊNG.
+function toSubStepDto(row) {
+  return { id: row.id, stepText: row.step_text, stepOrder: row.step_order }
+}
+function toSubtaskDto(row, steps = []) {
+  return {
+    id:            row.id,
+    title:         row.title,
+    dueOffsetDays: row.due_offset_days ?? null,
+    sortOrder:     row.sort_order ?? 0,
+    createdAt:     row.created_at,
+    steps:         steps.map(toSubStepDto),
   }
 }
 
@@ -76,7 +87,7 @@ async function getTaskTypeById(id) {
   const { rows: [tt] } = await query('SELECT * FROM task_types WHERE id = $1', [id])
   if (!tt) throw Object.assign(new Error('Task type not found'), { status: 404 })
 
-  const [{ rows: checklist }, { rows: fields }] = await Promise.all([
+  const [{ rows: checklist }, { rows: fields }, { rows: subtasks }] = await Promise.all([
     query(
       'SELECT * FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order',
       [id]
@@ -85,12 +96,28 @@ async function getTaskTypeById(id) {
       'SELECT * FROM task_type_custom_field_schemas WHERE task_type_id = $1 ORDER BY display_order, created_at',
       [id]
     ),
+    query(
+      'SELECT * FROM task_type_subtask_templates WHERE task_type_id = $1 ORDER BY sort_order, created_at',
+      [id]
+    ),
   ])
+
+  // Nạp checklist riêng của từng việc con (nest vào)
+  let stepsBySub = {}
+  const subIds = subtasks.map((s) => s.id)
+  if (subIds.length) {
+    const { rows: subSteps } = await query(
+      'SELECT * FROM task_type_subtask_steps WHERE subtask_template_id = ANY($1::uuid[]) ORDER BY step_order, created_at',
+      [subIds]
+    )
+    for (const st of subSteps) { (stepsBySub[st.subtask_template_id] ||= []).push(st) }
+  }
 
   return {
     ...toTaskTypeDto(tt),
     checklist: checklist.map(toStepDto),
     customFields: fields.map(toFieldDto),
+    subtaskTemplates: subtasks.map((s) => toSubtaskDto(s, stepsBySub[s.id] || [])),
   }
 }
 
@@ -215,20 +242,16 @@ async function getChecklist(taskTypeId) {
 
 async function addChecklistStep(taskTypeId, data = {}) {
   await assertTaskTypeExists(taskTypeId)
-  const {
-    stepText, level = 0,
-    spawnAsSubtask = false, dueOffsetDays = null, dependsOnPrev = false,
-  } = data
+  const { stepText, level = 0 } = data
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_checklist_templates WHERE task_type_id = $1',
     [taskTypeId]
   )
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [step] } = await query(
-    `INSERT INTO task_type_checklist_templates
-       (task_type_id, step_order, step_text, level, spawn_as_subtask, due_offset_days, depends_on_prev)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0, !!spawnAsSubtask, dueOffsetDays, !!dependsOnPrev]
+    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text, level)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0]
   )
   return toStepDto(step)
 }
@@ -240,9 +263,6 @@ async function updateChecklistStep(taskTypeId, stepId, data) {
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
   if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
-  if (data.spawnAsSubtask !== undefined) { params.push(!!data.spawnAsSubtask); updates.push(`spawn_as_subtask = $${params.length}`) }
-  if (data.dueOffsetDays !== undefined) { params.push(data.dueOffsetDays); updates.push(`due_offset_days = $${params.length}`) }
-  if (data.dependsOnPrev !== undefined) { params.push(!!data.dependsOnPrev); updates.push(`depends_on_prev = $${params.length}`) }
 
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(stepId, taskTypeId)
@@ -262,6 +282,99 @@ async function deleteChecklistStep(taskTypeId, stepId) {
     [stepId, taskTypeId]
   )
   if (!step) throw Object.assign(new Error('Checklist step not found'), { status: 404 })
+}
+
+// ── Việc con định kỳ (task_type_subtask_templates) ────────────────────────────
+async function listSubtaskTemplates(taskTypeId) {
+  await assertTaskTypeExists(taskTypeId)
+  const { rows } = await query(
+    'SELECT * FROM task_type_subtask_templates WHERE task_type_id = $1 ORDER BY sort_order, created_at',
+    [taskTypeId]
+  )
+  return rows.map(toSubtaskDto)
+}
+
+async function addSubtaskTemplate(taskTypeId, data = {}) {
+  await assertTaskTypeExists(taskTypeId)
+  const { title, dueOffsetDays = null } = data
+  const { rows: [maxRow] } = await query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS max FROM task_type_subtask_templates WHERE task_type_id = $1',
+    [taskTypeId]
+  )
+  const nextOrder = parseInt(maxRow.max, 10) + 1
+  const { rows: [row] } = await query(
+    `INSERT INTO task_type_subtask_templates (task_type_id, title, due_offset_days, sort_order)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [taskTypeId, title, dueOffsetDays, nextOrder]
+  )
+  return toSubtaskDto(row)
+}
+
+async function updateSubtaskTemplate(taskTypeId, id, data) {
+  await assertTaskTypeExists(taskTypeId)
+  const updates = []
+  const params = []
+  if (data.title !== undefined) { params.push(data.title); updates.push(`title = $${params.length}`) }
+  if (data.dueOffsetDays !== undefined) { params.push(data.dueOffsetDays); updates.push(`due_offset_days = $${params.length}`) }
+  if (data.sortOrder !== undefined) { params.push(data.sortOrder); updates.push(`sort_order = $${params.length}`) }
+  if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
+  params.push(id, taskTypeId)
+  const { rows: [row] } = await query(
+    `UPDATE task_type_subtask_templates SET ${updates.join(', ')}
+     WHERE id = $${params.length - 1} AND task_type_id = $${params.length} RETURNING *`,
+    params
+  )
+  if (!row) throw Object.assign(new Error('Subtask template not found'), { status: 404 })
+  return toSubtaskDto(row)
+}
+
+async function deleteSubtaskTemplate(taskTypeId, id) {
+  await assertTaskTypeExists(taskTypeId)
+  const { rows: [row] } = await query(
+    'DELETE FROM task_type_subtask_templates WHERE id = $1 AND task_type_id = $2 RETURNING id',
+    [id, taskTypeId]
+  )
+  if (!row) throw Object.assign(new Error('Subtask template not found'), { status: 404 })
+}
+
+// ── Checklist RIÊNG của từng việc con định kỳ ────────────────────────────────
+async function assertSubtask(taskTypeId, subtaskId) {
+  const { rows } = await query(
+    'SELECT id FROM task_type_subtask_templates WHERE id = $1 AND task_type_id = $2', [subtaskId, taskTypeId])
+  if (!rows[0]) throw Object.assign(new Error('Subtask template not found'), { status: 404 })
+}
+
+async function addSubtaskStep(taskTypeId, subtaskId, data = {}) {
+  await assertSubtask(taskTypeId, subtaskId)
+  const { stepText } = data
+  const { rows: [maxRow] } = await query(
+    'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_subtask_steps WHERE subtask_template_id = $1', [subtaskId])
+  const nextOrder = parseInt(maxRow.max, 10) + 1
+  const { rows: [row] } = await query(
+    'INSERT INTO task_type_subtask_steps (subtask_template_id, step_order, step_text) VALUES ($1,$2,$3) RETURNING *',
+    [subtaskId, nextOrder, stepText])
+  return toSubStepDto(row)
+}
+
+async function updateSubtaskStep(taskTypeId, subtaskId, stepId, data) {
+  await assertSubtask(taskTypeId, subtaskId)
+  const updates = []; const params = []
+  if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
+  if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
+  if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
+  params.push(stepId, subtaskId)
+  const { rows: [row] } = await query(
+    `UPDATE task_type_subtask_steps SET ${updates.join(', ')} WHERE id = $${params.length - 1} AND subtask_template_id = $${params.length} RETURNING *`,
+    params)
+  if (!row) throw Object.assign(new Error('Step not found'), { status: 404 })
+  return toSubStepDto(row)
+}
+
+async function deleteSubtaskStep(taskTypeId, subtaskId, stepId) {
+  await assertSubtask(taskTypeId, subtaskId)
+  const { rows: [row] } = await query(
+    'DELETE FROM task_type_subtask_steps WHERE id = $1 AND subtask_template_id = $2 RETURNING id', [stepId, subtaskId])
+  if (!row) throw Object.assign(new Error('Step not found'), { status: 404 })
 }
 
 async function reorderChecklist(taskTypeId, steps) {
@@ -369,5 +482,7 @@ async function deleteCustomField(taskTypeId, fieldId) {
 module.exports = {
   listTaskTypes, getTaskTypeById, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   getChecklist, addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
+  listSubtaskTemplates, addSubtaskTemplate, updateSubtaskTemplate, deleteSubtaskTemplate,
+  addSubtaskStep, updateSubtaskStep, deleteSubtaskStep,
   getCustomFields, addCustomField, updateCustomField, deleteCustomField,
 }

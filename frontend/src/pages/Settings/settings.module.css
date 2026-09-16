@@ -1370,6 +1370,27 @@
 .clAddBtn:hover:not(:disabled) { background: #2563eb; color: #fff; }
 .clAddBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* Nút "Thêm" xanh dương đặc (primary) — dùng cho khu Việc con định kỳ */
+.subAddBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 14px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.subAddBtn:hover { background: #1d4ed8; }
+
 /* ── Custom Field items ───────────────────────────────────────────────────── */
 
 .cfItem {

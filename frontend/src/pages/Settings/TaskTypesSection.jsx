@@ -18,6 +18,8 @@ import { useToastStore } from '../../stores/toastStore'
 import {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
+  addSubtaskTemplate, updateSubtaskTemplate, deleteSubtaskTemplate,
+  addSubtaskStep, updateSubtaskStep, deleteSubtaskStep,
   addCustomField, deleteCustomField,
 } from '../../api/taskTypes'
 import SyncTasksModal from './SyncTasksModal'
@@ -85,7 +87,7 @@ export default function TaskTypesSection() {
       const tt = await getTaskType(id)
       setDetailCache((p) => ({
         ...p,
-        [id]: { checklist: tt.checklist ?? [], customFields: tt.customFields ?? [] },
+        [id]: { checklist: tt.checklist ?? [], customFields: tt.customFields ?? [], subtaskTemplates: tt.subtaskTemplates ?? [] },
       }))
     } catch { /* ignore */ }
     finally { setDetailLoading((p) => ({ ...p, [id]: false })) }
@@ -276,6 +278,11 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
                 onRefresh={onDetailRefresh}
               />
             </div>
+            <SubtaskTemplatePanel
+              taskTypeId={tt.id}
+              subtasks={detail.subtaskTemplates ?? []}
+              onRefresh={onDetailRefresh}
+            />
             </>
           ) : null}
         </div>
@@ -294,7 +301,7 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
 
 // ── Checklist Panel ───────────────────────────────────────────────────────────
 
-function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel, onSpawnChange }) {
+function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: step.id })
 
@@ -305,9 +312,7 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
     opacity: isDragging ? 0.45 : 1,
     zIndex: isDragging ? 10 : 'auto',
     position: 'relative',
-    flexWrap: 'wrap',
   }
-  const fld = { fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)' }
 
   return (
     <div ref={setNodeRef} style={style} className={`${s.clItem} ${isChild ? s.clItemChild : ''}`}>
@@ -350,34 +355,6 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
             <Trash2 size={12} />
           </button>
         </>
-      )}
-
-      {/* Cấu hình "sinh thành việc con" khi tạo định kỳ (mỗi con một hạn riêng) */}
-      {!isEditing && (
-        <div style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 6, paddingLeft: 26 }}>
-          <label style={{ ...fld, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: step.spawnAsSubtask ? 'var(--color-primary-dark)' : 'var(--color-muted)' }}>
-            <input type="checkbox" checked={!!step.spawnAsSubtask} onChange={(e) => onSpawnChange({ spawnAsSubtask: e.target.checked })} />
-            <GitBranch size={11} /> Sinh thành việc con
-          </label>
-          {step.spawnAsSubtask && (
-            <>
-              <label style={{ ...fld, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                Hạn: kỳ +
-                <input
-                  type="number" min="0" max="3650"
-                  value={step.dueOffsetDays ?? 0}
-                  onChange={(e) => onSpawnChange({ dueOffsetDays: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-                  style={{ width: 56, padding: '2px 6px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--fs-2xs)' }}
-                />
-                ngày
-              </label>
-              <label style={{ ...fld, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
-                <input type="checkbox" checked={!!step.dependsOnPrev} onChange={(e) => onSpawnChange({ dependsOnPrev: e.target.checked })} />
-                Phụ thuộc bước trước
-              </label>
-            </>
-          )}
-        </div>
       )}
     </div>
   )
@@ -454,18 +431,6 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
     setSaving(false)
   }
 
-  // Cấu hình "sinh thành việc con" (spawnAsSubtask/dueOffsetDays/dependsOnPrev).
-  async function handleSpawnChange(step, patch) {
-    setItems((prev) => prev.map((i) => i.id === step.id ? { ...i, ...patch } : i))  // optimistic
-    try {
-      await updateChecklistStep(taskTypeId, step.id, patch)
-      onRefresh()
-    } catch {
-      setItems(checklist)  // revert
-      addToast('Không thể cập nhật cấu hình việc con', 'error')
-    }
-  }
-
   async function handleAdd() {
     const text = addText.trim()
     if (!text) return
@@ -505,7 +470,6 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
               onCancel={() => setEditingId(null)}
               onDelete={() => handleDelete(step.id)}
               onToggleLevel={() => handleToggleLevel(step)}
-              onSpawnChange={(patch) => handleSpawnChange(step, patch)}
             />
           ))}
         </SortableContext>
@@ -529,6 +493,147 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
           title="Thêm bước"
         >
           {adding ? <Loader2 size={12} className={s.spin} /> : <Plus size={12} />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Việc con định kỳ Panel ────────────────────────────────────────────────────
+// Tách RIÊNG khỏi checklist (đúng logic Tasks). Mỗi việc con là 1 THẺ mở rộng,
+// có tiêu đề + hạn (offset) + CHECKLIST RIÊNG của nó.
+
+const SS = {
+  offsetBox:  { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', flexShrink: 0, whiteSpace: 'nowrap' },
+  offsetInput:{ width: 52, boxSizing: 'border-box', padding: '3px 6px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--fs-2xs)' },
+  titleInput: { flex: '1 1 180px', minWidth: 0, boxSizing: 'border-box', padding: '5px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--fs-xs)', fontFamily: 'inherit' },
+  card:       { border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', marginBottom: 8 },
+  head:       { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 10px' },
+  body:       { padding: '4px 10px 10px 34px', borderTop: '1px dashed var(--color-border-soft)' },
+  stepRow:    { display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0' },
+  stepInput:  { flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '4px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--fs-2xs)', fontFamily: 'inherit' },
+  count:      { fontSize: 'var(--fs-3xs)', color: 'var(--color-muted)', flexShrink: 0 },
+}
+
+function SubtaskCard({ taskTypeId, subtask, expanded, onToggle, onRefresh }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [title, setTitle]   = useState(subtask.title)
+  const [newStep, setNewStep] = useState('')
+  useEffect(() => { setTitle(subtask.title) }, [subtask.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const steps = subtask.steps ?? []
+
+  async function saveTitle() {
+    const t = title.trim()
+    if (!t || t === subtask.title) { setTitle(subtask.title); return }
+    try { await updateSubtaskTemplate(taskTypeId, subtask.id, { title: t }); onRefresh() }
+    catch { addToast('Không thể cập nhật tiêu đề', 'error') }
+  }
+  async function del() {
+    try { await deleteSubtaskTemplate(taskTypeId, subtask.id); onRefresh() }
+    catch { addToast('Không thể xóa việc con', 'error') }
+  }
+  async function addStep() {
+    const t = newStep.trim(); if (!t) return
+    try { await addSubtaskStep(taskTypeId, subtask.id, { stepText: t }); setNewStep(''); onRefresh() }
+    catch { addToast('Không thể thêm bước', 'error') }
+  }
+  async function saveStep(stepId, val, orig) {
+    const t = val.trim(); if (!t || t === orig) return
+    try { await updateSubtaskStep(taskTypeId, subtask.id, stepId, { stepText: t }); onRefresh() }
+    catch { addToast('Không thể sửa bước', 'error') }
+  }
+  async function delStep(stepId) {
+    try { await deleteSubtaskStep(taskTypeId, subtask.id, stepId); onRefresh() }
+    catch { addToast('Không thể xóa bước', 'error') }
+  }
+
+  return (
+    <div style={SS.card}>
+      <div style={SS.head}>
+        <button
+          type="button"
+          onClick={onToggle}
+          title={expanded ? 'Thu gọn checklist' : 'Mở để thêm checklist'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 26, height: 26, flexShrink: 0, cursor: 'pointer',
+            border: '1px solid var(--color-primary-ring)', borderRadius: 'var(--radius-sm)',
+            background: expanded ? 'var(--color-primary)' : 'var(--color-primary-bg)',
+            color: expanded ? '#fff' : 'var(--color-primary-dark)',
+          }}
+        >
+          {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </button>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={saveTitle}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }} maxLength={300} placeholder="Tên việc con" style={SS.titleInput} />
+        <span style={SS.count}>{steps.length} bước</span>
+        <button className={`${s.clActionBtn} ${s.clDeleteBtn}`} onClick={del} title="Xóa việc con" style={{ flexShrink: 0 }}><Trash2 size={13} /></button>
+      </div>
+      {expanded && (
+        <div style={SS.body}>
+          <div style={{ fontSize: 'var(--fs-3xs)', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '.3px', margin: '4px 0 6px' }}>
+            Checklist của việc con này
+          </div>
+          {steps.length === 0 && <p style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', margin: '2px 0 6px' }}>Chưa có bước nào.</p>}
+          {steps.map((st) => (
+            <div key={st.id} style={SS.stepRow}>
+              <span style={{ color: 'var(--color-muted)', flexShrink: 0 }}>•</span>
+              <input defaultValue={st.stepText} onBlur={(e) => saveStep(st.id, e.target.value, st.stepText)}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }} maxLength={300} style={SS.stepInput} />
+              <button className={`${s.clActionBtn} ${s.clDeleteBtn}`} onClick={() => delStep(st.id)} title="Xóa bước" style={{ flexShrink: 0 }}><X size={12} /></button>
+            </div>
+          ))}
+          <div style={{ ...SS.stepRow, marginTop: 4 }}>
+            <Plus size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+            <input value={newStep} onChange={(e) => setNewStep(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStep() } }} placeholder="Thêm bước checklist…" maxLength={300} style={SS.stepInput} />
+            {newStep.trim() && <button type="button" className={s.subAddBtn} onClick={addStep}>Thêm</button>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SubtaskTemplatePanel({ taskTypeId, subtasks, onRefresh }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [expandedId, setExpandedId] = useState(null)
+  const [newTitle, setNewTitle]   = useState('')
+  const list = subtasks ?? []
+
+  async function addNew() {
+    const title = newTitle.trim()
+    if (!title) return
+    try {
+      const created = await addSubtaskTemplate(taskTypeId, { title })
+      setNewTitle('')
+      onRefresh()
+      if (created?.id) setExpandedId(created.id)   // mở luôn để thêm checklist
+    } catch { addToast('Không thể thêm việc con', 'error') }
+  }
+
+  return (
+    <div className={s.ttPanelSection} style={{ marginTop: 12 }}>
+      <div className={s.ttPanelTitle}><GitBranch size={13} /> Việc con định kỳ</div>
+      <p style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', margin: '0 0 10px' }}>
+        Mỗi thẻ là một việc con sẽ sinh cùng công việc cha khi tạo định kỳ — có <strong>checklist riêng</strong> của nó (mở thẻ để thêm bước). Hạn của việc con đặt ở <strong>Lịch định kỳ</strong> của từng công ty.
+      </p>
+
+      {list.length === 0 && <p className={s.ttPanelEmpty}>Chưa có việc con định kỳ.</p>}
+
+      {list.map((sub) => (
+        <SubtaskCard key={sub.id} taskTypeId={taskTypeId} subtask={sub}
+          expanded={expandedId === sub.id}
+          onToggle={() => setExpandedId(expandedId === sub.id ? null : sub.id)}
+          onRefresh={onRefresh} />
+      ))}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4, paddingTop: 8, borderTop: '1px dashed var(--color-border-soft)' }}>
+        <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNew() } }}
+          placeholder="Tên việc con mới…" maxLength={300} style={SS.titleInput} />
+        <button type="button" className={s.subAddBtn} onClick={addNew}>
+          <Plus size={12} /> Thêm việc con
         </button>
       </div>
     </div>

@@ -16,25 +16,37 @@ const updateTaskTypeSchema = taskTypeBase.partial().refine(
   { message: 'No fields to update' }
 )
 
-// spawnAsSubtask/dueOffsetDays/dependsOnPrev: cấu hình "sinh thành việc con" khi tạo định kỳ.
 const checklistStepSchema = z.object({
   stepText: z.string().min(1).max(2000),   // cho phép nhiều dòng
   level:    z.number().int().min(0).max(1).optional().default(0),  // 0 = mục chính, 1 = mục phụ
-  spawnAsSubtask: z.boolean().optional(),
-  dueOffsetDays:  z.number().int().min(0).max(3650).optional().nullable(),
-  dependsOnPrev:  z.boolean().optional(),
 })
 
 const updateChecklistStepSchema = z.object({
   stepText:  z.string().min(1).max(2000).optional(),
   stepOrder: z.number().int().min(1).optional(),
   level:     z.number().int().min(0).max(1).optional(),
-  spawnAsSubtask: z.boolean().optional(),
-  dueOffsetDays:  z.number().int().min(0).max(3650).optional().nullable(),
-  dependsOnPrev:  z.boolean().optional(),
 }).refine((d) => Object.keys(d).length > 0, {
   message: 'Provide at least one field to update',
 })
+
+// Việc con định kỳ (tách riêng): chỉ tiêu đề + hạn (offset ngày).
+const subtaskTemplateSchema = z.object({
+  title:         z.string().min(1).max(300),
+  dueOffsetDays: z.number().int().min(0).max(3650).optional().nullable(),
+})
+
+const updateSubtaskTemplateSchema = z.object({
+  title:         z.string().min(1).max(300).optional(),
+  dueOffsetDays: z.number().int().min(0).max(3650).optional().nullable(),
+  sortOrder:     z.number().int().min(0).optional(),
+}).refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' })
+
+// Bước checklist của việc con định kỳ
+const subtaskStepSchema = z.object({ stepText: z.string().min(1).max(300) })
+const updateSubtaskStepSchema = z.object({
+  stepText:  z.string().min(1).max(300).optional(),
+  stepOrder: z.number().int().min(1).optional(),
+}).refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' })
 
 const reorderChecklistSchema = z.object({
   steps: z
@@ -70,6 +82,10 @@ module.exports = {
   checklistStepSchema,
   updateChecklistStepSchema,
   reorderChecklistSchema,
+  subtaskTemplateSchema,
+  updateSubtaskTemplateSchema,
+  subtaskStepSchema,
+  updateSubtaskStepSchema,
   createCustomFieldSchema,
   updateCustomFieldSchema,
 }

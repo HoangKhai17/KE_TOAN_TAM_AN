@@ -81,11 +81,9 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
     ]
   )
 
-  // Copy checklist template (đóng băng cây cha-con vào task).
-  // Bước có spawn_as_subtask = true KHÔNG vào checklist của cha mà TÁCH thành việc con riêng.
+  // Copy checklist template (đóng băng cây cha-con vào task) — TẤT CẢ bước → checklist của cha.
   const { rows: steps } = await query(
-    `SELECT id, step_order, step_text, level, spawn_as_subtask, due_offset_days, depends_on_prev
-     FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order, id`,
+    'SELECT id, step_order, step_text, level FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order, id',
     [schedule.task_type_id]
   )
   const parentOf = new Map()
@@ -95,12 +93,10 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
     else parentOf.set(s.id, lastParentId)
   }
   const excluded = new Set(Array.isArray(schedule.excluded_step_ids) ? schedule.excluded_step_ids : [])
-  const applied        = steps.filter((step) => !excluded.has(step.id))
-  const checklistSteps = applied.filter((s) => !s.spawn_as_subtask)
-  const subtaskSteps   = applied.filter((s) => s.spawn_as_subtask)
+  const applied  = steps.filter((step) => !excluded.has(step.id))
 
-  if (checklistSteps.length && newTask) {
-    for (const step of checklistSteps) {
+  if (applied.length && newTask) {
+    for (const step of applied) {
       await query(
         `INSERT INTO task_checklist_items
            (task_id, step_order, step_text, level, source_step_id, source_parent_id)
@@ -110,13 +106,16 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
     }
   }
 
-  // Đẻ VIỆC CON cho từng bước spawn_as_subtask — mỗi con là task ĐỘC LẬP, hạn riêng.
-  // Hạn con = ngày kỳ (forDate) + due_offset_days, đẩy qua CN/lễ như task thường.
-  // depends_on_prev = true → nối phụ thuộc với con liền trước trong chuỗi (task_dependencies).
+  // Đẻ VIỆC CON định kỳ — đọc từ bảng RIÊNG task_type_subtask_templates (đúng logic Tasks:
+  // checklist và việc con là 2 thứ tách bạch). Mỗi con là task ĐỘC LẬP, hạn riêng
+  // (= ngày kỳ + due_offset_days, đẩy qua CN/lễ). KHÔNG có phụ thuộc bước trước.
   const childrenCreated = []
-  if (subtaskSteps.length && newTask) {
-    let prevChildId = null
-    for (const s of subtaskSteps) {
+  if (newTask) {
+    const { rows: subtasks } = await query(
+      'SELECT id, title, due_offset_days FROM task_type_subtask_templates WHERE task_type_id = $1 ORDER BY sort_order, created_at',
+      [schedule.task_type_id]
+    )
+    for (const s of subtasks) {
       const childDueStr = format(
         rollForwardToWorkday(addDays(forDate, s.due_offset_days ?? 0), holidaySet), 'yyyy-MM-dd')
       const { rows: [child] } = await query(
@@ -126,18 +125,21 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'auto',$10,'medium',$11)
          RETURNING id`,
         [
-          s.step_text, schedule.company_id, schedule.task_type_id, schedule.id, newTask.id,
+          s.title, schedule.company_id, schedule.task_type_id, schedule.id, newTask.id,
           schedule.assigned_staff_id ?? null, startDateStr, childDueStr, periodLabel, sla, schedule.created_by,
         ]
       )
-      if (s.depends_on_prev && prevChildId) {
+      // Copy checklist RIÊNG của việc con vào task con
+      const { rows: subSteps } = await query(
+        'SELECT step_order, step_text FROM task_type_subtask_steps WHERE subtask_template_id = $1 ORDER BY step_order, created_at',
+        [s.id]
+      )
+      for (const ss of subSteps) {
         await query(
-          `INSERT INTO task_dependencies (task_id, depends_on_task_id, created_by)
-           VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-          [child.id, prevChildId, schedule.created_by]
+          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level) VALUES ($1,$2,$3,0)`,
+          [child.id, ss.step_order, ss.step_text]
         )
       }
-      prevChildId = child.id
       childrenCreated.push(child.id)
     }
   }

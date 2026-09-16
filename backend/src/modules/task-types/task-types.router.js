@@ -5,6 +5,8 @@ const { validate } = require('../../middleware/validate')
 const {
   createTaskTypeSchema, updateTaskTypeSchema,
   checklistStepSchema, updateChecklistStepSchema, reorderChecklistSchema,
+  subtaskTemplateSchema, updateSubtaskTemplateSchema,
+  subtaskStepSchema, updateSubtaskStepSchema,
   createCustomFieldSchema, updateCustomFieldSchema,
 } = require('./task-types.schema')
 const ctrl = require('./task-types.controller')
@@ -273,6 +275,16 @@ router.patch('/:id/checklist/:stepId', ...admin, validate(updateChecklistStepSch
  *       204: { description: Deleted }
  */
 router.delete('/:id/checklist/:stepId', ...admin, ctrl.deleteChecklistStep)
+
+// ── Việc con định kỳ (tách riêng khỏi checklist) ──────────────────────────────
+router.get('/:id/subtasks', ...auth, ctrl.listSubtaskTemplates)
+router.post('/:id/subtasks', ...admin, validate(subtaskTemplateSchema), ctrl.addSubtaskTemplate)
+router.patch('/:id/subtasks/:subtaskId', ...admin, validate(updateSubtaskTemplateSchema), ctrl.updateSubtaskTemplate)
+router.delete('/:id/subtasks/:subtaskId', ...admin, ctrl.deleteSubtaskTemplate)
+// Checklist riêng của việc con định kỳ
+router.post('/:id/subtasks/:subtaskId/steps', ...admin, validate(subtaskStepSchema), ctrl.addSubtaskStep)
+router.patch('/:id/subtasks/:subtaskId/steps/:stepId', ...admin, validate(updateSubtaskStepSchema), ctrl.updateSubtaskStep)
+router.delete('/:id/subtasks/:subtaskId/steps/:stepId', ...admin, ctrl.deleteSubtaskStep)
 
 // ── Custom Fields ─────────────────────────────────────────────────────────────
 

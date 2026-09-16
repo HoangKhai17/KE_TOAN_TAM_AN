@@ -54,6 +54,36 @@ export async function reorderChecklist(id, steps) {
   return data.data.steps
 }
 
+// Việc con định kỳ (tách riêng khỏi checklist) — chỉ tiêu đề + hạn (offset)
+export async function getSubtaskTemplates(id) {
+  const { data } = await api.get(`/task-types/${id}/subtasks`)
+  return data.data.subtasks
+}
+export async function addSubtaskTemplate(id, body) {
+  const { data } = await api.post(`/task-types/${id}/subtasks`, body)
+  return data.data.subtask
+}
+export async function updateSubtaskTemplate(id, subtaskId, body) {
+  const { data } = await api.patch(`/task-types/${id}/subtasks/${subtaskId}`, body)
+  return data.data.subtask
+}
+export async function deleteSubtaskTemplate(id, subtaskId) {
+  await api.delete(`/task-types/${id}/subtasks/${subtaskId}`)
+}
+
+// Checklist riêng của việc con định kỳ
+export async function addSubtaskStep(id, subtaskId, body) {
+  const { data } = await api.post(`/task-types/${id}/subtasks/${subtaskId}/steps`, body)
+  return data.data.step
+}
+export async function updateSubtaskStep(id, subtaskId, stepId, body) {
+  const { data } = await api.patch(`/task-types/${id}/subtasks/${subtaskId}/steps/${stepId}`, body)
+  return data.data.step
+}
+export async function deleteSubtaskStep(id, subtaskId, stepId) {
+  await api.delete(`/task-types/${id}/subtasks/${subtaskId}/steps/${stepId}`)
+}
+
 // Custom Fields
 export async function getCustomFields(id) {
   const { data } = await api.get(`/task-types/${id}/fields`)
