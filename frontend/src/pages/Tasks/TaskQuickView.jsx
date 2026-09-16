@@ -102,6 +102,102 @@ function PriorityBadge({ priority }) {
   )
 }
 
+// ── Gắn vào việc cha ──────────────────────────────────────────────────────────
+// Chiều ngược của "Tách khỏi cha": biến một việc ĐỘC LẬP thành việc con của một
+// việc cha (cùng khách hàng). Chỉ hiện khi task chưa có cha VÀ chưa có con (giữ 1 cấp).
+
+function AttachToParent({ task, onAttached }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [open, setOpen]           = useState(false)
+  const [search, setSearch]       = useState('')
+  const [results, setResults]     = useState([])
+  const [searching, setSearching] = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onOutside(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onOutside)
+    return () => document.removeEventListener('mousedown', onOutside)
+  }, [open])
+
+  // Gợi ý việc cha trong CÙNG khách hàng: chỉ việc CẤP CAO (không phải việc con), khác chính nó.
+  useEffect(() => {
+    if (!open) { setResults([]); return }
+    const q = search.trim()
+    const timer = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const params = q
+          ? { search: q, companyId: task.companyId || undefined, limit: 10 }
+          : { companyId: task.companyId || undefined, limit: 10, sortBy: 'created_at', sortDir: 'desc' }
+        const { tasks } = await tasksApi.listTasks(params)
+        setResults(tasks.filter((t) => t.id !== task.id && !t.parentTaskId))
+      } catch { /* noop */ } finally { setSearching(false) }
+    }, q ? 300 : 0)
+    return () => clearTimeout(timer)
+  }, [open, search, task.id, task.companyId])
+
+  async function attach(parentId) {
+    if (saving) return
+    setSaving(true)
+    try {
+      const updated = await tasksApi.updateTask(task.id, { parentTaskId: parentId })
+      addToast('Đã gắn làm việc con', 'success')
+      setOpen(false)
+      onAttached(updated)
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể gắn vào việc cha', 'error')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <span ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        className={s.qvAttachBtn}
+        onClick={() => setOpen((o) => !o)}
+        title="Gắn công việc này làm việc con của một việc cha (cùng khách hàng)"
+      >
+        <ListTree size={10} /> Gắn vào việc cha
+      </button>
+      {open && (
+        <div className={s.qvAttachPop}>
+          <input
+            autoFocus
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm việc cha (cùng khách hàng)..."
+            className={s.qvAttachInput}
+          />
+          {searching && <div className={s.qvAttachHint}>Đang tìm…</div>}
+          {!searching && results.length === 0 && (
+            <div className={s.qvAttachHint}>Không có việc phù hợp trong khách hàng này.</div>
+          )}
+          {results.map((r) => (
+            <div
+              key={r.id}
+              className={s.qvAttachItem}
+              role="button"
+              tabIndex={0}
+              onClick={() => attach(r.id)}
+            >
+              <span className={s.qvAttachItemName}>{r.title}</span>
+              {r.childrenTotal > 0 && (
+                <span style={{ fontSize: 'var(--fs-3xs)', color: 'var(--color-muted)', flexShrink: 0 }}>
+                  ⎇ {r.childrenTotal}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </span>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }) {
@@ -490,6 +586,10 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                       <Unlink size={10} /> Tách khỏi cha
                     </button>
                   </>
+                )}
+                {/* Việc độc lập (chưa có cha, chưa có con) → cho gắn vào một việc cha */}
+                {!task.parentTaskId && task.childrenTotal === 0 && (
+                  <AttachToParent task={task} onAttached={applyUpdate} />
                 )}
                 {isAdmin ? (
                   <button
