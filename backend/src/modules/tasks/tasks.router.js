@@ -254,6 +254,21 @@ router.post('/:id/status', ...auth, validate(changeStatusSchema), ctrl.changeTas
  */
 router.get('/:id/activity', ...auth, ctrl.getActivityLog)
 
+/**
+ * @openapi
+ * /tasks/{id}/children:
+ *   get:
+ *     tags: [Tasks]
+ *     summary: List sub-tasks (children) of a parent task
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Danh sách việc con (mỗi con là task độc lập) }
+ *       403: { description: Không có quyền xem việc cha }
+ *       404: { description: Không tìm thấy việc cha }
+ */
+router.get('/:id/children', ...auth, ctrl.getChildren)
+
 // ─── Checklist ────────────────────────────────────────────────────────────────
 
 /**

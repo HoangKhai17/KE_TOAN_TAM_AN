@@ -4,7 +4,7 @@ import {
   ArrowLeft, Check, X, Plus, Trash2, Edit2, ChevronLeft, ChevronRight,
   Building2, User, Tag, Clock, Calendar, AlertTriangle,
   ClipboardList, MessageSquare, History, Timer, Sliders, GripVertical,
-  Lock, Globe,
+  Lock, Globe, ListTree, CornerLeftUp,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import DateBox from '../../components/ui/DateBox'
@@ -23,6 +23,7 @@ import { useDataSync } from '../../hooks/useDataSync'
 import TaskLinksSection from './TaskLinksSection'
 import CommentsTab from './TaskComments'
 import TaskCollaborators from './TaskCollaborators'
+import TaskFormModal from './TaskFormModal'
 import s from './tasks.module.css'
 
 // ── Status action CSS map ─────────────────────────────────────────────────────
@@ -710,6 +711,94 @@ function CustomFieldsTab({ taskId }) {
   )
 }
 
+// ── Chuỗi việc con (cha–con) ──────────────────────────────────────────────────
+// Việc cha là "thư mục" gom chuỗi. Mỗi việc con là task ĐỘC LẬP (hạn/trạng thái/
+// checklist riêng) — hoàn thành con KHÔNG kéo theo cha. Thanh "x/y xong" chỉ để nhìn.
+
+function ChildrenChain({ parentTask, onParentRefresh }) {
+  const navigate = useNavigate()
+  const [children, setChildren] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [showCreate, setShowCreate] = useState(false)
+
+  function load() {
+    setLoading(true)
+    tasksApi.getTaskChildren(parentTask.id)
+      .then(setChildren).catch(() => {}).finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [parentTask.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const total = children.length
+  const done  = children.filter((c) => c.status === 'completed').length
+  const pct   = total ? Math.round((done / total) * 100) : 0
+
+  return (
+    <div className={s.chainCard}>
+      <div className={s.chainHead}>
+        <span className={s.chainTitle}><ListTree size={15} /> Chuỗi việc con</span>
+        {total > 0 && <span className={s.chainCount}>{total} việc</span>}
+        {total > 0 && (
+          <div className={s.chainProgress}>
+            <div className={s.chainProgressBar}>
+              <div className={s.chainProgressFill} style={{ width: `${pct}%` }} />
+            </div>
+            <span className={s.chainProgressText}>{done}/{total} xong</span>
+          </div>
+        )}
+        <button
+          className={`${s.btnSecondary} ${s.btnCompact}`}
+          style={{ marginLeft: 'auto' }}
+          onClick={() => setShowCreate(true)}
+        >
+          <Plus size={12} /> Tách thành việc con
+        </button>
+      </div>
+
+      {loading ? (
+        <div className={s.loadingBox}><div className={s.spinner} /> Đang tải...</div>
+      ) : total === 0 ? (
+        <p className={s.chainEmpty}>
+          Chưa có việc con. Tách một phần việc ra để theo dõi riêng với ngày hết hạn của nó — việc con hoàn thành độc lập với việc cha.
+        </p>
+      ) : (
+        <div className={s.chainList}>
+          {children.map((c) => {
+            const overdue = isTaskOverdue(c)
+            const cpct = c.checklistTotal
+              ? Math.round((c.checklistDone / c.checklistTotal) * 100)
+              : (c.status === 'completed' ? 100 : 0)
+            return (
+              <Link key={c.id} to={`/tasks/${c.id}`} className={s.chainItem}>
+                <StatusBadge task={c} />
+                <span className={s.chainItemName}>{c.title}</span>
+                <span className={s.chainItemMeta}>
+                  {c.checklistTotal > 0 && (
+                    <span className={s.chainMiniBar}>
+                      <span className={s.chainMiniFill} style={{ width: `${cpct}%` }} />
+                    </span>
+                  )}
+                  <span className={`${s.chainItemDue} ${overdue ? s.chainItemDueOverdue : ''}`}>
+                    <Calendar size={10} /> {fmtDate(c.dueDate)}
+                  </span>
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+
+      {showCreate && (
+        <TaskFormModal
+          parentTask={parentTask}
+          onClose={() => setShowCreate(false)}
+          onSaved={() => { setShowCreate(false); load(); onParentRefresh?.() }}
+          onSavedAndOpen={(t) => navigate(`/tasks/${t.id}`)}
+        />
+      )}
+    </div>
+  )
+}
+
 // ── Main TaskDetail ───────────────────────────────────────────────────────────
 
 const TABS = [
@@ -942,6 +1031,13 @@ export default function TaskDetail() {
 
           {/* Meta row */}
           <div className={s.detailMeta}>
+            {task.parentTaskId && (
+              <div className={s.detailMetaItem}>
+                <Link to={`/tasks/${task.parentTaskId}`} className={s.parentCrumb} title="Đây là việc con — mở việc cha">
+                  <CornerLeftUp size={11} /> Việc cha: {task.parentTitle || 'Xem việc cha'}
+                </Link>
+              </div>
+            )}
             {task.companyName && (
               <div className={s.detailMetaItem}>
                 <Building2 size={12} className={s.detailMetaIcon} />
@@ -1003,6 +1099,14 @@ export default function TaskDetail() {
             </div>
           )}
         </div>
+
+        {/* ── Chuỗi việc con — chỉ hiện ở việc cấp cao (bản thân không phải việc con) ── */}
+        {!task.parentTaskId && (
+          <ChildrenChain
+            parentTask={task}
+            onParentRefresh={() => tasksApi.getTask(id).then(setTask).catch(() => {})}
+          />
+        )}
 
         {/* ── Body: tabs + sidebar ── */}
         <div className={s.detailBody}>

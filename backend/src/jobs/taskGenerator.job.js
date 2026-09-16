@@ -81,9 +81,11 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
     ]
   )
 
-  // Copy checklist template (đóng băng cây cha-con vào task)
+  // Copy checklist template (đóng băng cây cha-con vào task).
+  // Bước có spawn_as_subtask = true KHÔNG vào checklist của cha mà TÁCH thành việc con riêng.
   const { rows: steps } = await query(
-    'SELECT id, step_order, step_text, level FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order, id',
+    `SELECT id, step_order, step_text, level, spawn_as_subtask, due_offset_days, depends_on_prev
+     FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order, id`,
     [schedule.task_type_id]
   )
   const parentOf = new Map()
@@ -93,9 +95,12 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
     else parentOf.set(s.id, lastParentId)
   }
   const excluded = new Set(Array.isArray(schedule.excluded_step_ids) ? schedule.excluded_step_ids : [])
-  const applied = steps.filter((step) => !excluded.has(step.id))
-  if (applied.length && newTask) {
-    for (const step of applied) {
+  const applied        = steps.filter((step) => !excluded.has(step.id))
+  const checklistSteps = applied.filter((s) => !s.spawn_as_subtask)
+  const subtaskSteps   = applied.filter((s) => s.spawn_as_subtask)
+
+  if (checklistSteps.length && newTask) {
+    for (const step of checklistSteps) {
       await query(
         `INSERT INTO task_checklist_items
            (task_id, step_order, step_text, level, source_step_id, source_parent_id)
@@ -105,10 +110,42 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
     }
   }
 
+  // Đẻ VIỆC CON cho từng bước spawn_as_subtask — mỗi con là task ĐỘC LẬP, hạn riêng.
+  // Hạn con = ngày kỳ (forDate) + due_offset_days, đẩy qua CN/lễ như task thường.
+  // depends_on_prev = true → nối phụ thuộc với con liền trước trong chuỗi (task_dependencies).
+  const childrenCreated = []
+  if (subtaskSteps.length && newTask) {
+    let prevChildId = null
+    for (const s of subtaskSteps) {
+      const childDueStr = format(
+        rollForwardToWorkday(addDays(forDate, s.due_offset_days ?? 0), holidaySet), 'yyyy-MM-dd')
+      const { rows: [child] } = await query(
+        `INSERT INTO tasks
+           (title, company_id, task_type_id, customer_task_schedule_id, parent_task_id,
+            assigned_to, start_date, due_date, period_label, source, sla_days, priority, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'auto',$10,'medium',$11)
+         RETURNING id`,
+        [
+          s.step_text, schedule.company_id, schedule.task_type_id, schedule.id, newTask.id,
+          schedule.assigned_staff_id ?? null, startDateStr, childDueStr, periodLabel, sla, schedule.created_by,
+        ]
+      )
+      if (s.depends_on_prev && prevChildId) {
+        await query(
+          `INSERT INTO task_dependencies (task_id, depends_on_task_id, created_by)
+           VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+          [child.id, prevChildId, schedule.created_by]
+        )
+      }
+      prevChildId = child.id
+      childrenCreated.push(child.id)
+    }
+  }
+
   return {
     status:    'created',
     periodLabel,
-    task: { id: newTask?.id, title, startDate: startDateStr, dueDate: dueDateStr },
+    task: { id: newTask?.id, title, startDate: startDateStr, dueDate: dueDateStr, childrenCount: childrenCreated.length },
   }
 }
 

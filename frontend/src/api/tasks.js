@@ -54,6 +54,12 @@ export async function getTaskActivity(id, params = {}) {
   return data.data.logs
 }
 
+// Chuỗi việc con của một việc cha (mỗi con là task độc lập, có hạn/trạng thái riêng).
+export async function getTaskChildren(id) {
+  const { data } = await api.get(`/tasks/${id}/children`)
+  return data.data.children
+}
+
 // ─── Checklist ────────────────────────────────────────────────────────────────
 
 export async function getTaskChecklist(id) {

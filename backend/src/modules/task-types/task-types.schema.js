@@ -16,17 +16,24 @@ const updateTaskTypeSchema = taskTypeBase.partial().refine(
   { message: 'No fields to update' }
 )
 
+// spawnAsSubtask/dueOffsetDays/dependsOnPrev: cấu hình "sinh thành việc con" khi tạo định kỳ.
 const checklistStepSchema = z.object({
   stepText: z.string().min(1).max(2000),   // cho phép nhiều dòng
   level:    z.number().int().min(0).max(1).optional().default(0),  // 0 = mục chính, 1 = mục phụ
+  spawnAsSubtask: z.boolean().optional(),
+  dueOffsetDays:  z.number().int().min(0).max(3650).optional().nullable(),
+  dependsOnPrev:  z.boolean().optional(),
 })
 
 const updateChecklistStepSchema = z.object({
   stepText:  z.string().min(1).max(2000).optional(),
   stepOrder: z.number().int().min(1).optional(),
   level:     z.number().int().min(0).max(1).optional(),
-}).refine((d) => d.stepText !== undefined || d.stepOrder !== undefined || d.level !== undefined, {
-  message: 'Provide stepText, stepOrder or level',
+  spawnAsSubtask: z.boolean().optional(),
+  dueOffsetDays:  z.number().int().min(0).max(3650).optional().nullable(),
+  dependsOnPrev:  z.boolean().optional(),
+}).refine((d) => Object.keys(d).length > 0, {
+  message: 'Provide at least one field to update',
 })
 
 const reorderChecklistSchema = z.object({

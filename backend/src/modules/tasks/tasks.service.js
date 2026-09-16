@@ -72,6 +72,12 @@ function toDto(row) {
     assignedToName:         row.assigned_to_name ?? null,
     assignedBy:             row.assigned_by ?? null,
     collaborators:          Array.isArray(row.collaborators) ? row.collaborators : [],
+    // Việc cha–con: quan hệ gom nhóm chuỗi. childrenTotal/Done CHỈ để hiển thị tiến độ
+    // chuỗi — KHÔNG phải cổng hoàn thành của cha (mỗi task hoàn thành độc lập).
+    parentTaskId:           row.parent_task_id ?? null,
+    parentTitle:            row.parent_title ?? null,
+    childrenTotal:          parseInt(row.children_total ?? 0, 10),
+    childrenDone:           parseInt(row.children_done ?? 0, 10),
     status:                 row.status,
     priority:               row.priority,
     source:                 row.source,
@@ -108,12 +114,22 @@ const TASK_SELECT = `
          lc.latest_comment,
          lc.latest_comment_at,
          lc.latest_comment_by,
-         COALESCE(collab.list, '[]'::json) AS collaborators
+         COALESCE(collab.list, '[]'::json) AS collaborators,
+         pt.title AS parent_title,
+         ch.children_total,
+         ch.children_done
   FROM tasks t
   LEFT JOIN companies  c  ON c.id  = t.company_id
   LEFT JOIN task_types tt ON tt.id = t.task_type_id
   LEFT JOIN users      ua ON ua.id = t.assigned_to
   LEFT JOIN users      uc ON uc.id = t.created_by
+  LEFT JOIN tasks      pt ON pt.id = t.parent_task_id
+  LEFT JOIN LATERAL (
+    -- Đếm việc con (CHỈ để hiển thị tiến độ chuỗi, KHÔNG phải cổng hoàn thành cha)
+    SELECT COUNT(*) AS children_total,
+           COUNT(*) FILTER (WHERE status = 'completed') AS children_done
+    FROM tasks ct WHERE ct.parent_task_id = t.id
+  ) ch ON TRUE
   LEFT JOIN LATERAL (
     -- Người hỗ trợ (collaborators) — owner vẫn nằm ở t.assigned_to, KHÔNG gộp vào đây.
     SELECT json_agg(json_build_object('id', u2.id, 'name', u2.name) ORDER BY u2.name) AS list
@@ -223,7 +239,7 @@ function buildTaskWhere(filters = {}) {
   const {
     companyId, assignedTo, createdBy, status, priority, source,
     dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
-    forceAssignedTo, staffScopeId, collaboratorIds, assignedIncludeSupport,
+    forceAssignedTo, staffScopeId, collaboratorIds, assignedIncludeSupport, parentTaskId,
   } = filters
 
   const collabArr = collaboratorIds == null
@@ -240,6 +256,11 @@ function buildTaskWhere(filters = {}) {
     const arr = Array.isArray(companyId) ? companyId : [companyId]
     baseParams.push(arr)
     baseConditions.push(`t.company_id = ANY($${baseParams.length}::uuid[])`)
+  }
+  // Việc con của một việc cha (dùng khi liệt kê/lọc chuỗi con)
+  if (parentTaskId) {
+    baseParams.push(parentTaskId)
+    baseConditions.push(`t.parent_task_id = $${baseParams.length}`)
   }
   if (effectiveAssignedTo && (!Array.isArray(effectiveAssignedTo) || effectiveAssignedTo.length > 0)) {
     const arr = Array.isArray(effectiveAssignedTo) ? effectiveAssignedTo : [effectiveAssignedTo]
@@ -375,7 +396,7 @@ async function listTasks(filters = {}) {
     companyId, assignedTo, createdBy, status, priority, source,
     dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
     sortBy = 'created_at', sortDir = 'desc',
-    audience = 'internal',
+    audience = 'internal', parentTaskId,
     forceAssignedTo, staffScopeId, collaboratorIds, assignedIncludeSupport,
   } = filters
 
@@ -457,6 +478,11 @@ async function listTasks(filters = {}) {
     const arr = Array.isArray(companyId) ? companyId : [companyId]
     baseParams.push(arr)
     baseConditions.push(`t.company_id = ANY($${baseParams.length}::uuid[])`)
+  }
+  // Việc con của một việc cha (dùng khi liệt kê chuỗi con)
+  if (parentTaskId) {
+    baseParams.push(parentTaskId)
+    baseConditions.push(`t.parent_task_id = $${baseParams.length}`)
   }
   if (effectiveAssignedTo && (!Array.isArray(effectiveAssignedTo) || effectiveAssignedTo.length > 0)) {
     const arr = Array.isArray(effectiveAssignedTo) ? effectiveAssignedTo : [effectiveAssignedTo]
@@ -650,16 +676,37 @@ async function getTaskById(id, user = null) {
 }
 
 async function createTask(data, actorId, ipAddress, userAgent) {
-  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, collaboratorIds } = data
-  // Riêng tư: chỉ admin mới truyền 'private' (controller đã chặn staff). Mặc định 'company'.
-  const visibility = data.visibility === 'private' ? 'private' : 'company'
+  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, collaboratorIds, parentTaskId } = data
 
   // Ngày hết hạn KHÔNG được nhỏ hơn ngày bắt đầu (so sánh chuỗi YYYY-MM-DD hợp lệ).
   if (startDate && dueDate && dueDate < startDate) {
     throw Object.assign(new Error('Ngày hết hạn không được nhỏ hơn ngày bắt đầu'), { status: 422 })
   }
 
-  const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [companyId])
+  // Việc con: phải thuộc một việc cha hợp lệ, KHOÁ 1 CẤP (việc con không có cháu).
+  // Con LUÔN cùng công ty với cha và kế thừa chế độ hiển thị của cha (nếu không tự đặt).
+  let parentRow = null
+  if (parentTaskId) {
+    const { rows: [p] } = await query(
+      'SELECT id, company_id, visibility, parent_task_id FROM tasks WHERE id = $1', [parentTaskId]
+    )
+    if (!p) throw Object.assign(new Error('Không tìm thấy công việc cha'), { status: 404 })
+    if (p.parent_task_id) {
+      throw Object.assign(new Error('Không thể tạo việc con cho một việc vốn đã là việc con (chỉ hỗ trợ 1 cấp cha–con)'), { status: 422 })
+    }
+    parentRow = p
+  }
+
+  // Riêng tư: chỉ admin mới truyền 'private' (controller đã chặn staff).
+  // Việc con kế thừa chế độ hiển thị của cha khi không tự đặt; mặc định 'company'.
+  const visibility = data.visibility === 'private'
+    ? 'private'
+    : (parentRow ? parentRow.visibility : 'company')
+
+  // Con luôn nằm cùng công ty với cha; việc độc lập dùng companyId gửi lên.
+  const effectiveCompanyId = parentRow ? parentRow.company_id : companyId
+
+  const { rows: [company] } = await query('SELECT id FROM companies WHERE id = $1', [effectiveCompanyId])
   if (!company) throw Object.assign(new Error('Company not found'), { status: 404 })
 
   // Resolve task source (metadata-driven via enum_options); defaults to 'manual'.
@@ -682,13 +729,13 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   const { rows: [task] } = await query(
     `INSERT INTO tasks
        (title, description, company_id, task_type_id, assigned_to, assigned_by,
-        start_date, due_date, priority, source, sla_days, created_by, visibility)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        start_date, due_date, priority, source, sla_days, created_by, visibility, parent_task_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
      RETURNING *`,
     [
-      title, description ?? null, companyId, taskTypeId ?? null,
+      title, description ?? null, effectiveCompanyId, taskTypeId ?? null,
       assignedTo ?? null, actorId, startDate ?? null, dueDate ?? null,
-      priority, source, effectiveSlaDays, actorId, visibility,
+      priority, source, effectiveSlaDays, actorId, visibility, parentTaskId ?? null,
     ]
   )
 
@@ -739,7 +786,7 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     await notifyCollaboratorChanges(collabChanges, result, actorId)
   }
 
-  emitData('data:task', { action: 'created', id: task.id, companyId, actorId })
+  emitData('data:task', { action: 'created', id: task.id, companyId: effectiveCompanyId, actorId })
   void bumpColValsVersion()   // làm mới cache danh sách giá trị header filter
   return result
 }
@@ -764,6 +811,7 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     slaDays:     'sla_days',
     source:      'source',
     visibility:  'visibility',
+    parentTaskId: 'parent_task_id',
   }
 
   const { rows: [current] } = await query('SELECT * FROM tasks WHERE id = $1', [id])
@@ -777,6 +825,28 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     const effDue   = data.dueDate   !== undefined ? toDateStr(data.dueDate)   : toDateStr(current.due_date)
     if (effStart && effDue && effDue < effStart) {
       throw Object.assign(new Error('Ngày hết hạn không được nhỏ hơn ngày bắt đầu'), { status: 422 })
+    }
+  }
+
+  // Việc con: xác thực khi GÁN/ĐỔI việc cha (bỏ gán = null thì không cần kiểm tra).
+  // Khoá 1 cấp, cùng công ty, không tự trỏ mình, và task đang là cha thì không hạ thành con.
+  if (data.parentTaskId !== undefined && data.parentTaskId !== null) {
+    if (data.parentTaskId === id) {
+      throw Object.assign(new Error('Công việc không thể là con của chính nó'), { status: 422 })
+    }
+    const { rows: [p] } = await query(
+      'SELECT id, company_id, parent_task_id FROM tasks WHERE id = $1', [data.parentTaskId]
+    )
+    if (!p) throw Object.assign(new Error('Không tìm thấy công việc cha'), { status: 404 })
+    if (p.parent_task_id) {
+      throw Object.assign(new Error('Chỉ hỗ trợ 1 cấp cha–con: việc cha được chọn vốn đã là việc con'), { status: 422 })
+    }
+    if (p.company_id !== current.company_id) {
+      throw Object.assign(new Error('Việc con phải cùng công ty với việc cha'), { status: 422 })
+    }
+    const { rows: [hasKids] } = await query('SELECT 1 FROM tasks WHERE parent_task_id = $1 LIMIT 1', [id])
+    if (hasKids) {
+      throw Object.assign(new Error('Công việc đang là cha của việc khác nên không thể trở thành việc con'), { status: 422 })
     }
   }
 
@@ -1210,6 +1280,19 @@ async function getAvailableYears() {
   return rows.map((r) => r.year)
 }
 
+// Liệt kê các VIỆC CON của một việc cha (chuỗi liên đới), sắp theo hạn tăng dần.
+// Xem được chuỗi = xem được cha: assert quyền qua getTaskById trước (ném 404/403).
+// Trả về task đầy đủ (mỗi con có trạng thái/tiến độ/ngày hết hạn riêng, độc lập).
+async function listChildren(parentId, user = null) {
+  await getTaskById(parentId, user)
+  const { rows } = await query(
+    `${TASK_SELECT} WHERE t.parent_task_id = $1
+     ORDER BY t.due_date ASC NULLS LAST, t.created_at ASC`,
+    [parentId]
+  )
+  return rows.map(toDto)
+}
+
 // ── Xuất Excel: frontend gửi sẵn cột + dữ liệu (đã render đúng như bảng),
 // backend chỉ định dạng ra file. Không map/tính lại → KHÔNG lệch với giao diện.
 function buildTasksExcel({ sheetName = 'Cong viec', columns = [], rows = [] }) {
@@ -1247,6 +1330,6 @@ function buildTasksExcel({ sheetName = 'Cong viec', columns = [], rows = [] }) {
 
 module.exports = {
   listTasks, getColumnValues, getTaskById, createTask, updateTask, deleteTask,
-  changeTaskStatus, getActivityLog, getAvailableYears,
+  changeTaskStatus, getActivityLog, getAvailableYears, listChildren,
   assertTaskAccess, buildTasksExcel,
 }

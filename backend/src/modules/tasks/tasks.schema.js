@@ -19,6 +19,8 @@ const createTaskSchema = z.object({
   visibility:  z.enum(['company', 'private']).optional(),
   // Người hỗ trợ (khác owner = assignedTo). Tùy chọn, có thể rỗng.
   collaboratorIds: z.array(z.string().uuid()).optional(),
+  // Việc cha (nếu tạo dưới dạng việc con của một chuỗi). Con kế thừa công ty của cha.
+  parentTaskId: z.string().uuid().optional().nullable(),
 })
 
 const updateTaskSchema = z.object({
@@ -34,6 +36,8 @@ const updateTaskSchema = z.object({
   visibility:  z.enum(['company', 'private']).optional(),
   // Danh sách người hỗ trợ mới (thay thế toàn bộ). [] = gỡ hết người hỗ trợ.
   collaboratorIds: z.array(z.string().uuid()).optional(),
+  // Gán/đổi việc cha; null = gỡ khỏi chuỗi (thành việc độc lập).
+  parentTaskId: z.string().uuid().optional().nullable(),
 }).refine(d => Object.keys(d).length > 0, { message: 'No fields to update' })
 
 const changeStatusSchema = z.object({

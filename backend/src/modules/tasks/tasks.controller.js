@@ -68,6 +68,8 @@ async function createTask(req, res, next) {
   try {
     // Chỉ admin mới đặt task 'private'. Staff gửi visibility → bỏ qua (mặc định 'company').
     if (req.user.role !== 'admin') delete req.body.visibility
+    // Tạo việc con: phải có quyền trên việc cha (nhân sự chỉ tách được việc mình xem/sửa được).
+    if (req.body.parentTaskId) await svc.assertTaskAccess(req.body.parentTaskId, req.user)
     const task = await svc.createTask(req.body, req.user.id, req.ip, req.headers['user-agent'])
     res.status(201).json({ success: true, data: { task } })
   } catch (err) { next(err) }
@@ -108,6 +110,14 @@ async function getActivityLog(req, res, next) {
       limit: Math.min(200, Math.max(1, parseInt(limit, 10))),
     })
     res.json({ success: true, data: { logs } })
+  } catch (err) { next(err) }
+}
+
+// Chuỗi việc con của một việc cha (mỗi con là task độc lập).
+async function getChildren(req, res, next) {
+  try {
+    const children = await svc.listChildren(req.params.id, req.user)
+    res.json({ success: true, data: { children } })
   } catch (err) { next(err) }
 }
 
@@ -300,7 +310,7 @@ async function deleteLink(req, res, next) {
 
 module.exports = {
   listTasks, getColumnValues, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog,
-  getAvailableYears, exportTasksExcel,
+  getChildren, getAvailableYears, exportTasksExcel,
   listChecklist, addChecklistItem, updateChecklistItem, reorderChecklist, deleteChecklistItem,
   listDependencies, addDependency, removeDependency,
   listComments, addComment, updateComment, deleteComment,

@@ -8,7 +8,7 @@ import {
 import {
   Plus, Search, RotateCcw, List, Columns, Layers,
   ChevronRight, ChevronDown, Filter, ClipboardList, Check,
-  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal, FileDown, Lock,
+  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal, FileDown, Lock, CornerLeftUp,
 } from 'lucide-react'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
@@ -950,6 +950,11 @@ function ListView({
                       )}
                       {t.title}
                     </div>
+                    {t.parentTaskId && (
+                      <span className={s.childOfTag} title={t.parentTitle ? `Thuộc việc cha: ${t.parentTitle}` : 'Việc con'}>
+                        <CornerLeftUp size={10} /> {t.parentTitle || 'việc con'}
+                      </span>
+                    )}
                   </td>
 
                   {/* Tên viết tắt (thiếu thì lấy tên công ty) */}

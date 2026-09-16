@@ -21,6 +21,10 @@ function toStepDto(row) {
     stepOrder: row.step_order,
     stepText:  row.step_text,
     level:     row.level ?? 0,
+    // Cấu hình "sinh thành việc con" khi tạo định kỳ (mặc định: bước checklist thường).
+    spawnAsSubtask: row.spawn_as_subtask ?? false,
+    dueOffsetDays:  row.due_offset_days ?? null,
+    dependsOnPrev:  row.depends_on_prev ?? false,
     createdAt: row.created_at,
   }
 }
@@ -209,17 +213,22 @@ async function getChecklist(taskTypeId) {
   return rows.map(toStepDto)
 }
 
-async function addChecklistStep(taskTypeId, stepText, level = 0) {
+async function addChecklistStep(taskTypeId, data = {}) {
   await assertTaskTypeExists(taskTypeId)
+  const {
+    stepText, level = 0,
+    spawnAsSubtask = false, dueOffsetDays = null, dependsOnPrev = false,
+  } = data
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_checklist_templates WHERE task_type_id = $1',
     [taskTypeId]
   )
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [step] } = await query(
-    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text, level)
-     VALUES ($1, $2, $3, $4) RETURNING *`,
-    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0]
+    `INSERT INTO task_type_checklist_templates
+       (task_type_id, step_order, step_text, level, spawn_as_subtask, due_offset_days, depends_on_prev)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0, !!spawnAsSubtask, dueOffsetDays, !!dependsOnPrev]
   )
   return toStepDto(step)
 }
@@ -231,7 +240,11 @@ async function updateChecklistStep(taskTypeId, stepId, data) {
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
   if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
+  if (data.spawnAsSubtask !== undefined) { params.push(!!data.spawnAsSubtask); updates.push(`spawn_as_subtask = $${params.length}`) }
+  if (data.dueOffsetDays !== undefined) { params.push(data.dueOffsetDays); updates.push(`due_offset_days = $${params.length}`) }
+  if (data.dependsOnPrev !== undefined) { params.push(!!data.dependsOnPrev); updates.push(`depends_on_prev = $${params.length}`) }
 
+  if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(stepId, taskTypeId)
   const { rows: [step] } = await query(
     `UPDATE task_type_checklist_templates SET ${updates.join(', ')}

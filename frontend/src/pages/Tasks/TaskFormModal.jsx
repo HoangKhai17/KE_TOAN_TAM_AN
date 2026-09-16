@@ -113,13 +113,16 @@ function CompanyPicker({ companies, value, onChange, disabled, hasError }) {
 
 // ── Main modal ────────────────────────────────────────────────────────────────
 
-export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initialCompanyId, lockCompany }) {
+export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initialCompanyId, lockCompany, parentTask }) {
   const isAdmin = useAuthStore((st) => st.user?.role === 'admin')
   const todayISO = new Date().toISOString().slice(0, 10)
+  // Tách việc con: khoá công ty theo cha; con hoàn thành độc lập nên KHÔNG bắt buộc checklist.
+  const isSubtask = !!parentTask
+  const companyLocked = isSubtask || lockCompany
   const [form, setForm] = useState({
-    title: '', companyId: initialCompanyId || '', taskTypeId: '', assignedToId: '',
+    title: '', companyId: parentTask?.companyId || initialCompanyId || '', taskTypeId: '', assignedToId: '',
     startDate: todayISO, dueDate: '', priority: 'medium', slaDays: '', description: '',
-    source: 'manual', collaboratorIds: [], visibility: 'company',
+    source: 'manual', collaboratorIds: [], visibility: parentTask?.visibility === 'private' ? 'private' : 'company',
   })
   const [companies, setCompanies] = useState([])
   const [users,     setUsers]     = useState([])
@@ -216,7 +219,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       errs.dueDate = 'Ngày hết hạn không được nhỏ hơn ngày bắt đầu'
     // Bắt buộc phải có checklist: hoặc thêm tay ≥1 bước, hoặc chọn loại công việc có sẵn checklist mẫu.
     const hasTemplateChecklist = (selectedType?.checklistCount ?? 0) > 0
-    if (checklistItems.length === 0 && !hasTemplateChecklist) {
+    if (checklistItems.length === 0 && !hasTemplateChecklist && !isSubtask) {
       errs.checklist = 'Công việc phải có ít nhất 1 bước checklist (thêm bên dưới hoặc chọn loại công việc có sẵn checklist).'
     }
     if (Object.keys(errs).length) { setFE(errs); return }
@@ -236,6 +239,8 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
         collaboratorIds: form.collaboratorIds.filter((id) => id && id !== form.assignedToId),
         // Chỉ gửi khi admin đặt riêng tư; backend mặc định 'company'.
         ...(isAdmin && form.visibility === 'private' ? { visibility: 'private' } : {}),
+        // Tách việc con: gắn vào việc cha (con kế thừa công ty của cha ở backend).
+        ...(isSubtask ? { parentTaskId: parentTask.id } : {}),
       })
       for (const item of checklistItems) {
         await addTaskChecklistItem(task.id, { stepText: item.text, level: item.level ?? 0 })
@@ -261,7 +266,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
 
   return (
     <Modal
-      title="Tạo công việc mới"
+      title={isSubtask ? 'Tách thành việc con' : 'Tạo công việc mới'}
       onClose={onClose}
       width="min(1120px, calc(100vw - 40px))"
       maxWidth="1120px"
@@ -269,6 +274,16 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       {error && (
         <div className={s.taskFormErrorBox}>
           {error}
+        </div>
+      )}
+
+      {isSubtask && (
+        <div
+          className={s.taskFormErrorBox}
+          style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', border: '1px solid var(--color-primary-ring)' }}
+        >
+          Việc con của: <strong>{parentTask.title}</strong>
+          {parentTask.companyName ? ` — ${parentTask.companyName}` : ''}. Việc con hoàn thành độc lập, có ngày hết hạn riêng.
         </div>
       )}
 
@@ -296,7 +311,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
             companies={companies}
             value={form.companyId}
             onChange={(id) => setForm((p) => ({ ...p, companyId: id }))}
-            disabled={lockCompany}
+            disabled={companyLocked}
             hasError={!!fe.companyId}
           />
           {fe.companyId && <p className={s.formError}>{fe.companyId}</p>}

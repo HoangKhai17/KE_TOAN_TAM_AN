@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Plus, Pencil, ChevronDown, ChevronRight, ChevronLeft, Loader2,
   GripVertical, Trash2, Check, X, Tag, AlignLeft,
-  Power, RefreshCw,
+  Power, RefreshCw, GitBranch,
 } from 'lucide-react'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -294,7 +294,7 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
 
 // ── Checklist Panel ───────────────────────────────────────────────────────────
 
-function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel }) {
+function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel, onSpawnChange }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: step.id })
 
@@ -305,7 +305,9 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
     opacity: isDragging ? 0.45 : 1,
     zIndex: isDragging ? 10 : 'auto',
     position: 'relative',
+    flexWrap: 'wrap',
   }
+  const fld = { fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)' }
 
   return (
     <div ref={setNodeRef} style={style} className={`${s.clItem} ${isChild ? s.clItemChild : ''}`}>
@@ -348,6 +350,34 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
             <Trash2 size={12} />
           </button>
         </>
+      )}
+
+      {/* Cấu hình "sinh thành việc con" khi tạo định kỳ (mỗi con một hạn riêng) */}
+      {!isEditing && (
+        <div style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 6, paddingLeft: 26 }}>
+          <label style={{ ...fld, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer', color: step.spawnAsSubtask ? 'var(--color-primary-dark)' : 'var(--color-muted)' }}>
+            <input type="checkbox" checked={!!step.spawnAsSubtask} onChange={(e) => onSpawnChange({ spawnAsSubtask: e.target.checked })} />
+            <GitBranch size={11} /> Sinh thành việc con
+          </label>
+          {step.spawnAsSubtask && (
+            <>
+              <label style={{ ...fld, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                Hạn: kỳ +
+                <input
+                  type="number" min="0" max="3650"
+                  value={step.dueOffsetDays ?? 0}
+                  onChange={(e) => onSpawnChange({ dueOffsetDays: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
+                  style={{ width: 56, padding: '2px 6px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--fs-2xs)' }}
+                />
+                ngày
+              </label>
+              <label style={{ ...fld, display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!step.dependsOnPrev} onChange={(e) => onSpawnChange({ dependsOnPrev: e.target.checked })} />
+                Phụ thuộc bước trước
+              </label>
+            </>
+          )}
+        </div>
       )}
     </div>
   )
@@ -424,6 +454,18 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
     setSaving(false)
   }
 
+  // Cấu hình "sinh thành việc con" (spawnAsSubtask/dueOffsetDays/dependsOnPrev).
+  async function handleSpawnChange(step, patch) {
+    setItems((prev) => prev.map((i) => i.id === step.id ? { ...i, ...patch } : i))  // optimistic
+    try {
+      await updateChecklistStep(taskTypeId, step.id, patch)
+      onRefresh()
+    } catch {
+      setItems(checklist)  // revert
+      addToast('Không thể cập nhật cấu hình việc con', 'error')
+    }
+  }
+
   async function handleAdd() {
     const text = addText.trim()
     if (!text) return
@@ -463,6 +505,7 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh }) {
               onCancel={() => setEditingId(null)}
               onDelete={() => handleDelete(step.id)}
               onToggleLevel={() => handleToggleLevel(step)}
+              onSpawnChange={(patch) => handleSpawnChange(step, patch)}
             />
           ))}
         </SortableContext>
