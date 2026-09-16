@@ -491,8 +491,6 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, ad
 // có tiêu đề + hạn (offset) + CHECKLIST RIÊNG của nó.
 
 const SS = {
-  offsetBox:  { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', flexShrink: 0, whiteSpace: 'nowrap' },
-  offsetInput:{ width: 52, boxSizing: 'border-box', padding: '3px 6px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--fs-2xs)' },
   titleInput: { flex: '1 1 180px', minWidth: 0, boxSizing: 'border-box', padding: '5px 8px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--fs-xs)', fontFamily: 'inherit' },
   card:       { border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', marginBottom: 8 },
   head:       { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 10px' },
