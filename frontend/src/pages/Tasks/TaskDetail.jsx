@@ -536,12 +536,12 @@ function TimeLogsTab({ taskId }) {
     } catch { addToast('Không thể xoá', 'error') }
   }
 
-  if (loading) return <div className={s.loadingBox}><div className={s.spinner} /> Đang tải...</div>
+  if (loading) return <div className={`${s.loadingBox} ${s.timeLogTab}`}><div className={s.spinner} /> Đang tải...</div>
 
   const total = logs.reduce((sum, l) => sum + Number(l.hours || 0), 0)
 
   return (
-    <div>
+    <div className={s.timeLogTab}>
       <div className={s.timeLogAddRow}>
         <div>
           <label className={`${s.cfLabel} ${s.cfLabelBlock}`}>Số giờ *</label>
@@ -684,7 +684,7 @@ function CustomFieldsTab({ taskId }) {
       )
     }
     if (f.dataType === 'date') {
-      return <DateBox block value={val ?? ''} onChange={(v) => set(v)} />
+      return <DateBox block className={s.detailDateBox} value={val ?? ''} onChange={(v) => set(v)} />
     }
     if (f.dataType === 'number') {
       return <input type="number" value={val} onChange={(e) => set(e.target.value)} className={s.cfInput} />
@@ -746,11 +746,11 @@ function ChildrenChain({ parentTask, onParentRefresh }) {
           </div>
         )}
         <button
-          className={`${s.btnSecondary} ${s.btnCompact}`}
+          className={s.chainAddBtnGreen}
           style={{ marginLeft: 'auto' }}
           onClick={() => setShowCreate(true)}
         >
-          <Plus size={12} /> Tách thành việc con
+          <Plus size={12} /> Thêm việc con
         </button>
       </div>
 
@@ -1172,6 +1172,7 @@ export default function TaskDetail() {
                 {canEditDueDate(task, isAdmin) ? (
                   <DateBox
                     block
+                    className={s.detailDateBox}
                     value={task.dueDate?.slice(0, 10) ?? ''}
                     onChange={(v) => saveDueDate(v)}
                     min={task.startDate?.slice(0, 10) || ''}

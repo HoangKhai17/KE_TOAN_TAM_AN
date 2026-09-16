@@ -78,6 +78,9 @@ function toDto(row) {
     parentTitle:            row.parent_title ?? null,
     childrenTotal:          parseInt(row.children_total ?? 0, 10),
     childrenDone:           parseInt(row.children_done ?? 0, 10),
+    // Phụ thuộc 2 chiều (chỉ để hiển thị nhãn): depTotal = việc này chờ ai; dependentTotal = ai chờ việc này
+    depTotal:               parseInt(row.dep_total ?? 0, 10),
+    dependentTotal:         parseInt(row.dependent_total ?? 0, 10),
     status:                 row.status,
     priority:               row.priority,
     source:                 row.source,
@@ -117,7 +120,9 @@ const TASK_SELECT = `
          COALESCE(collab.list, '[]'::json) AS collaborators,
          pt.title AS parent_title,
          ch.children_total,
-         ch.children_done
+         ch.children_done,
+         dep.dep_total,
+         dep.dependent_total
   FROM tasks t
   LEFT JOIN companies  c  ON c.id  = t.company_id
   LEFT JOIN task_types tt ON tt.id = t.task_type_id
@@ -125,11 +130,23 @@ const TASK_SELECT = `
   LEFT JOIN users      uc ON uc.id = t.created_by
   LEFT JOIN tasks      pt ON pt.id = t.parent_task_id
   LEFT JOIN LATERAL (
+    -- "Đàn anh chính": việc phải-xong-trước sớm nhất mà t phụ thuộc (để gom nhóm phụ thuộc)
+    SELECT d.depends_on_task_id AS blocker_id
+    FROM task_dependencies d WHERE d.task_id = t.id
+    ORDER BY d.created_at LIMIT 1
+  ) db ON TRUE
+  LEFT JOIN tasks      bt ON bt.id = db.blocker_id
+  LEFT JOIN LATERAL (
     -- Đếm việc con (CHỈ để hiển thị tiến độ chuỗi, KHÔNG phải cổng hoàn thành cha)
     SELECT COUNT(*) AS children_total,
            COUNT(*) FILTER (WHERE status = 'completed') AS children_done
     FROM tasks ct WHERE ct.parent_task_id = t.id
   ) ch ON TRUE
+  LEFT JOIN LATERAL (
+    -- Đếm phụ thuộc 2 chiều: dep_total = việc này chờ (đàn anh); dependent_total = việc chờ việc này (đàn em)
+    SELECT (SELECT COUNT(*) FROM task_dependencies d1 WHERE d1.task_id = t.id)            AS dep_total,
+           (SELECT COUNT(*) FROM task_dependencies d2 WHERE d2.depends_on_task_id = t.id) AS dependent_total
+  ) dep ON TRUE
   LEFT JOIN LATERAL (
     -- Người hỗ trợ (collaborators) — owner vẫn nằm ở t.assigned_to, KHÔNG gộp vào đây.
     SELECT json_agg(json_build_object('id', u2.id, 'name', u2.name) ORDER BY u2.name) AS list
@@ -1124,7 +1141,7 @@ async function changeTaskStatus(id, newStatus, params, actorId, ipAddress, userA
     const blockers = await checkBlockers(id)
     if (blockers.length > 0) {
       throw Object.assign(
-        new Error(`Task is blocked by ${blockers.length} incomplete dependency task(s): ${blockers.map(b => b.title).join(', ')}`),
+        new Error(`Công việc đang bị chặn bởi ${blockers.length} việc phụ thuộc chưa hoàn thành: ${blockers.map(b => b.title).join(', ')}`),
         { status: 422, blockers }
       )
     }

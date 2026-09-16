@@ -430,6 +430,7 @@ router.delete('/:id/checklist/:itemId', ...auth, ctrl.deleteChecklistItem)
  *       422: { description: Would create a circular dependency }
  */
 router.get('/:id/dependencies', ...auth, ctrl.listDependencies)
+router.get('/:id/dependents', ...auth, ctrl.listDependents)
 router.post('/:id/dependencies', ...auth, validate(addDependencySchema), ctrl.addDependency)
 
 /**

@@ -8,7 +8,7 @@ import {
 import {
   Plus, Search, RotateCcw, List, Columns, Layers,
   ChevronRight, ChevronDown, Filter, ClipboardList, Check,
-  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal, FileDown, Lock, CornerLeftUp, ListTree,
+  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal, FileDown, Lock, CornerLeftUp, ListTree, Link2,
 } from 'lucide-react'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
@@ -978,6 +978,18 @@ function ListView({
                         <CornerLeftUp size={10} /> thuộc: {t.parentTitle || 'việc cha'}
                       </button>
                     )}
+                    {/* Nhãn phụ thuộc (2 chiều) để dễ phân biệt */}
+                    {(t.depTotal > 0 || t.dependentTotal > 0) && (
+                      <span
+                        className={s.depTag}
+                        title={[
+                          t.depTotal > 0 ? `Chờ ${t.depTotal} việc xong trước` : '',
+                          t.dependentTotal > 0 ? `${t.dependentTotal} việc đang chờ việc này` : '',
+                        ].filter(Boolean).join(' · ')}
+                      >
+                        <Link2 size={10} /> Phụ thuộc
+                      </span>
+                    )}
                   </td>
 
                   {/* Tên viết tắt (thiếu thì lấy tên công ty) */}
@@ -1880,8 +1892,9 @@ export default function Tasks() {
     setShowCreate(false)
     addToast(`Đã tạo "${task.title}"`, 'success')
     if (view === 'list') {
-      setTasks((prev) => [task, ...prev])
-      setPagination((p) => ({ ...p, total: p.total + 1 }))
+      // Chèn lạc quan NHƯNG tránh trùng: sự kiện socket 'data:task' cũng làm refetch
+      // danh sách (đã chứa task mới) → nếu prepend vô điều kiện sẽ hiện 2 dòng.
+      setTasks((prev) => prev.some((t) => t.id === task.id) ? prev : [task, ...prev])
     }
   }
 

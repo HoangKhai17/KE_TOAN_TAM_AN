@@ -47,6 +47,25 @@ async function listDependencies(taskId) {
   return rows.map(toDto)
 }
 
+// Chiều NGƯỢC LẠI: các việc ĐANG PHỤ THUỘC vào task này (đàn em — chờ task này xong).
+async function listDependents(taskId) {
+  await assertTask(taskId)
+  const { rows } = await query(
+    `SELECT td.id, td.task_id, t.title AS dependent_title, t.status AS dependent_status
+     FROM task_dependencies td
+     JOIN tasks t ON t.id = td.task_id
+     WHERE td.depends_on_task_id = $1
+     ORDER BY td.created_at`,
+    [taskId]
+  )
+  return rows.map((r) => ({
+    id:              r.id,
+    taskId:          r.task_id,
+    dependentTitle:  r.dependent_title ?? null,
+    dependentStatus: r.dependent_status ?? null,
+  }))
+}
+
 async function addDependency(taskId, { dependsOnTaskId }, actorId) {
   await assertTask(taskId)
 
@@ -106,4 +125,4 @@ async function checkBlockers(taskId) {
   return rows // non-empty = blocked
 }
 
-module.exports = { listDependencies, addDependency, removeDependency, checkBlockers }
+module.exports = { listDependencies, listDependents, addDependency, removeDependency, checkBlockers }

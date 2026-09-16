@@ -95,6 +95,12 @@ export async function getTaskDependencies(id) {
   return data.data.dependencies
 }
 
+// Chiều ngược: các việc đang phụ thuộc vào task này (đàn em)
+export async function getTaskDependents(id) {
+  const { data } = await api.get(`/tasks/${id}/dependents`)
+  return data.data.dependents
+}
+
 export async function addTaskDependency(id, body) {
   const { data } = await api.post(`/tasks/${id}/dependencies`, body)
   return data.data.dependency

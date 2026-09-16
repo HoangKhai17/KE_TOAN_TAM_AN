@@ -182,6 +182,13 @@ async function listDependencies(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function listDependents(req, res, next) {
+  try {
+    const dependents = await depsSvc.listDependents(req.params.id)
+    res.json({ success: true, data: { dependents } })
+  } catch (err) { next(err) }
+}
+
 async function addDependency(req, res, next) {
   try {
     const dependency = await depsSvc.addDependency(req.params.id, req.body, req.user.id)
@@ -312,7 +319,7 @@ module.exports = {
   listTasks, getColumnValues, getTask, createTask, updateTask, deleteTask, changeTaskStatus, getActivityLog,
   getChildren, getAvailableYears, exportTasksExcel,
   listChecklist, addChecklistItem, updateChecklistItem, reorderChecklist, deleteChecklistItem,
-  listDependencies, addDependency, removeDependency,
+  listDependencies, listDependents, addDependency, removeDependency,
   listComments, addComment, updateComment, deleteComment,
   listTimeLogs, addTimeLog, deleteTimeLog,
   getCustomFields, upsertCustomFields,

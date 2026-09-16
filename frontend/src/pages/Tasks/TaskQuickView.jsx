@@ -198,6 +198,152 @@ function AttachToParent({ task, onAttached }) {
   )
 }
 
+// ── Phụ thuộc (dependencies) — bản gọn cho QuickView ──────────────────────────
+// Hiển thị + thêm/xoá "việc phải xong trước". Chặn khởi động thực thi ở backend.
+
+function QvDependencies({ taskId, companyId, onOpen }) {
+  const addToast = useToastStore((st) => st.toast)
+  const [deps, setDeps]             = useState([])   // đàn anh: việc này chờ
+  const [dependents, setDependents] = useState([])   // đàn em: việc chờ việc này
+  const [loading, setLoading]     = useState(true)
+  const [open, setOpen]           = useState(false)
+  const [search, setSearch]       = useState('')
+  const [results, setResults]     = useState([])
+  const [searching, setSearching] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([
+      tasksApi.getTaskDependencies(taskId).then(setDeps).catch(() => {}),
+      tasksApi.getTaskDependents(taskId).then(setDependents).catch(() => {}),
+    ]).finally(() => setLoading(false))
+  }, [taskId])
+
+  useEffect(() => {
+    if (!open) return
+    function onOutside(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onOutside)
+    return () => document.removeEventListener('mousedown', onOutside)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) { setResults([]); return }
+    const q = search.trim()
+    const timer = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const params = q
+          ? { search: q, companyId: companyId || undefined, limit: 10 }
+          : { companyId: companyId || undefined, limit: 10, sortBy: 'created_at', sortDir: 'desc' }
+        const { tasks } = await tasksApi.listTasks(params)
+        setResults(tasks.filter((t) => t.id !== taskId && !deps.find((d) => d.dependsOnTaskId === t.id)))
+      } catch { /* noop */ } finally { setSearching(false) }
+    }, q ? 300 : 0)
+    return () => clearTimeout(timer)
+  }, [open, search, taskId, companyId, deps])
+
+  async function add(dependsOnTaskId) {
+    try {
+      const dep = await tasksApi.addTaskDependency(taskId, { dependsOnTaskId })
+      setDeps((p) => [...p, dep]); setSearch(''); setOpen(false)
+      addToast('Đã thêm phụ thuộc', 'success')
+    } catch (err) { addToast(err.response?.data?.error?.message ?? 'Không thể thêm', 'error') }
+  }
+  async function remove(depId) {
+    try { await tasksApi.deleteTaskDependency(taskId, depId); setDeps((p) => p.filter((d) => d.id !== depId)); addToast('Đã xoá phụ thuộc', 'success') }
+    catch { addToast('Không thể xoá', 'error') }
+  }
+
+  return (
+    <div>
+      <div className={s.qvSectionTitle} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>
+          <AlertTriangle size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+          Phụ thuộc
+        </span>
+        <span ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
+          <button className={s.btnQvSave} onClick={() => setOpen((o) => !o)} title="Thêm việc phải xong trước">
+            <Plus size={11} /> Thêm
+          </button>
+          {open && (
+            <div className={s.qvAttachPop} style={{ right: 0, left: 'auto', width: 300 }}>
+              <input
+                autoFocus type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm việc phải xong trước..." className={s.qvAttachInput}
+              />
+              {searching && <div className={s.qvAttachHint}>Đang tìm…</div>}
+              {!searching && results.length === 0 && <div className={s.qvAttachHint}>Không có việc phù hợp.</div>}
+              {results.map((r) => (
+                <div key={r.id} className={s.qvAttachItem} role="button" tabIndex={0} onClick={() => add(r.id)}>
+                  <span className={`${s.qvAttachItemName} ${s.qvDepPopName}`}>{r.title}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </span>
+      </div>
+
+      {loading ? (
+        <div className={s.qvAttachHint}>Đang tải…</div>
+      ) : (
+        <>
+          {/* Chiều 1 — việc NÀY chờ (đàn anh) */}
+          <div className={s.qvDepGroupLabel}>Việc này chờ ({deps.length})</div>
+          {deps.length === 0 ? (
+            <p className={s.chainEmpty} style={{ padding: '2px 0 8px' }}>Không phụ thuộc việc nào.</p>
+          ) : (
+            <div className={s.qvDepList} style={{ marginBottom: 10 }}>
+              {deps.map((dep) => {
+                const blocked = dep.dependsOnStatus !== 'completed'
+                const dotCls = dep.dependsOnStatus === 'completed' ? s.qvChainDotDone : (blocked ? s.qvChainDotHold : '')
+                return (
+                  <div key={dep.id} className={s.qvDepItem}>
+                    <span className={`${s.qvChainDot} ${dotCls}`} />
+                    <span
+                      className={s.qvDepTitle}
+                      title={dep.dependsOnTitle}
+                      onClick={onOpen ? () => onOpen(dep.dependsOnTaskId) : undefined}
+                      style={onOpen ? { cursor: 'pointer' } : undefined}
+                    >{dep.dependsOnTitle}</span>
+                    {blocked && <span className={s.qvDepWarn}>chưa xong</span>}
+                    <button className={s.qvDepDel} onClick={() => remove(dep.id)} title="Xoá phụ thuộc"><X size={11} /></button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Chiều 2 — việc CHỜ việc này (đàn em) — chỉ hiển thị, quản lý ở việc kia */}
+          <div className={s.qvDepGroupLabel}>Việc chờ việc này ({dependents.length})</div>
+          {dependents.length === 0 ? (
+            <p className={s.chainEmpty} style={{ padding: '2px 0 0' }}>Chưa có việc nào phụ thuộc việc này.</p>
+          ) : (
+            <div className={s.qvDepList}>
+              {dependents.map((d) => {
+                const done = d.dependentStatus === 'completed'
+                return (
+                  <div
+                    key={d.id}
+                    className={s.qvDepItem}
+                    role={onOpen ? 'button' : undefined}
+                    tabIndex={onOpen ? 0 : undefined}
+                    onClick={onOpen ? () => onOpen(d.taskId) : undefined}
+                    style={onOpen ? { cursor: 'pointer' } : undefined}
+                  >
+                    <span className={`${s.qvChainDot} ${done ? s.qvChainDotDone : ''}`} />
+                    <span className={s.qvDepTitle} title={d.dependentTitle}>{d.dependentTitle}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }) {
@@ -779,6 +925,10 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                   <span className={s.qvLabel}><Calendar size={11} /> Ngày tạo</span>
                   <span className={s.qvValue}>{fmtDate(task.createdAt)}</span>
                 </div>
+
+                {/* Kẻ ngăn + phần Phụ thuộc (việc phải xong trước) */}
+                <hr className={s.qvHr} />
+                <QvDependencies taskId={taskId} companyId={task.companyId} onOpen={openTask} />
               </div>
 
               {/* ── RIGHT: checklist + description ── */}

@@ -211,6 +211,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   }
 
   async function submit(openAfter) {
+    if (saving) return   // chặn double-submit (bấm nhanh 2 lần) → tránh tạo trùng
     const errs = {}
     if (!form.title.trim()) errs.title = 'Tiêu đề không được để trống'
     if (!form.companyId)    errs.companyId = 'Vui lòng chọn khách hàng'
