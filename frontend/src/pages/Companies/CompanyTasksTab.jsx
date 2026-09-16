@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, ListTodo, Loader2, Trash2, Plus, Search, RotateCcw, Filter, Eye,
   SlidersHorizontal, ChevronDown, ChevronRight, Check, LayoutGrid, List,
+  ListTree, CornerLeftUp, Link2,
 } from 'lucide-react'
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -213,7 +214,9 @@ function TaskMultiSelect({ placeholder, options, selected, onChange }) {
 // ── CompanyTasksTab ────────────────────────────────────────────────────────────
 
 // ── sessionStorage: remember Công việc tab filters/view per company (survives F5) ─
-const CT_STATE_KEY = (cid) => `company_tasks_state:${cid}`
+// v2: đổi kỳ mặc định từ "tháng hiện tại" → "năm nay" + thêm gom nhóm cha-con/phụ thuộc.
+// Bump khoá để phiên cũ (lưu tháng hiện tại) không đè mặc định mới.
+const CT_STATE_KEY = (cid) => `company_tasks_state:v2:${cid}`
 function loadCtState(cid) {
   try { return JSON.parse(sessionStorage.getItem(CT_STATE_KEY(cid))) ?? {} }
   catch { return {} }
@@ -234,6 +237,32 @@ function SourceCardInner({ task, getLabel }) {
       <div className={ts.boardCardHead}>
         <div className={`${ts.boardCardTitle} ${overdue ? s.companyTaskBoardTitleOverdue : ''}`}>{task.title}</div>
       </div>
+      {/* Nhãn cha–con / phụ thuộc — đồng bộ với danh sách (chỉ hiển thị, không lồng nhóm trên Kanban) */}
+      {(task.childrenTotal > 0 || task.parentTaskId || task.depTotal > 0 || task.dependentTotal > 0) && (
+        <div className={ts.boardCardMeta} style={{ marginTop: 2, marginBottom: 2 }}>
+          {task.childrenTotal > 0 && (
+            <span className={ts.chainHeadTag} title={`Đầu chuỗi — có ${task.childrenTotal} việc con`}>
+              <ListTree size={10} /> {task.childrenTotal} việc con
+            </span>
+          )}
+          {task.parentTaskId && (
+            <span className={ts.childOfTag} title={task.parentTitle ? `Thuộc việc cha: ${task.parentTitle}` : 'Việc con'}>
+              <CornerLeftUp size={10} /> thuộc: {task.parentTitle || 'việc cha'}
+            </span>
+          )}
+          {(task.depTotal > 0 || task.dependentTotal > 0) && (
+            <span
+              className={ts.depTag}
+              title={[
+                task.depTotal > 0 ? `Chờ ${task.depTotal} việc xong trước` : '',
+                task.dependentTotal > 0 ? `${task.dependentTotal} việc đang chờ việc này` : '',
+              ].filter(Boolean).join(' · ')}
+            >
+              <Link2 size={10} /> Phụ thuộc
+            </span>
+          )}
+        </div>
+      )}
       <div className={ts.boardCardMeta}>
         <span className={`${ts.priorityBadge} ${ts[PRIORITY_CSS[task.priority]]}`}>
           {getLabel('task_priority', task.priority, PRIORITY_LABELS[task.priority])}
@@ -384,8 +413,12 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const [priorityFilter, setPriorityFilter] = useState(initCt.priorityFilter ?? [])
   const [sourceFilter, setSourceFilter]     = useState(initCt.sourceFilter  ?? [])
   const [isOverdue, setIsOverdue]           = useState(initCt.isOverdue     ?? false)
-  const [monthFilter, setMonthFilter]       = useState(initCt.monthFilter   ?? CUR_MONTH)
+  // Mặc định = cả NĂM hiện tại (tháng để trống) — đồng bộ với danh sách Tasks.
+  const [monthFilter, setMonthFilter]       = useState(initCt.monthFilter   ?? '')
   const [yearFilter, setYearFilter]         = useState(initCt.yearFilter    ?? CUR_YEAR)
+  // Gom nhóm cha-con / phụ thuộc (loại trừ lẫn nhau) — đồng bộ với danh sách Tasks.
+  const [groupByChain, setGroupByChain]     = useState(initCt.groupByChain  ?? false)
+  const [groupByDep, setGroupByDep]         = useState(initCt.groupByDep    ?? false)
   // Khoảng ngày tự chọn — có giá trị thì được ưu tiên hơn Năm/Tháng
   const [dueDateFrom, setDueDateFrom]       = useState(initCt.dueDateFrom   ?? '')
   const [dueDateTo, setDueDateTo]           = useState(initCt.dueDateTo     ?? '')
@@ -437,8 +470,9 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     saveCtState(company.id, {
       view, limit, searchInput, statusFilter, priorityFilter, sourceFilter,
       isOverdue, monthFilter, yearFilter, dueDateFrom, dueDateTo, sortValue, sortState, hiddenCols: [...hiddenCols],
+      groupByChain, groupByDep,
     })
-  }, [company.id, view, limit, searchInput, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, dueDateFrom, dueDateTo, sortValue, sortState, hiddenCols])
+  }, [company.id, view, limit, searchInput, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, dueDateFrom, dueDateTo, sortValue, sortState, hiddenCols, groupByChain, groupByDep])
 
   useEffect(() => {
     loadEnums()
@@ -469,6 +503,10 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
     const [sortBy, sortDir] = sortValue.split(':')
     // Load the whole period (server-side coarse filters); column-header filter,
     // sort and pagination are applied client-side on top of this set.
+    // Gom nhóm chỉ áp dụng ở dạng danh sách. Khi bật, server đã sắp xếp con nằm dưới
+    // cha (hoặc việc phụ thuộc nằm dưới việc phải xong trước) — client giữ nguyên thứ tự.
+    const groupOn    = view === 'list' && groupByChain
+    const groupDepOn = view === 'list' && groupByDep
     tasksApi.listTasks({
       companyId:  company.id,
       search:     search                         || undefined,
@@ -478,9 +516,11 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       isOverdue:  isOverdue     ? true : undefined,
       ...getDateRange(),
       page:  1,
-      limit: 100,
+      limit: 500,   // nạp cả kỳ (năm) cho 1 công ty; phân trang/lọc cột/sort làm ở client
       sortBy,
       sortDir,
+      groupByChain: groupOn    ? true : undefined,
+      groupByDep:   groupDepOn ? true : undefined,
     })
       .then(({ tasks: t, pagination: p, statusCounts: sc }) => {
         if (!cancelled) {
@@ -492,7 +532,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       .catch(() => { if (!cancelled) setTasks([]) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [company.id, search, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, dueDateFrom, dueDateTo, sortValue]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [company.id, search, statusFilter, priorityFilter, sourceFilter, isOverdue, monthFilter, yearFilter, dueDateFrom, dueDateTo, sortValue, view, groupByChain, groupByDep]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const cancel = load()
@@ -538,7 +578,8 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   function resetFilters() {
     setSearchInput(''); setSearch('')
     setStatusFilter([]); setPriorityFilter([]); setSourceFilter([]); setIsOverdue(false)
-    setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR); clearRange()
+    setMonthFilter(''); setYearFilter(CUR_YEAR); clearRange()
+    setGroupByChain(false); setGroupByDep(false)
     setColFilters({}); setSortState({ col: null, dir: 'asc' }); setSortValue('work_priority:asc')
     setPage(1)
   }
@@ -640,7 +681,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
   const activeFilters = (search ? 1 : 0)
     + statusFilter.length + priorityFilter.length + sourceFilter.length
     + (isOverdue ? 1 : 0)
-    + (monthFilter !== CUR_MONTH ? 1 : 0)
+    + (monthFilter !== '' ? 1 : 0)
     + (yearFilter  !== CUR_YEAR  ? 1 : 0)
 
   // Nhãn hiển thị cho lọc/sắp theo cột — lấy từ ENUM ĐỘNG (getLabel), đồng bộ Tasks.
@@ -675,7 +716,10 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               : parseFloat(row[colKey]),
       }))
     }
-    if (sortState.col) {
+    // Khi GOM NHÓM (cha-con / phụ thuộc): giữ NGUYÊN thứ tự server trả về để con nằm
+    // đúng dưới cha — không sắp xếp lại theo cột (giống danh sách Tasks).
+    const grouping = view === 'list' && (groupByChain || groupByDep)
+    if (sortState.col && !grouping) {
       result.sort((a, b) => {
         const ak = getTaskSortKey(a, sortState.col)
         const bk = getTaskSortKey(b, sortState.col)
@@ -687,7 +731,7 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
       })
     }
     return result
-  }, [tasks, colFilters, sortState, colDisplayLabel])
+  }, [tasks, colFilters, sortState, colDisplayLabel, view, groupByChain, groupByDep])
 
   const clientTotal      = displayed.length
   const clientTotalPages = Math.max(1, Math.ceil(clientTotal / limit))
@@ -970,6 +1014,42 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
               onChange={(v) => { setSourceFilter(v); setPage(1) }}
             />
           </div>
+
+          {/* Gom nhóm cha-con / phụ thuộc — chỉ ở dạng danh sách, loại trừ lẫn nhau */}
+          {view === 'list' && (
+            <div className={ts.filterGroup}>
+              <label className={ts.filterLabel}>Hiển thị · gom nhóm</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(() => {
+                  const grpStyle = (on) => ({
+                    flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                    padding: '7px 10px', fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: 'pointer',
+                    border: '1px solid var(--color-primary, #2563eb)', whiteSpace: 'nowrap',
+                    background: on ? 'var(--color-primary, #2563eb)' : 'transparent',
+                    color: on ? '#fff' : 'var(--color-primary, #2563eb)',
+                  })
+                  return (<>
+                    <button
+                      type="button"
+                      style={grpStyle(groupByChain)}
+                      onClick={() => { const nv = !groupByChain; setGroupByChain(nv); if (nv) setGroupByDep(false); setPage(1) }}
+                      title="Gom nhóm cha – con: gộp việc con xuống ngay dưới việc cha (giữ nguyên sắp xếp)"
+                    >
+                      <ListTree size={13} /> Cha – con {groupByChain && <Check size={12} />}
+                    </button>
+                    <button
+                      type="button"
+                      style={grpStyle(groupByDep)}
+                      onClick={() => { const nv = !groupByDep; setGroupByDep(nv); if (nv) setGroupByChain(false); setPage(1) }}
+                      title="Gom nhóm phụ thuộc: gộp việc bị phụ thuộc xuống dưới việc phải xong trước (thụt vào)"
+                    >
+                      <Link2 size={13} /> Phụ thuộc {groupByDep && <Check size={12} />}
+                    </button>
+                  </>)
+                })()}
+              </div>
+            </div>
+          )}
             </div>
           </div>
         )}
@@ -978,14 +1058,14 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
         <div className={ts.filterChipsRow}>
           {/* Period chip — always show current period */}
           {(() => {
-            const isDefault = monthFilter === CUR_MONTH && yearFilter === CUR_YEAR && !dueDateFrom && !dueDateTo
+            const isDefault = monthFilter === '' && yearFilter === CUR_YEAR && !dueDateFrom && !dueDateTo
             return (
               <span className={ts.filterChip} title={periodRangeLabel(activeRange)}>
-                {monthFilter && yearFilter ? `T${monthFilter}/${yearFilter}` : periodRangeLabel(activeRange)}
+                {monthFilter && yearFilter ? `T${monthFilter}/${yearFilter}` : (yearFilter && !dueDateFrom && !dueDateTo ? `Năm ${yearFilter}` : periodRangeLabel(activeRange))}
                 {!isDefault && (
                   <button
                     className={ts.filterChipRemove}
-                    onClick={() => { setMonthFilter(CUR_MONTH); setYearFilter(CUR_YEAR); clearRange(); setPage(1) }}
+                    onClick={() => { setMonthFilter(''); setYearFilter(CUR_YEAR); clearRange(); setPage(1) }}
                   >×</button>
                 )}
               </span>
@@ -1128,11 +1208,40 @@ function CompanyTasksTab({ company, onTaskCountChange }) {
                       />
                     </td>
 
-                    {/* Tiêu đề (cố định) */}
-                    <td className={s.cTaskTitleCell}>
+                    {/* Tiêu đề (cố định) — thụt lề khi gom nhóm: việc con hoặc việc bị phụ thuộc */}
+                    <td className={`${s.cTaskTitleCell} ${task.parentTaskId ? ts.tdChild : ((groupByDep && task.depTotal > 0) ? ts.tdDepChild : '')}`}>
                       <div className={`${s.cTaskTitle} ${overdue ? s.cTaskTitleOverdue : ''}`} title={task.title}>
                         {task.title}
                       </div>
+                      {/* Việc cha: nhãn số việc con */}
+                      {task.childrenTotal > 0 && (
+                        <span className={ts.chainHeadTag} title={`Đầu chuỗi — có ${task.childrenTotal} việc con`}>
+                          <ListTree size={10} /> {task.childrenTotal} việc con
+                        </span>
+                      )}
+                      {/* Việc con: bấm để mở việc cha */}
+                      {task.parentTaskId && (
+                        <button
+                          type="button"
+                          className={ts.childOfTag}
+                          title={task.parentTitle ? `Thuộc việc cha: ${task.parentTitle} — bấm để mở` : 'Mở việc cha'}
+                          onClick={(e) => { e.stopPropagation(); setQuickViewId(task.parentTaskId) }}
+                        >
+                          <CornerLeftUp size={10} /> thuộc: {task.parentTitle || 'việc cha'}
+                        </button>
+                      )}
+                      {/* Nhãn phụ thuộc (2 chiều) */}
+                      {(task.depTotal > 0 || task.dependentTotal > 0) && (
+                        <span
+                          className={ts.depTag}
+                          title={[
+                            task.depTotal > 0 ? `Chờ ${task.depTotal} việc xong trước` : '',
+                            task.dependentTotal > 0 ? `${task.dependentTotal} việc đang chờ việc này` : '',
+                          ].filter(Boolean).join(' · ')}
+                        >
+                          <Link2 size={10} /> Phụ thuộc
+                        </span>
+                      )}
                     </td>
 
                     {vis('companyShort') && (
