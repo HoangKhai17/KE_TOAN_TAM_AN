@@ -645,6 +645,23 @@ async function listTasks(filters = {}) {
     orderBy = cf.buildColSortOrder(TASK_COLUMNS_SQL, colSortObj, { enumCaseExpr, tieBreak: 't.created_at DESC' })
   }
 
+  // Chế độ GOM NHÓM cha–con (optional): GIỮ NGUYÊN sắp xếp đang chọn, chỉ gộp con
+  // xuống ngay dưới cha. Các CHUỖI vẫn xếp theo tiêu chí sort hiện tại — nhưng dùng
+  // giá trị của CHA làm đại diện (COALESCE(pt.x, t.x)) để cả chuỗi đứng cùng chỗ.
+  if (filters.groupByChain === true || filters.groupByChain === 'true') {
+    const REP_SORT = {
+      created_at: 'COALESCE(pt.created_at, t.created_at)',
+      due_date:   'COALESCE(pt.due_date, t.due_date)',
+      updated_at: 'COALESCE(pt.updated_at, t.updated_at)',
+      priority: `CASE COALESCE(pt.priority, t.priority) WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END`,
+      status:   `CASE COALESCE(pt.status, t.status) WHEN 'pending' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'on_hold' THEN 3 WHEN 'pending_review' THEN 4 WHEN 'needs_revision' THEN 5 WHEN 'completed' THEN 6 ELSE 7 END`,
+      work_priority: `CASE COALESCE(pt.status, t.status) WHEN 'needs_revision' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'pending' THEN 3 WHEN 'pending_review' THEN 4 WHEN 'on_hold' THEN 5 WHEN 'completed' THEN 6 ELSE 7 END`,
+    }
+    const rep = REP_SORT[sortBy] || REP_SORT.created_at
+    const nulls = sortBy === 'due_date' ? ' NULLS LAST' : ''
+    orderBy = `${rep} ${huong}${nulls}, COALESCE(t.parent_task_id, t.id), (t.parent_task_id IS NOT NULL) ASC, t.due_date ASC NULLS LAST, t.id`
+  }
+
   const [countRes, statusCountsRes, { rows }] = await Promise.all([
     query(`SELECT COUNT(*) FROM tasks t ${colJoinSql} WHERE ${finalWhere}`, finalParams),
     query(`SELECT t.status, COUNT(*) AS cnt FROM tasks t WHERE ${baseWhere} GROUP BY t.status`, baseParams),

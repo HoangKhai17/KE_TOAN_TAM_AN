@@ -4787,3 +4787,19 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   color: var(--color-text); font-weight: var(--fw-medium);
 }
 .qvAttachHint { padding: 6px 8px; font-size: var(--fs-3xs); color: var(--color-muted); }
+
+/* Nút bật/tắt "Gom nhóm cha–con" trong bộ lọc */
+.groupChainBtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; height: 38px; padding: 0 12px; font: inherit;
+  font-size: var(--fs-2xs); font-weight: var(--fw-semibold);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface); color: var(--color-text); cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.groupChainBtn:hover { border-color: var(--color-primary-ring); background: var(--color-surface-muted); }
+.groupChainBtnOn {
+  background: var(--color-primary-bg); color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+.groupChainBtnOn:hover { background: var(--color-primary-bg-strong); }

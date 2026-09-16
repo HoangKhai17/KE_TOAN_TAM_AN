@@ -1245,6 +1245,8 @@ export default function Tasks() {
 
   // Sort — default: newest first
   const [sortValue, setSortValue] = useState(initF.sortValue ?? 'work_priority:asc')
+  // Gom nhóm cha–con: nút bật/tắt riêng, GIỮ NGUYÊN sắp xếp đang chọn, chỉ gộp con dưới cha.
+  const [groupByChain, setGroupByChain] = useState(initF.groupByChain ?? false)
 
   // Other filters (status/priority/source are multi-select arrays)
   const [searchInput, setSearchInput]       = useState(initF.searchInput    ?? '')
@@ -1421,12 +1423,12 @@ export default function Tasks() {
   useEffect(() => {
     saveFilters({
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
-      sortValue, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter,
+      sortValue, groupByChain, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter,
       statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page,
       colFilters: serializeColFilters(colFilters), sortColState, filterCollapsed,
       filterLayoutVersion: 2,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, groupByChain, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1471,6 +1473,8 @@ export default function Tasks() {
   }, [colFilters])
   const listParams = useMemo(() => {
     const [sortBy, sortDir] = sortValue.split(':')
+    // Gom nhóm cha–con: chỉ áp ở chế độ danh sách. GIỮ NGUYÊN sortBy/sortDir đang chọn.
+    const groupOn = isListView && groupByChain
     // Kanban nguồn: mặc định ẩn việc đã "Hoàn thành" ngay ở tầng query (không phí
     // ngạch working set 500 cho việc đã xong). Suy ra theo view — KHÔNG ghi vào
     // statusFilter dùng chung nên không rò sang view Danh sách/Board. Nếu user tự
@@ -1504,11 +1508,13 @@ export default function Tasks() {
       limit:       isListView ? pageSize : 500,
       page:        isListView ? page : 1,
       colFilters:  isListView && Object.keys(serverColFilters).length ? JSON.stringify(serverColFilters) : undefined,
-      colSort:     isListView && sortColState.col ? JSON.stringify(sortColState) : undefined,
+      // Khi gom nhóm cha–con: bỏ qua colSort (sort theo cột) để không đè thứ tự gom chuỗi.
+      colSort:     (!groupOn && isListView && sortColState.col) ? JSON.stringify(sortColState) : undefined,
+      groupByChain: groupOn ? true : undefined,
       sortBy,
       sortDir,
     }
-  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, isAdmin, currentUser?.id, view, isListView, page, pageSize, serverColFilters, sortColState]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, groupByChain, isAdmin, currentUser?.id, view, isListView, page, pageSize, serverColFilters, sortColState]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const listQuery = useQuery({
     queryKey: ['tasks', 'list', listParams],
@@ -1700,7 +1706,7 @@ export default function Tasks() {
     setYearFilter(CUR_YEAR); setMonthFilter(INIT_MONTH)
     setDueDateFrom(INIT_DATES.from)
     setDueDateTo(INIT_DATES.to)
-    setSortValue('work_priority:asc')
+    setSortValue('work_priority:asc'); setGroupByChain(false)
     setColFilters({}); setSortColState({ col: null, dir: 'asc' })
     setView('list'); setPageSize(20)
     setPage(1)
@@ -2152,6 +2158,22 @@ export default function Tasks() {
                     onChange={(v) => { setSourceFilter(v); setPage(1) }}
                   />
                 </div>
+                {/* Nút bật/tắt gom nhóm cha–con — giữ nguyên sắp xếp, chỉ gộp con dưới cha */}
+                {isListView && (
+                  <div className={s.filterGroup}>
+                    <label className={s.filterLabel}>Hiển thị</label>
+                    <button
+                      type="button"
+                      className={`${s.groupChainBtn} ${groupByChain ? s.groupChainBtnOn : ''}`}
+                      onClick={() => { setGroupByChain((v) => !v); setPage(1) }}
+                      title="Gộp việc con xuống ngay dưới việc cha (giữ nguyên sắp xếp đang chọn)"
+                    >
+                      <ListTree size={14} />
+                      Gom nhóm cha – con
+                      {groupByChain && <Check size={13} />}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
