@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   X, ArrowUpRight, Check, Loader2, Plus, ChevronLeft, ChevronRight, Edit2,
   Building2, User, Users, Calendar, Clock, AlertTriangle, Flag, FileText, Tag, GripVertical,
-  Lock, Globe,
+  Lock, Globe, ListTree, CornerLeftUp, Unlink,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
 import DateBox from '../../components/ui/DateBox'
@@ -21,6 +21,7 @@ import { useAuthStore } from '../../stores/authStore'
 import TaskLinksSection from './TaskLinksSection'
 import TaskComments from './TaskComments'
 import CollaboratorPicker from './CollaboratorPicker'
+import TaskFormModal from './TaskFormModal'
 import s from './tasks.module.css'
 
 // Convert any ISO string to local yyyy-MM-dd.
@@ -103,8 +104,11 @@ function PriorityBadge({ priority }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function TaskQuickView({ taskId, onClose, onUpdated }) {
+export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }) {
   const navigate  = useNavigate()
+  // Mở nhanh một task khác NGAY trong QuickView (chuyển qua lại cha↔con) nếu parent
+  // truyền onOpenTask; nếu không, fallback mở trang chi tiết.
+  const openTask  = (id) => { if (onOpenTask) onOpenTask(id); else navigate(`/tasks/${id}`) }
   const addToast  = useToastStore((st) => st.toast)
   const getLabel  = useEnumsStore((st) => st.getLabel)
   const getOptions = useEnumsStore((st) => st.getOptions)
@@ -117,6 +121,8 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
   const [togglingIds, setTogglingIds] = useState(new Set())
   const [saving,      setSaving]      = useState(false)
   const [staffList,   setStaffList]   = useState([])
+  const [children,    setChildren]    = useState([])   // chuỗi việc con (khi là việc cha)
+  const [showCreateChild, setShowCreateChild] = useState(false)
 
   // Checklist add
   const [newItemText, setNewItemText] = useState('')
@@ -166,9 +172,35 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
       .finally(() => setLoading(false))
   }, [taskId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Chuỗi việc con — chỉ nạp khi task là việc cha (có con). Mỗi con là task độc lập.
+  useEffect(() => {
+    if (!taskId || !(task?.childrenTotal > 0)) { setChildren([]); return }
+    tasksApi.getTaskChildren(taskId).then(setChildren).catch(() => {})
+  }, [taskId, task?.childrenTotal])
+
   function applyUpdate(updated) {
     setTask(updated)
     onUpdated?.(updated)
+  }
+
+  // Nạp lại việc cha + chuỗi con (sau khi tạo con mới)
+  async function refreshChain() {
+    try {
+      const [t, kids] = await Promise.all([tasksApi.getTask(taskId), tasksApi.getTaskChildren(taskId)])
+      applyUpdate(t); setChildren(kids)
+    } catch { /* noop */ }
+  }
+
+  // Tách việc con khỏi việc cha → thành việc độc lập (nhân viên không xoá được thì
+  // thay vì tạo lại, chuyển thẳng thành việc cấp cao; có thể tự có việc con sau này).
+  async function convertToStandalone() {
+    try {
+      const updated = await tasksApi.updateTask(taskId, { parentTaskId: null })
+      applyUpdate(updated)
+      addToast('Đã tách khỏi việc cha — giờ là việc độc lập', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể tách khỏi việc cha', 'error')
+    }
   }
 
   // Lưu tiêu đề sửa tại chỗ. Bỏ trống hoặc không đổi gì thì trả về nguyên trạng,
@@ -415,20 +447,18 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                 : (
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <h2
-                      className={s.qvTitle}
-                      style={{ cursor: 'text' }}
+                      className={`${s.qvTitle} ${s.qvTitleEditable}`}
                       title="Nhấp đúp để sửa tiêu đề"
                       onDoubleClick={() => { setTitleDraft(task?.title ?? ''); setEditingTitle(true) }}
                     >
                       {task?.title}
                     </h2>
                     <button
-                      className={s.qvChecklistDel}
-                      style={{ flexShrink: 0, marginTop: 2 }}
+                      className={s.qvTitleEditBtn}
                       title="Sửa tiêu đề"
                       onClick={() => { setTitleDraft(task?.title ?? ''); setEditingTitle(true) }}
                     >
-                      <Edit2 size={11} />
+                      <Edit2 size={12} />
                     </button>
                   </div>
                 )
@@ -439,6 +469,27 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
                 <PriorityBadge priority={task.priority} />
                 {overdue && (
                   <span className={s.overdueTag}><AlertTriangle size={10} /> Trễ hạn</span>
+                )}
+                {/* Việc con → chip mở nhanh việc cha + nút tách khỏi cha */}
+                {task.parentTaskId && (
+                  <>
+                    <button
+                      type="button"
+                      className={s.parentCrumb}
+                      onClick={() => openTask(task.parentTaskId)}
+                      title="Đây là việc con — mở nhanh việc cha"
+                    >
+                      <CornerLeftUp size={10} /> Việc cha: {task.parentTitle || '…'}
+                    </button>
+                    <button
+                      type="button"
+                      className={s.qvUnlinkBtn}
+                      onClick={convertToStandalone}
+                      title="Tách khỏi việc cha — chuyển thành việc độc lập"
+                    >
+                      <Unlink size={10} /> Tách khỏi cha
+                    </button>
+                  </>
                 )}
                 {isAdmin ? (
                   <button
@@ -633,6 +684,52 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
               {/* ── RIGHT: checklist + description ── */}
               <div className={s.qvRight}>
 
+                {/* Chuỗi việc con — hiện ở việc cấp cao (không phải việc con). Mỗi con độc lập. */}
+                {!task.parentTaskId && (
+                  <div className={s.qvSection}>
+                    <div className={s.qvSectionTitle} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>
+                        <ListTree size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+                        Chuỗi việc con
+                        {task.childrenTotal > 0 && (
+                          <span style={{ fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>
+                            {task.childrenDone}/{task.childrenTotal} xong
+                          </span>
+                        )}
+                      </span>
+                      <button className={s.btnQvSave} onClick={() => setShowCreateChild(true)} title="Tạo việc con mới">
+                        <Plus size={11} /> Tạo việc con
+                      </button>
+                    </div>
+                    {task.childrenTotal > 0 ? (
+                      <div className={s.qvChainList}>
+                        {children.map((c) => {
+                          const cOver = isTaskOverdue(c)
+                          const dotCls = c.status === 'completed' ? s.qvChainDotDone
+                            : c.status === 'on_hold' ? s.qvChainDotHold : ''
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className={s.qvChainItem}
+                              onClick={() => openTask(c.id)}
+                              title="Mở nhanh việc con"
+                            >
+                              <span className={`${s.qvChainDot} ${dotCls}`} />
+                              <span className={s.qvChainName}>{c.title}</span>
+                              <span className={`${s.qvChainDue} ${cOver ? s.qvChainDueOver : ''}`}>{fmtDate(c.dueDate)}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p className={s.chainEmpty} style={{ padding: '2px 0 0' }}>
+                        Chưa có việc con. Bấm “Tạo việc con” để tách một phần việc ra (có hạn riêng).
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Checklist */}
                 <div className={s.qvSection}>
                   <div className={s.qvSectionTitle}>
@@ -804,6 +901,18 @@ export default function TaskQuickView({ taskId, onClose, onUpdated }) {
           </div>
         ) : null}
       </div>
+
+      {/* Tạo việc con ngay trong QuickView (bọc z-index cao để nổi trên panel) */}
+      {showCreateChild && task && (
+        <div style={{ position: 'relative', zIndex: 600 }}>
+          <TaskFormModal
+            parentTask={task}
+            onClose={() => setShowCreateChild(false)}
+            onSaved={() => { setShowCreateChild(false); refreshChain() }}
+            onSavedAndOpen={(nt) => { setShowCreateChild(false); openTask(nt.id) }}
+          />
+        </div>
+      )}
     </>
   )
 }

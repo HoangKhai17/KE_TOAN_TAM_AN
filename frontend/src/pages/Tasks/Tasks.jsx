@@ -8,7 +8,7 @@ import {
 import {
   Plus, Search, RotateCcw, List, Columns, Layers,
   ChevronRight, ChevronDown, Filter, ClipboardList, Check,
-  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal, FileDown, Lock, CornerLeftUp,
+  Trash2, Loader2, X, Eye, ArrowUpRight, Maximize2, Minimize2, SlidersHorizontal, FileDown, Lock, CornerLeftUp, ListTree,
 } from 'lucide-react'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
@@ -943,17 +943,29 @@ function ListView({
                     />
                   </td>
                   {/* Tiêu đề (không còn tên KH bên dưới) */}
-                  <td className={s.td}>
+                  <td className={`${s.td} ${t.parentTaskId ? s.tdChild : ''}`}>
                     <div className={`${s.taskTitle} ${overdue ? s.taskTitleOverdue : ''}`}>
                       {t.visibility === 'private' && (
                         <Lock size={11} className={s.titleLock} aria-label="Riêng tư"><title>Riêng tư — ẩn với nhân sự phụ trách công ty</title></Lock>
                       )}
                       {t.title}
                     </div>
-                    {t.parentTaskId && (
-                      <span className={s.childOfTag} title={t.parentTitle ? `Thuộc việc cha: ${t.parentTitle}` : 'Việc con'}>
-                        <CornerLeftUp size={10} /> {t.parentTitle || 'việc con'}
+                    {/* Việc cha: nhãn số việc con */}
+                    {t.childrenTotal > 0 && (
+                      <span className={s.chainHeadTag} title={`Đầu chuỗi — có ${t.childrenTotal} việc con`}>
+                        <ListTree size={10} /> {t.childrenTotal} việc con
                       </span>
+                    )}
+                    {/* Việc con: pill bấm để mở việc cha (mở nhanh) */}
+                    {t.parentTaskId && (
+                      <button
+                        type="button"
+                        className={s.childOfTag}
+                        title={t.parentTitle ? `Thuộc việc cha: ${t.parentTitle} — bấm để mở` : 'Mở việc cha'}
+                        onClick={(e) => { e.stopPropagation(); onQuickView(t.parentTaskId) }}
+                      >
+                        <CornerLeftUp size={10} /> thuộc: {t.parentTitle || 'việc cha'}
+                      </button>
                     )}
                   </td>
 
@@ -2360,6 +2372,7 @@ export default function Tasks() {
         <TaskQuickView
           taskId={quickViewId}
           onClose={() => setQuickViewId(null)}
+          onOpenTask={setQuickViewId}
           onUpdated={(updated) => setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))}
         />
       )}
