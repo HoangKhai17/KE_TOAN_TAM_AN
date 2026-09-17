@@ -36,12 +36,12 @@ import s from './companies.module.css'
 const TABS = [
   { id: 'overview',          label: 'Tổng quan',         icon: BarChart2 },
   { id: 'credentials',       label: 'Tài khoản hệ thống', icon: Lock },
-  { id: 'processes',         label: 'Quy trình',          icon: Workflow },
-  { id: 'schedules',         label: 'Lịch định kỳ',       icon: CalendarDays },
+  { id: 'processes',         label: 'Quy trình làm việc & lưu chứng từ', icon: Workflow },
+  { id: 'important-notes',   label: 'Điều cần lưu ý với KH & Tâm An',    icon: AlertTriangle },
+  { id: 'notes',             label: 'Nhật ký làm số liệu KH',            icon: StickyNote },
   { id: 'tasks',             label: 'Công việc',          icon: ListTodo },
   { id: 'client-requests',   label: 'Yêu cầu KH',        icon: ClipboardList },
-  { id: 'notes',             label: 'Ghi chú',            icon: StickyNote },
-  { id: 'important-notes',   label: 'Điều cần lưu ý',     icon: AlertTriangle },
+  { id: 'schedules',         label: 'Lịch định kỳ',       icon: CalendarDays },
   { id: 'documents',         label: 'Tài liệu',           icon: FileText },
 ]
 
