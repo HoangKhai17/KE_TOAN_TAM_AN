@@ -2,16 +2,15 @@
 
 .page { display: flex; flex-direction: column; min-height: 100%; }
 
-/* Header */
-.pageHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-.pageTitle { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-2xl); font-weight: var(--fw-extrabold); color: var(--color-text-strong); margin: 0; }
-.pageTitle svg { flex-shrink: 0; color: var(--color-primary); }
+/* Tabs — segmented pill (đồng bộ trang Nội bộ / Tasks), CHỈ dùng token hệ thống */
+.tabs { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.tabLinks { display: flex; align-items: center; background: var(--color-primary-bg); border: 1.5px solid var(--color-primary-bg-strong); border-radius: var(--radius-md); padding: 3px; gap: 2px; min-width: 0; }
+.tabActions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.tab { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 12px; border: 0; background: transparent; cursor: pointer; border-radius: var(--radius-sm); font-family: inherit; font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--color-text-soft); white-space: nowrap; transition: background 0.13s, color 0.13s; }
+.tab:hover { color: var(--color-text); }
+.tabActive, .tabActive:hover { background: var(--gradient-primary); color: var(--color-white); box-shadow: var(--shadow-focus-blue); }
 
-/* Tabs */
-.tabBar { display: flex; gap: 4px; border-bottom: 1px solid var(--color-border-muted); margin: 12px 0; flex-wrap: wrap; }
-.tab { border: 0; background: transparent; font: inherit; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--color-text-soft); cursor: pointer; padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px; border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
-.tab:hover { color: var(--color-text-strong); }
-.tabActive { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+@media (max-width: 720px) { .tabs { align-items: stretch; flex-direction: column; gap: 8px; } .tabActions { justify-content: flex-end; } }
 
 /* Card */
 .stack { display: flex; flex-direction: column; gap: 12px; }
@@ -43,13 +42,16 @@
 
 /* Table */
 .tableWrap { overflow-x: auto; }
-.table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); min-width: 640px; }
-.table th { padding: 7px 8px; text-align: left; font-size: var(--fs-xs); font-weight: var(--fw-extrabold); color: var(--color-primary-deep); background: var(--gradient-table-head); border-bottom: 1.5px solid var(--color-primary-bg-strong); white-space: nowrap; }
-.table td { padding: 7px 8px; border-bottom: 1px solid var(--color-surface-muted); vertical-align: middle; color: var(--color-text-strong); font-size: var(--fs-xs); font-weight: var(--fw-medium); }
+.table { width: 100%; border-collapse: collapse; font-size: var(--fs-2xs); min-width: 640px; }
+.table th { padding: 7px 8px; text-align: left; font-size: var(--fs-2xs); font-weight: var(--fw-extrabold); color: var(--color-primary-deep); background: var(--gradient-table-head); border-bottom: 1.5px solid var(--color-primary-bg-strong); white-space: nowrap; }
+.table td { padding: 7px 8px; border-bottom: 1px solid var(--color-surface-muted); vertical-align: middle; color: var(--color-text-strong); font-size: var(--fs-2xs); font-weight: var(--fw-medium); }
 .table tbody tr:last-child td { border-bottom: none; }
 .table tbody tr:hover td { background: var(--color-bg-soft); }
 .table tfoot td { border-top: 1.5px solid var(--color-primary-bg-strong); background: var(--color-bg-soft); font-weight: var(--fw-bold); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
+.colChk { width: 34px; text-align: center; }
+.colStt { width: 44px; text-align: center; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.check { width: 15px; height: 15px; accent-color: var(--color-primary); cursor: pointer; vertical-align: middle; }
 .code { font-family: var(--font-mono, monospace); font-size: var(--fs-2xs); color: var(--color-muted); }
 .note { color: var(--color-muted); font-size: var(--fs-2xs); max-width: 240px; }
 .empty { color: var(--color-muted-subtle); }
