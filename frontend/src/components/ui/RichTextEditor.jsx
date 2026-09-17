@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
-import { mergeAttributes, Extension } from '@tiptap/core'
+import { mergeAttributes, Extension, wrappingInputRule } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { DOMParser as PMDOMParser } from '@tiptap/pm/model'
 import { CellSelection, TableMap } from '@tiptap/pm/tables'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
@@ -426,9 +427,123 @@ const TableSelectHandle = Extension.create({
   },
 })
 
+// ── Tự chuyển "•"/số dán từ ngoài (Word, PDF, text…) thành DANH SÁCH THẬT (như Google Docs) ──
+// Ngoài thường là đoạn văn có ký tự bullet "•" — KHÔNG phải <ul><li> — nên Enter không nối tiếp.
+// Xử lý 3 dạng: (a) 1 khối có nhiều dòng <br> đều bullet; (b) NHIỀU <p>/<div> liền nhau mỗi cái 1
+// dòng bullet (Word tách vậy) → gộp 1 danh sách; (c) dán TEXT THUẦN nhiều dòng bullet.
+const BULLET_RE = /^\s*[•◦▪‣·・►▶✦●○–—\-*]\s+/
+const NUMBER_RE = /^\s*(\d{1,3}|[a-zA-Z])[.)]\s+/
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML }
+function lineTextFromHtml(h) { const d = document.createElement('div'); d.innerHTML = h; return (d.textContent || '').replace(/ /g, ' ').trim() }
+// Phân loại 1 dòng → { type:'ul'|'ol', text } (đã bỏ ký tự bullet/số) hoặc null.
+function classifyLine(t) {
+  if (BULLET_RE.test(t)) return { type: 'ul', text: t.replace(BULLET_RE, '') }
+  if (NUMBER_RE.test(t)) return { type: 'ol', text: t.replace(NUMBER_RE, '') }
+  return null
+}
+function makeList(type, texts) {
+  const list = document.createElement(type)
+  for (const t of texts) { const li = document.createElement('li'); const p = document.createElement('p'); p.textContent = t; li.appendChild(p); list.appendChild(li) }
+  return list
+}
+// 1 khối <p>/<div> chỉ gồm 1 dòng bullet (không <br>, bảng, ảnh, list con).
+function singleBulletBlock(node, forceType) {
+  if (!node || node.nodeType !== 1) return null
+  const tag = node.tagName && node.tagName.toLowerCase()
+  if (tag !== 'p' && tag !== 'div') return null
+  if (node.querySelector('ul, ol, li, table, img, br')) return null
+  const c = classifyLine((node.textContent || '').replace(/ /g, ' ').trim())
+  if (!c) return null
+  if (forceType && c.type !== forceType) return null
+  return c
+}
+function bulletsToLists(html) {
+  if (typeof document === 'undefined' || !html) return html
+  const tpl = document.createElement('template'); tpl.innerHTML = html
+  const root = tpl.content
+
+  // (a) 1 khối có nhiều dòng <br> đều là bullet/số → 1 danh sách
+  for (const el of Array.from(root.querySelectorAll('p, div'))) {
+    if (el.querySelector('ul, ol, li, table, img')) continue
+    const rawLines = el.innerHTML.split(/<br\s*\/?>/i)
+    if (rawLines.length < 2) continue
+    const lines = rawLines.map(lineTextFromHtml).filter((t) => t !== '')
+    if (lines.length < 1) continue
+    const cls = lines.map(classifyLine)
+    if (cls.some((c) => !c) || cls.some((c) => c.type !== cls[0].type)) continue
+    el.replaceWith(makeList(cls[0].type, cls.map((c) => c.text)))
+  }
+
+  // (b) gộp CHUỖI <p>/<div> liền nhau, mỗi cái 1 dòng bullet cùng loại → 1 danh sách
+  const kids = Array.from(root.childNodes)
+  let i = 0
+  while (i < kids.length) {
+    const c = singleBulletBlock(kids[i])
+    if (!c) { i++; continue }
+    const runNodes = [kids[i]]; const texts = [c.text]
+    let j = i + 1
+    while (j < kids.length) {
+      const c2 = singleBulletBlock(kids[j], c.type)
+      if (!c2) break
+      runNodes.push(kids[j]); texts.push(c2.text); j++
+    }
+    root.insertBefore(makeList(c.type, texts), kids[i])
+    for (const rn of runNodes) rn.remove()
+    i = j
+  }
+  return tpl.innerHTML
+}
+// (c) TEXT THUẦN nhiều dòng → HTML có <ul>/<ol> ở đoạn bullet.
+function bulletsTextToHtml(text) {
+  const lines = String(text).replace(/\r/g, '').split('\n')
+  let out = '', run = null, runType = null
+  const flush = () => { if (run) { out += `<${runType}>${run}</${runType}>`; run = null; runType = null } }
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (line === '') { flush(); continue }
+    const c = classifyLine(line)
+    if (c) { if (runType && runType !== c.type) flush(); runType = c.type; run = (run || '') + `<li><p>${escapeHtml(c.text)}</p></li>` }
+    else { flush(); out += `<p>${escapeHtml(line)}</p>` }
+  }
+  flush()
+  return out
+}
+
+// Khi GÕ: "• " (hoặc ◦ ▪) đầu dòng → tự tạo danh sách chấm thật (giống "- ", "* " của StarterKit).
+const SmartLists = Extension.create({
+  name: 'smartLists',
+  addInputRules() {
+    const bulletList = this.editor?.schema?.nodes?.bulletList
+    if (!bulletList) return []
+    return [wrappingInputRule({ find: /^\s*[•◦▪‣·]\s$/, type: bulletList })]
+  },
+  addProseMirrorPlugins() {
+    return [new Plugin({
+      key: new PluginKey('smartPasteLists'),
+      props: {
+        transformPastedHTML: (html) => bulletsToLists(html),
+        // Dán TEXT THUẦN (không có HTML) mà có dòng bullet → dựng danh sách thật.
+        handlePaste: (view, event) => {
+          const cd = event.clipboardData
+          if (!cd || cd.getData('text/html')) return false   // có HTML → để transformPastedHTML lo
+          const text = cd.getData('text/plain')
+          if (!text) return false
+          const built = bulletsTextToHtml(text)
+          if (!/<(ul|ol)>/.test(built)) return false          // không có gì để chuyển → paste mặc định
+          const dom = document.createElement('div'); dom.innerHTML = built
+          const slice = PMDOMParser.fromSchema(view.state.schema).parseSlice(dom)
+          view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView())
+          return true
+        },
+      },
+    })]
+  },
+})
+
 function buildExtensions(placeholder) {
   return [
     StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
+    SmartLists,
     AttachmentImage.configure({ inline: true }),   // inline → nhiều ảnh chảy cạnh nhau (như Docs)
     ParagraphIndent,
     TextStyle,
