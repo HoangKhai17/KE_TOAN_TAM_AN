@@ -20,7 +20,7 @@ import SchedulesTab from './SchedulesTab'
 import CredentialsTab from './CredentialsTab'
 import DocumentsTab from './DocumentsTab'
 import NotesTab from './NotesTab'
-import NotesSection from './NotesSection'
+import ImportantNotesTab from './ImportantNotesTab'
 import ClientRequestsTab from './ClientRequestsTab'
 import CustomTableTab from './CustomTableTab'
 import OverviewTab, { StaffCard } from './CompanyOverviewTab'
@@ -471,9 +471,8 @@ export default function CompanyDetail() {
         <NotesTab company={company} onNoteCountChange={setNoteCount} />
       )}
       {activeTab === 'important-notes' && (
-        <NotesSection
-          companyId={company.id}
-          canEdit={isAdmin || company.assignedStaffId === currentUser?.id}
+        <ImportantNotesTab
+          company={company}
           onCountChange={setImportantNoteCount}
         />
       )}

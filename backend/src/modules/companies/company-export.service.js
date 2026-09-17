@@ -263,7 +263,7 @@ function columnsFor(key, lbl) {
       ]
     case 'important-notes':
       return [
-        { header: 'Nhóm',                      get: (r) => lbl('important_note_group', r.note_group, {}) },
+        { header: 'Nhóm',                      get: (r) => safe(r.note_group) },
         { header: 'Nội dung',                  get: (r) => safe(r.content) },
         { header: 'Hiện trạng/Hướng khắc phục', get: (r) => safe(r.resolution) },
       ]
@@ -374,10 +374,17 @@ async function fetchSection(key, companyIds, includeCredentials) {
         [companyIds],
       )).rows
     case 'important-notes':
+      // Đọc từ engine bảng cột-động (section='important_note'). Nhóm = TÊN def (đã là nhãn),
+      // nội dung/hiện trạng lấy từ data jsonb. Không còn phụ thuộc bảng cũ hay enum.
       return (await query(
-        `SELECT company_id, content, resolution, note_group
-         FROM company_important_notes WHERE company_id = ANY($1)
-         ORDER BY company_id, note_group, sort_order, created_at`,
+        `SELECT r.company_id,
+                r.data->>'content'    AS content,
+                r.data->>'resolution' AS resolution,
+                d.name                AS note_group
+         FROM company_table_rows r
+         JOIN company_table_defs d ON d.id = r.def_id AND d.section = 'important_note'
+         WHERE r.company_id = ANY($1)
+         ORDER BY r.company_id, d.sort_order, r.position, r.created_at`,
         [companyIds],
       )).rows
     case 'notes':

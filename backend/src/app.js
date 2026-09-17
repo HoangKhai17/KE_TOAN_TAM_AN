@@ -189,8 +189,7 @@ function createApp() {
   app.use('/api/companies/:companyId/document-types', require('./modules/document-types/documentTypes.router'))
   // Tab Quy trình — KH lưu HS gốc tại Cty (cấu trúc giống Chứng từ phát sinh)
   app.use('/api/companies/:companyId/original-documents', require('./modules/original-documents/originalDocuments.router'))
-  // 'important-notes' (không dùng '/notes' vì đã bị tab Ghi chú nhanh chiếm ở companies router)
-  app.use('/api/companies/:companyId/important-notes', require('./modules/company-notes/companyNotes.router'))
+  // ("Điều cần lưu ý" đã chuyển sang engine bảng cột-động — module company-notes cũ đã gỡ ở GĐ6.)
 
   // Phase 10 — Payroll
   app.use('/api/payroll', require('./modules/payroll/payroll.router'))

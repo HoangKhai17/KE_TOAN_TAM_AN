@@ -70,6 +70,7 @@ function defToDto(d, columns) {
   return {
     id: d.id, tableKey: d.table_key, name: d.name, description: d.description ?? null,
     icon: d.icon ?? null, sortOrder: d.sort_order, isActive: d.is_active,
+    section: d.section ?? 'data',   // 'data' = Bảng dữ liệu; 'important_note' = Điều cần lưu ý
     allowCompanyColumns: d.allow_company_columns, isSystem: d.is_system,
     parentDefId: d.parent_def_id ?? null,   // null = bảng cấp cao; có = bảng con (sub-tab)
     groupConfig: d.group_config ?? null,     // cấu hình "gom nhóm (pivot)" từ bảng cha
@@ -88,10 +89,15 @@ function rowToDto(r) {
 
 // ── Defs (global) ───────────────────────────────────────────────────────────
 
-async function listDefs({ activeOnly = false } = {}) {
-  const where = activeOnly ? 'WHERE is_active = TRUE' : ''
+// section: mặc định 'data' → giữ nguyên hành vi tab Bảng dữ liệu. Truyền 'important_note'
+// để lấy def của tab Điều cần lưu ý. Hai bên KHÔNG lẫn nhau.
+async function listDefs({ activeOnly = false, section = 'data' } = {}) {
+  const conds = ['section = $1']
+  const params = [section]
+  if (activeOnly) conds.push('is_active = TRUE')
   const { rows: defs } = await query(
-    `SELECT * FROM company_table_defs ${where} ORDER BY sort_order, created_at`,
+    `SELECT * FROM company_table_defs WHERE ${conds.join(' AND ')} ORDER BY sort_order, created_at`,
+    params,
   )
   if (!defs.length) return []
   const ids = defs.map((d) => d.id)
@@ -118,13 +124,17 @@ async function createDef(body, userId) {
   const set = new Set(existing.map((r) => r.table_key))
   const tableKey = uniqueKey(slugify(body.tableKey || body.name, 'tbl'), set)
 
+  // Phân loại nơi hiển thị. Bảng con LUÔN kế thừa section của cha (không lệch nhóm).
+  let section = body.section === 'important_note' ? 'important_note' : 'data'
+
   // Bảng con: chỉ cho 1 CẤP — def cha phải tồn tại và chính nó KHÔNG phải bảng con.
   let parentDefId = null
   if (body.parentDefId) {
-    const { rows: [p] } = await query('SELECT id, parent_def_id FROM company_table_defs WHERE id = $1', [body.parentDefId])
+    const { rows: [p] } = await query('SELECT id, parent_def_id, section FROM company_table_defs WHERE id = $1', [body.parentDefId])
     if (!p) { const e = new Error('Không tìm thấy bảng cha'); e.status = 404; throw e }
     if (p.parent_def_id) { const e = new Error('Chỉ hỗ trợ 1 cấp: bảng con không thể có bảng con'); e.status = 422; throw e }
     parentDefId = p.id
+    section = p.section ?? 'data'
   }
 
   // sort_order tính trong PHẠM VI anh em (cùng cha, hoặc cùng cấp cao)
@@ -134,10 +144,10 @@ async function createDef(body, userId) {
   const sortOrder = body.sortOrder ?? maxRows[0].next
 
   const { rows } = await query(
-    `INSERT INTO company_table_defs (table_key, name, description, icon, sort_order, allow_company_columns, parent_def_id, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    `INSERT INTO company_table_defs (table_key, name, description, icon, sort_order, allow_company_columns, parent_def_id, section, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
     [tableKey, body.name, body.description || null, body.icon || null, sortOrder,
-     body.allowCompanyColumns ?? false, parentDefId, userId],
+     body.allowCompanyColumns ?? false, parentDefId, section, userId],
   )
   return defToDto(rows[0], [])
 }
@@ -239,7 +249,13 @@ async function reorderDefs(orderedIds) {
     await query('UPDATE company_table_defs SET sort_order = $1, updated_at = NOW() WHERE id = $2',
       [idx, orderedIds[idx]])
   }
-  return listDefs({})
+  // Trả về đúng danh sách của SECTION vừa sắp xếp (suy ra từ def đầu tiên).
+  let section = 'data'
+  if (orderedIds.length) {
+    const { rows: [d] } = await query('SELECT section FROM company_table_defs WHERE id = $1', [orderedIds[0]])
+    if (d) section = d.section ?? 'data'
+  }
+  return listDefs({ section })
 }
 
 async function reorderColumns(defId, orderedIds) {

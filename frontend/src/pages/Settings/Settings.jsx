@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Clock, Users, ListTodo, Bell, CalendarDays, ShieldAlert,
@@ -8,7 +8,7 @@ import {
   Play, RotateCcw, CheckCircle, XCircle,
   ChevronDown, ChevronUp, ListChecks, History,
   Trash2, Check, X, Mail, Send, Info, ExternalLink, AlarmClock, Table2,
-  Database, Download,
+  Database, Download, AlertTriangle,
 } from 'lucide-react'
 import { testEmail } from '../../api/notifications'
 import AppLayout from '../../components/layout/AppLayout'
@@ -105,6 +105,8 @@ const SECTIONS = [
   { key: 'email',           label: 'Cấu hình Email (SMTP)',  icon: Mail,        dot: '#ea580c', bg: '#fff7ed', iconColor: '#ea580c' },
   { key: 'attendance',     label: 'Cấu hình chấm công',     icon: AlarmClock,  dot: '#d97706', bg: '#fffbeb', iconColor: '#d97706' },
   { key: 'backup',          label: 'Sao lưu dữ liệu',        icon: Database,    dot: '#0f766e', bg: '#f0fdfa', iconColor: '#0f766e' },
+  // Nhóm "Hồ sơ" — gom các cấu hình liên quan hồ sơ công ty (sau này thêm mục khác vào đây).
+  { key: 'important-notes', label: 'Nhóm điều cần lưu ý',    icon: AlertTriangle, dot: '#dc2626', bg: '#fef2f2', iconColor: '#dc2626', group: 'Hồ sơ' },
 ]
 
 const TIMEZONES = [
@@ -163,19 +165,31 @@ export default function Settings() {
             <span className={s.settingsNavTitle}>Cấu hình hệ thống</span>
           </div>
           <nav className={s.settingsNavList}>
-            {SECTIONS.map(({ key, label, dot }) => (
-              <button
-                key={key}
-                onClick={() => setActiveSection(key)}
-                className={`${s.settingsNavItem} ${activeSection === key ? s.settingsNavItemActive : ''}`}
-              >
-                <span
-                  className={s.settingsNavDot}
-                  style={{ background: activeSection === key ? dot : '#d1d5db' }}
-                />
-                <span className={s.settingsNavLabel}>{label}</span>
-              </button>
-            ))}
+            {SECTIONS.map(({ key, label, dot, group }, idx) => {
+              const showGroup = group && group !== (idx > 0 ? SECTIONS[idx - 1].group : undefined)
+              return (
+                <Fragment key={key}>
+                  {showGroup && (
+                    <>
+                      <hr style={{ border: 0, borderTop: '1px solid var(--color-border)', margin: '10px 8px 2px' }} />
+                      <div style={{ padding: '6px 12px 4px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--color-muted)' }}>
+                        {group}
+                      </div>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setActiveSection(key)}
+                    className={`${s.settingsNavItem} ${activeSection === key ? s.settingsNavItemActive : ''}`}
+                  >
+                    <span
+                      className={s.settingsNavDot}
+                      style={{ background: activeSection === key ? dot : '#d1d5db' }}
+                    />
+                    <span className={s.settingsNavLabel}>{label}</span>
+                  </button>
+                </Fragment>
+              )
+            })}
           </nav>
         </aside>
 
@@ -199,6 +213,7 @@ export default function Settings() {
             {activeSection === 'task-types'      && <TaskTypesSection />}
             {activeSection === 'enum-management' && <EnumManagementSection />}
             {activeSection === 'company-tables'  && <CompanyTablesSection />}
+            {activeSection === 'important-notes' && <CompanyTablesSection section="important_note" />}
             {activeSection === 'deadline'        && <DeadlineSection />}
             {activeSection === 'templates'       && <TemplatesSection />}
             {activeSection === 'escalation'      && <EscalationSection />}

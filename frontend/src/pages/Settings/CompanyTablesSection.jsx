@@ -8,14 +8,14 @@ import * as api from '../../api/companyTables'
 import { checkSyntax, extractRefs } from '../../utils/formula'
 import s from './settings.module.css'
 
-const TYPE_LABELS = { text: 'Văn bản', number: 'Số', date: 'Ngày', select: 'Lựa chọn', link: 'Link', file: 'File đính kèm', formula: 'Công thức', computed: 'Computed' }
+const TYPE_LABELS = { text: 'Văn bản', richtext: 'Văn bản định dạng', number: 'Số', date: 'Ngày', select: 'Lựa chọn', link: 'Link', file: 'File đính kèm', formula: 'Công thức', computed: 'Computed' }
 const COMPUTED_LABELS = { days_until: 'Số ngày còn lại', days_since: 'Số ngày chậm', months_since: 'Số tháng chậm', status_threshold: 'Tô màu theo ngưỡng' }
 const TONES = ['success', 'warning', 'danger', 'info', 'muted']
 
 const row = { display: 'flex', alignItems: 'center', gap: 8 }
 
 // ── Def create/edit modal ─────────────────────────────────────────────────────
-function DefModal({ def, parentDefId, parentDef, onClose, onSaved }) {
+function DefModal({ def, parentDefId, parentDef, section = 'data', onClose, onSaved }) {
   const gc = def?.groupConfig
   const [form, setForm] = useState({
     name: def?.name ?? '', icon: def?.icon ?? '', description: def?.description ?? '',
@@ -51,7 +51,7 @@ function DefModal({ def, parentDefId, parentDef, onClose, onSaved }) {
         }
       }
       const saved = def ? await api.updateDef(def.id, body)
-        : await api.createDef(parentDefId ? { ...body, parentDefId } : body)
+        : await api.createDef(parentDefId ? { ...body, parentDefId } : { ...body, section })
       onSaved(saved)
     } catch (e) { addToast(e.response?.data?.error?.message ?? 'Không thể lưu bảng', 'error') } finally { setSaving(false) }
   }
@@ -400,7 +400,9 @@ function ColumnModal({ defColumns, column, onClose, onSaved, otherDefs = [], sel
 }
 
 // ── Main section ──────────────────────────────────────────────────────────────
-export default function CompanyTablesSection() {
+// section: 'data' = Bảng tùy chỉnh (Bảng dữ liệu) | 'important_note' = Nhóm điều cần lưu ý.
+// Cùng UI, chỉ khác nơi dữ liệu neo (không lẫn nhau).
+export default function CompanyTablesSection({ section = 'data' }) {
   const confirmDelete = useDeleteConfirm()
   const addToast = useToastStore((st) => st.toast)
   const [defs, setDefs] = useState([])
@@ -409,11 +411,13 @@ export default function CompanyTablesSection() {
   const [defModal, setDefModal] = useState(null)  // {def}|{}
   const [colModal, setColModal] = useState(null)  // {column}|{}
 
+  const isNote = section === 'important_note'
+
   function reload() {
     setLoading(true)
-    api.listDefs().then((d) => setDefs(d)).catch(() => {}).finally(() => setLoading(false))
+    api.listDefs({ section }).then((d) => setDefs(d)).catch(() => {}).finally(() => setLoading(false))
   }
-  useEffect(() => { reload() }, [])
+  useEffect(() => { setSelected(null); reload() }, [section]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selDef = defs.find((d) => d.id === selected)
   // Cụm cha–con của bảng đang chọn, TRỪ chính nó → dùng cho công thức liên bảng
@@ -473,11 +477,13 @@ export default function CompanyTablesSection() {
   return (
     <div>
       <div style={{ ...row, justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 className={s.sectionTitle}>Bảng tùy chỉnh (Company tables)</h3>
-        <button className={s.btnSave} onClick={() => setDefModal({})}><Plus size={14} /> Tạo bảng mới</button>
+        <h3 className={s.sectionTitle}>{isNote ? 'Nhóm điều cần lưu ý' : 'Bảng tùy chỉnh (Company tables)'}</h3>
+        <button className={s.btnSave} onClick={() => setDefModal({})}><Plus size={14} /> {isNote ? 'Tạo nhóm mới' : 'Tạo bảng mới'}</button>
       </div>
       <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--color-muted)', marginTop: 0 }}>
-        Tab báo cáo tự tạo — áp dụng cho TẤT CẢ công ty.
+        {isNote
+          ? 'Mỗi NHÓM là 1 tab trong "Điều cần lưu ý" của Hồ sơ công ty, có bộ cột riêng — áp dụng cho TẤT CẢ công ty.'
+          : 'Tab báo cáo tự tạo — áp dụng cho TẤT CẢ công ty.'}
       </p>
 
       {loading ? <div><Loader2 size={16} className={s.spin} /> Đang tải...</div> : (
@@ -603,7 +609,7 @@ export default function CompanyTablesSection() {
       )}
 
       {defModal && (
-        <DefModal def={defModal.def} parentDefId={defModal.parentDefId}
+        <DefModal def={defModal.def} parentDefId={defModal.parentDefId} section={section}
           parentDef={defModal.def?.parentDefId ? defs.find((d) => d.id === defModal.def.parentDefId) : null}
           onClose={() => setDefModal(null)} onSaved={() => { setDefModal(null); reload() }} />
       )}

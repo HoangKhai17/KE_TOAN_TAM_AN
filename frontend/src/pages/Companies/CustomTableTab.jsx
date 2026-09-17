@@ -1,5 +1,9 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Plus, Trash2, Filter, Loader2, Download, Upload, X, ExternalLink, Paperclip, FileUp, RefreshCw, Eye } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react'
+import { Plus, Trash2, Filter, Loader2, Download, Upload, X, ExternalLink, Paperclip, FileUp, RefreshCw, Eye, Pencil } from 'lucide-react'
+import DOMPurify from 'dompurify'
+import ClampedRichText from '../../components/ui/ClampedRichText'
+import RichTextViewerModal from '../../components/ui/RichTextViewerModal'
+const RichTextEditor = lazy(() => import('../../components/ui/RichTextEditor'))
 import * as api from '../../api/companyTables'
 import { exportXlsx } from '../../utils/exportXlsx'
 import { uploadFile, downloadFile, deleteFile, formatSize, canPreview, ACCEPT_ATTR, MAX_FILE_BYTES } from '../../api/attachments'
@@ -24,9 +28,15 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import s from './companies.module.css'
 
+// Bóc thẻ HTML → text thuần (cho lọc/sắp xếp/xuất Excel cột richtext).
+function stripHtml(html) {
+  return DOMPurify.sanitize(String(html ?? ''), { ALLOWED_TAGS: [] }).replace(/\s+/g, ' ').trim()
+}
+
 // ── Cell value as plain text (for export/preview) ─────────────────────────────
 // columns cần cho cột 'formula' (tham chiếu cột khác). files: map "rowId|colKey"→[file] cho cột 'file'.
 export function cellText(col, row, columns = [], filesByCell = null) {
+  if (col.dataType === 'richtext') return stripHtml(row.data?.[col.colKey])
   if (col.dataType === 'computed') {
     if (col.computedType === 'status_threshold') {
       return resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).label
@@ -402,6 +412,7 @@ function numericValue(row, col, columns = []) {
 }
 function sortKey(row, col, columns = []) {
   if (col.colKey === '__stt') return typeof row.position === 'number' ? row.position : 0   // STT = thứ tự thủ công (position, cho phép kéo thả)
+  if (col.dataType === 'richtext') return stripHtml(row.data?.[col.colKey]).toLowerCase()
   if (col.dataType === 'computed') {
     if (col.computedType === 'status_threshold') {
       return STATUS_ORDER[resolveBucket(col.computedConfig, row.data?.[col.computedConfig?.source_col]).tone] ?? 9
@@ -424,7 +435,72 @@ function sortKey(row, col, columns = []) {
 
 // ── Inline editable cell ──────────────────────────────────────────────────────
 // Ô nhập điều khiển bởi cha (active) — hỗ trợ Tab/Shift+Tab/Enter/Esc để nhập liền mạch như Excel
-function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavigate }) {
+// Ô kiểu 'richtext' — hiển thị nội dung định dạng (clamp), sửa bằng RichTextEditor sẵn có trong modal.
+function RichTextCell({ value, canEdit, companyId, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [viewing, setViewing] = useState(false)
+  const [html, setHtml] = useState(value ?? '')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => { setHtml(value ?? '') }, [value])
+  const isEmpty = stripHtml(value) === ''
+
+  async function save() {
+    setSaving(true)
+    try {
+      await onSave(stripHtml(html) === '' ? null : html)
+      setEditing(false)
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <td className={s.archInlineTd} onClick={(e) => e.stopPropagation()}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {isEmpty
+            ? <span className={s.archInlineEmpty}>—</span>
+            : <ClampedRichText html={value} maxHeight={96} onExpand={() => setViewing(true)} />}
+        </div>
+        {canEdit && (
+          <button type="button" title="Sửa nội dung"
+            style={{ flexShrink: 0, display: 'inline-flex', padding: 4, border: '1px solid var(--color-border)', borderRadius: 6, background: 'var(--color-surface)', cursor: 'pointer', color: 'var(--color-muted)' }}
+            onClick={() => setEditing(true)}>
+            <Pencil size={12} />
+          </button>
+        )}
+      </div>
+
+      {viewing && (
+        <RichTextViewerModal
+          title="Nội dung"
+          html={value}
+          onEdit={canEdit ? () => { setViewing(false); setEditing(true) } : undefined}
+          onClose={() => setViewing(false)}
+        />
+      )}
+      {editing && (
+        <Modal title="Sửa nội dung" onClose={() => { if (!saving) { setHtml(value ?? ''); setEditing(false) } }} wide>
+          <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(88vh - 220px)', minHeight: 260,
+            border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+            <Suspense fallback={<div style={{ padding: 20, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-muted)' }}><Loader2 size={16} className={s.spin} /> Đang tải trình soạn thảo…</div>}>
+              <RichTextEditor value={html} onChange={setHtml} editable companyId={companyId} autoFocus minHeight={200} className="rte-fill" placeholder="Nhập nội dung..." />
+            </Suspense>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+            <button className={s.btnOutline} onClick={() => { setHtml(value ?? ''); setEditing(false) }} disabled={saving}>Huỷ</button>
+            <button className={s.btnNavy} onClick={save} disabled={saving}>
+              {saving ? <Loader2 size={13} className={s.spin} /> : null} Lưu
+            </button>
+          </div>
+        </Modal>
+      )}
+    </td>
+  )
+}
+
+function EditableCell({ col, value, canEdit, active, onActivate, onSave, onNavigate, companyId }) {
+  if (col.dataType === 'richtext') {
+    return <RichTextCell value={value} canEdit={canEdit} companyId={companyId} onSave={onSave} />
+  }
   const [local, setLocal] = useState(value ?? '')
   const ref = useRef(null)
   // Text tự do (bao gồm cột không set dataType) → dùng textarea, hỗ trợ xuống dòng + điều hướng mép ô
@@ -1352,6 +1428,7 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
                       return (
                         <EditableCell key={col.colKey} col={col} value={row.data?.[col.colKey]}
                           canEdit={canEdit}
+                          companyId={companyId}
                           active={canEdit && activeCell?.rowId === row.id && activeCell?.colKey === col.colKey}
                           onActivate={() => canEdit && setActiveCell({ rowId: row.id, colKey: col.colKey })}
                           onNavigate={(dir) => navigateCell(row.id, col.colKey, dir)}

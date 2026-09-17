@@ -4,7 +4,9 @@ const svc = require('./company-tables.service')
 async function listDefs(req, res, next) {
   try {
     const activeOnly = req.query.activeOnly === 'true' || req.user.role !== 'admin'
-    res.json({ success: true, data: { defs: await svc.listDefs({ activeOnly }) } })
+    // section: 'data' (mặc định — Bảng dữ liệu) | 'important_note' (Điều cần lưu ý)
+    const section = req.query.section === 'important_note' ? 'important_note' : 'data'
+    res.json({ success: true, data: { defs: await svc.listDefs({ activeOnly, section }) } })
   } catch (e) { next(e) }
 }
 async function getDef(req, res, next) {
