@@ -1,5 +1,6 @@
 const { query } = require('../../config/db')
 const audit     = require('../../lib/audit')
+const rewardPenalty = require('../reward-penalty/rewardPenalty.service')
 const ExcelJS   = require('exceljs')
 const { assertEndNotBeforeStart } = require('../../utils/dateRange')
 const { applyStandardStyle } = require('../export/excel-renderer')
@@ -268,6 +269,51 @@ async function upsertRecord(periodId, data, actorId) {
     [record.id]
   )
   return recordToDto(full)
+}
+
+// ── Kéo Thưởng/Phạt (KPI) theo tháng vào bảng lương ──────────────────────────
+// Đọc tổng ĐÃ DUYỆT của reward-penalty theo (năm, tháng) → cộng vào `bonus` của
+// record (dưới dạng 1 bonusItem có cờ kpi, idempotent) + lưu chi tiết vào
+// components.kpi_summary. gross/net là cột GENERATED nên tự tính lại.
+async function applyRewardPenalty({ year, month }, actorId, ipAddress, userAgent) {
+  const { rows: [period] } = await query(
+    'SELECT * FROM payroll_periods WHERE period_year = $1 AND period_month = $2 ORDER BY created_at LIMIT 1',
+    [year, month])
+  if (!period) throw Object.assign(new Error(`Chưa có kỳ lương tháng ${month}/${year}. Hãy tạo kỳ lương trước.`), { status: 404 })
+  if (period.status !== 'draft') throw Object.assign(new Error('Kỳ lương đã chốt — chỉ kéo được khi kỳ đang Nháp.'), { status: 409 })
+
+  const summary = await rewardPenalty.getSummary({ year, month })
+  const { rows: records } = await query('SELECT * FROM payroll_records WHERE payroll_period_id = $1', [period.id])
+  const recByUser = new Map(records.map((r) => [r.user_id, r]))
+
+  let applied = 0
+  const missing = []
+  for (const sRow of summary) {
+    const rec = recByUser.get(sRow.userId)
+    if (!rec) { missing.push(sRow.userName); continue }   // có thưởng/phạt nhưng chưa có dòng lương
+    const comp = (rec.components && typeof rec.components === 'object') ? rec.components : {}
+    // Giữ các bonusItem khác, thay item KPI cũ bằng item mới (idempotent).
+    const bonusItems = (Array.isArray(comp.bonusItems) ? comp.bonusItems : []).filter((i) => !i.kpi)
+    if (sRow.netAmount !== 0) bonusItems.push({ name: 'Thưởng/Phạt KPI', amount: sRow.netAmount, kpi: true })
+    const bonus = bonusItems.reduce((a, i) => a + (Number(i.amount) || 0), 0)
+    const newComp = {
+      ...comp, bonusItems,
+      kpi_summary: {
+        netPoints: sRow.netPoints, netAmount: sRow.netAmount,
+        rewardAmount: sRow.rewardAmount, penaltyAmount: sRow.penaltyAmount,
+        pulledAt: new Date().toISOString(),
+      },
+    }
+    await query('UPDATE payroll_records SET bonus = $2, components = $3, updated_at = NOW() WHERE id = $1',
+      [rec.id, bonus, JSON.stringify(newComp)])
+    applied++
+  }
+
+  await audit.log({
+    userId: actorId, action: 'payroll.apply_reward_penalty', targetType: 'payroll_period', targetId: period.id,
+    meta: { year, month, applied, missing: missing.length }, ipAddress, userAgent,
+  })
+  return { applied, missing, periodId: period.id, considered: summary.length }
 }
 
 async function deleteRecord(periodId, recordId, actorId) {
@@ -562,6 +608,6 @@ async function sendPayrollEmails(periodId) {
 module.exports = {
   listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod,
   confirmPeriod, markPaid,
-  listRecords, upsertRecord, deleteRecord,
+  listRecords, upsertRecord, deleteRecord, applyRewardPenalty,
   exportExcel, exportExcelCustom, sendPayrollEmails,
 }

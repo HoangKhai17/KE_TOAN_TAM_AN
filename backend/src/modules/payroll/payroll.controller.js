@@ -104,7 +104,17 @@ async function sendPayrollEmails(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function applyRewardPenalty(req, res, next) {
+  try {
+    const year = Number(req.body.year); const month = Number(req.body.month)
+    if (!year || !month) { const e = new Error('Thiếu year/month'); e.status = 400; throw e }
+    const result = await svc.applyRewardPenalty({ year, month }, req.user.id, req.ip, req.headers['user-agent'])
+    res.json({ success: true, data: result })
+  } catch (e) { next(e) }
+}
+
 module.exports = {
   listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod, confirmPeriod, markPaid,
   listRecords, upsertRecord, deleteRecord, exportExcel, exportExcelCustom, sendPayrollEmails,
+  applyRewardPenalty,
 }

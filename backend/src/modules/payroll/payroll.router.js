@@ -54,6 +54,9 @@ const admin = [authenticate, requireRole('admin')]
  */
 router.get('/',       ...auth,  ctrl.listPeriods)
 router.get('/years',  ...auth,  ctrl.listDistinctYears)
+// Kéo Thưởng/Phạt (KPI) tháng {year,month} vào bảng lương của kỳ tương ứng (admin).
+// Đặt TRƯỚC '/:id' để không bị bắt nhầm là :id.
+router.post('/apply-reward-penalty', ...admin, ctrl.applyRewardPenalty)
 router.post('/',      ...admin, validate(createPeriodSchema), ctrl.createPeriod)
 
 /**

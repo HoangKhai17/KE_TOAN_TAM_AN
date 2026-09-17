@@ -62,3 +62,9 @@ export async function sendPayrollEmails(id) {
   const { data } = await api.post(`/payroll/${id}/send-emails`)
   return data.data
 }
+
+// Kéo Thưởng/Phạt (KPI) tháng {year,month} vào bảng lương của kỳ tương ứng.
+export async function applyRewardPenalty(year, month) {
+  const { data } = await api.post('/payroll/apply-reward-penalty', { year, month })
+  return data.data  // { applied, missing, periodId, considered }
+}

@@ -7,6 +7,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { listUserOptions } from '../../api/users'
+import { applyRewardPenalty as pullToPayroll } from '../../api/payroll'
 import * as api from '../../api/rewardPenalty'
 import s from './rewardPenalty.module.css'
 
@@ -36,10 +37,7 @@ export default function RewardPenalty() {
     <AppLayout>
       <div className={s.page}>
         <div className={s.pageHeader}>
-          <div>
-            <h1 className={s.pageTitle}><Scale size={18} style={{ verticalAlign: '-3px', marginRight: 8, color: 'var(--color-primary)' }} />Thưởng / Phạt nhân viên</h1>
-            <p className={s.pageSubtitle}>{isAdmin ? 'Quy tắc · sổ ghi điểm · tổng hợp theo kỳ' : 'Danh sách thưởng/phạt của bạn'}</p>
-          </div>
+          <h1 className={s.pageTitle}><Scale size={18} aria-hidden="true" />Điểm thưởng</h1>
         </div>
 
         {isAdmin ? (
@@ -309,11 +307,23 @@ function EntryModal({ entry, users, getOptions, onClose, onSaved }) {
 
 // ══ TỔNG HỢP ═════════════════════════════════════════════════════════════════
 function SummaryPanel({ years }) {
+  const addToast = useToastStore((st) => st.toast)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
+  const [pulling, setPulling] = useState(false)
   const [ym, setYm] = useState({ year: CUR_Y, month: CUR_M })
   useEffect(() => { setLoading(true); api.getSummary(ym.year, ym.month).then(setRows).catch(() => setRows([])).finally(() => setLoading(false)) }, [ym])
   const tot = useMemo(() => rows.reduce((a, r) => ({ rp: a.rp + r.rewardPoints, pp: a.pp + r.penaltyPoints, np: a.np + r.netPoints, ra: a.ra + r.rewardAmount, pa: a.pa + r.penaltyAmount, na: a.na + r.netAmount }), { rp: 0, pp: 0, np: 0, ra: 0, pa: 0, na: 0 }), [rows])
+
+  async function pull() {
+    setPulling(true)
+    try {
+      const r = await pullToPayroll(ym.year, ym.month)
+      addToast(`Đã kéo ${r.applied} nhân viên vào Bảng lương T${ym.month}/${ym.year}.`, 'success')
+      if (r.missing?.length) addToast(`${r.missing.length} NV có thưởng/phạt nhưng CHƯA có dòng lương (bỏ qua): ${r.missing.join(', ')}`, 'warning')
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi kéo vào bảng lương', 'error') }
+    finally { setPulling(false) }
+  }
 
   return (
     <div className={s.card}>
@@ -323,6 +333,9 @@ function SummaryPanel({ years }) {
         <span className={s.spacer} />
         <select className={s.select} value={ym.year} onChange={(e) => setYm((p) => ({ ...p, year: Number(e.target.value) }))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>
         <select className={s.select} value={ym.month} onChange={(e) => setYm((p) => ({ ...p, month: Number(e.target.value) }))}>{MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}</select>
+        <button className={s.btnPrimary} onClick={pull} disabled={pulling || rows.length === 0} title="Cộng Ròng (₫) đã duyệt vào bonus của bảng lương kỳ tương ứng">
+          {pulling && <Loader2 size={13} className={s.spin} />} Kéo vào Bảng lương
+        </button>
       </div>
       {loading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
         <div className={s.tableWrap}>

@@ -30,7 +30,7 @@ const NAV_GROUPS = [
       { to: '/attendance',        label: 'Chấm công',         icon: CalendarCheck, staffOnly: true, end: true },
       { to: '/attendance/admin',  label: 'Quản lý chấm công', icon: CalendarCheck, adminOnly: true },
       { to: '/payroll',           label: 'Bảng lương',       icon: Wallet,        adminOnly: true },
-      { to: '/reward-penalty',    label: 'Thưởng / Phạt',    icon: Scale },
+      { to: '/reward-penalty',    label: 'Điểm thưởng',     icon: Scale },
       { to: '/settings',          label: 'Cài đặt',          icon: Settings,      adminOnly: true },
     ],
   },
