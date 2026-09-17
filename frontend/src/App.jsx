@@ -21,6 +21,7 @@ import TaskDetail from './pages/Tasks/TaskDetail'
 import Payroll from './pages/Payroll/Payroll'
 import PayrollDetail from './pages/Payroll/PayrollDetail'
 import Reports from './pages/Reports/Reports'
+import RewardPenalty from './pages/RewardPenalty/RewardPenalty'
 import ProgressMatrix from './pages/ProgressMatrix/ProgressMatrix'
 import Notifications from './pages/Notifications/Notifications'
 import PublicForm from './pages/PublicForm/PublicForm'
@@ -180,6 +181,10 @@ function AppRoutes() {
       <Route
         path="/payroll/:id"
         element={<ProtectedRoute><PayrollDetail /></ProtectedRoute>}
+      />
+      <Route
+        path="/reward-penalty"
+        element={<ProtectedRoute><RewardPenalty /></ProtectedRoute>}
       />
       <Route
         path="/reports"

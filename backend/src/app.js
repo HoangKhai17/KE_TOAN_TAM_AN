@@ -193,6 +193,8 @@ function createApp() {
 
   // Phase 10 — Payroll
   app.use('/api/payroll', require('./modules/payroll/payroll.router'))
+  // Thưởng/Phạt nhân viên (KPI) — quy tắc + sổ ghi + tổng hợp theo kỳ
+  app.use('/api/reward-penalty', require('./modules/reward-penalty/rewardPenalty.router'))
 
   // Phase 11 — Documents / OneDrive
   app.use('/api/companies/:companyId/documents', require('./modules/documents/documents.router'))

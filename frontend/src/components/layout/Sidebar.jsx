@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Building2, CheckSquare,
   Users, BarChart3, Settings,
   ChevronLeft, ChevronRight, LogOut, Wallet, CalendarCheck, ClipboardList,
-  ClipboardCheck, LayoutGrid,
+  ClipboardCheck, LayoutGrid, Scale,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { logout } from '../../api/auth'
@@ -30,6 +30,7 @@ const NAV_GROUPS = [
       { to: '/attendance',        label: 'Chấm công',         icon: CalendarCheck, staffOnly: true, end: true },
       { to: '/attendance/admin',  label: 'Quản lý chấm công', icon: CalendarCheck, adminOnly: true },
       { to: '/payroll',           label: 'Bảng lương',       icon: Wallet,        adminOnly: true },
+      { to: '/reward-penalty',    label: 'Thưởng / Phạt',    icon: Scale },
       { to: '/settings',          label: 'Cài đặt',          icon: Settings,      adminOnly: true },
     ],
   },
