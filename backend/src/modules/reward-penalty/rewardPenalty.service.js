@@ -14,8 +14,8 @@ async function assertEnum(typeKey, value, field) {
 // ── DTO ──────────────────────────────────────────────────────────────────────
 function ruleToDto(r) {
   return {
-    id: r.id, code: r.code ?? null, label: r.label, kind: r.kind,
-    defaultPoints: Number(r.default_points), defaultAmount: r.default_amount != null ? Number(r.default_amount) : null,
+    id: r.id, label: r.label, kind: r.kind,
+    defaultPoints: Number(r.default_points),
     detectSource: r.detect_source, isActive: r.is_active, sortOrder: r.sort_order,
     createdAt: r.created_at, updatedAt: r.updated_at,
   }
@@ -44,10 +44,10 @@ async function createRule(data, actorId) {
   await assertEnum('reward_penalty_detect', data.detectSource, 'Nguồn phát hiện')
   const { rows: [m] } = await query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM kpi_rules')
   const { rows: [r] } = await query(
-    `INSERT INTO kpi_rules (code, label, kind, default_points, default_amount, detect_source, sort_order, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [data.code || null, data.label, data.kind || 'violation', data.defaultPoints ?? 0,
-     data.defaultAmount ?? null, data.detectSource || 'manual', data.sortOrder ?? m.n, actorId])
+    `INSERT INTO kpi_rules (label, kind, default_points, detect_source, sort_order, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [data.label, data.kind || 'violation', data.defaultPoints ?? 0,
+     data.detectSource || 'manual', data.sortOrder ?? m.n, actorId])
   return ruleToDto(r)
 }
 
@@ -55,8 +55,8 @@ async function updateRule(id, data) {
   if (data.kind !== undefined) await assertEnum('reward_penalty_kind', data.kind, 'Loại')
   if (data.detectSource !== undefined) await assertEnum('reward_penalty_detect', data.detectSource, 'Nguồn phát hiện')
   const map = {
-    code: 'code', label: 'label', kind: 'kind', defaultPoints: 'default_points',
-    defaultAmount: 'default_amount', detectSource: 'detect_source', isActive: 'is_active', sortOrder: 'sort_order',
+    label: 'label', kind: 'kind', defaultPoints: 'default_points',
+    detectSource: 'detect_source', isActive: 'is_active', sortOrder: 'sort_order',
   }
   const sets = []; const params = []
   for (const [k, col] of Object.entries(map)) {
@@ -135,11 +135,15 @@ async function updateEntry(id, data) {
   if (data.status !== undefined) await assertEnum('reward_penalty_status', data.status, 'Trạng thái')
   const map = {
     kind: 'kind', categoryLabel: 'category_label', points: 'points', amount: 'amount',
-    note: 'note', occurredOn: 'occurred_on', userId: 'user_id',
+    note: 'note', occurredOn: 'occurred_on', userId: 'user_id', status: 'status',
   }
   const sets = []; const params = []
   for (const [k, col] of Object.entries(map)) {
     if (data[k] !== undefined) { params.push(data[k]); sets.push(`${col} = $${params.length}`) }
+  }
+  // Chuyển về trạng thái KHÔNG phải 'approved' → xoá thông tin duyệt
+  if (data.status !== undefined && data.status !== 'approved') {
+    sets.push('approved_by = NULL'); sets.push('approved_at = NULL')
   }
   // Đổi ngày → cập nhật kỳ
   if (data.occurredOn !== undefined) {

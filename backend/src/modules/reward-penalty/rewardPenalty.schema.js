@@ -4,11 +4,9 @@ const { z } = require('zod')
 // ĐỘNG qua lib/enums (không hardcode danh sách ở đây).
 
 const ruleSchema = z.object({
-  code:          z.string().max(40).optional().nullable(),
   label:         z.string().min(1).max(200),
   kind:          z.string().max(40).optional(),
   defaultPoints: z.number().optional(),
-  defaultAmount: z.number().optional().nullable(),
   detectSource:  z.string().max(40).optional(),
   isActive:      z.boolean().optional(),
   sortOrder:     z.number().int().optional(),

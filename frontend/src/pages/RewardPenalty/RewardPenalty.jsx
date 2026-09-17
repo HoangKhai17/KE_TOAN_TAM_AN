@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Loader2, Plus, Check, Pencil, Trash2, ListChecks, ClipboardList, Users, Wallet } from 'lucide-react'
+import { Loader2, Plus, Check, X, Trash2, ListChecks, ClipboardList, Users, Wallet } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
-import Modal from '../../components/ui/Modal'
 import PaginationFooter from '../../components/layout/PaginationFooter'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -10,11 +9,13 @@ import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { listUserOptions } from '../../api/users'
 import { applyRewardPenalty as pullToPayroll } from '../../api/payroll'
 import * as api from '../../api/rewardPenalty'
+import { useColFilter, FilterTh, ColFilterPortal } from './useColFilter'
 import s from './rewardPenalty.module.css'
 
 const CUR_Y = new Date().getFullYear()
 const CUR_M = new Date().getMonth() + 1
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)   // tháng là phổ quát, không phải danh mục
+const TODAY = () => new Date().toISOString().slice(0, 10)
 
 const fmtMoney = (n) => (n == null || n === 0) ? '—' : `${n > 0 ? '+' : '−'}${Math.abs(Number(n)).toLocaleString('vi-VN')}₫`
 const fmtPts = (n) => (n == null) ? '—' : (n > 0 ? `+${n}` : `${n}`)
@@ -22,6 +23,8 @@ const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('vi-VN', { day: 
 const signCls = (n) => n > 0 ? s.pos : n < 0 ? s.neg : s.zero
 const KIND_PILL = { reward: s.pillReward, violation: s.pillPenalty }
 const STATUS_PILL = { approved: s.pillApproved, draft: s.pillDraft }
+const kindSelCls = (k) => k === 'reward' ? s.selReward : s.selPenalty
+const statusSelCls = (k) => k === 'approved' ? s.selApproved : s.selDraft
 
 // Phân trang phía client (dữ liệu trả về là mảng đầy đủ).
 function paginate(list, page, pageSize) {
@@ -29,12 +32,34 @@ function paginate(list, page, pageSize) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const safePage = Math.min(Math.max(1, page), totalPages)
   const start = (safePage - 1) * pageSize
-  return {
-    total, totalPages, safePage, start,
-    from: total === 0 ? 0 : start + 1,
-    to: Math.min(total, safePage * pageSize),
-    slice: list.slice(start, start + pageSize),
-  }
+  return { total, totalPages, safePage, start, from: total === 0 ? 0 : start + 1, to: Math.min(total, safePage * pageSize), slice: list.slice(start, start + pageSize) }
+}
+
+// ── Ô nhập thẳng trong bảng (commit khi blur / Enter) ──────────────────────────
+function CellText({ value, onCommit, numeric, placeholder, disabled }) {
+  const [v, setV] = useState(value ?? '')
+  useEffect(() => { setV(value ?? '') }, [value])
+  const commit = () => { if (String(v) !== String(value ?? '')) onCommit(v) }
+  return (
+    <input
+      className={`${s.cellInput} ${numeric ? s.cellInputNum : ''}`}
+      type={numeric ? 'number' : 'text'} value={v} placeholder={placeholder} disabled={disabled}
+      onChange={(e) => setV(e.target.value)} onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setV(value ?? ''); e.currentTarget.blur() } }}
+    />
+  )
+}
+function CellDate({ value, onCommit, disabled }) {
+  return <input type="date" className={s.cellInput} value={value ? String(value).slice(0, 10) : ''} disabled={disabled}
+    onChange={(e) => onCommit(e.target.value)} />
+}
+function EnumSelect({ value, options, onCommit, cls, title, disabled }) {
+  return (
+    <select className={`${s.qeSelect} ${cls || ''}`} value={value} disabled={disabled} title={title}
+      onChange={(e) => onCommit(e.target.value)}>
+      {options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+    </select>
+  )
 }
 
 export default function RewardPenalty() {
@@ -86,37 +111,73 @@ export default function RewardPenalty() {
   )
 }
 
-// ══ QUY TẮC ══════════════════════════════════════════════════════════════════
+// ══ QUY TẮC — bảng nhập thẳng ═════════════════════════════════════════════════
 function RulesPanel({ createSignal, getOptions, enumLabel, onFooter }) {
   const addToast = useToastStore((st) => st.toast)
   const confirmDelete = useDeleteConfirm()
-  const [rules, setRules] = useState([])
+  const kinds = getOptions('reward_penalty_kind')
+  const detects = getOptions('reward_penalty_detect')
+  const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState(null)
+  const [draft, setDraft] = useState(null)     // dòng thêm mới (chưa lưu)
+  const [savingNew, setSavingNew] = useState(false)
   const [sel, setSel] = useState(() => new Set())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const allChecked = rules.length > 0 && sel.size === rules.length
-  const toggleAll = () => setSel(allChecked ? new Set() : new Set(rules.map((r) => r.id)))
+
+  const cols = useMemo(() => [
+    { key: 'label',  label: 'Tên quy tắc',    type: 'text',        getLabel: (r) => r.label },
+    { key: 'kind',   label: 'Loại',           type: 'enum',        getLabel: (r) => enumLabel('reward_penalty_kind', r.kind) },
+    { key: 'points', label: 'Điểm',           type: 'numberRange', num: true, getNumber: (r) => Number(r.defaultPoints), getLabel: (r) => String(r.defaultPoints) },
+    { key: 'detect', label: 'Nguồn phát hiện', type: 'enum',       getLabel: (r) => enumLabel('reward_penalty_detect', r.detectSource) },
+    { key: 'active', label: 'Trạng thái',     type: 'enum',        getLabel: (r) => (r.isActive ? 'Đang bật' : 'Tắt') },
+  ], [enumLabel])
+  const cf = useColFilter(cols)
+  const view = cf.apply(rows)
+  const pg = paginate(view, page, pageSize)
+  useEffect(() => { setPage(1) }, [cf.depKey])
+
+  const allChecked = rows.length > 0 && sel.size === rows.length
+  const toggleAll = () => setSel(allChecked ? new Set() : new Set(rows.map((r) => r.id)))
   const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const reload = useCallback(() => { setLoading(true); setSel(new Set()); setPage(1); api.listRules().then(setRules).catch(() => setRules([])).finally(() => setLoading(false)) }, [])
-  const pg = paginate(rules, page, pageSize)
+
+  const reload = useCallback(() => { setLoading(true); setSel(new Set()); api.listRules().then(setRows).catch(() => setRows([])).finally(() => setLoading(false)) }, [])
+  useEffect(() => { reload() }, [reload])
+
   useEffect(() => {
     onFooter(<PaginationFooter total={pg.total} from={pg.from} to={pg.to} itemLabel="quy tắc"
       page={pg.safePage} pageSize={pageSize} totalPages={pg.totalPages} loading={loading}
       onPageChange={setPage} onPageSizeChange={(sz) => { setPageSize(sz); setPage(1) }} />)
     return () => onFooter(null)
   }, [onFooter, pg.total, pg.from, pg.to, pg.safePage, pg.totalPages, pageSize, loading])
-  useEffect(() => { reload() }, [reload])
-  // Nút "Thêm quy tắc" nằm trên thanh tab (parent) → tăng signal để mở modal.
-  // So sánh giá trị signal (không dùng cờ "lần đầu") để không bị bật nhầm khi mount/StrictMode.
-  const lastSig = useRef(createSignal)
-  useEffect(() => { if (lastSig.current === createSignal) return; lastSig.current = createSignal; setModal({}) }, [createSignal])
 
+  // Nút "Thêm quy tắc" trên thanh tab → mở 1 dòng nhập thẳng ở đầu bảng.
+  const lastSig = useRef(createSignal)
+  useEffect(() => {
+    if (lastSig.current === createSignal) return; lastSig.current = createSignal
+    setDraft({ label: '', kind: kinds[0]?.key ?? 'violation', defaultPoints: 0, detectSource: detects[0]?.key ?? 'manual', isActive: true })
+  }, [createSignal, kinds, detects])
+
+  async function patchRule(r, patch) {
+    setRows((list) => list.map((x) => x.id === r.id ? { ...x, ...patch } : x))
+    try { await api.updateRule(r.id, patch) }
+    catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); reload() }
+  }
+  async function saveDraft() {
+    if (!draft.label.trim()) { addToast('Nhập tên quy tắc', 'error'); return }
+    setSavingNew(true)
+    try {
+      await api.createRule({ label: draft.label.trim(), kind: draft.kind, defaultPoints: Number(draft.defaultPoints) || 0, detectSource: draft.detectSource, isActive: !!draft.isActive })
+      setDraft(null); reload()
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error') }
+    finally { setSavingNew(false) }
+  }
   async function remove(r) {
     if (!(await confirmDelete({ title: 'Xoá quy tắc', message: <>Xoá quy tắc <strong>“{r.label}”</strong>?</> }))) return
     try { await api.deleteRule(r.id); addToast('Đã xoá', 'success'); reload() } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi', 'error') }
   }
+  const setD = (k, v) => setDraft((p) => ({ ...p, [k]: v }))
+  const ACTIVE_OPTS = [{ key: '1', label: 'Đang bật' }, { key: '0', label: 'Tắt' }]
 
   return (
     <div className={s.card}>
@@ -126,25 +187,43 @@ function RulesPanel({ createSignal, getOptions, enumLabel, onFooter }) {
             <thead><tr>
               <th className={s.colChk}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
               <th className={s.colStt}>STT</th>
-              <th>Mã</th><th>Danh mục</th><th>Loại</th><th className={s.num}>Điểm</th><th className={s.num}>Tiền gợi ý</th>
-              <th>Nguồn phát hiện</th><th>Trạng thái</th><th>Hành động</th>
+              <FilterTh cf={cf} colKey="label">Tên quy tắc</FilterTh>
+              <FilterTh cf={cf} colKey="kind">Loại</FilterTh>
+              <FilterTh cf={cf} colKey="points" num>Điểm</FilterTh>
+              <FilterTh cf={cf} colKey="detect">Nguồn phát hiện</FilterTh>
+              <FilterTh cf={cf} colKey="active">Trạng thái</FilterTh>
+              <th>Hành động</th>
             </tr></thead>
             <tbody>
-              {rules.length === 0 && <tr><td colSpan={10} className={s.empty}>Chưa có quy tắc. Bấm “Thêm quy tắc”.</td></tr>}
+              {draft && (
+                <tr className={`${s.newRow} ${savingNew ? s.rowSaving : ''}`}>
+                  <td className={s.colChk} />
+                  <td className={s.colStt}>＋</td>
+                  <td><input autoFocus className={s.cellInput} value={draft.label} placeholder="Tên quy tắc…" onChange={(e) => setD('label', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveDraft()} /></td>
+                  <td><EnumSelect value={draft.kind} options={kinds} cls={kindSelCls(draft.kind)} onCommit={(v) => setD('kind', v)} /></td>
+                  <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.defaultPoints} onChange={(e) => setD('defaultPoints', e.target.value)} /></td>
+                  <td><EnumSelect value={draft.detectSource} options={detects} onCommit={(v) => setD('detectSource', v)} /></td>
+                  <td><EnumSelect value={draft.isActive ? '1' : '0'} options={ACTIVE_OPTS} cls={draft.isActive ? s.selOn : s.selOff} onCommit={(v) => setD('isActive', v === '1')} /></td>
+                  <td>
+                    <span className={s.rowActions}>
+                      <button className={`${s.iconBtn}`} title="Lưu" onClick={saveDraft} disabled={savingNew}>{savingNew ? <Loader2 size={13} className={s.spin} /> : <Check size={14} />}</button>
+                      <button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Huỷ" onClick={() => setDraft(null)}><X size={14} /></button>
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {rows.length === 0 && !draft && <tr><td colSpan={8} className={s.empty}>Chưa có quy tắc. Bấm “Thêm quy tắc”.</td></tr>}
               {pg.slice.map((r, i) => (
                 <tr key={r.id}>
                   <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(r.id)} onChange={() => toggle(r.id)} /></td>
                   <td className={s.colStt}>{pg.start + i + 1}</td>
-                  <td className={s.code}>{r.code || '—'}</td>
-                  <td>{r.label}</td>
-                  <td><span className={`${s.pill} ${KIND_PILL[r.kind]}`}>{enumLabel('reward_penalty_kind', r.kind)}</span></td>
-                  <td className={`${s.num} ${signCls(r.defaultPoints)}`}>{fmtPts(r.defaultPoints)}</td>
-                  <td className={`${s.num} ${signCls(r.defaultAmount ?? 0)}`}>{fmtMoney(r.defaultAmount)}</td>
-                  <td className={s.note}>{enumLabel('reward_penalty_detect', r.detectSource)}</td>
-                  <td>{r.isActive ? <span className={`${s.pill} ${s.pillApproved}`}>Đang bật</span> : <span className={`${s.pill} ${s.pillOff}`}>Tắt</span>}</td>
-                  <td className={s.num}>
+                  <td><CellText value={r.label} onCommit={(v) => v.trim() && patchRule(r, { label: v.trim() })} /></td>
+                  <td><EnumSelect value={r.kind} options={kinds} cls={kindSelCls(r.kind)} onCommit={(v) => patchRule(r, { kind: v })} /></td>
+                  <td><CellText value={r.defaultPoints} numeric onCommit={(v) => patchRule(r, { defaultPoints: Number(v) || 0 })} /></td>
+                  <td><EnumSelect value={r.detectSource} options={detects} onCommit={(v) => patchRule(r, { detectSource: v })} /></td>
+                  <td><EnumSelect value={r.isActive ? '1' : '0'} options={ACTIVE_OPTS} cls={r.isActive ? s.selOn : s.selOff} onCommit={(v) => patchRule(r, { isActive: v === '1' })} /></td>
+                  <td>
                     <span className={s.rowActions}>
-                      <button className={s.iconBtn} title="Sửa" onClick={() => setModal(r)}><Pencil size={13} /></button>
                       <button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => remove(r)}><Trash2 size={13} /></button>
                     </span>
                   </td>
@@ -154,70 +233,54 @@ function RulesPanel({ createSignal, getOptions, enumLabel, onFooter }) {
           </table>
         </div>
       )}
-      {modal && <RuleModal rule={modal.id ? modal : null} getOptions={getOptions} onClose={() => setModal(null)} onSaved={() => { setModal(null); reload() }} />}
+      <ColFilterPortal cf={cf} allRows={rows} />
     </div>
   )
 }
 
-function RuleModal({ rule, getOptions, onClose, onSaved }) {
-  const addToast = useToastStore((st) => st.toast)
-  const kinds = getOptions('reward_penalty_kind')
-  const detects = getOptions('reward_penalty_detect')
-  const [f, setF] = useState({
-    code: rule?.code ?? '', label: rule?.label ?? '', kind: rule?.kind ?? kinds[0]?.key ?? '',
-    defaultPoints: rule?.defaultPoints ?? 0, defaultAmount: rule?.defaultAmount ?? '',
-    detectSource: rule?.detectSource ?? detects[0]?.key ?? '', isActive: rule?.isActive ?? true,
-  })
-  const [saving, setSaving] = useState(false)
-  const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
-
-  async function save() {
-    if (!f.label.trim()) { addToast('Nhập tên danh mục', 'error'); return }
-    setSaving(true)
-    const body = {
-      code: f.code.trim() || null, label: f.label.trim(), kind: f.kind,
-      defaultPoints: Number(f.defaultPoints) || 0, defaultAmount: f.defaultAmount === '' ? null : Number(f.defaultAmount),
-      detectSource: f.detectSource, isActive: !!f.isActive,
-    }
-    try { rule ? await api.updateRule(rule.id, body) : await api.createRule(body); onSaved() }
-    catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); setSaving(false) }
-  }
-
-  return (
-    <Modal title={rule ? 'Sửa quy tắc' : 'Thêm quy tắc'} onClose={onClose} width="min(680px, calc(100vw - 40px))">
-      <div className={s.form}>
-        <div><label className={s.fLbl}>Mã (tùy chọn)</label><input className={s.input} value={f.code} onChange={set('code')} placeholder="VD: KP-CC" /></div>
-        <div><label className={s.fLbl}>Loại</label><select className={s.input} value={f.kind} onChange={set('kind')}>{kinds.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}</select></div>
-        <div className={s.fFull}><label className={s.fLbl}>Tên danh mục <span className={s.fReq}>*</span></label><input className={s.input} value={f.label} onChange={set('label')} autoFocus placeholder="VD: Không chấm công" /></div>
-        <div><label className={s.fLbl}>Điểm mặc định (âm = phạt)</label><input className={s.input} type="number" value={f.defaultPoints} onChange={set('defaultPoints')} /></div>
-        <div><label className={s.fLbl}>Tiền gợi ý (₫, âm = phạt)</label><input className={s.input} type="number" value={f.defaultAmount} onChange={set('defaultAmount')} placeholder="tùy chọn" /></div>
-        <div><label className={s.fLbl}>Nguồn phát hiện</label><select className={s.input} value={f.detectSource} onChange={set('detectSource')}>{detects.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}</select></div>
-        <div><label className={s.fLbl}>Trạng thái</label><select className={s.input} value={f.isActive ? '1' : '0'} onChange={(e) => setF((p) => ({ ...p, isActive: e.target.value === '1' }))}><option value="1">Đang bật</option><option value="0">Tắt</option></select></div>
-        <div className={s.formFoot}>
-          <button className={s.btnSecondary} onClick={onClose} disabled={saving}>Huỷ</button>
-          <button className={s.btnPrimary} onClick={save} disabled={saving}>{saving && <Loader2 size={13} className={s.spin} />} Lưu</button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ══ SỔ GHI ═══════════════════════════════════════════════════════════════════
+// ══ SỔ THƯỞNG/PHẠT — bảng nhập thẳng (admin), xem (staff) ══════════════════════
 function LedgerPanel({ isAdmin, createSignal, years, getOptions, enumLabel, onFooter }) {
   const addToast = useToastStore((st) => st.toast)
   const confirmDelete = useDeleteConfirm()
+  const kinds = getOptions('reward_penalty_kind')
+  const statuses = getOptions('reward_penalty_status')
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState([])
-  const [modal, setModal] = useState(null)
-  const [flt, setFlt] = useState({ year: CUR_Y, month: CUR_M, userId: '', kind: '', status: '' })
+  const [draft, setDraft] = useState(null)
+  const [savingNew, setSavingNew] = useState(false)
+  const [flt, setFlt] = useState({ year: CUR_Y, month: CUR_M })
   const [sel, setSel] = useState(() => new Set())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+
+  const cols = useMemo(() => [
+    ...(isAdmin ? [{ key: 'user', label: 'Nhân viên', type: 'enum', getLabel: (e) => e.userName }] : []),
+    { key: 'date',   label: 'Ngày',      type: 'dateRange',   getDate: (e) => String(e.occurredOn || '').slice(0, 10), getLabel: (e) => fmtDate(e.occurredOn) },
+    { key: 'kind',   label: 'Loại',      type: 'enum',        getLabel: (e) => enumLabel('reward_penalty_kind', e.kind) },
+    { key: 'cat',    label: 'Danh mục',  type: 'text',        getLabel: (e) => e.categoryLabel },
+    { key: 'points', label: 'Điểm',      type: 'numberRange', num: true, getNumber: (e) => Number(e.points), getLabel: (e) => String(e.points) },
+    { key: 'amount', label: 'Tiền',      type: 'numberRange', num: true, getNumber: (e) => (e.amount == null ? null : Number(e.amount)), getLabel: (e) => (e.amount == null ? '' : String(e.amount)) },
+    { key: 'source', label: 'Nguồn',     type: 'enum',        getLabel: (e) => enumLabel('reward_penalty_source', e.source) },
+    { key: 'status', label: 'Trạng thái', type: 'enum',       getLabel: (e) => enumLabel('reward_penalty_status', e.status) },
+    { key: 'note',   label: 'Ghi chú',   type: 'text',        getLabel: (e) => e.note || '' },
+  ], [isAdmin, enumLabel])
+  const cf = useColFilter(cols)
+  const view = cf.apply(entries)
+  const pg = paginate(view, page, pageSize)
+  useEffect(() => { setPage(1) }, [cf.depKey])
+
   const allChecked = entries.length > 0 && sel.size === entries.length
   const toggleAll = () => setSel(allChecked ? new Set() : new Set(entries.map((e) => e.id)))
   const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const pg = paginate(entries, page, pageSize)
+
+  useEffect(() => { if (isAdmin) listUserOptions({ status: 'active' }).then(({ users: u }) => setUsers(u)).catch(() => {}) }, [isAdmin])
+  const reload = useCallback(() => {
+    setLoading(true); setSel(new Set())
+    api.listEntries({ year: flt.year, month: flt.month }).then(setEntries).catch(() => setEntries([])).finally(() => setLoading(false))
+  }, [flt])
+  useEffect(() => { reload() }, [reload])
+
   useEffect(() => {
     onFooter(<PaginationFooter total={pg.total} from={pg.from} to={pg.to} itemLabel="dòng"
       page={pg.safePage} pageSize={pageSize} totalPages={pg.totalPages} loading={loading}
@@ -225,20 +288,40 @@ function LedgerPanel({ isAdmin, createSignal, years, getOptions, enumLabel, onFo
     return () => onFooter(null)
   }, [onFooter, pg.total, pg.from, pg.to, pg.safePage, pg.totalPages, pageSize, loading])
 
-  useEffect(() => { if (isAdmin) listUserOptions({ status: 'active' }).then(({ users: u }) => setUsers(u)).catch(() => {}) }, [isAdmin])
-  // Nút "Ghi nhận" nằm trên thanh tab (parent) → tăng signal để mở modal.
+  // Nút "Ghi nhận" trên thanh tab → mở dòng nhập thẳng.
   const lastSig = useRef(createSignal)
-  useEffect(() => { if (lastSig.current === createSignal) return; lastSig.current = createSignal; setModal({}) }, [createSignal])
-  const reload = useCallback(() => {
-    setLoading(true); setSel(new Set()); setPage(1)
-    const params = { year: flt.year, month: flt.month }
-    if (isAdmin) { if (flt.userId) params.userId = flt.userId; if (flt.kind) params.kind = flt.kind; if (flt.status) params.status = flt.status }
-    api.listEntries(params).then(setEntries).catch(() => setEntries([])).finally(() => setLoading(false))
-  }, [flt, isAdmin])
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => {
+    if (lastSig.current === createSignal) return; lastSig.current = createSignal
+    const st = statuses.find((o) => o.key === 'approved') ? 'approved' : (statuses[0]?.key ?? '')
+    setDraft({ userId: users[0]?.id ?? '', occurredOn: TODAY(), kind: kinds[0]?.key ?? 'violation', categoryLabel: '', points: 0, amount: '', note: '', status: st })
+  }, [createSignal, users, kinds, statuses])
 
-  async function approve(e) { try { await api.approveEntry(e.id); addToast('Đã duyệt', 'success'); reload() } catch (er) { addToast(er.response?.data?.error?.message ?? 'Lỗi', 'error') } }
-  async function remove(e) { if (!(await confirmDelete({ title: 'Xoá bản ghi', message: <>Xoá dòng <strong>“{e.categoryLabel}”</strong>?</> }))) return; try { await api.deleteEntry(e.id); addToast('Đã xoá', 'success'); reload() } catch (er) { addToast(er.response?.data?.error?.message ?? 'Lỗi', 'error') } }
+  async function patchEntry(e, patch) {
+    setEntries((list) => list.map((x) => x.id === e.id ? { ...x, ...patch } : x))
+    try {
+      if (patch.status && Object.keys(patch).length === 1 && patch.status === 'approved') await api.approveEntry(e.id)
+      else await api.updateEntry(e.id, patch)
+    } catch (er) { addToast(er.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); reload() }
+  }
+  async function saveDraft() {
+    if (!draft.userId) { addToast('Chọn nhân viên', 'error'); return }
+    if (!draft.categoryLabel.trim()) { addToast('Nhập danh mục', 'error'); return }
+    setSavingNew(true)
+    try {
+      await api.createEntry({
+        userId: draft.userId, occurredOn: draft.occurredOn, kind: draft.kind,
+        categoryLabel: draft.categoryLabel.trim(), points: Number(draft.points) || 0,
+        amount: draft.amount === '' ? null : Number(draft.amount), note: draft.note.trim() || null, status: draft.status, source: 'manual',
+      })
+      setDraft(null); reload()
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error') }
+    finally { setSavingNew(false) }
+  }
+  async function remove(e) {
+    if (!(await confirmDelete({ title: 'Xoá bản ghi', message: <>Xoá dòng <strong>“{e.categoryLabel}”</strong>?</> }))) return
+    try { await api.deleteEntry(e.id); addToast('Đã xoá', 'success'); reload() } catch (er) { addToast(er.response?.data?.error?.message ?? 'Lỗi', 'error') }
+  }
+  const setD = (k, v) => setDraft((p) => ({ ...p, [k]: v }))
 
   return (
     <div className={s.stack}>
@@ -246,11 +329,6 @@ function LedgerPanel({ isAdmin, createSignal, years, getOptions, enumLabel, onFo
         <div className={s.filters}>
           <div className={s.fld}><label className={s.lbl}>Năm</label><select className={s.select} value={flt.year} onChange={(e) => setFlt((p) => ({ ...p, year: Number(e.target.value) }))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select></div>
           <div className={s.fld}><label className={s.lbl}>Tháng</label><select className={s.select} value={flt.month} onChange={(e) => setFlt((p) => ({ ...p, month: Number(e.target.value) }))}>{MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}</select></div>
-          {isAdmin && <>
-            <div className={s.fld}><label className={s.lbl}>Nhân viên</label><select className={s.select} value={flt.userId} onChange={(e) => setFlt((p) => ({ ...p, userId: e.target.value }))}><option value="">Tất cả</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
-            <div className={s.fld}><label className={s.lbl}>Loại</label><select className={s.select} value={flt.kind} onChange={(e) => setFlt((p) => ({ ...p, kind: e.target.value }))}><option value="">Tất cả</option>{getOptions('reward_penalty_kind').map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}</select></div>
-            <div className={s.fld}><label className={s.lbl}>Trạng thái</label><select className={s.select} value={flt.status} onChange={(e) => setFlt((p) => ({ ...p, status: e.target.value }))}><option value="">Tất cả</option>{getOptions('reward_penalty_status').map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}</select></div>
-          </>}
         </div>
         {loading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
           <div className={s.tableWrap}>
@@ -258,32 +336,73 @@ function LedgerPanel({ isAdmin, createSignal, years, getOptions, enumLabel, onFo
               <thead><tr>
                 <th className={s.colChk}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
                 <th className={s.colStt}>STT</th>
-                {isAdmin && <th>Nhân viên</th>}
-                <th>Ngày</th><th>Loại</th><th>Danh mục</th><th className={s.num}>Điểm</th><th className={s.num}>Tiền</th>
-                <th>Nguồn</th><th>Trạng thái</th><th>Ghi chú</th>{isAdmin && <th>Hành động</th>}
+                {isAdmin && <FilterTh cf={cf} colKey="user">Nhân viên</FilterTh>}
+                <FilterTh cf={cf} colKey="date">Ngày</FilterTh>
+                <FilterTh cf={cf} colKey="kind">Loại</FilterTh>
+                <FilterTh cf={cf} colKey="cat">Danh mục</FilterTh>
+                <FilterTh cf={cf} colKey="points" num>Điểm</FilterTh>
+                <FilterTh cf={cf} colKey="amount" num>Tiền</FilterTh>
+                <FilterTh cf={cf} colKey="source">Nguồn</FilterTh>
+                <FilterTh cf={cf} colKey="status">Trạng thái</FilterTh>
+                <FilterTh cf={cf} colKey="note">Ghi chú</FilterTh>
+                {isAdmin && <th>Hành động</th>}
               </tr></thead>
               <tbody>
-                {entries.length === 0 && <tr><td colSpan={isAdmin ? 12 : 10} className={s.empty}>Không có dòng nào trong kỳ.</td></tr>}
+                {isAdmin && draft && (
+                  <tr className={`${s.newRow} ${savingNew ? s.rowSaving : ''}`}>
+                    <td className={s.colChk} />
+                    <td className={s.colStt}>＋</td>
+                    <td><select className={s.qeSelect} value={draft.userId} onChange={(e) => setD('userId', e.target.value)}><option value="">— chọn —</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></td>
+                    <td><input type="date" className={s.cellInput} value={draft.occurredOn} onChange={(e) => setD('occurredOn', e.target.value)} /></td>
+                    <td><EnumSelect value={draft.kind} options={kinds} cls={kindSelCls(draft.kind)} onCommit={(v) => setD('kind', v)} /></td>
+                    <td><input autoFocus className={s.cellInput} value={draft.categoryLabel} placeholder="Danh mục…" onChange={(e) => setD('categoryLabel', e.target.value)} /></td>
+                    <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.points} onChange={(e) => setD('points', e.target.value)} /></td>
+                    <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.amount} placeholder="—" onChange={(e) => setD('amount', e.target.value)} /></td>
+                    <td className={s.note}>Thủ công</td>
+                    <td><EnumSelect value={draft.status} options={statuses} cls={statusSelCls(draft.status)} onCommit={(v) => setD('status', v)} /></td>
+                    <td><input className={s.cellInput} value={draft.note} placeholder="Ghi chú…" onChange={(e) => setD('note', e.target.value)} /></td>
+                    <td>
+                      <span className={s.rowActions}>
+                        <button className={s.iconBtn} title="Lưu" onClick={saveDraft} disabled={savingNew}>{savingNew ? <Loader2 size={13} className={s.spin} /> : <Check size={14} />}</button>
+                        <button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Huỷ" onClick={() => setDraft(null)}><X size={14} /></button>
+                      </span>
+                    </td>
+                  </tr>
+                )}
+                {entries.length === 0 && !draft && <tr><td colSpan={isAdmin ? 12 : 10} className={s.empty}>Không có dòng nào trong kỳ.</td></tr>}
                 {pg.slice.map((e, i) => (
                   <tr key={e.id}>
                     <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(e.id)} onChange={() => toggle(e.id)} /></td>
                     <td className={s.colStt}>{pg.start + i + 1}</td>
                     {isAdmin && <td>{e.userName}</td>}
-                    <td className={s.num} style={{ textAlign: 'left' }}>{fmtDate(e.occurredOn)}</td>
-                    <td><span className={`${s.pill} ${KIND_PILL[e.kind]}`}>{enumLabel('reward_penalty_kind', e.kind)}</span></td>
-                    <td>{e.categoryLabel}</td>
-                    <td className={`${s.num} ${signCls(e.points)}`}>{fmtPts(e.points)}</td>
-                    <td className={`${s.num} ${signCls(e.amount ?? 0)}`}>{fmtMoney(e.amount)}</td>
-                    <td className={s.note}>{enumLabel('reward_penalty_source', e.source)}</td>
-                    <td><span className={`${s.pill} ${STATUS_PILL[e.status] ?? s.pillDraft}`}>{enumLabel('reward_penalty_status', e.status)}</span></td>
-                    <td className={s.note}>{e.note || '—'}</td>
-                    {isAdmin && <td className={s.num}>
-                      <span className={s.rowActions}>
-                        {e.status === 'draft' && <button className={`${s.btnMini} ${s.btnMiniPrimary}`} onClick={() => approve(e)}><Check size={13} /> Duyệt</button>}
-                        <button className={s.iconBtn} title="Sửa" onClick={() => setModal(e)}><Pencil size={13} /></button>
-                        <button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => remove(e)}><Trash2 size={13} /></button>
-                      </span>
-                    </td>}
+                    {isAdmin ? (
+                      <>
+                        <td><CellDate value={e.occurredOn} onCommit={(v) => v && patchEntry(e, { occurredOn: v })} /></td>
+                        <td><EnumSelect value={e.kind} options={kinds} cls={kindSelCls(e.kind)} onCommit={(v) => patchEntry(e, { kind: v })} /></td>
+                        <td><CellText value={e.categoryLabel} onCommit={(v) => v.trim() && patchEntry(e, { categoryLabel: v.trim() })} /></td>
+                        <td><CellText value={e.points} numeric onCommit={(v) => patchEntry(e, { points: Number(v) || 0 })} /></td>
+                        <td><CellText value={e.amount ?? ''} numeric onCommit={(v) => patchEntry(e, { amount: v === '' ? null : Number(v) })} /></td>
+                        <td className={s.note}>{enumLabel('reward_penalty_source', e.source)}</td>
+                        <td><EnumSelect value={e.status} options={statuses} cls={statusSelCls(e.status)} onCommit={(v) => patchEntry(e, { status: v })} /></td>
+                        <td><CellText value={e.note ?? ''} onCommit={(v) => patchEntry(e, { note: v.trim() || null })} /></td>
+                        <td>
+                          <span className={s.rowActions}>
+                            <button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => remove(e)}><Trash2 size={13} /></button>
+                          </span>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className={s.num} style={{ textAlign: 'left' }}>{fmtDate(e.occurredOn)}</td>
+                        <td><span className={`${s.pill} ${KIND_PILL[e.kind]}`}>{enumLabel('reward_penalty_kind', e.kind)}</span></td>
+                        <td>{e.categoryLabel}</td>
+                        <td className={`${s.num} ${signCls(e.points)}`}>{fmtPts(e.points)}</td>
+                        <td className={`${s.num} ${signCls(e.amount ?? 0)}`}>{fmtMoney(e.amount)}</td>
+                        <td className={s.note}>{enumLabel('reward_penalty_source', e.source)}</td>
+                        <td><span className={`${s.pill} ${STATUS_PILL[e.status] ?? s.pillDraft}`}>{enumLabel('reward_penalty_status', e.status)}</span></td>
+                        <td className={s.note}>{e.note || '—'}</td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -291,78 +410,12 @@ function LedgerPanel({ isAdmin, createSignal, years, getOptions, enumLabel, onFo
           </div>
         )}
       </div>
-      {modal && <EntryModal entry={modal.id ? modal : null} users={users} getOptions={getOptions} onClose={() => setModal(null)} onSaved={() => { setModal(null); reload() }} />}
+      <ColFilterPortal cf={cf} allRows={entries} />
     </div>
   )
 }
 
-function EntryModal({ entry, users, getOptions, onClose, onSaved }) {
-  const addToast = useToastStore((st) => st.toast)
-  const statuses = getOptions('reward_penalty_status')
-  const [rules, setRules] = useState([])
-  useEffect(() => { api.listRules({ activeOnly: 'true' }).then(setRules).catch(() => {}) }, [])
-  const [f, setF] = useState({
-    userId: entry?.userId ?? (users[0]?.id ?? ''), occurredOn: entry?.occurredOn?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
-    ruleId: entry?.ruleId ?? '', kind: entry?.kind ?? getOptions('reward_penalty_kind')[0]?.key ?? '', categoryLabel: entry?.categoryLabel ?? '',
-    points: entry?.points ?? 0, amount: entry?.amount ?? '', note: entry?.note ?? '',
-    status: entry?.status ?? (statuses.find((o) => o.key === 'approved') ? 'approved' : (statuses[0]?.key ?? '')),
-  })
-  const [saving, setSaving] = useState(false)
-  const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }))
-  function pickRule(id) {
-    const r = rules.find((x) => x.id === id)
-    if (!r) { setF((p) => ({ ...p, ruleId: '' })); return }
-    setF((p) => ({ ...p, ruleId: id, kind: r.kind, categoryLabel: r.label, points: r.defaultPoints, amount: r.defaultAmount ?? '' }))
-  }
-  const pickedRule = rules.find((x) => x.id === f.ruleId)
-
-  async function save() {
-    if (!f.userId) { addToast('Chọn nhân viên', 'error'); return }
-    if (!f.categoryLabel.trim() && !f.ruleId) { addToast('Chọn quy tắc hoặc nhập danh mục', 'error'); return }
-    setSaving(true)
-    const body = {
-      userId: f.userId, occurredOn: f.occurredOn, ruleId: f.ruleId || null, kind: f.kind,
-      categoryLabel: f.categoryLabel.trim() || undefined, points: Number(f.points) || 0,
-      amount: f.amount === '' ? null : Number(f.amount), note: f.note.trim() || null, status: f.status,
-    }
-    try {
-      if (entry) await api.updateEntry(entry.id, { occurredOn: body.occurredOn, kind: body.kind, categoryLabel: body.categoryLabel, points: body.points, amount: body.amount, note: body.note, status: body.status, userId: body.userId })
-      else await api.createEntry(body)
-      onSaved()
-    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); setSaving(false) }
-  }
-
-  return (
-    <Modal title={entry ? 'Sửa ghi nhận' : 'Ghi nhận thưởng / phạt'} onClose={onClose} width="min(760px, calc(100vw - 40px))">
-      <div className={s.form}>
-        <div><label className={s.fLbl}>Nhân viên <span className={s.fReq}>*</span></label><select className={s.input} value={f.userId} onChange={set('userId')}><option value="">— chọn —</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
-        <div><label className={s.fLbl}>Ngày xảy ra <span className={s.fReq}>*</span></label><input className={s.input} type="date" value={f.occurredOn} onChange={set('occurredOn')} /></div>
-        {!entry && (
-          <div className={s.fFull}>
-            <label className={s.fLbl}>Quy tắc (chọn → tự điền điểm/tiền, sửa được)</label>
-            <select className={s.input} value={f.ruleId} onChange={(e) => pickRule(e.target.value)}>
-              <option value="">— Không dùng quy tắc (nhập tay) —</option>
-              {rules.map((r) => <option key={r.id} value={r.id}>{r.code ? `${r.code} · ` : ''}{r.label} ({getOptions('reward_penalty_kind').find((o) => o.key === r.kind)?.label ?? r.kind})</option>)}
-            </select>
-            {pickedRule && <span className={s.autofill}>↳ mặc định {fmtPts(pickedRule.defaultPoints)} điểm{pickedRule.defaultAmount != null ? ` · ${fmtMoney(pickedRule.defaultAmount)}` : ''} (sửa được bên dưới)</span>}
-          </div>
-        )}
-        <div><label className={s.fLbl}>Loại</label><select className={s.input} value={f.kind} onChange={set('kind')}>{getOptions('reward_penalty_kind').map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}</select></div>
-        <div><label className={s.fLbl}>Danh mục / nhãn <span className={s.fReq}>*</span></label><input className={s.input} value={f.categoryLabel} onChange={set('categoryLabel')} placeholder="VD: Đi trễ họp KH" /></div>
-        <div><label className={s.fLbl}>Điểm (âm = phạt)</label><input className={s.input} type="number" value={f.points} onChange={set('points')} /></div>
-        <div><label className={s.fLbl}>Số tiền (₫, âm = phạt)</label><input className={s.input} type="number" value={f.amount} onChange={set('amount')} placeholder="tùy chọn" /></div>
-        <div className={s.fFull}><label className={s.fLbl}>Ghi chú / bằng chứng</label><input className={s.input} value={f.note} onChange={set('note')} placeholder="Mô tả, kể cả vi phạm ngoài hệ thống" /></div>
-        <div><label className={s.fLbl}>Trạng thái</label><select className={s.input} value={f.status} onChange={set('status')}>{statuses.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}</select></div>
-        <div className={s.formFoot}>
-          <button className={s.btnSecondary} onClick={onClose} disabled={saving}>Huỷ</button>
-          <button className={s.btnPrimary} onClick={save} disabled={saving}>{saving && <Loader2 size={13} className={s.spin} />} Lưu</button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ══ TỔNG HỢP ═════════════════════════════════════════════════════════════════
+// ══ TỔNG HỢP — chỉ xem + lọc header ═══════════════════════════════════════════
 function SummaryPanel({ pullSignal, years, onFooter }) {
   const addToast = useToastStore((st) => st.toast)
   const [rows, setRows] = useState([])
@@ -372,10 +425,25 @@ function SummaryPanel({ pullSignal, years, onFooter }) {
   const [sel, setSel] = useState(() => new Set())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+
+  const cols = useMemo(() => [
+    { key: 'user', label: 'Nhân viên',   type: 'text',        getLabel: (r) => r.userName },
+    { key: 'rp',   label: 'Điểm thưởng', type: 'numberRange', num: true, getNumber: (r) => r.rewardPoints,  getLabel: (r) => String(r.rewardPoints) },
+    { key: 'pp',   label: 'Điểm phạt',   type: 'numberRange', num: true, getNumber: (r) => r.penaltyPoints, getLabel: (r) => String(r.penaltyPoints) },
+    { key: 'np',   label: 'Điểm ròng',   type: 'numberRange', num: true, getNumber: (r) => r.netPoints,     getLabel: (r) => String(r.netPoints) },
+    { key: 'ra',   label: 'Tiền thưởng', type: 'numberRange', num: true, getNumber: (r) => r.rewardAmount,  getLabel: (r) => String(r.rewardAmount) },
+    { key: 'pa',   label: 'Tiền phạt',   type: 'numberRange', num: true, getNumber: (r) => r.penaltyAmount, getLabel: (r) => String(r.penaltyAmount) },
+    { key: 'na',   label: 'Ròng (₫)',    type: 'numberRange', num: true, getNumber: (r) => r.netAmount,     getLabel: (r) => String(r.netAmount) },
+  ], [])
+  const cf = useColFilter(cols)
+  const view = cf.apply(rows)
+  const pg = paginate(view, page, pageSize)
+  useEffect(() => { setPage(1) }, [cf.depKey])
+
   const allChecked = rows.length > 0 && sel.size === rows.length
   const toggleAll = () => setSel(allChecked ? new Set() : new Set(rows.map((r) => r.userId)))
   const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const pg = paginate(rows, page, pageSize)
+
   useEffect(() => { setLoading(true); setSel(new Set()); setPage(1); api.getSummary(ym.year, ym.month).then(setRows).catch(() => setRows([])).finally(() => setLoading(false)) }, [ym])
   useEffect(() => {
     onFooter(<PaginationFooter total={pg.total} from={pg.from} to={pg.to} itemLabel="nhân viên"
@@ -383,7 +451,7 @@ function SummaryPanel({ pullSignal, years, onFooter }) {
       onPageChange={setPage} onPageSizeChange={(sz) => { setPageSize(sz); setPage(1) }} />)
     return () => onFooter(null)
   }, [onFooter, pg.total, pg.from, pg.to, pg.safePage, pg.totalPages, pageSize, loading])
-  const tot = useMemo(() => rows.reduce((a, r) => ({ rp: a.rp + r.rewardPoints, pp: a.pp + r.penaltyPoints, np: a.np + r.netPoints, ra: a.ra + r.rewardAmount, pa: a.pa + r.penaltyAmount, na: a.na + r.netAmount }), { rp: 0, pp: 0, np: 0, ra: 0, pa: 0, na: 0 }), [rows])
+  const tot = useMemo(() => view.reduce((a, r) => ({ rp: a.rp + r.rewardPoints, pp: a.pp + r.penaltyPoints, np: a.np + r.netPoints, ra: a.ra + r.rewardAmount, pa: a.pa + r.penaltyAmount, na: a.na + r.netAmount }), { rp: 0, pp: 0, np: 0, ra: 0, pa: 0, na: 0 }), [view])
 
   const pull = useCallback(async () => {
     if (rows.length === 0) { addToast('Kỳ này chưa có dòng đã duyệt để kéo.', 'info'); return }
@@ -395,7 +463,6 @@ function SummaryPanel({ pullSignal, years, onFooter }) {
     } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi kéo vào bảng lương', 'error') }
     finally { setPulling(false) }
   }, [rows.length, ym, addToast])
-  // Nút "Kéo vào Bảng lương" nằm trên thanh tab (parent) → tăng signal để kích hoạt.
   const lastSig = useRef(pullSignal)
   useEffect(() => { if (lastSig.current === pullSignal) return; lastSig.current = pullSignal; pull() }, [pullSignal]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -412,12 +479,16 @@ function SummaryPanel({ pullSignal, years, onFooter }) {
             <thead><tr>
               <th className={s.colChk}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
               <th className={s.colStt}>STT</th>
-              <th>Nhân viên</th>
-              <th className={s.num}>Điểm thưởng</th><th className={s.num}>Điểm phạt</th><th className={s.num}>Điểm ròng</th>
-              <th className={s.num}>Tiền thưởng</th><th className={s.num}>Tiền phạt</th><th className={s.num}>Ròng (₫)</th>
+              <FilterTh cf={cf} colKey="user">Nhân viên</FilterTh>
+              <FilterTh cf={cf} colKey="rp" num>Điểm thưởng</FilterTh>
+              <FilterTh cf={cf} colKey="pp" num>Điểm phạt</FilterTh>
+              <FilterTh cf={cf} colKey="np" num>Điểm ròng</FilterTh>
+              <FilterTh cf={cf} colKey="ra" num>Tiền thưởng</FilterTh>
+              <FilterTh cf={cf} colKey="pa" num>Tiền phạt</FilterTh>
+              <FilterTh cf={cf} colKey="na" num>Ròng (₫)</FilterTh>
             </tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td colSpan={9} className={s.empty}>Chưa có dữ liệu đã duyệt trong kỳ.</td></tr>}
+              {view.length === 0 && <tr><td colSpan={9} className={s.empty}>Chưa có dữ liệu đã duyệt trong kỳ.</td></tr>}
               {pg.slice.map((r, i) => (
                 <tr key={r.userId}>
                   <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(r.userId)} onChange={() => toggle(r.userId)} /></td>
@@ -432,7 +503,7 @@ function SummaryPanel({ pullSignal, years, onFooter }) {
                 </tr>
               ))}
             </tbody>
-            {rows.length > 0 && <tfoot><tr>
+            {view.length > 0 && <tfoot><tr>
               <td className={s.colChk} /><td className={s.colStt} />
               <td>Cộng kỳ</td>
               <td className={`${s.num} ${signCls(tot.rp)}`}>{fmtPts(tot.rp)}</td>
@@ -445,6 +516,7 @@ function SummaryPanel({ pullSignal, years, onFooter }) {
           </table>
         </div>
       )}
+      <ColFilterPortal cf={cf} allRows={rows} />
       <div className={s.cardFoot}>🔗 <strong>Nối payroll (GĐ2):</strong> nút “Kéo vào Bảng lương” sẽ đọc <strong>Ròng (₫)</strong> theo tháng → cộng vào bảng lương. Điểm ròng dùng cho KPI.</div>
     </div>
   )

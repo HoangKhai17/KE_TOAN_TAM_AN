@@ -80,4 +80,34 @@
 .spin { animation: rpspin 0.8s linear infinite; }
 @keyframes rpspin { to { transform: rotate(360deg); } }
 
+/* ── Header lọc/sắp xếp cột (đồng bộ Tasks, chỉ dùng token) ─────────────────── */
+.thInner { display: flex; align-items: center; gap: 4px; }
+.thInnerNum { justify-content: flex-end; }
+.thLabel { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.thInnerNum .thLabel { flex: 0 1 auto; }
+.thFilterBtn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-primary-deep); opacity: 0.5; cursor: pointer; transition: opacity 0.12s, background 0.12s; }
+.thFilterBtn:hover { opacity: 1; background: var(--color-primary-bg); }
+.thFilterBtnActive, .thFilterBtnActive:hover { opacity: 1; background: var(--color-primary); color: var(--color-white); }
+
+/* ── Ô nhập thẳng trong bảng (kiểu bảng tùy chỉnh / ghi chú) ────────────────── */
+.cellInput { width: 100%; box-sizing: border-box; height: 26px; padding: 0 6px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; font-family: inherit; font-size: var(--fs-2xs); color: var(--color-text-strong); outline: none; transition: border-color 0.12s, background 0.12s, box-shadow 0.12s; }
+.cellInput:hover { border-color: var(--color-border-muted); }
+.cellInput:focus { border-color: var(--color-primary-soft); background: var(--color-white); box-shadow: 0 0 0 2px var(--color-primary-bg); }
+.cellInput::placeholder { color: var(--color-muted-subtle); }
+.cellInputNum { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── Ô select enum dạng ô vuông có màu (đồng bộ Tasks) ──────────────────────── */
+.qeSelect { width: 100%; max-width: 160px; height: 26px; padding: 0 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-white); font-family: inherit; font-size: var(--fs-2xs); font-weight: var(--fw-semibold); color: var(--color-text); cursor: pointer; transition: border-color 0.13s, box-shadow 0.13s; }
+.qeSelect:focus { outline: none; border-color: var(--color-primary-soft); box-shadow: 0 0 0 2px var(--color-primary-bg); }
+.selReward { background: var(--color-success-bg); color: var(--color-success-text); border-color: var(--color-success-bg); }
+.selPenalty { background: var(--color-danger-bg); color: var(--color-danger-text); border-color: var(--color-danger-bg); }
+.selApproved { background: var(--color-primary-bg); color: var(--color-primary); border-color: var(--color-primary-bg-strong); }
+.selDraft { background: var(--color-warning-bg); color: var(--color-warning-text); border-color: var(--color-warning-bg-strong); }
+.selOn { background: var(--color-success-bg); color: var(--color-success-text); border-color: var(--color-success-bg); }
+.selOff { background: var(--color-surface-muted); color: var(--color-muted); border-color: var(--color-surface-muted); }
+
+/* Dòng thêm mới (chưa lưu) — nổi bật nhẹ */
+.newRow td { background: var(--color-primary-bg); }
+.rowSaving { opacity: 0.55; pointer-events: none; }
+
 @media (max-width: 820px) { .form { grid-template-columns: 1fr; } }
