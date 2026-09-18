@@ -657,6 +657,14 @@
 .iconGreen { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-radius: var(--radius-md); border: 1.5px solid var(--color-success-bg); background: var(--color-success-bg); color: var(--color-success-text); cursor: pointer; transition: background .13s, color .13s; }
 .iconGreen:hover { background: var(--color-success-dark, #16a34a); color: var(--color-white); border-color: transparent; }
 
+/* Nhóm điều khiển bên phải thanh tab (bộ lọc năm + xoá + tạo kỳ) */
+.tabActions { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+/* Cột hành động (nút xoá) trong bảng kỳ lương */
+.colAct { width: 44px; text-align: center; }
+.iconDanger { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border-radius: var(--radius-md); border: 1px solid var(--color-danger-border); background: var(--color-white); color: var(--color-danger); cursor: pointer; transition: background .13s, color .13s; }
+.iconDanger:hover { background: var(--color-danger); color: var(--color-white); border-color: transparent; }
+
 /* Dòng phụ cấp trong form hồ sơ lương */
 .salItemRow { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .salItemRow input:first-child { flex: 1 1 auto; }

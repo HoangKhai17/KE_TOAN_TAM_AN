@@ -96,8 +96,10 @@ router.post('/',      ...admin, validate(createPeriodSchema), ctrl.createPeriod)
  *       200: { description: Updated }
  *       409: { description: Period not in draft status }
  */
-router.get('/:id',   ...auth,  ctrl.getPeriod)
-router.patch('/:id', ...admin, validate(updatePeriodSchema), ctrl.updatePeriod)
+router.get('/:id',    ...auth,  ctrl.getPeriod)
+router.patch('/:id',  ...admin, validate(updatePeriodSchema), ctrl.updatePeriod)
+// Xoá kỳ lương rác (admin, chỉ kỳ draft; records cascade theo).
+router.delete('/:id', ...admin, ctrl.deletePeriod)
 
 /**
  * @openapi

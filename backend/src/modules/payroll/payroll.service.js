@@ -591,7 +591,7 @@ async function sendPayrollEmails(periodId) {
 
 module.exports = {
   listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod,
-  confirmPeriod, markPaid,
+  confirmPeriod, markPaid, deletePeriod,
   listRecords, upsertRecord, deleteRecord, applyRewardPenalty,
   exportExcel, exportExcelCustom, sendPayrollEmails,
 }

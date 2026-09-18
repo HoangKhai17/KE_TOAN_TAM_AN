@@ -60,6 +60,13 @@ async function markPaid(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function deletePeriod(req, res, next) {
+  try {
+    await svc.deletePeriod(req.params.id, req.user.id, req.ip, req.headers['user-agent'])
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
 // --- Records ---
 async function listRecords(req, res, next) {
   try {
@@ -144,7 +151,7 @@ async function generatePeriodRecords(req, res, next) {
 }
 
 module.exports = {
-  listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod, confirmPeriod, markPaid,
+  listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod, confirmPeriod, markPaid, deletePeriod,
   listRecords, upsertRecord, deleteRecord, exportExcel, exportExcelCustom, sendPayrollEmails,
   applyRewardPenalty,
   listSalaries, getSalaryHistory, createSalary, updateSalary, deleteSalary, generatePeriodRecords,

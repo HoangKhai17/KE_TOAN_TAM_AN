@@ -25,6 +25,10 @@ export async function updatePeriod(id, body) {
   return data.data.period
 }
 
+export async function deletePeriod(id) {
+  await api.delete(`/payroll/${id}`)
+}
+
 export async function confirmPeriod(id) {
   const { data } = await api.post(`/payroll/${id}/confirm`)
   return data.data.period

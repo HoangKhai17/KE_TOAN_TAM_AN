@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Loader2, DollarSign, CalendarDays, SlidersHorizontal } from 'lucide-react'
+import { Plus, Loader2, DollarSign, CalendarDays, SlidersHorizontal, Trash2 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import SalaryConfig from './SalaryConfig'
 import PaginationFooter from '../../components/layout/PaginationFooter'
 import Modal from '../../components/ui/Modal'
 import DateBox from '../../components/ui/DateBox'
+import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as payrollApi from '../../api/payroll'
@@ -144,9 +145,11 @@ function CreatePeriodModal({ onClose, onCreated }) {
 // ── Main Payroll page ─────────────────────────────────────────────────────────
 
 export default function Payroll() {
-  const navigate  = useNavigate()
-  const isAdmin   = useAuthStore((st) => st.user?.role === 'admin')
-  const addToast  = useToastStore((st) => st.toast)
+  const navigate     = useNavigate()
+  const isAdmin      = useAuthStore((st) => st.user?.role === 'admin')
+  const addToast     = useToastStore((st) => st.toast)
+  const queryClient  = useQueryClient()
+  const confirmDelete = useDeleteConfirm()
 
   const [tab,          setTab]          = useState('periods')  // periods | salary
   const [selPeriods,   setSelPeriods]   = useState(() => new Set())
@@ -184,6 +187,43 @@ export default function Payroll() {
   const paginationTo = Math.min(page * 24, pagination.total)
   useEffect(() => { if (listQuery.isError) addToast('Không thể tải danh sách kỳ lương', 'error') }, [listQuery.errorUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const refetchPeriods = () => queryClient.invalidateQueries({ queryKey: ['payroll', 'periods'] })
+
+  // Xoá 1 kỳ lương rác (chỉ kỳ Nháp).
+  async function handleDeletePeriod(period) {
+    if (!(await confirmDelete({
+      title: 'Xoá kỳ lương',
+      message: <>Xoá kỳ lương <strong>Tháng {period.periodMonth}/{period.periodYear}</strong>? Toàn bộ bảng lương của kỳ sẽ bị xoá theo.</>,
+    }))) return
+    try {
+      await payrollApi.deletePeriod(period.id)
+      setSelPeriods((prev) => { const n = new Set(prev); n.delete(period.id); return n })
+      addToast(`Đã xoá kỳ lương ${period.periodMonth}/${period.periodYear}`, 'success')
+      refetchPeriods()
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể xoá kỳ lương', 'error')
+    }
+  }
+
+  // Xoá hàng loạt các kỳ đã chọn (bỏ qua kỳ đã chốt/đã trả).
+  async function handleBulkDelete() {
+    const chosen = periods.filter((p) => selPeriods.has(p.id))
+    const draftIds = chosen.filter((p) => p.status === 'draft').map((p) => p.id)
+    const skipped  = chosen.length - draftIds.length
+    if (draftIds.length === 0) { addToast('Chỉ xoá được kỳ lương đang Nháp', 'error'); return }
+    if (!(await confirmDelete({
+      title: 'Xoá kỳ lương đã chọn',
+      message: <>Xoá <strong>{draftIds.length}</strong> kỳ lương đang Nháp?{skipped > 0 && ` (${skipped} kỳ đã chốt/đã trả sẽ được giữ lại)`}</>,
+    }))) return
+    let ok = 0
+    for (const id of draftIds) {
+      try { await payrollApi.deletePeriod(id); ok++ } catch { /* bỏ qua từng lỗi lẻ */ }
+    }
+    setSelPeriods(new Set())
+    addToast(`Đã xoá ${ok}/${draftIds.length} kỳ lương`, ok ? 'success' : 'error')
+    refetchPeriods()
+  }
+
   return (
     <AppLayout footer={tab === 'periods' ? (
       <PaginationFooter
@@ -205,34 +245,33 @@ export default function Payroll() {
             <button className={`${s.tabBtn} ${tab === 'periods' ? s.tabBtnActive : ''}`} onClick={() => setTab('periods')}><CalendarDays size={14} /> Kỳ lương</button>
             <button className={`${s.tabBtn} ${tab === 'salary' ? s.tabBtnActive : ''}`} onClick={() => setTab('salary')}><SlidersHorizontal size={14} /> Cấu hình lương</button>
           </div>
-          {isAdmin && tab === 'periods' && (
-            <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
-              <Plus size={14} /> Tạo kỳ lương
-            </button>
+          {tab === 'periods' && (
+            <div className={s.tabActions}>
+              <select
+                className={s.filterSelect}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+              >
+                <option value="">Tất cả năm</option>
+                {availableYears.map((y) => (
+                  <option key={y} value={String(y)}>Năm {y}</option>
+                ))}
+              </select>
+              {isAdmin && selPeriods.size > 0 && (
+                <button className={s.btnDanger} onClick={handleBulkDelete}>
+                  <Trash2 size={14} /> Xoá ({selPeriods.size})
+                </button>
+              )}
+              {isAdmin && (
+                <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
+                  <Plus size={14} /> Tạo kỳ lương
+                </button>
+              )}
+            </div>
           )}
         </div>
 
         {tab === 'salary' ? <SalaryConfig /> : (<>
-        {/* Year filter bar */}
-        <div className={s.filterBar}>
-          <select
-            className={s.filterSelect}
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(e.target.value)}
-          >
-            <option value="">Tất cả năm</option>
-            {availableYears.map((y) => (
-              <option key={y} value={String(y)}>Năm {y}</option>
-            ))}
-          </select>
-          {selectedYear && (
-            <span className={s.filterLabel}>
-              Đang xem: <strong>Năm {selectedYear}</strong>
-              {!loading && ` — ${pagination.total} kỳ lương`}
-            </span>
-          )}
-        </div>
-
         <div className={s.card}>
           {loading ? (
             <div className={s.loadingBox}>
@@ -262,6 +301,7 @@ export default function Payroll() {
                     <th>Bắt đầu</th>
                     <th>Kết thúc</th>
                     <th>Ghi chú</th>
+                    {isAdmin && <th className={s.colAct} />}
                   </tr>
                 </thead>
                 <tbody>
@@ -290,6 +330,19 @@ export default function Payroll() {
                       <td className={s.tableNoteCell}>
                         {period.notes ?? '—'}
                       </td>
+                      {isAdmin && (
+                        <td className={s.colAct} onClick={(e) => e.stopPropagation()}>
+                          {period.status === 'draft' && (
+                            <button
+                              className={s.iconDanger}
+                              title="Xoá kỳ lương"
+                              onClick={() => handleDeletePeriod(period)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
