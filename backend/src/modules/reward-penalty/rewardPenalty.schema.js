@@ -20,7 +20,6 @@ const entrySchema = z.object({
   kind:          z.string().max(40).optional(),
   categoryLabel: z.string().max(200).optional(),
   points:        z.number().optional(),
-  amount:        z.number().optional().nullable(),
   note:          z.string().max(2000).optional().nullable(),
   source:        z.string().max(40).optional(),
   status:        z.string().max(40).optional(),
@@ -28,10 +27,10 @@ const entrySchema = z.object({
 const entryUpdateSchema = z.object({
   userId:        z.string().uuid().optional(),
   occurredOn:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  ruleId:        z.string().uuid().optional().nullable(),
   kind:          z.string().max(40).optional(),
   categoryLabel: z.string().max(200).optional(),
   points:        z.number().optional(),
-  amount:        z.number().optional().nullable(),
   note:          z.string().max(2000).optional().nullable(),
   status:        z.string().max(40).optional(),
 })

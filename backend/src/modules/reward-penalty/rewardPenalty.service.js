@@ -25,7 +25,7 @@ function entryToDto(e) {
     id: e.id, userId: e.user_id, userName: e.user_name ?? null,
     periodYear: e.period_year, periodMonth: e.period_month, occurredOn: e.occurred_on,
     ruleId: e.rule_id ?? null, kind: e.kind, categoryLabel: e.category_label,
-    points: Number(e.points), amount: e.amount != null ? Number(e.amount) : null,
+    points: Number(e.points),
     note: e.note ?? null, source: e.source, status: e.status,
     createdBy: e.created_by ?? null, approvedBy: e.approved_by ?? null, approvedAt: e.approved_at ?? null,
     createdAt: e.created_at, updatedAt: e.updated_at,
@@ -101,16 +101,15 @@ async function createEntry(data, actorId) {
   await assertEnum('reward_penalty_status', data.status, 'Trạng thái')
 
   // Lấy mặc định từ quy tắc (nếu chọn) — đóng băng nhãn + loại.
-  let kind = data.kind, categoryLabel = data.categoryLabel, points = data.points, amount = data.amount ?? null
+  let kind = data.kind, categoryLabel = data.categoryLabel, points = data.points
   if (data.ruleId) {
     const { rows: [rule] } = await query('SELECT * FROM kpi_rules WHERE id = $1', [data.ruleId])
     if (!rule) { const e = new Error('Không tìm thấy quy tắc'); e.status = 404; throw e }
     kind = kind ?? rule.kind
     categoryLabel = categoryLabel ?? rule.label
     points = points ?? Number(rule.default_points)
-    amount = amount ?? (rule.default_amount != null ? Number(rule.default_amount) : null)
   }
-  if (!categoryLabel) { const e = new Error('Thiếu danh mục / nhãn'); e.status = 422; throw e }
+  if (!categoryLabel) { const e = new Error('Thiếu tên quy tắc'); e.status = 422; throw e }
   kind = kind || 'violation'
   points = points ?? 0
 
@@ -123,10 +122,10 @@ async function createEntry(data, actorId) {
   const { rows: [e] } = await query(
     `INSERT INTO staff_reward_penalty
        (user_id, period_year, period_month, occurred_on, rule_id, kind, category_label,
-        points, amount, note, source, status, created_by, approved_by, approved_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+        points, note, source, status, created_by, approved_by, approved_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [data.userId, py, pm, data.occurredOn, data.ruleId ?? null, kind, categoryLabel,
-     points, amount, data.note ?? null, data.source || 'manual', status, actorId, approvedBy, approvedAt])
+     points, data.note ?? null, data.source || 'manual', status, actorId, approvedBy, approvedAt])
   return getEntry(e.id)
 }
 
@@ -134,7 +133,7 @@ async function updateEntry(id, data) {
   if (data.kind !== undefined)   await assertEnum('reward_penalty_kind', data.kind, 'Loại')
   if (data.status !== undefined) await assertEnum('reward_penalty_status', data.status, 'Trạng thái')
   const map = {
-    kind: 'kind', categoryLabel: 'category_label', points: 'points', amount: 'amount',
+    kind: 'kind', categoryLabel: 'category_label', points: 'points', ruleId: 'rule_id',
     note: 'note', occurredOn: 'occurred_on', userId: 'user_id', status: 'status',
   }
   const sets = []; const params = []
@@ -179,23 +178,19 @@ async function getEntry(id) {
   return entryToDto(e)
 }
 
-// ── TỔNG HỢP theo kỳ (chỉ dòng ĐÃ DUYỆT) — payroll sẽ đọc net_amount theo tháng ──
+// ── TỔNG HỢP theo kỳ (chỉ dòng ĐÃ DUYỆT) — ĐIỂM THUẦN (chưa quy ra tiền) ──
 async function getSummary({ year, month }) {
   const { rows } = await query(
     `SELECT u.id AS user_id, u.name AS user_name,
             COALESCE(SUM(points) FILTER (WHERE points > 0), 0) AS reward_points,
             COALESCE(SUM(points) FILTER (WHERE points < 0), 0) AS penalty_points,
-            COALESCE(SUM(points), 0)                           AS net_points,
-            COALESCE(SUM(amount) FILTER (WHERE amount > 0), 0) AS reward_amount,
-            COALESCE(SUM(amount) FILTER (WHERE amount < 0), 0) AS penalty_amount,
-            COALESCE(SUM(amount), 0)                           AS net_amount
+            COALESCE(SUM(points), 0)                           AS net_points
        FROM staff_reward_penalty s JOIN users u ON u.id = s.user_id
       WHERE s.period_year = $1 AND s.period_month = $2 AND s.status = 'approved'
       GROUP BY u.id, u.name ORDER BY u.name`, [year, month])
   return rows.map((r) => ({
     userId: r.user_id, userName: r.user_name,
     rewardPoints: Number(r.reward_points), penaltyPoints: Number(r.penalty_points), netPoints: Number(r.net_points),
-    rewardAmount: Number(r.reward_amount), penaltyAmount: Number(r.penalty_amount), netAmount: Number(r.net_amount),
   }))
 }
 
