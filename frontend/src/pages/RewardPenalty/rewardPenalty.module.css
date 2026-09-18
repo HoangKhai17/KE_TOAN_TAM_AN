@@ -95,6 +95,10 @@
 .cellInput:focus { border-color: var(--color-primary-soft); background: var(--color-white); box-shadow: 0 0 0 2px var(--color-primary-bg); }
 .cellInput::placeholder { color: var(--color-muted-subtle); }
 .cellInputNum { text-align: right; font-variant-numeric: tabular-nums; }
+/* Thu nhỏ DateBox chuẩn về cỡ ô inline (nhân đôi class để thắng CSS gốc của DateBox) */
+.dateCell.dateCell { min-height: 26px; max-width: 150px; padding: 0 6px; gap: 4px; border-width: 1px; border-radius: var(--radius-sm); font-size: var(--fs-2xs); }
+.dateCell input { font-size: var(--fs-2xs); }
+.dateCell svg { width: 14px; height: 14px; }
 
 /* ── Ô select enum dạng ô vuông có màu (đồng bộ Tasks) ──────────────────────── */
 .qeSelect { width: 100%; max-width: 160px; height: 26px; padding: 0 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-white); font-family: inherit; font-size: var(--fs-2xs); font-weight: var(--fw-semibold); color: var(--color-text); cursor: pointer; transition: border-color 0.13s, box-shadow 0.13s; }
@@ -109,6 +113,10 @@
 /* Dòng thêm mới (chưa lưu) — nổi bật nhẹ */
 .newRow td { background: var(--color-primary-bg); }
 .rowSaving { opacity: 0.55; pointer-events: none; }
+/* Ô Danh mục: dropdown chọn quy tắc (rộng hết cột) hoặc nhập tay */
+.catSelect { max-width: 100%; }
+.catManual { display: flex; align-items: center; gap: 4px; }
+.catBack { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border-radius: var(--radius-sm); border: 1.5px solid var(--color-border-muted); background: var(--color-white); color: var(--color-primary); cursor: pointer; }
 
 /* Thanh công cụ trên đầu (bộ lọc + Nhập/Xuất + nút chính) — nằm cạnh tab, KHÔNG nhét vào bảng */
 .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }

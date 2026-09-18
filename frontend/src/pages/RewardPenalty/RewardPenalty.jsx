@@ -5,6 +5,7 @@ import AppLayout from '../../components/layout/AppLayout'
 import PaginationFooter from '../../components/layout/PaginationFooter'
 import { BulkActionBar } from '../../components/ui/data-table'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
+import DateBox from '../../components/ui/DateBox'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -64,7 +65,7 @@ function CellText({ value, onCommit, numeric, placeholder, disabled }) {
   )
 }
 function CellDate({ value, onCommit, disabled }) {
-  return <input type="date" className={s.cellInput} value={ISO(value)} disabled={disabled} onChange={(e) => onCommit(e.target.value)} />
+  return <DateBox block className={s.dateCell} value={ISO(value)} disabled={disabled} onChange={(v) => onCommit(v)} />
 }
 function EnumSelect({ value, options, onCommit, cls, title, disabled }) {
   return (
@@ -309,6 +310,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState([])
+  const [rules, setRules] = useState([])
   const [draft, setDraft] = useState(null)
   const [savingNew, setSavingNew] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -339,6 +341,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
   const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   useEffect(() => { if (isAdmin) listUserOptions({ status: 'active' }).then(({ users: u }) => setUsers(u)).catch(() => {}) }, [isAdmin])
+  useEffect(() => { if (isAdmin) api.listRules({ activeOnly: 'true' }).then(setRules).catch(() => {}) }, [isAdmin])
   const reload = useCallback(() => {
     setLoading(true); setSel(new Set())
     api.listEntries({ year: flt.year, month: flt.month }).then(setEntries).catch(() => setEntries([])).finally(() => setLoading(false))
@@ -353,7 +356,12 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
 
   function openAdd() {
     const st = statuses.find((o) => o.key === 'approved') ? 'approved' : (statuses[0]?.key ?? '')
-    setDraft({ userId: users[0]?.id ?? '', occurredOn: TODAY(), kind: kinds[0]?.key ?? 'violation', categoryLabel: '', points: 0, amount: '', note: '', status: st })
+    setDraft({ userId: users[0]?.id ?? '', occurredOn: TODAY(), ruleId: '', manual: false, kind: kinds[0]?.key ?? 'violation', categoryLabel: '', points: 0, amount: '', note: '', status: st })
+  }
+  function pickDraftRule(id) {
+    const r = rules.find((x) => x.id === id)
+    if (!r) return
+    setDraft((p) => ({ ...p, ruleId: id, categoryLabel: r.label, kind: r.kind, points: r.defaultPoints }))
   }
   async function patchEntry(e, patch) {
     setEntries((list) => list.map((x) => x.id === e.id ? { ...x, ...patch } : x))
@@ -368,7 +376,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
     setSavingNew(true)
     try {
       await api.createEntry({
-        userId: draft.userId, occurredOn: draft.occurredOn, kind: draft.kind, categoryLabel: draft.categoryLabel.trim(),
+        userId: draft.userId, occurredOn: draft.occurredOn, ruleId: draft.ruleId || null, kind: draft.kind, categoryLabel: draft.categoryLabel.trim(),
         points: Number(draft.points) || 0, amount: draft.amount === '' ? null : Number(draft.amount), note: draft.note.trim() || null, status: draft.status, source: 'manual',
       })
       setDraft(null); reload()
@@ -472,9 +480,23 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                     <td className={s.colChk} />
                     <td className={s.colStt}>＋</td>
                     <td><select className={s.qeSelect} value={draft.userId} onChange={(e) => setD('userId', e.target.value)}><option value="">— chọn —</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></td>
-                    <td><input type="date" className={s.cellInput} value={draft.occurredOn} onChange={(e) => setD('occurredOn', e.target.value)} /></td>
+                    <td><DateBox block className={s.dateCell} value={draft.occurredOn} onChange={(v) => setD('occurredOn', v)} /></td>
                     <td><EnumSelect value={draft.kind} options={kinds} cls={kindSelCls(draft.kind)} onCommit={(v) => setD('kind', v)} /></td>
-                    <td><input autoFocus className={s.cellInput} value={draft.categoryLabel} placeholder="Danh mục…" onChange={(e) => setD('categoryLabel', e.target.value)} /></td>
+                    <td>
+                      {draft.manual ? (
+                        <div className={s.catManual}>
+                          <input autoFocus className={s.cellInput} value={draft.categoryLabel} placeholder="Nhập danh mục ngoài quy tắc…" onChange={(e) => setD('categoryLabel', e.target.value)} />
+                          <button className={s.catBack} title="Chọn từ quy tắc" onClick={() => setDraft((p) => ({ ...p, manual: false, ruleId: '', categoryLabel: '' }))}>↩</button>
+                        </div>
+                      ) : (
+                        <select className={`${s.qeSelect} ${s.catSelect}`} value={draft.ruleId}
+                          onChange={(e) => { const v = e.target.value; if (v === '__manual__') setDraft((p) => ({ ...p, manual: true, ruleId: '', categoryLabel: '' })); else pickDraftRule(v) }}>
+                          <option value="">— Chọn quy tắc —</option>
+                          {rules.map((r) => <option key={r.id} value={r.id}>{r.label} ({enumLabel('reward_penalty_kind', r.kind)})</option>)}
+                          <option value="__manual__">➕ Khác (nhập tay)</option>
+                        </select>
+                      )}
+                    </td>
                     <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.points} onChange={(e) => setD('points', e.target.value)} /></td>
                     <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.amount} placeholder="—" onChange={(e) => setD('amount', e.target.value)} /></td>
                     <td className={s.note}>Thủ công</td>
