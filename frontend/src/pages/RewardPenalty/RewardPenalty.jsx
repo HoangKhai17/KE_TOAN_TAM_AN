@@ -45,6 +45,34 @@ const gradeColorCls = (grade, grades = []) => {
 const classifyGrade = (points, grades = []) =>
   grades.find((g) => (g.minPoints == null || points >= g.minPoints) && (g.maxPoints == null || points <= g.maxPoints)) || null
 
+// Bảng con chi tiết thưởng/phạt (đường kẻ gạch mờ) — nhóm theo Loại động theo enum.
+function BreakdownTable({ items, kinds }) {
+  const known = new Set(kinds.map((k) => k.key))
+  const ordered = [
+    ...kinds.flatMap((k) => (items || []).filter((it) => it.kind === k.key).map((it) => ({ ...it, kindLabel: k.label }))),
+    ...(items || []).filter((it) => !known.has(it.kind)).map((it) => ({ ...it, kindLabel: 'Khác' })),
+  ]
+  if (ordered.length === 0) return <div className={s.bkEmpty}>—</div>
+  return (
+    <table className={s.bkTable}>
+      <thead><tr>
+        <th className={s.bkColKind}>Loại</th><th>Tên quy tắc</th>
+        <th className={s.bkColNum}>Số lần</th><th className={s.bkColNum}>Điểm</th>
+      </tr></thead>
+      <tbody>
+        {ordered.map((it, idx) => (
+          <tr key={`${it.kind}-${it.label}-${idx}`}>
+            <td><span className={`${s.bkTag} ${kindColorCls(it.kind, kinds)}`}>{it.kindLabel}</span></td>
+            <td className={s.bkLabel}>{it.label}</td>
+            <td className={`${s.bkColNum} ${s.bkCount}`}>{it.count}</td>
+            <td className={`${s.bkColNum} ${signCls(it.points)}`}>{fmtPts(it.points)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 // map giá trị Excel (nhãn hoặc key) → key enum
 const optKey = (options, val, fallback) => {
   const q = String(val ?? '').trim().toLowerCase()
@@ -219,14 +247,21 @@ export default function RewardPenalty() {
     <AppLayout footer={footer}>
       <div className={s.page}>
         <div className={s.tabs}>
-          {isAdmin ? (
-            <div className={s.tabLinks} role="tablist">
-              <button className={cls('ledger')} onClick={() => setTab('ledger')}><ClipboardList size={13} /> Sổ thưởng/phạt</button>
-              <button className={cls('summary')} onClick={() => setTab('summary')}><Users size={13} /> Tổng hợp theo NV</button>
-              <button className={cls('rules')} onClick={() => setTab('rules')}><ListChecks size={13} /> Danh sách quy tắc</button>
-              <button className={cls('grades')} onClick={() => setTab('grades')}><Award size={13} /> Quy đổi xếp loại</button>
-            </div>
-          ) : <span />}
+          <div className={s.tabLinks} role="tablist">
+            {isAdmin ? (
+              <>
+                <button className={cls('ledger')} onClick={() => setTab('ledger')}><ClipboardList size={13} /> Sổ thưởng/phạt</button>
+                <button className={cls('summary')} onClick={() => setTab('summary')}><Users size={13} /> Tổng hợp theo NV</button>
+                <button className={cls('rules')} onClick={() => setTab('rules')}><ListChecks size={13} /> Danh sách quy tắc</button>
+                <button className={cls('grades')} onClick={() => setTab('grades')}><Award size={13} /> Quy đổi xếp loại</button>
+              </>
+            ) : (
+              <>
+                <button className={cls('ledger')} onClick={() => setTab('ledger')}><ClipboardList size={13} /> Sổ thưởng/phạt</button>
+                <button className={cls('summary')} onClick={() => setTab('summary')}><Award size={13} /> Xếp loại của tôi</button>
+              </>
+            )}
+          </div>
           <div className={s.tabActions} ref={setSlot} />
         </div>
         {isAdmin ? (
@@ -237,7 +272,13 @@ export default function RewardPenalty() {
             {tab === 'grades' && <GradesPanel slot={slot} onFooter={setFooter} />}
           </>
         ) : (
-          <LedgerPanel isAdmin={false} slot={slot} years={years} getOptions={getOptions} enumLabel={enumLabel} onFooter={setFooter} />
+          <>
+            {tab === 'summary' ? (
+              <SummaryPanel self slot={slot} years={years} onFooter={setFooter} />
+            ) : (
+              <LedgerPanel isAdmin={false} slot={slot} years={years} getOptions={getOptions} enumLabel={enumLabel} onFooter={setFooter} />
+            )}
+          </>
         )}
       </div>
     </AppLayout>
@@ -690,7 +731,8 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
 }
 
 // ══ TỔNG HỢP — 1 dòng/nhân viên, bung ra xem chi tiết thưởng/phạt vì gì ════════
-function SummaryPanel({ slot, years, onFooter }) {
+// self=true: chế độ NHÂN VIÊN tự xem của mình (gom từ entry của họ, không gọi getSummary admin).
+function SummaryPanel({ slot, years, onFooter, self = false }) {
   const getOptions = useEnumsStore((st) => st.getOptions)
   const enumLabel = useCallback((type, key) => (getOptions(type).find((x) => x.key === key)?.label ?? key), [getOptions])
   const kinds = getOptions('reward_penalty_kind')
@@ -720,11 +762,27 @@ function SummaryPanel({ slot, years, onFooter }) {
   const toggleAll = () => setSel(allChecked ? new Set() : new Set(rows.map((r) => r.userId)))
   const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
-  // Tổng hợp đã gộp SẴN ở DB (service.getSummary): mỗi NV kèm items chi tiết.
+  // Admin: gộp SẴN ở DB (getSummary). Staff (self): gom từ entry CỦA MÌNH (controller đã scope).
   useEffect(() => {
     setLoading(true); setSel(new Set()); setPage(1)
-    api.getSummary(ym.year, ym.month).then((data) => setRows(Array.isArray(data) ? data : [])).catch(() => setRows([])).finally(() => setLoading(false))
-  }, [ym])
+    const load = self
+      ? api.listEntries({ year: ym.year, month: ym.month }).then((entries) => {
+        const byUser = new Map()
+        for (const e of entries) {
+          if (e.status !== 'approved') continue
+          if (!byUser.has(e.userId)) byUser.set(e.userId, { userId: e.userId, userName: e.userName, rewardPoints: 0, penaltyPoints: 0, netPoints: 0, items: new Map() })
+          const u = byUser.get(e.userId); const p = Number(e.points) || 0
+          if (p > 0) u.rewardPoints += p; else if (p < 0) u.penaltyPoints += p
+          u.netPoints += p
+          const key = `${e.categoryLabel}||${e.kind}`
+          if (!u.items.has(key)) u.items.set(key, { label: e.categoryLabel, kind: e.kind, count: 0, points: 0 })
+          const it = u.items.get(key); it.count += 1; it.points += p
+        }
+        return [...byUser.values()].map((u) => ({ ...u, items: [...u.items.values()].sort((a, b) => Math.abs(b.points) - Math.abs(a.points)) }))
+      })
+      : api.getSummary(ym.year, ym.month)
+    load.then((data) => setRows(Array.isArray(data) ? data : [])).catch(() => setRows([])).finally(() => setLoading(false))
+  }, [ym, self])
   useEffect(() => {
     onFooter(<PaginationFooter total={pg.total} from={pg.from} to={pg.to} itemLabel="nhân viên"
       page={pg.safePage} pageSize={pageSize} totalPages={pg.totalPages} loading={loading}
@@ -755,36 +813,6 @@ function SummaryPanel({ slot, years, onFooter }) {
       <button className={s.btnSecondary} onClick={() => setExportOpen(true)}><Download size={14} /> Xuất Excel</button>
     </div>
   )
-
-  // Chi tiết dạng BẢNG CON (đường kẻ gạch mờ) — nhóm theo Loại (động theo enum), tô màu.
-  const Breakdown = ({ items }) => {
-    const known = new Set(kinds.map((k) => k.key))
-    const ordered = [
-      ...kinds.flatMap((k) => (items || []).filter((it) => it.kind === k.key).map((it) => ({ ...it, kindLabel: k.label }))),
-      ...(items || []).filter((it) => !known.has(it.kind)).map((it) => ({ ...it, kindLabel: 'Khác' })),
-    ]
-    if (ordered.length === 0) return <div className={s.bkEmpty}>—</div>
-    return (
-      <table className={s.bkTable}>
-        <thead><tr>
-          <th className={s.bkColKind}>Loại</th>
-          <th>Tên quy tắc</th>
-          <th className={s.bkColNum}>Số lần</th>
-          <th className={s.bkColNum}>Điểm</th>
-        </tr></thead>
-        <tbody>
-          {ordered.map((it, idx) => (
-            <tr key={`${it.kind}-${it.label}-${idx}`}>
-              <td><span className={`${s.bkTag} ${kindColorCls(it.kind, kinds)}`}>{it.kindLabel}</span></td>
-              <td className={s.bkLabel}>{it.label}</td>
-              <td className={`${s.bkColNum} ${s.bkCount}`}>{it.count}</td>
-              <td className={`${s.bkColNum} ${signCls(it.points)}`}>{fmtPts(it.points)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    )
-  }
 
   return (
     <div className={s.card}>
@@ -825,7 +853,7 @@ function SummaryPanel({ slot, years, onFooter }) {
                     <td className={`${s.num}`}>{(() => { const g = gradeOf(r); return g && Number(g.amount) ? fmtMoney(g.amount) : '—' })()}</td>
                   </tr>
                   <tr className={s.detailRow}>
-                    <td colSpan={8} className={s.detailCell}><Breakdown items={r.items} /></td>
+                    <td colSpan={8} className={s.detailCell}><BreakdownTable items={r.items} kinds={kinds} /></td>
                   </tr>
                 </Fragment>
               ))}
