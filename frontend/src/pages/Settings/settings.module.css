@@ -1691,6 +1691,8 @@
   border-radius: 10px;
   overflow: hidden;
   min-height: 400px;
+  /* Giới hạn chiều cao để cột danh sách enum cuộn NỘI BỘ, giữ layout cố định khi có nhiều enum */
+  max-height: calc(100vh - 220px);
 }
 
 .enumSidebar {
@@ -1742,7 +1744,9 @@
 
 .enumContent {
   flex: 1;
-  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;   /* nội dung enum dài cũng cuộn độc lập, không đẩy cả trang */
   padding: 16px 20px;
 }
 
