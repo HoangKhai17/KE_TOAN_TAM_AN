@@ -61,11 +61,12 @@ async function getSummary(req, res, next) {
   } catch (e) { next(e) }
 }
 
-async function explainEntry(req, res, next) {
+async function discussEntry(req, res, next) {
   try {
-    const explanation = String(req.body.explanation ?? '').trim()
-    if (!explanation) { const e = new Error('Nhập nội dung giải trình'); e.status = 400; throw e }
-    res.json({ success: true, data: { entry: await svc.explainEntry(req.params.id, req.user.id, explanation) } })
+    const text = String(req.body.text ?? '').trim()
+    if (!text) { const e = new Error('Nhập nội dung giải trình'); e.status = 400; throw e }
+    if (text.length > 2000) { const e = new Error('Nội dung quá dài'); e.status = 400; throw e }
+    res.json({ success: true, data: { entry: await svc.discussEntry(req.params.id, { id: req.user.id, role: req.user.role }, text) } })
   } catch (e) { next(e) }
 }
 
@@ -89,6 +90,6 @@ async function deleteGrade(req, res, next) {
 
 module.exports = {
   listRules, createRule, updateRule, deleteRule,
-  listEntries, createEntry, updateEntry, approveEntry, deleteEntry, explainEntry, getSummary, listYears,
+  listEntries, createEntry, updateEntry, approveEntry, deleteEntry, discussEntry, getSummary, listYears,
   listGrades, createGrade, updateGrade, deleteGrade,
 }

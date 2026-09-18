@@ -7,6 +7,7 @@ import PaginationFooter from '../../components/layout/PaginationFooter'
 import { BulkActionBar } from '../../components/ui/data-table'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
 import DateBox from '../../components/ui/DateBox'
+import DiscussionModal from '../../components/DiscussionModal'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -109,6 +110,29 @@ function CellText({ value, onCommit, numeric, placeholder, disabled }) {
 function CellDate({ value, onCommit, disabled }) {
   return <DateBox block className={s.dateCell} value={ISO(value)} disabled={disabled} onChange={(v) => onCommit(v)} />
 }
+// Ô ghi chú nhiều dòng (textarea, tự xuống hàng); commit khi blur.
+function CellTextarea({ value, onCommit, placeholder, disabled }) {
+  const [v, setV] = useState(value ?? '')
+  useEffect(() => { setV(value ?? '') }, [value])
+  const commit = () => { if (onCommit && String(v) !== String(value ?? '')) onCommit(v) }
+  return (
+    <textarea className={s.cellTextarea} value={v} placeholder={placeholder} disabled={disabled} rows={1}
+      onChange={(e) => setV(e.target.value)} onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Escape') { setV(value ?? ''); e.currentTarget.blur() } }} />
+  )
+}
+// Ô cột "Giải trình": xem trước tin cuối + nút xanh mở hội thoại.
+function DiscussCell({ entry, onOpen }) {
+  const n = entry.discussion?.length || 0
+  const last = n ? entry.discussion[n - 1] : null
+  return (
+    <div className={s.discussCell}>
+      <button className={s.btnDiscuss} onClick={() => onOpen(entry)}><MessageSquare size={12} /> {n ? `Trao đổi (${n})` : 'Giải trình'}</button>
+      {last && <span className={s.discussPreview} title={last.text}><strong>{last.role === 'admin' ? 'QL' : 'NV'}:</strong> {last.text}</span>}
+    </div>
+  )
+}
+
 function EnumSelect({ value, options, onCommit, cls, title, disabled }) {
   return (
     <select className={`${s.qeSelect} ${cls || ''}`} value={value} disabled={disabled} title={title} onChange={(e) => onCommit(e.target.value)}>
@@ -485,6 +509,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
   const [importOpen, setImportOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [createRuleFor, setCreateRuleFor] = useState(null)   // { prefill, apply(rule) }
+  const [discussTarget, setDiscussTarget] = useState(null)   // entry đang mở hội thoại giải trình
   const [flt, setFlt] = useState({ year: CUR_Y, month: CUR_M })
   const [sel, setSel] = useState(() => new Set())
   const [page, setPage] = useState(1)
@@ -516,8 +541,8 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
     api.listEntries({ year: flt.year, month: flt.month }).then(setEntries).catch(() => setEntries([])).finally(() => setLoading(false))
   }, [flt])
   useEffect(() => { reload() }, [reload])
-  // Real-time: có dòng mới được duyệt (staff) hoặc staff vừa giải trình (admin) → tải lại.
-  useDataSync(['reward_penalty:new', 'reward_penalty:explained'], () => reload(), [reload])
+  // Real-time: dòng mới được duyệt, hoặc có tin nhắn giải trình mới → tải lại.
+  useDataSync(['reward_penalty:new', 'reward_penalty:discussion'], () => reload(), [reload])
   useEffect(() => {
     onFooter(<PaginationFooter total={pg.total} from={pg.from} to={pg.to} itemLabel="dòng"
       page={pg.safePage} pageSize={pageSize} totalPages={pg.totalPages} loading={loading}
@@ -628,15 +653,16 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
               <thead><tr>
                 <th className={s.colChk}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
                 <th className={s.colStt}>STT</th>
-                <FilterTh cf={cf} colKey="cat">Tên quy tắc</FilterTh>
-                <FilterTh cf={cf} colKey="kind">Loại</FilterTh>
-                {isAdmin && <FilterTh cf={cf} colKey="user">Nhân viên</FilterTh>}
-                <FilterTh cf={cf} colKey="date">Ngày</FilterTh>
-                <FilterTh cf={cf} colKey="points" num>Điểm</FilterTh>
-                <FilterTh cf={cf} colKey="source">Nguồn</FilterTh>
-                <FilterTh cf={cf} colKey="status">Trạng thái</FilterTh>
-                <FilterTh cf={cf} colKey="note">Ghi chú</FilterTh>
-                {isAdmin && <th>Hành động</th>}
+                <FilterTh cf={cf} colKey="cat" className={s.wCat}>Tên quy tắc</FilterTh>
+                <FilterTh cf={cf} colKey="kind" className={s.wKind}>Loại</FilterTh>
+                {isAdmin && <FilterTh cf={cf} colKey="user" className={s.wUser}>Nhân viên</FilterTh>}
+                <FilterTh cf={cf} colKey="date" className={s.wDate}>Ngày</FilterTh>
+                <FilterTh cf={cf} colKey="points" num className={s.wPoints}>Điểm</FilterTh>
+                <FilterTh cf={cf} colKey="source" className={s.wSource}>Nguồn</FilterTh>
+                <FilterTh cf={cf} colKey="status" className={s.wStatus}>Trạng thái</FilterTh>
+                <FilterTh cf={cf} colKey="note" className={s.wNote}>Ghi chú</FilterTh>
+                <th className={s.wDiscuss}>Giải trình</th>
+                {isAdmin && <th className={s.wAction}>Hành động</th>}
               </tr></thead>
               <tbody>
                 {isAdmin && draft && (
@@ -653,7 +679,8 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                     <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.points} onChange={(e) => setD('points', e.target.value)} /></td>
                     <td className={s.note}>Thủ công</td>
                     <td><EnumSelect value={draft.status} options={statuses} cls={statusSelCls(draft.status)} onCommit={(v) => setD('status', v)} /></td>
-                    <td><input className={s.cellInput} value={draft.note} placeholder="Ghi chú…" onChange={(e) => setD('note', e.target.value)} /></td>
+                    <td><textarea className={s.cellTextarea} rows={1} value={draft.note} placeholder="Ghi chú…" onChange={(e) => setD('note', e.target.value)} /></td>
+                    <td className={s.empty}>—</td>
                     <td>
                       <span className={s.rowActions}>
                         <button className={s.iconBtn} title="Lưu" onClick={saveDraft} disabled={savingNew}>{savingNew ? <Loader2 size={13} className={s.spin} /> : <Check size={14} />}</button>
@@ -662,7 +689,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                     </td>
                   </tr>
                 )}
-                {entries.length === 0 && !draft && <tr><td colSpan={isAdmin ? 11 : 9} className={s.empty}>Không có dòng nào trong kỳ.</td></tr>}
+                {entries.length === 0 && !draft && <tr><td colSpan={isAdmin ? 12 : 10} className={s.empty}>Không có dòng nào trong kỳ.</td></tr>}
                 {pg.slice.map((e, i) => (
                   <tr key={e.id}>
                     <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(e.id)} onChange={() => toggle(e.id)} /></td>
@@ -679,10 +706,8 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                         <td><CellText value={e.points} numeric onCommit={(v) => patchEntry(e, { points: Number(v) || 0 })} /></td>
                         <td className={s.note}>{enumLabel('reward_penalty_source', e.source)}</td>
                         <td><EnumSelect value={e.status} options={statuses} cls={statusSelCls(e.status)} onCommit={(v) => patchEntry(e, { status: v })} /></td>
-                        <td>
-                          <CellText value={e.note ?? ''} placeholder="Ghi chú…" onCommit={(v) => patchEntry(e, { note: v.trim() || null })} />
-                          {e.staffExplanation && <div className={s.explainNote}><MessageSquare size={11} /><span><strong>Giải trình:</strong> {e.staffExplanation}</span></div>}
-                        </td>
+                        <td><CellTextarea value={e.note ?? ''} placeholder="Ghi chú…" onCommit={(v) => patchEntry(e, { note: v.trim() || null })} /></td>
+                        <td><DiscussCell entry={e} onOpen={setDiscussTarget} /></td>
                         <td>
                           <span className={s.rowActions}>
                             <button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => remove(e)}><Trash2 size={13} /></button>
@@ -697,10 +722,8 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                         <td className={`${s.num} ${signCls(e.points)}`}>{fmtPts(e.points)}</td>
                         <td className={s.note}>{enumLabel('reward_penalty_source', e.source)}</td>
                         <td><EnumSelect value={e.status} options={statuses} cls={statusSelCls(e.status)} disabled onCommit={() => {}} /></td>
-                        <td>
-                          <div className={s.note}>{e.note || '—'}</div>
-                          {e.staffExplanation && <div className={s.explainNote}><MessageSquare size={11} /><span><strong>Giải trình của bạn:</strong> {e.staffExplanation}</span></div>}
-                        </td>
+                        <td className={s.noteWrap}>{e.note || '—'}</td>
+                        <td><DiscussCell entry={e} onOpen={setDiscussTarget} /></td>
                       </>
                     )}
                   </tr>
@@ -734,6 +757,10 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
         <QuickRuleModal prefill={createRuleFor.prefill} getOptions={getOptions}
           onClose={() => setCreateRuleFor(null)}
           onCreated={(r) => { setRules((list) => [...list, r]); createRuleFor.apply(r); setCreateRuleFor(null) }} />
+      )}
+      {discussTarget && (
+        <DiscussionModal entry={discussTarget} onClose={() => setDiscussTarget(null)}
+          onPosted={(upd) => { setEntries((list) => list.map((x) => x.id === upd.id ? upd : x)); setDiscussTarget(upd) }} />
       )}
     </div>
   )

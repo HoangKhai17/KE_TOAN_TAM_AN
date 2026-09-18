@@ -38,7 +38,7 @@ router.post('/entries',             ...admin, validate(entrySchema), ctrl.create
 router.patch('/entries/:id',        ...admin, validate(entryUpdateSchema), ctrl.updateEntry)
 router.post('/entries/:id/approve', ...admin, ctrl.approveEntry)
 router.delete('/entries/:id',       ...admin, ctrl.deleteEntry)
-// Staff gửi giải trình cho dòng của MÌNH (service kiểm tra quyền sở hữu).
-router.post('/entries/:id/explain', ...auth,  ctrl.explainEntry)
+// Giải trình dạng hội thoại (staff trên dòng của mình; admin trên mọi dòng).
+router.post('/entries/:id/discuss', ...auth,  ctrl.discussEntry)
 
 module.exports = router

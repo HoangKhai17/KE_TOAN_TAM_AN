@@ -3,7 +3,7 @@ import Modal from './ui/Modal'
 import { useRpAlertStore } from '../stores/rewardPenaltyAlert'
 import { useToastStore } from '../stores/toastStore'
 import { useEnumsStore } from '../hooks/useEnums'
-import { explainEntry } from '../api/rewardPenalty'
+import { discussEntry } from '../api/rewardPenalty'
 import s from './RewardPenaltyAlert.module.css'
 
 const fmtPts = (n) => (n == null) ? '—' : (n > 0 ? `+${n}` : `${n}`)
@@ -30,7 +30,7 @@ export default function RewardPenaltyAlert() {
   async function submit() {
     if (!text.trim()) { addToast('Nhập nội dung giải trình', 'error'); return }
     setSending(true)
-    try { await explainEntry(entry.id, text.trim()); addToast('Đã gửi giải trình cho quản lý', 'success'); dismiss() }
+    try { await discussEntry(entry.id, text.trim()); addToast('Đã gửi giải trình cho quản lý', 'success'); dismiss() }
     catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi gửi giải trình', 'error') }
     finally { setSending(false) }
   }

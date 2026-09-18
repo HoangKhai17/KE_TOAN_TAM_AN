@@ -37,9 +37,9 @@ export async function approveEntry(id) {
 export async function deleteEntry(id) {
   await api.delete(`/reward-penalty/entries/${id}`)
 }
-// Staff gửi giải trình cho dòng của mình
-export async function explainEntry(id, explanation) {
-  const { data } = await api.post(`/reward-penalty/entries/${id}/explain`, { explanation })
+// Giải trình dạng hội thoại (staff/admin nhắn trong 1 thread trên dòng)
+export async function discussEntry(id, text) {
+  const { data } = await api.post(`/reward-penalty/entries/${id}/discuss`, { text })
   return data.data.entry
 }
 

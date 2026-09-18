@@ -34,7 +34,7 @@ function entryToDto(e) {
     ruleId: e.rule_id ?? null, kind: e.kind, categoryLabel: e.category_label,
     points: Number(e.points),
     note: e.note ?? null, source: e.source, status: e.status,
-    staffExplanation: e.staff_explanation ?? null, explainedAt: e.explained_at ?? null,
+    discussion: Array.isArray(e.discussion) ? e.discussion : [],
     createdBy: e.created_by ?? null, approvedBy: e.approved_by ?? null, approvedAt: e.approved_at ?? null,
     createdAt: e.created_at, updatedAt: e.updated_at,
   }
@@ -178,22 +178,28 @@ async function approveEntry(id, actorId) {
   return dto
 }
 
-// Staff gửi GIẢI TRÌNH cho dòng của mình → lưu + báo admin đã tạo dòng đó.
-async function explainEntry(id, userId, explanation) {
-  const { rows: [row] } = await query('SELECT user_id, created_by, category_label, kind FROM staff_reward_penalty WHERE id = $1', [id])
+// GIẢI TRÌNH dạng hội thoại: staff và admin cùng nhắn trong 1 thread trên dòng.
+//   actor = { id, role }. Non-admin chỉ được nhắn trên dòng của MÌNH.
+async function discussEntry(id, actor, text) {
+  const { rows: [row] } = await query('SELECT user_id, created_by, category_label FROM staff_reward_penalty WHERE id = $1', [id])
   if (!row) { const e = new Error('Không tìm thấy bản ghi'); e.status = 404; throw e }
-  if (row.user_id !== userId) { const e = new Error('Bạn chỉ được giải trình dòng của mình'); e.status = 403; throw e }
+  const isAdmin = actor.role === 'admin'
+  if (!isAdmin && row.user_id !== actor.id) { const e = new Error('Bạn chỉ được giải trình dòng của mình'); e.status = 403; throw e }
+  const { rows: [au] } = await query('SELECT name FROM users WHERE id = $1', [actor.id])
+  const msg = { role: isAdmin ? 'admin' : 'staff', name: au?.name ?? '', text, at: new Date().toISOString() }
   await query(
-    'UPDATE staff_reward_penalty SET staff_explanation = $2, explained_at = NOW(), updated_at = NOW() WHERE id = $1',
-    [id, explanation])
+    `UPDATE staff_reward_penalty SET discussion = COALESCE(discussion, '[]'::jsonb) || $2::jsonb, updated_at = NOW() WHERE id = $1`,
+    [id, JSON.stringify([msg])])
   const dto = await getEntry(id)
-  // Báo cho admin đã tạo dòng (nếu có) để xem xét.
-  if (row.created_by) {
-    createAndEmit(row.created_by, 'reward_penalty',
-      `Giải trình: ${dto.userName}`,
-      `${dto.userName} đã giải trình cho "${row.category_label}": ${explanation}`).catch(() => {})
-    emitToUser(row.created_by, 'reward_penalty:explained', dto)
+  const staffId = row.user_id, adminId = row.created_by
+  const recipient = isAdmin ? staffId : adminId
+  if (recipient && recipient !== actor.id) {
+    createAndEmit(recipient, 'reward_penalty',
+      isAdmin ? `Phản hồi giải trình` : `Giải trình: ${msg.name}`,
+      `${isAdmin ? 'Quản lý' : msg.name} (${row.category_label}): ${text}`).catch(() => {})
   }
+  // Cả 2 phía refresh bảng.
+  for (const uid of [staffId, adminId]) if (uid) emitToUser(uid, 'reward_penalty:discussion', { id })
   return dto
 }
 
@@ -292,7 +298,7 @@ async function deleteGrade(id) {
 
 module.exports = {
   listRules, createRule, updateRule, deleteRule,
-  listEntries, createEntry, updateEntry, approveEntry, deleteEntry, getEntry, explainEntry,
+  listEntries, createEntry, updateEntry, approveEntry, deleteEntry, getEntry, discussEntry,
   getSummary, listYears,
   listGrades, createGrade, updateGrade, deleteGrade,
 }

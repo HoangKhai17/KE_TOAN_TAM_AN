@@ -98,6 +98,30 @@
 .cellInput:focus { border-color: var(--color-primary-soft); background: var(--color-white); box-shadow: 0 0 0 2px var(--color-primary-bg); }
 .cellInput::placeholder { color: var(--color-muted-subtle); }
 .cellInputNum { text-align: right; font-variant-numeric: tabular-nums; }
+/* Ô ghi chú nhiều dòng (textarea xuống hàng) */
+.cellTextarea { width: 100%; box-sizing: border-box; min-height: 26px; padding: 4px 6px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; font-family: inherit; font-size: var(--fs-2xs); color: var(--color-text-strong); outline: none; resize: vertical; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+.cellTextarea:hover { border-color: var(--color-border-muted); }
+.cellTextarea:focus { border-color: var(--color-primary-soft); background: var(--color-white); box-shadow: 0 0 0 2px var(--color-primary-bg); }
+.cellTextarea::placeholder { color: var(--color-muted-subtle); }
+.noteWrap { white-space: pre-wrap; word-break: break-word; color: var(--color-text-strong); font-size: var(--fs-2xs); }
+/* Cột Giải trình (hội thoại) */
+.discussCell { display: flex; flex-direction: row; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.discussPreview { flex: 0 1 190px; min-width: 0; max-width: 190px; font-size: var(--fs-2xs); color: var(--color-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.discussPreview strong { color: var(--color-muted); }
+
+/* Bề rộng cột — thu hẹp cột phụ, nới rộng Ghi chú & Giải trình */
+.wCat { width: 300px; }
+.wKind { width: 106px; }
+.wUser { width: 146px; }
+.wDate { width: 118px; }
+.wPoints { width: 62px; }
+.wSource { width: 82px; }
+.wStatus { width: 126px; }
+.wNote { min-width: 220px; }
+.wDiscuss { min-width: 230px; }
+.wAction { width: 82px; }
+.btnDiscuss { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border: 1.5px solid var(--color-success-bg); border-radius: var(--radius-sm); background: var(--color-success-bg); color: var(--color-success-text); font-size: var(--fs-2xs); font-weight: var(--fw-bold); cursor: pointer; white-space: nowrap; }
+.btnDiscuss:hover { background: var(--color-success-dark, #16a34a); color: var(--color-white); border-color: transparent; }
 /* Thu nhỏ DateBox chuẩn về cỡ ô inline (nhân đôi class để thắng CSS gốc của DateBox) */
 .dateCell.dateCell { min-height: 26px; max-width: 150px; padding: 0 6px; gap: 4px; border-width: 1px; border-radius: var(--radius-sm); font-size: var(--fs-2xs); }
 .dateCell input { font-size: var(--fs-2xs); }

@@ -1,0 +1,18 @@
+.head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 2px 8px; border-bottom: 1px solid var(--color-border-muted); }
+.kind { font-weight: var(--fw-bold); color: var(--color-text-strong); word-break: break-word; }
+.pts { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--color-muted); }
+.list { display: flex; flex-direction: column; gap: 8px; max-height: min(46vh, 340px); overflow-y: auto; padding: 10px 2px; }
+.empty { text-align: center; color: var(--color-muted-subtle); font-size: var(--fs-2xs); padding: 16px; }
+.msg { display: flex; flex-direction: column; gap: 2px; max-width: 82%; }
+.staff { align-self: flex-start; }
+.admin { align-self: flex-end; align-items: flex-end; }
+.meta { font-size: var(--fs-2xs); color: var(--color-muted); }
+.bubble { font-size: var(--fs-xs); line-height: 1.4; padding: 7px 10px; border-radius: var(--radius-md); white-space: pre-wrap; word-break: break-word; }
+.staff .bubble { background: var(--color-surface-muted); color: var(--color-text-strong); border-bottom-left-radius: 2px; }
+.admin .bubble { background: var(--color-primary-bg); color: var(--color-primary-dark); border-bottom-right-radius: 2px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; padding-top: 8px; border-top: 1px solid var(--color-border-muted); }
+.textarea { flex: 1 1 auto; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid var(--color-border-muted); border-radius: var(--radius-md); font-family: inherit; font-size: var(--fs-xs); color: var(--color-text-strong); outline: none; resize: vertical; min-height: 40px; }
+.textarea:focus { border-color: var(--color-primary-soft); box-shadow: 0 0 0 2px var(--color-primary-bg); }
+.send { flex: 0 0 auto; height: var(--control-h-md); padding: 0 18px; border: none; border-radius: var(--radius-md); background: var(--color-success-dark, #16a34a); color: var(--color-white); font-size: var(--fs-2xs); font-weight: var(--fw-bold); cursor: pointer; }
+.send:disabled { opacity: 0.55; cursor: default; }
+.hint { font-size: var(--fs-2xs); color: var(--color-muted-subtle); margin-top: 4px; }
