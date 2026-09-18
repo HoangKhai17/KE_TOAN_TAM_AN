@@ -118,6 +118,17 @@
 /* Ô select vô hiệu (staff chỉ xem) vẫn GIỮ màu, không bị xám */
 .qeSelect:disabled { opacity: 1; cursor: default; }
 
+/* Xếp loại (grade) — palette E→S theo thứ tự, badge tròn */
+.gradeC0 { background: var(--color-danger-bg); color: var(--color-danger-text); }
+.gradeC1 { background: var(--color-warning-bg); color: var(--color-warning-text); }
+.gradeC2 { background: var(--color-surface-muted); color: var(--color-muted); }
+.gradeC3 { background: var(--color-primary-bg); color: var(--color-primary); }
+.gradeC4 { background: var(--color-success-bg); color: var(--color-success-text); }
+.gradeC5 { background: var(--color-primary); color: var(--color-white); }
+.gradeBadge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: var(--fw-bold); white-space: nowrap; }
+.gradeRow { display: inline-flex; align-items: center; gap: 6px; }
+.gradeRow input { max-width: 60px; }
+
 /* Dòng thêm mới (chưa lưu) — nổi bật nhẹ */
 .newRow td { background: var(--color-primary-bg); }
 .rowSaving { opacity: 0.55; pointer-events: none; }

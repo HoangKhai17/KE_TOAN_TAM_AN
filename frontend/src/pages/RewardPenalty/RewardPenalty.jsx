@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
-import { Loader2, Plus, Check, X, Trash2, Upload, Download, ListChecks, ClipboardList, Users, ChevronDown, Search } from 'lucide-react'
+import { Loader2, Plus, Check, X, Trash2, Upload, Download, ListChecks, ClipboardList, Users, ChevronDown, Search, Award } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import PaginationFooter from '../../components/layout/PaginationFooter'
@@ -24,6 +24,7 @@ const TODAY = () => new Date().toISOString().slice(0, 10)
 const ISO = (v) => (v ? String(v).slice(0, 10) : '')
 
 const fmtPts = (n) => (n == null) ? '—' : (n > 0 ? `+${n}` : `${n}`)
+const fmtMoney = (n) => (n == null || Number(n) === 0) ? '—' : `${Number(n) > 0 ? '' : '−'}${Math.abs(Number(n)).toLocaleString('vi-VN')}₫`
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
 const signCls = (n) => n > 0 ? s.pos : n < 0 ? s.neg : s.zero
 // Màu ĐỘNG cho Loại: mỗi loại trong enum lấy 1 màu trong palette theo thứ tự (thêm loại mới
@@ -34,6 +35,15 @@ const kindColorCls = (kind, opts = []) => {
   return KIND_PALETTE[(idx < 0 ? 0 : idx) % KIND_PALETTE.length]
 }
 const statusSelCls = (k) => k === 'approved' ? s.selApproved : s.selDraft
+
+// Palette màu cho xếp loại (E→S) theo thứ tự; phân loại điểm → xếp loại theo dải cấu hình.
+const GRADE_PALETTE = [s.gradeC0, s.gradeC1, s.gradeC2, s.gradeC3, s.gradeC4, s.gradeC5]
+const gradeColorCls = (grade, grades = []) => {
+  const idx = grades.findIndex((g) => g.id === grade?.id)
+  return GRADE_PALETTE[(idx < 0 ? 0 : idx) % GRADE_PALETTE.length]
+}
+const classifyGrade = (points, grades = []) =>
+  grades.find((g) => (g.minPoints == null || points >= g.minPoints) && (g.maxPoints == null || points <= g.maxPoints)) || null
 
 // map giá trị Excel (nhãn hoặc key) → key enum
 const optKey = (options, val, fallback) => {
@@ -214,6 +224,7 @@ export default function RewardPenalty() {
               <button className={cls('ledger')} onClick={() => setTab('ledger')}><ClipboardList size={13} /> Sổ thưởng/phạt</button>
               <button className={cls('summary')} onClick={() => setTab('summary')}><Users size={13} /> Tổng hợp theo NV</button>
               <button className={cls('rules')} onClick={() => setTab('rules')}><ListChecks size={13} /> Danh sách quy tắc</button>
+              <button className={cls('grades')} onClick={() => setTab('grades')}><Award size={13} /> Quy đổi xếp loại</button>
             </div>
           ) : <span />}
           <div className={s.tabActions} ref={setSlot} />
@@ -223,6 +234,7 @@ export default function RewardPenalty() {
             {tab === 'rules' && <RulesPanel slot={slot} getOptions={getOptions} enumLabel={enumLabel} onFooter={setFooter} />}
             {tab === 'ledger' && <LedgerPanel isAdmin slot={slot} years={years} getOptions={getOptions} enumLabel={enumLabel} onFooter={setFooter} />}
             {tab === 'summary' && <SummaryPanel slot={slot} years={years} onFooter={setFooter} />}
+            {tab === 'grades' && <GradesPanel slot={slot} onFooter={setFooter} />}
           </>
         ) : (
           <LedgerPanel isAdmin={false} slot={slot} years={years} getOptions={getOptions} enumLabel={enumLabel} onFooter={setFooter} />
@@ -683,12 +695,15 @@ function SummaryPanel({ slot, years, onFooter }) {
   const enumLabel = useCallback((type, key) => (getOptions(type).find((x) => x.key === key)?.label ?? key), [getOptions])
   const kinds = getOptions('reward_penalty_kind')
   const [rows, setRows] = useState([])
+  const [grades, setGrades] = useState([])
   const [loading, setLoading] = useState(true)
   const [ym, setYm] = useState({ year: CUR_Y, month: CUR_M })
   const [sel, setSel] = useState(() => new Set())
   const [exportOpen, setExportOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  useEffect(() => { api.listGrades({ activeOnly: 'true' }).then(setGrades).catch(() => {}) }, [])
+  const gradeOf = (r) => classifyGrade(r.netPoints, grades)
 
   const cols = useMemo(() => [
     { key: 'user', label: 'Nhân viên',   type: 'text',        getLabel: (r) => r.userName },
@@ -728,6 +743,8 @@ function SummaryPanel({ slot, years, onFooter }) {
     { key: 'rp', label: 'Điểm thưởng', width: 12, type: 'number', value: (r) => r.rewardPoints },
     { key: 'pp', label: 'Điểm phạt', width: 12, type: 'number', value: (r) => r.penaltyPoints },
     { key: 'np', label: 'Tổng điểm', width: 12, type: 'number', value: (r) => r.netPoints },
+    { key: 'grade', label: 'Xếp loại', width: 10, value: (r) => { const g = gradeOf(r); return g ? `${g.code}${g.label ? ` – ${g.label}` : ''}` : '' } },
+    { key: 'gamt', label: 'Thưởng', width: 14, type: 'number', thousands: true, value: (r) => { const g = gradeOf(r); return g ? g.amount : '' } },
     ...kindDetailCols,
   ]
 
@@ -790,9 +807,11 @@ function SummaryPanel({ slot, years, onFooter }) {
               <FilterTh cf={cf} colKey="rp" num>Điểm thưởng</FilterTh>
               <FilterTh cf={cf} colKey="pp" num>Điểm phạt</FilterTh>
               <FilterTh cf={cf} colKey="np" num>Tổng điểm</FilterTh>
+              <th>Xếp loại</th>
+              <th className={s.num}>Thưởng</th>
             </tr></thead>
             <tbody>
-              {view.length === 0 && <tr><td colSpan={6} className={s.empty}>Chưa có dữ liệu đã duyệt trong kỳ.</td></tr>}
+              {view.length === 0 && <tr><td colSpan={8} className={s.empty}>Chưa có dữ liệu đã duyệt trong kỳ.</td></tr>}
               {pg.slice.map((r, i) => (
                 <Fragment key={r.userId}>
                   <tr className={s.sumRow}>
@@ -802,9 +821,11 @@ function SummaryPanel({ slot, years, onFooter }) {
                     <td className={`${s.num} ${signCls(r.rewardPoints)}`}>{fmtPts(r.rewardPoints)}</td>
                     <td className={`${s.num} ${signCls(r.penaltyPoints)}`}>{fmtPts(r.penaltyPoints)}</td>
                     <td className={`${s.num} ${signCls(r.netPoints)}`}>{fmtPts(r.netPoints)}</td>
+                    <td>{(() => { const g = gradeOf(r); return g ? <span className={`${s.gradeBadge} ${gradeColorCls(g, grades)}`} title={g.label}>{g.code}{g.label ? ` · ${g.label}` : ''}</span> : <span className={s.zero}>—</span> })()}</td>
+                    <td className={`${s.num}`}>{(() => { const g = gradeOf(r); return g && Number(g.amount) ? fmtMoney(g.amount) : '—' })()}</td>
                   </tr>
                   <tr className={s.detailRow}>
-                    <td colSpan={6} className={s.detailCell}><Breakdown items={r.items} /></td>
+                    <td colSpan={8} className={s.detailCell}><Breakdown items={r.items} /></td>
                   </tr>
                 </Fragment>
               ))}
@@ -818,6 +839,129 @@ function SummaryPanel({ slot, years, onFooter }) {
           sheetName={`T${ym.month}-${ym.year}`} columns={exportCols} data={exportData} onClose={() => setExportOpen(false)} />
       )}
       <div className={s.cardFoot}>ℹ️ Mỗi nhân viên hiển thị tổng điểm kèm <strong>chi tiết thưởng/phạt vì gì</strong> (chỉ tính dòng <strong>đã duyệt</strong>). Quy đổi điểm → tiền để nối bảng lương sẽ bổ sung sau.</div>
+    </div>
+  )
+}
+
+// ══ QUY ĐỔI XẾP LOẠI — cấu hình dải điểm → xếp loại + tiền thưởng/phạt ═════════
+function GradesPanel({ slot, onFooter }) {
+  const addToast = useToastStore((st) => st.toast)
+  const confirmDelete = useDeleteConfirm()
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState(null)
+  const [savingNew, setSavingNew] = useState(false)
+  const [sel, setSel] = useState(() => new Set())
+
+  const reload = useCallback(() => { setLoading(true); setSel(new Set()); api.listGrades().then(setRows).catch(() => setRows([])).finally(() => setLoading(false)) }, [])
+  useEffect(() => { reload() }, [reload])
+  useEffect(() => { onFooter(null); return () => onFooter(null) }, [onFooter])
+
+  const allChecked = rows.length > 0 && sel.size === rows.length
+  const toggleAll = () => setSel(allChecked ? new Set() : new Set(rows.map((r) => r.id)))
+  const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  function openAdd() { setDraft({ code: '', label: '', minPoints: '', maxPoints: '', amount: 0, isActive: true }) }
+  async function patchGrade(g, patch) {
+    setRows((list) => list.map((x) => x.id === g.id ? { ...x, ...patch } : x))
+    try { await api.updateGrade(g.id, patch) } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); reload() }
+  }
+  async function saveDraft() {
+    if (!draft.label.trim()) { addToast('Nhập tên loại', 'error'); return }
+    setSavingNew(true)
+    try {
+      await api.createGrade({
+        code: draft.code.trim(), label: draft.label.trim(),
+        minPoints: draft.minPoints === '' ? null : Number(draft.minPoints),
+        maxPoints: draft.maxPoints === '' ? null : Number(draft.maxPoints),
+        amount: Number(draft.amount) || 0, isActive: !!draft.isActive,
+      })
+      setDraft(null); reload()
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error') }
+    finally { setSavingNew(false) }
+  }
+  async function remove(g) {
+    if (!(await confirmDelete({ title: 'Xoá xếp loại', message: <>Xoá xếp loại <strong>“{g.code || g.label}”</strong>?</> }))) return
+    try { await api.deleteGrade(g.id); addToast('Đã xoá', 'success'); reload() } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi', 'error') }
+  }
+  async function removeSelected() {
+    if (!(await confirmDelete({ title: 'Xoá nhiều xếp loại', message: <>Xoá <strong>{sel.size}</strong> xếp loại đã chọn?</> }))) return
+    const ids = [...sel]; let ok = 0
+    for (const id of ids) { try { await api.deleteGrade(id); ok++ } catch { /* skip */ } }
+    addToast(`Đã xoá ${ok}/${ids.length}`, ok ? 'success' : 'error'); reload()
+  }
+  const setD = (k, v) => setDraft((p) => ({ ...p, [k]: v }))
+  const ACTIVE_OPTS = [{ key: '1', label: 'Đang bật' }, { key: '0', label: 'Tắt' }]
+
+  const toolbar = (
+    <div className={s.toolbar}>
+      <button className={s.btnPrimary} onClick={openAdd}><Plus size={14} /> Thêm xếp loại</button>
+    </div>
+  )
+
+  return (
+    <div className={s.card}>
+      {slot && createPortal(toolbar, slot)}
+      {sel.size > 0 && (
+        <div className={s.bulkWrap}>
+          <BulkActionBar count={sel.size}>
+            <button className={`${s.btnMini} ${s.btnMiniDanger}`} onClick={removeSelected}><Trash2 size={13} /> Xoá đã chọn</button>
+            <button className={s.btnMini} onClick={() => setSel(new Set())}>Bỏ chọn</button>
+          </BulkActionBar>
+        </div>
+      )}
+      {loading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
+        <div className={s.tableWrap}>
+          <table className={s.table}>
+            <thead><tr>
+              <th className={s.colChk}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
+              <th className={s.colStt}>STT</th>
+              <th>Mã</th><th>Tên loại</th>
+              <th className={s.num}>Từ điểm</th><th className={s.num}>Đến điểm</th>
+              <th className={s.num}>Thưởng/Phạt</th><th>Trạng thái</th><th>Hành động</th>
+            </tr></thead>
+            <tbody>
+              {draft && (
+                <tr className={`${s.newRow} ${savingNew ? s.rowSaving : ''}`}>
+                  <td className={s.colChk} />
+                  <td className={s.colStt}>＋</td>
+                  <td><input autoFocus className={s.cellInput} value={draft.code} placeholder="VD: S" onChange={(e) => setD('code', e.target.value)} /></td>
+                  <td><input className={s.cellInput} value={draft.label} placeholder="VD: Nhân viên Ưu tú" onChange={(e) => setD('label', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveDraft()} /></td>
+                  <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.minPoints} placeholder="−∞" onChange={(e) => setD('minPoints', e.target.value)} /></td>
+                  <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.maxPoints} placeholder="+∞" onChange={(e) => setD('maxPoints', e.target.value)} /></td>
+                  <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.amount} onChange={(e) => setD('amount', e.target.value)} /></td>
+                  <td><EnumSelect value={draft.isActive ? '1' : '0'} options={ACTIVE_OPTS} cls={draft.isActive ? s.selOn : s.selOff} onCommit={(v) => setD('isActive', v === '1')} /></td>
+                  <td>
+                    <span className={s.rowActions}>
+                      <button className={s.iconBtn} title="Lưu" onClick={saveDraft} disabled={savingNew}>{savingNew ? <Loader2 size={13} className={s.spin} /> : <Check size={14} />}</button>
+                      <button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Huỷ" onClick={() => setDraft(null)}><X size={14} /></button>
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {rows.length === 0 && !draft && <tr><td colSpan={9} className={s.empty}>Chưa có xếp loại. Bấm “Thêm xếp loại”.</td></tr>}
+              {rows.map((g, i) => (
+                <tr key={g.id}>
+                  <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(g.id)} onChange={() => toggle(g.id)} /></td>
+                  <td className={s.colStt}>{i + 1}</td>
+                  <td><span className={s.gradeRow}><span className={`${s.gradeBadge} ${gradeColorCls(g, rows)}`}>{g.code || '—'}</span><CellText value={g.code} onCommit={(v) => patchGrade(g, { code: v.trim() })} /></span></td>
+                  <td><CellText value={g.label} onCommit={(v) => v.trim() && patchGrade(g, { label: v.trim() })} /></td>
+                  <td><CellText value={g.minPoints ?? ''} numeric placeholder="−∞" onCommit={(v) => patchGrade(g, { minPoints: v === '' ? null : Number(v) })} /></td>
+                  <td><CellText value={g.maxPoints ?? ''} numeric placeholder="+∞" onCommit={(v) => patchGrade(g, { maxPoints: v === '' ? null : Number(v) })} /></td>
+                  <td><CellText value={g.amount} numeric onCommit={(v) => patchGrade(g, { amount: Number(v) || 0 })} /></td>
+                  <td><EnumSelect value={g.isActive ? '1' : '0'} options={ACTIVE_OPTS} cls={g.isActive ? s.selOn : s.selOff} onCommit={(v) => patchGrade(g, { isActive: v === '1' })} /></td>
+                  <td>
+                    <span className={s.rowActions}>
+                      <button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => remove(g)}><Trash2 size={13} /></button>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className={s.cardFoot}>ℹ️ Xếp loại từ THẤP → CAO theo thứ tự dòng. Dải điểm dùng <strong>Tổng điểm</strong> của nhân viên trong kỳ (bỏ trống = không giới hạn). Mỗi loại gắn 1 mức <strong>thưởng/phạt</strong> (tiền), dùng khi quy đổi ra bảng lương.</div>
     </div>
   )
 }

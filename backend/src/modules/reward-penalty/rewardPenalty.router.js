@@ -4,7 +4,7 @@ const { authenticate } = require('../../middleware/auth')
 const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
 const ctrl = require('./rewardPenalty.controller')
-const { ruleSchema, ruleUpdateSchema, entrySchema, entryUpdateSchema } = require('./rewardPenalty.schema')
+const { ruleSchema, ruleUpdateSchema, entrySchema, entryUpdateSchema, gradeSchema, gradeUpdateSchema } = require('./rewardPenalty.schema')
 
 const router = Router()
 const auth  = [authenticate]
@@ -20,6 +20,12 @@ router.delete('/rules/:id', ...admin, ctrl.deleteRule)
 
 // Danh sách năm có dữ liệu (mọi người đăng nhập; staff scope trong controller)
 router.get('/years', ...auth, ctrl.listYears)
+
+// ── Quy đổi xếp loại (grades) — xem: mọi người đăng nhập; quản lý: admin ──
+router.get('/grades',        ...auth,  ctrl.listGrades)
+router.post('/grades',       ...admin, validate(gradeSchema), ctrl.createGrade)
+router.patch('/grades/:id',  ...admin, validate(gradeUpdateSchema), ctrl.updateGrade)
+router.delete('/grades/:id', ...admin, ctrl.deleteGrade)
 
 // ── Tổng hợp (chỉ admin) ──
 router.get('/summary', ...admin, ctrl.getSummary)

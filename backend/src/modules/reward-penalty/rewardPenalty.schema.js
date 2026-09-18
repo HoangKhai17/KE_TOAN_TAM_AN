@@ -35,4 +35,15 @@ const entryUpdateSchema = z.object({
   status:        z.string().max(40).optional(),
 })
 
-module.exports = { ruleSchema, ruleUpdateSchema, entrySchema, entryUpdateSchema }
+const gradeSchema = z.object({
+  code:       z.string().max(20).optional(),
+  label:      z.string().min(1).max(200),
+  minPoints:  z.number().optional().nullable(),
+  maxPoints:  z.number().optional().nullable(),
+  amount:     z.number().optional(),
+  sortOrder:  z.number().int().optional(),
+  isActive:   z.boolean().optional(),
+})
+const gradeUpdateSchema = gradeSchema.partial()
+
+module.exports = { ruleSchema, ruleUpdateSchema, entrySchema, entryUpdateSchema, gradeSchema, gradeUpdateSchema }

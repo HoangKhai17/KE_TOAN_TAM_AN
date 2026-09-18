@@ -61,7 +61,26 @@ async function getSummary(req, res, next) {
   } catch (e) { next(e) }
 }
 
+// ── Quy đổi xếp loại (grades) ──
+async function listGrades(req, res, next) {
+  try { res.json({ success: true, data: { grades: await svc.listGrades({ activeOnly: req.query.activeOnly === 'true' }) } }) }
+  catch (e) { next(e) }
+}
+async function createGrade(req, res, next) {
+  try { res.status(201).json({ success: true, data: { grade: await svc.createGrade(req.body, req.user.id) } }) }
+  catch (e) { next(e) }
+}
+async function updateGrade(req, res, next) {
+  try { res.json({ success: true, data: { grade: await svc.updateGrade(req.params.id, req.body) } }) }
+  catch (e) { next(e) }
+}
+async function deleteGrade(req, res, next) {
+  try { await svc.deleteGrade(req.params.id); res.status(204).end() }
+  catch (e) { next(e) }
+}
+
 module.exports = {
   listRules, createRule, updateRule, deleteRule,
   listEntries, createEntry, updateEntry, approveEntry, deleteEntry, getSummary, listYears,
+  listGrades, createGrade, updateGrade, deleteGrade,
 }

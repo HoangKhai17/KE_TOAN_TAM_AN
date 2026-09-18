@@ -214,8 +214,54 @@ async function listYears({ scopeUserId } = {}) {
   return [...set].sort((a, b) => b - a)
 }
 
+// ── QUY ĐỔI XẾP LOẠI (grades) ────────────────────────────────────────────────
+function gradeToDto(g) {
+  return {
+    id: g.id, code: g.code, label: g.label,
+    minPoints: g.min_points != null ? Number(g.min_points) : null,
+    maxPoints: g.max_points != null ? Number(g.max_points) : null,
+    amount: Number(g.amount), sortOrder: g.sort_order, isActive: g.is_active,
+    createdAt: g.created_at, updatedAt: g.updated_at,
+  }
+}
+async function listGrades({ activeOnly = false } = {}) {
+  const { rows } = await query(
+    `SELECT * FROM kpi_grades ${activeOnly ? 'WHERE is_active = TRUE' : ''} ORDER BY sort_order, created_at`)
+  return rows.map(gradeToDto)
+}
+async function createGrade(data, actorId) {
+  const { rows: [m] } = await query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM kpi_grades')
+  const { rows: [g] } = await query(
+    `INSERT INTO kpi_grades (code, label, min_points, max_points, amount, sort_order, is_active, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [data.code || '', data.label, data.minPoints ?? null, data.maxPoints ?? null,
+     data.amount ?? 0, data.sortOrder ?? m.n, data.isActive ?? true, actorId])
+  return gradeToDto(g)
+}
+async function updateGrade(id, data) {
+  const map = {
+    code: 'code', label: 'label', minPoints: 'min_points', maxPoints: 'max_points',
+    amount: 'amount', sortOrder: 'sort_order', isActive: 'is_active',
+  }
+  const sets = []; const params = []
+  for (const [k, col] of Object.entries(map)) {
+    if (data[k] !== undefined) { params.push(data[k]); sets.push(`${col} = $${params.length}`) }
+  }
+  if (!sets.length) { const e = new Error('Không có gì để cập nhật'); e.status = 400; throw e }
+  params.push(id)
+  const { rows: [g] } = await query(
+    `UPDATE kpi_grades SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`, params)
+  if (!g) { const e = new Error('Không tìm thấy xếp loại'); e.status = 404; throw e }
+  return gradeToDto(g)
+}
+async function deleteGrade(id) {
+  const { rows } = await query('DELETE FROM kpi_grades WHERE id = $1 RETURNING id', [id])
+  if (!rows.length) { const e = new Error('Không tìm thấy xếp loại'); e.status = 404; throw e }
+}
+
 module.exports = {
   listRules, createRule, updateRule, deleteRule,
   listEntries, createEntry, updateEntry, approveEntry, deleteEntry, getEntry,
   getSummary, listYears,
+  listGrades, createGrade, updateGrade, deleteGrade,
 }

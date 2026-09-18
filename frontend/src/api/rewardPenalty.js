@@ -49,3 +49,20 @@ export async function getSummary(year, month) {
   const { data } = await api.get('/reward-penalty/summary', { params: { year, month } })
   return data.data.summary
 }
+
+// ── Quy đổi xếp loại (grades) ──
+export async function listGrades(params = {}) {
+  const { data } = await api.get('/reward-penalty/grades', { params })
+  return data.data.grades
+}
+export async function createGrade(body) {
+  const { data } = await api.post('/reward-penalty/grades', body)
+  return data.data.grade
+}
+export async function updateGrade(id, body) {
+  const { data } = await api.patch(`/reward-penalty/grades/${id}`, body)
+  return data.data.grade
+}
+export async function deleteGrade(id) {
+  await api.delete(`/reward-penalty/grades/${id}`)
+}
