@@ -21,12 +21,11 @@ export function useColFilter(colDefs) {
 
   const openColFilter = useCallback((k, e) => {
     e.stopPropagation()
-    setPopup((cur) => {
-      if (cur?.colKey === k) return null
-      const rect = e.currentTarget.getBoundingClientRect()
-      const left = Math.min(rect.left, window.innerWidth - 348)
-      return { colKey: k, top: rect.bottom + 4, left: Math.max(8, left) }
-    })
+    // Đọc rect ĐỒNG BỘ trong handler — React reset e.currentTarget sau khi handler kết thúc,
+    // nên KHÔNG được đọc trong updater bất đồng bộ của setState.
+    const rect = e.currentTarget.getBoundingClientRect()
+    const left = Math.min(rect.left, window.innerWidth - 348)
+    setPopup((cur) => (cur?.colKey === k ? null : { colKey: k, top: rect.bottom + 4, left: Math.max(8, left) }))
   }, [])
   const closePopup = useCallback(() => setPopup(null), [])
   const handleColSort = useCallback((col, dir) => { setSort(dir ? { col, dir } : { col: null, dir: 'asc' }); setPopup(null) }, [])
