@@ -150,6 +150,12 @@ volume_points = SUM(COALESCE(t.size_points, tt.size_points, 2)) FILTER (
 > Lưu ý cố ý: (1) neo theo `due_date`, (2) neo theo `completed_at` — vì đo 2 thứ khác nhau (kỷ
 > luật hạn vs sản lượng thực trong tháng). Ghi rõ trong UI để khỏi hiểu nhầm.
 
+> **Ổn định lịch sử = CHỐT SỔ THEO THÁNG (đã chốt với user):** KHÔNG đóng dấu cỡ vào từng task.
+> Cỡ việc kế thừa SỐNG từ loại (effectiveSize = COALESCE(task, loại, 2)). Khi **chốt sổ 1 tháng**,
+> snapshot/lưu kết quả KPI của tháng đó (điểm khối lượng, đúng hạn, theo loại). Sau khi chốt: đổi
+> cỡ của loại chỉ ảnh hưởng THÁNG CHƯA CHỐT; tháng đã chốt giữ nguyên số. Đồng bộ mô hình kỳ tháng
+> của Bảng lương / Điểm thưởng. → task định kỳ KHÔNG cần stamp `size_points`, để NULL (kế thừa).
+
 ### 4.3 Backend
 
 - Module mới `backend/src/modules/kpi/` (service + controller + router), hoặc gộp vào `tasks`.
