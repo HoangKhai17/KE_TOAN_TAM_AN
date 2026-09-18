@@ -179,6 +179,22 @@ async function markPaid(id, actorId, ipAddress, userAgent) {
   return periodToDto(updated)
 }
 
+async function deletePeriod(id, actorId, ipAddress, userAgent) {
+  const { rows: [period] } = await query('SELECT * FROM payroll_periods WHERE id = $1', [id])
+  if (!period) throw Object.assign(new Error('Payroll period not found'), { status: 404 })
+  if (period.status !== 'draft') {
+    throw Object.assign(new Error('Chỉ xoá được kỳ lương đang Nháp. Kỳ đã chốt/đã trả không được xoá.'), { status: 409 })
+  }
+  // payroll_records có ON DELETE CASCADE nên tự xoá theo kỳ.
+  await query('DELETE FROM payroll_periods WHERE id = $1', [id])
+  await audit.log({
+    userId: actorId, action: 'payroll.deleted',
+    targetType: 'payroll_periods', targetId: id,
+    meta: { periodYear: period.period_year, periodMonth: period.period_month },
+    ipAddress, userAgent,
+  })
+}
+
 // --- Records ---
 
 async function listRecords(periodId) {

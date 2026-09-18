@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Loader2, DollarSign } from 'lucide-react'
+import { Plus, Loader2, DollarSign, CalendarDays, SlidersHorizontal } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
+import SalaryConfig from './SalaryConfig'
 import PaginationFooter from '../../components/layout/PaginationFooter'
 import Modal from '../../components/ui/Modal'
 import DateBox from '../../components/ui/DateBox'
@@ -104,7 +105,7 @@ function CreatePeriodModal({ onClose, onCreated }) {
             <DateBox
               value={form.startDate ?? ''}
               onChange={(v) => setForm((p) => ({ ...p, startDate: v }))}
-              block
+              block className={s.dateField}
             />
           </div>
           <div className={s.formGroup}>
@@ -113,7 +114,7 @@ function CreatePeriodModal({ onClose, onCreated }) {
               value={form.endDate ?? ''}
               onChange={(v) => setForm((p) => ({ ...p, endDate: v }))}
               min={form.startDate || ''}
-              block
+              block className={s.dateField}
             />
           </div>
           <div className={`${s.formGroup} ${s.formSpan2}`}>
@@ -147,6 +148,8 @@ export default function Payroll() {
   const isAdmin   = useAuthStore((st) => st.user?.role === 'admin')
   const addToast  = useToastStore((st) => st.toast)
 
+  const [tab,          setTab]          = useState('periods')  // periods | salary
+  const [selPeriods,   setSelPeriods]   = useState(() => new Set())
   const [page,         setPage]         = useState(1)
   const [showCreate,   setShowCreate]   = useState(false)
   const [availableYears, setAvailableYears] = useState([])
@@ -182,7 +185,7 @@ export default function Payroll() {
   useEffect(() => { if (listQuery.isError) addToast('Không thể tải danh sách kỳ lương', 'error') }, [listQuery.errorUpdatedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <AppLayout footer={(
+    <AppLayout footer={tab === 'periods' ? (
       <PaginationFooter
         total={pagination.total}
         from={paginationFrom}
@@ -195,20 +198,21 @@ export default function Payroll() {
         loading={loading}
         onPageChange={setPage}
       />
-    )}>
+    ) : null}>
       <div className={s.page}>
-        <div className={s.pageHeader}>
-          <div>
-            <h1 className={s.pageTitle}>Bảng lương</h1>
-            <p className={s.pageSubtitle}>Quản lý kỳ lương và bảng lương nhân viên</p>
+        <div className={s.tabRow}>
+          <div className={s.tabBar}>
+            <button className={`${s.tabBtn} ${tab === 'periods' ? s.tabBtnActive : ''}`} onClick={() => setTab('periods')}><CalendarDays size={14} /> Kỳ lương</button>
+            <button className={`${s.tabBtn} ${tab === 'salary' ? s.tabBtnActive : ''}`} onClick={() => setTab('salary')}><SlidersHorizontal size={14} /> Cấu hình lương</button>
           </div>
-          {isAdmin && (
+          {isAdmin && tab === 'periods' && (
             <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
               <Plus size={14} /> Tạo kỳ lương
             </button>
           )}
         </div>
 
+        {tab === 'salary' ? <SalaryConfig /> : (<>
         {/* Year filter bar */}
         <div className={s.filterBar}>
           <select
@@ -251,6 +255,8 @@ export default function Payroll() {
               <table className={s.table}>
                 <thead>
                   <tr>
+                    <th className={s.colChk}><input type="checkbox" className={s.check} title="Chọn tất cả" checked={periods.length > 0 && periods.every((p) => selPeriods.has(p.id))} onChange={(e) => setSelPeriods(e.target.checked ? new Set(periods.map((p) => p.id)) : new Set())} /></th>
+                    <th className={s.colStt}>STT</th>
                     <th>Kỳ lương</th>
                     <th>Trạng thái</th>
                     <th>Bắt đầu</th>
@@ -259,12 +265,14 @@ export default function Payroll() {
                   </tr>
                 </thead>
                 <tbody>
-                  {periods.map((period) => (
+                  {periods.map((period, idx) => (
                     <tr
                       key={period.id}
                       className={s.tableRowClickable}
                       onClick={() => navigate(`/payroll/${period.id}`)}
                     >
+                      <td className={s.colChk} onClick={(e) => e.stopPropagation()}><input type="checkbox" className={s.check} checked={selPeriods.has(period.id)} onChange={() => setSelPeriods((prev) => { const n = new Set(prev); n.has(period.id) ? n.delete(period.id) : n.add(period.id); return n })} /></td>
+                      <td className={s.colStt}>{(page - 1) * 24 + idx + 1}</td>
                       <td className={s.periodNameCell}>
                         Tháng {period.periodMonth}/{period.periodYear}
                       </td>
@@ -290,6 +298,7 @@ export default function Payroll() {
             </>
           )}
         </div>
+        </>)}
 
         {showCreate && (
           <CreatePeriodModal

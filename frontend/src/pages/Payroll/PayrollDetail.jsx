@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Check, Pencil, DollarSign, Download, Plus, Trash2,
-  AlertTriangle, Loader2, UserCog, Mail, CheckCircle2,
+  AlertTriangle, Loader2, UserCog, Mail, CheckCircle2, SlidersHorizontal,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -506,6 +506,7 @@ export default function PayrollDetail() {
   const [editRecord, setEditRecord] = useState(null)
   const [deleteRecord, setDeleteRecord] = useState(null)
   const [confirming, setConfirming]     = useState(false)
+  const [generating, setGenerating]     = useState(false)
   const [markingPaid, setMarkingPaid]   = useState(false)
   const [showExport, setShowExport]     = useState(false)
   const [sendingMail, setSendingMail]   = useState(false)
@@ -529,6 +530,18 @@ export default function PayrollDetail() {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [id])
+
+  async function handleGenerate() {
+    setGenerating(true)
+    try {
+      const r = await payrollApi.generatePeriodRecords(id)
+      const fresh = await payrollApi.listRecords(id)
+      setRecords(fresh)
+      addToast(`Đã sinh/cập nhật ${r.generated} bảng lương từ cấu hình.`, 'success')
+      if (r.missingSalary?.length) addToast(`${r.missingSalary.length} NV chưa có hồ sơ lương (bỏ qua): ${r.missingSalary.join(', ')}`, 'warning')
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi sinh bảng lương', 'error') }
+    finally { setGenerating(false) }
+  }
 
   async function handleConfirm() {
     setConfirming(true)
@@ -659,6 +672,10 @@ export default function PayrollDetail() {
             <div className={`${s.detailActions} ${s.detailActionsSpaced}`}>
               {isDraft && (
                 <>
+                  <button className={s.btnSecondary} onClick={handleGenerate} disabled={generating} title="Nạp lương từ Cấu hình lương (mức hiệu lực của kỳ), giữ thưởng/phạt">
+                    {generating ? <Loader2 size={13} className={s.spin} /> : <SlidersHorizontal size={13} />}
+                    {generating ? 'Đang sinh...' : 'Sinh từ cấu hình lương'}
+                  </button>
                   <button
                     className={s.btnPrimary}
                     onClick={() => { setEditRecord(null); setShowUpsert(true) }}

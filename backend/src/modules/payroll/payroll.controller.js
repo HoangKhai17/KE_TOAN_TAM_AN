@@ -1,4 +1,5 @@
 const svc = require('./payroll.service')
+const salarySvc = require('./salary.service')
 
 // --- Periods ---
 async function listPeriods(req, res, next) {
@@ -113,8 +114,38 @@ async function applyRewardPenalty(req, res, next) {
   } catch (e) { next(e) }
 }
 
+// --- Hồ sơ lương (salary config) ---
+async function listSalaries(req, res, next) {
+  try { res.json({ success: true, data: { salaries: await salarySvc.listCurrentSalaries() } }) }
+  catch (e) { next(e) }
+}
+async function getSalaryHistory(req, res, next) {
+  try { res.json({ success: true, data: { history: await salarySvc.getSalaryHistory(req.params.userId) } }) }
+  catch (e) { next(e) }
+}
+async function createSalary(req, res, next) {
+  try {
+    const { userId, ...data } = req.body
+    if (!userId) { const e = new Error('Thiếu nhân viên'); e.status = 400; throw e }
+    res.status(201).json({ success: true, data: { salary: await salarySvc.createSalary(userId, data, req.user.id) } })
+  } catch (e) { next(e) }
+}
+async function updateSalary(req, res, next) {
+  try { res.json({ success: true, data: { salary: await salarySvc.updateSalary(req.params.id, req.body) } }) }
+  catch (e) { next(e) }
+}
+async function deleteSalary(req, res, next) {
+  try { await salarySvc.deleteSalary(req.params.id); res.status(204).end() }
+  catch (e) { next(e) }
+}
+async function generatePeriodRecords(req, res, next) {
+  try { res.json({ success: true, data: await salarySvc.generatePeriodRecords(req.params.id, req.user.id) }) }
+  catch (e) { next(e) }
+}
+
 module.exports = {
   listPeriods, listDistinctYears, getPeriod, createPeriod, updatePeriod, confirmPeriod, markPaid,
   listRecords, upsertRecord, deleteRecord, exportExcel, exportExcelCustom, sendPayrollEmails,
   applyRewardPenalty,
+  listSalaries, getSalaryHistory, createSalary, updateSalary, deleteSalary, generatePeriodRecords,
 }

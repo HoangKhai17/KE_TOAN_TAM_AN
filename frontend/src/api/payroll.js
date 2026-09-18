@@ -68,3 +68,28 @@ export async function applyRewardPenalty(year, month) {
   const { data } = await api.post('/payroll/apply-reward-penalty', { year, month })
   return data.data  // { applied, missing, periodId, considered }
 }
+
+// ── Hồ sơ lương (cấu hình lương) ──
+export async function listSalaries() {
+  const { data } = await api.get('/payroll/salaries')
+  return data.data.salaries
+}
+export async function getSalaryHistory(userId) {
+  const { data } = await api.get(`/payroll/salaries/${userId}/history`)
+  return data.data.history
+}
+export async function createSalary(body) {
+  const { data } = await api.post('/payroll/salaries', body)
+  return data.data.salary
+}
+export async function updateSalary(id, body) {
+  const { data } = await api.patch(`/payroll/salaries/${id}`, body)
+  return data.data.salary
+}
+export async function deleteSalary(id) {
+  await api.delete(`/payroll/salaries/${id}`)
+}
+export async function generatePeriodRecords(id) {
+  const { data } = await api.post(`/payroll/${id}/generate`)
+  return data.data  // { generated, missingSalary, considered }
+}

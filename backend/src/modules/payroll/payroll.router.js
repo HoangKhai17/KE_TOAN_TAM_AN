@@ -54,6 +54,12 @@ const admin = [authenticate, requireRole('admin')]
  */
 router.get('/',       ...auth,  ctrl.listPeriods)
 router.get('/years',  ...auth,  ctrl.listDistinctYears)
+// Hồ sơ lương (admin) — ĐẶT TRƯỚC '/:id' để không bị bắt nhầm là :id.
+router.get('/salaries',                 ...admin, ctrl.listSalaries)
+router.get('/salaries/:userId/history', ...admin, ctrl.getSalaryHistory)
+router.post('/salaries',                ...admin, ctrl.createSalary)
+router.patch('/salaries/:id',           ...admin, ctrl.updateSalary)
+router.delete('/salaries/:id',          ...admin, ctrl.deleteSalary)
 // Kéo Thưởng/Phạt (KPI) tháng {year,month} vào bảng lương của kỳ tương ứng (admin).
 // Đặt TRƯỚC '/:id' để không bị bắt nhầm là :id.
 router.post('/apply-reward-penalty', ...admin, ctrl.applyRewardPenalty)
@@ -143,6 +149,8 @@ router.post('/:id/confirm', ...admin, ctrl.confirmPeriod)
  *       409: { description: Period is not in confirmed status }
  */
 router.post('/:id/mark-paid', ...admin, ctrl.markPaid)
+// Sinh records của kỳ từ hồ sơ lương hiệu lực (admin, kỳ draft).
+router.post('/:id/generate', ...admin, ctrl.generatePeriodRecords)
 
 /**
  * @openapi

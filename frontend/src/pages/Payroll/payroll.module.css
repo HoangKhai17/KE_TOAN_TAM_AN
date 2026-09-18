@@ -634,6 +634,35 @@
   flex-direction: column;
 }
 
+/* Cấu hình lương — helper */
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rowActions { display: inline-flex; align-items: center; gap: 6px; }
+/* Tab bar (Kỳ lương | Cấu hình lương) — đồng bộ với thanh tab của Điểm thưởng */
+.tabRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabBar { display: inline-flex; align-items: center; gap: 2px; background: var(--color-primary-bg); border: 1.5px solid var(--color-primary-bg-strong); border-radius: var(--radius-md); padding: 3px; }
+.tabBtn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 12px; border: 0; background: transparent; border-radius: var(--radius-sm); font-family: inherit; font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--color-text-soft); white-space: nowrap; cursor: pointer; transition: background .13s, color .13s; }
+.tabBtn:hover { color: var(--color-text); }
+.tabBtnActive, .tabBtnActive:hover { background: var(--gradient-primary); color: var(--color-white); box-shadow: var(--shadow-focus-blue); }
+
+/* Cột STT + checkbox (đồng bộ các bảng khác) */
+.colChk { width: 34px; text-align: center; }
+.colStt { width: 44px; text-align: center; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.check { width: 15px; height: 15px; accent-color: var(--color-primary); cursor: pointer; vertical-align: middle; }
+
+/* DateBox trong form lương — thu về cỡ formInput (nhân đôi class để thắng CSS gốc) */
+.dateField.dateField { min-height: var(--control-h-md); padding: 0 var(--space-4); border-color: var(--color-border-muted); border-radius: var(--radius-md); font-size: var(--fs-2xs); }
+.dateField input { font-size: var(--fs-2xs); }
+
+/* Nút icon vuông xanh lá nhạt (vd: Lịch sử lương) */
+.iconGreen { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border-radius: var(--radius-md); border: 1.5px solid var(--color-success-bg); background: var(--color-success-bg); color: var(--color-success-text); cursor: pointer; transition: background .13s, color .13s; }
+.iconGreen:hover { background: var(--color-success-dark, #16a34a); color: var(--color-white); border-color: transparent; }
+
+/* Dòng phụ cấp trong form hồ sơ lương */
+.salItemRow { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.salItemRow input:first-child { flex: 1 1 auto; }
+.salItemRow input:nth-child(2) { flex: 0 0 170px; }
+.salItemRow button { flex: 0 0 auto; height: var(--control-h-md); width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+
 .itemRow {
   display: flex;
   align-items: center;
