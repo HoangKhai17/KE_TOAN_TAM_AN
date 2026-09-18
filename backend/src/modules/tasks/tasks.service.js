@@ -372,6 +372,7 @@ function buildTaskWhere(filters = {}) {
 // An toàn: chỉ nhận colKey trong map, không ghép chuỗi tự do từ input.
 const COL_JOINS = {
   company:   'LEFT JOIN companies c ON c.id = t.company_id',
+  tasktype:  'LEFT JOIN task_types tt ON tt.id = t.task_type_id',
   assignee:  'LEFT JOIN users ua ON ua.id = t.assigned_to',
   comment:   `LEFT JOIN LATERAL (SELECT cm.content AS latest_comment FROM task_comments cm WHERE cm.task_id = t.id ORDER BY cm.created_at DESC LIMIT 1) lc ON TRUE`,
   checklist: `LEFT JOIN LATERAL (
@@ -395,6 +396,8 @@ const TASK_COLUMNS_SQL = {
   days:           { text: null, filter: '(GREATEST(0, (COALESCE(t.completed_at::date, CURRENT_DATE) - COALESCE(t.start_date, t.created_at::date))) + 1)', kind: 'number' },
   plannedDays:    { text: null, filter: '(CASE WHEN t.due_date IS NULL THEN NULL ELSE GREATEST(0, (t.due_date - COALESCE(t.start_date, t.created_at::date))) + 1 END)', kind: 'number' },
   progress:       { text: null, filter: '(CASE WHEN cl.checklist_total > 0 THEN ROUND(100.0 * cl.checklist_done / cl.checklist_total) ELSE NULL END)', kind: 'number', join: 'checklist' },
+  // Cỡ việc hiệu lực (KPI): mã enum = điểm. value-list trả '1'/'2'/'3' (frontend map ra nhãn).
+  size:           { text: `(COALESCE(t.size_points, tt.size_points, 2))::text`, filter: `(COALESCE(t.size_points, tt.size_points, 2))::text`, kind: 'text', join: 'tasktype' },
 }
 // Cột enum → loại enum để SẮP theo nhãn tiếng Việt (thay vì mã)
 const COL_ENUM_TYPE = { status: 'task_status', priority: 'task_priority', source: 'task_source' }
@@ -415,7 +418,7 @@ async function getColumnValues({ column, search, filters = {} }) {
 async function listTasks(filters = {}) {
   const {
     page = 1, limit = 20,
-    companyId, assignedTo, createdBy, status, priority, source,
+    companyId, assignedTo, createdBy, status, priority, source, size,
     dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
     sortBy = 'created_at', sortDir = 'desc',
     audience = 'internal', parentTaskId,
@@ -601,6 +604,12 @@ async function listTasks(filters = {}) {
     params.push(arr)
     conditions.push(`t.priority = ANY($${params.length}::text[])`)
   }
+  // Cỡ việc hiệu lực (mã enum = điểm; so khớp dạng text với '1'/'2'/'3'…)
+  if (size) {
+    const arr = (Array.isArray(size) ? size : [size]).map(String)
+    params.push(arr)
+    conditions.push(`(COALESCE(t.size_points, tt.size_points, 2))::text = ANY($${params.length}::text[])`)
+  }
 
   const baseWhere = baseConditions.join(' AND ')
 
@@ -610,7 +619,10 @@ async function listTasks(filters = {}) {
   const colF = cf.buildColFilterSql(TASK_COLUMNS_SQL, colFiltersObj, params.length)
   const finalParams = [...params, ...colF.params]
   const finalWhere  = [...conditions, ...colF.conditions].join(' AND ')
-  const colJoinSql  = [...colF.joins].map((k) => COL_JOINS[k]).join(' ')
+  // Count query dùng bare `tasks t` → cần join task_types khi lọc theo cỡ việc (dedupe với join của header filter).
+  const joinKeys = new Set(colF.joins)
+  if (size) joinKeys.add('tasktype')
+  const colJoinSql  = [...joinKeys].map((k) => COL_JOINS[k]).join(' ')
 
   const SORT_COLS = {
     created_at: 't.created_at',

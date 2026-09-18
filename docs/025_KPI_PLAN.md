@@ -73,6 +73,13 @@ thì = 2.
 > badge ở TaskDetail. Migration đã chạy, backend restart, build FE pass; smoke: values=['1','2','3'],
 > cỡ sai bị 422. Nhãn Nhỏ/Vừa/Lớn sửa được ở **Danh mục hệ thống**.
 > Số migration THẬT là **152–153** (không phải 025 — 025 là số của tài liệu này).
+>
+> **Bổ sung đợt 2 (đủ mặt trong module Tasks):** cỡ việc nay có ở: popup **Tạo công việc**
+> (kế thừa loại + override), **QuickView** sửa nhanh (admin sửa / staff xem), **TaskDetail** badge,
+> **cột "Cỡ việc"** trong danh sách (optional — ẩn mặc định, bật ở bộ chọn cột), **bộ lọc cột**
+> (enum, value-list phía server qua `TASK_COLUMNS_SQL.size` + join `tasktype`). **Lịch định kỳ:**
+> task sinh ra `size_points=NULL` → effectiveSize **kế thừa cỡ của loại** (không cần cấu hình riêng
+> ở lịch). Smoke: value-list cỡ = [{'2':570},{'3':54}] (kế thừa từ loại) — filter chạy đúng.
 
 ### 3.1 Migration `025_task_size_points.sql` (+ `.down`)
 

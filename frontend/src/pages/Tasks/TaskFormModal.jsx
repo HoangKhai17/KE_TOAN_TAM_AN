@@ -716,6 +716,17 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           </select>
         </div>
 
+        {/* Cỡ việc (KPI) — mặc định theo loại CV, override được */}
+        <div className={s.formGroup}>
+          <label className={s.formLabel}>Cỡ việc</label>
+          <select value={form.sizePoints} onChange={set('sizePoints')} className={s.formSelect}>
+            <option value="">
+              {form.taskTypeId && typeDetail ? `Theo loại (${taskSizeLabel(getOptions('task_size'), typeDetail.sizePoints)})` : 'Theo loại'}
+            </option>
+            {sizeOptionsOr(getOptions('task_size')).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+        </div>
+
         {/* Source — metadata-driven; 'auto' is reserved for the generator */}
         <div className={s.formGroup}>
           <label className={s.formLabel}>Nguồn công việc</label>
@@ -747,20 +758,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
           {fe.dueDate && <p className={s.formError}>{fe.dueDate}</p>}
         </div>
 
-        {/* SLA */}
-        <div className={s.formGroup}>
-          <label className={s.formLabel}>SLA chuẩn (ngày)</label>
-          <input
-            type="number" min="1" max="365"
-            value={form.slaDays}
-            onChange={set('slaDays')}
-            className={s.formInput}
-            placeholder="Ví dụ: 7"
-          />
-          <p className={s.taskFormHelper}>
-            Số ngày tối đa để hoàn thành theo chuẩn dịch vụ
-          </p>
-        </div>
+        {/* SLA ẩn khỏi form — tự kế thừa từ loại công việc (slaDays để trống → backend lấy default_sla_days) */}
 
         {/* Description */}
         <div className={`${s.formGroup} ${s.span2}`}>

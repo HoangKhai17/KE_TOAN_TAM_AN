@@ -33,6 +33,7 @@ import {
   completionKind, taskStatusLabel, canEditDueDate, dateLockReason,
   calcDays, calcPlannedDays,
 } from './taskUtils'
+import { taskSizeLabel, sizeOptionsOr } from '../../utils/taskSize'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useDataSync } from '../../hooks/useDataSync'
 import useScrollRestore from '../../hooks/useScrollRestore'
@@ -433,6 +434,7 @@ const TASK_LIST_COL_TYPE = {
   status:         'enum',
   priority:       'enum',
   progress:       'numberRange',
+  size:           'enum',
   assignedToName: 'enum',
   latestComment:  'text',
 }
@@ -442,7 +444,7 @@ function taskColFilterType(colKey) { return TASK_LIST_COL_TYPE[colKey] ?? 'text'
 // (days/plannedDays/progress) chỉ lọc theo điều kiện, không có value-list.
 const SERVER_VALUE_COLS = new Set([
   'title', 'companyShort', 'status', 'priority', 'source', 'assignedToName',
-  'dueDate', 'startDate', 'createdAt', 'latestComment',
+  'dueDate', 'startDate', 'createdAt', 'latestComment', 'size',
 ])
 
 // Danh mục cột danh sách (thứ tự hiển thị + nhãn) — dùng cho render, bộ chọn cột, skeleton.
@@ -458,14 +460,21 @@ const TASK_COLUMNS = [
   { key: 'status',         label: 'Trạng thái' },
   { key: 'priority',       label: 'Ưu tiên' },
   { key: 'progress',       label: 'Tiến độ' },
+  { key: 'size',           label: 'Cỡ việc' },
   { key: 'assignedToName', label: 'Giao cho' },
   { key: 'latestComment',  label: 'Bình luận mới' },
 ]
 
-const TASK_COLS_KEY = 'tasks_hidden_cols_v1'
+const TASK_COLS_KEY = 'tasks_hidden_cols_v2'
+// Cột ẩn MẶC ĐỊNH (optional, không hiện sẵn) khi người dùng chưa từng chỉnh bộ chọn cột.
+const DEFAULT_HIDDEN_COLS = ['size']
 function loadHiddenCols() {
-  try { const a = JSON.parse(sessionStorage.getItem(TASK_COLS_KEY)); return new Set(Array.isArray(a) ? a : []) }
-  catch { return new Set() }
+  try {
+    const raw = sessionStorage.getItem(TASK_COLS_KEY)
+    if (raw == null) return new Set(DEFAULT_HIDDEN_COLS)   // lần đầu: ẩn cột optional
+    const a = JSON.parse(raw)
+    return new Set(Array.isArray(a) ? a : DEFAULT_HIDDEN_COLS)
+  } catch { return new Set(DEFAULT_HIDDEN_COLS) }
 }
 function saveHiddenCols(set) {
   try { sessionStorage.setItem(TASK_COLS_KEY, JSON.stringify([...set])) } catch { /* ignore */ }
@@ -490,6 +499,7 @@ function taskColSortKey(t, colKey) {
     case 'days':           { const d = calcDays(t);    return d == null ? Number.MAX_SAFE_INTEGER : d }
     case 'plannedDays':    { const d = calcPlannedDays(t); return d == null ? Number.MAX_SAFE_INTEGER : d }
     case 'progress':       { const p = progressPct(t); return p == null ? -1 : p }
+    case 'size':           return Number(t.effectiveSize) || 0
     case 'startDate':      return t.startDate || t.createdAt || ''
     case 'dueDate':        return t.dueDate || ''
     case 'createdAt':      return t.createdAt || ''
@@ -908,6 +918,7 @@ function ListView({
               {vis('status')       && <Th colKey="status" w={132}>Trạng thái</Th>}
               {vis('priority')     && <Th colKey="priority" w={106}>Ưu tiên</Th>}
               {vis('progress')     && <Th colKey="progress" w={110}>Tiến độ</Th>}
+              {vis('size')         && <Th colKey="size" w={92}>Cỡ việc</Th>}
               {vis('assignedToName') && <Th colKey="assignedToName" w={116}>Giao cho</Th>}
               {vis('latestComment') && <Th colKey="latestComment" w={160}>Bình luận mới</Th>}
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
@@ -1112,6 +1123,13 @@ function ListView({
                     </td>
                   )}
 
+                  {/* Cỡ việc (optional) */}
+                  {vis('size') && (
+                    <td className={s.td}>
+                      <span className={s.sizeCell}>{taskSizeLabel(getOptions('task_size'), t.effectiveSize)}</span>
+                    </td>
+                  )}
+
                   {/* Giao cho */}
                   {vis('assignedToName') && (
                     <td className={s.td}>
@@ -1285,6 +1303,7 @@ export default function Tasks() {
   const [supportFilter, setSupportFilter]   = useState(() => Array.isArray(initF.supportFilter) ? initF.supportFilter : [])
   const [statusFilter, setStatusFilter]     = useState(initF.statusFilter   ?? [])
   const [priorityFilter, setPriorityFilter] = useState(initF.priorityFilter ?? [])
+  const [sizeFilter, setSizeFilter]         = useState(initF.sizeFilter     ?? [])
   const [sourceFilter, setSourceFilter]     = useState(initF.sourceFilter   ?? [])
   const [isOverdue, setIsOverdue]           = useState(initF.isOverdue      ?? false)
   const [scheduleToday, setScheduleToday]   = useState(initF.scheduleToday  ?? false)
@@ -1394,7 +1413,7 @@ export default function Tasks() {
 
   // Đổi bộ lọc → về trang 1 (cũng so sánh giá trị, không dùng cờ "lần đầu").
   const filterKey = JSON.stringify([
-    statusFilter, priorityFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo,
+    statusFilter, priorityFilter, sizeFilter, sourceFilter, isOverdue, dueDateFrom, dueDateTo,
     pageSize, companyFilter, staffFilter, creatorFilter, supportFilter, sortValue,
   ])
   const appliedFilterKeyRef = useRef(filterKey)
@@ -1449,11 +1468,11 @@ export default function Tasks() {
     saveFilters({
       view, yearFilter, monthFilter, dueDateFrom, dueDateTo,
       sortValue, groupByChain, groupByDep, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter,
-      statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page,
+      statusFilter, priorityFilter, sizeFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page,
       colFilters: serializeColFilters(colFilters), sortColState, filterCollapsed,
       filterLayoutVersion: 2,
     })
-  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, groupByChain, groupByDep, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
+  }, [view, yearFilter, monthFilter, dueDateFrom, dueDateTo, sortValue, groupByChain, groupByDep, searchInput, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sizeFilter, sourceFilter, isOverdue, scheduleToday, pageSize, page, colFilters, sortColState, filterCollapsed])
 
   // Load stats (always uses base date/company/staff filters, no status filter)
   useEffect(() => {
@@ -1522,6 +1541,7 @@ export default function Tasks() {
       collaboratorIds: supportFilter.length ? supportFilter : undefined,
       status:      effectiveStatus,
       priority:    priorityFilter.length > 0 ? priorityFilter : undefined,
+      size:        sizeFilter.length     > 0 ? sizeFilter     : undefined,
       source:      sourceFilter.length   > 0 ? sourceFilter   : undefined,
       isOverdue:     scheduleToday ? undefined : (isOverdue ? true : undefined),
       scheduleToday: scheduleToday ? true : undefined,
@@ -1541,7 +1561,7 @@ export default function Tasks() {
       sortBy,
       sortDir,
     }
-  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, groupByChain, groupByDep, isAdmin, currentUser?.id, view, isListView, page, pageSize, serverColFilters, sortColState]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, companyFilter, staffFilter, staffIncludeSupport, creatorFilter, supportFilter, statusFilter, priorityFilter, sizeFilter, sourceFilter, isOverdue, scheduleToday, dueDateFrom, dueDateTo, sortValue, groupByChain, groupByDep, isAdmin, currentUser?.id, view, isListView, page, pageSize, serverColFilters, sortColState]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const listQuery = useQuery({
     queryKey: ['tasks', 'list', listParams],
@@ -1591,10 +1611,11 @@ export default function Tasks() {
     if (colKey === 'status')   return getLabel('task_status', value, STATUS_LABELS[value] ?? value)
     if (colKey === 'priority') return getLabel('task_priority', value, PRIORITY_LABELS[value] ?? value)
     if (colKey === 'source')   return getLabel('task_source', value, SOURCE_LABELS[value] ?? value)
+    if (colKey === 'size')     return taskSizeLabel(getOptions('task_size'), value)
     // Cột ngày: server trả 'YYYY-MM-DD' → hiển thị dd/mm/yyyy (giữ value gốc để lọc)
     if (colKey === 'dueDate' || colKey === 'startDate' || colKey === 'createdAt') return fmtDate(value)
     return value
-  }, [getLabel])
+  }, [getLabel, getOptions])
 
   // Xuất Excel: list view lấy TOÀN BỘ dòng đã lọc (bỏ phân trang) để xuất đủ, không
   // chỉ 1 trang; board/kanban dùng tập đang hiển thị.
@@ -1728,7 +1749,7 @@ export default function Tasks() {
   function resetFilters() {
     setSearchInput(''); setSearch('')
     setCompanyFilter([]); setStaffFilter([]); setStaffIncludeSupport(false); setCreatorFilter([]); setSupportFilter([])
-    setStatusFilter([]); setPriorityFilter([])
+    setStatusFilter([]); setPriorityFilter([]); setSizeFilter([])
     setSourceFilter([]); setIsOverdue(false); setScheduleToday(false)
     setYearFilter(CUR_YEAR); setMonthFilter(INIT_MONTH)
     setDueDateFrom(INIT_DATES.from)
@@ -1750,13 +1771,14 @@ export default function Tasks() {
       case 'latestComment':  return row.latestComment || '(Chưa có)'
       case 'status':         return taskStatusLabel(row, getLabel)
       case 'priority':       return getLabel('task_priority', row.priority, PRIORITY_LABELS[row.priority] ?? row.priority)
+      case 'size':           return taskSizeLabel(getOptions('task_size'), row.effectiveSize)
       // Cột ngày: hiển thị dd/mm/yyyy (không phải ISO) trong danh sách giá trị
       case 'startDate':      { const v = row.startDate || row.createdAt; return v ? fmtDate(v) : '(Trống)' }
       case 'dueDate':        return row.dueDate   ? fmtDate(row.dueDate)   : '(Trống)'
       case 'createdAt':      return row.createdAt ? fmtDate(row.createdAt) : '(Trống)'
       default: { const v = row[colKey]; return v != null && v !== '' ? String(v) : '(Trống)' }
     }
-  }, [getLabel])
+  }, [getLabel, getOptions])
 
   function hasColFilter(colKey) {
     return isColFilterActive(colFilters[colKey], taskColFilterType(colKey))
@@ -1838,7 +1860,7 @@ export default function Tasks() {
   const activeFilterCount = [search].filter(Boolean).length
     + companyFilter.length + staffFilter.length + creatorFilter.length
     + (isAdmin ? supportFilter.length : (supportFilter.length ? 1 : 0))
-    + statusFilter.length + priorityFilter.length + sourceFilter.length
+    + statusFilter.length + priorityFilter.length + sizeFilter.length + sourceFilter.length
     + (isOverdue ? 1 : 0) + (scheduleToday ? 1 : 0)
 
   function toggleSelect(id) {
@@ -2186,6 +2208,15 @@ export default function Tasks() {
                     onChange={(v) => { setSourceFilter(v); setPage(1) }}
                   />
                 </div>
+                <div className={s.filterGroup}>
+                  <label className={s.filterLabel}>Cỡ việc</label>
+                  <MultiSelect
+                    placeholder="Tất cả cỡ"
+                    options={sizeOptionsOr(getOptions('task_size'))}
+                    selected={sizeFilter}
+                    onChange={(v) => { setSizeFilter(v); setPage(1) }}
+                  />
+                </div>
                 {/* Nút bật/tắt gom nhóm — giữ nguyên sắp xếp, chỉ gộp con/việc phụ thuộc; loại trừ lẫn nhau */}
                 {isListView && (
                   <div className={s.filterGroup}>
@@ -2221,7 +2252,7 @@ export default function Tasks() {
           )}
 
           {/* ── Active filter chips ── */}
-          {(yearFilter || monthFilter || staffFilter.length > 0 || creatorFilter.length > 0 || supportFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sourceFilter.length > 0 || isOverdue || scheduleToday || search) && (
+          {(yearFilter || monthFilter || staffFilter.length > 0 || creatorFilter.length > 0 || supportFilter.length > 0 || companyFilter.length > 0 || statusFilter.length > 0 || priorityFilter.length > 0 || sizeFilter.length > 0 || sourceFilter.length > 0 || isOverdue || scheduleToday || search) && (
             <div className={s.filterChipsRow}>
               {(yearFilter || monthFilter) && (
                 <span className={s.filterChip}>
@@ -2270,6 +2301,12 @@ export default function Tasks() {
                 <span key={pr} className={s.filterChip}>
                   {getLabel('task_priority', pr, PRIORITY_LABELS[pr])}
                   <button className={s.filterChipRemove} onClick={() => { setPriorityFilter((prev) => prev.filter((x) => x !== pr)); setPage(1) }}>×</button>
+                </span>
+              ))}
+              {sizeFilter.map((sz) => (
+                <span key={`size-${sz}`} className={s.filterChip}>
+                  Cỡ: {taskSizeLabel(getOptions('task_size'), sz)}
+                  <button className={s.filterChipRemove} onClick={() => { setSizeFilter((prev) => prev.filter((x) => x !== sz)); setPage(1) }}>×</button>
                 </span>
               ))}
               {sourceFilter.map((src) => (
