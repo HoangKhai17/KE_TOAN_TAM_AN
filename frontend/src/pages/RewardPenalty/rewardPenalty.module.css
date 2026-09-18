@@ -146,6 +146,21 @@
 .rpKind { color: var(--color-muted); }
 .rpEmpty { padding: 10px; text-align: center; color: var(--color-muted-subtle); font-size: var(--fs-xs); }
 
+/* Tổng hợp theo NV — dòng bung chi tiết thưởng/phạt vì gì */
+.sumRow:hover td { background: var(--color-bg-soft); }
+.userCell { display: inline-flex; align-items: center; gap: 4px; }
+.expandBtn { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; color: var(--color-muted); flex: 0 0 auto; }
+.detailRow td { background: var(--color-bg-soft); border-bottom: 1.5px solid var(--color-primary-bg-strong); }
+.breakdown { display: flex; gap: 24px; flex-wrap: wrap; padding: 6px 2px 8px; }
+.bkCol { flex: 1 1 260px; min-width: 0; }
+.bkTitle { font-size: var(--fs-2xs); font-weight: var(--fw-bold); margin-bottom: 5px; }
+.bkItem { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: var(--fs-2xs); border-bottom: 1px dashed var(--color-border-muted); }
+.bkItem:last-child { border-bottom: 0; }
+.bkLabel { flex: 1 1 auto; color: var(--color-text-strong); word-break: break-word; }
+.bkCount { flex: 0 0 auto; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.bkPts { flex: 0 0 auto; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; font-weight: var(--fw-bold); }
+.bkEmpty { color: var(--color-muted-subtle); font-size: var(--fs-2xs); font-style: italic; padding: 3px 0; }
+
 /* Thanh công cụ trên đầu (bộ lọc + Nhập/Xuất + nút chính) — nằm cạnh tab, KHÔNG nhét vào bảng */
 .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .toolField { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-2xs); color: var(--color-text-soft); font-weight: var(--fw-medium); }

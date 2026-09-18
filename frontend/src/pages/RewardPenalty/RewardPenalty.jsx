@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, Plus, Check, X, Trash2, Upload, Download, ListChecks, ClipboardList, Users, ChevronDown, Search } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
@@ -673,7 +673,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
   )
 }
 
-// ══ TỔNG HỢP — chỉ xem + lọc header ═══════════════════════════════════════════
+// ══ TỔNG HỢP — 1 dòng/nhân viên, bung ra xem chi tiết thưởng/phạt vì gì ════════
 function SummaryPanel({ slot, years, onFooter }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -698,21 +698,41 @@ function SummaryPanel({ slot, years, onFooter }) {
   const toggleAll = () => setSel(allChecked ? new Set() : new Set(rows.map((r) => r.userId)))
   const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
-  useEffect(() => { setLoading(true); setSel(new Set()); setPage(1); api.getSummary(ym.year, ym.month).then(setRows).catch(() => setRows([])).finally(() => setLoading(false)) }, [ym])
+  // Gom TỪ CÁC DÒNG ĐÃ DUYỆT: mỗi NV có tổng điểm + chi tiết theo tên quy tắc.
+  useEffect(() => {
+    setLoading(true); setSel(new Set()); setPage(1)
+    api.listEntries({ year: ym.year, month: ym.month }).then((entries) => {
+      const byUser = new Map()
+      for (const e of entries) {
+        if (e.status !== 'approved') continue
+        if (!byUser.has(e.userId)) byUser.set(e.userId, { userId: e.userId, userName: e.userName, rewardPoints: 0, penaltyPoints: 0, netPoints: 0, items: new Map() })
+        const u = byUser.get(e.userId); const p = Number(e.points) || 0
+        if (p > 0) u.rewardPoints += p; else u.penaltyPoints += p
+        u.netPoints += p
+        const key = `${e.categoryLabel}||${e.kind}`
+        if (!u.items.has(key)) u.items.set(key, { label: e.categoryLabel, kind: e.kind, count: 0, points: 0 })
+        const it = u.items.get(key); it.count += 1; it.points += p
+      }
+      const out = [...byUser.values()].map((u) => ({ ...u, items: [...u.items.values()].sort((a, b) => Math.abs(b.points) - Math.abs(a.points)) }))
+      out.sort((a, b) => String(a.userName).localeCompare(String(b.userName), 'vi'))
+      setRows(out)
+    }).catch(() => setRows([])).finally(() => setLoading(false))
+  }, [ym])
   useEffect(() => {
     onFooter(<PaginationFooter total={pg.total} from={pg.from} to={pg.to} itemLabel="nhân viên"
       page={pg.safePage} pageSize={pageSize} totalPages={pg.totalPages} loading={loading}
       onPageChange={setPage} onPageSizeChange={(sz) => { setPageSize(sz); setPage(1) }} />)
     return () => onFooter(null)
   }, [onFooter, pg.total, pg.from, pg.to, pg.safePage, pg.totalPages, pageSize, loading])
-  const tot = useMemo(() => view.reduce((a, r) => ({ rp: a.rp + r.rewardPoints, pp: a.pp + r.penaltyPoints, np: a.np + r.netPoints }), { rp: 0, pp: 0, np: 0 }), [view])
 
   const exportData = sel.size ? view.filter((r) => sel.has(r.userId)) : view
   const exportCols = [
     { key: 'user', label: 'Nhân viên', width: 24, value: (r) => r.userName },
-    { key: 'rp', label: 'Điểm thưởng', width: 12, type: 'number', total: true, value: (r) => r.rewardPoints },
-    { key: 'pp', label: 'Điểm phạt', width: 12, type: 'number', total: true, value: (r) => r.penaltyPoints },
-    { key: 'np', label: 'Điểm ròng', width: 12, type: 'number', total: true, value: (r) => r.netPoints },
+    { key: 'rp', label: 'Điểm thưởng', width: 12, type: 'number', value: (r) => r.rewardPoints },
+    { key: 'pp', label: 'Điểm phạt', width: 12, type: 'number', value: (r) => r.penaltyPoints },
+    { key: 'np', label: 'Điểm ròng', width: 12, type: 'number', value: (r) => r.netPoints },
+    { key: 'rw', label: 'Thưởng vì', width: 40, value: (r) => r.items.filter((it) => it.points > 0).map((it) => `${it.label} (${fmtPts(it.points)}${it.count > 1 ? `, ${it.count} lần` : ''})`).join('; ') },
+    { key: 'pn', label: 'Phạt vì', width: 40, value: (r) => r.items.filter((it) => it.points < 0).map((it) => `${it.label} (${fmtPts(it.points)}${it.count > 1 ? `, ${it.count} lần` : ''})`).join('; ') },
   ]
 
   const toolbar = (
@@ -722,6 +742,24 @@ function SummaryPanel({ slot, years, onFooter }) {
       <button className={s.btnSecondary} onClick={() => setExportOpen(true)}><Download size={14} /> Xuất Excel</button>
     </div>
   )
+
+  const Breakdown = ({ items }) => {
+    const rw = items.filter((it) => it.points > 0)
+    const pn = items.filter((it) => it.points < 0)
+    const list = (arr) => arr.length === 0 ? <div className={s.bkEmpty}>—</div> : arr.map((it) => (
+      <div key={it.label} className={s.bkItem}>
+        <span className={s.bkLabel}>{it.label}</span>
+        {it.count > 1 && <span className={s.bkCount}>×{it.count}</span>}
+        <span className={`${s.bkPts} ${signCls(it.points)}`}>{fmtPts(it.points)}</span>
+      </div>
+    ))
+    return (
+      <div className={s.breakdown}>
+        <div className={s.bkCol}><div className={`${s.bkTitle} ${s.pos}`}>▲ Thưởng vì</div>{list(rw)}</div>
+        <div className={s.bkCol}><div className={`${s.bkTitle} ${s.neg}`}>▼ Phạt vì</div>{list(pn)}</div>
+      </div>
+    )
+  }
 
   return (
     <div className={s.card}>
@@ -748,32 +786,31 @@ function SummaryPanel({ slot, years, onFooter }) {
             <tbody>
               {view.length === 0 && <tr><td colSpan={6} className={s.empty}>Chưa có dữ liệu đã duyệt trong kỳ.</td></tr>}
               {pg.slice.map((r, i) => (
-                <tr key={r.userId}>
-                  <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(r.userId)} onChange={() => toggle(r.userId)} /></td>
-                  <td className={s.colStt}>{pg.start + i + 1}</td>
-                  <td>{r.userName}</td>
-                  <td className={`${s.num} ${signCls(r.rewardPoints)}`}>{fmtPts(r.rewardPoints)}</td>
-                  <td className={`${s.num} ${signCls(r.penaltyPoints)}`}>{fmtPts(r.penaltyPoints)}</td>
-                  <td className={`${s.num} ${signCls(r.netPoints)}`}>{fmtPts(r.netPoints)}</td>
-                </tr>
+                <Fragment key={r.userId}>
+                  <tr className={s.sumRow}>
+                    <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(r.userId)} onChange={() => toggle(r.userId)} /></td>
+                    <td className={s.colStt}>{pg.start + i + 1}</td>
+                    <td>{r.userName}</td>
+                    <td className={`${s.num} ${signCls(r.rewardPoints)}`}>{fmtPts(r.rewardPoints)}</td>
+                    <td className={`${s.num} ${signCls(r.penaltyPoints)}`}>{fmtPts(r.penaltyPoints)}</td>
+                    <td className={`${s.num} ${signCls(r.netPoints)}`}>{fmtPts(r.netPoints)}</td>
+                  </tr>
+                  <tr className={s.detailRow}>
+                    <td /><td />
+                    <td colSpan={4}><Breakdown items={r.items} /></td>
+                  </tr>
+                </Fragment>
               ))}
             </tbody>
-            {view.length > 0 && <tfoot><tr>
-              <td className={s.colChk} /><td className={s.colStt} />
-              <td>Cộng kỳ</td>
-              <td className={`${s.num} ${signCls(tot.rp)}`}>{fmtPts(tot.rp)}</td>
-              <td className={`${s.num} ${signCls(tot.pp)}`}>{fmtPts(tot.pp)}</td>
-              <td className={`${s.num} ${signCls(tot.np)}`}>{fmtPts(tot.np)}</td>
-            </tr></tfoot>}
           </table>
         </div>
       )}
       <ColFilterPortal cf={cf} allRows={rows} />
       {exportOpen && (
         <ExportPreviewModal title="Xuất Excel — Tổng hợp KPI" filename={`tong_hop_kpi_${ym.year}-${String(ym.month).padStart(2, '0')}`}
-          sheetName={`T${ym.month}-${ym.year}`} columns={exportCols} data={exportData} totalLabel="Cộng kỳ" onClose={() => setExportOpen(false)} />
+          sheetName={`T${ym.month}-${ym.year}`} columns={exportCols} data={exportData} onClose={() => setExportOpen(false)} />
       )}
-      <div className={s.cardFoot}>ℹ️ Tổng hợp theo <strong>điểm</strong> (thưởng/phạt/ròng), chỉ tính dòng <strong>đã duyệt</strong>. Việc quy đổi điểm → tiền để nối bảng lương sẽ bổ sung sau.</div>
+      <div className={s.cardFoot}>ℹ️ Mỗi nhân viên hiển thị tổng điểm kèm <strong>chi tiết thưởng/phạt vì gì</strong> (chỉ tính dòng <strong>đã duyệt</strong>). Quy đổi điểm → tiền để nối bảng lương sẽ bổ sung sau.</div>
     </div>
   )
 }
