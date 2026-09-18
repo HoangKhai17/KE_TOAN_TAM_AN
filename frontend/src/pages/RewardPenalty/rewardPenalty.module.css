@@ -109,6 +109,14 @@
 .selDraft { background: var(--color-warning-bg); color: var(--color-warning-text); border-color: var(--color-warning-bg-strong); }
 .selOn { background: var(--color-success-bg); color: var(--color-success-text); border-color: var(--color-success-bg); }
 .selOff { background: var(--color-surface-muted); color: var(--color-muted); border-color: var(--color-surface-muted); }
+/* Palette màu ĐỘNG cho Loại (thêm loại mới tự có màu khác) — chỉ dùng token */
+.selP0 { background: var(--color-danger-bg); color: var(--color-danger-text); border-color: var(--color-danger-bg); }
+.selP1 { background: var(--color-success-bg); color: var(--color-success-text); border-color: var(--color-success-bg); }
+.selP2 { background: var(--color-warning-bg); color: var(--color-warning-text); border-color: var(--color-warning-bg-strong); }
+.selP3 { background: var(--color-primary-bg); color: var(--color-primary); border-color: var(--color-primary-bg-strong); }
+.selP4 { background: var(--color-surface-muted); color: var(--color-muted); border-color: var(--color-surface-muted); }
+/* Ô select vô hiệu (staff chỉ xem) vẫn GIỮ màu, không bị xám */
+.qeSelect:disabled { opacity: 1; cursor: default; }
 
 /* Dòng thêm mới (chưa lưu) — nổi bật nhẹ */
 .newRow td { background: var(--color-primary-bg); }
@@ -151,14 +159,19 @@
 .userCell { display: inline-flex; align-items: center; gap: 4px; }
 .expandBtn { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; color: var(--color-muted); flex: 0 0 auto; }
 .detailRow td { background: var(--color-bg-soft); border-bottom: 1.5px solid var(--color-primary-bg-strong); }
-.breakdown { display: flex; gap: 24px; flex-wrap: wrap; padding: 6px 2px 8px; }
-.bkCol { flex: 1 1 260px; min-width: 0; }
-.bkTitle { font-size: var(--fs-2xs); font-weight: var(--fw-bold); margin-bottom: 5px; }
-.bkItem { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: var(--fs-2xs); border-bottom: 1px dashed var(--color-border-muted); }
-.bkItem:last-child { border-bottom: 0; }
-.bkLabel { flex: 1 1 auto; color: var(--color-text-strong); word-break: break-word; }
-.bkCount { flex: 0 0 auto; color: var(--color-muted); font-variant-numeric: tabular-nums; }
-.bkPts { flex: 0 0 auto; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; font-weight: var(--fw-bold); }
+.detailCell { padding: 6px 16px 10px 40px; }
+.bkTag { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: var(--fw-bold); white-space: nowrap; }
+/* Bảng con chi tiết thưởng/phạt — đường kẻ gạch mờ cho dễ phân biệt */
+.bkTable { width: 100%; border-collapse: collapse; font-size: var(--fs-2xs); margin: 2px 0 6px; }
+.bkTable th { text-align: left; padding: 4px 8px; color: var(--color-muted); font-weight: var(--fw-semibold); border-bottom: 1px dashed var(--color-border-muted); }
+.bkTable td { padding: 4px 8px; border-bottom: 1px dashed var(--color-border-muted); vertical-align: middle; }
+.bkTable tbody tr:last-child td { border-bottom: 0; }
+.bkTable td + td, .bkTable th + th { border-left: 1px dashed var(--color-border-muted); }
+.bkTable tbody tr:hover td { background: var(--color-surface); }
+.bkColKind { width: 130px; }
+.bkTable .bkColNum { width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
+.bkLabel { color: var(--color-text-strong); word-break: break-word; }
+.bkCount { color: var(--color-muted); font-weight: var(--fw-medium); }
 .bkEmpty { color: var(--color-muted-subtle); font-size: var(--fs-2xs); font-style: italic; padding: 3px 0; }
 
 /* Thanh công cụ trên đầu (bộ lọc + Nhập/Xuất + nút chính) — nằm cạnh tab, KHÔNG nhét vào bảng */

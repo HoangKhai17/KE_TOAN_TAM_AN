@@ -179,19 +179,29 @@ async function getEntry(id) {
 }
 
 // ── TỔNG HỢP theo kỳ (chỉ dòng ĐÃ DUYỆT) — ĐIỂM THUẦN (chưa quy ra tiền) ──
+// Gộp NGAY TẠI DB theo (nhân viên × tên quy tắc × loại) rồi roll-up ở server, nên
+// dữ liệu trả về gọn (không kéo từng dòng về client). Kèm chi tiết items để bung.
 async function getSummary({ year, month }) {
   const { rows } = await query(
-    `SELECT u.id AS user_id, u.name AS user_name,
-            COALESCE(SUM(points) FILTER (WHERE points > 0), 0) AS reward_points,
-            COALESCE(SUM(points) FILTER (WHERE points < 0), 0) AS penalty_points,
-            COALESCE(SUM(points), 0)                           AS net_points
+    `SELECT u.id AS user_id, u.name AS user_name, s.category_label, s.kind,
+            COUNT(*)::int AS cnt, COALESCE(SUM(s.points), 0) AS points
        FROM staff_reward_penalty s JOIN users u ON u.id = s.user_id
       WHERE s.period_year = $1 AND s.period_month = $2 AND s.status = 'approved'
-      GROUP BY u.id, u.name ORDER BY u.name`, [year, month])
-  return rows.map((r) => ({
-    userId: r.user_id, userName: r.user_name,
-    rewardPoints: Number(r.reward_points), penaltyPoints: Number(r.penalty_points), netPoints: Number(r.net_points),
-  }))
+      GROUP BY u.id, u.name, s.category_label, s.kind
+      ORDER BY u.name, ABS(SUM(s.points)) DESC`, [year, month])
+  const byUser = new Map()
+  for (const r of rows) {
+    if (!byUser.has(r.user_id)) {
+      byUser.set(r.user_id, { userId: r.user_id, userName: r.user_name, rewardPoints: 0, penaltyPoints: 0, netPoints: 0, items: [] })
+    }
+    const u = byUser.get(r.user_id)
+    const pts = Number(r.points)
+    if (pts > 0) u.rewardPoints += pts
+    else if (pts < 0) u.penaltyPoints += pts
+    u.netPoints += pts
+    u.items.push({ label: r.category_label, kind: r.kind, count: r.cnt, points: pts })
+  }
+  return [...byUser.values()]
 }
 
 // Danh sách NĂM có dữ liệu (để dropdown, không hardcode) — luôn kèm năm hiện tại.

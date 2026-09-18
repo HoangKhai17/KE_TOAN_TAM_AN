@@ -24,11 +24,15 @@ const TODAY = () => new Date().toISOString().slice(0, 10)
 const ISO = (v) => (v ? String(v).slice(0, 10) : '')
 
 const fmtPts = (n) => (n == null) ? '—' : (n > 0 ? `+${n}` : `${n}`)
-const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : '—'
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
 const signCls = (n) => n > 0 ? s.pos : n < 0 ? s.neg : s.zero
-const KIND_PILL = { reward: s.pillReward, violation: s.pillPenalty }
-const STATUS_PILL = { approved: s.pillApproved, draft: s.pillDraft }
-const kindSelCls = (k) => k === 'reward' ? s.selReward : s.selPenalty
+// Màu ĐỘNG cho Loại: mỗi loại trong enum lấy 1 màu trong palette theo thứ tự (thêm loại mới
+// tự có màu khác, không bị đỏ hết). violation→đỏ, reward→xanh lá, kế tiếp→vàng/xanh dương…
+const KIND_PALETTE = [s.selP0, s.selP1, s.selP2, s.selP3, s.selP4]
+const kindColorCls = (kind, opts = []) => {
+  const idx = opts.findIndex((o) => o.key === kind)
+  return KIND_PALETTE[(idx < 0 ? 0 : idx) % KIND_PALETTE.length]
+}
 const statusSelCls = (k) => k === 'approved' ? s.selApproved : s.selDraft
 
 // map giá trị Excel (nhãn hoặc key) → key enum
@@ -357,7 +361,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
                   <td className={s.colChk} />
                   <td className={s.colStt}>＋</td>
                   <td><input autoFocus className={s.cellInput} value={draft.label} placeholder="Tên quy tắc…" onChange={(e) => setD('label', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveDraft()} /></td>
-                  <td><EnumSelect value={draft.kind} options={kinds} cls={kindSelCls(draft.kind)} onCommit={(v) => setD('kind', v)} /></td>
+                  <td><EnumSelect value={draft.kind} options={kinds} cls={kindColorCls(draft.kind, kinds)} onCommit={(v) => setD('kind', v)} /></td>
                   <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.defaultPoints} onChange={(e) => setD('defaultPoints', e.target.value)} /></td>
                   <td><EnumSelect value={draft.detectSource} options={detects} onCommit={(v) => setD('detectSource', v)} /></td>
                   <td><EnumSelect value={draft.isActive ? '1' : '0'} options={ACTIVE_OPTS} cls={draft.isActive ? s.selOn : s.selOff} onCommit={(v) => setD('isActive', v === '1')} /></td>
@@ -375,7 +379,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
                   <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(r.id)} onChange={() => toggle(r.id)} /></td>
                   <td className={s.colStt}>{pg.start + i + 1}</td>
                   <td><CellText value={r.label} onCommit={(v) => v.trim() && patchRule(r, { label: v.trim() })} /></td>
-                  <td><EnumSelect value={r.kind} options={kinds} cls={kindSelCls(r.kind)} onCommit={(v) => patchRule(r, { kind: v })} /></td>
+                  <td><EnumSelect value={r.kind} options={kinds} cls={kindColorCls(r.kind, kinds)} onCommit={(v) => patchRule(r, { kind: v })} /></td>
                   <td><CellText value={r.defaultPoints} numeric onCommit={(v) => patchRule(r, { defaultPoints: Number(v) || 0 })} /></td>
                   <td><EnumSelect value={r.detectSource} options={detects} onCommit={(v) => patchRule(r, { detectSource: v })} /></td>
                   <td><EnumSelect value={r.isActive ? '1' : '0'} options={ACTIVE_OPTS} cls={r.isActive ? s.selOn : s.selOff} onCommit={(v) => patchRule(r, { isActive: v === '1' })} /></td>
@@ -587,7 +591,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                       onPick={(r) => setDraft((p) => ({ ...p, ruleId: r.id, categoryLabel: r.label, kind: r.kind, points: r.defaultPoints }))}
                       onManual={(name) => setDraft((p) => ({ ...p, ruleId: '', categoryLabel: name }))}
                       onCreate={(name) => setCreateRuleFor({ prefill: name, apply: (r) => setDraft((p) => ({ ...p, ruleId: r.id, categoryLabel: r.label, kind: r.kind, points: r.defaultPoints })) })} /></td>
-                    <td><EnumSelect value={draft.kind} options={kinds} cls={kindSelCls(draft.kind)} onCommit={(v) => setD('kind', v)} /></td>
+                    <td><EnumSelect value={draft.kind} options={kinds} cls={kindColorCls(draft.kind, kinds)} onCommit={(v) => setD('kind', v)} /></td>
                     <td><select className={s.qeSelect} value={draft.userId} onChange={(e) => setD('userId', e.target.value)}><option value="">— chọn —</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></td>
                     <td><DateBox block className={s.dateCell} value={draft.occurredOn} onChange={(v) => setD('occurredOn', v)} /></td>
                     <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.points} onChange={(e) => setD('points', e.target.value)} /></td>
@@ -613,7 +617,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                           onPick={(r) => patchEntry(e, { ruleId: r.id, categoryLabel: r.label, kind: r.kind, points: r.defaultPoints })}
                           onManual={(name) => patchEntry(e, { ruleId: null, categoryLabel: name })}
                           onCreate={(name) => setCreateRuleFor({ prefill: name, apply: (r) => patchEntry(e, { ruleId: r.id, categoryLabel: r.label, kind: r.kind, points: r.defaultPoints }) })} /></td>
-                        <td><EnumSelect value={e.kind} options={kinds} cls={kindSelCls(e.kind)} onCommit={(v) => patchEntry(e, { kind: v })} /></td>
+                        <td><EnumSelect value={e.kind} options={kinds} cls={kindColorCls(e.kind, kinds)} onCommit={(v) => patchEntry(e, { kind: v })} /></td>
                         <td><select className={`${s.qeSelect} ${s.ruleSelect}`} value={e.userId} onChange={(ev) => ev.target.value && patchEntry(e, { userId: ev.target.value })}>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></td>
                         <td><CellDate value={e.occurredOn} onCommit={(v) => v && patchEntry(e, { occurredOn: v })} /></td>
                         <td><CellText value={e.points} numeric onCommit={(v) => patchEntry(e, { points: Number(v) || 0 })} /></td>
@@ -629,11 +633,11 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                     ) : (
                       <>
                         <td>{e.categoryLabel}</td>
-                        <td><span className={`${s.pill} ${KIND_PILL[e.kind]}`}>{enumLabel('reward_penalty_kind', e.kind)}</span></td>
-                        <td className={s.num} style={{ textAlign: 'left' }}>{fmtDate(e.occurredOn)}</td>
+                        <td><EnumSelect value={e.kind} options={kinds} cls={kindColorCls(e.kind, kinds)} disabled onCommit={() => {}} /></td>
+                        <td><DateBox block className={s.dateCell} value={ISO(e.occurredOn)} disabled onChange={() => {}} /></td>
                         <td className={`${s.num} ${signCls(e.points)}`}>{fmtPts(e.points)}</td>
                         <td className={s.note}>{enumLabel('reward_penalty_source', e.source)}</td>
-                        <td><span className={`${s.pill} ${STATUS_PILL[e.status] ?? s.pillDraft}`}>{enumLabel('reward_penalty_status', e.status)}</span></td>
+                        <td><EnumSelect value={e.status} options={statuses} cls={statusSelCls(e.status)} disabled onCommit={() => {}} /></td>
                         <td className={s.note}>{e.note || '—'}</td>
                       </>
                     )}
@@ -675,6 +679,9 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
 
 // ══ TỔNG HỢP — 1 dòng/nhân viên, bung ra xem chi tiết thưởng/phạt vì gì ════════
 function SummaryPanel({ slot, years, onFooter }) {
+  const getOptions = useEnumsStore((st) => st.getOptions)
+  const enumLabel = useCallback((type, key) => (getOptions(type).find((x) => x.key === key)?.label ?? key), [getOptions])
+  const kinds = getOptions('reward_penalty_kind')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [ym, setYm] = useState({ year: CUR_Y, month: CUR_M })
@@ -687,7 +694,7 @@ function SummaryPanel({ slot, years, onFooter }) {
     { key: 'user', label: 'Nhân viên',   type: 'text',        getLabel: (r) => r.userName },
     { key: 'rp',   label: 'Điểm thưởng', type: 'numberRange', num: true, getNumber: (r) => r.rewardPoints,  getLabel: (r) => String(r.rewardPoints) },
     { key: 'pp',   label: 'Điểm phạt',   type: 'numberRange', num: true, getNumber: (r) => r.penaltyPoints, getLabel: (r) => String(r.penaltyPoints) },
-    { key: 'np',   label: 'Điểm ròng',   type: 'numberRange', num: true, getNumber: (r) => r.netPoints,     getLabel: (r) => String(r.netPoints) },
+    { key: 'np',   label: 'Tổng điểm',   type: 'numberRange', num: true, getNumber: (r) => r.netPoints,     getLabel: (r) => String(r.netPoints) },
   ], [])
   const cf = useColFilter(cols)
   const view = cf.apply(rows)
@@ -698,25 +705,10 @@ function SummaryPanel({ slot, years, onFooter }) {
   const toggleAll = () => setSel(allChecked ? new Set() : new Set(rows.map((r) => r.userId)))
   const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
-  // Gom TỪ CÁC DÒNG ĐÃ DUYỆT: mỗi NV có tổng điểm + chi tiết theo tên quy tắc.
+  // Tổng hợp đã gộp SẴN ở DB (service.getSummary): mỗi NV kèm items chi tiết.
   useEffect(() => {
     setLoading(true); setSel(new Set()); setPage(1)
-    api.listEntries({ year: ym.year, month: ym.month }).then((entries) => {
-      const byUser = new Map()
-      for (const e of entries) {
-        if (e.status !== 'approved') continue
-        if (!byUser.has(e.userId)) byUser.set(e.userId, { userId: e.userId, userName: e.userName, rewardPoints: 0, penaltyPoints: 0, netPoints: 0, items: new Map() })
-        const u = byUser.get(e.userId); const p = Number(e.points) || 0
-        if (p > 0) u.rewardPoints += p; else u.penaltyPoints += p
-        u.netPoints += p
-        const key = `${e.categoryLabel}||${e.kind}`
-        if (!u.items.has(key)) u.items.set(key, { label: e.categoryLabel, kind: e.kind, count: 0, points: 0 })
-        const it = u.items.get(key); it.count += 1; it.points += p
-      }
-      const out = [...byUser.values()].map((u) => ({ ...u, items: [...u.items.values()].sort((a, b) => Math.abs(b.points) - Math.abs(a.points)) }))
-      out.sort((a, b) => String(a.userName).localeCompare(String(b.userName), 'vi'))
-      setRows(out)
-    }).catch(() => setRows([])).finally(() => setLoading(false))
+    api.getSummary(ym.year, ym.month).then((data) => setRows(Array.isArray(data) ? data : [])).catch(() => setRows([])).finally(() => setLoading(false))
   }, [ym])
   useEffect(() => {
     onFooter(<PaginationFooter total={pg.total} from={pg.from} to={pg.to} itemLabel="nhân viên"
@@ -726,13 +718,17 @@ function SummaryPanel({ slot, years, onFooter }) {
   }, [onFooter, pg.total, pg.from, pg.to, pg.safePage, pg.totalPages, pageSize, loading])
 
   const exportData = sel.size ? view.filter((r) => sel.has(r.userId)) : view
+  // 1 cột chi tiết cho MỖI loại (động theo enum) — VD: "Thưởng vì", "Vi phạm vì", "Nhắc nhở vì"…
+  const kindDetailCols = kinds.map((k) => ({
+    key: `k_${k.key}`, label: `${k.label} vì`, width: 40,
+    value: (r) => (r.items || []).filter((it) => it.kind === k.key).map((it) => `${it.label} (${fmtPts(it.points)}${it.count > 1 ? `, ${it.count} lần` : ''})`).join('; '),
+  }))
   const exportCols = [
     { key: 'user', label: 'Nhân viên', width: 24, value: (r) => r.userName },
     { key: 'rp', label: 'Điểm thưởng', width: 12, type: 'number', value: (r) => r.rewardPoints },
     { key: 'pp', label: 'Điểm phạt', width: 12, type: 'number', value: (r) => r.penaltyPoints },
-    { key: 'np', label: 'Điểm ròng', width: 12, type: 'number', value: (r) => r.netPoints },
-    { key: 'rw', label: 'Thưởng vì', width: 40, value: (r) => r.items.filter((it) => it.points > 0).map((it) => `${it.label} (${fmtPts(it.points)}${it.count > 1 ? `, ${it.count} lần` : ''})`).join('; ') },
-    { key: 'pn', label: 'Phạt vì', width: 40, value: (r) => r.items.filter((it) => it.points < 0).map((it) => `${it.label} (${fmtPts(it.points)}${it.count > 1 ? `, ${it.count} lần` : ''})`).join('; ') },
+    { key: 'np', label: 'Tổng điểm', width: 12, type: 'number', value: (r) => r.netPoints },
+    ...kindDetailCols,
   ]
 
   const toolbar = (
@@ -743,21 +739,33 @@ function SummaryPanel({ slot, years, onFooter }) {
     </div>
   )
 
+  // Chi tiết dạng BẢNG CON (đường kẻ gạch mờ) — nhóm theo Loại (động theo enum), tô màu.
   const Breakdown = ({ items }) => {
-    const rw = items.filter((it) => it.points > 0)
-    const pn = items.filter((it) => it.points < 0)
-    const list = (arr) => arr.length === 0 ? <div className={s.bkEmpty}>—</div> : arr.map((it) => (
-      <div key={it.label} className={s.bkItem}>
-        <span className={s.bkLabel}>{it.label}</span>
-        {it.count > 1 && <span className={s.bkCount}>×{it.count}</span>}
-        <span className={`${s.bkPts} ${signCls(it.points)}`}>{fmtPts(it.points)}</span>
-      </div>
-    ))
+    const known = new Set(kinds.map((k) => k.key))
+    const ordered = [
+      ...kinds.flatMap((k) => (items || []).filter((it) => it.kind === k.key).map((it) => ({ ...it, kindLabel: k.label }))),
+      ...(items || []).filter((it) => !known.has(it.kind)).map((it) => ({ ...it, kindLabel: 'Khác' })),
+    ]
+    if (ordered.length === 0) return <div className={s.bkEmpty}>—</div>
     return (
-      <div className={s.breakdown}>
-        <div className={s.bkCol}><div className={`${s.bkTitle} ${s.pos}`}>▲ Thưởng vì</div>{list(rw)}</div>
-        <div className={s.bkCol}><div className={`${s.bkTitle} ${s.neg}`}>▼ Phạt vì</div>{list(pn)}</div>
-      </div>
+      <table className={s.bkTable}>
+        <thead><tr>
+          <th className={s.bkColKind}>Loại</th>
+          <th>Tên quy tắc</th>
+          <th className={s.bkColNum}>Số lần</th>
+          <th className={s.bkColNum}>Điểm</th>
+        </tr></thead>
+        <tbody>
+          {ordered.map((it, idx) => (
+            <tr key={`${it.kind}-${it.label}-${idx}`}>
+              <td><span className={`${s.bkTag} ${kindColorCls(it.kind, kinds)}`}>{it.kindLabel}</span></td>
+              <td className={s.bkLabel}>{it.label}</td>
+              <td className={`${s.bkColNum} ${s.bkCount}`}>{it.count}</td>
+              <td className={`${s.bkColNum} ${signCls(it.points)}`}>{fmtPts(it.points)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     )
   }
 
@@ -781,7 +789,7 @@ function SummaryPanel({ slot, years, onFooter }) {
               <FilterTh cf={cf} colKey="user">Nhân viên</FilterTh>
               <FilterTh cf={cf} colKey="rp" num>Điểm thưởng</FilterTh>
               <FilterTh cf={cf} colKey="pp" num>Điểm phạt</FilterTh>
-              <FilterTh cf={cf} colKey="np" num>Điểm ròng</FilterTh>
+              <FilterTh cf={cf} colKey="np" num>Tổng điểm</FilterTh>
             </tr></thead>
             <tbody>
               {view.length === 0 && <tr><td colSpan={6} className={s.empty}>Chưa có dữ liệu đã duyệt trong kỳ.</td></tr>}
@@ -796,8 +804,7 @@ function SummaryPanel({ slot, years, onFooter }) {
                     <td className={`${s.num} ${signCls(r.netPoints)}`}>{fmtPts(r.netPoints)}</td>
                   </tr>
                   <tr className={s.detailRow}>
-                    <td /><td />
-                    <td colSpan={4}><Breakdown items={r.items} /></td>
+                    <td colSpan={6} className={s.detailCell}><Breakdown items={r.items} /></td>
                   </tr>
                 </Fragment>
               ))}
