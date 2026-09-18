@@ -42,9 +42,9 @@ export default function ExportPreviewModal({ title, filename, sheetName = 'Dữ 
     finally { setExporting(false) }
   }
 
-  const previewRows = data.slice(0, 8)
+  const previewRows = data
   return (
-    <Modal title={title} onClose={onClose} width="min(900px, calc(100vw - 40px))">
+    <Modal title={title} onClose={onClose} wide>
       <div className={s.expBody}>
         <div className={s.expSide}>
           <div className={s.expSideTitle}>Chọn cột xuất</div>
@@ -56,7 +56,7 @@ export default function ExportPreviewModal({ title, filename, sheetName = 'Dữ 
           ))}
         </div>
         <div className={s.expPreview}>
-          <div className={s.expPreviewTitle}>Xem trước ({Math.min(8, data.length)} / {data.length} dòng)</div>
+          <div className={s.expPreviewTitle}>Xem trước ({data.length} dòng)</div>
           <div className={s.expPreviewWrap}>
             {outCols.length === 0 || data.length === 0 ? (
               <div className={s.expEmpty}>{outCols.length === 0 ? 'Chưa chọn cột nào' : 'Không có dữ liệu'}</div>
