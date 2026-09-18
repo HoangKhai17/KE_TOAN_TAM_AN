@@ -37,6 +37,11 @@ export async function approveEntry(id) {
 export async function deleteEntry(id) {
   await api.delete(`/reward-penalty/entries/${id}`)
 }
+// Staff gửi giải trình cho dòng của mình
+export async function explainEntry(id, explanation) {
+  const { data } = await api.post(`/reward-penalty/entries/${id}/explain`, { explanation })
+  return data.data.entry
+}
 
 // Năm có dữ liệu (dropdown) — kèm năm hiện tại
 export async function listYears() {

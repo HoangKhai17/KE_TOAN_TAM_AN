@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
-import { Loader2, Plus, Check, X, Trash2, Upload, Download, ListChecks, ClipboardList, Users, ChevronDown, Search, Award } from 'lucide-react'
+import { Loader2, Plus, Check, X, Trash2, Upload, Download, ListChecks, ClipboardList, Users, ChevronDown, Search, Award, MessageSquare } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import PaginationFooter from '../../components/layout/PaginationFooter'
@@ -13,6 +13,7 @@ import { useEnumsStore } from '../../hooks/useEnums'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { listUserOptions } from '../../api/users'
 import * as api from '../../api/rewardPenalty'
+import { useDataSync } from '../../hooks/useDataSync'
 import { useColFilter, FilterTh, ColFilterPortal } from './useColFilter'
 import ExportPreviewModal from './ExportPreviewModal'
 import s from './rewardPenalty.module.css'
@@ -515,6 +516,8 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
     api.listEntries({ year: flt.year, month: flt.month }).then(setEntries).catch(() => setEntries([])).finally(() => setLoading(false))
   }, [flt])
   useEffect(() => { reload() }, [reload])
+  // Real-time: có dòng mới được duyệt (staff) hoặc staff vừa giải trình (admin) → tải lại.
+  useDataSync(['reward_penalty:new', 'reward_penalty:explained'], () => reload(), [reload])
   useEffect(() => {
     onFooter(<PaginationFooter total={pg.total} from={pg.from} to={pg.to} itemLabel="dòng"
       page={pg.safePage} pageSize={pageSize} totalPages={pg.totalPages} loading={loading}
@@ -676,7 +679,10 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                         <td><CellText value={e.points} numeric onCommit={(v) => patchEntry(e, { points: Number(v) || 0 })} /></td>
                         <td className={s.note}>{enumLabel('reward_penalty_source', e.source)}</td>
                         <td><EnumSelect value={e.status} options={statuses} cls={statusSelCls(e.status)} onCommit={(v) => patchEntry(e, { status: v })} /></td>
-                        <td><CellText value={e.note ?? ''} placeholder="Ghi chú…" onCommit={(v) => patchEntry(e, { note: v.trim() || null })} /></td>
+                        <td>
+                          <CellText value={e.note ?? ''} placeholder="Ghi chú…" onCommit={(v) => patchEntry(e, { note: v.trim() || null })} />
+                          {e.staffExplanation && <div className={s.explainNote}><MessageSquare size={11} /><span><strong>Giải trình:</strong> {e.staffExplanation}</span></div>}
+                        </td>
                         <td>
                           <span className={s.rowActions}>
                             <button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => remove(e)}><Trash2 size={13} /></button>
@@ -691,7 +697,10 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
                         <td className={`${s.num} ${signCls(e.points)}`}>{fmtPts(e.points)}</td>
                         <td className={s.note}>{enumLabel('reward_penalty_source', e.source)}</td>
                         <td><EnumSelect value={e.status} options={statuses} cls={statusSelCls(e.status)} disabled onCommit={() => {}} /></td>
-                        <td className={s.note}>{e.note || '—'}</td>
+                        <td>
+                          <div className={s.note}>{e.note || '—'}</div>
+                          {e.staffExplanation && <div className={s.explainNote}><MessageSquare size={11} /><span><strong>Giải trình của bạn:</strong> {e.staffExplanation}</span></div>}
+                        </td>
                       </>
                     )}
                   </tr>

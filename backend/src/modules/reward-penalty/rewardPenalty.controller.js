@@ -61,6 +61,14 @@ async function getSummary(req, res, next) {
   } catch (e) { next(e) }
 }
 
+async function explainEntry(req, res, next) {
+  try {
+    const explanation = String(req.body.explanation ?? '').trim()
+    if (!explanation) { const e = new Error('Nhập nội dung giải trình'); e.status = 400; throw e }
+    res.json({ success: true, data: { entry: await svc.explainEntry(req.params.id, req.user.id, explanation) } })
+  } catch (e) { next(e) }
+}
+
 // ── Quy đổi xếp loại (grades) ──
 async function listGrades(req, res, next) {
   try { res.json({ success: true, data: { grades: await svc.listGrades({ activeOnly: req.query.activeOnly === 'true' }) } }) }
@@ -81,6 +89,6 @@ async function deleteGrade(req, res, next) {
 
 module.exports = {
   listRules, createRule, updateRule, deleteRule,
-  listEntries, createEntry, updateEntry, approveEntry, deleteEntry, getSummary, listYears,
+  listEntries, createEntry, updateEntry, approveEntry, deleteEntry, explainEntry, getSummary, listYears,
   listGrades, createGrade, updateGrade, deleteGrade,
 }

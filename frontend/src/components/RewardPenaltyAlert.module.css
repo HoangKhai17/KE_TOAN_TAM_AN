@@ -1,0 +1,19 @@
+.wrap { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px; }
+.banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: var(--radius-md); font-weight: var(--fw-bold); }
+.reward { background: var(--color-success-bg); color: var(--color-success-text); }
+.penalty { background: var(--color-danger-bg); color: var(--color-danger-text); }
+.neutral { background: var(--color-warning-bg); color: var(--color-warning-text); }
+.kind { font-size: var(--fs-sm); }
+.points { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.info { display: flex; flex-direction: column; gap: 6px; padding: 2px 2px; }
+.row { display: flex; gap: 10px; font-size: var(--fs-xs); }
+.lbl { flex: 0 0 72px; color: var(--color-muted); }
+.val { flex: 1 1 auto; color: var(--color-text-strong); font-weight: var(--fw-medium); word-break: break-word; }
+.explainLbl { font-size: var(--fs-2xs); color: var(--color-text-soft); font-weight: var(--fw-medium); }
+.textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid var(--color-border-muted); border-radius: var(--radius-md); font-family: inherit; font-size: var(--fs-xs); color: var(--color-text-strong); outline: none; resize: vertical; }
+.textarea:focus { border-color: var(--color-primary-soft); box-shadow: 0 0 0 2px var(--color-primary-bg); }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.btnGhost { display: inline-flex; align-items: center; height: var(--control-h-md); padding: 0 14px; border: 1.5px solid var(--color-border-muted); border-radius: var(--radius-md); background: var(--color-white); color: var(--color-text-strong); font-size: var(--fs-2xs); font-weight: var(--fw-semibold); cursor: pointer; }
+.btnGhost:disabled { opacity: 0.6; cursor: default; }
+.btnPrimary { display: inline-flex; align-items: center; height: var(--control-h-md); padding: 0 18px; border: none; border-radius: var(--radius-md); background: var(--gradient-primary); color: var(--color-white); font-size: var(--fs-2xs); font-weight: var(--fw-bold); cursor: pointer; box-shadow: var(--shadow-focus-blue); }
+.more { text-align: center; font-size: var(--fs-2xs); color: var(--color-muted); }

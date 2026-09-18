@@ -6,6 +6,7 @@ import { useAuthStore } from './stores/authStore'
 import { refreshSession } from './api/session'
 import { useTokenRefresh } from './hooks/useTokenRefresh'
 import SocketProvider from './providers/SocketProvider'
+import RewardPenaltyAlert from './components/RewardPenaltyAlert'
 import Login from './pages/Login/Login'
 import Dashboard from './pages/Dashboard/Dashboard'
 import Staff from './pages/Staff/Staff'
@@ -246,6 +247,7 @@ export default function App() {
       <DeleteConfirmProvider>
         <SocketProvider>
           <AppRoutes />
+          <RewardPenaltyAlert />
         </SocketProvider>
       </DeleteConfirmProvider>
       <ToastContainer />

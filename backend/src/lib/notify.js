@@ -55,4 +55,24 @@ function emitData(event, payload) {
   }
 }
 
-module.exports = { createAndEmit, emitData }
+/**
+ * Emit một sự kiện tuỳ ý tới room của 1 user (real-time, KHÔNG lưu DB).
+ * Dùng cho popup tức thời (vd: thưởng/phạt vừa duyệt).
+ */
+function emitToUser(userId, event, payload) {
+  try {
+    const io = getIo()
+    if (!io || !userId) { logger.warn('[Notify] emitToUser: no io or userId', { event, userId }); return }
+    const room = `user:${userId}`
+    if (process.env.NODE_ENV !== 'production') {
+      io.in(room).allSockets().then((sids) => {
+        logger.info(`[Notify] emitToUser ${event} → ${room} (${sids.size} socket)`)
+      }).catch(() => {})
+    }
+    io.to(room).emit(event, payload)
+  } catch (err) {
+    logger.warn('[Notify] emitToUser failed', { event, error: err.message })
+  }
+}
+
+module.exports = { createAndEmit, emitData, emitToUser }

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { useToastStore } from '../stores/toastStore'
+import { useRpAlertStore } from '../stores/rewardPenaltyAlert'
 import { getUnreadCount, listNotifications } from '../api/notifications'
 import { connectSocket, disconnectSocket } from '../lib/socket'
 
@@ -67,11 +68,17 @@ export default function SocketProvider({ children }) {
       window.dispatchEvent(new CustomEvent('cdr:refresh', { detail: payload }))
     }
 
+    function onRewardPenalty(entry) {
+      if (DEV) console.log('[Socket] reward_penalty:new', entry?.categoryLabel)
+      useRpAlertStore.getState().push(entry)
+    }
+
     sock.on('connect',       onConnect)
     sock.on('connect_error', onConnectError)
     sock.on('disconnect',    onDisconnect)
     sock.on('notification',  onNotification)
     sock.on('data:cdr',      onCdrData)
+    sock.on('reward_penalty:new', onRewardPenalty)
 
     // Socket may have already been connected before this effect ran (e.g. StrictMode re-run)
     if (sock.connected) {
@@ -85,6 +92,7 @@ export default function SocketProvider({ children }) {
       sock.off('disconnect',    onDisconnect)
       sock.off('notification',  onNotification)
       sock.off('data:cdr',      onCdrData)
+      sock.off('reward_penalty:new', onRewardPenalty)
     }
   }, [accessToken, addNew, setRecent, setUnreadCount, toastFn])
 

@@ -2,6 +2,13 @@
 // THƯỞNG/PHẠT — nghiệp vụ. Giá trị enum lấy ĐỘNG qua lib/enums (không hardcode).
 const { query } = require('../../config/db')
 const enums = require('../../lib/enums')
+const { emitToUser, createAndEmit } = require('../../lib/notify')
+
+// Bắn popup tức thời cho nhân viên khi dòng thưởng/phạt của họ ĐÃ DUYỆT.
+function notifyStaffApproved(entry) {
+  if (!entry || entry.status !== 'approved') return
+  emitToUser(entry.userId, 'reward_penalty:new', entry)
+}
 
 async function assertEnum(typeKey, value, field) {
   if (value == null || value === '') return
@@ -27,6 +34,7 @@ function entryToDto(e) {
     ruleId: e.rule_id ?? null, kind: e.kind, categoryLabel: e.category_label,
     points: Number(e.points),
     note: e.note ?? null, source: e.source, status: e.status,
+    staffExplanation: e.staff_explanation ?? null, explainedAt: e.explained_at ?? null,
     createdBy: e.created_by ?? null, approvedBy: e.approved_by ?? null, approvedAt: e.approved_at ?? null,
     createdAt: e.created_at, updatedAt: e.updated_at,
   }
@@ -126,7 +134,9 @@ async function createEntry(data, actorId) {
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [data.userId, py, pm, data.occurredOn, data.ruleId ?? null, kind, categoryLabel,
      points, data.note ?? null, data.source || 'manual', status, actorId, approvedBy, approvedAt])
-  return getEntry(e.id)
+  const dto = await getEntry(e.id)
+  notifyStaffApproved(dto)
+  return dto
 }
 
 async function updateEntry(id, data) {
@@ -163,7 +173,28 @@ async function approveEntry(id, actorId) {
     `UPDATE staff_reward_penalty SET status = 'approved', approved_by = $2, approved_at = NOW(), updated_at = NOW()
      WHERE id = $1 RETURNING id`, [id, actorId])
   if (!rows.length) { const e = new Error('Không tìm thấy bản ghi'); e.status = 404; throw e }
-  return getEntry(id)
+  const dto = await getEntry(id)
+  notifyStaffApproved(dto)
+  return dto
+}
+
+// Staff gửi GIẢI TRÌNH cho dòng của mình → lưu + báo admin đã tạo dòng đó.
+async function explainEntry(id, userId, explanation) {
+  const { rows: [row] } = await query('SELECT user_id, created_by, category_label, kind FROM staff_reward_penalty WHERE id = $1', [id])
+  if (!row) { const e = new Error('Không tìm thấy bản ghi'); e.status = 404; throw e }
+  if (row.user_id !== userId) { const e = new Error('Bạn chỉ được giải trình dòng của mình'); e.status = 403; throw e }
+  await query(
+    'UPDATE staff_reward_penalty SET staff_explanation = $2, explained_at = NOW(), updated_at = NOW() WHERE id = $1',
+    [id, explanation])
+  const dto = await getEntry(id)
+  // Báo cho admin đã tạo dòng (nếu có) để xem xét.
+  if (row.created_by) {
+    createAndEmit(row.created_by, 'reward_penalty',
+      `Giải trình: ${dto.userName}`,
+      `${dto.userName} đã giải trình cho "${row.category_label}": ${explanation}`).catch(() => {})
+    emitToUser(row.created_by, 'reward_penalty:explained', dto)
+  }
+  return dto
 }
 
 async function deleteEntry(id) {
@@ -261,7 +292,7 @@ async function deleteGrade(id) {
 
 module.exports = {
   listRules, createRule, updateRule, deleteRule,
-  listEntries, createEntry, updateEntry, approveEntry, deleteEntry, getEntry,
+  listEntries, createEntry, updateEntry, approveEntry, deleteEntry, getEntry, explainEntry,
   getSummary, listYears,
   listGrades, createGrade, updateGrade, deleteGrade,
 }
