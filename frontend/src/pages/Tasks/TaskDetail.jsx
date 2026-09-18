@@ -11,6 +11,7 @@ import DateBox from '../../components/ui/DateBox'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
+import { taskSizeLabel } from '../../utils/taskSize'
 import * as tasksApi from '../../api/tasks'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
@@ -1066,6 +1067,11 @@ export default function TaskDetail() {
                 <span>{task.taskTypeName}</span>
               </div>
             )}
+            <div className={s.detailMetaItem} title="Cỡ việc — độ lớn/phức tạp dùng tính KPI">
+              <Sliders size={12} className={s.detailMetaIcon} />
+              <span className={s.detailMetaLabel}>Cỡ việc:</span>
+              <span>{taskSizeLabel(getOptions('task_size'), task.effectiveSize)}</span>
+            </div>
             {task.periodLabel && (
               <div className={s.detailMetaItem}>
                 <Calendar size={12} className={s.detailMetaIcon} />

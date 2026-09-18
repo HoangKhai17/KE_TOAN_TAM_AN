@@ -64,6 +64,10 @@ function toDto(row) {
     companyAssignedStaffId: row.company_assigned_staff_id ?? null,
     taskTypeId:             row.task_type_id ?? null,
     taskTypeName:           row.task_type_name ?? null,
+    // Cỡ việc (KPI): override trên task (có thể null) + cỡ chuẩn của loại; effectiveSize để hiển thị.
+    sizePoints:             row.size_points ?? null,
+    typeSizePoints:         row.type_size_points ?? null,
+    effectiveSize:          row.size_points ?? row.type_size_points ?? 2,
     customerTaskScheduleId: row.customer_task_schedule_id ?? null,
     // Có giá trị = nhân viên đã dùng lượt chỉnh của NGÀY ĐÓ → khoá riêng ngày đó
     staffStartAdjustedAt:   row.staff_start_adjusted_at ?? null,
@@ -110,6 +114,7 @@ const TASK_SELECT = `
          c.short_name AS company_short_name,
          c.assigned_staff_id AS company_assigned_staff_id,
          tt.name  AS task_type_name,
+         tt.size_points AS type_size_points,
          ua.name  AS assigned_to_name,
          uc.name  AS created_by_name,
          cl.checklist_total,
@@ -724,7 +729,15 @@ async function getTaskById(id, user = null) {
 }
 
 async function createTask(data, actorId, ipAddress, userAgent) {
-  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, collaboratorIds, parentTaskId, spawnSubtasks = true, subtaskTemplateId = null } = data
+  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, sizePoints = null, collaboratorIds, parentTaskId, spawnSubtasks = true, subtaskTemplateId = null } = data
+
+  // Cỡ việc override (nếu có) phải là mã hợp lệ của enum động 'task_size'.
+  if (sizePoints != null) {
+    const validSizes = await enums.getValues('task_size')
+    if (!validSizes.includes(String(sizePoints))) {
+      throw Object.assign(new Error(`Cỡ việc không hợp lệ: ${sizePoints}`), { status: 422 })
+    }
+  }
 
   // Ngày hết hạn KHÔNG được nhỏ hơn ngày bắt đầu (so sánh chuỗi YYYY-MM-DD hợp lệ).
   if (startDate && dueDate && dueDate < startDate) {
@@ -777,13 +790,13 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   const { rows: [task] } = await query(
     `INSERT INTO tasks
        (title, description, company_id, task_type_id, assigned_to, assigned_by,
-        start_date, due_date, priority, source, sla_days, created_by, visibility, parent_task_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        start_date, due_date, priority, source, sla_days, created_by, visibility, parent_task_id, size_points)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      RETURNING *`,
     [
       title, description ?? null, effectiveCompanyId, taskTypeId ?? null,
       assignedTo ?? null, actorId, startDate ?? null, dueDate ?? null,
-      priority, source, effectiveSlaDays, actorId, visibility, parentTaskId ?? null,
+      priority, source, effectiveSlaDays, actorId, visibility, parentTaskId ?? null, sizePoints ?? null,
     ]
   )
 
@@ -901,6 +914,7 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     priority:    'priority',
     slaDays:     'sla_days',
     source:      'source',
+    sizePoints:  'size_points',
     visibility:  'visibility',
     parentTaskId: 'parent_task_id',
   }
@@ -958,6 +972,14 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     }
   }
 
+  // Cỡ việc override (nếu đặt) phải là mã hợp lệ của enum động 'task_size'. null = gỡ override (kế thừa loại).
+  if (data.sizePoints != null) {
+    const validSizes = await enums.getValues('task_size')
+    if (!validSizes.includes(String(data.sizePoints))) {
+      throw Object.assign(new Error(`Cỡ việc không hợp lệ: ${data.sizePoints}`), { status: 422 })
+    }
+  }
+
   if (user?.role === 'staff') {
     // Được chỉnh sửa nếu: được giao việc, là nhân sự phụ trách công ty của việc,
     // HOẶC là người được nhờ HỖ TRỢ (task_collaborators) — quyền như owner.
@@ -972,6 +994,7 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     }
     delete fieldMap.assignedTo
     delete fieldMap.visibility   // chỉ admin mới đổi được chế độ riêng tư
+    delete fieldMap.sizePoints   // cỡ việc do người giao (admin) đặt, NV làm không tự đổi
 
     // ── Quy tắc NGÀY với nhân viên ───────────────────────────────────────────
     // 1) Chỉ sửa được nếu task sinh từ LỊCH ĐỊNH KỲ (customer_task_schedule_id).

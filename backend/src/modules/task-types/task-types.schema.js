@@ -7,6 +7,8 @@ const taskTypeBase = z.object({
   groupName:      z.string().max(100).optional().nullable(),
   description:    z.string().optional().nullable(),
   defaultSlaDays: z.number().int().min(1).max(365).default(7),
+  // Cỡ việc (KPI): giá trị = mã enum 'task_size' (1=Nhỏ, 2=Vừa, 3=Lớn…). Service validate theo enum.
+  sizePoints:     z.number().int().min(1).default(2),
 })
 
 const createTaskTypeSchema = taskTypeBase

@@ -1,5 +1,15 @@
 const { query, getClient } = require('../../config/db')
 const audit = require('../../lib/audit')
+const enums = require('../../lib/enums')
+
+// Cỡ việc phải là 1 mã hợp lệ của enum động 'task_size' (mã = điểm).
+async function assertSizePoints(v) {
+  if (v == null) return
+  const valid = await enums.getValues('task_size')
+  if (!valid.includes(String(v))) {
+    throw Object.assign(new Error(`Cỡ việc không hợp lệ: ${v}`), { status: 422 })
+  }
+}
 
 function toTaskTypeDto(row) {
   return {
@@ -8,6 +18,7 @@ function toTaskTypeDto(row) {
     groupName:      row.group_name ?? null,
     description:    row.description ?? null,
     defaultSlaDays: row.default_sla_days,
+    sizePoints:     row.size_points ?? 2,
     isActive:       row.is_active,
     createdBy:      row.created_by,
     createdAt:      row.created_at,
@@ -122,13 +133,14 @@ async function getTaskTypeById(id) {
 }
 
 async function createTaskType(data, actorId, ipAddress, userAgent) {
-  const { name, groupName, description, defaultSlaDays = 7 } = data
+  const { name, groupName, description, defaultSlaDays = 7, sizePoints = 2 } = data
+  await assertSizePoints(sizePoints)
   let tt
   try {
     const { rows } = await query(
-      `INSERT INTO task_types (name, group_name, description, default_sla_days, created_by)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [name, groupName ?? null, description ?? null, defaultSlaDays, actorId]
+      `INSERT INTO task_types (name, group_name, description, default_sla_days, size_points, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [name, groupName ?? null, description ?? null, defaultSlaDays, sizePoints, actorId]
     )
     tt = rows[0]
   } catch (err) {
@@ -145,8 +157,10 @@ async function createTaskType(data, actorId, ipAddress, userAgent) {
 }
 
 async function updateTaskType(id, data, actorId, ipAddress, userAgent) {
+  if (data.sizePoints !== undefined) await assertSizePoints(data.sizePoints)
   const fieldMap = {
     name: 'name', groupName: 'group_name', description: 'description', defaultSlaDays: 'default_sla_days',
+    sizePoints: 'size_points',
   }
   const updates = []
   const params = []

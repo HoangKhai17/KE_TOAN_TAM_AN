@@ -15,6 +15,8 @@ import { CSS } from '@dnd-kit/utilities'
 import Modal from '../../components/ui/Modal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useToastStore } from '../../stores/toastStore'
+import { DEFAULT_TASK_SIZE, sizeOptionsOr, taskSizeLabel } from '../../utils/taskSize'
+import { useEnumsStore } from '../../hooks/useEnums'
 import {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
@@ -61,6 +63,7 @@ function toFieldKey(label) {
 export default function TaskTypesSection() {
   const confirmDelete = useDeleteConfirm()
   const addToast              = useToastStore((st) => st.toast)
+  const sizeOptions           = useEnumsStore((st) => st.getOptions)('task_size')
   const [grouped, setGrouped] = useState({})
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal]     = useState(false)
@@ -127,6 +130,17 @@ export default function TaskTypesSection() {
     }
   }
 
+  // Sửa nhanh CỠ VIỆC ngay trên dòng (không cần mở modal) — tiện cho loại đã setup sẵn.
+  async function handleSizeChange(tt, sizePoints) {
+    try {
+      await updateTaskType(tt.id, { sizePoints })
+      load()
+      addToast(`Cỡ việc "${tt.name}" → ${taskSizeLabel(sizeOptions, sizePoints)}`, 'success')
+    } catch {
+      addToast('Không thể cập nhật cỡ việc', 'error')
+    }
+  }
+
   function toggleGroup(group) {
     setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }))
   }
@@ -178,6 +192,8 @@ export default function TaskTypesSection() {
                         onEdit={() => { setEditing(tt); setShowModal(true) }}
                         onToggle={() => handleToggle(tt)}
                         onDelete={() => handleDelete(tt)}
+                        onSizeChange={(v) => handleSizeChange(tt, v)}
+                        sizeOptions={sizeOptions}
                         onDetailRefresh={() => refreshDetail(tt.id)}
                       />
                     ))}
@@ -203,7 +219,7 @@ export default function TaskTypesSection() {
 
 // ── Task Type Row ─────────────────────────────────────────────────────────────
 
-function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit, onToggle, onDelete, onDetailRefresh }) {
+function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit, onToggle, onDelete, onSizeChange, sizeOptions, onDetailRefresh }) {
   const [showSync, setShowSync] = useState(false)
   return (
     <div className={`${s.ttRow} ${isExpanded ? s.ttRowExpanded : ''}`}>
@@ -219,6 +235,17 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
         </div>
 
         <div className={s.ttMeta}>
+          <select
+            className={s.ttSizeSelect}
+            value={tt.sizePoints ?? DEFAULT_TASK_SIZE}
+            onChange={(e) => onSizeChange(Number(e.target.value))}
+            title="Cỡ việc (KPI) — bấm để đổi ngay"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {sizeOptionsOr(sizeOptions).map((o) => (
+              <option key={o.key} value={o.key}>Cỡ · {o.label}</option>
+            ))}
+          </select>
           <span className={s.ttSlaTag} title="SLA mặc định">{tt.defaultSlaDays}d</span>
           <span className={tt.isActive ? s.badgeActive : s.badgeInactive}>
             <span className={s.badgeDot} />
@@ -821,11 +848,13 @@ function CustomFieldsPanel({ taskTypeId, customFields, onRefresh }) {
 function TaskTypeModal({ taskType, onClose, onSaved }) {
   const isEdit   = !!taskType
   const addToast = useToastStore((st) => st.toast)
+  const sizeOptions = useEnumsStore((st) => st.getOptions)('task_size')
   const [form, setForm] = useState({
     name:           taskType?.name           ?? '',
     groupName:      taskType?.groupName      ?? '',
     description:    taskType?.description    ?? '',
     defaultSlaDays: taskType?.defaultSlaDays ?? 7,
+    sizePoints:     taskType?.sizePoints     ?? DEFAULT_TASK_SIZE,
   })
   const [steps, setSteps]   = useState([''])
   const [saving, setSaving] = useState(false)
@@ -856,6 +885,7 @@ function TaskTypeModal({ taskType, onClose, onSaved }) {
         groupName:      form.groupName.trim()   || null,
         description:    form.description.trim() || null,
         defaultSlaDays: sla,
+        sizePoints:     Number(form.sizePoints) || DEFAULT_TASK_SIZE,
       }
 
       if (isEdit) {
@@ -917,16 +947,30 @@ function TaskTypeModal({ taskType, onClose, onSaved }) {
           />
         </div>
 
-        <div>
-          <label className={s.settingsLabel}>SLA mặc định (ngày)</label>
-          <input
-            type="number"
-            min={1}
-            max={365}
-            value={form.defaultSlaDays}
-            onChange={set('defaultSlaDays')}
-            className={`${s.settingsInput} ${s.slaInput}`}
-          />
+        <div className={s.formGrid2}>
+          <div>
+            <label className={s.settingsLabel}>SLA mặc định (ngày)</label>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={form.defaultSlaDays}
+              onChange={set('defaultSlaDays')}
+              className={`${s.settingsInput} ${s.slaInput}`}
+            />
+          </div>
+          <div>
+            <label className={s.settingsLabel} title="Độ lớn/phức tạp của công việc — dùng tính điểm KPI">Cỡ việc (KPI)</label>
+            <select
+              value={form.sizePoints}
+              onChange={set('sizePoints')}
+              className={s.settingsInput}
+            >
+              {sizeOptionsOr(sizeOptions).map((o) => (
+                <option key={o.key} value={o.key}>{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {!isEdit && (

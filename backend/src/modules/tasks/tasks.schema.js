@@ -15,6 +15,8 @@ const createTaskSchema = z.object({
   priority:    z.string().min(1).max(50).default('medium'),   // danh mục động (task_priority)
   slaDays:     z.number().int().min(1).optional().nullable(),
   source:      z.string().min(1).max(40).optional().nullable(),
+  // Cỡ việc (KPI) override cho task này; null/bỏ trống = kế thừa cỡ của loại CV. Giá trị = mã enum 'task_size'.
+  sizePoints:  z.number().int().min(1).optional().nullable(),
   // 'private' = ẩn với nhân sự phụ trách công ty (chỉ admin đặt được — controller chặn staff).
   visibility:  z.enum(['company', 'private']).optional(),
   // Người hỗ trợ (khác owner = assignedTo). Tùy chọn, có thể rỗng.
@@ -37,6 +39,8 @@ const updateTaskSchema = z.object({
   priority:    z.string().min(1).max(50).optional(),   // danh mục động (task_priority)
   slaDays:     z.number().int().min(1).optional().nullable(),
   source:      z.string().min(1).max(40).optional().nullable(),
+  // Cỡ việc (KPI) override; null = quay về kế thừa cỡ của loại CV. Giá trị = mã enum 'task_size'.
+  sizePoints:  z.number().int().min(1).optional().nullable(),
   // 'private' = ẩn với nhân sự phụ trách công ty (chỉ admin đặt được — service chặn staff).
   visibility:  z.enum(['company', 'private']).optional(),
   // Danh sách người hỗ trợ mới (thay thế toàn bộ). [] = gỡ hết người hỗ trợ.
