@@ -61,6 +61,7 @@ function toDto(row) {
     companyId:          row.company_id,
     taskTypeId:         row.task_type_id,
     taskTypeName:       row.task_type_name ?? null,
+    title:              row.title ?? null,            // tên riêng (lịch thủ công); null = dùng tên loại CV
     assignedStaffId:    row.assigned_staff_id ?? null,
     assignedStaffName:  row.staff_name ?? null,
     recurrenceType:     row.recurrence_type,
@@ -265,6 +266,7 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
   const {
     taskTypeId, assignedStaffId, recurrenceType, recurrenceConfig,
     deadlineOffsetDays = 0, overrideSlaDays, excludedStepIds = [], subtaskOffsets = {}, notes,
+    title = null,
   } = data
 
   const { rows: [tt] } = await query('SELECT id FROM task_types WHERE id = $1 AND is_active = TRUE', [taskTypeId])
@@ -273,9 +275,9 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
   const { rows: [schedule] } = await query(
     `INSERT INTO customer_task_schedules
        (company_id, task_type_id, assigned_staff_id, recurrence_type, recurrence_config,
-        deadline_offset_days, override_sla_days, excluded_step_ids, subtask_offsets, notes, sort_order, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-       (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM customer_task_schedules WHERE company_id = $1),$11)
+        deadline_offset_days, override_sla_days, excluded_step_ids, subtask_offsets, notes, title, sort_order, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+       (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM customer_task_schedules WHERE company_id = $1),$12)
      RETURNING *`,
     [
       companyId, taskTypeId, assignedStaffId ?? null,
@@ -283,7 +285,7 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
       deadlineOffsetDays, overrideSlaDays ?? null,
       JSON.stringify(Array.isArray(excludedStepIds) ? excludedStepIds : []),
       JSON.stringify(subtaskOffsets && typeof subtaskOffsets === 'object' ? subtaskOffsets : {}),
-      notes ?? null, actorId,
+      notes ?? null, (title && String(title).trim()) || null, actorId,
     ]
   )
 
@@ -319,6 +321,7 @@ async function updateSchedule(id, data, user, ipAddress, userAgent) {
     deadlineOffsetDays: 'deadline_offset_days',
     overrideSlaDays:    'override_sla_days',
     notes:              'notes',
+    title:              'title',
     sortOrder:          'sort_order',
   }
 

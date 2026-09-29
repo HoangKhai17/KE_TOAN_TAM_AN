@@ -59,7 +59,8 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
   }
 
   const sla = schedule.override_sla_days ?? schedule.default_sla_days
-  const title = buildTaskTitle(periodLabel, schedule.task_type_name)
+  // Lịch thủ công có tên riêng (title) → dùng làm tên task; ngược lại dùng tên loại CV.
+  const title = buildTaskTitle(periodLabel, schedule.title || schedule.task_type_name)
 
   const { rows: [newTask] } = await query(
     `INSERT INTO tasks
@@ -106,7 +107,8 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
   // công ty; thiếu thì mặc định start=0, deadline=due_offset_days của template ?? 0.
   // KHÔNG có phụ thuộc bước trước.
   const childrenCreated = []
-  if (newTask) {
+  // Lịch THỦ CÔNG (title) = chỉ checklist, KHÔNG đẻ việc con liên kết của mẫu.
+  if (newTask && !schedule.title) {
     const subOffsets = (schedule.subtask_offsets && typeof schedule.subtask_offsets === 'object')
       ? schedule.subtask_offsets : {}
     const { rows: subtasks } = await query(

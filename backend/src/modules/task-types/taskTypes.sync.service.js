@@ -121,6 +121,7 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
   const { rows: tasks } = await query(
     `SELECT t.id, t.title, t.status, t.period_label, t.parent_task_id,
             t.customer_task_schedule_id AS schedule_id,
+            cs.title AS schedule_title,
             c.name AS company_name,
             COALESCE(cs.excluded_step_ids, '[]'::jsonb) AS excluded_step_ids
        FROM tasks t
@@ -296,7 +297,8 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
 
     // Việc CON giữ NGUYÊN tiêu đề (tiêu đề con = tên mẫu con, không có [Kỳ]); chỉ việc
     // cha/độc lập mới chuẩn hoá lại tiêu đề "[Kỳ] Tên loại".
-    const titleMoi = laViecCon ? task.title : buildTitle(extractPeriod(task.title), tt.name)
+    // Lịch THỦ CÔNG (có tên riêng) → GIỮ nguyên tên task, không đổi về tên loại CV.
+    const titleMoi = (laViecCon || task.schedule_title) ? task.title : buildTitle(extractPeriod(task.title), tt.name)
     const doiTitle = titleMoi !== task.title
     if (doiTitle) doiTitles.push({ id: task.id, title: titleMoi })
 

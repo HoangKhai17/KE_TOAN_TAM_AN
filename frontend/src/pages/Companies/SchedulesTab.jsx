@@ -102,6 +102,8 @@ function capViolation(type, config, offsetDays, maxDueDay) {
 
 function emptyForm() {
   return {
+    mode: 'template',   // 'template' = từ mẫu | 'manual' = tự tạo (tên riêng + checklist tự dựng)
+    title: '',          // tên riêng khi tự tạo
     taskTypeId: '',
     assignedStaffId: '',
     recurrenceType: 'monthly_by_date',
@@ -180,6 +182,7 @@ function validateForm(form) {
   const today = format(new Date(), 'yyyy-MM-dd')
 
   if (!form.taskTypeId) errors.taskTypeId = 'Vui lòng chọn loại công việc'
+  if (form.mode === 'manual' && !(form.title || '').trim()) errors.title = 'Vui lòng nhập tên lịch'
 
   const cfg = form.recurrenceConfig || {}
   switch (form.recurrenceType) {
@@ -554,13 +557,14 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
   // KPI v2: khi TẠO lịch và đổi loại CV → seed checklist nháp từ checklist mẫu của loại đó.
   // (Chế độ SỬA nạp checklist của lịch trong openEdit, không seed lại từ mẫu.)
   useEffect(() => {
-    if (!modal || modal.mode !== 'create' || !form.taskTypeId) return
+    // Chỉ tự seed checklist từ mẫu khi TẠO + chế độ TỪ MẪU. Chế độ tự tạo giữ checklist tự dựng.
+    if (!modal || modal.mode !== 'create' || form.mode === 'manual' || !form.taskTypeId) return
     let cancelled = false
     getChecklist(form.taskTypeId)
       .then((steps) => { if (!cancelled) setForm((f) => ({ ...f, checklist: mapTemplateToDraft(steps) })) })
       .catch(() => { if (!cancelled) setForm((f) => ({ ...f, checklist: [] })) })
     return () => { cancelled = true }
-  }, [modal?.mode, form.taskTypeId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [modal?.mode, form.mode, form.taskTypeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nạp việc con LIÊN KẾT của loại CV → để đặt offset ngày bắt đầu + hạn cho từng con.
   useEffect(() => {
@@ -740,6 +744,8 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
 
   function openEdit(sc) {
     setForm({
+      mode:               sc.title ? 'manual' : 'template',
+      title:              sc.title || '',
       taskTypeId:         sc.taskTypeId,
       assignedStaffId:    sc.assignedStaffId || '',
       recurrenceType:     sc.recurrenceType,
@@ -798,6 +804,7 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
     setSaving(true)
     try {
       const payload = {
+        title:              form.mode === 'manual' ? (form.title.trim() || null) : null,
         assignedStaffId:    form.assignedStaffId || null,
         recurrenceType:     form.recurrenceType,
         recurrenceConfig:   form.recurrenceConfig,
@@ -948,8 +955,9 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                     <SelectionRowCell checked={selection.selectedIds.has(sc.id)} onToggle={() => selection.toggle(sc.id)} />
                     <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
                     <td>
-                      <div className={s.scTypeName}>{sc.taskTypeName}</div>
-                      {sc.subtaskCount > 0 && (
+                      <div className={s.scTypeName}>{sc.title || sc.taskTypeName}</div>
+                      {sc.title && <div className={s.scDeadlineTag} style={{ marginTop: 2, display: 'inline-block' }}>Tự tạo · {sc.taskTypeName}</div>}
+                      {sc.subtaskCount > 0 && !sc.title && (
                         <button type="button"
                           className={s.scDeadlineTag}
                           style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 3, cursor: 'pointer', background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', border: '1px solid var(--color-primary-ring)' }}
@@ -1076,10 +1084,25 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
       {/* ── Create / Edit modal ── */}
       {modal && (
         <Modal
-          title={modal.mode === 'create' ? 'Tạo lịch định kỳ' : 'Chỉnh sửa lịch định kỳ'}
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1, minWidth: 0 }}>
+              <span style={{ whiteSpace: 'nowrap' }}>{modal.mode === 'create' ? 'Tạo lịch định kỳ' : 'Chỉnh sửa lịch định kỳ'}</span>
+              {modal.mode === 'create' && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[['template', 'Từ mẫu'], ['manual', 'Tự tạo (thủ công)']].map(([m, lbl]) => (
+                    <button key={m} type="button" onClick={() => setForm(f => ({ ...f, mode: m, ...(m === 'manual' ? { checklist: [] } : { title: '' }) }))}
+                      style={{ height: 30, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 'var(--fs-2xs)', fontWeight: 600,
+                        border: form.mode === m ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+                        background: form.mode === m ? 'var(--color-primary-bg)' : 'var(--color-white)',
+                        color: form.mode === m ? 'var(--color-primary)' : 'var(--color-text-soft)' }}>{lbl}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          }
           onClose={() => setModal(null)}
-          width="min(1040px, calc(100vw - 40px))"
-          maxWidth="1040px"
+          width="min(1180px, calc(100vw - 40px))"
+          maxWidth="1180px"
         >
           <div className={s.scModalGrid}>
 
@@ -1089,14 +1112,26 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                 <div className={s.errorBox}>{formErrors.submit}</div>
               )}
 
+              {/* Tên lịch — chế độ tự tạo */}
+              {form.mode === 'manual' && (
+                <div className={s.formField}>
+                  <label className={`${s.formLabel} ${s.formLabelReq}`}>Tên lịch</label>
+                  <input className={`${s.formInput} ${formErrors.title ? s.formInputError : ''}`}
+                    value={form.title}
+                    onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="VD: Đối chiếu kho định kỳ" />
+                  {formErrors.title && <div className={s.formError}>{formErrors.title}</div>}
+                </div>
+              )}
+
               {/* Task type — only on create */}
               {modal.mode === 'create' ? (
                 <div className={s.formField}>
-                  <label className={`${s.formLabel} ${s.formLabelReq}`}>Loại công việc</label>
+                  <label className={`${s.formLabel} ${s.formLabelReq}`}>{form.mode === 'manual' ? 'Loại công việc (nhóm báo cáo)' : 'Loại công việc'}</label>
                   <select
                     className={`${s.formSelect} ${formErrors.taskTypeId ? s.formInputError : ''}`}
                     value={form.taskTypeId}
-                    onChange={e => setForm(f => ({ ...f, taskTypeId: e.target.value, checklist: [], subtaskOffsets: {} }))}
+                    onChange={e => setForm(f => ({ ...f, taskTypeId: e.target.value, checklist: f.mode === 'manual' ? f.checklist : [], subtaskOffsets: {} }))}
                   >
                     <option value="">-- Chọn loại công việc --</option>
                     {taskTypes.map(tt => (
@@ -1124,8 +1159,8 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                         · Tổng điểm {form.checklist.reduce((a, it) => a + (Number(it.points) || 0), 0)}
                       </span>
                     </label>
-                    <button type="button" className={s.scClResetBtn} onClick={resetClFromTemplate} title="Xoá và nạp lại từ checklist mẫu của loại CV">
-                      <RefreshCw size={12} /> Khôi phục về mẫu
+                    <button type="button" className={s.scClResetBtn} onClick={resetClFromTemplate} title="Nạp checklist từ mẫu của loại CV (ghi đè checklist hiện tại)">
+                      <RefreshCw size={12} /> {form.mode === 'manual' ? 'Lấy từ mẫu' : 'Khôi phục về mẫu'}
                     </button>
                   </div>
                   <div className={s.scStepPickHint}>
@@ -1164,8 +1199,8 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                 </div>
               )}
 
-              {/* Việc con LIÊN KẾT — đặt offset ngày bắt đầu + hạn cho từng con */}
-              {templSubs.length > 0 && (
+              {/* Việc con LIÊN KẾT — đặt offset ngày bắt đầu + hạn cho từng con (không áp dụng lịch tự tạo) */}
+              {form.mode !== 'manual' && templSubs.length > 0 && (
                 <div className={s.formField}>
                   <label className={s.formLabel}>Việc con liên kết ({templSubs.length})</label>
                   <div className={s.scStepPickHint}>

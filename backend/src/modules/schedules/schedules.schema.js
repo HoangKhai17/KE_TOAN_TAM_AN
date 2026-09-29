@@ -17,6 +17,7 @@ const subtaskOffsetsSchema = z.record(
 
 const createScheduleSchema = z.object({
   taskTypeId:         z.string().uuid('Invalid task type ID'),
+  title:              z.string().max(300).optional().nullable(),   // tên riêng (lịch thủ công)
   assignedStaffId:    z.string().uuid().optional().nullable(),
   recurrenceType:     z.enum(RECURRENCE_TYPES),
   recurrenceConfig:   z.record(z.any()).default({}),
@@ -35,6 +36,7 @@ const createScheduleSchema = z.object({
 })
 
 const updateScheduleSchema = z.object({
+  title:              z.string().max(300).optional().nullable(),
   assignedStaffId:    z.string().uuid().optional().nullable(),
   recurrenceType:     z.enum(RECURRENCE_TYPES).optional(),
   recurrenceConfig:   z.record(z.any()).optional(),
