@@ -81,27 +81,21 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
     ]
   )
 
-  // Copy checklist template (đóng băng cây cha-con vào task) — TẤT CẢ bước → checklist của cha.
-  const { rows: steps } = await query(
-    'SELECT id, step_order, step_text, level FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order, id',
-    [schedule.task_type_id]
+  // KPI v2: copy checklist RIÊNG CỦA LỊCH (schedule_checklist_items) vào task cha — kèm ĐIỂM + ★.
+  // Cây cha-con theo `level` + thứ tự (không cần source_parent_id: FE tính hierarchy theo level).
+  const { rows: schedSteps } = await query(
+    `SELECT step_order, step_text, level, points, is_important, source_template_step_id
+     FROM schedule_checklist_items WHERE schedule_id = $1 ORDER BY step_order`,
+    [schedule.id]
   )
-  const parentOf = new Map()
-  let lastParentId = null
-  for (const s of steps) {
-    if ((s.level ?? 0) === 0) { lastParentId = s.id; parentOf.set(s.id, null) }
-    else parentOf.set(s.id, lastParentId)
-  }
-  const excluded = new Set(Array.isArray(schedule.excluded_step_ids) ? schedule.excluded_step_ids : [])
-  const applied  = steps.filter((step) => !excluded.has(step.id))
-
-  if (applied.length && newTask) {
-    for (const step of applied) {
+  if (schedSteps.length && newTask) {
+    for (const step of schedSteps) {
       await query(
         `INSERT INTO task_checklist_items
-           (task_id, step_order, step_text, level, source_step_id, source_parent_id)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [newTask.id, step.step_order, step.step_text, step.level ?? 0, step.id, parentOf.get(step.id) ?? null]
+           (task_id, step_order, step_text, level, points, is_important, source_step_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [newTask.id, step.step_order, step.step_text, step.level ?? 0,
+         step.points ?? 0, !!step.is_important, step.source_template_step_id ?? null]
       )
     }
   }

@@ -166,7 +166,15 @@ nút ★, commit điểm on-blur). Smoke đạt.
 > gỡ khối "tick chọn bước" (excludedStepIds), thay bằng **editor checklist đầy đủ**: thêm/sửa/xoá,
 > lên/xuống, thụt mục con, độ khó (tự gợi ý điểm), điểm tay, ★ quan trọng, "Khôi phục về mẫu", tổng
 > điểm. Tạo lịch → seed mặc định rồi ghi đè theo bản sửa; sửa lịch → nạp checklist của lịch. Smoke
-> replace/restore đạt, build FE pass. · A4–A5 chờ.
+> replace/restore đạt, build FE pass.
+>
+> ✅ **A4 XONG (2026-09-29)** — migration `156` (cột `points` + `is_important` cho `task_checklist_items`,
+> mặc định 0/false). Generator ([taskGenerator.job.js](../backend/src/jobs/taskGenerator.job.js)) đổi
+> nguồn copy checklist cha **từ `schedule_checklist_items`** (mang điểm/★; bỏ đọc `excluded_step_ids`,
+> hierarchy theo `level`). `createTask` (task tay từ loại) copy điểm/★ từ template. Checklist DTO
+> ([checklist.service.js](../backend/src/modules/tasks/checklist.service.js)) trả `points/isImportant`.
+> Smoke: sinh task định kỳ → checklist có điểm, tổng 68đ (17 bước). **% vẫn đếm-item (đổi cách tính =
+> Phase B).** · A5 chờ.
 
 ```
 Phase A — Checklist có điểm ở Template + Lịch định kỳ (nền tảng data + cấu hình)

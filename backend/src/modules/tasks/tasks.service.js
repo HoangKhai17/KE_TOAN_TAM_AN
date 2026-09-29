@@ -825,10 +825,11 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     )
   } else if (taskTypeId) {
     // source_parent_id = id bước level-0 gần nhất PHÍA TRƯỚC (nếu bước hiện tại là con).
+    // KPI v2: copy kèm điểm/★ từ template (task tay cũng mang điểm; % tính ở Phase B).
     await query(
       `INSERT INTO task_checklist_items
-         (task_id, step_order, step_text, level, source_step_id, source_parent_id)
-       SELECT $1, t.step_order, t.step_text, t.level, t.id,
+         (task_id, step_order, step_text, level, points, is_important, source_step_id, source_parent_id)
+       SELECT $1, t.step_order, t.step_text, t.level, t.points, t.is_important, t.id,
               CASE WHEN t.level = 1 THEN (
                 SELECT p.id FROM task_type_checklist_templates p
                 WHERE p.task_type_id = t.task_type_id AND p.level = 0 AND p.step_order < t.step_order

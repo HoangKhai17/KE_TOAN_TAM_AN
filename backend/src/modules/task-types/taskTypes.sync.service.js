@@ -86,7 +86,7 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
   if (!tt) throw Object.assign(new Error('Không tìm thấy loại công việc'), { status: 404 })
 
   const { rows: mauSteps } = await query(
-    `SELECT id, step_order, step_text, level
+    `SELECT id, step_order, step_text, level, points, is_important
        FROM task_type_checklist_templates
       WHERE task_type_id = $1
       ORDER BY step_order, id`,
@@ -107,16 +107,20 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
         ORDER BY step_order, id`,
       [subTempls.map((s) => s.id)])
     : { rows: [] }
-  const subStepsByTitle = new Map()   // tiêu đề việc con → [bước checklist riêng]
+  const subStepsByTitle = new Map()   // tiêu đề việc con → [bước checklist riêng] (dạng keyed, points=0)
   for (const st of subStepRows) {
     const title = subTitleById.get(st.subtask_template_id)
     if (!title) continue
     if (!subStepsByTitle.has(title)) subStepsByTitle.set(title, [])
-    subStepsByTitle.get(title).push({ id: st.id, step_order: st.step_order, step_text: st.step_text, level: st.level })
+    subStepsByTitle.get(title).push({
+      key: st.id, sourceStepId: st.id, step_text: st.step_text, level: st.level ?? 0,
+      points: 0, is_important: false,
+    })
   }
 
   const { rows: tasks } = await query(
     `SELECT t.id, t.title, t.status, t.period_label, t.parent_task_id,
+            t.customer_task_schedule_id AS schedule_id,
             c.name AS company_name,
             COALESCE(cs.excluded_step_ids, '[]'::jsonb) AS excluded_step_ids
        FROM tasks t
@@ -146,6 +150,32 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
     if (!itemsByTask.has(it.task_id)) itemsByTask.set(it.task_id, [])
     itemsByTask.get(it.task_id).push(it)
   }
+
+  // KPI v2: checklist của TASK CHA/độc lập đồng bộ theo CHECKLIST CỦA LỊCH (schedule_checklist_items),
+  // KHÔNG theo template — vì mỗi công ty có checklist + điểm riêng. Mang theo points/is_important.
+  //   key         = id item của lịch (duy nhất, dùng cho map ghép + lặp)
+  //   sourceStepId = source_template_step_id (mềm, khớp với source_step_id đã đóng băng khi sinh task)
+  const schedIds = [...new Set(tasks.map((t) => t.schedule_id).filter(Boolean))]
+  const { rows: schedStepRows } = schedIds.length
+    ? await query(
+      `SELECT schedule_id, id, step_order, step_text, level, points, is_important, source_template_step_id
+         FROM schedule_checklist_items WHERE schedule_id = ANY($1::uuid[]) ORDER BY step_order`,
+      [schedIds])
+    : { rows: [] }
+  const schedStepsBySchedule = new Map()
+  for (const r of schedStepRows) {
+    if (!schedStepsBySchedule.has(r.schedule_id)) schedStepsBySchedule.set(r.schedule_id, [])
+    schedStepsBySchedule.get(r.schedule_id).push({
+      key: r.id, sourceStepId: r.source_template_step_id ?? null,
+      step_text: r.step_text, level: r.level ?? 0,
+      points: r.points ?? 0, is_important: !!r.is_important,
+    })
+  }
+  // Template dạng {key, sourceStepId} để fallback (task không có lịch / lịch chưa có checklist).
+  const mauStepsKeyed = mauSteps.map((s) => ({
+    key: s.id, sourceStepId: s.id, step_text: s.step_text, level: s.level ?? 0,
+    points: s.points ?? 0, is_important: !!s.is_important,
+  }))
 
   const chiTiet = []
   const keHoach = []
@@ -180,9 +210,16 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
         continue
       }
     } else {
-      stepsApDung = theoLoaiTru
-        ? mauSteps.filter((s) => !excluded.has(String(s.id)))
-        : mauSteps
+      // Cha/độc lập: nguồn = checklist RIÊNG của LỊCH (có điểm). Fallback template nếu task không
+      // gắn lịch hoặc lịch chưa có checklist. `theoLoaiTru` chỉ còn ý nghĩa cho fallback template.
+      const schedSteps = task.schedule_id ? schedStepsBySchedule.get(task.schedule_id) : null
+      if (schedSteps && schedSteps.length) {
+        stepsApDung = schedSteps
+      } else {
+        stepsApDung = theoLoaiTru
+          ? mauStepsKeyed.filter((s) => !excluded.has(String(s.sourceStepId)))
+          : mauStepsKeyed
+      }
     }
 
     const daDung = new Set()
@@ -194,48 +231,51 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
     // ghép không dùng để quyết định tick (đã tick hết rồi), nhưng vẫn cần để biết
     // mục cũ nào thực sự KHÔNG có trong mẫu — nếu bỏ qua thì phần xem trước sẽ
     // báo nhầm là "toàn bộ checklist sẽ mất", trong khi thực tế được nạp lại y nguyên.
-    const ghep = new Map()   // step.id → { cu, ghepBang, doGiong }
+    const ghep = new Map()   // step.key → { cu, ghepBang, doGiong }
 
     // Tầng 1 + 2: khớp chắc chắn, làm trước để "xí chỗ"
     for (const step of stepsApDung) {
-      let cu = items.find((x) => x.source_step_id === step.id && !daDung.has(x.id))
+      let cu = step.sourceStepId != null
+        ? items.find((x) => x.source_step_id === step.sourceStepId && !daDung.has(x.id))
+        : null
       let bang = 'liên kết'
       if (!cu) {
         cu = items.find((x) => !x.source_step_id && x.step_text === step.step_text && !daDung.has(x.id))
         bang = 'nội dung'
       }
-      if (cu) { daDung.add(cu.id); ghep.set(step.id, { cu, ghepBang: bang, doGiong: null }) }
+      if (cu) { daDung.add(cu.id); ghep.set(step.key, { cu, ghepBang: bang, doGiong: null }) }
     }
 
     // Tầng 3 — GẦN ĐÚNG, xét TOÀN CỤC: gom mọi cặp còn lại rồi ghép cặp giống
     // nhau nhất trước. Nếu duyệt tuần tự thì bước đứng trước có thể giành mất
     // mục vốn khớp hơn với bước đứng sau (vd 80% cướp chỗ của 94%).
     {
-      const stepCon = stepsApDung.filter((s) => !ghep.has(s.id))
+      const stepCon = stepsApDung.filter((s) => !ghep.has(s.key))
       const mucCon  = items.filter((x) => !x.source_step_id && !daDung.has(x.id))
       const cacCap = []
       for (const s2 of stepCon) {
         for (const x of mucCon) {
           const d = doGiongNhau(x.step_text, s2.step_text)
-          if (d >= NGUONG_GIONG) cacCap.push({ stepId: s2.id, x, d })
+          if (d >= NGUONG_GIONG) cacCap.push({ stepKey: s2.key, x, d })
         }
       }
       cacCap.sort((a, b) => b.d - a.d)
       for (const cap of cacCap) {
-        if (ghep.has(cap.stepId) || daDung.has(cap.x.id)) continue
+        if (ghep.has(cap.stepKey) || daDung.has(cap.x.id)) continue
         daDung.add(cap.x.id)
-        ghep.set(cap.stepId, { cu: cap.x, ghepBang: 'gần đúng', doGiong: Math.round(cap.d * 100) })
+        ghep.set(cap.stepKey, { cu: cap.x, ghepBang: 'gần đúng', doGiong: Math.round(cap.d * 100) })
       }
     }
 
     for (const [i, step] of stepsApDung.entries()) {
-      const g = ghep.get(step.id)
+      const g = ghep.get(step.key)
       const tick = daXong ? true : !!g?.cu.is_completed
       if (!daXong && tick) soGiuTick += 1
 
       napMoi.push({
         step_text: step.step_text, level: step.level,
-        is_completed: tick, source_step_id: step.id, thuTu: i + 1,
+        points: step.points ?? 0, is_important: !!step.is_important,
+        is_completed: tick, source_step_id: step.sourceStepId ?? null, thuTu: i + 1,
       })
       rowNap.push({
         noiDung: step.step_text, level: step.level,
@@ -309,9 +349,9 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
       for (const it of k.napMoi) {
         await client.query(
           `INSERT INTO task_checklist_items
-             (task_id, step_order, step_text, level, is_completed, completed_at, source_step_id)
-           VALUES ($1, $2, $3, $4, $5, CASE WHEN $5 THEN NOW() ELSE NULL END, $6)`,
-          [k.taskId, it.thuTu, it.step_text, it.level, it.is_completed, it.source_step_id]
+             (task_id, step_order, step_text, level, points, is_important, is_completed, completed_at, source_step_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $7 THEN NOW() ELSE NULL END, $8)`,
+          [k.taskId, it.thuTu, it.step_text, it.level, it.points ?? 0, !!it.is_important, it.is_completed, it.source_step_id]
         )
       }
     }
