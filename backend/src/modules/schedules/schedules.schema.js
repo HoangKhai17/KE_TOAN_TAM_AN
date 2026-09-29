@@ -71,4 +71,27 @@ const backfillSchema = z.object({
   force:   z.boolean().optional().default(false),
 })
 
-module.exports = { createScheduleSchema, updateScheduleSchema, setMaxDueDaySchema, backfillSchema }
+// Checklist RIÊNG của lịch (KPI v2) — độ khó validate ở service theo enum.
+const scheduleChecklistItemSchema = z.object({
+  stepText:    z.string().min(1).max(2000),
+  level:       z.number().int().min(0).max(1).optional().default(0),
+  difficulty:  z.string().max(20).optional(),
+  points:      z.number().int().min(0).max(100).optional(),
+  isImportant: z.boolean().optional(),
+})
+const updateScheduleChecklistItemSchema = z.object({
+  stepText:    z.string().min(1).max(2000).optional(),
+  stepOrder:   z.number().int().min(1).optional(),
+  level:       z.number().int().min(0).max(1).optional(),
+  difficulty:  z.string().max(20).optional(),
+  points:      z.number().int().min(0).max(100).optional(),
+  isImportant: z.boolean().optional(),
+}).refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' })
+const reorderScheduleChecklistSchema = z.object({
+  items: z.array(z.object({ id: z.string().uuid(), stepOrder: z.number().int().min(1) })).min(1),
+})
+
+module.exports = {
+  createScheduleSchema, updateScheduleSchema, setMaxDueDaySchema, backfillSchema,
+  scheduleChecklistItemSchema, updateScheduleChecklistItemSchema, reorderScheduleChecklistSchema,
+}

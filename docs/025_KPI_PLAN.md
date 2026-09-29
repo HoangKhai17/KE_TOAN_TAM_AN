@@ -152,7 +152,13 @@ Tổng hợp nhiều tham số → 1 kết quả:
 + cột `difficulty/points/is_important` cho `task_type_checklist_templates`); BE `task-types.service`
 (DTO + add/update bước nhận độ khó/điểm/★, tự điền điểm mặc định Dễ=2/TB=4/Khó=6, validate enum);
 FE `utils/checklistDifficulty.js` + editor checklist ở Settings loại CV (dropdown độ khó · ô điểm ·
-nút ★, commit điểm on-blur). Smoke đạt. · A2–A5 chờ.
+nút ★, commit điểm on-blur). Smoke đạt.
+>
+> ✅ **A2 XONG (2026-09-29)** — migration `155` (bảng `schedule_checklist_items` + **backfill 123/123
+> lịch cũ** từ template−excluded, mang theo độ khó/điểm/★). BE `schedules.service` (seed khi tạo lịch;
+> CRUD list/add/update/delete/reorder/reset; `getScheduleById` trả kèm `checklist`) + controller +
+> router `GET/POST/PATCH/DELETE /schedules/:id/checklist…` + schema. Smoke đạt (backfill 17 bước,
+> thêm Khó→6đ+★, xóa OK). **FE (api + UI cấu hình lịch) = A3.** · A3–A5 chờ.
 
 ```
 Phase A — Checklist có điểm ở Template + Lịch định kỳ (nền tảng data + cấu hình)

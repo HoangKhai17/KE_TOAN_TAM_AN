@@ -1,5 +1,31 @@
 const { query } = require('../../config/db')
 const audit = require('../../lib/audit')
+const enums = require('../../lib/enums')
+
+// KPI v2 · điểm gợi ý theo độ khó (khớp task-types.service + FE).
+const CHECKLIST_POINTS_BY_DIFFICULTY = { de: 2, trung_binh: 4, kho: 6 }
+function defaultPointsFor(difficulty) { return CHECKLIST_POINTS_BY_DIFFICULTY[difficulty] ?? 4 }
+async function assertDifficulty(v) {
+  if (v == null) return
+  const valid = await enums.getValues('checklist_difficulty')
+  if (!valid.includes(String(v))) {
+    throw Object.assign(new Error(`Độ khó checklist không hợp lệ: ${v}`), { status: 422 })
+  }
+}
+function toScheduleStepDto(row) {
+  return {
+    id:          row.id,
+    scheduleId:  row.schedule_id,
+    stepOrder:   row.step_order,
+    stepText:    row.step_text,
+    level:       row.level ?? 0,
+    difficulty:  row.difficulty ?? 'trung_binh',
+    points:      row.points ?? 4,
+    isImportant: row.is_important ?? false,
+    sourceTemplateStepId: row.source_template_step_id ?? null,
+    createdAt:   row.created_at,
+  }
+}
 const { getNextOccurrences, getNextOccurrence } = require('../../utils/recurrence.calculator')
 const { rollForwardToWorkday } = require('../../utils/workday.util')
 const { buildPeriodLabel, docPeriodOffset } = require('../../utils/periodLabel')
@@ -87,7 +113,9 @@ async function getScheduleById(id) {
     [id]
   )
   if (!row) throw Object.assign(new Error('Schedule not found'), { status: 404 })
-  return toDto(row)
+  const dto = toDto(row)
+  dto.checklist = await listScheduleChecklist(id)   // checklist RIÊNG của lịch (KPI v2)
+  return dto
 }
 
 async function listSchedules(companyId) {
@@ -103,6 +131,110 @@ async function listSchedules(companyId) {
     [companyId]
   )
   return rows.map(toDto)
+}
+
+// ── Checklist RIÊNG của lịch (KPI v2) ─────────────────────────────────────────
+
+// Seed checklist của lịch từ checklist MẪU của loại CV (trừ các bước bị loại — tương thích ngược).
+// Copy kèm độ khó/điểm/★. Chỉ seed khi lịch CHƯA có checklist riêng.
+async function seedScheduleChecklistFromTemplate(scheduleId, taskTypeId, excludedStepIds = []) {
+  const excluded = new Set((Array.isArray(excludedStepIds) ? excludedStepIds : []).map(String))
+  const { rows: tpl } = await query(
+    `SELECT id, step_order, step_text, level, difficulty, points, is_important
+     FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order`,
+    [taskTypeId]
+  )
+  let order = 0
+  for (const t of tpl) {
+    if (excluded.has(String(t.id))) continue
+    order += 1
+    await query(
+      `INSERT INTO schedule_checklist_items
+         (schedule_id, step_order, step_text, level, difficulty, points, is_important, source_template_step_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scheduleId, order, t.step_text, t.level ?? 0, t.difficulty ?? 'trung_binh',
+       t.points ?? 4, !!t.is_important, t.id]
+    )
+  }
+}
+
+async function assertScheduleAccess(scheduleId, user) {
+  const companyId = await getScheduleCompanyId(scheduleId)
+  await assertCompanyAccess(companyId, user)
+  return companyId
+}
+
+async function listScheduleChecklist(scheduleId) {
+  const { rows } = await query(
+    'SELECT * FROM schedule_checklist_items WHERE schedule_id = $1 ORDER BY step_order', [scheduleId])
+  return rows.map(toScheduleStepDto)
+}
+
+async function addScheduleChecklistItem(scheduleId, data, user) {
+  await assertScheduleAccess(scheduleId, user)
+  const { stepText, level = 0, difficulty = 'trung_binh', isImportant = false } = data
+  await assertDifficulty(difficulty)
+  const points = data.points != null ? Number(data.points) : defaultPointsFor(difficulty)
+  const { rows: [{ max }] } = await query(
+    'SELECT COALESCE(MAX(step_order), 0) AS max FROM schedule_checklist_items WHERE schedule_id = $1', [scheduleId])
+  const { rows: [row] } = await query(
+    `INSERT INTO schedule_checklist_items
+       (schedule_id, step_order, step_text, level, difficulty, points, is_important)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [scheduleId, parseInt(max, 10) + 1, stepText, level === 1 ? 1 : 0, difficulty, points, !!isImportant])
+  return toScheduleStepDto(row)
+}
+
+async function updateScheduleChecklistItem(scheduleId, itemId, data, user) {
+  await assertScheduleAccess(scheduleId, user)
+  if (data.difficulty !== undefined) await assertDifficulty(data.difficulty)
+  const map = { stepText: 'step_text', stepOrder: 'step_order', difficulty: 'difficulty',
+    points: 'points', isImportant: 'is_important' }
+  const updates = []; const params = []
+  for (const [k, col] of Object.entries(map)) {
+    if (data[k] !== undefined) {
+      let v = data[k]
+      if (k === 'points') v = Math.max(0, Number(v) || 0)
+      if (k === 'isImportant') v = !!v
+      params.push(v); updates.push(`${col} = $${params.length}`)
+    }
+  }
+  if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
+  if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
+  params.push(itemId, scheduleId)
+  const { rows: [row] } = await query(
+    `UPDATE schedule_checklist_items SET ${updates.join(', ')}
+     WHERE id = $${params.length - 1} AND schedule_id = $${params.length} RETURNING *`, params)
+  if (!row) throw Object.assign(new Error('Checklist item not found'), { status: 404 })
+  return toScheduleStepDto(row)
+}
+
+async function deleteScheduleChecklistItem(scheduleId, itemId, user) {
+  await assertScheduleAccess(scheduleId, user)
+  const { rows } = await query(
+    'DELETE FROM schedule_checklist_items WHERE id = $1 AND schedule_id = $2 RETURNING id', [itemId, scheduleId])
+  if (!rows.length) throw Object.assign(new Error('Checklist item not found'), { status: 404 })
+}
+
+// Kéo–thả: two-phase vì UNIQUE(schedule_id, step_order).
+async function reorderScheduleChecklist(scheduleId, items, user) {
+  await assertScheduleAccess(scheduleId, user)
+  await query('UPDATE schedule_checklist_items SET step_order = step_order + 10000 WHERE schedule_id = $1', [scheduleId])
+  for (const it of items) {
+    await query('UPDATE schedule_checklist_items SET step_order = $1 WHERE id = $2 AND schedule_id = $3',
+      [it.stepOrder, it.id, scheduleId])
+  }
+  return listScheduleChecklist(scheduleId)
+}
+
+// Khôi phục về checklist mẫu của loại CV (xoá hết rồi seed lại).
+async function resetScheduleChecklistFromTemplate(scheduleId, user) {
+  await assertScheduleAccess(scheduleId, user)
+  const { rows: [s] } = await query('SELECT task_type_id FROM customer_task_schedules WHERE id = $1', [scheduleId])
+  if (!s) throw Object.assign(new Error('Schedule not found'), { status: 404 })
+  await query('DELETE FROM schedule_checklist_items WHERE schedule_id = $1', [scheduleId])
+  await seedScheduleChecklistFromTemplate(scheduleId, s.task_type_id, [])
+  return listScheduleChecklist(scheduleId)
 }
 
 async function createSchedule(companyId, data, user, ipAddress, userAgent) {
@@ -133,6 +265,9 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
       notes ?? null, actorId,
     ]
   )
+
+  // Seed checklist RIÊNG của lịch từ checklist mẫu của loại CV (trừ bước bị loại — tương thích ngược).
+  await seedScheduleChecklistFromTemplate(schedule.id, taskTypeId, excludedStepIds)
 
   await audit.log({
     userId: actorId, action: 'schedule.created',
@@ -446,4 +581,7 @@ module.exports = {
   updateSchedule, deleteSchedule, toggleSchedule, previewSchedule,
   getRecurringOverview, setScheduleMaxDueDay,
   getSchedulePeriods, backfillPeriods,
+  // Checklist RIÊNG của lịch (KPI v2)
+  listScheduleChecklist, addScheduleChecklistItem, updateScheduleChecklistItem,
+  deleteScheduleChecklistItem, reorderScheduleChecklist, resetScheduleChecklistFromTemplate,
 }

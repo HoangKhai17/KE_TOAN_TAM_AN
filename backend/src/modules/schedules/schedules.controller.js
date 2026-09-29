@@ -84,9 +84,37 @@ async function backfillPeriods(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// ── Checklist RIÊNG của lịch (KPI v2) ─────────────────────────────────────────
+async function listScheduleChecklist(req, res, next) {
+  try { res.json({ success: true, data: { checklist: await svc.listScheduleChecklist(req.params.id) } }) }
+  catch (err) { next(err) }
+}
+async function addScheduleChecklistItem(req, res, next) {
+  try { res.status(201).json({ success: true, data: { item: await svc.addScheduleChecklistItem(req.params.id, req.body, req.user) } }) }
+  catch (err) { next(err) }
+}
+async function updateScheduleChecklistItem(req, res, next) {
+  try { res.json({ success: true, data: { item: await svc.updateScheduleChecklistItem(req.params.id, req.params.itemId, req.body, req.user) } }) }
+  catch (err) { next(err) }
+}
+async function deleteScheduleChecklistItem(req, res, next) {
+  try { await svc.deleteScheduleChecklistItem(req.params.id, req.params.itemId, req.user); res.status(204).end() }
+  catch (err) { next(err) }
+}
+async function reorderScheduleChecklist(req, res, next) {
+  try { res.json({ success: true, data: { checklist: await svc.reorderScheduleChecklist(req.params.id, req.body.items, req.user) } }) }
+  catch (err) { next(err) }
+}
+async function resetScheduleChecklist(req, res, next) {
+  try { res.json({ success: true, data: { checklist: await svc.resetScheduleChecklistFromTemplate(req.params.id, req.user) } }) }
+  catch (err) { next(err) }
+}
+
 module.exports = {
   listSchedules, getSchedule, createSchedule,
   updateSchedule, deleteSchedule, toggleSchedule, previewSchedule,
   getRecurringOverview, setScheduleMaxDueDay,
   getSchedulePeriods, backfillPeriods,
+  listScheduleChecklist, addScheduleChecklistItem, updateScheduleChecklistItem,
+  deleteScheduleChecklistItem, reorderScheduleChecklist, resetScheduleChecklist,
 }
