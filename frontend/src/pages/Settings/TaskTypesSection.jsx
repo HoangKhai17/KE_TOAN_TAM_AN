@@ -16,6 +16,7 @@ import Modal from '../../components/ui/Modal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useToastStore } from '../../stores/toastStore'
 import { DEFAULT_TASK_SIZE, sizeOptionsOr, taskSizeLabel } from '../../utils/taskSize'
+import { diffOptionsOr, defaultPointsFor } from '../../utils/checklistDifficulty'
 import { useEnumsStore } from '../../hooks/useEnums'
 import {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
@@ -298,6 +299,7 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
                 taskTypeId={tt.id}
                 checklist={detail.checklist}
                 onRefresh={onDetailRefresh}
+                withPoints
               />
               <CustomFieldsPanel
                 taskTypeId={tt.id}
@@ -328,9 +330,14 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
 
 // ── Checklist Panel ───────────────────────────────────────────────────────────
 
-function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel }) {
+function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel,
+  withPoints, diffOptions, onChangeDifficulty, onChangePoints, onToggleImportant }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: step.id })
+
+  // Điểm gõ tay: giữ nháp cục bộ, chỉ gọi API khi rời ô (onBlur) — tránh gọi mỗi ký tự.
+  const [pointsDraft, setPointsDraft] = useState(step.points ?? 0)
+  useEffect(() => { setPointsDraft(step.points ?? 0) }, [step.points])
 
   const isChild = step.level === 1
   const style = {
@@ -378,6 +385,32 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
           <span className={s.clStepText} onClick={onStartEdit} title="Nhấp để chỉnh sửa" style={{ whiteSpace: 'pre-wrap' }}>
             {step.stepText}
           </span>
+          {withPoints && (
+            <span className={s.clPointsGroup}>
+              <button
+                className={`${s.clStarBtn} ${step.isImportant ? s.clStarOn : ''}`}
+                onClick={() => onToggleImportant(step)}
+                title={step.isImportant ? 'Bỏ đánh dấu quan trọng' : 'Đánh dấu quan trọng (★)'}
+              >★</button>
+              <select
+                className={s.clDiffSelect}
+                value={step.difficulty ?? 'trung_binh'}
+                onChange={(e) => onChangeDifficulty(step, e.target.value)}
+                title="Độ khó"
+              >
+                {diffOptionsOr(diffOptions).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+              <input
+                type="number" min={0} max={100}
+                className={s.clPointsInput}
+                value={pointsDraft}
+                onChange={(e) => setPointsDraft(e.target.value)}
+                onBlur={() => { if (Number(pointsDraft) !== Number(step.points ?? 0)) onChangePoints(step, pointsDraft) }}
+                title="Điểm"
+              />
+              <span className={s.clPointsUnit}>đ</span>
+            </span>
+          )}
           <button className={`${s.clActionBtn} ${s.clDeleteBtn}`} onClick={onDelete} title="Xóa bước">
             <Trash2 size={12} />
           </button>
@@ -395,9 +428,10 @@ const DEFAULT_CL_API = {
   reorder: (tid, steps) => reorderChecklist(tid, steps),
 }
 
-function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, addPlaceholder }) {
+function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, addPlaceholder, withPoints }) {
   const A = api ?? DEFAULT_CL_API
   const addToast = useToastStore((st) => st.toast)
+  const diffOptions = useEnumsStore((st) => st.getOptions)('checklist_difficulty')
   const [items, setItems]       = useState(checklist)
   const [saving, setSaving]     = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -449,6 +483,26 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, ad
     setSaving(false)
   }
 
+  // Đổi độ khó → gợi ý điểm mặc định (vẫn cho sửa điểm sau).
+  async function handleChangeDifficulty(step, difficulty) {
+    setSaving(true)
+    try { await A.update(taskTypeId, step.id, { difficulty, points: defaultPointsFor(difficulty) }); onRefresh() }
+    catch { addToast('Không thể đổi độ khó', 'error') }
+    setSaving(false)
+  }
+  async function handleChangePoints(step, value) {
+    setSaving(true)
+    try { await A.update(taskTypeId, step.id, { points: Math.max(0, Number(value) || 0) }); onRefresh() }
+    catch { addToast('Không thể đổi điểm', 'error') }
+    setSaving(false)
+  }
+  async function handleToggleImportant(step) {
+    setSaving(true)
+    try { await A.update(taskTypeId, step.id, { isImportant: !step.isImportant }); onRefresh() }
+    catch { addToast('Không thể đổi đánh dấu', 'error') }
+    setSaving(false)
+  }
+
   async function handleAdd() {
     const text = addText.trim()
     if (!text) return
@@ -476,6 +530,11 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, ad
               onCancel={() => setEditingId(null)}
               onDelete={() => handleDelete(step.id)}
               onToggleLevel={() => handleToggleLevel(step)}
+              withPoints={withPoints}
+              diffOptions={diffOptions}
+              onChangeDifficulty={handleChangeDifficulty}
+              onChangePoints={handleChangePoints}
+              onToggleImportant={handleToggleImportant}
             />
           ))}
         </SortableContext>

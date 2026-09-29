@@ -35,8 +35,10 @@ export async function getChecklist(id) {
   return data.data.steps
 }
 
-export async function addChecklistStep(id, stepText, level = 0) {
-  const { data } = await api.post(`/task-types/${id}/checklist`, { stepText, level })
+// body: { stepText, level?, difficulty?, points?, isImportant? }. Nhận string để tương thích cũ.
+export async function addChecklistStep(id, body, level = 0) {
+  const payload = typeof body === 'string' ? { stepText: body, level } : body
+  const { data } = await api.post(`/task-types/${id}/checklist`, payload)
   return data.data.step
 }
 

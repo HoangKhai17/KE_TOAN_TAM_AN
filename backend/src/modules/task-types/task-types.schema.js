@@ -19,14 +19,21 @@ const updateTaskTypeSchema = taskTypeBase.partial().refine(
 )
 
 const checklistStepSchema = z.object({
-  stepText: z.string().min(1).max(2000),   // cho phép nhiều dòng
-  level:    z.number().int().min(0).max(1).optional().default(0),  // 0 = mục chính, 1 = mục phụ
+  stepText:    z.string().min(1).max(2000),   // cho phép nhiều dòng
+  level:       z.number().int().min(0).max(1).optional().default(0),  // 0 = mục chính, 1 = mục phụ
+  // KPI v2: độ khó (mã enum 'checklist_difficulty', validate ở service) + điểm gợi ý + cờ quan trọng.
+  difficulty:  z.string().max(20).optional(),
+  points:      z.number().int().min(0).max(100).optional(),
+  isImportant: z.boolean().optional(),
 })
 
 const updateChecklistStepSchema = z.object({
-  stepText:  z.string().min(1).max(2000).optional(),
-  stepOrder: z.number().int().min(1).optional(),
-  level:     z.number().int().min(0).max(1).optional(),
+  stepText:    z.string().min(1).max(2000).optional(),
+  stepOrder:   z.number().int().min(1).optional(),
+  level:       z.number().int().min(0).max(1).optional(),
+  difficulty:  z.string().max(20).optional(),
+  points:      z.number().int().min(0).max(100).optional(),
+  isImportant: z.boolean().optional(),
 }).refine((d) => Object.keys(d).length > 0, {
   message: 'Provide at least one field to update',
 })

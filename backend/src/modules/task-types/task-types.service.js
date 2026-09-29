@@ -11,6 +11,20 @@ async function assertSizePoints(v) {
   }
 }
 
+// KPI v2 · điểm gợi ý theo độ khó checklist (Dễ=2 / Trung bình=4 / Khó=6).
+const CHECKLIST_POINTS_BY_DIFFICULTY = { de: 2, trung_binh: 4, kho: 6 }
+function defaultPointsFor(difficulty) {
+  return CHECKLIST_POINTS_BY_DIFFICULTY[difficulty] ?? 4
+}
+// Độ khó phải là 1 mã hợp lệ của enum động 'checklist_difficulty'.
+async function assertDifficulty(v) {
+  if (v == null) return
+  const valid = await enums.getValues('checklist_difficulty')
+  if (!valid.includes(String(v))) {
+    throw Object.assign(new Error(`Độ khó checklist không hợp lệ: ${v}`), { status: 422 })
+  }
+}
+
 function toTaskTypeDto(row) {
   return {
     id:             row.id,
@@ -28,11 +42,14 @@ function toTaskTypeDto(row) {
 
 function toStepDto(row) {
   return {
-    id:        row.id,
-    stepOrder: row.step_order,
-    stepText:  row.step_text,
-    level:     row.level ?? 0,
-    createdAt: row.created_at,
+    id:          row.id,
+    stepOrder:   row.step_order,
+    stepText:    row.step_text,
+    level:       row.level ?? 0,
+    difficulty:  row.difficulty ?? 'trung_binh',
+    points:      row.points ?? 4,
+    isImportant: row.is_important ?? false,
+    createdAt:   row.created_at,
   }
 }
 
@@ -256,27 +273,34 @@ async function getChecklist(taskTypeId) {
 
 async function addChecklistStep(taskTypeId, data = {}) {
   await assertTaskTypeExists(taskTypeId)
-  const { stepText, level = 0 } = data
+  const { stepText, level = 0, difficulty = 'trung_binh', isImportant = false } = data
+  await assertDifficulty(difficulty)
+  // Không nhập điểm → lấy điểm gợi ý theo độ khó.
+  const points = data.points != null ? Number(data.points) : defaultPointsFor(difficulty)
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_checklist_templates WHERE task_type_id = $1',
     [taskTypeId]
   )
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [step] } = await query(
-    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text, level)
-     VALUES ($1, $2, $3, $4) RETURNING *`,
-    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0]
+    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text, level, difficulty, points, is_important)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0, difficulty, points, !!isImportant]
   )
   return toStepDto(step)
 }
 
 async function updateChecklistStep(taskTypeId, stepId, data) {
   await assertTaskTypeExists(taskTypeId)
+  if (data.difficulty !== undefined) await assertDifficulty(data.difficulty)
   const updates = []
   const params = []
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
   if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
+  if (data.difficulty !== undefined) { params.push(data.difficulty); updates.push(`difficulty = $${params.length}`) }
+  if (data.points !== undefined) { params.push(Number(data.points)); updates.push(`points = $${params.length}`) }
+  if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
 
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(stepId, taskTypeId)

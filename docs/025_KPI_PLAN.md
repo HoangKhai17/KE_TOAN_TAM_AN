@@ -148,6 +148,12 @@ Tổng hợp nhiều tham số → 1 kết quả:
 
 ## 9. Lộ trình đề xuất
 
+**Tiến độ:** ✅ **A1 XONG (2026-09-29)** — migration `154` (enum `checklist_difficulty` de/trung_binh/kho
++ cột `difficulty/points/is_important` cho `task_type_checklist_templates`); BE `task-types.service`
+(DTO + add/update bước nhận độ khó/điểm/★, tự điền điểm mặc định Dễ=2/TB=4/Khó=6, validate enum);
+FE `utils/checklistDifficulty.js` + editor checklist ở Settings loại CV (dropdown độ khó · ô điểm ·
+nút ★, commit điểm on-blur). Smoke đạt. · A2–A5 chờ.
+
 ```
 Phase A — Checklist có điểm ở Template + Lịch định kỳ (nền tảng data + cấu hình)
    → nghiệm thu
