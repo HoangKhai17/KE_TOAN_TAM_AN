@@ -23,6 +23,7 @@ import Payroll from './pages/Payroll/Payroll'
 import PayrollDetail from './pages/Payroll/PayrollDetail'
 import Reports from './pages/Reports/Reports'
 import RewardPenalty from './pages/RewardPenalty/RewardPenalty'
+import Kpi from './pages/Kpi/Kpi'
 import ProgressMatrix from './pages/ProgressMatrix/ProgressMatrix'
 import Notifications from './pages/Notifications/Notifications'
 import PublicForm from './pages/PublicForm/PublicForm'
@@ -186,6 +187,10 @@ function AppRoutes() {
       <Route
         path="/reward-penalty"
         element={<ProtectedRoute><RewardPenalty /></ProtectedRoute>}
+      />
+      <Route
+        path="/kpi"
+        element={<ProtectedRoute><Kpi /></ProtectedRoute>}
       />
       <Route
         path="/reports"

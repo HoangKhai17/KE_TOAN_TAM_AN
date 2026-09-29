@@ -149,6 +149,18 @@ Thêm cột: `points SMALLINT DEFAULT 0`, `is_important BOOLEAN DEFAULT FALSE`.
 
 ---
 
+> ✅ **PHASE C XONG (2026-09-29)** — migration `157` (`kpi_monthly_results`). BE module
+> `backend/src/modules/kpi/` (service: `listMonthly` live/snapshot, `getDetail` breakdown công ty+loại,
+> `closeMonth`/`reopenMonth`; điểm khối lượng = Σ điểm bước LEAF đã tick trong tháng theo assigned_to;
+> đúng hạn = task đúng hạn/được giao theo due_date) + controller + router `/api/kpi` (RBAC: staff chỉ
+> mình). FE: `api/kpi.js`, trang **menu KPI mới** ([Kpi.jsx](../frontend/src/pages/Kpi/Kpi.jsx)) —
+> chọn tháng, bảng NV (điểm khối lượng · đúng hạn · %), click ra chi tiết breakdown, nút Chốt sổ/Mở
+> lại + badge trạng thái; sidebar + route. Smoke: on-time thật (30%/22%…), volume verified (5×5=25),
+> close→6 NV snapshot→read snapshot, reopen→xoá. Build FE pass, BE boot sạch.
+> **Lưu ý:** volume của dữ liệu CŨ = 0 (item hoàn thành trước A4 có points=0) — sẽ cộng dần khi task
+> mới (có điểm) hoàn thành. Đã dùng đề xuất mặc định cho 4 điểm chốt (item-based, due_date, hiện cả 2
+> chỉ số, completed_at set khi tick). Kế tiếp: **Phase D** (cần khảo sát nghiệp vụ với khách).
+
 ## 7. PHASE C — KPI tháng (auto từ checklist) + chốt sổ
 
 **Mục tiêu:** biến điểm-từng-task (Phase A/B) thành **con số KPI TỔNG của mỗi NV theo tháng**, tự
