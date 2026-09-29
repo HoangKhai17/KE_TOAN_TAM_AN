@@ -45,4 +45,29 @@ async function reopen(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { list, detail, close, reopen }
+// GET /kpi/performance?year=&month= — hiệu suất tổng hợp (KPI + thưởng/phạt → xếp loại → tiền)
+async function performance(req, res, next) {
+  try {
+    const { year, month } = req.query
+    if (!year || !month) throw bad('Thiếu year/month')
+    const userId = req.user.role === 'staff' ? req.user.id : null
+    const data = await svc.getPerformance(year, month, userId)
+    res.json({ success: true, data })
+  } catch (err) { next(err) }
+}
+
+// ── Mốc quy đổi % đúng hạn → điểm (admin) ──
+async function listTiers(req, res, next) {
+  try { res.json({ success: true, data: { tiers: await svc.listTiers() } }) } catch (err) { next(err) }
+}
+async function createTier(req, res, next) {
+  try { res.status(201).json({ success: true, data: { tier: await svc.createTier(req.body, req.user.id) } }) } catch (err) { next(err) }
+}
+async function updateTier(req, res, next) {
+  try { res.json({ success: true, data: { tier: await svc.updateTier(req.params.id, req.body) } }) } catch (err) { next(err) }
+}
+async function deleteTier(req, res, next) {
+  try { await svc.deleteTier(req.params.id); res.status(204).end() } catch (err) { next(err) }
+}
+
+module.exports = { list, detail, close, reopen, performance, listTiers, createTier, updateTier, deleteTier }

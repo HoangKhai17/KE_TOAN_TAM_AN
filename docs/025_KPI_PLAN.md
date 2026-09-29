@@ -215,6 +215,20 @@ tính từ việc tick checklist, và **chốt sổ** để khóa số liệu l�
 
 ---
 
+> ✅ **PHASE D (một phần) XONG (2026-09-29)** — GỘP vào trang **Điểm thưởng** (không menu riêng).
+> • Migration `158` (`kpi_ontime_tiers`: % đúng hạn → điểm, seed mẫu). BE `kpi.service`: tier CRUD +
+>   `getPerformance` (composite: **% đúng hạn → điểm KPI** + **net thưởng/phạt** → tổng → dò `kpi_grades`
+>   → xếp loại + tiền; `matchRange` chịu được min/max nhập ngược). Endpoint `/kpi/performance`,
+>   `/kpi/tiers`.
+> • FE: **KPI = TAB ĐẦU trong Điểm thưởng** ([KpiPanel.jsx](../frontend/src/pages/RewardPenalty/KpiPanel.jsx),
+>   dùng CHUNG `rewardPenalty.module.css`, **years lấy từ DB** qua prop) — 2 sub-tab: Tiến độ (khối
+>   lượng · đúng hạn · breakdown · chốt sổ) + Xếp loại & thưởng (composite → grade → tiền). **Cấu hình
+>   mốc % đúng hạn → điểm GỘP vào tab "Quy đổi xếp loại"** (OntimeTiersSection, không popup riêng). Gỡ
+>   trang/menu/route/css KPI riêng.
+> • Smoke: 30% đúng hạn → −10đ → C(0đ); thêm phạt −15 → tổng −25 → **E → −500.000đ**. Build FE pass.
+> **CÒN LẠI của D (chờ nghiệp vụ):** đẩy tiền xếp loại vào **bonus Bảng lương** (bật lại
+> `payroll.applyRewardPenalty` — dùng composite total → grade.amount). Cần chốt cách/kỳ ráp với khách.
+
 ## 8. PHASE D — Hiệu suất NV cuối (ráp KPI + vi phạm + lương/thưởng)
 
 **Mục tiêu:** gộp nhiều nguồn → **1 kết quả đánh giá hiệu suất cuối / NV / tháng**. Đây là mảnh ghép

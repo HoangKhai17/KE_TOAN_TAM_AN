@@ -174,4 +174,97 @@ async function reopenMonth(year, month, actorId, ipAddress, userAgent) {
   return { year: y, month: m }
 }
 
-module.exports = { listMonthly, getDetail, closeMonth, reopenMonth, isMonthClosed }
+// ── Phase D: MỐC quy đổi % đúng hạn → điểm (kpi_ontime_tiers) ─────────────────
+function tierToDto(t) {
+  return {
+    id: t.id, minPct: t.min_pct, maxPct: t.max_pct, points: Number(t.points),
+    sortOrder: t.sort_order, isActive: t.is_active,
+  }
+}
+async function listTiers({ activeOnly = false } = {}) {
+  const { rows } = await query(
+    `SELECT * FROM kpi_ontime_tiers ${activeOnly ? 'WHERE is_active = TRUE' : ''} ORDER BY sort_order, created_at`)
+  return rows.map(tierToDto)
+}
+async function createTier(data, actorId) {
+  const { rows: [m] } = await query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM kpi_ontime_tiers')
+  const { rows: [t] } = await query(
+    `INSERT INTO kpi_ontime_tiers (min_pct, max_pct, points, sort_order, is_active, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [data.minPct ?? null, data.maxPct ?? null, data.points ?? 0, data.sortOrder ?? m.n, data.isActive ?? true, actorId])
+  return tierToDto(t)
+}
+async function updateTier(id, data) {
+  const map = { minPct: 'min_pct', maxPct: 'max_pct', points: 'points', sortOrder: 'sort_order', isActive: 'is_active' }
+  const sets = []; const params = []
+  for (const [k, col] of Object.entries(map)) {
+    if (data[k] !== undefined) { params.push(data[k]); sets.push(`${col} = $${params.length}`) }
+  }
+  if (!sets.length) { const e = new Error('Không có gì để cập nhật'); e.status = 400; throw e }
+  params.push(id)
+  const { rows: [t] } = await query(
+    `UPDATE kpi_ontime_tiers SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`, params)
+  if (!t) { const e = new Error('Không tìm thấy mốc'); e.status = 404; throw e }
+  return tierToDto(t)
+}
+async function deleteTier(id) {
+  const { rows } = await query('DELETE FROM kpi_ontime_tiers WHERE id = $1 RETURNING id', [id])
+  if (!rows.length) { const e = new Error('Không tìm thấy mốc'); e.status = 404; throw e }
+}
+
+// Dò mốc/xếp loại theo dải [min, max] (bao gồm 2 đầu; NULL = không giới hạn).
+// Chịu được trường hợp admin nhập min/max NGƯỢC (vd E: -21..-100) → tự chuẩn hoá lo≤hi.
+function matchRange(value, list, minKey, maxKey) {
+  if (value == null) return null
+  for (const x of list) {
+    let lo = x[minKey], hi = x[maxKey]
+    if (lo != null && hi != null && lo > hi) { const t = lo; lo = hi; hi = t }
+    if ((lo == null || value >= lo) && (hi == null || value <= hi)) return x
+  }
+  return null
+}
+
+// ── Phase D: HIỆU SUẤT TỔNG HỢP = điểm KPI (từ % đúng hạn) + net thưởng/phạt → xếp loại → tiền ──
+async function getPerformance(year, month, userId = null) {
+  const { y, m } = monthBounds(year, month)
+  const base = await listMonthly(y, m, userId)                    // { closed, rows:[{...onTimePct, volumePoints}] }
+  const tiers = await listTiers({ activeOnly: true })
+  // grades ở bảng kpi_grades (module reward-penalty) — đọc trực tiếp.
+  const { rows: grades } = await query(
+    `SELECT code, label, min_points, max_points, amount, sort_order FROM kpi_grades WHERE is_active = TRUE ORDER BY sort_order, created_at`)
+  const gradeList = grades.map((g, idx) => ({
+    code: g.code, label: g.label, sortOrder: idx,
+    minPoints: g.min_points != null ? Number(g.min_points) : null,
+    maxPoints: g.max_points != null ? Number(g.max_points) : null,
+    amount: Number(g.amount),
+  }))
+  // net thưởng/phạt (đã duyệt) theo NV trong kỳ.
+  const rpParams = [y, m]
+  let rpUserCond = ''
+  if (userId) { rpParams.push(userId); rpUserCond = ` AND user_id = $${rpParams.length}` }
+  const { rows: rp } = await query(
+    `SELECT user_id, COALESCE(SUM(points),0)::numeric AS net FROM staff_reward_penalty
+     WHERE period_year = $1 AND period_month = $2 AND status = 'approved'${rpUserCond}
+     GROUP BY user_id`, rpParams)
+  const netByUser = new Map(rp.map((r) => [r.user_id, Number(r.net)]))
+
+  const rows = base.rows.map((r) => {
+    const tier = matchRange(r.onTimePct, tiers, 'minPct', 'maxPct')
+    const kpiPoints = tier ? tier.points : 0
+    const rpNet = netByUser.get(r.userId) ?? 0
+    const totalPoints = kpiPoints + rpNet
+    const grade = matchRange(totalPoints, gradeList, 'minPoints', 'maxPoints')
+    return {
+      ...r,
+      kpiPoints, rewardPenaltyNet: rpNet, totalPoints,
+      gradeCode: grade?.code ?? null, gradeLabel: grade?.label ?? null, gradeSort: grade?.sortOrder ?? null,
+      amount: grade ? grade.amount : 0,
+    }
+  })
+  return { closed: base.closed, rows }
+}
+
+module.exports = {
+  listMonthly, getDetail, closeMonth, reopenMonth, isMonthClosed,
+  listTiers, createTier, updateTier, deleteTier, getPerformance,
+}

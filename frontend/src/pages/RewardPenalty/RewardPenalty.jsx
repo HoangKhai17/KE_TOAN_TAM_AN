@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
-import { Loader2, Plus, Check, X, Trash2, Upload, Download, ListChecks, ClipboardList, Users, ChevronDown, Search, Award, MessageSquare } from 'lucide-react'
+import { Loader2, Plus, Check, X, Trash2, Upload, Download, ListChecks, ClipboardList, Users, ChevronDown, Search, Award, MessageSquare, Target } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import PaginationFooter from '../../components/layout/PaginationFooter'
@@ -14,6 +14,8 @@ import { useEnumsStore } from '../../hooks/useEnums'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { listUserOptions } from '../../api/users'
 import * as api from '../../api/rewardPenalty'
+import { listKpiTiers, createKpiTier, updateKpiTier, deleteKpiTier } from '../../api/kpi'
+import KpiPanel from './KpiPanel'
 import { useDataSync } from '../../hooks/useDataSync'
 import { useColFilter, FilterTh, ColFilterPortal } from './useColFilter'
 import ExportPreviewModal from './ExportPreviewModal'
@@ -259,7 +261,7 @@ export default function RewardPenalty() {
   const getOptions = useEnumsStore((st) => st.getOptions)
   useEffect(() => { loadEnums() }, [loadEnums])
   const enumLabel = useCallback((type, key) => (getOptions(type).find((x) => x.key === key)?.label ?? key), [getOptions])
-  const [tab, setTab] = useState('ledger')
+  const [tab, setTab] = useState('kpi')
   const [footer, setFooter] = useState(null)
   const [slot, setSlot] = useState(null)   // thanh công cụ trên đầu — panel portal vào đây
   // Năm lấy ĐỘNG từ DB (năm có dữ liệu + năm hiện tại), không hardcode.
@@ -275,6 +277,7 @@ export default function RewardPenalty() {
           <div className={s.tabLinks} role="tablist">
             {isAdmin ? (
               <>
+                <button className={cls('kpi')} onClick={() => setTab('kpi')}><Target size={13} /> KPI</button>
                 <button className={cls('ledger')} onClick={() => setTab('ledger')}><ClipboardList size={13} /> Sổ thưởng/phạt</button>
                 <button className={cls('summary')} onClick={() => setTab('summary')}><Users size={13} /> Tổng hợp theo NV</button>
                 <button className={cls('rules')} onClick={() => setTab('rules')}><ListChecks size={13} /> Danh sách quy tắc</button>
@@ -282,6 +285,7 @@ export default function RewardPenalty() {
               </>
             ) : (
               <>
+                <button className={cls('kpi')} onClick={() => setTab('kpi')}><Target size={13} /> KPI</button>
                 <button className={cls('ledger')} onClick={() => setTab('ledger')}><ClipboardList size={13} /> Sổ thưởng/phạt</button>
                 <button className={cls('summary')} onClick={() => setTab('summary')}><Award size={13} /> Xếp loại của tôi</button>
               </>
@@ -291,6 +295,7 @@ export default function RewardPenalty() {
         </div>
         {isAdmin ? (
           <>
+            {tab === 'kpi' && <KpiPanel isAdmin slot={slot} years={years} />}
             {tab === 'rules' && <RulesPanel slot={slot} getOptions={getOptions} enumLabel={enumLabel} onFooter={setFooter} />}
             {tab === 'ledger' && <LedgerPanel isAdmin slot={slot} years={years} getOptions={getOptions} enumLabel={enumLabel} onFooter={setFooter} />}
             {tab === 'summary' && <SummaryPanel slot={slot} years={years} onFooter={setFooter} />}
@@ -298,11 +303,9 @@ export default function RewardPenalty() {
           </>
         ) : (
           <>
-            {tab === 'summary' ? (
-              <SummaryPanel self slot={slot} years={years} onFooter={setFooter} />
-            ) : (
-              <LedgerPanel isAdmin={false} slot={slot} years={years} getOptions={getOptions} enumLabel={enumLabel} onFooter={setFooter} />
-            )}
+            {tab === 'kpi' && <KpiPanel isAdmin={false} slot={slot} years={years} />}
+            {tab === 'summary' && <SummaryPanel self slot={slot} years={years} onFooter={setFooter} />}
+            {tab === 'ledger' && <LedgerPanel isAdmin={false} slot={slot} years={years} getOptions={getOptions} enumLabel={enumLabel} onFooter={setFooter} />}
           </>
         )}
       </div>
@@ -964,6 +967,7 @@ function GradesPanel({ slot, onFooter }) {
   )
 
   return (
+    <>
     <div className={s.card}>
       {slot && createPortal(toolbar, slot)}
       {sel.size > 0 && (
@@ -1026,6 +1030,60 @@ function GradesPanel({ slot, onFooter }) {
         </div>
       )}
       <div className={s.cardFoot}>ℹ️ Xếp loại từ THẤP → CAO theo thứ tự dòng. Dải điểm dùng <strong>Tổng điểm</strong> của nhân viên trong kỳ (bỏ trống = không giới hạn). Mỗi loại gắn 1 mức <strong>thưởng/phạt</strong> (tiền), dùng khi quy đổi ra bảng lương.</div>
+    </div>
+    <OntimeTiersSection />
+    </>
+  )
+}
+
+// Mốc quy đổi: % ĐÚNG HẠN (KPI) → điểm — gộp trong tab Quy đổi xếp loại (không popup riêng).
+function OntimeTiersSection() {
+  const addToast = useToastStore((st) => st.toast)
+  const confirmDelete = useDeleteConfirm()
+  const [tiers, setTiers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [savingNew, setSavingNew] = useState(false)
+  const reload = useCallback(() => { setLoading(true); listKpiTiers().then(setTiers).catch(() => setTiers([])).finally(() => setLoading(false)) }, [])
+  useEffect(() => { reload() }, [reload])
+  async function patch(t, p) {
+    setTiers((l) => l.map((x) => x.id === t.id ? { ...x, ...p } : x))
+    try { await updateKpiTier(t.id, p) } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); reload() }
+  }
+  async function add() {
+    setSavingNew(true)
+    try { await createKpiTier({ minPct: null, maxPct: null, points: 0 }); reload() }
+    catch { addToast('Không thêm được mốc', 'error') } finally { setSavingNew(false) }
+  }
+  async function remove(t) {
+    if (!(await confirmDelete({ title: 'Xoá mốc', message: <>Xoá mốc điểm này?</> }))) return
+    try { await deleteKpiTier(t.id); reload() } catch { addToast('Không xoá được', 'error') }
+  }
+  return (
+    <div className={s.card} style={{ marginTop: 16 }}>
+      <div className={s.toolbar} style={{ justifyContent: 'space-between' }}>
+        <strong style={{ fontSize: 'var(--fs-xs)' }}>Mốc quy đổi: % đúng hạn (KPI) → điểm</strong>
+        <button className={s.btnMini} onClick={add} disabled={savingNew}>{savingNew ? <Loader2 size={13} className={s.spin} /> : <Plus size={13} />} Thêm mốc</button>
+      </div>
+      {loading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
+        <div className={s.tableWrap}>
+          <table className={s.table}>
+            <thead><tr><th className={s.colStt}>STT</th><th className={s.num}>Từ %</th><th className={s.num}>Đến %</th><th className={s.num}>Điểm KPI</th><th>Hành động</th></tr></thead>
+            <tbody>
+              {tiers.length === 0 && <tr><td colSpan={5} className={s.empty}>Chưa có mốc. Bấm “Thêm mốc”.</td></tr>}
+              {tiers.map((t, i) => (
+                <tr key={t.id}>
+                  <td className={s.colStt}>{i + 1}</td>
+                  <td><CellText value={t.minPct ?? ''} numeric placeholder="−∞" onCommit={(v) => patch(t, { minPct: v === '' ? null : Number(v) })} /></td>
+                  <td><CellText value={t.maxPct ?? ''} numeric placeholder="+∞" onCommit={(v) => patch(t, { maxPct: v === '' ? null : Number(v) })} /></td>
+                  <td><CellText value={t.points} numeric onCommit={(v) => patch(t, { points: Number(v) || 0 })} /></td>
+                  <td><span className={s.rowActions}><button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => remove(t)}><Trash2 size={13} /></button></span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className={s.cardFoot}>ℹ️ <strong>Điểm KPI</strong> (từ % đúng hạn trong kỳ) cộng với <strong>Tổng điểm thưởng/phạt</strong> → ra <strong>Xếp loại</strong>. Bỏ trống = không giới hạn; điểm âm = trừ.</div>
     </div>
   )
 }
