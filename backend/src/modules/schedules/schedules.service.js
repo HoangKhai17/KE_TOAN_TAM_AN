@@ -227,6 +227,27 @@ async function reorderScheduleChecklist(scheduleId, items, user) {
   return listScheduleChecklist(scheduleId)
 }
 
+// Ghi ĐÈ toàn bộ checklist của lịch bằng danh sách gửi lên (dùng cho "Lưu" từ màn cấu hình).
+async function replaceScheduleChecklist(scheduleId, items, user) {
+  await assertScheduleAccess(scheduleId, user)
+  const list = Array.isArray(items) ? items : []
+  for (const it of list) { if (it.difficulty != null) await assertDifficulty(it.difficulty) }
+  await query('DELETE FROM schedule_checklist_items WHERE schedule_id = $1', [scheduleId])
+  let order = 0
+  for (const it of list) {
+    order += 1
+    const difficulty = it.difficulty || 'trung_binh'
+    const points = it.points != null ? Math.max(0, Number(it.points) || 0) : defaultPointsFor(difficulty)
+    await query(
+      `INSERT INTO schedule_checklist_items
+         (schedule_id, step_order, step_text, level, difficulty, points, is_important, source_template_step_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scheduleId, order, it.stepText, it.level === 1 ? 1 : 0, difficulty, points, !!it.isImportant,
+       it.sourceTemplateStepId ?? null])
+  }
+  return listScheduleChecklist(scheduleId)
+}
+
 // Khôi phục về checklist mẫu của loại CV (xoá hết rồi seed lại).
 async function resetScheduleChecklistFromTemplate(scheduleId, user) {
   await assertScheduleAccess(scheduleId, user)
@@ -584,4 +605,5 @@ module.exports = {
   // Checklist RIÊNG của lịch (KPI v2)
   listScheduleChecklist, addScheduleChecklistItem, updateScheduleChecklistItem,
   deleteScheduleChecklistItem, reorderScheduleChecklist, resetScheduleChecklistFromTemplate,
+  replaceScheduleChecklist,
 }

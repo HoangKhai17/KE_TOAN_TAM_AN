@@ -158,7 +158,15 @@ nút ★, commit điểm on-blur). Smoke đạt.
 > lịch cũ** từ template−excluded, mang theo độ khó/điểm/★). BE `schedules.service` (seed khi tạo lịch;
 > CRUD list/add/update/delete/reorder/reset; `getScheduleById` trả kèm `checklist`) + controller +
 > router `GET/POST/PATCH/DELETE /schedules/:id/checklist…` + schema. Smoke đạt (backfill 17 bước,
-> thêm Khó→6đ+★, xóa OK). **FE (api + UI cấu hình lịch) = A3.** · A3–A5 chờ.
+> thêm Khó→6đ+★, xóa OK).
+>
+> ✅ **A3 XONG (2026-09-29)** — BE thêm `PUT /schedules/:id/checklist` (ghi đè toàn bộ) + service
+> `replaceScheduleChecklist`. FE: `api/schedules` (getScheduleChecklist, replaceScheduleChecklist);
+> **làm lại màn cấu hình Lịch** ([SchedulesTab.jsx](../frontend/src/pages/Companies/SchedulesTab.jsx)) —
+> gỡ khối "tick chọn bước" (excludedStepIds), thay bằng **editor checklist đầy đủ**: thêm/sửa/xoá,
+> lên/xuống, thụt mục con, độ khó (tự gợi ý điểm), điểm tay, ★ quan trọng, "Khôi phục về mẫu", tổng
+> điểm. Tạo lịch → seed mặc định rồi ghi đè theo bản sửa; sửa lịch → nạp checklist của lịch. Smoke
+> replace/restore đạt, build FE pass. · A4–A5 chờ.
 
 ```
 Phase A — Checklist có điểm ở Template + Lịch định kỳ (nền tảng data + cấu hình)

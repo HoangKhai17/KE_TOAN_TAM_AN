@@ -109,6 +109,10 @@ async function resetScheduleChecklist(req, res, next) {
   try { res.json({ success: true, data: { checklist: await svc.resetScheduleChecklistFromTemplate(req.params.id, req.user) } }) }
   catch (err) { next(err) }
 }
+async function replaceScheduleChecklist(req, res, next) {
+  try { res.json({ success: true, data: { checklist: await svc.replaceScheduleChecklist(req.params.id, req.body.items, req.user) } }) }
+  catch (err) { next(err) }
+}
 
 module.exports = {
   listSchedules, getSchedule, createSchedule,
@@ -117,4 +121,5 @@ module.exports = {
   getSchedulePeriods, backfillPeriods,
   listScheduleChecklist, addScheduleChecklistItem, updateScheduleChecklistItem,
   deleteScheduleChecklistItem, reorderScheduleChecklist, resetScheduleChecklist,
+  replaceScheduleChecklist,
 }

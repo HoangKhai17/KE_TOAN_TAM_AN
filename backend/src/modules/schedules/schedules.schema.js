@@ -90,8 +90,20 @@ const updateScheduleChecklistItemSchema = z.object({
 const reorderScheduleChecklistSchema = z.object({
   items: z.array(z.object({ id: z.string().uuid(), stepOrder: z.number().int().min(1) })).min(1),
 })
+// Ghi đè toàn bộ checklist của lịch (cho phép rỗng = xoá hết).
+const replaceScheduleChecklistSchema = z.object({
+  items: z.array(z.object({
+    stepText:    z.string().min(1).max(2000),
+    level:       z.number().int().min(0).max(1).optional(),
+    difficulty:  z.string().max(20).optional(),
+    points:      z.number().int().min(0).max(100).optional(),
+    isImportant: z.boolean().optional(),
+    sourceTemplateStepId: z.string().uuid().optional().nullable(),
+  })).max(200),
+})
 
 module.exports = {
   createScheduleSchema, updateScheduleSchema, setMaxDueDaySchema, backfillSchema,
   scheduleChecklistItemSchema, updateScheduleChecklistItemSchema, reorderScheduleChecklistSchema,
+  replaceScheduleChecklistSchema,
 }

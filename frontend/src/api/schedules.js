@@ -34,6 +34,17 @@ export async function previewSchedule(id) {
   return data.data.dates
 }
 
+// ── Checklist RIÊNG của lịch (KPI v2) ─────────────────────────────────────────
+export async function getScheduleChecklist(id) {
+  const { data } = await api.get(`/schedules/${id}/checklist`)
+  return data.data.checklist
+}
+// Ghi đè toàn bộ checklist của lịch (items = [{stepText, level?, difficulty?, points?, isImportant?, sourceTemplateStepId?}])
+export async function replaceScheduleChecklist(id, items) {
+  const { data } = await api.put(`/schedules/${id}/checklist`, { items })
+  return data.data.checklist
+}
+
 // ── Console tập trung (admin) ─────────────────────────────────────────────────
 export async function getRecurringOverview() {
   const { data } = await api.get('/schedules/overview')

@@ -2,12 +2,15 @@ import { useState, useEffect, useMemo, Fragment } from 'react'
 import { format, parseISO, addDays } from 'date-fns'
 import {
   CalendarDays, Plus, Eye, Power, Pencil, Trash2, Loader2, AlertTriangle, RefreshCw, ChevronDown, GitBranch,
+  ChevronLeft, ChevronRight, ChevronUp, Star,
 } from 'lucide-react'
 import * as schedulesApi from '../../api/schedules'
 import { listTaskTypes, getChecklist, getSubtaskTemplates } from '../../api/taskTypes'
 import { listUserOptions } from '../../api/users'
 import { listHolidays } from '../../api/attendance'
 import { getNextOccurrences, rollForwardToWorkday } from '../../utils/recurrencePreview'
+import { diffOptionsOr, defaultPointsFor } from '../../utils/checklistDifficulty'
+import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
@@ -105,10 +108,28 @@ function emptyForm() {
     recurrenceConfig: { day: 1 },
     deadlineOffsetDays: 0,
     overrideSlaDays: '',
-    excludedStepIds: [],
+    checklist: [],   // KPI v2: checklist RIÊNG của lịch (draft: [{_key, stepText, level, difficulty, points, isImportant, sourceTemplateStepId}])
     subtaskOffsets: {},   // { <subtaskTemplateId>: { start, deadline } } — offset việc con theo lịch
     notes: '',
   }
+}
+
+// KPI v2 — helper draft checklist của lịch
+let _clSeq = 0
+function clKey() { return `cl_${Date.now()}_${_clSeq++}` }
+function mapTemplateToDraft(steps) {
+  return (steps || []).map((s) => ({
+    _key: clKey(), stepText: s.stepText, level: s.level ?? 0,
+    difficulty: s.difficulty ?? 'trung_binh', points: s.points ?? 4,
+    isImportant: !!s.isImportant, sourceTemplateStepId: s.id ?? null,
+  }))
+}
+function mapScheduleToDraft(items) {
+  return (items || []).map((it) => ({
+    _key: clKey(), stepText: it.stepText, level: it.level ?? 0,
+    difficulty: it.difficulty ?? 'trung_binh', points: it.points ?? 4,
+    isImportant: !!it.isImportant, sourceTemplateStepId: it.sourceTemplateStepId ?? null,
+  }))
 }
 
 function defaultConfig(type) {
@@ -496,6 +517,7 @@ function PreviewPanel({ type, config, holidaySet }) {
 export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
   const confirmDelete = useDeleteConfirm()
   const toast = useToastStore(st => st.toast)
+  const diffOptions = useEnumsStore((st) => st.getOptions)('checklist_difficulty')
 
   const [schedules,  setSchedules]  = useState([])
   const [loading,    setLoading]    = useState(true)
@@ -527,18 +549,18 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
   const [form,       setForm]       = useState(emptyForm())
   const [formErrors, setFormErrors] = useState({})
   const [saving,     setSaving]     = useState(false)
-  const [templSteps, setTemplSteps] = useState([])   // checklist mẫu của loại CV đang chọn
   const [templSubs,  setTemplSubs]  = useState([])   // việc con LIÊN KẾT của loại CV đang chọn
 
-  // Nạp checklist mẫu khi mở modal / đổi loại công việc → để chọn bước áp dụng
+  // KPI v2: khi TẠO lịch và đổi loại CV → seed checklist nháp từ checklist mẫu của loại đó.
+  // (Chế độ SỬA nạp checklist của lịch trong openEdit, không seed lại từ mẫu.)
   useEffect(() => {
-    if (!modal || !form.taskTypeId) { setTemplSteps([]); return }
+    if (!modal || modal.mode !== 'create' || !form.taskTypeId) return
     let cancelled = false
     getChecklist(form.taskTypeId)
-      .then((steps) => { if (!cancelled) setTemplSteps(steps || []) })
-      .catch(() => { if (!cancelled) setTemplSteps([]) })
+      .then((steps) => { if (!cancelled) setForm((f) => ({ ...f, checklist: mapTemplateToDraft(steps) })) })
+      .catch(() => { if (!cancelled) setForm((f) => ({ ...f, checklist: [] })) })
     return () => { cancelled = true }
-  }, [modal, form.taskTypeId])
+  }, [modal?.mode, form.taskTypeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nạp việc con LIÊN KẾT của loại CV → để đặt offset ngày bắt đầu + hạn cho từng con.
   useEffect(() => {
@@ -588,25 +610,40 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
     }))
   }
 
-  // Bật/tắt 1 bước cho công ty này (mục chính kéo theo con; con áp dụng thì mục chính cũng áp dụng)
-  function toggleStep(idx) {
-    const step = templSteps[idx]
-    const excluded = new Set(form.excludedStepIds || [])
-    const wasExcluded = excluded.has(step.id)
-    const affected = [step.id]
-    const isParent = step.level === 0 && templSteps[idx + 1]?.level === 1
-    if (isParent) {
-      for (let j = idx + 1; j < templSteps.length && templSteps[j].level === 1; j++) affected.push(templSteps[j].id)
-    }
-    if (wasExcluded) {
-      if (step.level === 1) {
-        for (let j = idx - 1; j >= 0; j--) { if (templSteps[j].level === 0) { affected.push(templSteps[j].id); break } }
-      }
-      affected.forEach((id) => excluded.delete(id))
-    } else {
-      affected.forEach((id) => excluded.add(id))
-    }
-    setForm((f) => ({ ...f, excludedStepIds: [...excluded] }))
+  // ── KPI v2: editor checklist nháp của lịch ──────────────────────────────────
+  function setClField(idx, field, value) {
+    setForm((f) => {
+      const cl = f.checklist.slice()
+      const it = { ...cl[idx], [field]: value }
+      // Đổi độ khó → gợi ý điểm mặc định (vẫn cho sửa sau).
+      if (field === 'difficulty') it.points = defaultPointsFor(value)
+      cl[idx] = it
+      return { ...f, checklist: cl }
+    })
+  }
+  function addClRow() {
+    setForm((f) => ({ ...f, checklist: [...f.checklist, {
+      _key: clKey(), stepText: '', level: 0, difficulty: 'trung_binh', points: 4, isImportant: false, sourceTemplateStepId: null,
+    }] }))
+  }
+  function removeClRow(idx) {
+    setForm((f) => ({ ...f, checklist: f.checklist.filter((_, i) => i !== idx) }))
+  }
+  function moveClRow(idx, dir) {
+    setForm((f) => {
+      const cl = f.checklist.slice()
+      const j = idx + dir
+      if (j < 0 || j >= cl.length) return f
+      ;[cl[idx], cl[j]] = [cl[j], cl[idx]]
+      return { ...f, checklist: cl }
+    })
+  }
+  async function resetClFromTemplate() {
+    if (!form.taskTypeId) return
+    try {
+      const steps = await getChecklist(form.taskTypeId)
+      setForm((f) => ({ ...f, checklist: mapTemplateToDraft(steps) }))
+    } catch { toast('Không tải được checklist mẫu', 'error') }
   }
 
   // Delete
@@ -709,12 +746,16 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
       recurrenceConfig:   { ...(sc.recurrenceConfig || {}) },
       deadlineOffsetDays: sc.deadlineOffsetDays ?? 0,
       overrideSlaDays:    sc.overrideSlaDays != null ? String(sc.overrideSlaDays) : '',
-      excludedStepIds:    Array.isArray(sc.excludedStepIds) ? sc.excludedStepIds : [],
+      checklist:          [],   // nạp async ngay dưới
       subtaskOffsets:     (sc.subtaskOffsets && typeof sc.subtaskOffsets === 'object') ? sc.subtaskOffsets : {},
       notes:              sc.notes || '',
     })
     setFormErrors({})
     setModal({ mode: 'edit', schedule: sc })
+    // Nạp checklist RIÊNG của lịch (KPI v2)
+    schedulesApi.getScheduleChecklist(sc.id)
+      .then((cl) => setForm((f) => ({ ...f, checklist: mapScheduleToDraft(cl) })))
+      .catch(() => { /* để trống nếu lỗi */ })
   }
 
   async function handleSave() {
@@ -743,6 +784,17 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
       subtaskOffsets[sub.id] = { start, deadline }
     }
 
+    // Checklist: bỏ dòng trống, chuẩn hoá điểm; gửi cho backend ghi đè.
+    const checklistPayload = (form.checklist || [])
+      .filter((it) => it.stepText && it.stepText.trim())
+      .map((it) => ({
+        stepText: it.stepText.trim(), level: it.level === 1 ? 1 : 0,
+        difficulty: it.difficulty || 'trung_binh',
+        points: Math.max(0, Number(it.points) || 0),
+        isImportant: !!it.isImportant,
+        sourceTemplateStepId: it.sourceTemplateStepId ?? null,
+      }))
+
     setSaving(true)
     try {
       const payload = {
@@ -751,20 +803,26 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
         recurrenceConfig:   form.recurrenceConfig,
         deadlineOffsetDays: Number(form.deadlineOffsetDays) || 0,
         overrideSlaDays:    form.overrideSlaDays !== '' ? parseInt(form.overrideSlaDays) : null,
-        excludedStepIds:    form.excludedStepIds || [],
         subtaskOffsets,
         notes:              form.notes || null,
       }
 
+      let scheduleId
       if (modal.mode === 'create') {
         const created = await schedulesApi.createCompanySchedule(company.id, {
           taskTypeId: form.taskTypeId,
           ...payload,
         })
-        setSchedules(prev => [created, ...prev])
+        scheduleId = created.id
+        // Ghi đè checklist theo bản đã sửa (backend đã seed mặc định từ mẫu khi tạo).
+        await schedulesApi.replaceScheduleChecklist(scheduleId, checklistPayload)
+        const full = await schedulesApi.getSchedule(scheduleId)
+        setSchedules(prev => [full, ...prev])
         toast('Tạo lịch định kỳ thành công', 'success')
       } else {
-        const updated = await schedulesApi.updateSchedule(modal.schedule.id, payload)
+        scheduleId = modal.schedule.id
+        const updated = await schedulesApi.updateSchedule(scheduleId, payload)
+        await schedulesApi.replaceScheduleChecklist(scheduleId, checklistPayload)
         setSchedules(prev => prev.map(s => s.id === updated.id ? updated : s))
         toast('Cập nhật lịch thành công', 'success')
       }
@@ -1038,7 +1096,7 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                   <select
                     className={`${s.formSelect} ${formErrors.taskTypeId ? s.formInputError : ''}`}
                     value={form.taskTypeId}
-                    onChange={e => setForm(f => ({ ...f, taskTypeId: e.target.value, excludedStepIds: [], subtaskOffsets: {} }))}
+                    onChange={e => setForm(f => ({ ...f, taskTypeId: e.target.value, checklist: [], subtaskOffsets: {} }))}
                   >
                     <option value="">-- Chọn loại công việc --</option>
                     {taskTypes.map(tt => (
@@ -1056,25 +1114,53 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                 </div>
               )}
 
-              {/* Chọn bước checklist áp dụng cho công ty này (Phương án A: tập con) */}
-              {templSteps.length > 0 && (
+              {/* KPI v2 — Checklist RIÊNG của lịch (sửa được, có độ khó + điểm + ★ quan trọng) */}
+              {form.taskTypeId && (
                 <div className={s.formField}>
-                  <label className={s.formLabel}>Bước checklist áp dụng</label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <label className={s.formLabel} style={{ margin: 0 }}>
+                      Checklist của lịch{' '}
+                      <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>
+                        · Tổng điểm {form.checklist.reduce((a, it) => a + (Number(it.points) || 0), 0)}
+                      </span>
+                    </label>
+                    <button type="button" className={s.scClResetBtn} onClick={resetClFromTemplate} title="Xoá và nạp lại từ checklist mẫu của loại CV">
+                      <RefreshCw size={12} /> Khôi phục về mẫu
+                    </button>
+                  </div>
                   <div className={s.scStepPickHint}>
-                    Bỏ tick những bước công ty này không dùng — task sinh ra sẽ chỉ có các bước được chọn.
+                    Sửa checklist riêng cho công ty này — thêm/bớt bước, đổi độ khó (tự gợi ý điểm) hoặc nhập điểm tay. <b>★</b> = bước quan trọng (hiện mặc định ở báo cáo).
                   </div>
-                  <div className={s.scStepPickList}>
-                    {templSteps.map((st, idx) => {
-                      const isChild = st.level === 1
-                      const checked = !(form.excludedStepIds || []).includes(st.id)
-                      return (
-                        <label key={st.id} className={`${s.scStepPickItem} ${isChild ? s.scStepPickChild : ''}`}>
-                          <input type="checkbox" checked={checked} onChange={() => toggleStep(idx)} />
-                          <span className={isChild ? '' : s.scStepPickMain}>{st.stepText}</span>
-                        </label>
-                      )
-                    })}
+                  <div className={s.scClList}>
+                    {form.checklist.length === 0 && <div className={s.scClEmpty}>Chưa có bước nào. Bấm “+ Thêm bước”.</div>}
+                    {form.checklist.map((it, idx) => (
+                      <div key={it._key} className={`${s.scClRow} ${it.level === 1 ? s.scClRowChild : ''}`}>
+                        <div className={s.scClMove}>
+                          <button type="button" onClick={() => moveClRow(idx, -1)} disabled={idx === 0} title="Lên"><ChevronUp size={12} /></button>
+                          <button type="button" onClick={() => moveClRow(idx, 1)} disabled={idx === form.checklist.length - 1} title="Xuống"><ChevronDown size={12} /></button>
+                        </div>
+                        <button type="button" className={s.scClIndent} onClick={() => setClField(idx, 'level', it.level === 1 ? 0 : 1)} title={it.level === 1 ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>
+                          {it.level === 1 ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
+                        </button>
+                        <input
+                          className={s.scClText}
+                          value={it.stepText}
+                          onChange={(e) => setClField(idx, 'stepText', e.target.value)}
+                          placeholder="Nội dung bước..."
+                        />
+                        <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setClField(idx, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>
+                          <Star size={13} fill={it.isImportant ? 'currentColor' : 'none'} />
+                        </button>
+                        <select className={s.scClDiff} value={it.difficulty} onChange={(e) => setClField(idx, 'difficulty', e.target.value)} title="Độ khó">
+                          {diffOptionsOr(diffOptions).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                        </select>
+                        <input type="number" min={0} max={100} className={s.scClPoints} value={it.points} onChange={(e) => setClField(idx, 'points', e.target.value)} title="Điểm" />
+                        <span className={s.scClUnit}>đ</span>
+                        <button type="button" className={s.scClDel} onClick={() => removeClRow(idx)} title="Xoá bước"><Trash2 size={13} /></button>
+                      </div>
+                    ))}
                   </div>
+                  <button type="button" className={s.scClAddBtn} onClick={addClRow}><Plus size={13} /> Thêm bước</button>
                 </div>
               )}
 

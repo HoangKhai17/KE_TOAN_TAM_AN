@@ -3,7 +3,8 @@ const { authenticate } = require('../../middleware/auth')
 const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
 const { updateScheduleSchema, setMaxDueDaySchema, backfillSchema,
-  scheduleChecklistItemSchema, updateScheduleChecklistItemSchema, reorderScheduleChecklistSchema } = require('./schedules.schema')
+  scheduleChecklistItemSchema, updateScheduleChecklistItemSchema, reorderScheduleChecklistSchema,
+  replaceScheduleChecklistSchema } = require('./schedules.schema')
 const ctrl = require('./schedules.controller')
 
 const router = Router()
@@ -128,6 +129,7 @@ router.post('/:id/toggle', ...auth, ctrl.toggleSchedule)
 
 // ── Checklist RIÊNG của lịch (KPI v2) — quyền theo công ty kiểm tra trong service ──
 router.get('/:id/checklist',                    ...auth, ctrl.listScheduleChecklist)
+router.put('/:id/checklist',                    ...auth, validate(replaceScheduleChecklistSchema), ctrl.replaceScheduleChecklist)
 router.post('/:id/checklist',                   ...auth, validate(scheduleChecklistItemSchema), ctrl.addScheduleChecklistItem)
 router.post('/:id/checklist/reorder',           ...auth, validate(reorderScheduleChecklistSchema), ctrl.reorderScheduleChecklist)
 router.post('/:id/checklist/reset',             ...auth, ctrl.resetScheduleChecklist)
