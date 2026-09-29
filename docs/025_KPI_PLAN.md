@@ -149,25 +149,89 @@ Thêm cột: `points SMALLINT DEFAULT 0`, `is_important BOOLEAN DEFAULT FALSE`.
 
 ---
 
-## 7. Bảng kết quả KPI tháng (auto từ checklist) — Phase C
+## 7. PHASE C — KPI tháng (auto từ checklist) + chốt sổ
 
-- **Tick checklist → tự cộng điểm** vào kết quả tháng (thay vì nhập tay). "Liên kết đến table chỉnh
-  ra kết quả".
-- Mỗi NV / mỗi công ty, theo tháng:
-  - **Điểm khối lượng** = Σ điểm checklist đã hoàn thành (theo `completed_at` trong tháng).
-  - **Đúng hạn %** = task xong đúng hạn / được giao (theo `due_date` trong tháng).
-  - **Theo công ty / loại CV** = gom nhóm.
-- **Chốt sổ tháng** → snapshot số, khóa lịch sử.
+**Mục tiêu:** biến điểm-từng-task (Phase A/B) thành **con số KPI TỔNG của mỗi NV theo tháng**, tự
+tính từ việc tick checklist, và **chốt sổ** để khóa số liệu lịch sử.
+
+**Dữ liệu đã có sẵn:** `task_checklist_items` (points, is_completed, completed_at), `tasks`
+(assigned_to, due_date, completed_at, company_id, task_type_id). Không cần thêm dữ liệu nguồn.
+
+### C1 — Bảng kết quả + snapshot
+- Migration bảng mới **`kpi_monthly_results`**:
+  `id, user_id, period_year, period_month, volume_points, assigned_count, on_time_count,
+   on_time_pct, breakdown JSONB (theo công ty/loại), status ('open'|'closed'), closed_by,
+   closed_at, computed_at`. UNIQUE(user_id, year, month).
+- Tháng **chưa chốt** → tính **LIVE** (không lưu). Tháng **đã chốt** → đọc snapshot từ bảng.
+
+### C2 — Service tổng hợp (`backend/src/modules/kpi/`)
+- `computeMonthlyKpi(year, month, userId?)` — LIVE:
+  - **Điểm khối lượng** = Σ `points` của checklist item `is_completed` có `completed_at` **trong
+    tháng**, gom theo `task.assigned_to` (partial credit — cộng dần khi tick, khớp "tick → ra kết
+    quả").
+  - **Đúng hạn %**: mẫu = task của NV có `due_date` trong tháng; tử = trong đó `status='completed'`
+    và `completed_at::date <= due_date`.
+  - **Breakdown** theo `company_id` / `task_type_id`.
+- `getMonthlyKpi(year, month)` → tháng closed đọc snapshot, else compute live.
+- `closeMonth(year, month, actorId)` → compute + ghi bảng + `status='closed'` (audit).
+- `reopenMonth(year, month, actorId)` → mở lại để sửa (admin, audit).
+- Timezone **giờ VN** khi cắt mốc tháng.
+
+### C3 — Endpoints + RBAC
+- `GET /kpi?year=&month=` — admin: tất cả NV; **staff: chỉ mình** (forceUserId).
+- `GET /kpi/:userId?year=&month=` — chi tiết + breakdown.
+- `POST /kpi/close`, `POST /kpi/reopen` — admin.
+
+### C4 — Frontend: menu KPI mới
+- Trang KPI (menu mới), **chọn tháng** như Bảng lương/Điểm thưởng.
+- Bảng NV: STT · tên · **điểm khối lượng** · **đúng hạn %**; click → chi tiết breakdown theo công
+  ty/loại CV.
+- Nút **Chốt sổ tháng** (admin) + badge trạng thái (mở / đã chốt).
+- Xuất Excel (chuẩn POST `/api/export/xlsx`).
+
+### C5 — Tự cập nhật khi tick
+- Tháng mở tính LIVE → tick checklist thì lần mở KPI kế tiếp tự có, **không cần job nền**. (Tùy
+  chọn: cache + invalidate khi tick.)
+
+### Cần chốt trước khi làm C
+1. **Điểm khối lượng** đếm theo **item đã tick trong tháng** (đề xuất — partial, khớp mô tả khách)
+   hay theo **task hoàn thành** (chỉ cộng khi cả task xong)?
+2. **"Được giao"** (Đúng hạn %) neo theo **`due_date` trong tháng** (đề xuất)?
+3. **Con số KPI chính** hiển thị = **Điểm khối lượng** hay **Đúng hạn %**? (2 cái còn lại là cột phụ)
+4. `completed_at` của item: đã được set khi tick (checklist.service) — cần rà đảm bảo mọi đường tick
+   đều ghi `completed_at`.
 
 ---
 
-## 8. Hiệu suất nhân viên (kết quả cuối) — Phase D
+## 8. PHASE D — Hiệu suất NV cuối (ráp KPI + vi phạm + lương/thưởng)
 
-Tổng hợp nhiều tham số → 1 kết quả:
-- **Vi phạm nội quy** (module hiện có / cần bổ sung).
-- **Tiến độ công việc** (điểm checklist, đúng hạn — từ Phase C).
-- **Lương / thưởng phạt** (Điểm thưởng E→S + Bảng lương).
-→ Gắn với `reward_penalty_module` + `salary_config_module` (giai đoạn ráp cuối).
+**Mục tiêu:** gộp nhiều nguồn → **1 kết quả đánh giá hiệu suất cuối / NV / tháng**. Đây là mảnh ghép
+cuối, nối với `reward_penalty_module` + `salary_config_module`.
+
+### D1 — Nguồn dữ liệu đầu vào
+- **Tiến độ công việc**: từ Phase C (điểm khối lượng + đúng hạn %).
+- **Vi phạm nội quy**: cần **khảo sát** — lấy từ đâu? (chấm công trễ/thiếu? điểm phạt thủ công? module
+  mới?). *Chưa có nguồn rõ → phải chốt trước.*
+- **Lương / thưởng phạt**: Điểm thưởng (xếp loại E→S → tiền, `kpi_grades.amount`) + Bảng lương.
+
+### D2 — Công thức tổng hợp
+- Định nghĩa **trọng số** các thành phần (tiến độ / vi phạm / thưởng phạt) → điểm hiệu suất hoặc xếp
+  loại cuối. **Cần khách chốt công thức + trọng số.**
+
+### D3 — Ráp vào Điểm thưởng / Lương
+- Map KPI/hiệu suất → **xếp loại E→S** (reward_penalty) → **tiền vào `bonus`** của Bảng lương.
+- Bật lại `payroll.applyRewardPenalty` (hiện đang throw — điểm thuần).
+
+### D4 — Frontend
+- Màn **tổng hợp hiệu suất cuối** / NV / tháng (gộp 3 nguồn + kết quả + xếp loại).
+
+### Cần chốt trước khi làm D (nhiều — KHẢO SÁT trước)
+1. **Vi phạm nội quy** lấy dữ liệu từ đâu / có module chưa?
+2. **Công thức tổng hợp** + trọng số từng thành phần.
+3. Cách **map KPI → xếp loại → tiền** (nối reward_penalty + payroll).
+
+> ⚠️ Phase D phụ thuộc **quyết định nghiệp vụ của khách** (công thức, nguồn vi phạm) nhiều hơn kỹ
+> thuật. Nên **làm Phase C trước, nghiệm thu**, rồi khảo sát kỹ D với khách mới code.
 
 ---
 
