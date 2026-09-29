@@ -664,7 +664,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
     ? getOptions('task_status').map((o) => o.key)
     : TASK_STATUSES
   const transitions = task ? statusKeys.filter((st) => st !== task.status) : []
-  const { total: clTotal, done: clDone, pct: clPct } = checklistLeafCounts(checklist)
+  const { total: clTotal, done: clDone, pct: clPct, weighted: clWeighted, pointsTotal: clPtsTotal, pointsDone: clPtsDone } = checklistLeafCounts(checklist)
   const pct         = clTotal ? clPct : null
 
   return (
@@ -1014,9 +1014,10 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                 <div className={s.qvSection}>
                   <div className={s.qvSectionTitle}>
                     Checklist
-                    {clTotal > 0 && (
+    {clTotal > 0 && (
                       <span style={{ fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>
-                        {clDone}/{clTotal}{pct !== null ? ` · ${pct}%` : ''}
+                        {clWeighted ? `${clPtsDone}/${clPtsTotal}đ` : `${clDone}/${clTotal}`}{pct !== null ? ` · ${pct}%` : ''}
+                        {clWeighted && <span title="Tiến độ tính theo ĐIỂM (task định kỳ)"> · theo điểm</span>}
                       </span>
                     )}
                   </div>
@@ -1088,6 +1089,8 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                               >
                                 {item.stepText}
                               </span>
+                              {item.isImportant && <span className={s.clItemStar} title="Bước quan trọng">★</span>}
+                              {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
                               <button
                                 className={s.qvChecklistDel}
                                 onClick={() => { setEditItemId(item.id); setEditItemText(item.stepText) }}

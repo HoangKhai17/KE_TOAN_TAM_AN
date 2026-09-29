@@ -77,6 +77,10 @@ export function periodRangeLabel(range) {
 }
 
 export function progressPct(task) {
+  // KPI v2: có điểm (task định kỳ) → % theo Σ điểm; ngược lại đếm bước như cũ.
+  if (task.checklistPointsTotal > 0) {
+    return Math.round((task.checklistPointsDone / task.checklistPointsTotal) * 100)
+  }
   if (!task.checklistTotal) return null
   return Math.round((task.checklistDone / task.checklistTotal) * 100)
 }
@@ -126,14 +130,21 @@ export function checklistIsParent(items, index) {
   return it?.level === 0 && next?.level === 1
 }
 // Leaf = mọi mục KHÔNG phải cha → dùng để tính tiến độ.
+// KPI v2: nếu leaf có điểm (task định kỳ) → pct tính theo Σ điểm; ngược lại đếm bước.
 export function checklistLeafCounts(items) {
-  let total = 0, done = 0
+  let total = 0, done = 0, pointsTotal = 0, pointsDone = 0
   for (let i = 0; i < items.length; i++) {
     if (checklistIsParent(items, i)) continue
     total++
-    if (items[i].isCompleted) done++
+    const p = Number(items[i].points) || 0
+    pointsTotal += p
+    if (items[i].isCompleted) { done++; pointsDone += p }
   }
-  return { total, done, pct: total ? Math.round((done * 100) / total) : 0 }
+  const weighted = pointsTotal > 0
+  const pct = weighted
+    ? Math.round((pointsDone * 100) / pointsTotal)
+    : (total ? Math.round((done * 100) / total) : 0)
+  return { total, done, pct, pointsTotal, pointsDone, weighted }
 }
 // Cha "xong" (dẫn xuất) khi tất cả con của nó đã xong.
 export function checklistParentDone(items, index) {

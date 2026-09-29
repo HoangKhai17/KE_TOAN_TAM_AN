@@ -35,6 +35,8 @@ function cdrToTaskDto(cdr) {
     actualHours:    null,
     checklistTotal: 0,
     checklistDone:  0,
+    checklistPointsTotal: 0,
+    checklistPointsDone:  0,
     createdBy:      cdr.requestedBy,
     createdAt:      cdr.createdAt,
     updatedAt:      cdr.updatedAt,
@@ -98,6 +100,9 @@ function toDto(row) {
     actualHours:            row.actual_hours ? parseFloat(row.actual_hours) : null,
     checklistTotal:         parseInt(row.checklist_total ?? 0, 10),
     checklistDone:          parseInt(row.checklist_done ?? 0, 10),
+    // KPI v2: tổng/đã-xong theo ĐIỂM (task định kỳ tính % có trọng số; 0 = không có điểm → đếm bước).
+    checklistPointsTotal:   parseInt(row.checklist_points_total ?? 0, 10),
+    checklistPointsDone:    parseInt(row.checklist_points_done ?? 0, 10),
     latestComment:          row.latest_comment ?? null,
     latestCommentAt:        row.latest_comment_at ?? null,
     latestCommentBy:        row.latest_comment_by ?? null,
@@ -119,6 +124,8 @@ const TASK_SELECT = `
          uc.name  AS created_by_name,
          cl.checklist_total,
          cl.checklist_done,
+         cl.checklist_points_total,
+         cl.checklist_points_done,
          lc.latest_comment,
          lc.latest_comment_at,
          lc.latest_comment_by,
@@ -161,10 +168,13 @@ const TASK_SELECT = `
   LEFT JOIN LATERAL (
     -- Chỉ đếm mục "leaf": mục phụ (level 1) hoặc mục chính không có con.
     -- Mục chính CÓ con (level 0 ngay trước 1 level 1) là nhóm → không tính vào tiến độ.
+    -- KPI v2: cộng thêm ĐIỂM leaf (total + done) để tính % có trọng số.
     SELECT COUNT(*) FILTER (WHERE is_leaf)                  AS checklist_total,
-           COUNT(*) FILTER (WHERE is_leaf AND is_completed) AS checklist_done
+           COUNT(*) FILTER (WHERE is_leaf AND is_completed) AS checklist_done,
+           COALESCE(SUM(points) FILTER (WHERE is_leaf), 0)                  AS checklist_points_total,
+           COALESCE(SUM(points) FILTER (WHERE is_leaf AND is_completed), 0) AS checklist_points_done
     FROM (
-      SELECT is_completed,
+      SELECT is_completed, points,
              NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
       FROM task_checklist_items WHERE task_id = t.id
     ) z
@@ -377,8 +387,10 @@ const COL_JOINS = {
   comment:   `LEFT JOIN LATERAL (SELECT cm.content AS latest_comment FROM task_comments cm WHERE cm.task_id = t.id ORDER BY cm.created_at DESC LIMIT 1) lc ON TRUE`,
   checklist: `LEFT JOIN LATERAL (
     SELECT COUNT(*) FILTER (WHERE is_leaf) AS checklist_total,
-           COUNT(*) FILTER (WHERE is_leaf AND is_completed) AS checklist_done
-    FROM (SELECT is_completed, NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
+           COUNT(*) FILTER (WHERE is_leaf AND is_completed) AS checklist_done,
+           COALESCE(SUM(points) FILTER (WHERE is_leaf), 0) AS checklist_points_total,
+           COALESCE(SUM(points) FILTER (WHERE is_leaf AND is_completed), 0) AS checklist_points_done
+    FROM (SELECT is_completed, points, NOT (level = 0 AND COALESCE(LEAD(level) OVER (ORDER BY step_order, id), 0) = 1) AS is_leaf
           FROM task_checklist_items WHERE task_id = t.id) z) cl ON TRUE`,
 }
 const TASK_COLUMNS_SQL = {
@@ -395,7 +407,7 @@ const TASK_COLUMNS_SQL = {
   createdAt:      { text: `to_char(t.created_at, 'YYYY-MM-DD')`,                      filter: 't.created_at::date', kind: 'date' },
   days:           { text: null, filter: '(GREATEST(0, (COALESCE(t.completed_at::date, CURRENT_DATE) - COALESCE(t.start_date, t.created_at::date))) + 1)', kind: 'number' },
   plannedDays:    { text: null, filter: '(CASE WHEN t.due_date IS NULL THEN NULL ELSE GREATEST(0, (t.due_date - COALESCE(t.start_date, t.created_at::date))) + 1 END)', kind: 'number' },
-  progress:       { text: null, filter: '(CASE WHEN cl.checklist_total > 0 THEN ROUND(100.0 * cl.checklist_done / cl.checklist_total) ELSE NULL END)', kind: 'number', join: 'checklist' },
+  progress:       { text: null, filter: '(CASE WHEN cl.checklist_points_total > 0 THEN ROUND(100.0 * cl.checklist_points_done / cl.checklist_points_total) WHEN cl.checklist_total > 0 THEN ROUND(100.0 * cl.checklist_done / cl.checklist_total) ELSE NULL END)', kind: 'number', join: 'checklist' },
   // Cỡ việc hiệu lực (KPI): mã enum = điểm. value-list trả '1'/'2'/'3' (frontend map ra nhãn).
   size:           { text: `(COALESCE(t.size_points, tt.size_points, 2))::text`, filter: `(COALESCE(t.size_points, tt.size_points, 2))::text`, kind: 'text', join: 'tasktype' },
 }

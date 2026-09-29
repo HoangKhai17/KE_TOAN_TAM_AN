@@ -367,7 +367,7 @@ function ExportModal({ view, filters, data, onClose }) {
     setExporting(true)
     try {
       const body = { view, month: filters.month, year: filters.year, source: filters.source, columns: [...selected] }
-      if (view === 'matrix') { body.taskTypeId = filters.taskTypeId; body.collapse = filters.collapse }
+      if (view === 'matrix') { body.taskTypeId = filters.taskTypeId; body.collapse = filters.collapse; body.importantOnly = filters.importantOnly }
       if (view === 'company') body.companyId = filters.companyId
       if (view === 'staff') body.staffId = filters.staffId
       const { blob, filename } = await exportReport(body)
@@ -466,6 +466,7 @@ export default function ProgressMatrix() {
   const [month, setMonth] = useState(CUR_MONTH)
   const [year, setYear] = useState(CUR_YEAR)
   const [showChildren, setShowChildren] = useState(true)   // "Hiện mục con": bật = đầy đủ; tắt = gộp về cha
+  const [importantOnly, setImportantOnly] = useState(true) // KPI v2: mặc định chỉ hiện bước ★ (quan trọng)
   // Dữ liệu tham chiếu — React Query (cache + gộp request dùng chung giữa các trang)
   const { data: taskTypes = [] } = useProgressTaskTypes()
   const { data: yearsData = [] } = useProgressYears()
@@ -510,7 +511,7 @@ export default function ProgressMatrix() {
     setLoading(true)
     const src = sourceFilter || undefined
     const fetcher = tab === 'matrix'
-      ? getMatrix({ taskTypeId, month, year, source: src, collapse: !showChildren })
+      ? getMatrix({ taskTypeId, month, year, source: src, collapse: !showChildren, importantOnly })
       : tab === 'company'
         ? getByCompany({ companyId, month, year, source: src })
         : getByStaff({ staffId: staffId || undefined, month, year, source: src })
@@ -519,7 +520,7 @@ export default function ProgressMatrix() {
       .catch(() => { if (!cancelled) { setData(null); addToast('Không tải được dữ liệu', 'error') } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [tab, taskTypeId, companyId, staffId, month, year, sourceFilter, showChildren, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, taskTypeId, companyId, staffId, month, year, sourceFilter, showChildren, importantOnly, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped = useMemo(() => {
     const map = new Map()
@@ -538,7 +539,7 @@ export default function ProgressMatrix() {
       ? `TIẾN ĐỘ CÔNG VIỆC — ${data.subject.name} — ${data.period.label}`
       : `TIẾN ĐỘ CÔNG VIỆC — NV ${data.subject.name} — ${data.period.label}`
 
-  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, source: sourceFilter || undefined, collapse: !showChildren }
+  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, source: sourceFilter || undefined, collapse: !showChildren, importantOnly }
 
   return (
     <AppLayout>
@@ -620,10 +621,16 @@ export default function ProgressMatrix() {
           {tab === 'matrix' && (
             <div className={s.filterGroup}>
               <label className={s.filterLabel}>Hiển thị</label>
-              <label className={s.toggleChildren} title="Tắt để gộp các mục con vào mục cha (hiển thị x/N)">
-                <input type="checkbox" checked={showChildren} onChange={(e) => setShowChildren(e.target.checked)} />
-                <span>Hiện mục con</span>
-              </label>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <label className={s.toggleChildren} title="Chỉ hiện các bước ĐÁNH DẤU ★ (quan trọng). Tắt để xem tất cả bước.">
+                  <input type="checkbox" checked={importantOnly} onChange={(e) => setImportantOnly(e.target.checked)} />
+                  <span>Chỉ bước ★</span>
+                </label>
+                <label className={s.toggleChildren} title="Tắt để gộp các mục con vào mục cha (hiển thị x/N)">
+                  <input type="checkbox" checked={showChildren} onChange={(e) => setShowChildren(e.target.checked)} />
+                  <span>Hiện mục con</span>
+                </label>
+              </div>
             </div>
           )}
         </div>

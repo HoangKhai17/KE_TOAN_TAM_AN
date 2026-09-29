@@ -828,6 +828,20 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   color: var(--color-muted);
   white-space: nowrap;
 }
+/* KPI v2 — nhãn "theo điểm" cạnh % (task định kỳ tính có trọng số) */
+.progressByPoints {
+  font-weight: var(--fw-regular);
+  color: var(--color-primary, #2563eb);
+  font-size: var(--fs-2xs);
+}
+/* KPI v2 — ★ quan trọng + điểm trên từng dòng checklist */
+.clItemStar { flex-shrink: 0; color: #f59e0b; font-size: 12px; line-height: 1; margin-left: 2px; }
+.clItemPts {
+  flex-shrink: 0; margin-left: 4px; padding: 0 6px; height: 16px;
+  display: inline-flex; align-items: center; border-radius: var(--radius-pill);
+  background: var(--color-bg-soft, #f1f5f9); color: var(--color-text-soft, #475569);
+  font-size: var(--fs-2xs); font-weight: var(--fw-bold);
+}
 
 /* ── List / table view ───────────────────────────────────────── */
 

@@ -40,7 +40,7 @@ async function listYears() {
 }
 
 // Ma trận tiến độ cho (taskTypeId, month, year). forceAssignedTo: staff chỉ thấy phiếu của mình.
-async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, collapse = false }) {
+async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, collapse = false, importantOnly = true }) {
   const m = parseInt(month, 10)
   const y = parseInt(year, 10)
   if (!taskTypeId || !m || !y) {
@@ -56,7 +56,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
 
   // Nhãn cột lấy từ mẫu HIỆN TẠI (chỉ để hiển thị); dữ liệu khớp theo id nên đổi tên không sai.
   const { rows: templ } = await query(
-    `SELECT id, step_order, step_text, level FROM task_type_checklist_templates
+    `SELECT id, step_order, step_text, level, is_important FROM task_type_checklist_templates
      WHERE task_type_id = $1 ORDER BY step_order, id`,
     [taskTypeId],
   )
@@ -115,6 +115,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
           stepOrder:    t?.step_order ?? it.step_order ?? 0,
           text:         t?.step_text ?? it.step_text,   // đổi tên mẫu → hiện tên mới; mẫu bị xoá → giữ tên lúc tạo
           parentId:     it.source_parent_id ?? null,
+          important:    !!(t?.is_important),             // bước ★ (then chốt của quy trình) — lọc mặc định
         })
       }
       if (it.source_parent_id != null) parentIds.add(it.source_parent_id)
@@ -149,6 +150,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
           stepText:     s.text,
           group:        null, groupId: null,
           isGroup,
+          important:    !!s.important,
           childCount:   childIds.length,
           childNames:   childIds.map((c) => c.text),   // cho tooltip "Gồm: …"
         }
@@ -165,9 +167,18 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
         group:        s.parentId ? labelOf(s.parentId) : null,
         groupId:      s.parentId ?? null,
         isGroup:      false,
+        important:    !!s.important,
         childCount:   0,
         childNames:   [],
       }))
+  }
+
+  // KPI v2: mặc định CHỈ hiện các bước ★ (quan trọng). Nếu quy trình chưa đánh dấu bước nào ★
+  // thì KHÔNG lọc (tránh bảng rỗng) — trả cờ để FE biết.
+  let importantFilterApplied = false
+  if (importantOnly) {
+    const imp = cols.filter((c) => c.important)
+    if (imp.length) { cols = imp; importantFilterApplied = true }
   }
 
   const cellFor = (col, map) => {
@@ -222,6 +233,8 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
     columns:  cols,
     rows,
     collapse: !!collapse,
+    importantOnly: !!importantOnly,
+    importantFilterApplied,   // false = quy trình chưa có bước ★ nên đang hiện tất cả
   }
 }
 
@@ -582,7 +595,7 @@ async function buildSummaryExcel(data, includeSet) {
 }
 
 // Entry export thống nhất 3 view + chọn cột → { buffer, nameBase }
-async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, month, year, source, columns, collapse = false, forceAssignedTo }) {
+async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, month, year, source, columns, collapse = false, importantOnly = true, forceAssignedTo }) {
   const includeSet = Array.isArray(columns) && columns.length ? new Set(columns) : null
   if (view === 'company') {
     const data = await byCompany({ companyId, month, year, source, forceAssignedTo })
@@ -592,7 +605,7 @@ async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, m
     const data = await byStaff({ staffId, month, year, source, forceAssignedTo })
     return { buffer: await buildSummaryExcel(data, includeSet), nameBase: `nhan-vien-${slug(data.subject.name)}`, period: data.period }
   }
-  const mx = await getMatrix({ taskTypeId, month, year, source, collapse, forceAssignedTo })
+  const mx = await getMatrix({ taskTypeId, month, year, source, collapse, importantOnly, forceAssignedTo })
   return { buffer: await exportMatrix(mx, includeSet), nameBase: slug(mx.taskType.name), period: mx.period }
 }
 

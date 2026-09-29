@@ -104,6 +104,31 @@ Thêm cột: `points SMALLINT DEFAULT 0`, `is_important BOOLEAN DEFAULT FALSE`.
 
 ---
 
+> ✅ **B1 XONG (2026-09-29)** — BE tính % theo điểm. `tasks.service.js`: 2 LATERAL checklist cộng
+> `checklist_points_total/done`; DTO trả `checklistPointsTotal/Done`; cột `progress` rẽ nhánh
+> (Σđiểm>0 → theo điểm, else đếm bước). Smoke: điểm đồng đều → bằng đếm bước; điểm khác nhau (2 dễ
+> xong, 1 khó chưa) → theo bước 25% vs theo điểm 12% (đúng). FE vẫn hiện theo bước tới B2.
+>
+> ✅ **B2 XONG (2026-09-29)** — FE hiển thị % theo điểm. `taskUtils.js`: `progressPct` +
+> `checklistLeafCounts` rẽ nhánh theo điểm (trả thêm weighted/pointsTotal/pointsDone). Danh sách +
+> board tự đổi qua `progressPct`. TaskDetail (thanh panel + thanh header qua onCountChange truyền pct)
+> và QuickView: % theo điểm + text "X/Yđ (pct%) · theo điểm" khi có trọng số. Build FE pass.
+>
+> ✅ **B3 + B4 XONG (2026-09-29)** — mỗi dòng checklist trong TaskDetail + QuickView hiện **★** (nếu
+> quan trọng) + **badge điểm** (nếu points>0). Nhãn phân biệt "theo điểm" (B4) đã gộp ở B2. Build FE
+> pass.
+>
+> ✅ **B5 XONG (2026-09-29)** — Ma trận tiến độ lọc theo bước ★. BE `progress-matrix.service.getMatrix`:
+> đọc `is_important` của template, thêm param `importantOnly` (mặc định true) → **mặc định chỉ hiện
+> cột bước ★**; nếu quy trình chưa có ★ nào thì fallback hiện tất cả (không rỗng, cờ
+> `importantFilterApplied`). Controller/export nhận param. FE `ProgressMatrix.jsx`: toggle **"Chỉ bước
+> ★"** (mặc định bật). Smoke: false→15 cột, true(chưa ★)→15 (fallback), true(★2 bước)→2 cột. Build FE
+> pass.
+>
+> **➡ PHASE B HOÀN TẤT (B1–B5).** % theo điểm + hiển thị điểm/★ + báo cáo lọc ★ đã xong.
+> Follow-up (nhỏ): báo cáo dùng `is_important` của TEMPLATE (bước then chốt của quy trình); text/bước
+> tự-thêm-riêng của lịch vẫn theo cơ chế cũ (badge "bước riêng"). Kế tiếp: **Phase C** (KPI tháng + chốt sổ).
+
 ## 5. Hai hệ tính tiến độ
 
 - Xác định hệ: `task.customer_task_schedule_id IS NOT NULL` **và** task có item `points > 0` → dùng

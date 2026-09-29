@@ -27,8 +27,10 @@ async function getSources(req, res, next) {
 
 async function getMatrix(req, res, next) {
   try {
-    const { taskTypeId, month, year, source, collapse } = req.query
-    const data = await svc.getMatrix({ taskTypeId, month, year, source, collapse: collapse === 'true' || collapse === '1', forceAssignedTo: staffScope(req) })
+    const { taskTypeId, month, year, source, collapse, importantOnly } = req.query
+    // Mặc định CHỈ hiện bước ★; FE gửi importantOnly=false để hiện tất cả.
+    const impOnly = !(importantOnly === 'false' || importantOnly === '0')
+    const data = await svc.getMatrix({ taskTypeId, month, year, source, collapse: collapse === 'true' || collapse === '1', importantOnly: impOnly, forceAssignedTo: staffScope(req) })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
@@ -51,9 +53,10 @@ async function getByStaff(req, res, next) {
 
 async function exportReport(req, res, next) {
   try {
-    const { view, taskTypeId, companyId, staffId, month, year, source, columns, collapse } = req.body ?? {}
+    const { view, taskTypeId, companyId, staffId, month, year, source, columns, collapse, importantOnly } = req.body ?? {}
     const { buffer, nameBase, period } = await svc.exportReport({
       view, taskTypeId, companyId, staffId, month, year, source, columns, collapse: collapse === true,
+      importantOnly: importantOnly !== false,
       forceAssignedTo: staffScope(req),
     })
     const filename = `bc-tien-do-${nameBase}-T${period.month}-${period.year}.xlsx`

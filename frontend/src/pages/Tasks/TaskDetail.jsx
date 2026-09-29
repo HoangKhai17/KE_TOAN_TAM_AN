@@ -174,9 +174,9 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
       .finally(() => setLoading(false))
   }, [taskId])
 
-  const { total, done, pct } = checklistLeafCounts(items)  // đếm theo mục con (leaf)
+  const { total, done, pct, weighted, pointsTotal, pointsDone } = checklistLeafCounts(items)  // KPI v2: pct theo điểm nếu có
 
-  useEffect(() => { onCountChange(total, done) }, [total, done, onCountChange]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onCountChange(total, done, pct) }, [total, done, pct, onCountChange]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function toggle(item) {
     if (togglingIds.has(item.id)) return
@@ -251,7 +251,10 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
               style={{ '--progress-width': `${pct}%` }}
             />
           </div>
-          <span className={s.progressText}>{done}/{total} ({pct}%)</span>
+          <span className={s.progressText}>
+            {weighted ? `${pointsDone}/${pointsTotal}đ` : `${done}/${total}`} ({pct}%)
+            {weighted && <span className={s.progressByPoints} title="Tiến độ tính theo ĐIỂM (task định kỳ)"> · theo điểm</span>}
+          </span>
         </div>
       )}
 
@@ -304,6 +307,8 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
           ) : (
             <>
               <span className={`${s.checklistText} ${isParent ? s.checklistTextParent : ''} ${(!isParent && item.isCompleted) ? s.checklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>{item.stepText}</span>
+              {item.isImportant && <span className={s.clItemStar} title="Bước quan trọng">★</span>}
+              {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
               <div className={s.checklistItemActions}>
                 <button className={s.btnIcon} onClick={() => toggleLevel(item)} title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>
                   {isChild ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
@@ -843,6 +848,7 @@ export default function TaskDetail() {
   // Checklist counts for tab badge
   const [clTotal, setClTotal] = useState(0)
   const [clDone, setClDone]   = useState(0)
+  const [clPct, setClPct]     = useState(null)   // KPI v2: % có thể theo điểm (task định kỳ)
 
   useEffect(() => { loadEnums() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -972,7 +978,7 @@ export default function TaskDetail() {
 
   const overdue      = isTaskOverdue(task)
   const transitions  = STATUS_TRANSITIONS[task.status] ?? []
-  const pct          = clTotal ? Math.round((clDone / clTotal) * 100) : null
+  const pct          = clPct != null ? clPct : (clTotal ? Math.round((clDone / clTotal) * 100) : null)
 
   return (
     <AppLayout>
@@ -1146,7 +1152,7 @@ export default function TaskDetail() {
               {activeTab === 'checklist' && (
                 <ChecklistTab
                   taskId={id}
-                  onCountChange={(total, done) => { setClTotal(total); setClDone(done) }}
+                  onCountChange={(total, done, p) => { setClTotal(total); setClDone(done); setClPct(p ?? null) }}
                   onTaskChanged={() => { tasksApi.getTask(id).then((t) => setTask(t)).catch(() => {}) }}
                 />
               )}
