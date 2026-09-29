@@ -1,237 +1,193 @@
-# 025 — Build Plan: KPI (Cỡ việc theo loại công việc + KPI tháng)
+# 025 — Build Plan: KPI theo ĐIỂM CHECKLIST (bản v2 — đổi hướng)
 
-> Trạng thái: **Phase 1 ĐÃ XONG (2026-09-18)** · Phase 2–3 chờ triển khai. Mục [7] còn vài điểm
-> chốt cho Phase 2.
-> Ngày lập: 2026-09-18. Liên quan: `reward_penalty_module`, `salary_config_module` (memory).
+> Trạng thái: **KẾ HOẠCH (v2) — chưa code phần mới.** Đọc để chốt hướng rồi mới triển khai.
+> Cập nhật: 2026-09-29. Liên quan: `reward_penalty_module`, `salary_config_module`,
+> `recurring_schedule_enhancements` (memory).
 >
-> **Đổi hướng so với bản nháp đầu:** BỎ ý gắn trọng số vào từng mục checklist (rối, chỉnh
-> nhiều, NV nhìn loạn). Thay bằng **"cỡ việc" (điểm) gắn ở LOẠI công việc** — đúng cách các
-> tool lớn (Jira/Asana/ClickUp) làm: checklist chỉ là thanh tiến độ đều nhau, độ khó/công sức
-> ước lượng ở mức task/loại (kiểu story point / cỡ áo S-M-L).
+> **v1 → v2 (đổi hướng theo yêu cầu khách):** BỎ mô hình "cỡ việc ở LOẠI công việc" (Nhỏ/Vừa/Lớn
+> gắn task). Thay bằng **ĐIỂM cho từng CHECKLIST item**, cấu hình **riêng theo Lịch định kỳ của từng
+> công ty**. Tổng điểm checklist = khối lượng công việc của công ty (thêm checklist → tăng điểm, bớt
+> → giảm). Đây là thước đo khối lượng công bằng, sát thực tế công ty kế toán (mỗi khách một lượng
+> việc khác nhau).
 
 ---
 
-## 1. Mục tiêu & nguyên tắc
+## 1. Bối cảnh & vì sao đổi hướng
 
-Đo **KPI hoàn thành công việc** của nhân viên theo tháng, tách rõ 2 tầng:
+Công ty kế toán: mỗi **khách hàng** có bộ công việc thường xuyên (định kỳ) **khác nhau** — số lượng
+checklist khác nhau, độ khó khác nhau. Mô hình v1 ("cỡ việc" gắn ở loại CV) không phản ánh được sự
+khác biệt theo từng công ty. 
 
-- **Tầng 1 — Cỡ việc:** mỗi *loại công việc* có 1 điểm "cỡ việc" (Nhỏ/Vừa/Lớn = 1/2/3), gán 1
-  lần. Việc lớn/khó được ghi nhận nhiều hơn việc nhỏ — **không đụng checklist**.
-- **Tầng 2 — KPI tháng:** tổng hợp *task đã hoàn thành* → 3 chỉ số: Đúng hạn %, Khối lượng
-  (Σ cỡ việc), Tách theo loại CV.
+**Insight khách:** đo khối lượng/độ khó ở **mức checklist item**, cấu hình theo **lịch định kỳ của
+từng công ty**. Vì lịch định kỳ ổn định (cấu hình 1 lần/công ty), việc đặt điểm per-checklist **không
+còn rối/chủ quan** như khi gắn tay từng task lẻ. Task định kỳ sinh ra **tự kế thừa** điểm từ lịch.
 
-### Nguyên tắc chốt
+**Ví dụ (theo ảnh khách gửi):**
 
-1. **Checklist giữ nguyên, đơn giản, đều nhau** (đếm mục xong/tổng mục). NV không phải chọn
-   khó/dễ gì → không loạn. Không thêm cột `weight`.
-2. **Độ khó = "cỡ việc" ở mức LOẠI CV**, đặt 1 lần cho vài chục loại → quản lý gọn.
-3. **Cỡ = độ phức tạp KHÁCH QUAN của việc, cố định theo việc — KHÔNG theo người.** NV cũ thấy
-   dễ / NV mới thấy khó là *chênh lệch kinh nghiệm*, và nó **tự hiện ra ở Đúng hạn + Số lượng**,
-   không nhét vào cỡ việc (nhét vào sẽ đếm 2 lần, đảo ngược động lực).
-4. **KPI tháng tính trên task ĐÃ ĐÓNG**, không dùng % tiến độ của task dở.
-5. **Cảnh báo (thực tế ngành):** điểm cỡ việc chỉ để *không đánh đồng việc to với việc nhỏ*,
-   **không** phải thước đo hiệu suất tuyệt đối. Xương sống KPI = **Đúng hạn + Hoàn thành**; cỡ
-   việc là hệ số phụ. Tránh để người chạy theo điểm / chọn việc điểm cao / "vẽ" điểm.
-
----
-
-## 2. Mô hình dữ liệu
-
-### Bảng cần đụng (schema thật đã rà)
-
-| Bảng | Hiện có | Thêm |
+| Checklist | Mức độ | Điểm |
 |---|---|---|
-| `task_types` (`006`) | name, group_name, default_sla_days, is_active | **`size_points SMALLINT NOT NULL DEFAULT 2`** (1=Nhỏ, 2=Vừa, 3=Lớn) |
-| `tasks` (`010`) | task_type_id, assigned_to, status, due_date, completed_at | **`size_points SMALLINT NULL`** (override / cho task tự nhập không có loại) |
-| `task_checklist_items` (`011`) | level, is_completed | **KHÔNG đổi** |
+| Kiểm tra HĐ đầu vào | Dễ | 2 |
+| Nhập HĐ đầu vào | Dễ | 2 |
+| Kiểm tra HĐ đầu ra | Trung bình | 3 |
+| Nhập HĐ đầu ra | Dễ | 2 |
+| Đối chiếu ngân hàng | Trung bình | 4 |
+| Đối chiếu công nợ | Khó | 6 |
+| Kiểm tra chi phí | Trung bình | 4 |
+| Kiểm tra số dư cuối kỳ | Khó | 5 |
 
-### Công thức "cỡ hiệu lực" của 1 task
-
-```
-effective_size(task) = COALESCE(tasks.size_points, task_types.size_points, 2)
-```
-Ưu tiên: override trên task → cỡ chuẩn của loại → mặc định Vừa(2). Task tự nhập không chọn gì
-thì = 2.
-
-### Nhãn hiển thị — enum động `task_size` (ĐÃ LÀM, đúng chuẩn dự án)
-
-- **KHÔNG hardcode.** Danh mục động `task_size` (migration `153`): **MÃ enum (option_key) CHÍNH LÀ
-  điểm** — key `'1'`=Nhỏ, `'2'`=Vừa, `'3'`=Lớn. Nhãn sửa được trong **Cài đặt → Danh mục hệ thống**.
-- Cột `size_points` lưu đúng con số = mã enum. KPI cộng điểm trực tiếp từ số này.
-- Admin thêm mức mới (vd key `'5'` = "Rất lớn") → tự chạy, **không cần sửa code** (mã = trọng số).
-- BE validate `size_points` ∈ `enums.getValues('task_size')` (giống cách validate `task_source`).
-- FE đọc `getOptions('task_size')`; có fallback tĩnh khi enum chưa tải (giống `task_priority`).
+→ Điểm **không cố định cứng** theo mức độ (Trung bình có cả 3 và 4; Khó có cả 5 và 6). Suy ra: **điểm
+nhập tay**, còn *mức độ* là **nhãn gợi ý** (có thể set điểm mặc định theo mức, cho sửa).
 
 ---
 
-## 3. Phase 1 — Cỡ việc ở loại công việc  ✅ ĐÃ XONG
+## 2. Nguyên tắc chốt
 
-> Đã triển khai: migration `152_task_size_points.sql` (2 cột) + `153_enum_task_size.sql` (enum động
-> `task_size`, mã=điểm); BE `task_types` + `tasks` (DTO `sizePoints`/`effectiveSize`, create/update,
-> validate theo enum, staff không đổi cỡ); FE util `utils/taskSize.js` (đọc `getOptions('task_size')`
-> + fallback), select cỡ ở Settings loại CV (modal + inline sửa nhanh trên dòng) + form tạo task,
-> badge ở TaskDetail. Migration đã chạy, backend restart, build FE pass; smoke: values=['1','2','3'],
-> cỡ sai bị 422. Nhãn Nhỏ/Vừa/Lớn sửa được ở **Danh mục hệ thống**.
-> Số migration THẬT là **152–153** (không phải 025 — 025 là số của tài liệu này).
->
-> **Bổ sung đợt 2 (đủ mặt trong module Tasks):** cỡ việc nay có ở: popup **Tạo công việc**
-> (kế thừa loại + override), **QuickView** sửa nhanh (admin sửa / staff xem), **TaskDetail** badge,
-> **cột "Cỡ việc"** trong danh sách (optional — ẩn mặc định, bật ở bộ chọn cột), **bộ lọc cột**
-> (enum, value-list phía server qua `TASK_COLUMNS_SQL.size` + join `tasktype`). **Lịch định kỳ:**
-> task sinh ra `size_points=NULL` → effectiveSize **kế thừa cỡ của loại** (không cần cấu hình riêng
-> ở lịch). Smoke: value-list cỡ = [{'2':570},{'3':54}] (kế thừa từ loại) — filter chạy đúng.
-
-### 3.1 Migration `025_task_size_points.sql` (+ `.down`)
-
-```sql
-ALTER TABLE task_types ADD COLUMN IF NOT EXISTS size_points SMALLINT NOT NULL DEFAULT 2;
-ALTER TABLE tasks      ADD COLUMN IF NOT EXISTS size_points SMALLINT;              -- nullable = kế thừa loại
--- (tuỳ chọn) seed enum động task_size: nho=1 / vua=2 / lon=3
-```
-Dữ liệu cũ: mọi loại về mặc định Vừa(2), mọi task `NULL` → kế thừa. **Không phá số liệu.**
-
-### 3.2 Backend
-
-- `task_types` service/schema: thêm `sizePoints` vào DTO + create/update (validate 1..3 hoặc
-  theo enum). Files: `backend/src/modules/settings/taskTypes.*` (hoặc nơi CRUD loại CV hiện tại).
-- `tasks` service/schema: thêm `sizePoints` (nullable) vào DTO + create/update task. Trả
-  `effectiveSize` khi list/detail để FE hiển thị. File: `backend/src/modules/tasks/tasks.service.js`.
-- Không cần đụng logic copy checklist template (`tasks.service.js:795/804/845`) vì bỏ weight.
-
-### 3.3 Frontend
-
-- **Settings → Loại công việc:** thêm ô chọn **Cỡ việc (Nhỏ/Vừa/Lớn)** cho mỗi loại. 1 control,
-  set 1 lần. (Nơi: trang quản lý task types trong Settings.)
-- **Tạo/sửa task** (`TaskFormModal.jsx`): ô **Cỡ việc** —
-  - Task có loại: mặc định hiển thị theo cỡ của loại, cho **override** (tuỳ quyền — [7.d]).
-  - Task tự nhập (không loại): chọn cỡ, mặc định **Vừa**.
-- **Hiển thị:** badge cỡ việc nhỏ ở list/detail task (vd chip "L"). Không thêm gì vào checklist.
-- Tuân chuẩn: token CSS, `Modal`, enum động qua `useEnumsStore` nếu dùng enum `task_size`.
-
-### 3.4 Kết quả Phase 1
-
-Việc lớn/khó được gắn cỡ cao hơn, gán 1 lần ở loại; checklist sạch như cũ; nền tảng "điểm khối
-lượng" cho Phase 2 sẵn sàng.
+1. **Điểm gắn với CHECKLIST (công việc), không gắn NGƯỜI** — giữ nguyên tắc "đo theo việc". Người làm
+   nhanh/đúng hạn thể hiện ở chỉ số khác (đúng hạn/tốc độ), không nhét vào điểm.
+2. **Điểm cấu hình ở LỊCH ĐỊNH KỲ (per công ty)**, seed từ template loại CV rồi **sửa tự do**. Cấu
+   hình 1 lần, ổn định.
+3. **2 hệ tiến độ song song:**
+   - Task **thường** (không từ lịch): % = số item xong / tổng item (GIỮ NGUYÊN hiện tại).
+   - Task **từ lịch định kỳ**: % = **Σ điểm(item xong) / Σ điểm(tất cả item)** (có trọng số).
+4. **Ổn định lịch sử = CHỐT SỔ THÁNG** (đã chốt v1): tick checklist → tự cộng điểm vào kết quả tháng;
+   khi chốt sổ, snapshot số của tháng. Đổi điểm về sau chỉ ảnh hưởng tháng chưa chốt.
+5. **Không hardcode enum** — mức độ khó dùng enum động `checklist_difficulty`.
 
 ---
 
-## 4. Phase 2 — Module KPI tháng
+## 3. Quyết định (ĐỀ XUẤT — cần bạn chốt)
 
-### 4.1 Menu & quyền
-
-- Menu **KPI** mới, chọn **tháng** (đồng bộ kỳ với Điểm thưởng / Bảng lương).
-- RBAC như Tasks: **admin xem tất cả NV**, **staff chỉ xem mình**.
-
-### 4.2 Ba chỉ số (mỗi NV, theo tháng M/Y)
-
-**(1) Đúng hạn %** — đo kỷ luật theo hạn. Mẫu số = task **có `due_date` trong tháng** & giao
-cho NV; tử số = trong đó **đóng đúng hạn**.
-```sql
--- tử/mẫu cho 1 user, 1 tháng
-assigned = COUNT(*) FILTER (
-  WHERE assigned_to = :uid AND due_date BETWEEN :mStart AND :mEnd)
-on_time  = COUNT(*) FILTER (
-  WHERE assigned_to = :uid AND due_date BETWEEN :mStart AND :mEnd
-        AND status = 'completed' AND completed_at::date <= due_date)
-pct = ROUND(on_time * 100.0 / NULLIF(assigned, 0))
-```
-
-**(2) Khối lượng (Σ cỡ việc)** — đo sản lượng có tính độ lớn. Tính theo **task hoàn thành trong
-tháng** (`completed_at` trong tháng).
-```sql
-volume_points = SUM(COALESCE(t.size_points, tt.size_points, 2)) FILTER (
-  WHERE t.assigned_to = :uid AND t.status = 'completed'
-        AND t.completed_at::date BETWEEN :mStart AND :mEnd)
-```
-
-**(3) Tách theo loại CV** — gom `task_type`: mỗi loại có số việc hoàn thành + tỉ lệ đúng hạn +
-điểm → thấy **loại nào làm tốt nhất**.
-
-> Lưu ý cố ý: (1) neo theo `due_date`, (2) neo theo `completed_at` — vì đo 2 thứ khác nhau (kỷ
-> luật hạn vs sản lượng thực trong tháng). Ghi rõ trong UI để khỏi hiểu nhầm.
-
-> **Ổn định lịch sử = CHỐT SỔ THEO THÁNG (đã chốt với user):** KHÔNG đóng dấu cỡ vào từng task.
-> Cỡ việc kế thừa SỐNG từ loại (effectiveSize = COALESCE(task, loại, 2)). Khi **chốt sổ 1 tháng**,
-> snapshot/lưu kết quả KPI của tháng đó (điểm khối lượng, đúng hạn, theo loại). Sau khi chốt: đổi
-> cỡ của loại chỉ ảnh hưởng THÁNG CHƯA CHỐT; tháng đã chốt giữ nguyên số. Đồng bộ mô hình kỳ tháng
-> của Bảng lương / Điểm thưởng. → task định kỳ KHÔNG cần stamp `size_points`, để NULL (kế thừa).
-
-### 4.3 Backend
-
-- Module mới `backend/src/modules/kpi/` (service + controller + router), hoặc gộp vào `tasks`.
-- Endpoint (admin + self):
-  - `GET /kpi?year=&month=` → tổng hợp mọi NV (admin) hoặc chính mình (staff): mảng
-    `{ userId, userName, assigned, onTime, onTimePct, volumePoints }`.
-  - `GET /kpi/:userId?year=&month=` → chi tiết 1 NV + bảng tách theo loại CV.
-- Đọc enum trạng thái/loại đúng chuẩn; timezone quy **giờ VN** khi cắt mốc tháng (tránh lệch UTC
-  như các module cũ).
-
-### 4.4 Frontend
-
-- Trang `frontend/src/pages/KPI/` : bảng NV (STT/checkbox chuẩn, `PaginationFooter`), cột Đúng
-  hạn %, Khối lượng; filter tháng; click NV → chi tiết + bảng theo loại CV.
-- Dùng lại: `data-table` primitives, `ColumnFilterDropdown`, `exportXlsx` (chuẩn POST
-  `/api/export/xlsx`), token CSS.
-
-### 4.5 Con số "69%"
-
-Con số hiển thị **chính = Đúng hạn %**. Khối lượng & theo-loại là **bảng bổ trợ**, không gộp vào
-1 số để tránh nhập nhằng. (Chốt [7.c].)
+| # | Vấn đề | Đề xuất |
+|---|---|---|
+| 1 | Điểm mỗi checklist tính sao? | **Nhập tay**; mức độ (Dễ/TB/Khó) là nhãn + set điểm **mặc định gợi ý** (vd 2/4/6), cho sửa số |
+| 2 | "Cỡ việc ở loại CV" (v1 đã làm) | **Ngưng dùng cho KPI**; giữ tạm code (không hại) hoặc gỡ khi dọn. Enum độ khó chuyển xuống mức checklist |
+| 3 | Checklist của lịch định kỳ | **Bảng riêng** `schedule_checklist_items` — copy từ template khi tạo lịch, rồi sửa tự do. Template mẫu giữ nguyên để tái dùng |
+| 4 | Task định kỳ đã sinh trước đây | Chỉ áp cho task **sinh mới**; cung cấp nút "đồng bộ lại" checklist/điểm cho task cũ đang mở (tùy chọn) |
+| 5 | "Bảng kết quả tự tính" là gì | Chính là **module KPI tháng** (Phase C) — tick checklist → auto cộng điểm vào kết quả |
+| 6 | Task thường (ad-hoc) | **Giữ đếm-item** như cũ, không điểm |
 
 ---
 
-## 5. Phase 3 — Ráp KPI → Thưởng → Lương (phần "chưa ráp")
+## 4. Kiến trúc & Data model
 
-- Map KPI tháng → **xếp loại E→S** (Điểm thưởng) → `kpi_grades.amount` (tiền) → cộng vào `bonus`
-  của Bảng lương.
-- `payroll.applyRewardPenalty` hiện đang throw → bật lại theo hướng cộng `grade.amount`.
-- Làm **sau khi Phase 1–2 nghiệm thu**. Tham chiếu `reward_penalty_module`, `salary_config_module`.
+### 4.1 Enum động
+- `checklist_difficulty`: `de` (Dễ), `trung_binh` (Trung bình), `kho` (Khó). Kèm **điểm mặc định gợi
+  ý** (map ở code hoặc thêm cột — xem [4.5]). Đọc qua `lib/enums` / `useEnumsStore`.
+
+### 4.2 Template checklist (tái dùng) — `task_type_checklist_templates`
+Thêm cột: `difficulty` (enum), `points SMALLINT`, `is_important BOOLEAN` (đánh dấu \*). Đây là **giá
+trị GỢI Ý mặc định** để lịch copy xuống.
+
+### 4.3 Checklist của Lịch định kỳ — BẢNG MỚI `schedule_checklist_items`
+```
+id, schedule_id FK customer_task_schedules(id) ON DELETE CASCADE,
+step_order, step_text, level (0/1),
+difficulty (enum), points SMALLINT NOT NULL DEFAULT 0,
+is_important BOOLEAN DEFAULT FALSE,
+source_template_step_id UUID NULL,   -- vết template gốc (để đối chiếu), NULL = item tự thêm
+created_at
+```
+- Khi **tạo lịch**: copy toàn bộ checklist của loại CV → bảng này (kèm difficulty/points/important).
+- Sau đó admin **sửa tự do** cho công ty đó: thêm/bớt/sửa text, đổi độ khó/điểm, gắn \*.
+- Thay thế cơ chế `excluded_step_ids` cũ (ẩn/hiện) bằng edit đầy đủ. `excluded_step_ids` giữ lại cho
+  tương thích ngược (lịch cũ) hoặc migrate sang bảng mới.
+
+### 4.4 Task sinh ra — `task_checklist_items`
+Thêm cột: `points SMALLINT DEFAULT 0`, `is_important BOOLEAN DEFAULT FALSE`.
+- Task **từ lịch**: generator copy từ `schedule_checklist_items` (kèm points/important).
+- Task **thường**: points = 0 (không dùng), tiến độ đếm item như cũ.
+
+### 4.5 Cần chốt kỹ thuật nhỏ
+- Điểm mặc định theo độ khó để ở **map code** (dễ đổi) hay **cột trong enum_options**? *(enum_options
+  chỉ có key/label/sort_order — nếu muốn lưu điểm mặc định trong DB phải thêm cột, hoặc map ở code.)*
+  → Đề xuất: **map code** cho điểm-gợi-ý, vì điểm cuối cùng là nhập tay ở checklist.
 
 ---
 
-## 6. Thứ tự & phạm vi
+## 5. Hai hệ tính tiến độ
+
+- Xác định hệ: `task.customer_task_schedule_id IS NOT NULL` **và** task có item `points > 0` → dùng
+  **hệ điểm**; ngược lại → **hệ đếm item** (hiện tại).
+- Hệ điểm: `pct = round(100 * Σ points(item leaf đã xong) / NULLIF(Σ points(item leaf), 0))`.
+- Sửa nơi tính: FE `checklistLeafCounts` (`TaskDetail.jsx`) + BE `TASK_COLUMNS_SQL.progress`
+  (`tasks.service.js`) — thêm nhánh weighted khi task thuộc lịch.
+- Hiển thị: badge/nhãn cho biết task đang đo theo **điểm** hay theo **item** (tránh nhầm).
+
+---
+
+## 6. Báo cáo tiến độ công việc
+
+- Hiện đang hiển thị **cha–con**. Thêm chế độ **theo checklist**:
+  - Mặc định chỉ hiện các checklist đánh dấu **\*** (quan trọng).
+  - Các checklist còn lại: **optional** (bật thêm khi cần).
+- Áp cho báo cáo tiến độ + (tùy) danh sách task.
+
+---
+
+## 7. Bảng kết quả KPI tháng (auto từ checklist) — Phase C
+
+- **Tick checklist → tự cộng điểm** vào kết quả tháng (thay vì nhập tay). "Liên kết đến table chỉnh
+  ra kết quả".
+- Mỗi NV / mỗi công ty, theo tháng:
+  - **Điểm khối lượng** = Σ điểm checklist đã hoàn thành (theo `completed_at` trong tháng).
+  - **Đúng hạn %** = task xong đúng hạn / được giao (theo `due_date` trong tháng).
+  - **Theo công ty / loại CV** = gom nhóm.
+- **Chốt sổ tháng** → snapshot số, khóa lịch sử.
+
+---
+
+## 8. Hiệu suất nhân viên (kết quả cuối) — Phase D
+
+Tổng hợp nhiều tham số → 1 kết quả:
+- **Vi phạm nội quy** (module hiện có / cần bổ sung).
+- **Tiến độ công việc** (điểm checklist, đúng hạn — từ Phase C).
+- **Lương / thưởng phạt** (Điểm thưởng E→S + Bảng lương).
+→ Gắn với `reward_penalty_module` + `salary_config_module` (giai đoạn ráp cuối).
+
+---
+
+## 9. Lộ trình đề xuất
 
 ```
-Phase 1 (cỡ việc ở loại CV)  → nghiệm thu
-  → Phase 2 (module KPI tháng)  → nghiệm thu
-     → Phase 3 (ráp KPI → thưởng → lương)
+Phase A — Checklist có điểm ở Template + Lịch định kỳ (nền tảng data + cấu hình)
+   → nghiệm thu
+Phase B — Hai hệ tiến độ + hiển thị + báo cáo theo checklist *
+   → nghiệm thu
+Phase C — Bảng kết quả KPI tháng (auto từ checklist) + chốt sổ tháng
+   → nghiệm thu
+Phase D — Hiệu suất NV cuối (ráp vi phạm + tiến độ + lương/thưởng)
 ```
-Phase 1 nhỏ gọn (2 cột + UI select), dùng được ngay. Phase 2 là phần chính. Phase 3 để cuối.
+
+**Phần v1 đã làm (giữ/đổi vai):**
+- Enum `task_size` + cột `size_points` (task/loại) + UI cỡ việc (Settings/Tạo/QuickView/cột/bộ lọc):
+  **ngưng dùng cho KPI**. Giữ tạm (không hại) hoặc gỡ ở bước dọn dẹp — xem [3.#2].
+- Bài học migration đặt default → dữ liệu cũ đồng loạt 1 giá trị: áp dụng tương tự khi thêm
+  points/difficulty (default an toàn, không phá dữ liệu).
 
 ---
 
-## 7. Cần chốt trước khi code
+## 10. Cần chốt trước khi vào Phase A
 
-- **a. Task không có `due_date`** thì tính đúng-hạn thế nào? *Đề xuất:* loại khỏi mẫu số "Đúng
-  hạn" (vì không có hạn để so), nhưng **vẫn tính vào Khối lượng** khi hoàn thành.
-- **b. "Được giao" neo theo `due_date` trong tháng** (đề xuất) hay theo ngày tạo/giao? *Đề xuất:*
-  `due_date` — phản ánh "việc đến hạn tháng này xong chưa".
-- **c. Con số KPI chính = Đúng hạn %** (đề xuất) hay công thức tổng hợp có trọng số cả 3?
-- **d. Ai được đặt/override cỡ việc?** *Đã chốt:* cỡ chuẩn ở loại CV do **admin** đặt; override
-  trên task do **người giao việc** (staff làm việc không tự đổi — đã chặn ở updateTask). Nhãn cỡ
-  dùng **enum động `task_size`** (đã làm — migration 153).
-- **e. Task việc con (subtask)** có cỡ riêng không? *Đề xuất:* không — chỉ task chính có cỡ,
-  subtask thừa hưởng ngữ cảnh của task cha.
+1–6 ở [mục 3]. Ngoài ra:
+- **7.** Ai được sửa checklist/điểm của lịch định kỳ? *(đề xuất: admin — như cấu hình lịch hiện tại.)*
+- **8.** Báo cáo "checklist \*": áp cho báo cáo tiến độ hiện có hay là màn mới? *(đề xuất: bổ sung chế
+  độ vào báo cáo hiện có.)*
+- **9.** Vi phạm nội quy (Phase D) đã có dữ liệu/module chưa, hay cần thiết kế mới?
 
 ---
 
-## 8. Rủi ro & lưu ý
+## 11. Rủi ro & lưu ý
 
-- **Anti-pattern hiệu suất:** đừng biến điểm cỡ việc thành thước đo cá nhân tuyệt đối (nguồn:
-  Atlassian/Asana/Scrum.org). Ưu tiên **Đúng hạn + Hoàn thành**, cỡ việc là hệ số phụ.
-- **Cỡ theo việc, không theo người:** chênh lệch kinh nghiệm đã nằm ở tốc độ/đúng hạn — không
-  nhân đôi vào cỡ.
-- **Không phá dữ liệu cũ:** default cỡ = Vừa(2), checklist không đổi → hệ thống chạy y như trước
-  cho tới khi admin bắt đầu gán cỡ.
+- **2 hệ tiến độ dễ gây nhầm** → luôn ghi rõ task đang đo theo điểm hay theo item.
+- **Bảng riêng cho checklist lịch** = thay đổi cấu trúc lớn; cần migrate cẩn thận từ `excluded_step_ids`
+  (giữ tương thích ngược cho lịch cũ).
+- **Điểm nhập tay** → có thể "vẽ số"; giảm rủi ro bằng: điểm ở **lịch (per công ty, admin đặt)** +
+  mức độ gợi ý + audit khi sửa.
+- **Ổn định KPI** dựa vào **chốt sổ tháng**, không đóng dấu điểm vào task.
 - **Enum động + timezone VN** theo chuẩn dự án.
-- **Task tự nhập** vốn khó so sánh khách quan giữa người — đây là giới hạn tự nhiên; ưu tiên
-  chuẩn hoá việc lặp lại thành loại CV để phần có-cỡ-chuẩn phình ra theo thời gian.
 
 ---
 
-## Tham khảo
-
+## Tham khảo (v1)
 - Story Points — Atlassian: https://www.atlassian.com/agile/project-management/estimation
-- Story Points — Asana: https://asana.com/resources/story-points
 - 9 Bad Practices for Story Points — Agile Insider: https://medium.com/agileinsider/9-bad-practices-for-using-story-points-ae210ad1d06c
-- To Estimate or Not — Scrum.org: https://www.scrum.org/resources/blog/story-points-estimate-or-not-estimate
