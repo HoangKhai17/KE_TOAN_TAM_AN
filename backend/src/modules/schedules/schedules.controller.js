@@ -51,6 +51,15 @@ async function previewSchedule(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Sinh thử (dry-run) mọi lịch của 1 công ty — KHÔNG ghi DB
+async function simulateGeneration(req, res, next) {
+  try {
+    const companyId = req.params.companyId || req.params.id
+    const result = await svc.simulateCompanyGeneration(companyId, { periods: req.query.periods }, req.user)
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
 // Console tập trung (admin)
 async function getRecurringOverview(req, res, next) {
   try {
@@ -130,7 +139,7 @@ async function resetScheduleSubtasks(req, res, next) {
 module.exports = {
   listSchedules, getSchedule, createSchedule,
   updateSchedule, deleteSchedule, toggleSchedule, previewSchedule,
-  getRecurringOverview, setScheduleMaxDueDay,
+  getRecurringOverview, setScheduleMaxDueDay, simulateGeneration,
   getSchedulePeriods, backfillPeriods,
   listScheduleChecklist, addScheduleChecklistItem, updateScheduleChecklistItem,
   deleteScheduleChecklistItem, reorderScheduleChecklist, resetScheduleChecklist,

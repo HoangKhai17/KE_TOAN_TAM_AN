@@ -29,7 +29,7 @@ function toScheduleStepDto(row) {
 const { getNextOccurrences, getNextOccurrence } = require('../../utils/recurrence.calculator')
 const { rollForwardToWorkday } = require('../../utils/workday.util')
 const { buildPeriodLabel, docPeriodOffset } = require('../../utils/periodLabel')
-const { createTaskForOccurrence, loadHolidaySet } = require('../../jobs/taskGenerator.job')
+const { createTaskForOccurrence, loadHolidaySet, buildTaskTitle } = require('../../jobs/taskGenerator.job')
 const { parseISO, format, addDays, addMonths } = require('date-fns')
 
 function midnight(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
@@ -587,6 +587,97 @@ async function previewSchedule(id, count = 10) {
   return occurrences.map(ds => format(rollForwardToWorkday(parseISO(ds), holidaySet), 'yyyy-MM-dd'))
 }
 
+// ── SINH THỬ (dry-run) — mô phỏng generator cho MỌI lịch của 1 công ty, KHÔNG ghi DB ──
+// Trả về: mỗi lịch × N kỳ sắp tới → task cha (nhãn kỳ, ngày bắt đầu/hạn) + việc con + tóm tắt
+// checklist, và cờ "đã có" (trùng period_label với task hiện tại → generator sẽ bỏ qua).
+async function simulateCompanyGeneration(companyId, { periods = 3 } = {}, user) {
+  await assertCompanyAccess(companyId, user)   // admin hoặc staff phụ trách công ty
+  const n = Math.max(1, Math.min(12, Number(periods) || 3))
+
+  const { rows: schedules } = await query(
+    `SELECT s.*, tt.name AS task_type_name, tt.default_sla_days, u.name AS staff_name
+       FROM customer_task_schedules s
+       JOIN task_types tt ON tt.id = s.task_type_id
+       LEFT JOIN users u  ON u.id  = s.assigned_staff_id
+      WHERE s.company_id = $1
+      ORDER BY s.sort_order ASC, s.created_at DESC`,
+    [companyId]
+  )
+  const holidaySet = await loadHolidaySet()
+  const roll = (d) => format(rollForwardToWorkday(d, holidaySet), 'yyyy-MM-dd')
+
+  const out = []
+  for (const s of schedules) {
+    const offset = docPeriodOffset(s.recurrence_config)
+    // Checklist tóm tắt của lịch
+    const { rows: [cl] } = await query(
+      `SELECT COUNT(*)::int AS cnt, COALESCE(SUM(points),0)::int AS pts,
+              COALESCE(SUM(CASE WHEN is_important THEN 1 ELSE 0 END),0)::int AS important
+         FROM schedule_checklist_items WHERE schedule_id = $1`, [s.id])
+    const subtasks = await listScheduleSubtasks(s.id)
+
+    // Task đã có của lịch → map period_label để đánh dấu "đã có / sẽ tạo"
+    const { rows: existing } = await query(
+      'SELECT period_label, status FROM tasks WHERE customer_task_schedule_id = $1', [s.id])
+    const byLabel = new Map()
+    for (const t of existing) if (!byLabel.has(t.period_label)) byLabel.set(t.period_label, t)
+
+    let occDates = []
+    let occError = null
+    if (s.is_active) {
+      try { occDates = getNextOccurrences(s.recurrence_type, s.recurrence_config, new Date(), n) }
+      catch (e) { occError = e.message || 'Cấu hình lịch chưa hợp lệ' }
+    }
+
+    const occurrences = occDates.map((ds) => {
+      const forDate = parseISO(ds)
+      const periodLabel = buildPeriodLabel(s.recurrence_type, forDate, offset)
+      const ex = byLabel.get(periodLabel) || null
+      const sla = s.override_sla_days ?? s.default_sla_days
+      return {
+        forDate: ds,
+        periodLabel,
+        title: buildTaskTitle(periodLabel, s.title || s.task_type_name),
+        startDate: roll(forDate),
+        dueDate: roll(addDays(forDate, s.deadline_offset_days || 0)),
+        slaDays: sla ?? null,
+        alreadyExists: !!ex,
+        existingStatus: ex?.status ?? null,
+        subtasks: subtasks.map((sub) => {
+          const start = Number.isInteger(sub.startOffset) ? sub.startOffset : 0
+          const deadline = Math.max(Number.isInteger(sub.deadlineOffset) ? sub.deadlineOffset : start, start)
+          return {
+            title: sub.title,
+            startDate: roll(addDays(forDate, start)),
+            dueDate: roll(addDays(forDate, deadline)),
+            stepCount: (sub.items || []).length,
+            points: (sub.items || []).reduce((a, it) => a + (Number(it.points) || 0), 0),
+          }
+        }),
+      }
+    })
+
+    out.push({
+      scheduleId:  s.id,
+      title:       s.title || s.task_type_name,
+      taskTypeName: s.task_type_name,
+      isManual:    !!s.title,
+      recurrenceType: s.recurrence_type,
+      recurrenceConfig: s.recurrence_config,
+      isActive:    s.is_active,
+      assignedStaffName: s.staff_name ?? null,
+      deadlineOffsetDays: s.deadline_offset_days ?? 0,
+      maxDueDay:   s.max_due_day ?? null,
+      periodOffset: offset,
+      checklist:   { count: cl.cnt, totalPoints: cl.pts, importantCount: cl.important },
+      subtaskCount: subtasks.length,
+      occError,
+      occurrences,
+    })
+  }
+  return { companyId, periods: n, generatedAt: new Date().toISOString(), schedules: out }
+}
+
 // ── Luồng 2 — Console tập trung: overview theo LỊCH + đặt trần "ngày N hàng tháng" ─
 
 // Danh sách LỊCH định kỳ đang chạy (kèm công ty, loại CV, phụ trách, trần ngày N).
@@ -769,7 +860,7 @@ async function backfillPeriods(scheduleId, { periods = [], force = false }, user
 
 module.exports = {
   listSchedules, getScheduleById, createSchedule,
-  updateSchedule, deleteSchedule, toggleSchedule, previewSchedule,
+  updateSchedule, deleteSchedule, toggleSchedule, previewSchedule, simulateCompanyGeneration,
   getRecurringOverview, setScheduleMaxDueDay,
   getSchedulePeriods, backfillPeriods,
   // Checklist RIÊNG của lịch (KPI v2)

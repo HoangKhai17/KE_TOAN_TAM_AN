@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, Fragment } from 'react'
 import { format, parseISO, addDays } from 'date-fns'
 import {
   CalendarDays, Plus, Eye, Power, Pencil, Trash2, Loader2, AlertTriangle, RefreshCw, ChevronDown, GitBranch,
-  ChevronLeft, ChevronRight, ChevronUp, Star,
+  ChevronLeft, ChevronRight, ChevronUp, Star, FlaskConical, CircleCheck, CircleAlert,
 } from 'lucide-react'
 import * as schedulesApi from '../../api/schedules'
 import { listTaskTypes, getChecklist, getSubtaskTemplates } from '../../api/taskTypes'
@@ -731,6 +731,79 @@ function SubtaskFormModal({ initial, isNew, diffOptions, subPreviewOcc, previewS
   )
 }
 
+// ── 1 lịch trong kết quả SINH THỬ (dry-run) ──────────────────────────────────
+function SimScheduleCard({ sc }) {
+  const th = { textAlign: 'left', padding: '4px 8px', fontSize: 11, fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '.3px' }
+  const td = { padding: '5px 8px', borderTop: '1px solid var(--color-border-soft)', fontVariantNumeric: 'tabular-nums' }
+  return (
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ padding: '9px 12px', background: 'var(--color-bg-soft, #f8fafc)', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <strong style={{ fontSize: 14 }}>{sc.title}</strong>
+        {sc.isManual && <span className={s.scDeadlineTag}>Tự tạo · {sc.taskTypeName}</span>}
+        <span className={s.scDeadlineTag}>{RECURRENCE_LABELS[sc.recurrenceType]} · {describeRecurrence(sc.recurrenceType, sc.recurrenceConfig)}</span>
+        {!sc.isActive && <span className={s.scDeadlineTag} style={{ color: '#b45309', borderColor: '#f59e0b' }}>Tạm dừng</span>}
+        {sc.maxDueDay != null && <span className={s.scDeadlineTag}>Trần ngày {sc.maxDueDay}</span>}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-muted)' }}>
+          Checklist {sc.checklist.count} bước · {sc.checklist.totalPoints}đ
+          {sc.checklist.importantCount > 0 ? ` · ${sc.checklist.importantCount}★` : ''}
+          {sc.subtaskCount > 0 ? ` · ${sc.subtaskCount} việc con` : ''}
+        </span>
+      </div>
+      <div style={{ padding: '4px 8px 8px' }}>
+        {sc.occError ? (
+          <div style={{ padding: '8px', color: '#dc2626', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <CircleAlert size={14} /> {sc.occError}
+          </div>
+        ) : !sc.isActive ? (
+          <div style={{ padding: '8px', color: 'var(--color-muted)', fontSize: 13 }}>Lịch đang tạm dừng — sẽ không sinh.</div>
+        ) : sc.occurrences.length === 0 ? (
+          <div style={{ padding: '8px', color: 'var(--color-muted)', fontSize: 13 }}>Không có kỳ sắp tới.</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr><th style={th}>Kỳ / Việc con</th><th style={th}>Bắt đầu</th><th style={th}>Hạn</th><th style={th}>Trạng thái</th></tr>
+            </thead>
+            <tbody>
+              {sc.occurrences.map((o, i) => (
+                <Fragment key={i}>
+                  <tr>
+                    <td style={{ ...td, fontWeight: 700 }}>{o.periodLabel}</td>
+                    <td style={td}>{o.startDate}</td>
+                    <td style={td}>{o.dueDate}</td>
+                    <td style={td}>
+                      {o.alreadyExists ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-muted)' }}>
+                          Đã có{o.existingStatus ? ` (${o.existingStatus})` : ''}
+                        </span>
+                      ) : (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#16a34a', fontWeight: 600 }}>
+                          <CircleCheck size={13} /> Sẽ tạo
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                  {o.subtasks.map((sub, j) => (
+                    <tr key={`${i}-${j}`}>
+                      <td style={{ ...td, paddingLeft: 22, color: 'var(--color-text-soft)', borderTop: 'none' }}>
+                        <GitBranch size={11} style={{ color: 'var(--color-muted)', verticalAlign: -1, marginRight: 4 }} />
+                        {sub.title}
+                        <span style={{ color: 'var(--color-muted)', fontSize: 11 }}> · {sub.stepCount} bước/{sub.points}đ</span>
+                      </td>
+                      <td style={{ ...td, borderTop: 'none', color: 'var(--color-text-soft)' }}>{sub.startDate}</td>
+                      <td style={{ ...td, borderTop: 'none', color: 'var(--color-text-soft)' }}>{sub.dueDate}</td>
+                      <td style={{ ...td, borderTop: 'none' }} />
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function SchedulesTab({ company, isAdmin = false }) {
@@ -919,6 +992,18 @@ export default function SchedulesTab({ company, isAdmin = false }) {
 
   // Server preview
   const [previewModal, setPreviewModal] = useState(null)  // null | { schedule, dates, loading }
+
+  // Sinh thử (dry-run) toàn công ty
+  const [simModal, setSimModal] = useState(null)  // null | { loading, periods, data, error }
+  async function openSimulate(periods = 3) {
+    setSimModal({ loading: true, periods, data: null, error: null })
+    try {
+      const data = await schedulesApi.simulateCompanyGeneration(company.id, periods)
+      setSimModal({ loading: false, periods, data, error: null })
+    } catch (err) {
+      setSimModal({ loading: false, periods, data: null, error: err?.response?.data?.message || err.message || 'Lỗi sinh thử' })
+    }
+  }
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -1134,6 +1219,11 @@ export default function SchedulesTab({ company, isAdmin = false }) {
           {selection.selectedCount > 0 && <button className={`${s.btnDanger} ${s.dataTableBulkDelete}`} onClick={deleteSelected}><Trash2 size={13} /> Xoá {selection.selectedCount} dòng</button>}
           <button className={s.btnGhost} onClick={load} title="Tải lại" disabled={loading}>
             <RefreshCw size={14} className={loading ? s.spin : ''} />
+          </button>
+          <button className={s.btnOutline} onClick={() => openSimulate(3)} disabled={loading || schedules.length === 0}
+            title="Sinh thử các kỳ sắp tới để kiểm tra cấu hình — KHÔNG lưu vào hệ thống">
+            <FlaskConical size={14} />
+            Sinh thử
           </button>
           <button className={s.btnPrimary} onClick={openCreate}>
             <Plus size={14} />
@@ -1653,6 +1743,60 @@ export default function SchedulesTab({ company, isAdmin = false }) {
           <div className={s.modalActions}>
             <button className={s.btnOutline} onClick={() => setPreviewModal(null)}>Đóng</button>
           </div>
+        </Modal>
+      )}
+
+      {/* ── Sinh thử (dry-run) toàn công ty ── */}
+      {simModal && (
+        <Modal
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ whiteSpace: 'nowrap' }}>Sinh thử lịch tự động</span>
+              <span style={{ fontSize: 'var(--fs-2xs)', fontWeight: 400, color: 'var(--color-muted)' }}>
+                Mô phỏng — KHÔNG lưu vào hệ thống
+              </span>
+            </div>
+          }
+          onClose={() => setSimModal(null)}
+          width="min(1080px, calc(100vw - 40px))"
+          maxWidth="1080px"
+          footer={
+            <div className={s.modalActions} style={{ margin: 0, paddingTop: 0, borderTop: 'none' }}>
+              <button className={s.btnOutline} onClick={() => setSimModal(null)}>Đóng</button>
+            </div>
+          }
+        >
+          {/* Toolbar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+            <span style={{ fontSize: 13, color: 'var(--color-text-soft)' }}>Số kỳ sắp tới mỗi lịch:</span>
+            {[1, 3, 6, 12].map((p) => (
+              <button key={p} type="button" onClick={() => openSimulate(p)} disabled={simModal.loading}
+                style={{ height: 28, padding: '0 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  border: simModal.periods === p ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+                  background: simModal.periods === p ? 'var(--color-primary-bg)' : 'var(--color-white)',
+                  color: simModal.periods === p ? 'var(--color-primary)' : 'var(--color-text-soft)' }}>{p} kỳ</button>
+            ))}
+            <button type="button" className={s.btnGhost} onClick={() => openSimulate(simModal.periods)} disabled={simModal.loading} title="Chạy lại">
+              <RefreshCw size={14} className={simModal.loading ? s.spin : ''} /> Chạy lại
+            </button>
+          </div>
+
+          {simModal.loading ? (
+            <div className={s.loadingCenter}><Loader2 size={18} className={s.spin} /> Đang mô phỏng…</div>
+          ) : simModal.error ? (
+            <div className={s.errorBox}>{simModal.error}</div>
+          ) : !simModal.data || simModal.data.schedules.length === 0 ? (
+            <div className={s.scPreviewEmpty}>Công ty chưa có lịch định kỳ nào.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CircleAlert size={13} /> Kết quả dưới đây là <b>mô phỏng ngày sinh & nội dung task</b> theo cấu hình hiện tại — dùng để kiểm tra trước, không tạo task thật. Ngày đã tự đẩy khỏi CN/lễ.
+              </div>
+              {simModal.data.schedules.map((sc) => (
+                <SimScheduleCard key={sc.scheduleId} sc={sc} />
+              ))}
+            </div>
+          )}
         </Modal>
       )}
 

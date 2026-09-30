@@ -10,6 +10,12 @@ export async function createCompanySchedule(companyId, body) {
   return data.data.schedule
 }
 
+// Sinh thử (dry-run) mọi lịch của công ty — KHÔNG ghi DB, chỉ xem kết quả. periods = 1..12
+export async function simulateCompanyGeneration(companyId, periods = 3) {
+  const { data } = await api.get(`/companies/${companyId}/schedules/simulate`, { params: { periods } })
+  return data.data
+}
+
 export async function getSchedule(id) {
   const { data } = await api.get(`/schedules/${id}`)
   return data.data.schedule

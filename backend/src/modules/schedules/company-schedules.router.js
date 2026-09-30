@@ -38,6 +38,9 @@ const auth  = [authenticate]   // quyền theo công ty phụ trách kiểm tra 
  */
 router.get('/', ...auth, ctrl.listSchedules)
 
+// Sinh thử (dry-run) mọi lịch của công ty — KHÔNG ghi DB. ?periods=1..12 (mặc định 3)
+router.get('/simulate', ...auth, ctrl.simulateGeneration)
+
 /**
  * @openapi
  * /companies/{companyId}/schedules:
