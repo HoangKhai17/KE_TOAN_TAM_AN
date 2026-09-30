@@ -644,6 +644,7 @@ function SubtaskCard({ taskTypeId, subtask, expanded, onToggle, onRefresh }) {
             onRefresh={onRefresh}
             api={stepApi}
             bare
+            withPoints
             addPlaceholder="Thêm bước checklist…"
           />
         </div>

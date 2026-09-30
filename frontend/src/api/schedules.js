@@ -45,6 +45,22 @@ export async function replaceScheduleChecklist(id, items) {
   return data.data.checklist
 }
 
+// ── Việc con RIÊNG của lịch (KPI v2) ──────────────────────────────────────────
+export async function getScheduleSubtasks(id) {
+  const { data } = await api.get(`/schedules/${id}/subtasks`)
+  return data.data.subtasks
+}
+// Ghi đè toàn bộ việc con của lịch. subtasks = [{title, startOffset?, deadlineOffset?,
+//   sourceTemplateSubtaskId?, items?: [{stepText, level?, difficulty?, points?, isImportant?, sourceTemplateStepId?}]}]
+export async function replaceScheduleSubtasks(id, subtasks) {
+  const { data } = await api.put(`/schedules/${id}/subtasks`, { subtasks })
+  return data.data.subtasks
+}
+export async function resetScheduleSubtasks(id) {
+  const { data } = await api.post(`/schedules/${id}/subtasks/reset`)
+  return data.data.subtasks
+}
+
 // ── Console tập trung (admin) ─────────────────────────────────────────────────
 export async function getRecurringOverview() {
   const { data } = await api.get('/schedules/overview')

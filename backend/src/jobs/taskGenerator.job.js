@@ -107,18 +107,16 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
   // công ty; thiếu thì mặc định start=0, deadline=due_offset_days của template ?? 0.
   // KHÔNG có phụ thuộc bước trước.
   const childrenCreated = []
-  // Lịch THỦ CÔNG (title) = chỉ checklist, KHÔNG đẻ việc con liên kết của mẫu.
-  if (newTask && !schedule.title) {
-    const subOffsets = (schedule.subtask_offsets && typeof schedule.subtask_offsets === 'object')
-      ? schedule.subtask_offsets : {}
+  // Việc con của lịch (KPI v2) — đọc từ schedule_subtasks (per-lịch, đã seed từ mẫu
+  // khi tạo lịch template, hoặc do admin tự cấu hình). Áp dụng cho CẢ lịch mẫu lẫn thủ công.
+  if (newTask) {
     const { rows: subtasks } = await query(
-      'SELECT id, title, due_offset_days FROM task_type_subtask_templates WHERE task_type_id = $1 ORDER BY sort_order, created_at',
-      [schedule.task_type_id]
+      'SELECT id, title, start_offset_days, deadline_offset_days FROM schedule_subtasks WHERE schedule_id = $1 ORDER BY sort_order, created_at',
+      [schedule.id]
     )
     for (const s of subtasks) {
-      const off = subOffsets[s.id] || {}
-      const startOff    = Number.isInteger(off.start)    ? off.start    : 0
-      const deadlineOff = Number.isInteger(off.deadline) ? off.deadline : (s.due_offset_days ?? 0)
+      const startOff    = Number.isInteger(s.start_offset_days)    ? s.start_offset_days    : 0
+      const deadlineOff = Number.isInteger(s.deadline_offset_days) ? s.deadline_offset_days : startOff
       const childStartStr = format(
         rollForwardToWorkday(addDays(forDate, startOff), holidaySet), 'yyyy-MM-dd')
       const childDueStr = format(
@@ -134,15 +132,16 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
           schedule.assigned_staff_id ?? null, childStartStr, childDueStr, periodLabel, sla, schedule.created_by,
         ]
       )
-      // Copy checklist RIÊNG của việc con vào task con
+      // Copy checklist RIÊNG của việc con (kèm điểm/độ quan trọng) vào task con
       const { rows: subSteps } = await query(
-        'SELECT step_order, step_text, level FROM task_type_subtask_steps WHERE subtask_template_id = $1 ORDER BY step_order, created_at',
+        'SELECT step_order, step_text, level, points, is_important FROM schedule_subtask_items WHERE schedule_subtask_id = $1 ORDER BY step_order, created_at',
         [s.id]
       )
       for (const ss of subSteps) {
         await query(
-          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level) VALUES ($1,$2,$3,$4)`,
-          [child.id, ss.step_order, ss.step_text, ss.level ?? 0]
+          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level, points, is_important)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [child.id, ss.step_order, ss.step_text, ss.level ?? 0, ss.points ?? 0, ss.is_important ?? false]
         )
       }
       childrenCreated.push(child.id)

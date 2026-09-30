@@ -55,7 +55,10 @@ function toStepDto(row) {
 
 // Việc con định kỳ (tách riêng khỏi checklist) — tiêu đề + hạn (offset) + checklist RIÊNG.
 function toSubStepDto(row) {
-  return { id: row.id, stepText: row.step_text, stepOrder: row.step_order, level: row.level ?? 0 }
+  return {
+    id: row.id, stepText: row.step_text, stepOrder: row.step_order, level: row.level ?? 0,
+    difficulty: row.difficulty ?? 'trung_binh', points: row.points ?? 4, isImportant: row.is_important ?? false,
+  }
 }
 function toSubtaskDto(row, steps = []) {
   return {
@@ -329,9 +332,18 @@ async function listSubtaskTemplates(taskTypeId) {
     'SELECT * FROM task_type_subtask_templates WHERE task_type_id = $1 ORDER BY sort_order, created_at',
     [taskTypeId]
   )
+  // Nạp checklist RIÊNG (kèm độ khó/điểm/★) của từng việc con để nest vào.
+  const stepsBySub = {}
+  const subIds = rows.map((r) => r.id)
+  if (subIds.length) {
+    const { rows: subSteps } = await query(
+      'SELECT * FROM task_type_subtask_steps WHERE subtask_template_id = ANY($1::uuid[]) ORDER BY step_order, created_at',
+      [subIds])
+    for (const st of subSteps) { (stepsBySub[st.subtask_template_id] ||= []).push(st) }
+  }
   // LƯU Ý: KHÔNG dùng rows.map(toSubtaskDto) — map truyền (row, index) nên index rơi vào tham số
-  // `steps`, gây "steps.map is not a function". Bọc lambda để chỉ truyền row.
-  return rows.map((r) => toSubtaskDto(r))
+  // `steps`, gây "steps.map is not a function". Bọc lambda để truyền đúng row + steps.
+  return rows.map((r) => toSubtaskDto(r, stepsBySub[r.id] || []))
 }
 
 async function addSubtaskTemplate(taskTypeId, data = {}) {
@@ -386,13 +398,15 @@ async function assertSubtask(taskTypeId, subtaskId) {
 
 async function addSubtaskStep(taskTypeId, subtaskId, data = {}) {
   await assertSubtask(taskTypeId, subtaskId)
-  const { stepText, level = 0 } = data
+  const { stepText, level = 0, difficulty = 'trung_binh', isImportant = false } = data
+  const points = data.points != null ? Math.max(0, Number(data.points) || 0) : defaultPointsFor(difficulty)
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_subtask_steps WHERE subtask_template_id = $1', [subtaskId])
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [row] } = await query(
-    'INSERT INTO task_type_subtask_steps (subtask_template_id, step_order, step_text, level) VALUES ($1,$2,$3,$4) RETURNING *',
-    [subtaskId, nextOrder, stepText, level === 1 ? 1 : 0])
+    `INSERT INTO task_type_subtask_steps (subtask_template_id, step_order, step_text, level, difficulty, points, is_important)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [subtaskId, nextOrder, stepText, level === 1 ? 1 : 0, difficulty, points, !!isImportant])
   return toSubStepDto(row)
 }
 
@@ -402,6 +416,9 @@ async function updateSubtaskStep(taskTypeId, subtaskId, stepId, data) {
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
   if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
+  if (data.difficulty !== undefined) { params.push(data.difficulty); updates.push(`difficulty = $${params.length}`) }
+  if (data.points !== undefined) { params.push(Math.max(0, Number(data.points) || 0)); updates.push(`points = $${params.length}`) }
+  if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(stepId, subtaskId)
   const { rows: [row] } = await query(

@@ -113,6 +113,19 @@ async function replaceScheduleChecklist(req, res, next) {
   try { res.json({ success: true, data: { checklist: await svc.replaceScheduleChecklist(req.params.id, req.body.items, req.user) } }) }
   catch (err) { next(err) }
 }
+// ── Việc con của lịch (KPI v2) ──
+async function listScheduleSubtasks(req, res, next) {
+  try { res.json({ success: true, data: { subtasks: await svc.listScheduleSubtasks(req.params.id) } }) }
+  catch (err) { next(err) }
+}
+async function replaceScheduleSubtasks(req, res, next) {
+  try { res.json({ success: true, data: { subtasks: await svc.replaceScheduleSubtasks(req.params.id, req.body.subtasks, req.user) } }) }
+  catch (err) { next(err) }
+}
+async function resetScheduleSubtasks(req, res, next) {
+  try { res.json({ success: true, data: { subtasks: await svc.resetScheduleSubtasksFromTemplate(req.params.id, req.user) } }) }
+  catch (err) { next(err) }
+}
 
 module.exports = {
   listSchedules, getSchedule, createSchedule,
@@ -122,4 +135,5 @@ module.exports = {
   listScheduleChecklist, addScheduleChecklistItem, updateScheduleChecklistItem,
   deleteScheduleChecklistItem, reorderScheduleChecklist, resetScheduleChecklist,
   replaceScheduleChecklist,
+  listScheduleSubtasks, replaceScheduleSubtasks, resetScheduleSubtasks,
 }

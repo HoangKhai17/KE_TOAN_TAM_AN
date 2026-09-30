@@ -111,7 +111,7 @@ function emptyForm() {
     deadlineOffsetDays: 0,
     overrideSlaDays: '',
     checklist: [],   // KPI v2: checklist RIÊNG của lịch (draft: [{_key, stepText, level, difficulty, points, isImportant, sourceTemplateStepId}])
-    subtaskOffsets: {},   // { <subtaskTemplateId>: { start, deadline } } — offset việc con theo lịch
+    subtasks: [],    // KPI v2: VIỆC CON của lịch (draft: [{_key, title, startOffset, deadlineOffset, sourceTemplateSubtaskId, items:[...]}])
     notes: '',
   }
 }
@@ -132,6 +132,32 @@ function mapScheduleToDraft(items) {
     difficulty: it.difficulty ?? 'trung_binh', points: it.points ?? 4,
     isImportant: !!it.isImportant, sourceTemplateStepId: it.sourceTemplateStepId ?? null,
   }))
+}
+
+// ── VIỆC CON của lịch: helper draft ──────────────────────────────────────────
+let _subSeq = 0
+function subKey() { return `sub_${Date.now()}_${_subSeq++}` }
+// Từ MẪU (getSubtaskTemplates → {title, dueOffsetDays, steps:[{stepText,level,difficulty,points,isImportant,id}]})
+function mapTemplateSubsToDraft(subs) {
+  return (subs || []).map((sub) => ({
+    _key: subKey(), title: sub.title || '', startOffset: 0, deadlineOffset: sub.dueOffsetDays ?? 0,
+    sourceTemplateSubtaskId: sub.id ?? null,
+    items: mapTemplateToDraft(sub.steps || []),
+  }))
+}
+// Từ LỊCH (getScheduleSubtasks → {title, startOffset, deadlineOffset, sourceTemplateSubtaskId, items:[...]})
+function mapScheduleSubsToDraft(subs) {
+  return (subs || []).map((sub) => ({
+    _key: subKey(), title: sub.title || '', startOffset: sub.startOffset ?? 0, deadlineOffset: sub.deadlineOffset ?? 0,
+    sourceTemplateSubtaskId: sub.sourceTemplateSubtaskId ?? null,
+    items: mapScheduleToDraft(sub.items || []),
+  }))
+}
+function newSubtaskDraft() {
+  return { _key: subKey(), title: '', startOffset: 0, deadlineOffset: 0, sourceTemplateSubtaskId: null, items: [] }
+}
+function newSubStepDraft() {
+  return { _key: clKey(), stepText: '', level: 0, difficulty: 'trung_binh', points: 4, isImportant: false, sourceTemplateStepId: null }
 }
 
 function defaultConfig(type) {
@@ -515,6 +541,173 @@ function PreviewPanel({ type, config, holidaySet }) {
   )
 }
 
+// Nhân bản 1 việc con nháp (tránh sửa trực tiếp danh sách trước khi bấm Lưu ở popup con).
+function cloneSubtaskDraft(sub) {
+  return { ...sub, items: (sub.items || []).map((it) => ({ ...it })) }
+}
+
+// ── Danh sách VIỆC CON (gọn) — thêm/sửa qua popup riêng SubtaskFormModal ──
+function SubtaskList({ subtasks, onAdd, onEdit, onRemove, onResetFromTemplate, subPreviewOcc, previewSubDate }) {
+  return (
+    <div className={s.formField}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <label className={s.formLabel} style={{ margin: 0 }}>
+          Việc con <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>· {subtasks.length}</span>
+        </label>
+        {onResetFromTemplate && (
+          <button type="button" className={s.scClResetBtn} onClick={onResetFromTemplate} title="Nạp việc con từ mẫu của loại CV (ghi đè danh sách hiện tại)">
+            <RefreshCw size={12} /> Lấy từ mẫu
+          </button>
+        )}
+      </div>
+      <div className={s.scStepPickHint}>
+        Mỗi việc con là 1 công việc độc lập, có ngày bắt đầu &amp; hạn riêng (<b>ngày = ngày kỳ + số ngày offset</b>, tự đẩy khỏi CN/lễ) và checklist riêng có độ khó + điểm.
+        {subPreviewOcc && <> Xem trước theo <b>kỳ sắp tới {format(subPreviewOcc, 'dd/MM/yyyy')}</b>.</>}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+        {subtasks.length === 0 && <div className={s.scClEmpty}>Chưa có việc con. Bấm “+ Thêm việc con”.</div>}
+        {subtasks.map((sub, i) => {
+          const startN = Number(sub.startOffset) || 0
+          const dueN = Math.max(Number(sub.deadlineOffset) || 0, startN)
+          const invalid = Number(sub.deadlineOffset) < startN
+          const totalPts = (sub.items || []).reduce((a, it) => a + (Number(it.points) || 0), 0)
+          return (
+            <div key={sub._key} style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: 'var(--color-bg-soft, #f8fafc)' }}>
+              <GitBranch size={13} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+              <button type="button" onClick={() => onEdit(i)} title="Sửa việc con"
+                style={{ flex: '1 1 180px', minWidth: 0, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, fontWeight: 600, color: sub.title ? 'var(--color-text)' : 'var(--color-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {sub.title || '(chưa đặt tên)'}
+              </button>
+              <span className={s.scDeadlineTag}>{(sub.items || []).length} bước · {totalPts}đ</span>
+              <span className={s.scDeadlineTag} style={{ borderColor: invalid ? '#ef4444' : undefined, color: invalid ? '#ef4444' : undefined }}>BĐ +{startN}d · Hạn +{dueN}d</span>
+              {subPreviewOcc && (
+                <span style={{ fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>→ {previewSubDate(startN)} → {previewSubDate(dueN)}</span>
+              )}
+              <button type="button" className={s.rowActionBtn} onClick={() => onEdit(i)} title="Sửa"><Pencil size={13} /></button>
+              <button type="button" className={s.scClDel} onClick={() => onRemove(i)} title="Xoá việc con"><Trash2 size={13} /></button>
+            </div>
+          )
+        })}
+      </div>
+      <button type="button" className={s.scClAddBtn} onClick={onAdd} style={{ marginTop: 8 }}><Plus size={13} /> Thêm việc con</button>
+    </div>
+  )
+}
+
+// ── Popup THÊM/SỬA 1 việc con: tên + offset + checklist riêng (độ khó/điểm/★) ──
+function SubtaskFormModal({ initial, isNew, diffOptions, subPreviewOcc, previewSubDate, onCancel, onSave }) {
+  const [draft, setDraft] = useState(() => cloneSubtaskDraft(initial))
+  const [err, setErr] = useState('')
+
+  const setNum = (field, v) => setDraft((d) => ({ ...d, [field]: v === '' ? 0 : Math.max(0, parseInt(v, 10) || 0) }))
+  const setItemField = (j, field, value) => setDraft((d) => ({
+    ...d,
+    items: d.items.map((it, k) => {
+      if (k !== j) return it
+      const nx = { ...it, [field]: value }
+      if (field === 'difficulty') nx.points = defaultPointsFor(value)
+      return nx
+    }),
+  }))
+  const addItem = () => setDraft((d) => ({ ...d, items: [...d.items, newSubStepDraft()] }))
+  const removeItem = (j) => setDraft((d) => ({ ...d, items: d.items.filter((_, k) => k !== j) }))
+  const moveItem = (j, dir) => setDraft((d) => {
+    const items = d.items.slice()
+    const t = j + dir
+    if (t < 0 || t >= items.length) return d
+    ;[items[j], items[t]] = [items[t], items[j]]
+    return { ...d, items }
+  })
+
+  const startN = Number(draft.startOffset) || 0
+  const dueN = Math.max(Number(draft.deadlineOffset) || 0, startN)
+  const invalid = Number(draft.deadlineOffset) < startN
+  const totalPts = draft.items.reduce((a, it) => a + (Number(it.points) || 0), 0)
+
+  function submit() {
+    if (!draft.title.trim()) { setErr('Vui lòng nhập tên việc con'); return }
+    if (invalid) { setErr('Hạn không được nhỏ hơn ngày bắt đầu'); return }
+    onSave({ ...draft, title: draft.title.trim() })
+  }
+
+  const inStyle = { width: 64, boxSizing: 'border-box', padding: '5px 8px', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 13, textAlign: 'center' }
+
+  return (
+    <Modal
+      title={isNew ? 'Thêm việc con' : 'Sửa việc con'}
+      onClose={onCancel}
+      width="min(920px, calc(100vw - 40px))"
+      maxWidth="920px"
+    >
+      {err && <div className={s.errorBox}>{err}</div>}
+
+      <div className={s.formField}>
+        <label className={`${s.formLabel} ${s.formLabelReq}`}>Tên việc con</label>
+        <input className={`${s.formInput} ${err && !draft.title.trim() ? s.formInputError : ''}`}
+          value={draft.title} autoFocus
+          onChange={(e) => { setErr(''); setDraft((d) => ({ ...d, title: e.target.value })) }}
+          placeholder="VD: Đối chiếu công nợ" />
+      </div>
+
+      <div className={s.formGrid2}>
+        <div className={s.formField}>
+          <label className={s.formLabel}>Bắt đầu kỳ + (ngày)</label>
+          <input type="number" min="0" className={s.formInput} value={draft.startOffset} onChange={(e) => { setErr(''); setNum('startOffset', e.target.value) }} />
+        </div>
+        <div className={s.formField}>
+          <label className={s.formLabel}>Hạn kỳ + (ngày)</label>
+          <input type="number" min="0" className={`${s.formInput} ${invalid ? s.formInputError : ''}`} value={draft.deadlineOffset} onChange={(e) => { setErr(''); setNum('deadlineOffset', e.target.value) }} />
+        </div>
+      </div>
+      {subPreviewOcc && (
+        <div style={{ margin: '2px 0 6px', fontSize: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ color: 'var(--color-muted)' }}>→ Kỳ {format(subPreviewOcc, 'dd/MM/yyyy')}:</span>
+          <span className={s.scDeadlineTag} style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' }}>bắt đầu {previewSubDate(startN)}</span>
+          <span className={s.scDeadlineTag} style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' }}>hạn {previewSubDate(dueN)}</span>
+        </div>
+      )}
+
+      <div className={s.formField}>
+        <label className={s.formLabel} style={{ margin: 0 }}>
+          Checklist việc con <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>· {draft.items.length} bước · tổng {totalPts}đ</span>
+        </label>
+        <div className={s.scStepPickHint}>Đổi độ khó (tự gợi ý điểm) hoặc nhập điểm tay. <b>★</b> = bước quan trọng (hiện mặc định ở báo cáo).</div>
+        <div className={s.scClList}>
+          {draft.items.length === 0 && <div className={s.scClEmpty}>Chưa có bước nào. Bấm “+ Thêm bước”.</div>}
+          {draft.items.map((it, j) => (
+            <div key={it._key} className={`${s.scClRow} ${it.level === 1 ? s.scClRowChild : ''}`}>
+              <div className={s.scClMove}>
+                <button type="button" onClick={() => moveItem(j, -1)} disabled={j === 0} title="Lên"><ChevronUp size={12} /></button>
+                <button type="button" onClick={() => moveItem(j, 1)} disabled={j === draft.items.length - 1} title="Xuống"><ChevronDown size={12} /></button>
+              </div>
+              <button type="button" className={s.scClIndent} onClick={() => setItemField(j, 'level', it.level === 1 ? 0 : 1)} title={it.level === 1 ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>
+                {it.level === 1 ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
+              </button>
+              <input className={s.scClText} value={it.stepText} onChange={(e) => setItemField(j, 'stepText', e.target.value)} placeholder="Nội dung bước…" />
+              <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setItemField(j, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>
+                <Star size={13} fill={it.isImportant ? 'currentColor' : 'none'} />
+              </button>
+              <select className={s.scClDiff} value={it.difficulty} onChange={(e) => setItemField(j, 'difficulty', e.target.value)} title="Độ khó">
+                {diffOptionsOr(diffOptions).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+              <input type="number" min={0} max={100} className={s.scClPoints} value={it.points} onChange={(e) => setItemField(j, 'points', e.target.value)} title="Điểm" />
+              <span className={s.scClUnit}>đ</span>
+              <button type="button" className={s.scClDel} onClick={() => removeItem(j)} title="Xoá bước"><Trash2 size={13} /></button>
+            </div>
+          ))}
+        </div>
+        <button type="button" className={s.scClAddBtn} onClick={addItem}><Plus size={13} /> Thêm bước</button>
+      </div>
+
+      <div className={s.modalActions}>
+        <button className={s.btnOutline} onClick={onCancel}>Hủy</button>
+        <button className={s.btnPrimary} onClick={submit}>{isNew ? 'Thêm việc con' : 'Lưu việc con'}</button>
+      </div>
+    </Modal>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
@@ -552,41 +745,29 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
   const [form,       setForm]       = useState(emptyForm())
   const [formErrors, setFormErrors] = useState({})
   const [saving,     setSaving]     = useState(false)
-  const [templSubs,  setTemplSubs]  = useState([])   // việc con LIÊN KẾT của loại CV đang chọn
 
-  // KPI v2: khi TẠO lịch và đổi loại CV → seed checklist nháp từ checklist mẫu của loại đó.
-  // (Chế độ SỬA nạp checklist của lịch trong openEdit, không seed lại từ mẫu.)
+  // KPI v2: khi TẠO lịch + chế độ TỪ MẪU → seed checklist VÀ việc con nháp từ mẫu của loại CV.
+  // (Chế độ SỬA nạp từ chính lịch trong openEdit; chế độ tự tạo giữ bản tự dựng.)
   useEffect(() => {
-    // Chỉ tự seed checklist từ mẫu khi TẠO + chế độ TỪ MẪU. Chế độ tự tạo giữ checklist tự dựng.
     if (!modal || modal.mode !== 'create' || form.mode === 'manual' || !form.taskTypeId) return
     let cancelled = false
     getChecklist(form.taskTypeId)
       .then((steps) => { if (!cancelled) setForm((f) => ({ ...f, checklist: mapTemplateToDraft(steps) })) })
       .catch(() => { if (!cancelled) setForm((f) => ({ ...f, checklist: [] })) })
+    getSubtaskTemplates(form.taskTypeId)
+      .then((subs) => { if (!cancelled) setForm((f) => ({ ...f, subtasks: mapTemplateSubsToDraft(subs) })) })
+      .catch(() => { if (!cancelled) setForm((f) => ({ ...f, subtasks: [] })) })
     return () => { cancelled = true }
   }, [modal?.mode, form.mode, form.taskTypeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Nạp việc con LIÊN KẾT của loại CV → để đặt offset ngày bắt đầu + hạn cho từng con.
-  useEffect(() => {
-    if (!modal || !form.taskTypeId) { setTemplSubs([]); return }
-    let cancelled = false
-    getSubtaskTemplates(form.taskTypeId)
-      .then((subs) => {
-        if (cancelled) return
-        setTemplSubs(subs || [])
-        // Điền offset mặc định cho con nào chưa có (KHÔNG đè giá trị đã lưu khi sửa).
-        setForm((f) => {
-          const cur = f.subtaskOffsets || {}
-          const next = { ...cur }
-          for (const sub of subs || []) {
-            if (!next[sub.id]) next[sub.id] = { start: 0, deadline: sub.dueOffsetDays ?? 0 }
-          }
-          return { ...f, subtaskOffsets: next }
-        })
-      })
-      .catch(() => { if (!cancelled) setTemplSubs([]) })
-    return () => { cancelled = true }
-  }, [modal, form.taskTypeId])
+  // Nạp việc con từ mẫu để GHI ĐÈ (nút "Lấy từ mẫu" trong editor).
+  async function loadSubtasksFromTemplate() {
+    if (!form.taskTypeId) return
+    try {
+      const subs = await getSubtaskTemplates(form.taskTypeId)
+      setForm((f) => ({ ...f, subtasks: mapTemplateSubsToDraft(subs) }))
+    } catch { toast('Không tải được việc con mẫu', 'error') }
+  }
 
   // Kỳ SẮP TỚI (chưa đẩy CN/lễ) — mốc để xem trước ngày việc con, khớp cách generator tính.
   const subPreviewOcc = useMemo(() => {
@@ -602,16 +783,19 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
     return format(rollForwardToWorkday(addDays(subPreviewOcc, Math.max(0, offset)), holidaySet), 'dd/MM/yyyy')
   }
 
-  // Đặt offset (start|deadline) cho 1 việc con.
-  function setSubOffset(subId, field, value) {
-    const n = value === '' ? 0 : Math.max(0, parseInt(value, 10) || 0)
-    setForm((f) => ({
-      ...f,
-      subtaskOffsets: {
-        ...(f.subtaskOffsets || {}),
-        [subId]: { ...((f.subtaskOffsets || {})[subId] || { start: 0, deadline: 0 }), [field]: n },
-      },
-    }))
+  // Popup THÊM/SỬA 1 việc con — nháp riêng, chỉ ghi vào form.subtasks khi bấm Lưu ở popup con.
+  const [subEdit, setSubEdit] = useState(null)   // null | { index: number | -1 (thêm mới), draft }
+  const openAddSubtask  = () => setSubEdit({ index: -1, draft: newSubtaskDraft() })
+  const openEditSubtask = (i) => setSubEdit({ index: i, draft: cloneSubtaskDraft(form.subtasks[i]) })
+  const removeSubtask   = (i) => setForm((f) => ({ ...f, subtasks: f.subtasks.filter((_, k) => k !== i) }))
+  const saveSubtask     = (draft) => {
+    setForm((f) => {
+      const list = f.subtasks.slice()
+      if (subEdit.index === -1) list.push(draft)
+      else list[subEdit.index] = draft
+      return { ...f, subtasks: list }
+    })
+    setSubEdit(null)
   }
 
   // ── KPI v2: editor checklist nháp của lịch ──────────────────────────────────
@@ -659,7 +843,7 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
 
-  // Mở rộng dòng để xem offset từng việc con (nạp mẫu việc con khi mở lần đầu)
+  // Mở rộng dòng để xem việc con RIÊNG của lịch (nạp khi mở lần đầu)
   const [expandedId, setExpandedId] = useState(null)
   const [expandSubs, setExpandSubs] = useState({})   // { [scheduleId]: 'loading' | subs[] }
   async function toggleExpand(sc) {
@@ -668,7 +852,7 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
     if (expandSubs[sc.id] === undefined) {
       setExpandSubs((m) => ({ ...m, [sc.id]: 'loading' }))
       try {
-        const subs = await getSubtaskTemplates(sc.taskTypeId)
+        const subs = await schedulesApi.getScheduleSubtasks(sc.id)
         setExpandSubs((m) => ({ ...m, [sc.id]: subs || [] }))
       } catch {
         setExpandSubs((m) => ({ ...m, [sc.id]: [] }))
@@ -753,14 +937,17 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
       deadlineOffsetDays: sc.deadlineOffsetDays ?? 0,
       overrideSlaDays:    sc.overrideSlaDays != null ? String(sc.overrideSlaDays) : '',
       checklist:          [],   // nạp async ngay dưới
-      subtaskOffsets:     (sc.subtaskOffsets && typeof sc.subtaskOffsets === 'object') ? sc.subtaskOffsets : {},
+      subtasks:           [],   // nạp async ngay dưới
       notes:              sc.notes || '',
     })
     setFormErrors({})
     setModal({ mode: 'edit', schedule: sc })
-    // Nạp checklist RIÊNG của lịch (KPI v2)
+    // Nạp checklist + việc con RIÊNG của lịch (KPI v2)
     schedulesApi.getScheduleChecklist(sc.id)
       .then((cl) => setForm((f) => ({ ...f, checklist: mapScheduleToDraft(cl) })))
+      .catch(() => { /* để trống nếu lỗi */ })
+    schedulesApi.getScheduleSubtasks(sc.id)
+      .then((subs) => setForm((f) => ({ ...f, subtasks: mapScheduleSubsToDraft(subs) })))
       .catch(() => { /* để trống nếu lỗi */ })
   }
 
@@ -777,17 +964,30 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
       }
     }
 
-    // Offset việc con: chỉ gửi cho các con của mẫu hiện tại; ép số, đảm bảo hạn ≥ bắt đầu.
-    const subtaskOffsets = {}
-    for (const sub of templSubs) {
-      const o = (form.subtaskOffsets || {})[sub.id] || {}
-      const start = Math.max(0, parseInt(o.start, 10) || 0)
-      const deadline = parseInt(o.deadline, 10) || 0
-      if (deadline < start) {
-        setFormErrors({ submit: `Việc con "${sub.title}": Hạn (+${deadline}) không được nhỏ hơn ngày bắt đầu (+${start}).` })
+    // Việc con: bỏ con không tên; ép số + đảm bảo hạn ≥ bắt đầu; kèm checklist riêng (bỏ bước trống).
+    const subtasksPayload = []
+    for (const sub of (form.subtasks || [])) {
+      const title = (sub.title || '').trim()
+      if (!title) continue
+      const startOffset = Math.max(0, parseInt(sub.startOffset, 10) || 0)
+      const deadlineOffset = parseInt(sub.deadlineOffset, 10) || 0
+      if (deadlineOffset < startOffset) {
+        setFormErrors({ submit: `Việc con "${title}": Hạn (+${deadlineOffset}) không được nhỏ hơn ngày bắt đầu (+${startOffset}).` })
         return
       }
-      subtaskOffsets[sub.id] = { start, deadline }
+      subtasksPayload.push({
+        title, startOffset, deadlineOffset,
+        sourceTemplateSubtaskId: sub.sourceTemplateSubtaskId ?? null,
+        items: (sub.items || [])
+          .filter((it) => it.stepText && it.stepText.trim())
+          .map((it) => ({
+            stepText: it.stepText.trim(), level: it.level === 1 ? 1 : 0,
+            difficulty: it.difficulty || 'trung_binh',
+            points: Math.max(0, Number(it.points) || 0),
+            isImportant: !!it.isImportant,
+            sourceTemplateStepId: it.sourceTemplateStepId ?? null,
+          })),
+      })
     }
 
     // Checklist: bỏ dòng trống, chuẩn hoá điểm; gửi cho backend ghi đè.
@@ -810,7 +1010,6 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
         recurrenceConfig:   form.recurrenceConfig,
         deadlineOffsetDays: Number(form.deadlineOffsetDays) || 0,
         overrideSlaDays:    form.overrideSlaDays !== '' ? parseInt(form.overrideSlaDays) : null,
-        subtaskOffsets,
         notes:              form.notes || null,
       }
 
@@ -821,8 +1020,9 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
           ...payload,
         })
         scheduleId = created.id
-        // Ghi đè checklist theo bản đã sửa (backend đã seed mặc định từ mẫu khi tạo).
+        // Ghi đè checklist + việc con theo bản đã sửa (backend đã seed mặc định từ mẫu khi tạo).
         await schedulesApi.replaceScheduleChecklist(scheduleId, checklistPayload)
+        await schedulesApi.replaceScheduleSubtasks(scheduleId, subtasksPayload)
         const full = await schedulesApi.getSchedule(scheduleId)
         setSchedules(prev => [full, ...prev])
         toast('Tạo lịch định kỳ thành công', 'success')
@@ -830,7 +1030,9 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
         scheduleId = modal.schedule.id
         const updated = await schedulesApi.updateSchedule(scheduleId, payload)
         await schedulesApi.replaceScheduleChecklist(scheduleId, checklistPayload)
-        setSchedules(prev => prev.map(s => s.id === updated.id ? updated : s))
+        await schedulesApi.replaceScheduleSubtasks(scheduleId, subtasksPayload)
+        const full = await schedulesApi.getSchedule(scheduleId)
+        setSchedules(prev => prev.map(s => s.id === full.id ? full : s))
         toast('Cập nhật lịch thành công', 'success')
       }
       setModal(null)
@@ -957,12 +1159,12 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                     <td>
                       <div className={s.scTypeName}>{sc.title || sc.taskTypeName}</div>
                       {sc.title && <div className={s.scDeadlineTag} style={{ marginTop: 2, display: 'inline-block' }}>Tự tạo · {sc.taskTypeName}</div>}
-                      {sc.subtaskCount > 0 && !sc.title && (
+                      {sc.subtaskCount > 0 && (
                         <button type="button"
                           className={s.scDeadlineTag}
                           style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 3, cursor: 'pointer', background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', border: '1px solid var(--color-primary-ring)' }}
                           onClick={() => toggleExpand(sc)}
-                          title="Xem/ẩn offset ngày bắt đầu & hạn của từng việc con">
+                          title="Xem/ẩn việc con & checklist của từng con">
                           {sc.subtaskCount} việc con
                           <ChevronDown size={11} style={{ transform: expandedId === sc.id ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
                         </button>
@@ -1053,16 +1255,17 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '.3px' }}>
-                              Việc con liên kết — offset tính từ ngày kỳ (ngày bắt đầu việc cha)
+                              Việc con — mỗi con là 1 công việc độc lập; offset tính từ ngày kỳ
                             </div>
                             {expandSubs[sc.id].map((sub) => {
-                              const off = (sc.subtaskOffsets || {})[sub.id] || {}
-                              const start = Number.isInteger(off.start) ? off.start : 0
-                              const deadline = Number.isInteger(off.deadline) ? off.deadline : (sub.dueOffsetDays ?? 0)
+                              const start = Number.isInteger(sub.startOffset) ? sub.startOffset : 0
+                              const deadline = Number.isInteger(sub.deadlineOffset) ? sub.deadlineOffset : start
+                              const pts = (sub.items || []).reduce((a, it) => a + (Number(it.points) || 0), 0)
                               return (
                                 <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13 }}>
                                   <GitBranch size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
                                   <span style={{ flex: '1 1 200px' }}>{sub.title}</span>
+                                  {(sub.items?.length > 0) && <span className={s.scDeadlineTag}>{sub.items.length} bước · {pts}đ</span>}
                                   <span className={s.scDeadlineTag}>Bắt đầu kỳ +{start}d</span>
                                   <span className={s.scDeadlineTag}>Hạn kỳ +{deadline}d</span>
                                 </div>
@@ -1087,20 +1290,23 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
           title={
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1, minWidth: 0 }}>
               <span style={{ whiteSpace: 'nowrap' }}>{modal.mode === 'create' ? 'Tạo lịch định kỳ' : 'Chỉnh sửa lịch định kỳ'}</span>
-              {modal.mode === 'create' && (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {[['template', 'Từ mẫu'], ['manual', 'Tự tạo (thủ công)']].map(([m, lbl]) => (
-                    <button key={m} type="button" onClick={() => setForm(f => ({ ...f, mode: m, ...(m === 'manual' ? { checklist: [] } : { title: '' }) }))}
-                      style={{ height: 30, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 'var(--fs-2xs)', fontWeight: 600,
-                        border: form.mode === m ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
-                        background: form.mode === m ? 'var(--color-primary-bg)' : 'var(--color-white)',
-                        color: form.mode === m ? 'var(--color-primary)' : 'var(--color-text-soft)' }}>{lbl}</button>
-                  ))}
-                </div>
-              )}
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[['template', 'Từ mẫu'], ['manual', 'Tự tạo (thủ công)']].map(([m, lbl]) => (
+                  <button key={m} type="button" onClick={() => setForm(f => ({
+                    ...f, mode: m,
+                    ...(m === 'template' ? { title: '' } : {}),
+                    // Chỉ xoá checklist + việc con khi TẠO MỚI + chuyển sang thủ công. Khi SỬA giữ nguyên bản của lịch.
+                    ...(modal.mode === 'create' && m === 'manual' ? { checklist: [], subtasks: [] } : {}),
+                  }))}
+                    style={{ height: 30, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 'var(--fs-2xs)', fontWeight: 600,
+                      border: form.mode === m ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+                      background: form.mode === m ? 'var(--color-primary-bg)' : 'var(--color-white)',
+                      color: form.mode === m ? 'var(--color-primary)' : 'var(--color-text-soft)' }}>{lbl}</button>
+                ))}
+              </div>
             </div>
           }
-          onClose={() => setModal(null)}
+          onClose={() => { if (!subEdit) setModal(null) }}
           width="min(1180px, calc(100vw - 40px))"
           maxWidth="1180px"
         >
@@ -1131,7 +1337,7 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                   <select
                     className={`${s.formSelect} ${formErrors.taskTypeId ? s.formInputError : ''}`}
                     value={form.taskTypeId}
-                    onChange={e => setForm(f => ({ ...f, taskTypeId: e.target.value, checklist: f.mode === 'manual' ? f.checklist : [], subtaskOffsets: {} }))}
+                    onChange={e => setForm(f => ({ ...f, taskTypeId: e.target.value, checklist: f.mode === 'manual' ? f.checklist : [], subtasks: f.mode === 'manual' ? f.subtasks : [] }))}
                   >
                     <option value="">-- Chọn loại công việc --</option>
                     {taskTypes.map(tt => (
@@ -1199,55 +1405,17 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
                 </div>
               )}
 
-              {/* Việc con LIÊN KẾT — đặt offset ngày bắt đầu + hạn cho từng con (không áp dụng lịch tự tạo) */}
-              {form.mode !== 'manual' && templSubs.length > 0 && (
-                <div className={s.formField}>
-                  <label className={s.formLabel}>Việc con liên kết ({templSubs.length})</label>
-                  <div className={s.scStepPickHint}>
-                    Mỗi việc con là 1 công việc độc lập, có ngày bắt đầu &amp; hạn riêng.
-                    <b> Ngày = ngày kỳ + số ngày offset</b>, rồi tự đẩy sang ngày làm việc kế nếu rơi vào CN/lễ (thứ 7 vẫn tính).
-                    {subPreviewOcc && <> Xem trước theo <b>kỳ sắp tới {format(subPreviewOcc, 'dd/MM/yyyy')}</b>.</>}
-                  </div>
-                  <div style={{ border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', marginTop: 6 }}>
-                    {templSubs.map((sub, i) => {
-                      const o = (form.subtaskOffsets || {})[sub.id] || { start: 0, deadline: 0 }
-                      const invalid = Number(o.deadline) < Number(o.start)
-                      const inStyle = { width: 52, boxSizing: 'border-box', padding: '3px 6px', border: '1px solid var(--color-border)', borderRadius: 4, fontSize: 12, textAlign: 'center' }
-                      const startN = Number(o.start) || 0
-                      const dueN = Math.max(Number(o.deadline) || 0, startN)
-                      return (
-                        <div key={sub.id} style={{ padding: '8px 10px', borderTop: i ? '1px solid var(--color-border-soft)' : 'none' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                            <span style={{ flex: '1 1 160px', fontSize: 13, fontWeight: 600 }}>
-                              {sub.title}
-                              {sub.steps?.length ? <span style={{ color: 'var(--color-muted)', fontSize: 11, fontWeight: 400 }}> · {sub.steps.length} bước</span> : null}
-                            </span>
-                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
-                              Bắt đầu kỳ +
-                              <input type="number" min="0" value={o.start} onChange={e => setSubOffset(sub.id, 'start', e.target.value)} style={inStyle} />
-                              ngày
-                            </label>
-                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
-                              Hạn kỳ +
-                              <input type="number" min="0" value={o.deadline} onChange={e => setSubOffset(sub.id, 'deadline', e.target.value)} style={{ ...inStyle, borderColor: invalid ? '#ef4444' : 'var(--color-border)' }} />
-                              ngày
-                            </label>
-                          </div>
-                          {subPreviewOcc && (
-                            <div style={{ marginTop: 5, fontSize: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                              <span style={{ color: 'var(--color-muted)' }}>→ Kỳ {format(subPreviewOcc, 'dd/MM/yyyy')}:</span>
-                              <span className={s.scDeadlineTag} style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' }}>bắt đầu {previewSubDate(startN)}</span>
-                              <span className={s.scDeadlineTag} style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' }}>hạn {previewSubDate(dueN)}</span>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                  {templSubs.some(sub => { const o = (form.subtaskOffsets || {})[sub.id] || {}; return Number(o.deadline) < Number(o.start) }) && (
-                    <div className={s.formError}>Hạn việc con không được nhỏ hơn ngày bắt đầu.</div>
-                  )}
-                </div>
+              {/* Việc con của lịch — danh sách gọn; thêm/sửa qua popup riêng (cả mẫu lẫn tự tạo) */}
+              {form.taskTypeId && (
+                <SubtaskList
+                  subtasks={form.subtasks}
+                  onAdd={openAddSubtask}
+                  onEdit={openEditSubtask}
+                  onRemove={removeSubtask}
+                  onResetFromTemplate={loadSubtasksFromTemplate}
+                  subPreviewOcc={subPreviewOcc}
+                  previewSubDate={previewSubDate}
+                />
               )}
 
               {/* Staff */}
@@ -1397,6 +1565,19 @@ export default function SchedulesTab({ company, isAdmin: _isAdmin }) {
             </button>
           </div>
         </Modal>
+      )}
+
+      {/* ── Popup THÊM/SỬA việc con (lồng trên popup lịch) ── */}
+      {subEdit && (
+        <SubtaskFormModal
+          initial={subEdit.draft}
+          isNew={subEdit.index === -1}
+          diffOptions={diffOptions}
+          subPreviewOcc={subPreviewOcc}
+          previewSubDate={previewSubDate}
+          onCancel={() => setSubEdit(null)}
+          onSave={saveSubtask}
+        />
       )}
 
       {/* ── Server preview modal ── */}

@@ -106,7 +106,7 @@ async function getScheduleCompanyId(id) {
 async function getScheduleById(id) {
   const { rows: [row] } = await query(
     `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name,
-            (SELECT COUNT(*) FROM task_type_subtask_templates st WHERE st.task_type_id = s.task_type_id) AS subtask_count
+            (SELECT COUNT(*) FROM schedule_subtasks ss WHERE ss.schedule_id = s.id) AS subtask_count
      FROM customer_task_schedules s
      JOIN task_types tt ON tt.id = s.task_type_id
      LEFT JOIN users u  ON u.id  = s.assigned_staff_id
@@ -116,6 +116,7 @@ async function getScheduleById(id) {
   if (!row) throw Object.assign(new Error('Schedule not found'), { status: 404 })
   const dto = toDto(row)
   dto.checklist = await listScheduleChecklist(id)   // checklist RIÊNG của lịch (KPI v2)
+  dto.subtasks  = await listScheduleSubtasks(id)    // việc con RIÊNG của lịch (KPI v2)
   return dto
 }
 
@@ -123,7 +124,7 @@ async function listSchedules(companyId) {
   await assertCompanyExists(companyId)
   const { rows } = await query(
     `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name,
-            (SELECT COUNT(*) FROM task_type_subtask_templates st WHERE st.task_type_id = s.task_type_id) AS subtask_count
+            (SELECT COUNT(*) FROM schedule_subtasks ss WHERE ss.schedule_id = s.id) AS subtask_count
      FROM customer_task_schedules s
      JOIN task_types tt ON tt.id = s.task_type_id
      LEFT JOIN users u  ON u.id  = s.assigned_staff_id
@@ -259,6 +260,102 @@ async function resetScheduleChecklistFromTemplate(scheduleId, user) {
   return listScheduleChecklist(scheduleId)
 }
 
+// ── VIỆC CON của lịch (schedule_subtasks + checklist riêng có điểm) ───────────
+function toScheduleSubtaskItemDto(r) {
+  return {
+    id: r.id, stepOrder: r.step_order, stepText: r.step_text, level: r.level ?? 0,
+    difficulty: r.difficulty ?? 'trung_binh', points: r.points ?? 4, isImportant: r.is_important ?? false,
+    sourceTemplateStepId: r.source_template_step_id ?? null,
+  }
+}
+function toScheduleSubtaskDto(r, items = []) {
+  return {
+    id: r.id, scheduleId: r.schedule_id, title: r.title,
+    startOffset: r.start_offset_days ?? 0, deadlineOffset: r.deadline_offset_days ?? 0,
+    sortOrder: r.sort_order ?? 0, sourceTemplateSubtaskId: r.source_template_subtask_id ?? null,
+    items: items.map(toScheduleSubtaskItemDto),
+  }
+}
+
+async function listScheduleSubtasks(scheduleId) {
+  const { rows: subs } = await query(
+    'SELECT * FROM schedule_subtasks WHERE schedule_id = $1 ORDER BY sort_order, created_at', [scheduleId])
+  if (!subs.length) return []
+  const { rows: items } = await query(
+    'SELECT * FROM schedule_subtask_items WHERE schedule_subtask_id = ANY($1::uuid[]) ORDER BY step_order',
+    [subs.map((s) => s.id)])
+  const bySub = new Map()
+  for (const it of items) {
+    if (!bySub.has(it.schedule_subtask_id)) bySub.set(it.schedule_subtask_id, [])
+    bySub.get(it.schedule_subtask_id).push(it)
+  }
+  return subs.map((s) => toScheduleSubtaskDto(s, bySub.get(s.id) || []))
+}
+
+// Seed việc con của lịch từ MẪU của loại CV (dùng khi tạo lịch từ mẫu).
+async function seedScheduleSubtasksFromTemplate(scheduleId, taskTypeId) {
+  const { rows: tmpls } = await query(
+    'SELECT * FROM task_type_subtask_templates WHERE task_type_id = $1 ORDER BY sort_order, created_at', [taskTypeId])
+  for (let i = 0; i < tmpls.length; i++) {
+    const t = tmpls[i]
+    const { rows: [sub] } = await query(
+      `INSERT INTO schedule_subtasks (schedule_id, title, start_offset_days, deadline_offset_days, sort_order, source_template_subtask_id)
+       VALUES ($1,$2,0,$3,$4,$5) RETURNING id`,
+      [scheduleId, t.title, t.due_offset_days ?? 0, i, t.id])
+    const { rows: steps } = await query(
+      'SELECT * FROM task_type_subtask_steps WHERE subtask_template_id = $1 ORDER BY step_order', [t.id])
+    let order = 0
+    for (const st of steps) {
+      order += 1
+      await query(
+        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, difficulty, points, is_important, source_template_step_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [sub.id, order, st.step_text, st.level ?? 0, st.difficulty ?? 'trung_binh', st.points ?? 4, !!st.is_important, st.id])
+    }
+  }
+}
+
+// Ghi ĐÈ toàn bộ việc con của lịch (mỗi việc con kèm checklist riêng). Dùng cho "Lưu".
+async function replaceScheduleSubtasks(scheduleId, subtasks, user) {
+  await assertScheduleAccess(scheduleId, user)
+  const list = Array.isArray(subtasks) ? subtasks : []
+  for (const sub of list) for (const it of (sub.items || [])) if (it.difficulty != null) await assertDifficulty(it.difficulty)
+  await query('DELETE FROM schedule_subtasks WHERE schedule_id = $1', [scheduleId])   // cascade items
+  let so = 0
+  for (const sub of list) {
+    if (!sub.title || !String(sub.title).trim()) continue
+    so += 1
+    const start = Math.max(0, Number(sub.startOffset) || 0)
+    const deadline = Math.max(start, Number(sub.deadlineOffset) || 0)
+    const { rows: [row] } = await query(
+      `INSERT INTO schedule_subtasks (schedule_id, title, start_offset_days, deadline_offset_days, sort_order, source_template_subtask_id)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [scheduleId, String(sub.title).trim(), start, deadline, so, sub.sourceTemplateSubtaskId ?? null])
+    let io = 0
+    for (const it of (sub.items || [])) {
+      if (!it.stepText || !String(it.stepText).trim()) continue
+      io += 1
+      const difficulty = it.difficulty || 'trung_binh'
+      const points = it.points != null ? Math.max(0, Number(it.points) || 0) : defaultPointsFor(difficulty)
+      await query(
+        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, difficulty, points, is_important, source_template_step_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [row.id, io, String(it.stepText).trim(), it.level === 1 ? 1 : 0, difficulty, points, !!it.isImportant, it.sourceTemplateStepId ?? null])
+    }
+  }
+  return listScheduleSubtasks(scheduleId)
+}
+
+// Khôi phục việc con về mẫu của loại CV.
+async function resetScheduleSubtasksFromTemplate(scheduleId, user) {
+  await assertScheduleAccess(scheduleId, user)
+  const { rows: [s] } = await query('SELECT task_type_id FROM customer_task_schedules WHERE id = $1', [scheduleId])
+  if (!s) throw Object.assign(new Error('Schedule not found'), { status: 404 })
+  await query('DELETE FROM schedule_subtasks WHERE schedule_id = $1', [scheduleId])
+  await seedScheduleSubtasksFromTemplate(scheduleId, s.task_type_id)
+  return listScheduleSubtasks(scheduleId)
+}
+
 async function createSchedule(companyId, data, user, ipAddress, userAgent) {
   await assertCompanyAccess(companyId, user)   // admin hoặc staff phụ trách công ty
   const actorId = user.id
@@ -291,6 +388,8 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
 
   // Seed checklist RIÊNG của lịch từ checklist mẫu của loại CV (trừ bước bị loại — tương thích ngược).
   await seedScheduleChecklistFromTemplate(schedule.id, taskTypeId, excludedStepIds)
+  // Seed VIỆC CON từ mẫu — chỉ với lịch TỪ MẪU (không có title). Lịch thủ công để rỗng, FE tự thêm.
+  if (!(title && String(title).trim())) await seedScheduleSubtasksFromTemplate(schedule.id, taskTypeId)
 
   await audit.log({
     userId: actorId, action: 'schedule.created',
@@ -609,4 +708,6 @@ module.exports = {
   listScheduleChecklist, addScheduleChecklistItem, updateScheduleChecklistItem,
   deleteScheduleChecklistItem, reorderScheduleChecklist, resetScheduleChecklistFromTemplate,
   replaceScheduleChecklist,
+  // Việc con của lịch (KPI v2)
+  listScheduleSubtasks, replaceScheduleSubtasks, resetScheduleSubtasksFromTemplate,
 }

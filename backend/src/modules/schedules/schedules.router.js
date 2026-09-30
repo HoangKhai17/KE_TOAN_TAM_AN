@@ -4,7 +4,7 @@ const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
 const { updateScheduleSchema, setMaxDueDaySchema, backfillSchema,
   scheduleChecklistItemSchema, updateScheduleChecklistItemSchema, reorderScheduleChecklistSchema,
-  replaceScheduleChecklistSchema } = require('./schedules.schema')
+  replaceScheduleChecklistSchema, replaceScheduleSubtasksSchema } = require('./schedules.schema')
 const ctrl = require('./schedules.controller')
 
 const router = Router()
@@ -135,5 +135,10 @@ router.post('/:id/checklist/reorder',           ...auth, validate(reorderSchedul
 router.post('/:id/checklist/reset',             ...auth, ctrl.resetScheduleChecklist)
 router.patch('/:id/checklist/:itemId',          ...auth, validate(updateScheduleChecklistItemSchema), ctrl.updateScheduleChecklistItem)
 router.delete('/:id/checklist/:itemId',         ...auth, ctrl.deleteScheduleChecklistItem)
+
+// Việc con của lịch (KPI v2)
+router.get('/:id/subtasks',        ...auth, ctrl.listScheduleSubtasks)
+router.put('/:id/subtasks',        ...auth, validate(replaceScheduleSubtasksSchema), ctrl.replaceScheduleSubtasks)
+router.post('/:id/subtasks/reset', ...auth, ctrl.resetScheduleSubtasks)
 
 module.exports = router
