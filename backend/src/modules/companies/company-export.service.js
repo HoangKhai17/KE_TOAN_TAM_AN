@@ -229,12 +229,12 @@ function columnsFor(key, lbl) {
       ]
     case 'schedules':
       return [
-        { header: 'Loại công việc', get: (r) => safe(r.task_type_name) },
+        { header: 'Loại công việc / Lịch', get: (r) => safe(r.task_type_name) },
+        { header: 'Nhóm',           get: (r) => safe(r.group_name) },
         { header: 'Định kỳ',        get: (r) => RECURRENCE_VI[r.recurrence_type] ?? safe(r.recurrence_type) },
         { header: 'Phụ trách',      get: (r) => safe(r.assigned_staff_name) },
         { header: 'Hạn (số ngày)',  get: (r) => safe(r.deadline_offset_days) },
         { header: 'Trần ngày',      get: (r) => safe(r.max_due_day) },
-        { header: 'SLA (ngày)',     get: (r) => safe(r.override_sla_days) },
         { header: 'Ghi chú',        get: (r) => safe(r.notes) },
         { header: 'Trạng thái',     get: (r) => (r.is_active ? 'Đang hoạt động' : 'Tạm dừng') },
       ]
@@ -339,14 +339,16 @@ async function fetchSection(key, companyIds, includeCredentials) {
       )).rows
     case 'schedules':
       return (await query(
-        `SELECT s.company_id, tt.name AS task_type_name, s.recurrence_type, s.recurrence_config,
+        `SELECT s.company_id, COALESCE(tt.name, s.title) AS task_type_name,
+                COALESCE(s.group_name, tt.group_name) AS group_name,
+                s.recurrence_type, s.recurrence_config,
                 u.name AS assigned_staff_name, s.deadline_offset_days, s.max_due_day,
-                s.override_sla_days, s.notes, s.is_active
+                s.notes, s.is_active
          FROM customer_task_schedules s
          LEFT JOIN task_types tt ON tt.id = s.task_type_id
          LEFT JOIN users u ON u.id = s.assigned_staff_id
          WHERE s.company_id = ANY($1)
-         ORDER BY s.company_id, tt.name`,
+         ORDER BY s.company_id, COALESCE(tt.name, s.title)`,
         [companyIds],
       )).rows
     case 'documents':

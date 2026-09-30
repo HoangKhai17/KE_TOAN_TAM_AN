@@ -390,17 +390,18 @@ async function forecast({ month, year, user }) {
   const { rows: schedules } = await query(`
     SELECT
       cs.id, cs.recurrence_type, cs.recurrence_config,
-      cs.deadline_offset_days, cs.last_generated_at, cs.override_sla_days,
-      tt.name AS task_type_name, tt.group_name,
+      cs.deadline_offset_days, cs.last_generated_at,
+      COALESCE(tt.name, cs.title) AS task_type_name,
+      COALESCE(cs.group_name, tt.group_name) AS group_name,
       c.name  AS company_name,
       u.name  AS assigned_to_name
     FROM customer_task_schedules cs
-    JOIN task_types tt ON tt.id = cs.task_type_id
+    LEFT JOIN task_types tt ON tt.id = cs.task_type_id
     JOIN companies  c  ON c.id  = cs.company_id
     LEFT JOIN users u  ON u.id  = cs.assigned_staff_id
     WHERE cs.is_active = TRUE
       AND c.status != 'terminated'${scopeSql}
-    ORDER BY c.name, tt.name
+    ORDER BY c.name, COALESCE(tt.name, cs.title)
   `, params)
 
   const result = []

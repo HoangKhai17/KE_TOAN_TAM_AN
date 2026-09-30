@@ -26,7 +26,7 @@ function buildTaskTitle(periodLabel, taskTypeName) {
 // giữa 2 đường sinh.
 //
 // `schedule` phải có: id, company_id, task_type_id, assigned_staff_id,
-//   deadline_offset_days, override_sla_days, default_sla_days, task_type_name,
+//   deadline_offset_days, task_type_name,
 //   created_by, recurrence_type, recurrence_config, excluded_step_ids.
 // `forDate`     : Date — ngày phát sinh (occurrence) GỐC (chưa đẩy CN/lễ).
 // `holidaySet`  : Set 'YYYY-MM-DD' — ngày nghỉ để đẩy start/due.
@@ -58,26 +58,25 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
     if (existing) return { status: 'skipped', periodLabel, existingId: existing.id }
   }
 
-  const sla = schedule.override_sla_days ?? schedule.default_sla_days
   // Lịch thủ công có tên riêng (title) → dùng làm tên task; ngược lại dùng tên loại CV.
   const title = buildTaskTitle(periodLabel, schedule.title || schedule.task_type_name)
 
   const { rows: [newTask] } = await query(
     `INSERT INTO tasks
-       (title, company_id, task_type_id, customer_task_schedule_id,
-        assigned_to, start_date, due_date, period_label, source, sla_days, priority, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'auto',$9,'medium',$10)
+       (title, company_id, task_type_id, group_name, customer_task_schedule_id,
+        assigned_to, start_date, due_date, period_label, source, priority, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'auto','medium',$10)
      RETURNING id`,
     [
       title,
       schedule.company_id,
       schedule.task_type_id,
+      schedule.group_name ?? null,   // lịch thủ công gắn nhóm; lịch mẫu suy nhóm từ loại CV
       schedule.id,
       schedule.assigned_staff_id ?? null,
       startDateStr,
       dueDateStr,
       periodLabel,
-      sla,
       schedule.created_by,
     ]
   )
@@ -123,13 +122,13 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
         rollForwardToWorkday(addDays(forDate, Math.max(deadlineOff, startOff)), holidaySet), 'yyyy-MM-dd')
       const { rows: [child] } = await query(
         `INSERT INTO tasks
-           (title, company_id, task_type_id, customer_task_schedule_id, parent_task_id,
-            assigned_to, start_date, due_date, period_label, source, sla_days, priority, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'auto',$10,'medium',$11)
+           (title, company_id, task_type_id, group_name, customer_task_schedule_id, parent_task_id,
+            assigned_to, start_date, due_date, period_label, source, priority, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'auto','medium',$11)
          RETURNING id`,
         [
-          s.title, schedule.company_id, schedule.task_type_id, schedule.id, newTask.id,
-          schedule.assigned_staff_id ?? null, childStartStr, childDueStr, periodLabel, sla, schedule.created_by,
+          s.title, schedule.company_id, schedule.task_type_id, schedule.group_name ?? null, schedule.id, newTask.id,
+          schedule.assigned_staff_id ?? null, childStartStr, childDueStr, periodLabel, schedule.created_by,
         ]
       )
       // Copy checklist RIÊNG của việc con (kèm điểm/độ quan trọng) vào task con
@@ -176,8 +175,7 @@ async function runTaskGenerator(options = {}) {
     const { rows: schedules } = await query(
       `SELECT cts.*,
               c.name AS company_name,
-              tt.name AS task_type_name,
-              tt.default_sla_days
+              tt.name AS task_type_name
        FROM customer_task_schedules cts
        JOIN companies c  ON c.id  = cts.company_id
        JOIN task_types tt ON tt.id = cts.task_type_id

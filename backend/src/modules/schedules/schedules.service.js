@@ -59,15 +59,15 @@ function toDto(row) {
   return {
     id:                 row.id,
     companyId:          row.company_id,
-    taskTypeId:         row.task_type_id,
+    taskTypeId:         row.task_type_id ?? null,
     taskTypeName:       row.task_type_name ?? null,
+    groupName:          row.group_name ?? null,       // nhóm báo cáo (lịch thủ công gắn trực tiếp)
     title:              row.title ?? null,            // tên riêng (lịch thủ công); null = dùng tên loại CV
     assignedStaffId:    row.assigned_staff_id ?? null,
     assignedStaffName:  row.staff_name ?? null,
     recurrenceType:     row.recurrence_type,
     recurrenceConfig:   row.recurrence_config,
     deadlineOffsetDays: row.deadline_offset_days,
-    overrideSlaDays:    row.override_sla_days ?? null,
     maxDueDay:          row.max_due_day ?? null,   // trần "ngày N hàng tháng" do admin đặt
     excludedStepIds:    Array.isArray(row.excluded_step_ids) ? row.excluded_step_ids : [],
     subtaskOffsets:     (row.subtask_offsets && typeof row.subtask_offsets === 'object') ? row.subtask_offsets : {},
@@ -108,7 +108,7 @@ async function getScheduleById(id) {
     `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name,
             (SELECT COUNT(*) FROM schedule_subtasks ss WHERE ss.schedule_id = s.id) AS subtask_count
      FROM customer_task_schedules s
-     JOIN task_types tt ON tt.id = s.task_type_id
+     LEFT JOIN task_types tt ON tt.id = s.task_type_id
      LEFT JOIN users u  ON u.id  = s.assigned_staff_id
      WHERE s.id = $1`,
     [id]
@@ -126,7 +126,7 @@ async function listSchedules(companyId) {
     `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name,
             (SELECT COUNT(*) FROM schedule_subtasks ss WHERE ss.schedule_id = s.id) AS subtask_count
      FROM customer_task_schedules s
-     JOIN task_types tt ON tt.id = s.task_type_id
+     LEFT JOIN task_types tt ON tt.id = s.task_type_id
      LEFT JOIN users u  ON u.id  = s.assigned_staff_id
      WHERE s.company_id = $1
      ORDER BY s.sort_order ASC, s.created_at DESC`,
@@ -429,40 +429,54 @@ async function createSchedule(companyId, data, user, ipAddress, userAgent) {
   const actorId = user.id
 
   const {
-    taskTypeId, assignedStaffId, recurrenceType, recurrenceConfig,
-    deadlineOffsetDays = 0, overrideSlaDays, excludedStepIds = [], subtaskOffsets = {}, notes,
+    taskTypeId, groupName, assignedStaffId, recurrenceType, recurrenceConfig,
+    deadlineOffsetDays = 0, excludedStepIds = [], subtaskOffsets = {}, notes,
     title = null,
   } = data
 
-  const { rows: [tt] } = await query('SELECT id FROM task_types WHERE id = $1 AND is_active = TRUE', [taskTypeId])
-  if (!tt) throw Object.assign(new Error('Task type not found or inactive'), { status: 404 })
+  // Lịch THỦ CÔNG (title) → gắn NHÓM báo cáo (group_name), KHÔNG dùng loại CV mẫu.
+  // Lịch TỪ MẪU → loại CV (task_type_id); nhóm suy ra từ loại CV lúc báo cáo.
+  const isManual = !!(title && String(title).trim())
+  let taskTypeIdToStore = null
+  let groupNameToStore = null
+  if (isManual) {
+    if (!(groupName && String(groupName).trim())) {
+      throw Object.assign(new Error('Lịch tự tạo cần chọn nhóm báo cáo'), { status: 422 })
+    }
+    groupNameToStore = String(groupName).trim()
+  } else {
+    const { rows: [tt] } = await query('SELECT id FROM task_types WHERE id = $1 AND is_active = TRUE', [taskTypeId])
+    if (!tt) throw Object.assign(new Error('Task type not found or inactive'), { status: 404 })
+    taskTypeIdToStore = taskTypeId
+  }
 
   const { rows: [schedule] } = await query(
     `INSERT INTO customer_task_schedules
-       (company_id, task_type_id, assigned_staff_id, recurrence_type, recurrence_config,
-        deadline_offset_days, override_sla_days, excluded_step_ids, subtask_offsets, notes, title, sort_order, created_by)
+       (company_id, task_type_id, group_name, assigned_staff_id, recurrence_type, recurrence_config,
+        deadline_offset_days, excluded_step_ids, subtask_offsets, notes, title, sort_order, created_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
        (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM customer_task_schedules WHERE company_id = $1),$12)
      RETURNING *`,
     [
-      companyId, taskTypeId, assignedStaffId ?? null,
+      companyId, taskTypeIdToStore, groupNameToStore, assignedStaffId ?? null,
       recurrenceType, JSON.stringify(recurrenceConfig),
-      deadlineOffsetDays, overrideSlaDays ?? null,
+      deadlineOffsetDays,
       JSON.stringify(Array.isArray(excludedStepIds) ? excludedStepIds : []),
       JSON.stringify(subtaskOffsets && typeof subtaskOffsets === 'object' ? subtaskOffsets : {}),
-      notes ?? null, (title && String(title).trim()) || null, actorId,
+      notes ?? null, isManual ? String(title).trim() : null, actorId,
     ]
   )
 
-  // Seed checklist RIÊNG của lịch từ checklist mẫu của loại CV (trừ bước bị loại — tương thích ngược).
-  await seedScheduleChecklistFromTemplate(schedule.id, taskTypeId, excludedStepIds)
-  // Seed VIỆC CON từ mẫu — chỉ với lịch TỪ MẪU (không có title). Lịch thủ công để rỗng, FE tự thêm.
-  if (!(title && String(title).trim())) await seedScheduleSubtasksFromTemplate(schedule.id, taskTypeId)
+  // Seed checklist + việc con TỪ MẪU — chỉ với lịch TỪ MẪU. Lịch thủ công để rỗng, FE tự dựng.
+  if (!isManual) {
+    await seedScheduleChecklistFromTemplate(schedule.id, taskTypeIdToStore, excludedStepIds)
+    await seedScheduleSubtasksFromTemplate(schedule.id, taskTypeIdToStore)
+  }
 
   await audit.log({
     userId: actorId, action: 'schedule.created',
     targetType: 'schedule', targetId: schedule.id,
-    meta: { companyId, taskTypeId, recurrenceType }, ipAddress, userAgent,
+    meta: { companyId, taskTypeId: taskTypeIdToStore, groupName: groupNameToStore, recurrenceType }, ipAddress, userAgent,
   })
 
   return getScheduleById(schedule.id)
@@ -486,7 +500,7 @@ async function updateSchedule(id, data, user, ipAddress, userAgent) {
     assignedStaffId:    'assigned_staff_id',
     recurrenceType:     'recurrence_type',
     deadlineOffsetDays: 'deadline_offset_days',
-    overrideSlaDays:    'override_sla_days',
+    groupName:          'group_name',
     notes:              'notes',
     title:              'title',
     sortOrder:          'sort_order',
@@ -595,9 +609,9 @@ async function simulateCompanyGeneration(companyId, { periods = 3 } = {}, user) 
   const n = Math.max(1, Math.min(12, Number(periods) || 3))
 
   const { rows: schedules } = await query(
-    `SELECT s.*, tt.name AS task_type_name, tt.default_sla_days, u.name AS staff_name
+    `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name
        FROM customer_task_schedules s
-       JOIN task_types tt ON tt.id = s.task_type_id
+       LEFT JOIN task_types tt ON tt.id = s.task_type_id
        LEFT JOIN users u  ON u.id  = s.assigned_staff_id
       WHERE s.company_id = $1
       ORDER BY s.sort_order ASC, s.created_at DESC`,
@@ -633,14 +647,12 @@ async function simulateCompanyGeneration(companyId, { periods = 3 } = {}, user) 
       const forDate = parseISO(ds)
       const periodLabel = buildPeriodLabel(s.recurrence_type, forDate, offset)
       const ex = byLabel.get(periodLabel) || null
-      const sla = s.override_sla_days ?? s.default_sla_days
       return {
         forDate: ds,
         periodLabel,
         title: buildTaskTitle(periodLabel, s.title || s.task_type_name),
         startDate: roll(forDate),
         dueDate: roll(addDays(forDate, s.deadline_offset_days || 0)),
-        slaDays: sla ?? null,
         alreadyExists: !!ex,
         existingStatus: ex?.status ?? null,
         subtasks: subtasks.map((sub) => {
@@ -661,6 +673,7 @@ async function simulateCompanyGeneration(companyId, { periods = 3 } = {}, user) 
       scheduleId:  s.id,
       title:       s.title || s.task_type_name,
       taskTypeName: s.task_type_name,
+      groupName:   s.group_name ?? null,
       isManual:    !!s.title,
       recurrenceType: s.recurrence_type,
       recurrenceConfig: s.recurrence_config,
@@ -684,23 +697,24 @@ async function simulateCompanyGeneration(companyId, { periods = 3 } = {}, user) 
 // Frontend gộp nhóm theo công ty.
 async function getRecurringOverview() {
   const { rows } = await query(
-    `SELECT cts.id AS schedule_id, cts.max_due_day, cts.recurrence_type,
+    `SELECT cts.id AS schedule_id, cts.max_due_day, cts.recurrence_type, cts.title, cts.group_name,
             c.id AS company_id, c.name AS company_name, c.business_type,
             tt.name AS task_type_name,
             u.name AS assigned_staff_name
        FROM customer_task_schedules cts
        JOIN companies c   ON c.id  = cts.company_id
-       JOIN task_types tt ON tt.id = cts.task_type_id
+       LEFT JOIN task_types tt ON tt.id = cts.task_type_id
        LEFT JOIN users u  ON u.id  = cts.assigned_staff_id
       WHERE cts.is_active = TRUE AND c.status = 'active'
-      ORDER BY c.name, tt.name`
+      ORDER BY c.name, COALESCE(tt.name, cts.title)`
   )
   return rows.map(r => ({
     scheduleId:        r.schedule_id,
     companyId:         r.company_id,
     companyName:       r.company_name,
     businessType:      r.business_type ?? null,   // loại hình DN — để lọc theo enum/nhóm
-    taskTypeName:      r.task_type_name,
+    taskTypeName:      r.task_type_name ?? r.title,   // lịch thủ công: dùng tên riêng
+    groupName:         r.group_name ?? null,
     recurrenceType:    r.recurrence_type,
     assignedStaffName: r.assigned_staff_name ?? null,
     maxDueDay:         r.max_due_day ?? null,
@@ -758,7 +772,7 @@ async function getSchedulePeriods(scheduleId, { months = 6 } = {}) {
   const { rows: [sch] } = await query(
     `SELECT s.*, tt.name AS task_type_name, c.name AS company_name
        FROM customer_task_schedules s
-       JOIN task_types tt ON tt.id = s.task_type_id
+       LEFT JOIN task_types tt ON tt.id = s.task_type_id
        JOIN companies c   ON c.id  = s.company_id
       WHERE s.id = $1`,
     [scheduleId]
@@ -825,9 +839,9 @@ async function backfillPeriods(scheduleId, { periods = [], force = false }, user
     throw Object.assign(new Error('Chưa chọn kỳ nào để sinh'), { status: 422 })
   }
   const { rows: [sch] } = await query(
-    `SELECT s.*, tt.name AS task_type_name, tt.default_sla_days
+    `SELECT s.*, tt.name AS task_type_name
        FROM customer_task_schedules s
-       JOIN task_types tt ON tt.id = s.task_type_id
+       LEFT JOIN task_types tt ON tt.id = s.task_type_id
       WHERE s.id = $1`,
     [scheduleId]
   )
