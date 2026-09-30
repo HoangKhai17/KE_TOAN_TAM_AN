@@ -27,6 +27,19 @@ async function detail(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// GET /kpi/:userId/tasks?year=&month= — từng task của NV trong kỳ; staff chỉ xem mình
+async function userTasks(req, res, next) {
+  try {
+    const { year, month } = req.query
+    if (!year || !month) throw bad('Thiếu year/month')
+    if (req.user.role === 'staff' && req.params.userId !== req.user.id) {
+      const e = new Error('Không có quyền xem KPI của người khác'); e.status = 403; throw e
+    }
+    const tasks = await svc.getUserTasks(year, month, req.params.userId)
+    res.json({ success: true, data: { tasks } })
+  } catch (err) { next(err) }
+}
+
 async function close(req, res, next) {
   try {
     const { year, month } = req.body
@@ -70,4 +83,4 @@ async function deleteTier(req, res, next) {
   try { await svc.deleteTier(req.params.id); res.status(204).end() } catch (err) { next(err) }
 }
 
-module.exports = { list, detail, close, reopen, performance, listTiers, createTier, updateTier, deleteTier }
+module.exports = { list, detail, userTasks, close, reopen, performance, listTiers, createTier, updateTier, deleteTier }

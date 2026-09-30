@@ -20,6 +20,7 @@ router.patch('/tiers/:id', ...admin, ctrl.updateTier)
 router.delete('/tiers/:id', ...admin, ctrl.deleteTier)
 
 router.get('/',        ...auth, ctrl.list)
+router.get('/:userId/tasks', ...auth, ctrl.userTasks)   // từng task của NV trong kỳ
 router.get('/:userId', ...auth, ctrl.detail)
 
 module.exports = router

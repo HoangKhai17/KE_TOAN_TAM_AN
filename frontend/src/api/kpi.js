@@ -12,6 +12,12 @@ export async function getKpiDetail(userId, year, month) {
   return data.data
 }
 
+// Từng task của 1 NV trong kỳ. Trả { tasks: [{taskId, title, companyName, typeName, points, dueDate, completedAt, dueInPeriod, onTime, status}] }
+export async function getKpiUserTasks(userId, year, month) {
+  const { data } = await api.get(`/kpi/${userId}/tasks`, { params: { year, month } })
+  return data.data.tasks
+}
+
 export async function closeKpiMonth(year, month) {
   const { data } = await api.post('/kpi/close', { year, month })
   return data.data

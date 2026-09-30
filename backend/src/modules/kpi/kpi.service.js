@@ -138,6 +138,44 @@ async function getDetail(year, month, userId) {
   return { closed: false, ...(await detailLive(y, m, userId)) }
 }
 
+// ── Danh sách TỪNG TASK của 1 NV trong kỳ (điểm khối lượng + đúng hạn) ─────────
+// Gồm task có điểm bước LEAF tick trong tháng (theo completed_at) HOẶC task đến hạn trong tháng.
+async function getUserTasks(year, month, userId) {
+  const { start, end } = monthBounds(year, month)
+  const { rows } = await query(`
+    ${LEAF_CTE},
+    pts AS (
+      SELECT t.id AS task_id, COALESCE(SUM(leaf.points), 0)::int AS points
+      FROM leaf JOIN tasks t ON t.id = leaf.task_id
+      WHERE leaf.is_leaf AND leaf.is_completed
+        AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date
+        AND t.assigned_to = $3
+      GROUP BY t.id
+    )
+    SELECT t.id, t.title, t.status, t.due_date, t.completed_at,
+           c.name AS company_name,
+           COALESCE(tt.name, t.group_name) AS type_name,
+           COALESCE(pts.points, 0) AS points,
+           (t.due_date >= $1::date AND t.due_date < $2::date) AS due_in_period,
+           (t.status = 'completed' AND t.completed_at::date <= t.due_date) AS on_time
+    FROM tasks t
+    LEFT JOIN companies c   ON c.id  = t.company_id
+    LEFT JOIN task_types tt ON tt.id = t.task_type_id
+    LEFT JOIN pts ON pts.task_id = t.id
+    WHERE t.assigned_to = $3
+      AND (pts.points IS NOT NULL OR (t.due_date >= $1::date AND t.due_date < $2::date))
+    ORDER BY COALESCE(pts.points, 0) DESC, t.due_date NULLS LAST, t.title
+  `, [start, end, userId])
+  return rows.map((r) => ({
+    taskId: r.id, title: r.title, status: r.status,
+    companyName: r.company_name ?? null, typeName: r.type_name ?? null,
+    points: parseInt(r.points, 10) || 0,
+    dueDate: r.due_date, completedAt: r.completed_at,
+    dueInPeriod: !!r.due_in_period,
+    onTime: !!r.on_time,
+  }))
+}
+
 // ── Chốt sổ tháng: tính LIVE rồi ghi snapshot (khóa) ──────────────────────────
 async function closeMonth(year, month, actorId, ipAddress, userAgent) {
   const { y, m } = monthBounds(year, month)
@@ -265,6 +303,6 @@ async function getPerformance(year, month, userId = null) {
 }
 
 module.exports = {
-  listMonthly, getDetail, closeMonth, reopenMonth, isMonthClosed,
+  listMonthly, getDetail, getUserTasks, closeMonth, reopenMonth, isMonthClosed,
   listTiers, createTier, updateTier, deleteTier, getPerformance,
 }
