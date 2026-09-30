@@ -12,7 +12,8 @@ async function getStatus(req, res, next) {
 
 async function runNow(req, res, next) {
   try {
-    const result = await scheduler.triggerNow(req.user?.id ?? null)
+    const companyId = req.body?.companyId || null   // null = chạy toàn hệ thống
+    const result = await scheduler.triggerNow(req.user?.id ?? null, { companyId })
     res.json({ success: true, data: { result } })
   } catch (err) { next(err) }
 }

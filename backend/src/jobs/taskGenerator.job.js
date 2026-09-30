@@ -159,9 +159,9 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
 //   và chỉ dựa vào việc task đã tồn tại hay chưa, KHÔNG dựa last_generated_at.
 //   Nhờ vậy xóa task rồi bấm chạy lại sẽ tạo lại được (vẫn không nhân đôi nếu task còn).
 async function runTaskGenerator(options = {}) {
-  const { manual = false } = options
+  const { manual = false, companyId = null } = options
   const startedAt = new Date()
-  logger.info(`[Scheduler] Task generator started${manual ? ' (manual)' : ''}`)
+  logger.info(`[Scheduler] Task generator started${manual ? ' (manual)' : ''}${companyId ? ` [1 công ty]` : ''}`)
 
   let generated    = 0
   let skipped      = 0
@@ -172,14 +172,18 @@ async function runTaskGenerator(options = {}) {
     // Ngày nghỉ (CN + lễ) áp cho MỌI lịch: đẩy start/due sang ngày làm việc kế.
     const holidaySet = await loadHolidaySet()
 
+    // LEFT JOIN task_types: lịch TỰ TẠO có task_type_id NULL vẫn phải sinh.
+    // companyId != null → chỉ chạy cho 1 công ty (test / chạy đơn từng công ty).
     const { rows: schedules } = await query(
       `SELECT cts.*,
               c.name AS company_name,
               tt.name AS task_type_name
        FROM customer_task_schedules cts
        JOIN companies c  ON c.id  = cts.company_id
-       JOIN task_types tt ON tt.id = cts.task_type_id
-       WHERE cts.is_active = TRUE AND c.status = 'active'`
+       LEFT JOIN task_types tt ON tt.id = cts.task_type_id
+       WHERE cts.is_active = TRUE AND c.status = 'active'
+         AND ($1::uuid IS NULL OR cts.company_id = $1)`,
+      [companyId]
     )
 
     for (const schedule of schedules) {

@@ -107,10 +107,10 @@ async function saveLog({ triggeredBy, triggeredByUserId, startedAt, finishedAt,
   }
 }
 
-async function runAndLog(triggeredBy, triggeredByUserId = null) {
+async function runAndLog(triggeredBy, triggeredByUserId = null, opts = {}) {
   const startedAt = new Date()
   try {
-    const result = await runTaskGenerator({ manual: triggeredBy === 'manual' })
+    const result = await runTaskGenerator({ manual: triggeredBy === 'manual', companyId: opts.companyId ?? null })
     await saveLog({ ...result, triggeredBy, triggeredByUserId, startedAt, finishedAt: new Date() })
     lastRunResult = result
     return result
@@ -178,14 +178,14 @@ function getStatus() {
   }
 }
 
-async function triggerNow(triggeredByUserId = null) {
+async function triggerNow(triggeredByUserId = null, opts = {}) {
   if (isRunning) {
     throw Object.assign(new Error('Scheduler is already running'), { status: 409 })
   }
   isRunning = true
   lastRunAt = new Date()
   try {
-    return await runAndLog('manual', triggeredByUserId)
+    return await runAndLog('manual', triggeredByUserId, opts)
   } finally {
     isRunning = false
   }

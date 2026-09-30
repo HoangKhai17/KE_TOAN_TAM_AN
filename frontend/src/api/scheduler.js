@@ -5,8 +5,9 @@ export async function getSchedulerStatus() {
   return data.data.scheduler
 }
 
-export async function runSchedulerNow() {
-  const { data } = await api.post('/admin/scheduler/run-now')
+// companyId = null → chạy toàn hệ thống; có id → chỉ chạy cho 1 công ty (test / chạy đơn)
+export async function runSchedulerNow(companyId = null) {
+  const { data } = await api.post('/admin/scheduler/run-now', companyId ? { companyId } : {})
   return data.data.result
 }
 

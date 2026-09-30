@@ -18,6 +18,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
 import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerConfig, deleteSchedulerLog, clearSchedulerLogs } from '../../api/scheduler'
+import { getRecurringOverview } from '../../api/schedules'
 import RecurringOverviewModal from './RecurringOverviewModal'
 import TaskTypesSection from './TaskTypesSection'
 import CompanyTablesSection from './CompanyTablesSection'
@@ -812,6 +813,8 @@ function TemplatesSection() {
   const [confirmClearAll, setConfirmClearAll] = useState(false)
   const [clearingAll,     setClearingAll]     = useState(false)
   const [showOverview,    setShowOverview]    = useState(false)
+  const [companyOptions,  setCompanyOptions]  = useState([])   // [{id, name}] công ty CÓ lịch định kỳ
+  const [runCompanyId,    setRunCompanyId]    = useState('')   // '' = toàn hệ thống
   const LOGS_PER_PAGE = 10
 
   function fmtDt(iso) {
@@ -856,14 +859,31 @@ function TemplatesSection() {
   useEffect(() => {
     loadStatus()
     loadLogs()
+    loadCompanyOptions()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Danh sách công ty CÓ lịch định kỳ (để chạy đơn từng công ty)
+  async function loadCompanyOptions() {
+    try {
+      const overview = await getRecurringOverview()
+      const seen = new Map()
+      for (const r of overview || []) {
+        if (r.companyId && !seen.has(r.companyId)) seen.set(r.companyId, r.companyName)
+      }
+      setCompanyOptions([...seen].map(([id, name]) => ({ id, name }))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'vi')))
+    } catch { /* im lặng — nút vẫn chạy toàn hệ thống được */ }
+  }
 
   async function handleRunNow() {
     setRunning(true)
     try {
-      const result = await runSchedulerNow()
+      const result = await runSchedulerNow(runCompanyId || null)
       setLastResult(result)
-      addToast(`Đã chạy: tạo ${result.generated} task, bỏ qua ${result.skipped}`, 'success')
+      const scope = runCompanyId
+        ? `công ty "${companyOptions.find(c => c.id === runCompanyId)?.name ?? ''}"`
+        : 'toàn hệ thống'
+      addToast(`Đã chạy ${scope}: tạo ${result.generated} task, bỏ qua ${result.skipped}`, 'success')
       loadStatus()
       loadLogs()
     } catch (err) {
@@ -1034,8 +1054,20 @@ function TemplatesSection() {
             </div>
           )}
 
-          {/* ── Nút Chạy ngay + Làm mới ─────────────────────────────────── */}
-          <div className={s.formActions} style={{ marginTop: 20 }}>
+          {/* ── Chọn phạm vi + Chạy ngay + Làm mới ──────────────────────── */}
+          <div className={s.formActions} style={{ marginTop: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select
+              value={runCompanyId}
+              onChange={(e) => setRunCompanyId(e.target.value)}
+              disabled={running || status.isRunning}
+              title="Chọn phạm vi chạy — 1 công ty (test/chạy đơn) hoặc toàn hệ thống"
+              style={{ height: 36, minWidth: 240, maxWidth: 340, padding: '0 10px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-white)', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-xs)', color: 'var(--color-text)' }}
+            >
+              <option value="">Toàn hệ thống ({companyOptions.length} công ty có lịch)</option>
+              {companyOptions.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
             <button
               className={s.btnSave}
               onClick={handleRunNow}
@@ -1043,13 +1075,18 @@ function TemplatesSection() {
             >
               {running || status.isRunning
                 ? <><Loader2 size={13} className={s.spin} /> Đang chạy...</>
-                : <><Play size={13} /> Chạy ngay</>
+                : <><Play size={13} /> {runCompanyId ? 'Chạy công ty này' : 'Chạy ngay'}</>
               }
             </button>
             <button className={s.btnOutline} onClick={() => { loadStatus(); loadLogs() }} disabled={loading} style={{ height: 36 }}>
               <RotateCcw size={13} /> Làm mới
             </button>
           </div>
+          {runCompanyId && (
+            <div style={{ marginTop: 6, color: '#b45309', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-xs)' }}>
+              Đang giới hạn: chỉ sinh cho công ty đã chọn. Bỏ chọn để chạy toàn hệ thống.
+            </div>
+          )}
         </>
       )}
 
