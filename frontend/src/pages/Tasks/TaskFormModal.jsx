@@ -10,7 +10,6 @@ import { listTaskTypes, getTaskType } from '../../api/taskTypes'
 import { useAuthStore } from '../../stores/authStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { PRIORITY_LABELS } from './taskUtils'
-import { sizeOptionsOr, taskSizeLabel } from '../../utils/taskSize'
 import CollaboratorPicker from './CollaboratorPicker'
 import s from './tasks.module.css'
 
@@ -123,7 +122,6 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   const [form, setForm] = useState({
     title: '', companyId: parentTask?.companyId || initialCompanyId || '', taskTypeId: '', assignedToId: '',
     startDate: todayISO, dueDate: '', priority: 'medium', slaDays: '', description: '',
-    sizePoints: '',   // '' = kế thừa cỡ của loại CV
     source: 'manual', collaboratorIds: [], visibility: parentTask?.visibility === 'private' ? 'private' : 'company',
   })
   const [companies, setCompanies] = useState([])
@@ -310,7 +308,6 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       dueDate:     pf.dueDate      || null,
       priority:    pf.priority,
       slaDays:     pf.slaDays ? Number(pf.slaDays) : null,
-      sizePoints:  pf.sizePoints ? Number(pf.sizePoints) : null,   // null = kế thừa cỡ của loại
       description: pf.description.trim() || null,
       source:      pf.source || 'manual',
       collaboratorIds: pf.collaboratorIds.filter((id) => id && id !== pf.assignedToId),
@@ -526,17 +523,6 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
             </select>
           </div>
 
-          {/* Cỡ việc (KPI) — mặc định theo loại CV, override được */}
-          <div className={s.formGroup}>
-            <label className={s.formLabel}>Cỡ việc</label>
-            <select value={form.sizePoints} onChange={set('sizePoints')} className={s.formSelect}>
-              <option value="">
-                {form.taskTypeId && typeDetail ? `Theo loại (${taskSizeLabel(getOptions('task_size'), typeDetail.sizePoints)})` : 'Theo loại'}
-              </option>
-              {sizeOptionsOr(getOptions('task_size')).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-            </select>
-          </div>
-
           {/* Ngày bắt đầu */}
           <div className={s.formGroup}>
             <label className={s.formLabel}>Ngày bắt đầu</label>
@@ -713,17 +699,6 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
               ? getOptions('task_priority')
               : ['urgent', 'high', 'medium', 'low'].map((k) => ({ key: k, label: PRIORITY_LABELS[k] }))
             ).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-          </select>
-        </div>
-
-        {/* Cỡ việc (KPI) — mặc định theo loại CV, override được */}
-        <div className={s.formGroup}>
-          <label className={s.formLabel}>Cỡ việc</label>
-          <select value={form.sizePoints} onChange={set('sizePoints')} className={s.formSelect}>
-            <option value="">
-              {form.taskTypeId && typeDetail ? `Theo loại (${taskSizeLabel(getOptions('task_size'), typeDetail.sizePoints)})` : 'Theo loại'}
-            </option>
-            {sizeOptionsOr(getOptions('task_size')).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
           </select>
         </div>
 

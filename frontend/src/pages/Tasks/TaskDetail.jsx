@@ -11,7 +11,6 @@ import DateBox from '../../components/ui/DateBox'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
-import { taskSizeLabel } from '../../utils/taskSize'
 import * as tasksApi from '../../api/tasks'
 import {
   STATUS_LABELS, STATUS_TRANSITIONS, STATUS_CSS,
@@ -159,6 +158,7 @@ function DescriptionTab({ taskId, initialDesc, onSaved }) {
 
 function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
   const addToast = useToastStore((s) => s.toast)
+  const getLabel = useEnumsStore((st) => st.getLabel)
   const [items, setItems]         = useState([])
   const [loading, setLoading]     = useState(true)
   const [togglingIds, setTogglingIds] = useState(new Set())
@@ -308,6 +308,7 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
             <>
               <span className={`${s.checklistText} ${isParent ? s.checklistTextParent : ''} ${(!isParent && item.isCompleted) ? s.checklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>{item.stepText}</span>
               {item.isImportant && <span className={s.clItemStar} title="Bước quan trọng">★</span>}
+              {item.difficulty && <span className={`${s.clItemDiff} ${s[`clItemDiff_${item.difficulty}`] || ''}`} title="Độ khó">{getLabel('checklist_difficulty', item.difficulty)}</span>}
               {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
               <div className={s.checklistItemActions}>
                 <button className={s.btnIcon} onClick={() => toggleLevel(item)} title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>
@@ -1073,11 +1074,6 @@ export default function TaskDetail() {
                 <span>{task.taskTypeName}</span>
               </div>
             )}
-            <div className={s.detailMetaItem} title="Cỡ việc — độ lớn/phức tạp dùng tính KPI">
-              <Sliders size={12} className={s.detailMetaIcon} />
-              <span className={s.detailMetaLabel}>Cỡ việc:</span>
-              <span>{taskSizeLabel(getOptions('task_size'), task.effectiveSize)}</span>
-            </div>
             {task.periodLabel && (
               <div className={s.detailMetaItem}>
                 <Calendar size={12} className={s.detailMetaIcon} />

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   X, ArrowUpRight, Check, Loader2, Plus, ChevronLeft, ChevronRight, Edit2,
   Building2, User, Users, Calendar, Clock, AlertTriangle, Flag, FileText, Tag, GripVertical,
-  Lock, Globe, ListTree, CornerLeftUp, Unlink, Sliders,
+  Lock, Globe, ListTree, CornerLeftUp, Unlink,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
 import DateBox from '../../components/ui/DateBox'
@@ -16,7 +16,6 @@ import {
   checklistLeafCounts, checklistIsParent, checklistParentDone,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
-import { taskSizeLabel, sizeOptionsOr } from '../../utils/taskSize'
 import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
 import TaskLinksSection from './TaskLinksSection'
@@ -490,15 +489,6 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
     } catch { addToast('Không thể đổi ưu tiên', 'error') }
   }
 
-  async function changeSize(sizePoints) {
-    try {
-      // '' = gỡ override → về kế thừa cỡ của loại CV (gửi null)
-      const val = sizePoints === '' ? null : Number(sizePoints)
-      const updated = await tasksApi.updateTask(taskId, { sizePoints: val })
-      applyUpdate(updated)
-      addToast(`Cỡ việc → "${taskSizeLabel(getOptions('task_size'), updated.effectiveSize)}"`, 'success')
-    } catch { addToast('Không thể đổi cỡ việc', 'error') }
-  }
 
   async function changeSource(source) {
     try {
@@ -879,24 +869,6 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                   </select>
                 </div>
 
-                <div className={s.qvRow}>
-                  <span className={s.qvLabel}><Sliders size={11} /> Cỡ việc</span>
-                  {isAdmin ? (
-                    <select
-                      value={task.sizePoints ?? ''}
-                      onChange={(e) => changeSize(e.target.value)}
-                      className={`${s.qeSelect} ${s.qvFieldSelect}`}
-                      title="Cỡ việc (KPI) — bỏ trống = theo loại công việc"
-                    >
-                      <option value="">Theo loại{task.typeSizePoints ? ` (${taskSizeLabel(getOptions('task_size'), task.typeSizePoints)})` : ''}</option>
-                      {sizeOptionsOr(getOptions('task_size')).map((o) => (
-                        <option key={o.key} value={o.key}>{o.label}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className={s.qvValue}>{taskSizeLabel(getOptions('task_size'), task.effectiveSize)}</span>
-                  )}
-                </div>
 
                 <div className={s.qvRow}>
                   <span className={s.qvLabel}><Tag size={11} /> Nguồn</span>
@@ -1090,6 +1062,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                                 {item.stepText}
                               </span>
                               {item.isImportant && <span className={s.clItemStar} title="Bước quan trọng">★</span>}
+                              {item.difficulty && <span className={`${s.clItemDiff} ${s[`clItemDiff_${item.difficulty}`] || ''}`} title="Độ khó">{getLabel('checklist_difficulty', item.difficulty)}</span>}
                               {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
                               <button
                                 className={s.qvChecklistDel}

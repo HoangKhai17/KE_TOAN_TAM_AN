@@ -84,7 +84,7 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
   // KPI v2: copy checklist RIÊNG CỦA LỊCH (schedule_checklist_items) vào task cha — kèm ĐIỂM + ★.
   // Cây cha-con theo `level` + thứ tự (không cần source_parent_id: FE tính hierarchy theo level).
   const { rows: schedSteps } = await query(
-    `SELECT step_order, step_text, level, points, is_important, source_template_step_id
+    `SELECT step_order, step_text, level, difficulty, points, is_important, source_template_step_id
      FROM schedule_checklist_items WHERE schedule_id = $1 ORDER BY step_order`,
     [schedule.id]
   )
@@ -92,10 +92,10 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
     for (const step of schedSteps) {
       await query(
         `INSERT INTO task_checklist_items
-           (task_id, step_order, step_text, level, points, is_important, source_step_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+           (task_id, step_order, step_text, level, difficulty, points, is_important, source_step_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [newTask.id, step.step_order, step.step_text, step.level ?? 0,
-         step.points ?? 0, !!step.is_important, step.source_template_step_id ?? null]
+         step.difficulty ?? null, step.points ?? 0, !!step.is_important, step.source_template_step_id ?? null]
       )
     }
   }
@@ -133,14 +133,14 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
       )
       // Copy checklist RIÊNG của việc con (kèm điểm/độ quan trọng) vào task con
       const { rows: subSteps } = await query(
-        'SELECT step_order, step_text, level, points, is_important FROM schedule_subtask_items WHERE schedule_subtask_id = $1 ORDER BY step_order, created_at',
+        'SELECT step_order, step_text, level, difficulty, points, is_important FROM schedule_subtask_items WHERE schedule_subtask_id = $1 ORDER BY step_order, created_at',
         [s.id]
       )
       for (const ss of subSteps) {
         await query(
-          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level, points, is_important)
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [child.id, ss.step_order, ss.step_text, ss.level ?? 0, ss.points ?? 0, ss.is_important ?? false]
+          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level, difficulty, points, is_important)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [child.id, ss.step_order, ss.step_text, ss.level ?? 0, ss.difficulty ?? null, ss.points ?? 0, ss.is_important ?? false]
         )
       }
       childrenCreated.push(child.id)

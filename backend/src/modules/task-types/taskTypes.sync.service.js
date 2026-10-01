@@ -86,7 +86,7 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
   if (!tt) throw Object.assign(new Error('Không tìm thấy loại công việc'), { status: 404 })
 
   const { rows: mauSteps } = await query(
-    `SELECT id, step_order, step_text, level, points, is_important
+    `SELECT id, step_order, step_text, level, difficulty, points, is_important
        FROM task_type_checklist_templates
       WHERE task_type_id = $1
       ORDER BY step_order, id`,
@@ -101,7 +101,7 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
   const subTitleById = new Map(subTempls.map((s) => [s.id, s.title]))
   const { rows: subStepRows } = subTempls.length
     ? await query(
-      `SELECT subtask_template_id, id, step_order, step_text, level
+      `SELECT subtask_template_id, id, step_order, step_text, level, difficulty
          FROM task_type_subtask_steps
         WHERE subtask_template_id = ANY($1::uuid[])
         ORDER BY step_order, id`,
@@ -114,7 +114,7 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
     if (!subStepsByTitle.has(title)) subStepsByTitle.set(title, [])
     subStepsByTitle.get(title).push({
       key: st.id, sourceStepId: st.id, step_text: st.step_text, level: st.level ?? 0,
-      points: 0, is_important: false,
+      difficulty: st.difficulty ?? null, points: 0, is_important: false,
     })
   }
 
@@ -159,7 +159,7 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
   const schedIds = [...new Set(tasks.map((t) => t.schedule_id).filter(Boolean))]
   const { rows: schedStepRows } = schedIds.length
     ? await query(
-      `SELECT schedule_id, id, step_order, step_text, level, points, is_important, source_template_step_id
+      `SELECT schedule_id, id, step_order, step_text, level, difficulty, points, is_important, source_template_step_id
          FROM schedule_checklist_items WHERE schedule_id = ANY($1::uuid[]) ORDER BY step_order`,
       [schedIds])
     : { rows: [] }
@@ -169,13 +169,13 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
     schedStepsBySchedule.get(r.schedule_id).push({
       key: r.id, sourceStepId: r.source_template_step_id ?? null,
       step_text: r.step_text, level: r.level ?? 0,
-      points: r.points ?? 0, is_important: !!r.is_important,
+      difficulty: r.difficulty ?? null, points: r.points ?? 0, is_important: !!r.is_important,
     })
   }
   // Template dạng {key, sourceStepId} để fallback (task không có lịch / lịch chưa có checklist).
   const mauStepsKeyed = mauSteps.map((s) => ({
     key: s.id, sourceStepId: s.id, step_text: s.step_text, level: s.level ?? 0,
-    points: s.points ?? 0, is_important: !!s.is_important,
+    difficulty: s.difficulty ?? null, points: s.points ?? 0, is_important: !!s.is_important,
   }))
 
   const chiTiet = []
@@ -275,7 +275,7 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
 
       napMoi.push({
         step_text: step.step_text, level: step.level,
-        points: step.points ?? 0, is_important: !!step.is_important,
+        difficulty: step.difficulty ?? null, points: step.points ?? 0, is_important: !!step.is_important,
         is_completed: tick, source_step_id: step.sourceStepId ?? null, thuTu: i + 1,
       })
       rowNap.push({
@@ -351,9 +351,9 @@ async function syncTasksFromTemplate(taskTypeId, opts = {}) {
       for (const it of k.napMoi) {
         await client.query(
           `INSERT INTO task_checklist_items
-             (task_id, step_order, step_text, level, points, is_important, is_completed, completed_at, source_step_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $7 THEN NOW() ELSE NULL END, $8)`,
-          [k.taskId, it.thuTu, it.step_text, it.level, it.points ?? 0, !!it.is_important, it.is_completed, it.source_step_id]
+             (task_id, step_order, step_text, level, difficulty, points, is_important, is_completed, completed_at, source_step_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $8 THEN NOW() ELSE NULL END, $9)`,
+          [k.taskId, it.thuTu, it.step_text, it.level, it.difficulty ?? null, it.points ?? 0, !!it.is_important, it.is_completed, it.source_step_id]
         )
       }
     }

@@ -66,10 +66,6 @@ function toDto(row) {
     companyAssignedStaffId: row.company_assigned_staff_id ?? null,
     taskTypeId:             row.task_type_id ?? null,
     taskTypeName:           row.task_type_name ?? null,
-    // Cỡ việc (KPI): override trên task (có thể null) + cỡ chuẩn của loại; effectiveSize để hiển thị.
-    sizePoints:             row.size_points ?? null,
-    typeSizePoints:         row.type_size_points ?? null,
-    effectiveSize:          row.size_points ?? row.type_size_points ?? 2,
     customerTaskScheduleId: row.customer_task_schedule_id ?? null,
     // Có giá trị = nhân viên đã dùng lượt chỉnh của NGÀY ĐÓ → khoá riêng ngày đó
     staffStartAdjustedAt:   row.staff_start_adjusted_at ?? null,
@@ -119,7 +115,6 @@ const TASK_SELECT = `
          c.short_name AS company_short_name,
          c.assigned_staff_id AS company_assigned_staff_id,
          tt.name  AS task_type_name,
-         tt.size_points AS type_size_points,
          ua.name  AS assigned_to_name,
          uc.name  AS created_by_name,
          cl.checklist_total,
@@ -408,8 +403,6 @@ const TASK_COLUMNS_SQL = {
   days:           { text: null, filter: '(GREATEST(0, (COALESCE(t.completed_at::date, CURRENT_DATE) - COALESCE(t.start_date, t.created_at::date))) + 1)', kind: 'number' },
   plannedDays:    { text: null, filter: '(CASE WHEN t.due_date IS NULL THEN NULL ELSE GREATEST(0, (t.due_date - COALESCE(t.start_date, t.created_at::date))) + 1 END)', kind: 'number' },
   progress:       { text: null, filter: '(CASE WHEN cl.checklist_points_total > 0 THEN ROUND(100.0 * cl.checklist_points_done / cl.checklist_points_total) WHEN cl.checklist_total > 0 THEN ROUND(100.0 * cl.checklist_done / cl.checklist_total) ELSE NULL END)', kind: 'number', join: 'checklist' },
-  // Cỡ việc hiệu lực (KPI): mã enum = điểm. value-list trả '1'/'2'/'3' (frontend map ra nhãn).
-  size:           { text: `(COALESCE(t.size_points, tt.size_points, 2))::text`, filter: `(COALESCE(t.size_points, tt.size_points, 2))::text`, kind: 'text', join: 'tasktype' },
 }
 // Cột enum → loại enum để SẮP theo nhãn tiếng Việt (thay vì mã)
 const COL_ENUM_TYPE = { status: 'task_status', priority: 'task_priority', source: 'task_source' }
@@ -430,7 +423,7 @@ async function getColumnValues({ column, search, filters = {} }) {
 async function listTasks(filters = {}) {
   const {
     page = 1, limit = 20,
-    companyId, assignedTo, createdBy, status, priority, source, size,
+    companyId, assignedTo, createdBy, status, priority, source,
     dueDateFrom, dueDateTo, periodLabel, isOverdue, scheduleToday, search,
     sortBy = 'created_at', sortDir = 'desc',
     audience = 'internal', parentTaskId,
@@ -616,13 +609,6 @@ async function listTasks(filters = {}) {
     params.push(arr)
     conditions.push(`t.priority = ANY($${params.length}::text[])`)
   }
-  // Cỡ việc hiệu lực (mã enum = điểm; so khớp dạng text với '1'/'2'/'3'…)
-  if (size) {
-    const arr = (Array.isArray(size) ? size : [size]).map(String)
-    params.push(arr)
-    conditions.push(`(COALESCE(t.size_points, tt.size_points, 2))::text = ANY($${params.length}::text[])`)
-  }
-
   const baseWhere = baseConditions.join(' AND ')
 
   // ── Bộ lọc theo CỘT (header filter, server-side) ────────────────────────────────
@@ -633,7 +619,6 @@ async function listTasks(filters = {}) {
   const finalWhere  = [...conditions, ...colF.conditions].join(' AND ')
   // Count query dùng bare `tasks t` → cần join task_types khi lọc theo cỡ việc (dedupe với join của header filter).
   const joinKeys = new Set(colF.joins)
-  if (size) joinKeys.add('tasktype')
   const colJoinSql  = [...joinKeys].map((k) => COL_JOINS[k]).join(' ')
 
   const SORT_COLS = {
@@ -753,15 +738,7 @@ async function getTaskById(id, user = null) {
 }
 
 async function createTask(data, actorId, ipAddress, userAgent) {
-  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, sizePoints = null, collaboratorIds, parentTaskId, spawnSubtasks = true, subtaskTemplateId = null } = data
-
-  // Cỡ việc override (nếu có) phải là mã hợp lệ của enum động 'task_size'.
-  if (sizePoints != null) {
-    const validSizes = await enums.getValues('task_size')
-    if (!validSizes.includes(String(sizePoints))) {
-      throw Object.assign(new Error(`Cỡ việc không hợp lệ: ${sizePoints}`), { status: 422 })
-    }
-  }
+  const { title, description, companyId, taskTypeId, assignedTo, startDate, dueDate, priority = 'medium', slaDays, collaboratorIds, parentTaskId, spawnSubtasks = true, subtaskTemplateId = null } = data
 
   // Ngày hết hạn KHÔNG được nhỏ hơn ngày bắt đầu (so sánh chuỗi YYYY-MM-DD hợp lệ).
   if (startDate && dueDate && dueDate < startDate) {
@@ -814,13 +791,13 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   const { rows: [task] } = await query(
     `INSERT INTO tasks
        (title, description, company_id, task_type_id, assigned_to, assigned_by,
-        start_date, due_date, priority, source, sla_days, created_by, visibility, parent_task_id, size_points)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        start_date, due_date, priority, source, sla_days, created_by, visibility, parent_task_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
      RETURNING *`,
     [
       title, description ?? null, effectiveCompanyId, taskTypeId ?? null,
       assignedTo ?? null, actorId, startDate ?? null, dueDate ?? null,
-      priority, source, effectiveSlaDays, actorId, visibility, parentTaskId ?? null, sizePoints ?? null,
+      priority, source, effectiveSlaDays, actorId, visibility, parentTaskId ?? null,
     ]
   )
 
@@ -840,8 +817,8 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     // KPI v2: copy kèm điểm/★ từ template (task tay cũng mang điểm; % tính ở Phase B).
     await query(
       `INSERT INTO task_checklist_items
-         (task_id, step_order, step_text, level, points, is_important, source_step_id, source_parent_id)
-       SELECT $1, t.step_order, t.step_text, t.level, t.points, t.is_important, t.id,
+         (task_id, step_order, step_text, level, difficulty, points, is_important, source_step_id, source_parent_id)
+       SELECT $1, t.step_order, t.step_text, t.level, t.difficulty, t.points, t.is_important, t.id,
               CASE WHEN t.level = 1 THEN (
                 SELECT p.id FROM task_type_checklist_templates p
                 WHERE p.task_type_id = t.task_type_id AND p.level = 0 AND p.step_order < t.step_order
@@ -939,7 +916,6 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     priority:    'priority',
     slaDays:     'sla_days',
     source:      'source',
-    sizePoints:  'size_points',
     visibility:  'visibility',
     parentTaskId: 'parent_task_id',
   }
@@ -997,14 +973,6 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     }
   }
 
-  // Cỡ việc override (nếu đặt) phải là mã hợp lệ của enum động 'task_size'. null = gỡ override (kế thừa loại).
-  if (data.sizePoints != null) {
-    const validSizes = await enums.getValues('task_size')
-    if (!validSizes.includes(String(data.sizePoints))) {
-      throw Object.assign(new Error(`Cỡ việc không hợp lệ: ${data.sizePoints}`), { status: 422 })
-    }
-  }
-
   if (user?.role === 'staff') {
     // Được chỉnh sửa nếu: được giao việc, là nhân sự phụ trách công ty của việc,
     // HOẶC là người được nhờ HỖ TRỢ (task_collaborators) — quyền như owner.
@@ -1019,7 +987,6 @@ async function updateTask(id, data, actorId, ipAddress, userAgent, user = null) 
     }
     delete fieldMap.assignedTo
     delete fieldMap.visibility   // chỉ admin mới đổi được chế độ riêng tư
-    delete fieldMap.sizePoints   // cỡ việc do người giao (admin) đặt, NV làm không tự đổi
 
     // ── Quy tắc NGÀY với nhân viên ───────────────────────────────────────────
     // 1) Chỉ sửa được nếu task sinh từ LỊCH ĐỊNH KỲ (customer_task_schedule_id).

@@ -8,6 +8,7 @@ function toDto(row) {
     stepOrder:   row.step_order,
     stepText:    row.step_text,
     level:       row.level ?? 0,
+    difficulty:  row.difficulty ?? null,
     points:      row.points ?? 0,
     isImportant: row.is_important ?? false,
     isCompleted: row.is_completed,

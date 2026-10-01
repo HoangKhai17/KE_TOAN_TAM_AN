@@ -3570,7 +3570,7 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   top: 0;
   right: 0;
   bottom: 0;
-  width: 70vw;
+  width: 75vw;
   min-width: 640px;
   max-width: 96vw;
   background: #fff;
@@ -4906,3 +4906,10 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   transition: background 0.12s ease, border-color 0.12s ease;
 }
 .chainAddBtnGreen:hover { background: var(--color-success-dark); border-color: var(--color-success-dark); }
+
+/* Nhãn ĐỘ KHÓ của bước checklist (quickview + chi tiết) */
+.clItemDiff { flex: 0 0 auto; font-size: var(--fs-4xs, 10px); font-weight: var(--fw-bold); padding: 1px 7px; border-radius: 999px; white-space: nowrap; background: var(--color-surface-muted); color: var(--color-muted); }
+.clItemDiff_de { background: var(--color-success-bg); color: var(--color-success-text); }
+.clItemDiff_trung_binh { background: var(--color-primary-bg); color: var(--color-primary-dark); }
+.clItemDiff_kho { background: var(--color-warning-bg); color: var(--color-warning-text); }
+.clItemDiff_rat_kho { background: var(--color-danger-bg); color: var(--color-danger-text); }
