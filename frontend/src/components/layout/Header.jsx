@@ -24,7 +24,7 @@ const ROUTE_LABELS = {
   attendance:             'Chấm công',
   admin:                  'Quản lý',
   payroll:                'Bảng lương',
-  'reward-penalty':       'Điểm thưởng',
+  'reward-penalty':       'Đánh giá nhân viên',
   'internal-assignments': 'Công việc nội bộ',
   'client-requests':      'Yêu cầu KH',
   'progress-matrix':      'BC Tiến độ CV',
