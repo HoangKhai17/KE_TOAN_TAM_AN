@@ -669,15 +669,21 @@ function SubtaskFormModal({ initial, isNew, diffOptions, subPreviewOcc, previewS
 
       <div className={s.formGrid2}>
         <div className={s.formField}>
-          <label className={s.formLabel}>Bắt đầu kỳ + (ngày)</label>
+          <label className={s.formLabel}>Bắt đầu — số ngày sau ngày kỳ</label>
           <input type="number" min="0" className={s.formInput} value={draft.startOffset} onChange={(e) => { setErr(''); setNum('startOffset', e.target.value) }} />
+          <div className={s.formHint}>Ví dụ +{startN}: việc con bắt đầu {startN} ngày sau ngày kỳ.</div>
         </div>
         <div className={s.formField}>
-          <label className={s.formLabel}>Hạn kỳ + (ngày)</label>
+          <label className={s.formLabel}>Hạn — số ngày sau ngày kỳ</label>
           <input type="number" min="0" className={`${s.formInput} ${invalid ? s.formInputError : ''}`} value={draft.deadlineOffset} onChange={(e) => { setErr(''); setNum('deadlineOffset', e.target.value) }} />
+          {invalid ? (
+            <div className={s.formError}>Hạn (+{Number(draft.deadlineOffset) || 0}) đang NHỎ HƠN ngày bắt đầu (+{startN}). Cả hai đều tính từ ngày kỳ, nên hạn phải ≥ {startN}.</div>
+          ) : (
+            <div className={s.formHint}>Tính từ ngày kỳ (KHÔNG phải cộng thêm sau ngày bắt đầu) — phải ≥ ngày bắt đầu (+{startN}).</div>
+          )}
         </div>
       </div>
-      {subPreviewOcc && (
+      {subPreviewOcc && !invalid && (
         <div style={{ margin: '2px 0 6px', fontSize: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ color: 'var(--color-muted)' }}>→ Kỳ {format(subPreviewOcc, 'dd/MM/yyyy')}:</span>
           <span className={s.scDeadlineTag} style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' }}>bắt đầu {previewSubDate(startN)}</span>
@@ -1262,7 +1268,10 @@ export default function SchedulesTab({ company, isAdmin = false }) {
                   <SelectionHeaderCell allSelected={selection.allSelected} someSelected={selection.someSelected} onToggle={selection.toggleAll} />
                   <IndexHeaderCell />
                   <th>Loại công việc</th>
+                  <th>Loại</th>
                   <th>Lịch lặp</th>
+                  <th style={{ textAlign: 'center' }}>Checklist</th>
+                  <th style={{ textAlign: 'center' }}>Tổng điểm</th>
                   <th>Nhân viên</th>
                   <th>Deadline</th>
                   <th>Trạng thái</th>
@@ -1278,7 +1287,6 @@ export default function SchedulesTab({ company, isAdmin = false }) {
                     <IndexRowCell index={(safePage - 1) * pageSize + index + 1} />
                     <td>
                       <div className={s.scTypeName}>{sc.title || sc.taskTypeName}</div>
-                      {sc.title && <div className={s.scDeadlineTag} style={{ marginTop: 2, display: 'inline-block' }}>Tự tạo · Nhóm: {sc.groupName || '—'}</div>}
                       {sc.subtaskCount > 0 && (
                         <button type="button"
                           className={s.scDeadlineTag}
@@ -1291,6 +1299,12 @@ export default function SchedulesTab({ company, isAdmin = false }) {
                       )}
                     </td>
                     <td>
+                      {sc.title
+                        ? <span className={s.scDeadlineTag} style={{ background: 'var(--color-warning-bg, #fef3c7)', color: 'var(--color-warning-text, #b45309)', border: '1px solid var(--color-warning-ring, #fcd34d)' }}>Tự tạo</span>
+                        : <span className={s.scDeadlineTag} style={{ background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', border: '1px solid var(--color-primary-ring)' }}>Từ mẫu</span>}
+                      <div className={s.scRecurrenceDesc} style={{ marginTop: 3 }}>Nhóm: {sc.effectiveGroupName || '—'}</div>
+                    </td>
+                    <td>
                       <div className={s.scRecurrenceLabel}>{RECURRENCE_LABELS[sc.recurrenceType]}</div>
                       <div className={s.scRecurrenceDesc}>
                         {describeRecurrence(sc.recurrenceType, sc.recurrenceConfig)}
@@ -1301,6 +1315,12 @@ export default function SchedulesTab({ company, isAdmin = false }) {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={s.scDeadlineTag}>{(sc.checklistCount ?? 0)} bước</span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <strong>{sc.totalPoints ?? 0}</strong><span style={{ color: 'var(--color-muted)' }}> đ</span>
                     </td>
                     <td>
                       {sc.assignedStaffName
@@ -1364,7 +1384,7 @@ export default function SchedulesTab({ company, isAdmin = false }) {
 
                   {expandedId === sc.id && (
                     <tr>
-                      <td colSpan={9} style={{ background: 'var(--color-bg-soft, #f8fafc)', padding: '10px 16px' }}>
+                      <td colSpan={12} style={{ background: 'var(--color-bg-soft, #f8fafc)', padding: '10px 16px' }}>
                         {expandSubs[sc.id] === 'loading' ? (
                           <span style={{ fontSize: 12, color: 'var(--color-muted)' }}><Loader2 size={12} className={s.spin} /> Đang tải việc con…</span>
                         ) : !Array.isArray(expandSubs[sc.id]) || expandSubs[sc.id].length === 0 ? (
@@ -1407,20 +1427,27 @@ export default function SchedulesTab({ company, isAdmin = false }) {
           title={
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1, minWidth: 0 }}>
               <span style={{ whiteSpace: 'nowrap' }}>{modal.mode === 'create' ? 'Tạo lịch định kỳ' : 'Chỉnh sửa lịch định kỳ'}</span>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {[['template', 'Từ mẫu'], ['manual', 'Tự tạo (thủ công)']].map(([m, lbl]) => (
-                  <button key={m} type="button" onClick={() => setForm(f => ({
-                    ...f, mode: m,
-                    ...(m === 'template' ? { title: '' } : {}),
-                    // Chỉ xoá checklist + việc con khi TẠO MỚI + chuyển sang thủ công. Khi SỬA giữ nguyên bản của lịch.
-                    ...(modal.mode === 'create' && m === 'manual' ? { checklist: [], subtasks: [] } : {}),
-                  }))}
-                    style={{ height: 30, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 'var(--fs-2xs)', fontWeight: 600,
-                      border: form.mode === m ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
-                      background: form.mode === m ? 'var(--color-primary-bg)' : 'var(--color-white)',
-                      color: form.mode === m ? 'var(--color-primary)' : 'var(--color-text-soft)' }}>{lbl}</button>
-                ))}
-              </div>
+              {modal.mode === 'create' ? (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[['template', 'Từ mẫu'], ['manual', 'Tự tạo (thủ công)']].map(([m, lbl]) => (
+                    <button key={m} type="button" onClick={() => setForm(f => ({
+                      ...f, mode: m,
+                      // GIỮ nguyên "Tên lịch" khi qua lại tab (chỉ dùng khi mode=manual, không gửi khi template).
+                      ...(m === 'manual' ? { checklist: [], subtasks: [] } : {}),
+                    }))}
+                      style={{ height: 30, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 'var(--fs-2xs)', fontWeight: 600,
+                        border: form.mode === m ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
+                        background: form.mode === m ? 'var(--color-primary-bg)' : 'var(--color-white)',
+                        color: form.mode === m ? 'var(--color-primary)' : 'var(--color-text-soft)' }}>{lbl}</button>
+                  ))}
+                </div>
+              ) : (
+                // Chế độ SỬA: loại lịch cố định (không đổi được task_type_id/nhóm sau khi tạo) → chỉ hiển thị.
+                <span style={{ height: 30, display: 'inline-flex', alignItems: 'center', padding: '0 14px', borderRadius: 8, fontSize: 'var(--fs-2xs)', fontWeight: 700,
+                  border: '1.5px solid var(--color-primary)', background: 'var(--color-primary-bg)', color: 'var(--color-primary)' }}>
+                  {form.mode === 'manual' ? 'Tự tạo (thủ công)' : 'Từ mẫu'}
+                </span>
+              )}
             </div>
           }
           onClose={() => { if (!subEdit) setModal(null) }}

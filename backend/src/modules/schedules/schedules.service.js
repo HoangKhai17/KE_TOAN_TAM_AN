@@ -62,6 +62,8 @@ function toDto(row) {
     taskTypeId:         row.task_type_id ?? null,
     taskTypeName:       row.task_type_name ?? null,
     groupName:          row.group_name ?? null,       // nhóm báo cáo (lịch thủ công gắn trực tiếp)
+    // Nhóm hiệu lực để hiển thị: lịch tự tạo dùng group_name; lịch từ mẫu suy từ nhóm của loại CV.
+    effectiveGroupName: row.group_name ?? row.type_group_name ?? null,
     title:              row.title ?? null,            // tên riêng (lịch thủ công); null = dùng tên loại CV
     assignedStaffId:    row.assigned_staff_id ?? null,
     assignedStaffName:  row.staff_name ?? null,
@@ -72,6 +74,11 @@ function toDto(row) {
     excludedStepIds:    Array.isArray(row.excluded_step_ids) ? row.excluded_step_ids : [],
     subtaskOffsets:     (row.subtask_offsets && typeof row.subtask_offsets === 'object') ? row.subtask_offsets : {},
     subtaskCount:       row.subtask_count != null ? parseInt(row.subtask_count, 10) : undefined,
+    checklistCount:     row.checklist_count != null ? parseInt(row.checklist_count, 10) : undefined,
+    // Tổng điểm KPI của lịch = điểm checklist cha + điểm checklist các việc con.
+    totalPoints:        (row.checklist_points != null || row.subtask_points != null)
+      ? (parseInt(row.checklist_points, 10) || 0) + (parseInt(row.subtask_points, 10) || 0)
+      : undefined,
     notes:              row.notes ?? null,
     isActive:           row.is_active,
     lastGeneratedAt:    row.last_generated_at ?? null,
@@ -105,8 +112,11 @@ async function getScheduleCompanyId(id) {
 
 async function getScheduleById(id) {
   const { rows: [row] } = await query(
-    `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name,
-            (SELECT COUNT(*) FROM schedule_subtasks ss WHERE ss.schedule_id = s.id) AS subtask_count
+    `SELECT s.*, tt.name AS task_type_name, tt.group_name AS type_group_name, u.name AS staff_name,
+            (SELECT COUNT(*) FROM schedule_subtasks ss WHERE ss.schedule_id = s.id) AS subtask_count,
+            (SELECT COUNT(*) FROM schedule_checklist_items ci WHERE ci.schedule_id = s.id) AS checklist_count,
+            (SELECT COALESCE(SUM(points),0) FROM schedule_checklist_items ci WHERE ci.schedule_id = s.id) AS checklist_points,
+            (SELECT COALESCE(SUM(si.points),0) FROM schedule_subtask_items si JOIN schedule_subtasks ss ON ss.id = si.schedule_subtask_id WHERE ss.schedule_id = s.id) AS subtask_points
      FROM customer_task_schedules s
      LEFT JOIN task_types tt ON tt.id = s.task_type_id
      LEFT JOIN users u  ON u.id  = s.assigned_staff_id
@@ -123,8 +133,11 @@ async function getScheduleById(id) {
 async function listSchedules(companyId) {
   await assertCompanyExists(companyId)
   const { rows } = await query(
-    `SELECT s.*, tt.name AS task_type_name, u.name AS staff_name,
-            (SELECT COUNT(*) FROM schedule_subtasks ss WHERE ss.schedule_id = s.id) AS subtask_count
+    `SELECT s.*, tt.name AS task_type_name, tt.group_name AS type_group_name, u.name AS staff_name,
+            (SELECT COUNT(*) FROM schedule_subtasks ss WHERE ss.schedule_id = s.id) AS subtask_count,
+            (SELECT COUNT(*) FROM schedule_checklist_items ci WHERE ci.schedule_id = s.id) AS checklist_count,
+            (SELECT COALESCE(SUM(points),0) FROM schedule_checklist_items ci WHERE ci.schedule_id = s.id) AS checklist_points,
+            (SELECT COALESCE(SUM(si.points),0) FROM schedule_subtask_items si JOIN schedule_subtasks ss ON ss.id = si.schedule_subtask_id WHERE ss.schedule_id = s.id) AS subtask_points
      FROM customer_task_schedules s
      LEFT JOIN task_types tt ON tt.id = s.task_type_id
      LEFT JOIN users u  ON u.id  = s.assigned_staff_id
