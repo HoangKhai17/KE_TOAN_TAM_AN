@@ -1,4 +1,4 @@
-const { query } = require('../config/db')
+const { query, getClient } = require('../config/db')
 const logger    = require('../config/logger')
 const { shouldGenerateToday, getCurrentOccurrence } = require('../utils/recurrence.calculator')
 const { buildPeriodLabel, docPeriodOffset } = require('../utils/periodLabel')
@@ -61,36 +61,43 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
   // Lịch thủ công có tên riêng (title) → dùng làm tên task; ngược lại dùng tên loại CV.
   const title = buildTaskTitle(periodLabel, schedule.title || schedule.task_type_name)
 
-  const { rows: [newTask] } = await query(
-    `INSERT INTO tasks
-       (title, company_id, task_type_id, group_name, customer_task_schedule_id,
-        assigned_to, start_date, due_date, period_label, source, priority, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'auto','medium',$10)
-     RETURNING id`,
-    [
-      title,
-      schedule.company_id,
-      schedule.task_type_id,
-      schedule.group_name ?? null,   // lịch thủ công gắn nhóm; lịch mẫu suy nhóm từ loại CV
-      schedule.id,
-      schedule.assigned_staff_id ?? null,
-      startDateStr,
-      dueDateStr,
-      periodLabel,
-      schedule.created_by,
-    ]
-  )
+  // ── NGUYÊN TỬ: task cha + checklist cha + việc con + checklist con trong 1 TRANSACTION ──
+  // Nếu bất kỳ bước nào lỗi → ROLLBACK toàn bộ, không để lại task cha "cụt" (thiếu việc con).
+  const client = await getClient()
+  let newTask
+  const childrenCreated = []
+  try {
+    await client.query('BEGIN')
 
-  // KPI v2: copy checklist RIÊNG CỦA LỊCH (schedule_checklist_items) vào task cha — kèm ĐIỂM + ★.
-  // Cây cha-con theo `level` + thứ tự (không cần source_parent_id: FE tính hierarchy theo level).
-  const { rows: schedSteps } = await query(
-    `SELECT step_order, step_text, level, difficulty, points, is_important, source_template_step_id
-     FROM schedule_checklist_items WHERE schedule_id = $1 ORDER BY step_order`,
-    [schedule.id]
-  )
-  if (schedSteps.length && newTask) {
+    ;({ rows: [newTask] } = await client.query(
+      `INSERT INTO tasks
+         (title, company_id, task_type_id, group_name, customer_task_schedule_id,
+          assigned_to, start_date, due_date, period_label, source, priority, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'auto','medium',$10)
+       RETURNING id`,
+      [
+        title,
+        schedule.company_id,
+        schedule.task_type_id,
+        schedule.group_name ?? null,   // lịch thủ công gắn nhóm; lịch mẫu suy nhóm từ loại CV
+        schedule.id,
+        schedule.assigned_staff_id ?? null,
+        startDateStr,
+        dueDateStr,
+        periodLabel,
+        schedule.created_by,
+      ]
+    ))
+
+    // KPI v2: copy checklist RIÊNG CỦA LỊCH (schedule_checklist_items) vào task cha — kèm ĐIỂM + ★.
+    // Cây cha-con theo `level` + thứ tự (không cần source_parent_id: FE tính hierarchy theo level).
+    const { rows: schedSteps } = await client.query(
+      `SELECT step_order, step_text, level, difficulty, points, is_important, source_template_step_id
+       FROM schedule_checklist_items WHERE schedule_id = $1 ORDER BY step_order`,
+      [schedule.id]
+    )
     for (const step of schedSteps) {
-      await query(
+      await client.query(
         `INSERT INTO task_checklist_items
            (task_id, step_order, step_text, level, difficulty, points, is_important, source_step_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -98,18 +105,11 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
          step.difficulty ?? null, step.points ?? 0, !!step.is_important, step.source_template_step_id ?? null]
       )
     }
-  }
 
-  // Đẻ VIỆC CON định kỳ — đọc từ bảng RIÊNG task_type_subtask_templates (đúng logic Tasks:
-  // checklist và việc con là 2 thứ tách bạch). Mỗi con là task ĐỘC LẬP với NGÀY BẮT ĐẦU + HẠN
-  // riêng = ngày kỳ + offset (đẩy qua CN/lễ). Offset lấy từ LỊCH (subtask_offsets) theo từng
-  // công ty; thiếu thì mặc định start=0, deadline=due_offset_days của template ?? 0.
-  // KHÔNG có phụ thuộc bước trước.
-  const childrenCreated = []
-  // Việc con của lịch (KPI v2) — đọc từ schedule_subtasks (per-lịch, đã seed từ mẫu
-  // khi tạo lịch template, hoặc do admin tự cấu hình). Áp dụng cho CẢ lịch mẫu lẫn thủ công.
-  if (newTask) {
-    const { rows: subtasks } = await query(
+    // Đẻ VIỆC CON của lịch (KPI v2) — đọc từ schedule_subtasks (per-lịch, đã seed từ mẫu khi tạo
+    // lịch template, hoặc do admin tự cấu hình). Mỗi con là task ĐỘC LẬP với ngày bắt đầu + hạn
+    // riêng = ngày kỳ + offset (đẩy qua CN/lễ). Áp dụng cho CẢ lịch mẫu lẫn thủ công.
+    const { rows: subtasks } = await client.query(
       'SELECT id, title, start_offset_days, deadline_offset_days FROM schedule_subtasks WHERE schedule_id = $1 ORDER BY sort_order, created_at',
       [schedule.id]
     )
@@ -120,7 +120,7 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
         rollForwardToWorkday(addDays(forDate, startOff), holidaySet), 'yyyy-MM-dd')
       const childDueStr = format(
         rollForwardToWorkday(addDays(forDate, Math.max(deadlineOff, startOff)), holidaySet), 'yyyy-MM-dd')
-      const { rows: [child] } = await query(
+      const { rows: [child] } = await client.query(
         `INSERT INTO tasks
            (title, company_id, task_type_id, group_name, customer_task_schedule_id, parent_task_id,
             assigned_to, start_date, due_date, period_label, source, priority, created_by)
@@ -132,12 +132,12 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
         ]
       )
       // Copy checklist RIÊNG của việc con (kèm điểm/độ quan trọng) vào task con
-      const { rows: subSteps } = await query(
+      const { rows: subSteps } = await client.query(
         'SELECT step_order, step_text, level, difficulty, points, is_important FROM schedule_subtask_items WHERE schedule_subtask_id = $1 ORDER BY step_order, created_at',
         [s.id]
       )
       for (const ss of subSteps) {
-        await query(
+        await client.query(
           `INSERT INTO task_checklist_items (task_id, step_order, step_text, level, difficulty, points, is_important)
            VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [child.id, ss.step_order, ss.step_text, ss.level ?? 0, ss.difficulty ?? null, ss.points ?? 0, ss.is_important ?? false]
@@ -145,6 +145,13 @@ async function createTaskForOccurrence(schedule, forDate, holidaySet, options = 
       }
       childrenCreated.push(child.id)
     }
+
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
   }
 
   return {
