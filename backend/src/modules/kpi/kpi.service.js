@@ -64,13 +64,25 @@ async function listLive(year, month, opts = {}) {
       WHERE t.assigned_to IS NOT NULL AND t.due_date >= $1::date AND t.due_date < $2::date
         AND (t.status = 'completed' OR t.due_date < CURRENT_DATE)${srcClause}
       GROUP BY t.assigned_to
+    ),
+    poss AS (
+      -- TỔNG điểm có thể đạt trong kỳ (mẫu số cho "đạt/tổng"): cộng TẤT CẢ bước LEAF (xong hay chưa)
+      -- của task đến hạn trong kỳ, CỘNG các bước đã tick trong kỳ của task ngoài kỳ → luôn ≥ điểm đã đạt.
+      SELECT t.assigned_to AS user_id, COALESCE(SUM(leaf.points), 0)::int AS possible_points
+      FROM leaf JOIN tasks t ON t.id = leaf.task_id
+      WHERE leaf.is_leaf AND t.assigned_to IS NOT NULL${srcClause}
+        AND ( (t.due_date >= $1::date AND t.due_date < $2::date)
+              OR (leaf.is_completed AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date) )
+      GROUP BY t.assigned_to
     )
     SELECT u.id AS user_id, u.name AS user_name, u.job_title,
            COALESCE(vol.volume_points, 0) AS volume_points,
+           COALESCE(poss.possible_points, 0) AS possible_points,
            COALESCE(ont.assigned_count, 0) AS assigned_count,
            COALESCE(ont.on_time_count, 0)  AS on_time_count
     FROM users u
     LEFT JOIN vol ON vol.user_id = u.id
+    LEFT JOIN poss ON poss.user_id = u.id
     LEFT JOIN ont ON ont.user_id = u.id
     WHERE ${uConds.join(' AND ')}
     ORDER BY u.name
@@ -84,6 +96,7 @@ function toKpiDto(r) {
   return {
     userId: r.user_id, userName: r.user_name, jobTitle: r.job_title ?? null,
     volumePoints: parseInt(r.volume_points, 10) || 0,
+    volumePossible: Math.max(parseInt(r.possible_points, 10) || 0, parseInt(r.volume_points, 10) || 0),
     assignedCount: assigned, onTimeCount: onTime,
     onTimePct: assigned > 0 ? Math.round((onTime * 100) / assigned) : null,
   }
@@ -107,7 +120,7 @@ async function listMonthly(year, month, opts = {}) {
       ORDER BY u.name`, params)
     return { closed: true, rows: rows.map((r) => ({
       userId: r.user_id, userName: r.user_name, jobTitle: r.job_title ?? null,
-      volumePoints: r.volume_points, assignedCount: r.assigned_count,
+      volumePoints: r.volume_points, volumePossible: r.volume_points, assignedCount: r.assigned_count,
       onTimeCount: r.on_time_count, onTimePct: r.on_time_pct,
     })) }
   }

@@ -41,6 +41,8 @@ const FALLBACK_COLORS = ['#0ea5e9', '#f97316', '#14b8a6', '#ec4899', '#a3a3a3']
 const srcColor = (key, i) => SOURCE_COLOR[key] || FALLBACK_COLORS[i % FALLBACK_COLORS.length]
 const ON_TIME_TARGET = 90
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : '—')
+// Tên ngắn cho nhãn biểu đồ: lấy 2 từ CUỐI = phần tên gọi (vd "Bùi Thị Thanh Thảo" → "Thanh Thảo").
+const shortName = (nm) => (nm || '').trim().split(/\s+/).slice(-2).join(' ')
 
 export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] }) {
   const addToast = useToastStore((st) => st.toast)
@@ -315,18 +317,23 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
           <div className={s.kpiCharts}>
             <div className={s.kpiPanel}>
               <h4>Điểm khối lượng theo nhân viên</h4>
-              <div className={s.kpiHint}>Tổng điểm các bước checklist đã hoàn thành trong kỳ.</div>
+              <div className={s.kpiHint}>Điểm đã đạt / tổng điểm có thể đạt của công việc trong kỳ (phần xám = bước chưa hoàn thành).</div>
               {summary.sumVol === 0 ? (
                 <div className={s.empty} style={{ padding: 12 }}>Chưa có điểm khối lượng trong kỳ — công việc chưa chấm điểm checklist (hoặc đang lọc nguồn không có điểm).</div>
               ) : (
                 <div className={s.kpiBars}>
-                  {summary.volTop.map((r) => (
+                  {summary.volTop.map((r) => {
+                    const got = r.volumePoints || 0
+                    const poss = r.volumePossible || 0
+                    const pct = poss > 0 ? Math.round((got / poss) * 100) : 0
+                    return (
                     <div className={s.kpiBarRow} key={r.userId}>
-                      <span className={s.kpiNm} title={r.userName}>{r.userName}</span>
-                      <span className={s.kpiTrack}><span className={s.kpiFill} style={{ width: `${Math.round(((r.volumePoints || 0) / summary.volMax) * 100)}%` }} /></span>
-                      <span className={s.kpiVal}>{r.volumePoints || 0}</span>
+                      <span className={s.kpiNm} title={r.userName}>{shortName(r.userName)}</span>
+                      <span className={s.kpiTrack} title={`Đạt ${got} / ${poss} điểm (${pct}%)`}><span className={s.kpiFill} style={{ width: `${pct}%` }} /></span>
+                      <span className={s.kpiVal}>{got} <small style={{ color: 'var(--color-muted)', fontWeight: 'var(--fw-regular, 400)' }}>/ {poss}</small></span>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -380,7 +387,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {sourceReport.perUser.map((u) => (
                   <div key={u.userId} style={{ display: 'grid', gridTemplateColumns: '92px 1fr 40px', alignItems: 'center', gap: 9 }}>
-                    <span title={u.name} style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</span>
+                    <span title={u.name} style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{shortName(u.name)}</span>
                     <span style={{ display: 'flex', height: 11, borderRadius: 6, overflow: 'hidden', background: 'var(--color-surface-muted)', width: `${Math.round((u.total / sourceReport.maxTotal) * 100)}%`, minWidth: 2 }}>
                       {u.segs.filter((sg) => sg.count > 0).map((sg) => (
                         <span key={sg.source} title={`${getLabel('task_source', sg.source, sg.source)}: ${sg.count} việc · đúng hạn ${sg.onTime}`}

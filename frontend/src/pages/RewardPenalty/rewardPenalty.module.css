@@ -243,16 +243,16 @@
 .kpiCard .kpiSub { font-size: var(--fs-3xs); color: var(--color-text-soft); margin-top: 2px; }
 .kpiPos { color: var(--color-success-text); } .kpiNeg { color: var(--color-danger-text); }
 
-.kpiCharts { display: grid; grid-template-columns: 1.35fr 1fr; gap: 10px; margin-bottom: 14px; }
+.kpiCharts { display: grid; grid-template-columns: 1.35fr 1fr; gap: 10px; margin-bottom: 14px; align-items: start; }
 .kpiPanel { background: var(--color-surface); border: 1px solid var(--color-border-muted); border-radius: var(--radius-lg); padding: 13px 14px; min-width: 0; }
 .kpiPanel h4 { margin: 0; font-size: var(--fs-xs); font-weight: var(--fw-extrabold); color: var(--color-text-strong); }
 .kpiPanel .kpiHint { font-size: var(--fs-3xs); color: var(--color-muted); margin-top: 2px; }
 
 .kpiBars { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-.kpiBarRow { display: grid; grid-template-columns: 92px 1fr 40px; align-items: center; gap: 9px; }
+.kpiBarRow { display: grid; grid-template-columns: 92px 1fr 78px; align-items: center; gap: 9px; }
 .kpiBarRow .kpiNm { font-size: var(--fs-2xs); color: var(--color-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpiTrack { height: 11px; background: var(--color-surface-muted); border-radius: 6px; overflow: hidden; }
-.kpiFill { height: 100%; border-radius: 6px; background: var(--gradient-primary); }
+.kpiFill { display: block; height: 100%; border-radius: 6px; background: var(--gradient-primary); }
 .kpiBarRow .kpiVal { font-size: var(--fs-2xs); font-weight: var(--fw-bold); text-align: right; font-variant-numeric: tabular-nums; }
 
 .kpiDonutWrap { display: flex; align-items: center; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
@@ -278,7 +278,7 @@
 /* Bảng tổng quan: thanh % đúng hạn + con trỏ */
 .kpiMini { display: inline-flex; align-items: center; gap: 7px; }
 .kpiMiniTrack { width: 46px; height: 6px; border-radius: 3px; background: var(--color-surface-muted); overflow: hidden; }
-.kpiMiniFill { height: 100%; border-radius: 3px; }
+.kpiMiniFill { display: block; height: 100%; border-radius: 3px; }
 .kpiRowClick { cursor: pointer; }
 .kpiRowClick:hover { background: var(--color-primary-bg); }
 .kpiPickRow { background: var(--color-primary-bg); }
