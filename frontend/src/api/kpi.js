@@ -29,8 +29,13 @@ export async function reopenKpiMonth(year, month) {
 }
 
 // Hiệu suất tổng hợp (KPI đúng hạn → điểm + thưởng/phạt → xếp loại → tiền). { closed, rows }
-export async function getKpiPerformance(year, month) {
-  const { data } = await api.get('/kpi/performance', { params: { year, month } })
+// filters (admin): { role: 'staff'|'admin', userIds: [] } — bỏ trống = tất cả.
+export async function getKpiPerformance(year, month, filters = {}) {
+  const params = { year, month }
+  if (filters.role) params.role = filters.role
+  if (Array.isArray(filters.userIds) && filters.userIds.length) params.userIds = filters.userIds.join(',')
+  if (Array.isArray(filters.sources) && filters.sources.length) params.sources = filters.sources.join(',')
+  const { data } = await api.get('/kpi/performance', { params })
   return data.data
 }
 

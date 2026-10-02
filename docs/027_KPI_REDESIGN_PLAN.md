@@ -99,9 +99,7 @@ Chọn 1 trong 2 mức (hoặc làm dần):
 - *Đúng hạn* = theo `due_date` (việc đến hạn trong tháng).
 → Giữ như vậy (đo 2 thứ khác nhau — đúng chuẩn), hay thống nhất 1 mốc?
 
-**C4. "Nhóm nhân viên" thật sự:**
-- Trước mắt dùng **role** (staff/admin) — đủ cho nhu cầu "chỉ xem staff".
-- Nếu cần nhóm theo **phòng ban/đội** (vd nhóm KH doanh nghiệp vs hộ kinh doanh): cần **migration thêm bảng `teams` + `users.team_id`** (hoặc chuẩn hoá `job_title` thành enum). → Đề xuất làm **phase riêng** khi bạn xác định cơ cấu nhóm.
+**C4. "Nhóm nhân viên":** dùng **role** (staff/admin) sẵn có — ĐỦ (user đã chốt KHÔNG làm phòng ban/migration).
 
 **C5. Mốc điểm (`kpi_ontime_tiers`) hiện "gắt"** (≤49% đã −10). Có nới không? (chỉnh dữ liệu, không cần code).
 
@@ -111,13 +109,14 @@ Chọn 1 trong 2 mức (hoặc làm dần):
 
 | Phase | Nội dung | Phụ thuộc quyết định |
 |---|---|---|
-| **1** | **Bộ lọc Tổng quan** (role + nhân viên) — Phần A1+A2 (trừ lọc nguồn) | Không — làm ngay được |
-| **2** | **Lọc theo nguồn** + ghi chú "đang xem nguồn X" — phần còn lại của A | C1 |
-| **3** | **Báo cáo đa nguồn B1** (cột/stacked bar tách nguồn) | C1 |
-| **4** | (Tùy) B2 xem-tách-nguồn đầy đủ | C1, C2 |
-| **5** | (Tùy) Nhóm/phòng ban thật — migration `teams` | C4 |
+| **1** ✅ | **Bộ lọc Tổng quan** (role + nhân viên) — Phần A1+A2 (trừ lọc nguồn) | Không — làm ngay được |
+| **2** ✅ | **Lọc theo nguồn** + ghi chú "đang xem nguồn X" — phần còn lại của A | C1 → chốt (c) |
+| **3** ✅ | **Báo cáo đa nguồn B1** (stacked bar số việc theo nguồn / NV) | C1 |
+| **4** ✅ | B2 xem-tách-nguồn đầy đủ (bảng ma trận NV × nguồn, toggle Gộp↔Tách) | C1 |
 
-→ **Phase 1 không cần chốt gì**, có thể làm ngay. Phase 2+ cần bạn trả lời C1–C5.
+> **Không làm phòng ban/đội bằng migration** (theo chốt của user). "Nhóm" chỉ dùng **role** (staff/admin) sẵn có. Mọi điều chỉnh thống kê làm trực tiếp trên UI/logic hiện có để user xem rồi tinh chỉnh.
+
+→ **Phase 1 không cần chốt gì**, có thể làm ngay. Phase 2+ cần bạn trả lời C1–C3/C5.
 
 ---
 

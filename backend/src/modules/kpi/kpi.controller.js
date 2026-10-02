@@ -3,13 +3,26 @@ const svc = require('./kpi.service')
 
 function bad(msg) { const e = new Error(msg); e.status = 400; return e }
 
-// GET /kpi?year=&month=  — admin: tất cả NV; staff: chỉ mình
+// Xây bộ lọc từ query (chỉ admin được lọc; staff LUÔN chỉ xem chính mình).
+// ?role=staff|admin  ?userIds=id1,id2  (bỏ trống = tất cả theo role)
+function buildFilter(req) {
+  const sources = req.query.sources
+    ? String(req.query.sources).split(',').map((s) => s.trim()).filter(Boolean)
+    : null
+  if (req.user.role === 'staff') return { userId: req.user.id, sources }
+  const role = ['staff', 'admin'].includes(req.query.role) ? req.query.role : null
+  const userIds = req.query.userIds
+    ? String(req.query.userIds).split(',').map((s) => s.trim()).filter(Boolean)
+    : null
+  return { role, userIds, sources }
+}
+
+// GET /kpi?year=&month=  — admin: tất cả NV (lọc được); staff: chỉ mình
 async function list(req, res, next) {
   try {
     const { year, month } = req.query
     if (!year || !month) throw bad('Thiếu year/month')
-    const userId = req.user.role === 'staff' ? req.user.id : null
-    const data = await svc.listMonthly(year, month, userId)
+    const data = await svc.listMonthly(year, month, buildFilter(req))
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
@@ -63,8 +76,7 @@ async function performance(req, res, next) {
   try {
     const { year, month } = req.query
     if (!year || !month) throw bad('Thiếu year/month')
-    const userId = req.user.role === 'staff' ? req.user.id : null
-    const data = await svc.getPerformance(year, month, userId)
+    const data = await svc.getPerformance(year, month, buildFilter(req))
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }

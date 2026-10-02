@@ -32,11 +32,17 @@ async function isMonthClosed(year, month) {
 }
 
 // ── Danh sách KPI (LIVE) — mỗi NV active 1 dòng ───────────────────────────────
-async function listLive(year, month, userId = null) {
+async function listLive(year, month, opts = {}) {
+  const { userId = null, role = null, userIds = null, sources = null } = opts
   const { start, end } = monthBounds(year, month)
   const params = [start, end]
-  let userCond = ''
-  if (userId) { params.push(userId); userCond = ` AND u.id = $${params.length}` }
+  // Lọc theo NGUỒN (auto/manual/customer/…): thêm sớm để $3 cố định cho vol/ont. Bỏ trống = mọi nguồn.
+  let srcClause = ''
+  if (Array.isArray(sources) && sources.length) { params.push(sources); srcClause = ` AND t.source = ANY($${params.length}::text[])` }
+  const uConds = ["u.status = 'active'"]
+  if (userId) { params.push(userId); uConds.push(`u.id = $${params.length}`) }
+  if (role) { params.push(role); uConds.push(`u.role = $${params.length}`) }
+  if (Array.isArray(userIds) && userIds.length) { params.push(userIds); uConds.push(`u.id = ANY($${params.length}::uuid[])`) }
   const { rows } = await query(`
     ${LEAF_CTE},
     vol AS (
@@ -44,7 +50,7 @@ async function listLive(year, month, userId = null) {
       FROM leaf JOIN tasks t ON t.id = leaf.task_id
       WHERE leaf.is_leaf AND leaf.is_completed
         AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date
-        AND t.assigned_to IS NOT NULL
+        AND t.assigned_to IS NOT NULL${srcClause}
       GROUP BY t.assigned_to
     ),
     ont AS (
@@ -56,7 +62,7 @@ async function listLive(year, month, userId = null) {
              COUNT(*) FILTER (WHERE t.status = 'completed' AND t.completed_at::date <= t.due_date)::int AS on_time_count
       FROM tasks t
       WHERE t.assigned_to IS NOT NULL AND t.due_date >= $1::date AND t.due_date < $2::date
-        AND (t.status = 'completed' OR t.due_date < CURRENT_DATE)
+        AND (t.status = 'completed' OR t.due_date < CURRENT_DATE)${srcClause}
       GROUP BY t.assigned_to
     )
     SELECT u.id AS user_id, u.name AS user_name, u.job_title,
@@ -66,7 +72,7 @@ async function listLive(year, month, userId = null) {
     FROM users u
     LEFT JOIN vol ON vol.user_id = u.id
     LEFT JOIN ont ON ont.user_id = u.id
-    WHERE u.status = 'active'${userCond}
+    WHERE ${uConds.join(' AND ')}
     ORDER BY u.name
   `, params)
   return rows.map(toKpiDto)
@@ -84,17 +90,20 @@ function toKpiDto(r) {
 }
 
 // ── Danh sách KPI (đọc snapshot nếu tháng đã chốt) ────────────────────────────
-async function listMonthly(year, month, userId = null) {
+async function listMonthly(year, month, opts = {}) {
+  const { userId = null, role = null, userIds = null } = opts
   const { y, m } = monthBounds(year, month)
   if (await isMonthClosed(y, m)) {
     const params = [y, m]
-    let userCond = ''
-    if (userId) { params.push(userId); userCond = ` AND k.user_id = $${params.length}` }
+    const conds = []
+    if (userId) { params.push(userId); conds.push(`k.user_id = $${params.length}`) }
+    if (role) { params.push(role); conds.push(`u.role = $${params.length}`) }
+    if (Array.isArray(userIds) && userIds.length) { params.push(userIds); conds.push(`k.user_id = ANY($${params.length}::uuid[])`) }
     const { rows } = await query(`
       SELECT k.user_id, u.name AS user_name, u.job_title,
              k.volume_points, k.assigned_count, k.on_time_count, k.on_time_pct
       FROM kpi_monthly_results k JOIN users u ON u.id = k.user_id
-      WHERE k.period_year = $1 AND k.period_month = $2${userCond}
+      WHERE k.period_year = $1 AND k.period_month = $2${conds.length ? ' AND ' + conds.join(' AND ') : ''}
       ORDER BY u.name`, params)
     return { closed: true, rows: rows.map((r) => ({
       userId: r.user_id, userName: r.user_name, jobTitle: r.job_title ?? null,
@@ -102,7 +111,7 @@ async function listMonthly(year, month, userId = null) {
       onTimeCount: r.on_time_count, onTimePct: r.on_time_pct,
     })) }
   }
-  return { closed: false, rows: await listLive(y, m, userId) }
+  return { closed: false, rows: await listLive(y, m, opts) }
 }
 
 // ── Chi tiết breakdown (LIVE) theo công ty + loại CV cho 1 NV ──────────────────
@@ -294,9 +303,10 @@ function matchRange(value, list, minKey, maxKey) {
 }
 
 // ── Phase D: HIỆU SUẤT TỔNG HỢP = điểm KPI (từ % đúng hạn) + net thưởng/phạt → xếp loại → tiền ──
-async function getPerformance(year, month, userId = null) {
+async function getPerformance(year, month, opts = {}) {
+  const { userId = null } = opts
   const { y, m } = monthBounds(year, month)
-  const base = await listMonthly(y, m, userId)                    // { closed, rows:[{...onTimePct, volumePoints}] }
+  const base = await listMonthly(y, m, opts)                      // { closed, rows:[{...onTimePct, volumePoints}] }
   const tiers = await listTiers({ activeOnly: true })
   // grades ở bảng kpi_grades (module reward-penalty) — đọc trực tiếp.
   const { rows: grades } = await query(
@@ -317,6 +327,28 @@ async function getPerformance(year, month, userId = null) {
      GROUP BY user_id`, rpParams)
   const netByUser = new Map(rp.map((r) => [r.user_id, Number(r.net)]))
 
+  // Báo cáo ĐA NGUỒN: số việc đến hạn / đúng hạn theo (NV × nguồn) trong kỳ — để vẽ stacked bar
+  // ở Tổng quan. Tôn trọng bộ lọc nguồn (sources). CHỈ tính live (tháng đã chốt không có breakdown này).
+  const srcByUser = new Map()   // userId → [{source, taskCount, dueCount, onTimeCount}]
+  if (!base.closed) {
+    const { start, end } = monthBounds(y, m)
+    const sp = [start, end]
+    let sClause = ''
+    if (Array.isArray(opts.sources) && opts.sources.length) { sp.push(opts.sources); sClause = ` AND t.source = ANY($${sp.length}::text[])` }
+    const { rows: srcAgg } = await query(`
+      SELECT t.assigned_to AS user_id, t.source,
+             COUNT(*)::int AS task_count,
+             COUNT(*) FILTER (WHERE t.status='completed' OR t.due_date < CURRENT_DATE)::int AS due_count,
+             COUNT(*) FILTER (WHERE t.status='completed' AND t.completed_at::date <= t.due_date)::int AS on_time_count
+      FROM tasks t
+      WHERE t.assigned_to IS NOT NULL AND t.due_date >= $1::date AND t.due_date < $2::date${sClause}
+      GROUP BY t.assigned_to, t.source`, sp)
+    for (const a of srcAgg) {
+      if (!srcByUser.has(a.user_id)) srcByUser.set(a.user_id, [])
+      srcByUser.get(a.user_id).push({ source: a.source, taskCount: a.task_count, dueCount: a.due_count, onTimeCount: a.on_time_count })
+    }
+  }
+
   const rows = base.rows.map((r) => {
     const tier = matchRange(r.onTimePct, tiers, 'minPct', 'maxPct')
     const kpiPoints = tier ? tier.points : 0
@@ -328,6 +360,7 @@ async function getPerformance(year, month, userId = null) {
       kpiPoints, rewardPenaltyNet: rpNet, totalPoints,
       gradeCode: grade?.code ?? null, gradeLabel: grade?.label ?? null, gradeSort: grade?.sortOrder ?? null,
       amount: grade ? grade.amount : 0,
+      bySource: srcByUser.get(r.userId) ?? [],
     }
   })
   return { closed: base.closed, rows }
