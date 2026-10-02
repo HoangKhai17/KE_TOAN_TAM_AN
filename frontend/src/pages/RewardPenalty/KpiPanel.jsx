@@ -4,6 +4,7 @@ import { Loader2, Lock, LockOpen, ChevronRight } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useToastStore } from '../../stores/toastStore'
+import { useEnumsStore } from '../../hooks/useEnums'
 import { listKpi, getKpiDetail, getKpiUserTasks, closeKpiMonth, reopenKpiMonth, getKpiPerformance } from '../../api/kpi'
 import s from './rewardPenalty.module.css'
 
@@ -24,6 +25,7 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-di
 export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] }) {
   const addToast = useToastStore((st) => st.toast)
   const confirmAction = useDeleteConfirm()
+  const getLabel = useEnumsStore((st) => st.getLabel)
 
   const [sub, setSub]     = useState('overview')   // overview | progress | grade
   const [year, setYear]   = useState(years[0] ?? now.getFullYear())
@@ -32,6 +34,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy]   = useState(false)
   const [detail, setDetail] = useState(null)
+  const [dTab, setDTab]   = useState('company')   // tab trong popup chi tiết NV
 
   // Tab Tổng quan & Xếp loại dùng chung getKpiPerformance (đủ mọi cột). Tiến độ dùng listKpi (nhẹ).
   const load = useCallback(() => {
@@ -104,6 +107,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
     finally { setBusy(false) }
   }
   async function openDetail(row) {
+    setDTab('company')
     setDetail({ user: row, data: null, tasks: null })
     const [d, t] = await Promise.allSettled([
       getKpiDetail(row.userId, year, month),
@@ -314,7 +318,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
       )}
 
       {detail && (
-        <Modal title={`KPI — ${detail.user.userName} · Tháng ${month}/${year}`} onClose={() => setDetail(null)} width="min(1440px, calc(100vw - 40px))" maxWidth="1440px">
+        <Modal title={`KPI — ${detail.user.userName} · Tháng ${month}/${year}`} onClose={() => setDetail(null)} wide>
           {/* Header màu */}
           <div className={s.kpiDrawerHead}>
             <div className={s.kpiDnm}>{detail.user.userName}</div>
@@ -331,63 +335,93 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
           <div className={s.kpiStat4}>
             <div className={s.kpiStat}><div className={s.kpiK}>Điểm khối lượng</div><div className={s.kpiV}>{detail.user.volumePoints ?? 0} đ</div></div>
             <div className={s.kpiStat}><div className={s.kpiK}>% đúng hạn</div><div className={s.kpiV}>{detail.user.onTimePct == null ? '—' : `${detail.user.onTimePct}%`}</div></div>
-            <div className={s.kpiStat}><div className={s.kpiK}>Giao / đúng hạn</div><div className={s.kpiV}>{detail.user.assignedCount ?? 0} / {detail.user.onTimeCount ?? 0}</div></div>
+            <div className={s.kpiStat}><div className={s.kpiK}>Đã đến hạn / đúng hạn</div><div className={s.kpiV}>{detail.user.assignedCount ?? 0} / {detail.user.onTimeCount ?? 0}</div></div>
             <div className={s.kpiStat}><div className={s.kpiK}>Thưởng/phạt (net)</div><div className={s.kpiV}>{detail.user.rewardPenaltyNet != null ? fmtSigned(detail.user.rewardPenaltyNet) : '—'}</div></div>
           </div>
 
-          {!detail.data ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
-            <>
-              {/* Breakdown công ty */}
-              <div className={s.kpiDsec}>Điểm theo công ty</div>
-              {detail.data.byCompany.length === 0 ? <div className={s.empty} style={{ padding: 10 }}>Chưa có điểm.</div> : (() => {
-                const mx = Math.max(1, ...detail.data.byCompany.map((x) => x.volumePoints || 0))
-                return <div className={s.kpiBrk}>{detail.data.byCompany.map((x) => (
-                  <div key={x.key}>
-                    <div className={s.kpiBrkR}><span>{x.label}</span><b>{x.volumePoints}đ</b></div>
-                    <div className={s.kpiBrkBar}><i style={{ width: `${Math.round(((x.volumePoints || 0) / mx) * 100)}%` }} /></div>
-                  </div>
-                ))}</div>
-              })()}
-
-              {/* Breakdown loại CV */}
-              <div className={s.kpiDsec}>Điểm theo loại công việc</div>
-              {detail.data.byType.length === 0 ? <div className={s.empty} style={{ padding: 10 }}>Chưa có điểm.</div> : (() => {
-                const mx = Math.max(1, ...detail.data.byType.map((x) => x.volumePoints || 0))
-                return <div className={s.kpiBrk}>{detail.data.byType.map((x) => (
-                  <div key={x.key}>
-                    <div className={s.kpiBrkR}><span>{x.label}</span><b>{x.volumePoints}đ</b></div>
-                    <div className={s.kpiBrkBar}><i style={{ width: `${Math.round(((x.volumePoints || 0) / mx) * 100)}%` }} /></div>
-                  </div>
-                ))}</div>
-              })()}
-
-              {/* Từng task */}
-              <div className={s.kpiDsec}>Từng công việc trong kỳ {detail.tasks ? `· ${detail.tasks.length}` : ''}</div>
-              {!detail.tasks ? <div className={s.loading}><Loader2 size={13} className={s.spin} /> Đang tải…</div>
-                : detail.tasks.length === 0 ? <div className={s.empty} style={{ padding: 10 }}>Không có công việc nào trong kỳ.</div> : (
-                <div className={s.kpiTasks}>
-                  {detail.tasks.map((t) => (
-                    <div className={s.kpiTask} key={t.taskId}>
-                      <div className={s.kpiT1}>
-                        <b title={t.title}>{t.title}</b>
-                        <span className={`${s.kpiPt} ${t.points > 0 ? s.kpiPos : ''}`}>{t.points > 0 ? `+${t.points}` : t.points}đ</span>
-                      </div>
-                      <div className={s.kpiT2}>
-                        {t.companyName && <span>{t.companyName}</span>}
-                        {t.typeName && <span>· {t.typeName}</span>}
-                        {t.dueInPeriod && <>
-                          <span>· Hạn {fmtDate(t.dueDate)}{t.completedAt ? ` · Xong ${fmtDate(t.completedAt)}` : ''}</span>
-                          {t.status === 'completed'
-                            ? <span className={`${s.kpiSt} ${t.onTime ? s.kpiStOk : s.kpiStLate}`}>{t.onTime ? 'Đúng hạn' : 'Trễ'}</span>
-                            : <span className={`${s.kpiSt} ${s.kpiStLate}`}>Chưa xong</span>}
-                        </>}
-                      </div>
-                    </div>
+          {!detail.data ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (() => {
+            const TABS = [
+              ['company', `Theo công ty (${detail.data.byCompany?.length || 0})`],
+              ['type',    `Theo loại CV (${detail.data.byType?.length || 0})`],
+              ['source',  `Theo nguồn (${detail.data.bySource?.length || 0})`],
+              ['tasks',   `Từng công việc${detail.tasks ? ` (${detail.tasks.length})` : ''}`],
+            ]
+            const brk = (rows) => {
+              if (!rows || rows.length === 0) return <div className={s.empty} style={{ padding: 10 }}>Chưa có dữ liệu.</div>
+              const mx = Math.max(1, ...rows.map((x) => x.volumePoints || 0))
+              return <div className={s.kpiBrk}>{rows.map((x, i) => (
+                <div key={x.key ?? i}>
+                  <div className={s.kpiBrkR}><span>{x.label}</span><b>{x.volumePoints}đ</b></div>
+                  <div className={s.kpiBrkBar}><i style={{ width: `${Math.round(((x.volumePoints || 0) / mx) * 100)}%` }} /></div>
+                </div>
+              ))}</div>
+            }
+            return (
+              <>
+                <div className={s.tabLinks} role="tablist" style={{ margin: '4px 0 12px', alignSelf: 'flex-start' }}>
+                  {TABS.map(([k, lbl]) => (
+                    <button key={k} className={`${s.tab} ${dTab === k ? s.tabActive : ''}`} onClick={() => setDTab(k)}>{lbl}</button>
                   ))}
                 </div>
-              )}
-            </>
-          )}
+
+                {dTab === 'company' && brk(detail.data.byCompany)}
+                {dTab === 'type' && brk(detail.data.byType)}
+
+                {dTab === 'source' && (
+                  !detail.data.bySource || detail.data.bySource.length === 0
+                    ? <div className={s.empty} style={{ padding: 10 }}>Không có công việc trong kỳ.</div>
+                    : <div className={s.tableWrap}><table className={s.table}>
+                        <thead><tr><th>Nguồn</th><th className={s.num}>Số việc</th><th className={s.num}>Đã đến hạn</th><th className={s.num}>Đúng hạn</th><th className={s.num}>% đúng hạn</th><th className={s.num}>Điểm KL</th></tr></thead>
+                        <tbody>
+                          {detail.data.bySource.map((x) => {
+                            const lbl = x.source === 'auto' ? 'Định kỳ (tự sinh)' : getLabel('task_source', x.source, x.label)
+                            const pct = x.dueCount > 0 ? Math.round((x.onTimeCount * 100) / x.dueCount) : null
+                            return <tr key={x.key}>
+                              <td>{lbl}</td>
+                              <td className={s.num}>{x.taskCount}</td>
+                              <td className={s.num}>{x.dueCount}</td>
+                              <td className={s.num}>{x.onTimeCount}</td>
+                              <td className={s.num}>{pct == null ? <span className={s.zero}>—</span> : `${pct}%`}</td>
+                              <td className={s.num}>{x.volumePoints}đ</td>
+                            </tr>
+                          })}
+                        </tbody>
+                      </table></div>
+                )}
+
+                {dTab === 'tasks' && (
+                  !detail.tasks ? <div className={s.loading}><Loader2 size={13} className={s.spin} /> Đang tải…</div>
+                    : detail.tasks.length === 0 ? <div className={s.empty} style={{ padding: 10 }}>Không có công việc nào trong kỳ.</div> : (
+                    <div className={s.kpiTasks}>
+                      {detail.tasks.map((t) => (
+                        <div className={s.kpiTask} key={t.taskId}>
+                          <div className={s.kpiT1}>
+                            <b title={t.title}>{t.title}</b>
+                            <span className={`${s.kpiPt} ${t.points > 0 ? s.kpiPos : ''}`}>{t.points > 0 ? `+${t.points}` : t.points}đ</span>
+                          </div>
+                          <div className={s.kpiT2}>
+                            <span className={s.kpiSt} style={{ background: 'var(--color-surface-muted)', color: 'var(--color-muted)' }}>
+                              {t.source === 'auto' ? 'Định kỳ' : getLabel('task_source', t.source, t.source === 'manual' ? 'Tự tạo' : (t.source || 'Khác'))}
+                            </span>
+                            {t.companyName && <span>{t.companyName}</span>}
+                            {t.typeName && <span>· {t.typeName}</span>}
+                            {t.dueInPeriod && <>
+                              <span>· Hạn {fmtDate(t.dueDate)}{t.completedAt ? ` · Xong ${fmtDate(t.completedAt)}` : ''}</span>
+                              {t.status === 'completed'
+                                ? <span className={`${s.kpiSt} ${t.onTime ? s.kpiStOk : s.kpiStLate}`}>{t.onTime ? 'Đúng hạn' : 'Trễ'}</span>
+                                : t.notDueYet
+                                  ? <span className={s.kpiSt} style={{ background: 'var(--color-surface-muted)', color: 'var(--color-muted)' }}>Chưa tới hạn</span>
+                                  : <span className={`${s.kpiSt} ${s.kpiStLate}`}>Quá hạn chưa xong</span>}
+                            </>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
+              </>
+            )
+          })()}
         </Modal>
       )}
     </div>

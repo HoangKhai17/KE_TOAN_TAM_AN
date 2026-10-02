@@ -48,11 +48,15 @@ async function listLive(year, month, userId = null) {
       GROUP BY t.assigned_to
     ),
     ont AS (
+      -- Mẫu số "được giao" CHỈ gồm task ĐÃ ĐẾN HẠN (đã xong, HOẶC quá hạn): task chưa tới hạn
+      -- & chưa xong KHÔNG tính là trượt (tránh phạt oan khi kỳ đang diễn ra). Kỳ đã khép thì
+      -- mọi due_date đều < hôm nay nên không đổi.
       SELECT t.assigned_to AS user_id,
              COUNT(*)::int AS assigned_count,
              COUNT(*) FILTER (WHERE t.status = 'completed' AND t.completed_at::date <= t.due_date)::int AS on_time_count
       FROM tasks t
       WHERE t.assigned_to IS NOT NULL AND t.due_date >= $1::date AND t.due_date < $2::date
+        AND (t.status = 'completed' OR t.due_date < CURRENT_DATE)
       GROUP BY t.assigned_to
     )
     SELECT u.id AS user_id, u.name AS user_name, u.job_title,
@@ -105,7 +109,7 @@ async function listMonthly(year, month, userId = null) {
 async function detailLive(year, month, userId) {
   const { start, end } = monthBounds(year, month)
   const p = [start, end, userId]
-  const [byCompany, byType] = await Promise.all([
+  const [byCompany, byType, bySource] = await Promise.all([
     query(`
       ${LEAF_CTE}
       SELECT c.id AS key, c.name AS label, COALESCE(SUM(leaf.points),0)::int AS volume_points
@@ -115,15 +119,39 @@ async function detailLive(year, month, userId) {
       GROUP BY c.id, c.name ORDER BY volume_points DESC`, p),
     query(`
       ${LEAF_CTE}
-      SELECT tt.id AS key, tt.name AS label, COALESCE(SUM(leaf.points),0)::int AS volume_points
-      FROM leaf JOIN tasks t ON t.id = leaf.task_id JOIN task_types tt ON tt.id = t.task_type_id
+      SELECT COALESCE(tt.name, t.group_name, '(Không có loại)') AS label,
+             COALESCE(SUM(leaf.points),0)::int AS volume_points
+      FROM leaf JOIN tasks t ON t.id = leaf.task_id LEFT JOIN task_types tt ON tt.id = t.task_type_id
       WHERE leaf.is_leaf AND leaf.is_completed
         AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date AND t.assigned_to = $3
-      GROUP BY tt.id, tt.name ORDER BY volume_points DESC`, p),
+      GROUP BY COALESCE(tt.name, t.group_name, '(Không có loại)') ORDER BY volume_points DESC`, p),
+    // Tách theo NGUỒN task: định kỳ (auto) vs tự tạo (manual) — số lượng + đã đến hạn + đúng hạn + điểm.
+    query(`
+      ${LEAF_CTE},
+      pts AS (
+        SELECT t.id AS task_id, COALESCE(SUM(leaf.points),0)::int AS points
+        FROM leaf JOIN tasks t ON t.id = leaf.task_id
+        WHERE leaf.is_leaf AND leaf.is_completed
+          AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date AND t.assigned_to = $3
+        GROUP BY t.id
+      )
+      SELECT t.source AS key,
+             COUNT(*)::int AS task_count,
+             COUNT(*) FILTER (WHERE t.status='completed' OR t.due_date < CURRENT_DATE)::int AS due_count,
+             COUNT(*) FILTER (WHERE t.status='completed' AND t.completed_at::date<=t.due_date)::int AS on_time_count,
+             COALESCE(SUM(pts.points),0)::int AS volume_points
+      FROM tasks t LEFT JOIN pts ON pts.task_id = t.id
+      WHERE t.assigned_to = $3 AND t.due_date >= $1::date AND t.due_date < $2::date
+      GROUP BY t.source ORDER BY task_count DESC`, p),
   ])
   return {
     byCompany: byCompany.rows.map((r) => ({ key: r.key, label: r.label, volumePoints: r.volume_points })),
-    byType:    byType.rows.map((r) => ({ key: r.key, label: r.label, volumePoints: r.volume_points })),
+    byType:    byType.rows.map((r) => ({ key: r.label, label: r.label, volumePoints: r.volume_points })),
+    bySource:  bySource.rows.map((r) => ({
+      key: r.key, source: r.key,
+      label: r.key === 'auto' ? 'Định kỳ (tự sinh)' : r.key === 'manual' ? 'Tự tạo (thủ công)' : (r.key || '(Khác)'),
+      taskCount: r.task_count, dueCount: r.due_count, onTimeCount: r.on_time_count, volumePoints: r.volume_points,
+    })),
   }
 }
 
@@ -152,11 +180,12 @@ async function getUserTasks(year, month, userId) {
         AND t.assigned_to = $3
       GROUP BY t.id
     )
-    SELECT t.id, t.title, t.status, t.due_date, t.completed_at,
+    SELECT t.id, t.title, t.status, t.source, t.due_date, t.completed_at,
            c.name AS company_name,
            COALESCE(tt.name, t.group_name) AS type_name,
            COALESCE(pts.points, 0) AS points,
            (t.due_date >= $1::date AND t.due_date < $2::date) AS due_in_period,
+           (t.due_date >= CURRENT_DATE AND t.status <> 'completed') AS not_due_yet,
            (t.status = 'completed' AND t.completed_at::date <= t.due_date) AS on_time
     FROM tasks t
     LEFT JOIN companies c   ON c.id  = t.company_id
@@ -168,10 +197,12 @@ async function getUserTasks(year, month, userId) {
   `, [start, end, userId])
   return rows.map((r) => ({
     taskId: r.id, title: r.title, status: r.status,
+    source: r.source ?? null, isRecurring: r.source === 'auto',
     companyName: r.company_name ?? null, typeName: r.type_name ?? null,
     points: parseInt(r.points, 10) || 0,
     dueDate: r.due_date, completedAt: r.completed_at,
     dueInPeriod: !!r.due_in_period,
+    notDueYet: !!r.not_due_yet,   // chưa tới hạn & chưa xong → KHÔNG tính trượt
     onTime: !!r.on_time,
   }))
 }
