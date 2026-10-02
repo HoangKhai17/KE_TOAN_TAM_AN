@@ -39,6 +39,9 @@ const SOURCE_COLOR = {
 }
 const FALLBACK_COLORS = ['#0ea5e9', '#f97316', '#14b8a6', '#ec4899', '#a3a3a3']
 const srcColor = (key, i) => SOURCE_COLOR[key] || FALLBACK_COLORS[i % FALLBACK_COLORS.length]
+// Màu theo ĐỘ KHÓ — theo THỨ TỰ enum (dễ→khó = xanh→đỏ), KHÔNG neo theo key cứng.
+const DIFF_COLORS = ['var(--color-success-text)', 'var(--color-warning-text)', 'var(--color-danger-text)', '#8b5cf6', '#be123c']
+const diffColor = (i) => DIFF_COLORS[i % DIFF_COLORS.length]
 const ON_TIME_TARGET = 90
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : '—')
 // Tên ngắn cho nhãn biểu đồ: lấy 2 từ CUỐI = phần tên gọi (vd "Bùi Thị Thanh Thảo" → "Thanh Thảo").
@@ -191,6 +194,45 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
       data: d.status === 'fulfilled' ? d.value : { byCompany: [], byType: [] },
       tasks: t.status === 'fulfilled' ? t.value : [],
     })
+  }
+
+  // Phân bố theo ĐỘ KHÓ checklist (việc định kỳ) — dùng chung cho Tổng quan & popup. Nhãn/thứ tự theo ENUM.
+  const renderDifficulty = (report) => {
+    const diffOpts = getOptions('checklist_difficulty') || []
+    const map = new Map((report || []).map((d) => [d.difficulty, d]))
+    const keys = diffOpts.length ? diffOpts.map((o) => o.key) : [...map.keys()]
+    const rowsD = keys.map((k, i) => {
+      const d = map.get(k) || {}
+      return {
+        key: k, label: getLabel('checklist_difficulty', k, k), color: diffColor(i),
+        stepCount: d.stepCount || 0, totalPoints: d.totalPoints || 0,
+        doneCount: d.doneCount || 0, donePoints: d.donePoints || 0,
+      }
+    }).filter((r) => r.stepCount > 0 || r.totalPoints > 0)
+    if (rowsD.length === 0) return <div className={s.empty} style={{ padding: 12 }}>Chưa có việc định kỳ chấm điểm checklist trong kỳ.</div>
+    const sumTotal = rowsD.reduce((a, r) => a + r.totalPoints, 0)
+    const sumDone = rowsD.reduce((a, r) => a + r.donePoints, 0)
+    const sumSteps = rowsD.reduce((a, r) => a + r.stepCount, 0)
+    return (
+      <div className={s.kpiDiff}>
+        <div className={`${s.kpiDiffRow} ${s.kpiDiffHd}`}>
+          <span>Mức độ</span><span /><span className={s.num}>Số checklist</span><span className={s.num}>Điểm (đạt/tổng)</span>
+        </div>
+        {rowsD.map((r) => {
+          const pct = r.totalPoints > 0 ? Math.round((r.donePoints / r.totalPoints) * 100) : 0
+          const sharePct = sumSteps > 0 ? Math.round((r.stepCount / sumSteps) * 100) : 0
+          return (
+            <div className={s.kpiDiffRow} key={r.key}>
+              <span className={s.kpiDiffNm}><span style={{ width: 9, height: 9, borderRadius: 2, background: r.color, flexShrink: 0 }} />{r.label}</span>
+              <span className={s.kpiDiffTrk} title={`${r.donePoints}/${r.totalPoints}đ · ${pct}% điểm`}><span className={s.kpiDiffFill} style={{ width: `${pct}%`, background: r.color }} /></span>
+              <span className={s.kpiDiffCnt}>{r.stepCount} <small>checklist · {sharePct}%</small></span>
+              <span className={s.kpiDiffVal}>{r.donePoints} / {r.totalPoints} <small>đ</small></span>
+            </div>
+          )
+        })}
+        <div className={s.kpiDiffFoot}>Tổng: <b>{sumSteps} checklist</b> · <b>{sumDone} / {sumTotal}đ</b> ({sumTotal > 0 ? Math.round((sumDone / sumTotal) * 100) : 0}% điểm hoàn thành)</div>
+      </div>
+    )
   }
 
   const toolbar = (
@@ -403,6 +445,15 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
             </div>
           )}
 
+          {/* Phân bố theo độ khó checklist — chỉ việc định kỳ (auto) */}
+          {(data.difficultyReport || []).some((d) => (d.totalPoints || 0) > 0 || (d.stepCount || 0) > 0) && (
+            <div className={s.kpiPanel} style={{ marginBottom: 14 }}>
+              <h4>Phân bố điểm theo độ khó · việc định kỳ</h4>
+              <div className={s.kpiHint}>Điểm checklist theo mức độ (đạt / tổng). Chỉ tính công việc định kỳ — nguồn khác không gắn độ khó.</div>
+              {renderDifficulty(data.difficultyReport)}
+            </div>
+          )}
+
           {/* Toggle kiểu bảng: Gộp ↔ Tách nguồn */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: '4px 2px 8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)' }}>Bảng chi tiết nhân viên</span>
@@ -532,6 +583,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
               ['company', `Theo công ty (${detail.data.byCompany?.length || 0})`],
               ['type',    `Theo loại CV (${detail.data.byType?.length || 0})`],
               ['source',  `Theo nguồn${detail.tasks ? ` · ${detail.tasks.length} việc` : ''}`],
+              ['difficulty', `Theo độ khó (${detail.data.byDifficulty?.length || 0})`],
             ]
             // Thẻ 1 công việc (dùng trong nhóm nguồn khi bung).
             const renderTask = (t) => (
@@ -619,6 +671,8 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                     </div>
                   )
                 })()}
+
+                {dTab === 'difficulty' && renderDifficulty(detail.data.byDifficulty)}
               </>
             )
           })()}

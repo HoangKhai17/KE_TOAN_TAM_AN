@@ -304,6 +304,18 @@
 .kpiSrcOpen { background: var(--color-primary-bg); }
 .kpiSrcNm { display: flex; align-items: center; gap: 7px; font-weight: var(--fw-semibold); min-width: 0; }
 .kpiSrcTasks { padding: 2px 4px 10px 28px; }
+
+/* Phân bố theo độ khó checklist (việc định kỳ) */
+.kpiDiff { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.kpiDiffRow { display: grid; grid-template-columns: 92px 1fr 128px 104px; align-items: center; gap: 10px; font-size: var(--fs-2xs); }
+.kpiDiffHd { font-size: var(--fs-3xs); font-weight: var(--fw-bold); color: var(--color-muted); text-transform: uppercase; letter-spacing: .03em; }
+.kpiDiffNm { display: flex; align-items: center; gap: 7px; color: var(--color-text-soft); white-space: nowrap; }
+.kpiDiffTrk { height: 11px; background: var(--color-surface-muted); border-radius: 6px; overflow: hidden; }
+.kpiDiffFill { display: block; height: 100%; border-radius: 6px; }
+.kpiDiffCnt { font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; color: var(--color-text-strong); }
+.kpiDiffCnt small, .kpiDiffVal small { font-weight: var(--fw-regular, 400); color: var(--color-muted); }
+.kpiDiffVal { font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.kpiDiffFoot { margin-top: 3px; font-size: var(--fs-3xs); color: var(--color-muted); }
 .kpiDsec { font-size: var(--fs-3xs); font-weight: var(--fw-extrabold); text-transform: uppercase; letter-spacing: .05em; color: var(--color-muted); margin: 14px 0 8px; display: flex; align-items: center; gap: 6px; }
 .kpiBrk { display: flex; flex-direction: column; gap: 8px; }
 .kpiBrk .kpiBrkR { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: var(--fs-2xs); }

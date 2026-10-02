@@ -19,7 +19,7 @@ function monthBounds(year, month) {
 // CTE xác định bước LEAF (mục phụ, hoặc mục chính không con) — khớp cách tính tiến độ.
 const LEAF_CTE = `
   WITH leaf AS (
-    SELECT ci.task_id, ci.points, ci.is_completed, ci.completed_at,
+    SELECT ci.task_id, ci.points, ci.difficulty, ci.is_completed, ci.completed_at,
            NOT (ci.level = 0 AND COALESCE(LEAD(ci.level) OVER (PARTITION BY ci.task_id ORDER BY ci.step_order, ci.id), 0) = 1) AS is_leaf
     FROM task_checklist_items ci
   )`
@@ -131,7 +131,7 @@ async function listMonthly(year, month, opts = {}) {
 async function detailLive(year, month, userId) {
   const { start, end } = monthBounds(year, month)
   const p = [start, end, userId]
-  const [byCompany, byType, bySource] = await Promise.all([
+  const [byCompany, byType, bySource, byDifficulty] = await Promise.all([
     query(`
       ${LEAF_CTE}
       SELECT c.id AS key, c.name AS label, COALESCE(SUM(leaf.points),0)::int AS volume_points
@@ -165,6 +165,19 @@ async function detailLive(year, month, userId) {
       FROM tasks t LEFT JOIN pts ON pts.task_id = t.id
       WHERE t.assigned_to = $3 AND t.due_date >= $1::date AND t.due_date < $2::date
       GROUP BY t.source ORDER BY task_count DESC`, p),
+    // Phân bố theo ĐỘ KHÓ bước checklist — CHỈ nguồn định kỳ (auto). Nguồn khác không có độ khó.
+    query(`
+      ${LEAF_CTE}
+      SELECT leaf.difficulty AS key,
+             COUNT(*)::int AS step_count,
+             COALESCE(SUM(leaf.points),0)::int AS total_points,
+             COUNT(*) FILTER (WHERE leaf.is_completed AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date)::int AS done_count,
+             COALESCE(SUM(leaf.points) FILTER (WHERE leaf.is_completed AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date),0)::int AS done_points
+      FROM leaf JOIN tasks t ON t.id = leaf.task_id
+      WHERE leaf.is_leaf AND leaf.difficulty IS NOT NULL AND t.source = 'auto' AND t.assigned_to = $3
+        AND ( (t.due_date >= $1::date AND t.due_date < $2::date)
+              OR (leaf.is_completed AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date) )
+      GROUP BY leaf.difficulty`, p),
   ])
   return {
     byCompany: byCompany.rows.map((r) => ({ key: r.key, label: r.label, volumePoints: r.volume_points })),
@@ -173,6 +186,10 @@ async function detailLive(year, month, userId) {
       key: r.key, source: r.key,
       label: r.key === 'auto' ? 'Định kỳ (tự sinh)' : r.key === 'manual' ? 'Tự tạo (thủ công)' : (r.key || '(Khác)'),
       taskCount: r.task_count, dueCount: r.due_count, onTimeCount: r.on_time_count, volumePoints: r.volume_points,
+    })),
+    byDifficulty: byDifficulty.rows.map((r) => ({
+      difficulty: r.key, stepCount: r.step_count, totalPoints: r.total_points,
+      doneCount: r.done_count, donePoints: r.done_points,
     })),
   }
 }
@@ -362,6 +379,35 @@ async function getPerformance(year, month, opts = {}) {
     }
   }
 
+  // Phân bố theo ĐỘ KHÓ checklist (Tổng quan) — gộp toàn NV trong bộ lọc. CHỈ nguồn định kỳ (auto).
+  // Nếu đang lọc nguồn mà KHÔNG gồm 'auto' → để trống (user đã loại định kỳ).
+  let difficultyReport = []
+  const srcHasAuto = !(Array.isArray(opts.sources) && opts.sources.length) || opts.sources.includes('auto')
+  if (!base.closed && srcHasAuto) {
+    const { start, end } = monthBounds(y, m)
+    const dp = [start, end]
+    const uc = ["u.status = 'active'", "t.source = 'auto'", 't.assigned_to IS NOT NULL']
+    if (opts.userId) { dp.push(opts.userId); uc.push(`u.id = $${dp.length}`) }
+    if (opts.role) { dp.push(opts.role); uc.push(`u.role = $${dp.length}`) }
+    if (Array.isArray(opts.userIds) && opts.userIds.length) { dp.push(opts.userIds); uc.push(`u.id = ANY($${dp.length}::uuid[])`) }
+    const { rows: dRows } = await query(`
+      ${LEAF_CTE}
+      SELECT leaf.difficulty AS key,
+             COUNT(*)::int AS step_count,
+             COALESCE(SUM(leaf.points),0)::int AS total_points,
+             COUNT(*) FILTER (WHERE leaf.is_completed AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date)::int AS done_count,
+             COALESCE(SUM(leaf.points) FILTER (WHERE leaf.is_completed AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date),0)::int AS done_points
+      FROM leaf JOIN tasks t ON t.id = leaf.task_id JOIN users u ON u.id = t.assigned_to
+      WHERE leaf.is_leaf AND leaf.difficulty IS NOT NULL AND ${uc.join(' AND ')}
+        AND ( (t.due_date >= $1::date AND t.due_date < $2::date)
+              OR (leaf.is_completed AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date) )
+      GROUP BY leaf.difficulty`, dp)
+    difficultyReport = dRows.map((r) => ({
+      difficulty: r.key, stepCount: r.step_count, totalPoints: r.total_points,
+      doneCount: r.done_count, donePoints: r.done_points,
+    }))
+  }
+
   const rows = base.rows.map((r) => {
     const tier = matchRange(r.onTimePct, tiers, 'minPct', 'maxPct')
     const kpiPoints = tier ? tier.points : 0
@@ -376,7 +422,7 @@ async function getPerformance(year, month, opts = {}) {
       bySource: srcByUser.get(r.userId) ?? [],
     }
   })
-  return { closed: base.closed, rows }
+  return { closed: base.closed, rows, difficultyReport }
 }
 
 module.exports = {
