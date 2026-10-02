@@ -283,16 +283,27 @@
 .kpiRowClick:hover { background: var(--color-primary-bg); }
 .kpiPickRow { background: var(--color-primary-bg); }
 
-/* Drawer chi tiết NV */
-.kpiDrawerHead { padding: 14px 16px; background: var(--gradient-primary); color: var(--color-white); border-radius: var(--radius-md) var(--radius-md) 0 0; margin: -1px -1px 14px; }
-.kpiDrawerHead .kpiDnm { font-size: var(--fs-md); font-weight: var(--fw-extrabold); }
-.kpiDrawerHead .kpiDjt { font-size: var(--fs-3xs); opacity: .9; }
-.kpiDrawerHead .kpiDrow { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; }
-.kpiDrawerHead .kpiDamt { font-size: var(--fs-md); font-weight: var(--fw-extrabold); }
-.kpiStat4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-.kpiStat { background: var(--color-surface-muted); border: 1px solid var(--color-border-muted); border-radius: var(--radius-md); padding: 8px 10px; }
-.kpiStat .kpiK { font-size: var(--fs-3xs); color: var(--color-muted); }
-.kpiStat .kpiV { font-size: var(--fs-md); font-weight: var(--fw-extrabold); margin-top: 1px; color: var(--color-text-strong); }
+/* Drawer chi tiết NV — header gộp 1 hàng: tên + các chỉ số */
+.kpiDHead { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; padding: 12px 16px; background: var(--gradient-primary); color: var(--color-white); border-radius: var(--radius-md) var(--radius-md) 0 0; margin: -1px -1px 14px; }
+.kpiDHead .kpiDHid { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; min-width: 0; }
+.kpiDHead .kpiDnm { font-size: var(--fs-md); font-weight: var(--fw-extrabold); }
+.kpiDHead .kpiDjt { font-size: var(--fs-3xs); opacity: .9; }
+.kpiDHead .kpiDbadges { display: flex; align-items: center; gap: 8px; }
+.kpiDHead .kpiDamt { font-size: var(--fs-sm); font-weight: var(--fw-extrabold); }
+.kpiDmetrics { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.kpiDmetrics .kpiDm { display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
+.kpiDmetrics .kpiDm span { font-size: var(--fs-4xs, 9px); text-transform: uppercase; letter-spacing: .04em; opacity: .85; }
+.kpiDmetrics .kpiDm b { font-size: var(--fs-md); font-weight: var(--fw-extrabold); font-variant-numeric: tabular-nums; }
+
+/* Tab Theo nguồn: danh sách nguồn (đủ enum) + bung công việc khi click */
+.kpiSrcList { display: flex; flex-direction: column; gap: 2px; }
+.kpiSrcRow { display: grid; grid-template-columns: 1fr 62px 62px 68px 56px 64px; align-items: center; gap: 8px; padding: 8px 10px; font-size: var(--fs-2xs); }
+.kpiSrcHd { font-size: var(--fs-3xs); font-weight: var(--fw-bold); color: var(--color-muted); text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--color-border-muted); }
+.kpiSrcClick { cursor: pointer; border-radius: var(--radius-sm); }
+.kpiSrcClick:hover { background: var(--color-primary-bg); }
+.kpiSrcOpen { background: var(--color-primary-bg); }
+.kpiSrcNm { display: flex; align-items: center; gap: 7px; font-weight: var(--fw-semibold); min-width: 0; }
+.kpiSrcTasks { padding: 2px 4px 10px 28px; }
 .kpiDsec { font-size: var(--fs-3xs); font-weight: var(--fw-extrabold); text-transform: uppercase; letter-spacing: .05em; color: var(--color-muted); margin: 14px 0 8px; display: flex; align-items: center; gap: 6px; }
 .kpiBrk { display: flex; flex-direction: column; gap: 8px; }
 .kpiBrk .kpiBrkR { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: var(--fs-2xs); }

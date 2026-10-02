@@ -57,6 +57,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
   const [busy, setBusy]   = useState(false)
   const [detail, setDetail] = useState(null)
   const [dTab, setDTab]   = useState('company')   // tab trong popup chi tiết NV
+  const [srcOpen, setSrcOpen] = useState(null)    // nguồn đang bung xem công việc (tab Theo nguồn)
   const [tableMode, setTableMode] = useState('merged')   // merged | bySource
 
   // Bộ lọc Tổng quan (chỉ admin) — vai trò + nhân viên cụ thể. Nhớ qua localStorage.
@@ -179,6 +180,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
   }
   async function openDetail(row) {
     setDTab('company')
+    setSrcOpen(null)
     setDetail({ user: row, data: null, tasks: null })
     const [d, t] = await Promise.allSettled([
       getKpiDetail(row.userId, year, month),
@@ -507,33 +509,51 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
 
       {detail && (
         <Modal title={`KPI — ${detail.user.userName} · Tháng ${month}/${year}`} onClose={() => setDetail(null)} wide>
-          {/* Header màu */}
-          <div className={s.kpiDrawerHead}>
-            <div className={s.kpiDnm}>{detail.user.userName}</div>
-            <div className={s.kpiDjt}>{detail.user.jobTitle || 'Nhân viên'} · Tháng {month}/{year}</div>
-            <div className={s.kpiDrow}>
-              {detail.user.gradeCode
-                ? <span className={`${s.gradeBadge} ${gradeCls(detail.user.gradeSort)}`} style={{ background: '#fff', color: 'var(--color-primary)' }}>{detail.user.gradeCode}{detail.user.gradeLabel ? ` · ${detail.user.gradeLabel}` : ''}</span>
-                : <span />}
-              {detail.user.amount != null && <span className={s.kpiDamt}>{detail.user.amount > 0 ? '+' : ''}{fmtMoney(detail.user.amount)} đ</span>}
+          {/* Header 1 hàng: tên + các chỉ số gộp chung */}
+          <div className={s.kpiDHead}>
+            <div className={s.kpiDHid}>
+              <div className={s.kpiDnm}>{detail.user.userName}</div>
+              <div className={s.kpiDjt}>{detail.user.jobTitle || 'Nhân viên'} · Tháng {month}/{year}</div>
+              <div className={s.kpiDbadges}>
+                {detail.user.gradeCode && <span className={`${s.gradeBadge} ${gradeCls(detail.user.gradeSort)}`} style={{ background: 'var(--color-white)', color: 'var(--color-primary)' }}>{detail.user.gradeCode}{detail.user.gradeLabel ? ` · ${detail.user.gradeLabel}` : ''}</span>}
+                {detail.user.amount != null && <span className={s.kpiDamt}>{detail.user.amount > 0 ? '+' : ''}{fmtMoney(detail.user.amount)} đ</span>}
+              </div>
             </div>
-          </div>
-
-          {/* 4 chỉ số */}
-          <div className={s.kpiStat4}>
-            <div className={s.kpiStat}><div className={s.kpiK}>Điểm khối lượng</div><div className={s.kpiV}>{detail.user.volumePoints ?? 0} đ</div></div>
-            <div className={s.kpiStat}><div className={s.kpiK}>% đúng hạn</div><div className={s.kpiV}>{detail.user.onTimePct == null ? '—' : `${detail.user.onTimePct}%`}</div></div>
-            <div className={s.kpiStat}><div className={s.kpiK}>Đã đến hạn / đúng hạn</div><div className={s.kpiV}>{detail.user.assignedCount ?? 0} / {detail.user.onTimeCount ?? 0}</div></div>
-            <div className={s.kpiStat}><div className={s.kpiK}>Thưởng/phạt (net)</div><div className={s.kpiV}>{detail.user.rewardPenaltyNet != null ? fmtSigned(detail.user.rewardPenaltyNet) : '—'}</div></div>
+            <div className={s.kpiDmetrics}>
+              <div className={s.kpiDm}><span>Điểm khối lượng</span><b>{detail.user.volumePoints ?? 0} / {detail.user.volumePossible ?? (detail.user.volumePoints ?? 0)}</b></div>
+              <div className={s.kpiDm}><span>% đúng hạn</span><b>{detail.user.onTimePct == null ? '—' : `${detail.user.onTimePct}%`}</b></div>
+              <div className={s.kpiDm}><span>Đến hạn / đúng hạn</span><b>{detail.user.assignedCount ?? 0} / {detail.user.onTimeCount ?? 0}</b></div>
+              <div className={s.kpiDm}><span>Thưởng/phạt (net)</span><b>{detail.user.rewardPenaltyNet != null ? fmtSigned(detail.user.rewardPenaltyNet) : '—'}</b></div>
+            </div>
           </div>
 
           {!detail.data ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (() => {
             const TABS = [
               ['company', `Theo công ty (${detail.data.byCompany?.length || 0})`],
               ['type',    `Theo loại CV (${detail.data.byType?.length || 0})`],
-              ['source',  `Theo nguồn (${detail.data.bySource?.length || 0})`],
-              ['tasks',   `Từng công việc${detail.tasks ? ` (${detail.tasks.length})` : ''}`],
+              ['source',  `Theo nguồn${detail.tasks ? ` · ${detail.tasks.length} việc` : ''}`],
             ]
+            // Thẻ 1 công việc (dùng trong nhóm nguồn khi bung).
+            const renderTask = (t) => (
+              <div className={s.kpiTask} key={t.taskId}>
+                <div className={s.kpiT1}>
+                  <b title={t.title}>{t.title}</b>
+                  <span className={`${s.kpiPt} ${t.points > 0 ? s.kpiPos : ''}`}>{t.points > 0 ? `+${t.points}` : t.points}đ</span>
+                </div>
+                <div className={s.kpiT2}>
+                  {t.companyName && <span>{t.companyName}</span>}
+                  {t.typeName && <span>· {t.typeName}</span>}
+                  {t.dueInPeriod && <>
+                    <span>· Hạn {fmtDate(t.dueDate)}{t.completedAt ? ` · Xong ${fmtDate(t.completedAt)}` : ''}</span>
+                    {t.status === 'completed'
+                      ? <span className={`${s.kpiSt} ${t.onTime ? s.kpiStOk : s.kpiStLate}`}>{t.onTime ? 'Đúng hạn' : 'Trễ'}</span>
+                      : t.notDueYet
+                        ? <span className={s.kpiSt} style={{ background: 'var(--color-surface-muted)', color: 'var(--color-muted)' }}>Chưa tới hạn</span>
+                        : <span className={`${s.kpiSt} ${s.kpiStLate}`}>Quá hạn chưa xong</span>}
+                  </>}
+                </div>
+              </div>
+            )
             const brk = (rows) => {
               if (!rows || rows.length === 0) return <div className={s.empty} style={{ padding: 10 }}>Chưa có dữ liệu.</div>
               const mx = Math.max(1, ...rows.map((x) => x.volumePoints || 0))
@@ -555,58 +575,50 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                 {dTab === 'company' && brk(detail.data.byCompany)}
                 {dTab === 'type' && brk(detail.data.byType)}
 
-                {dTab === 'source' && (
-                  !detail.data.bySource || detail.data.bySource.length === 0
-                    ? <div className={s.empty} style={{ padding: 10 }}>Không có công việc trong kỳ.</div>
-                    : <div className={s.tableWrap}><table className={s.table}>
-                        <thead><tr><th>Nguồn</th><th className={s.num}>Số việc</th><th className={s.num}>Đã đến hạn</th><th className={s.num}>Đúng hạn</th><th className={s.num}>% đúng hạn</th><th className={s.num}>Điểm khối lượng</th></tr></thead>
-                        <tbody>
-                          {detail.data.bySource.map((x) => {
-                            const lbl = x.source === 'auto' ? 'Định kỳ (tự sinh)' : getLabel('task_source', x.source, x.label)
-                            const pct = x.dueCount > 0 ? Math.round((x.onTimeCount * 100) / x.dueCount) : null
-                            return <tr key={x.key}>
-                              <td>{lbl}</td>
-                              <td className={s.num}>{x.taskCount}</td>
-                              <td className={s.num}>{x.dueCount}</td>
-                              <td className={s.num}>{x.onTimeCount}</td>
-                              <td className={s.num}>{pct == null ? <span className={s.zero}>—</span> : `${pct}%`}</td>
-                              <td className={s.num}>{x.volumePoints}đ</td>
-                            </tr>
-                          })}
-                        </tbody>
-                      </table></div>
-                )}
-
-                {dTab === 'tasks' && (
-                  !detail.tasks ? <div className={s.loading}><Loader2 size={13} className={s.spin} /> Đang tải…</div>
-                    : detail.tasks.length === 0 ? <div className={s.empty} style={{ padding: 10 }}>Không có công việc nào trong kỳ.</div> : (
-                    <div className={s.kpiTasks}>
-                      {detail.tasks.map((t) => (
-                        <div className={s.kpiTask} key={t.taskId}>
-                          <div className={s.kpiT1}>
-                            <b title={t.title}>{t.title}</b>
-                            <span className={`${s.kpiPt} ${t.points > 0 ? s.kpiPos : ''}`}>{t.points > 0 ? `+${t.points}` : t.points}đ</span>
+                {dTab === 'source' && (() => {
+                  const bySrc = new Map((detail.data.bySource || []).map((x) => [x.source, x]))
+                  const opts = getOptions('task_source') || []
+                  const keys = opts.length ? opts.map((o) => o.key) : [...bySrc.keys()]
+                  if (keys.length === 0) return <div className={s.empty} style={{ padding: 10 }}>Không có công việc trong kỳ.</div>
+                  return (
+                    <div className={s.kpiSrcList}>
+                      <div className={`${s.kpiSrcRow} ${s.kpiSrcHd}`}>
+                        <span>Nguồn</span><span className={s.num}>Số việc</span><span className={s.num}>Đến hạn</span><span className={s.num}>Đúng hạn</span><span className={s.num}>% ĐH</span><span className={s.num}>Điểm KL</span>
+                      </div>
+                      {keys.map((key, i) => {
+                        const x = bySrc.get(key)
+                        const taskCount = x?.taskCount || 0, dueCount = x?.dueCount || 0, onTimeCount = x?.onTimeCount || 0, vol = x?.volumePoints || 0
+                        const pct = dueCount > 0 ? Math.round((onTimeCount * 100) / dueCount) : null
+                        const open = srcOpen === key
+                        const tasksOfSrc = (detail.tasks || []).filter((t) => t.source === key)
+                        const lbl = key === 'auto' ? 'Định kỳ (tự sinh)' : getLabel('task_source', key, key)
+                        return (
+                          <div key={key}>
+                            <div className={`${s.kpiSrcRow} ${s.kpiSrcClick} ${open ? s.kpiSrcOpen : ''}`} role="button" onClick={() => setSrcOpen(open ? null : key)}>
+                              <span className={s.kpiSrcNm}>
+                                {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                <span style={{ width: 9, height: 9, borderRadius: 2, background: srcColor(key, i), flexShrink: 0 }} />
+                                {lbl}
+                              </span>
+                              <span className={s.num}>{taskCount}</span>
+                              <span className={s.num}>{dueCount}</span>
+                              <span className={s.num}>{onTimeCount}</span>
+                              <span className={s.num}>{pct == null ? <span className={s.zero}>—</span> : `${pct}%`}</span>
+                              <span className={s.num}>{vol}đ</span>
+                            </div>
+                            {open && (
+                              <div className={s.kpiSrcTasks}>
+                                {tasksOfSrc.length === 0
+                                  ? <div className={s.empty} style={{ padding: 8 }}>Không có công việc nguồn này trong kỳ.</div>
+                                  : <div className={s.kpiTasks}>{tasksOfSrc.map(renderTask)}</div>}
+                              </div>
+                            )}
                           </div>
-                          <div className={s.kpiT2}>
-                            <span className={s.kpiSt} style={{ background: 'var(--color-surface-muted)', color: 'var(--color-muted)' }}>
-                              {t.source === 'auto' ? 'Định kỳ' : getLabel('task_source', t.source, t.source === 'manual' ? 'Tự tạo' : (t.source || 'Khác'))}
-                            </span>
-                            {t.companyName && <span>{t.companyName}</span>}
-                            {t.typeName && <span>· {t.typeName}</span>}
-                            {t.dueInPeriod && <>
-                              <span>· Hạn {fmtDate(t.dueDate)}{t.completedAt ? ` · Xong ${fmtDate(t.completedAt)}` : ''}</span>
-                              {t.status === 'completed'
-                                ? <span className={`${s.kpiSt} ${t.onTime ? s.kpiStOk : s.kpiStLate}`}>{t.onTime ? 'Đúng hạn' : 'Trễ'}</span>
-                                : t.notDueYet
-                                  ? <span className={s.kpiSt} style={{ background: 'var(--color-surface-muted)', color: 'var(--color-muted)' }}>Chưa tới hạn</span>
-                                  : <span className={`${s.kpiSt} ${s.kpiStLate}`}>Quá hạn chưa xong</span>}
-                            </>}
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )
-                )}
+                })()}
               </>
             )
           })()}
