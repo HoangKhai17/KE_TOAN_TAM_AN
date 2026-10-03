@@ -24,6 +24,7 @@ import s from './rewardPenalty.module.css'
 
 const CUR_Y = new Date().getFullYear()
 const CUR_M = new Date().getMonth() + 1
+const TAB_KEY = 'reward_penalty_tab_v1'   // nhớ tab đang xem (sessionStorage)
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)   // tháng là phổ quát, không phải danh mục
 // Preset "Kỳ" (đồng bộ tab KPI): Tháng này / Tháng trước / Năm nay / Tất cả.
 function presetPeriod(key) {
@@ -269,7 +270,12 @@ export default function RewardPenalty() {
   const getOptions = useEnumsStore((st) => st.getOptions)
   useEffect(() => { loadEnums() }, [loadEnums])
   const enumLabel = useCallback((type, key) => (getOptions(type).find((x) => x.key === key)?.label ?? key), [getOptions])
-  const [tab, setTab] = useState('kpi')
+  // Nhớ tab đang xem qua sessionStorage (giữ sau F5 / chuyển trang) — validate theo quyền.
+  const allowedTabs = isAdmin ? ['kpi', 'ledger', 'summary', 'rules', 'grades'] : ['kpi', 'ledger', 'summary']
+  const [tab, setTab] = useState(() => {
+    try { const t = sessionStorage.getItem(TAB_KEY); return (t && allowedTabs.includes(t)) ? t : 'kpi' } catch { return 'kpi' }
+  })
+  useEffect(() => { try { sessionStorage.setItem(TAB_KEY, tab) } catch { /* ignore */ } }, [tab])
   const [footer, setFooter] = useState(null)
   const [slot, setSlot] = useState(null)   // thanh công cụ trên đầu — panel portal vào đây
   // Năm lấy ĐỘNG từ DB (năm có dữ liệu + năm hiện tại), không hardcode.
@@ -875,6 +881,8 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
     { key: 'user', label: 'Nhân viên', width: 24, value: (r) => r.userName },
     { key: 'vrec', label: 'Điểm định kỳ', width: 12, type: 'number', value: (r) => r.volumeRecurring },
     { key: 'voth', label: 'Điểm task khác', width: 12, type: 'number', value: (r) => r.volumeOther },
+    { key: 'otpct', label: '% đúng hạn', width: 10, value: (r) => r.onTimePct == null ? '' : `${r.onTimePct}%` },
+    { key: 'otn', label: 'Đúng hạn/Đến hạn', width: 14, value: (r) => `${r.onTimeCount}/${r.assignedCount}` },
     { key: 'kpi', label: 'Điểm đúng hạn', width: 12, type: 'number', value: (r) => r.kpiPoints },
     { key: 'rp', label: 'Thưởng/phạt', width: 12, type: 'number', value: (r) => r.rewardPenaltyNet },
     { key: 'total', label: 'Tổng điểm', width: 12, type: 'number', value: (r) => r.totalPoints },
