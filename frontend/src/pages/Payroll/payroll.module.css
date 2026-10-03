@@ -59,7 +59,7 @@
 .table th {
   padding: 7px 8px;
   text-align: left;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-extrabold);
   color: var(--color-primary-deep);
   background: var(--gradient-table-head);
@@ -837,4 +837,136 @@
 .exportCount {
   font-size: var(--fs-2xs);
   color: var(--color-text-soft);
+}
+
+/* ── Staff payslip (phiếu lương của nhân viên) ───────────── */
+
+.myPayrollTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-extrabold);
+  color: var(--color-text-strong);
+}
+
+.payslipGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .payslipGrid { grid-template-columns: 1fr; }
+}
+
+.payslipCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.payslipHead {
+  padding: 8px 14px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-primary-deep);
+  background: var(--gradient-table-head);
+  border-bottom: 1.5px solid var(--color-primary-bg-strong);
+}
+
+.payslipBody {
+  padding: 4px 14px 10px;
+}
+
+.payslipLine {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--color-surface-muted);
+  font-size: var(--fs-2xs);
+}
+
+.payslipLine:last-child { border-bottom: none; }
+
+.payslipLabel {
+  color: var(--color-text-soft);
+  min-width: 0;
+}
+
+.payslipLabel small {
+  display: block;
+  color: var(--color-muted-soft);
+  font-size: var(--fs-2xs);
+  margin-top: 1px;
+}
+
+.payslipVal {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-strong);
+  white-space: nowrap;
+}
+
+.payslipValNeg { color: var(--color-danger-text); }
+
+.payslipSub {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0 2px;
+  margin-top: 3px;
+  border-top: 1.5px solid var(--color-border-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.payslipHint {
+  margin: 8px 0 0;
+  font-size: var(--fs-2xs);
+  color: var(--color-muted-soft);
+  font-style: italic;
+}
+
+.payslipNet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 14px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-primary);
+  color: var(--color-white);
+  box-shadow: var(--shadow-focus-blue);
+}
+
+.payslipNetLabel {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.payslipNetVal {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-extrabold);
+  font-variant-numeric: tabular-nums;
+}
+
+.payslipNote {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-primary-bg-strong);
+  font-size: var(--fs-2xs);
+  color: var(--color-text-soft);
+  line-height: 1.55;
 }

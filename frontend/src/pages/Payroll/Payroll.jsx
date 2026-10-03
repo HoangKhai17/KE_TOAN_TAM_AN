@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Loader2, DollarSign, CalendarDays, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { Plus, Loader2, DollarSign, CalendarDays, SlidersHorizontal, Trash2, Wallet } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import SalaryConfig from './SalaryConfig'
 import PaginationFooter from '../../components/layout/PaginationFooter'
@@ -241,10 +241,14 @@ export default function Payroll() {
     ) : null}>
       <div className={s.page}>
         <div className={s.tabRow}>
-          <div className={s.tabBar}>
-            <button className={`${s.tabBtn} ${tab === 'periods' ? s.tabBtnActive : ''}`} onClick={() => setTab('periods')}><CalendarDays size={14} /> Kỳ lương</button>
-            <button className={`${s.tabBtn} ${tab === 'salary' ? s.tabBtnActive : ''}`} onClick={() => setTab('salary')}><SlidersHorizontal size={14} /> Cấu hình lương</button>
-          </div>
+          {isAdmin ? (
+            <div className={s.tabBar}>
+              <button className={`${s.tabBtn} ${tab === 'periods' ? s.tabBtnActive : ''}`} onClick={() => setTab('periods')}><CalendarDays size={14} /> Kỳ lương</button>
+              <button className={`${s.tabBtn} ${tab === 'salary' ? s.tabBtnActive : ''}`} onClick={() => setTab('salary')}><SlidersHorizontal size={14} /> Cấu hình lương</button>
+            </div>
+          ) : (
+            <h2 className={s.myPayrollTitle}><Wallet size={16} /> Bảng lương của tôi</h2>
+          )}
           {tab === 'periods' && (
             <div className={s.tabActions}>
               <select
@@ -271,7 +275,7 @@ export default function Payroll() {
           )}
         </div>
 
-        {tab === 'salary' ? <SalaryConfig /> : (<>
+        {isAdmin && tab === 'salary' ? <SalaryConfig /> : (<>
         <div className={s.card}>
           {loading ? (
             <div className={s.loadingBox}>
@@ -281,7 +285,9 @@ export default function Payroll() {
             <div className={s.emptyState}>
               <DollarSign size={36} className={s.emptyIcon} />
               <p className={s.emptyText}>
-                {selectedYear ? `Chưa có kỳ lương nào trong năm ${selectedYear}.` : 'Chưa có kỳ lương nào.'}
+                {!isAdmin
+                  ? (selectedYear ? `Chưa có bảng lương nào được công bố cho bạn trong năm ${selectedYear}.` : 'Chưa có bảng lương nào được công bố cho bạn.')
+                  : (selectedYear ? `Chưa có kỳ lương nào trong năm ${selectedYear}.` : 'Chưa có kỳ lương nào.')}
               </p>
               {isAdmin && !selectedYear && (
                 <button className={`${s.btnPrimary} ${s.emptyAction}`} onClick={() => setShowCreate(true)}>
@@ -294,7 +300,7 @@ export default function Payroll() {
               <table className={s.table}>
                 <thead>
                   <tr>
-                    <th className={s.colChk}><input type="checkbox" className={s.check} title="Chọn tất cả" checked={periods.length > 0 && periods.every((p) => selPeriods.has(p.id))} onChange={(e) => setSelPeriods(e.target.checked ? new Set(periods.map((p) => p.id)) : new Set())} /></th>
+                    {isAdmin && <th className={s.colChk}><input type="checkbox" className={s.check} title="Chọn tất cả" checked={periods.length > 0 && periods.every((p) => selPeriods.has(p.id))} onChange={(e) => setSelPeriods(e.target.checked ? new Set(periods.map((p) => p.id)) : new Set())} /></th>}
                     <th className={s.colStt}>STT</th>
                     <th>Kỳ lương</th>
                     <th>Trạng thái</th>
@@ -311,7 +317,7 @@ export default function Payroll() {
                       className={s.tableRowClickable}
                       onClick={() => navigate(`/payroll/${period.id}`)}
                     >
-                      <td className={s.colChk} onClick={(e) => e.stopPropagation()}><input type="checkbox" className={s.check} checked={selPeriods.has(period.id)} onChange={() => setSelPeriods((prev) => { const n = new Set(prev); n.has(period.id) ? n.delete(period.id) : n.add(period.id); return n })} /></td>
+                      {isAdmin && <td className={s.colChk} onClick={(e) => e.stopPropagation()}><input type="checkbox" className={s.check} checked={selPeriods.has(period.id)} onChange={() => setSelPeriods((prev) => { const n = new Set(prev); n.has(period.id) ? n.delete(period.id) : n.add(period.id); return n })} /></td>}
                       <td className={s.colStt}>{(page - 1) * 24 + idx + 1}</td>
                       <td className={s.periodNameCell}>
                         Tháng {period.periodMonth}/{period.periodYear}

@@ -54,15 +54,22 @@ function recordToDto(row) {
 
 // --- Periods ---
 
-async function listPeriods({ page = 1, limit = 24, year } = {}) {
+async function listPeriods({ page = 1, limit = 24, year, viewer } = {}) {
   const offset = (page - 1) * limit
   const params = []
-  let where = ''
+  const clauses = []
 
   if (year) {
     params.push(parseInt(year, 10))
-    where = `WHERE period_year = $${params.length}`
+    clauses.push(`period_year = $${params.length}`)
   }
+  // Staff: chỉ thấy kỳ ĐÃ chốt/đã trả VÀ có bảng lương của chính họ (không lộ kỳ nháp hoặc kỳ không liên quan).
+  if (viewer && viewer.role !== 'admin') {
+    params.push(viewer.id)
+    clauses.push(`status <> 'draft'`)
+    clauses.push(`EXISTS (SELECT 1 FROM payroll_records pr WHERE pr.payroll_period_id = payroll_periods.id AND pr.user_id = $${params.length})`)
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
 
   const { rows: [{ count }] } = await query(
     `SELECT COUNT(*) FROM payroll_periods ${where}`,
@@ -80,16 +87,34 @@ async function listPeriods({ page = 1, limit = 24, year } = {}) {
   }
 }
 
-async function listDistinctYears() {
+async function listDistinctYears(viewer) {
+  if (viewer && viewer.role !== 'admin') {
+    const { rows } = await query(
+      `SELECT DISTINCT period_year FROM payroll_periods p
+       WHERE p.status <> 'draft'
+         AND EXISTS (SELECT 1 FROM payroll_records pr WHERE pr.payroll_period_id = p.id AND pr.user_id = $1)
+       ORDER BY period_year DESC`,
+      [viewer.id]
+    )
+    return rows.map((r) => r.period_year)
+  }
   const { rows } = await query(
     'SELECT DISTINCT period_year FROM payroll_periods ORDER BY period_year DESC'
   )
   return rows.map((r) => r.period_year)
 }
 
-async function getPeriod(id) {
+async function getPeriod(id, viewer) {
   const { rows: [row] } = await query('SELECT * FROM payroll_periods WHERE id = $1', [id])
   if (!row) throw Object.assign(new Error('Payroll period not found'), { status: 404 })
+  // Staff chỉ xem được kỳ đã chốt/đã trả và phải có bảng lương của mình; nếu không → 404 (không lộ tồn tại).
+  if (viewer && viewer.role !== 'admin') {
+    if (row.status === 'draft') throw Object.assign(new Error('Payroll period not found'), { status: 404 })
+    const { rows: [rec] } = await query(
+      'SELECT 1 FROM payroll_records WHERE payroll_period_id = $1 AND user_id = $2', [id, viewer.id]
+    )
+    if (!rec) throw Object.assign(new Error('Payroll period not found'), { status: 404 })
+  }
   return periodToDto(row)
 }
 
@@ -197,17 +222,27 @@ async function deletePeriod(id, actorId, ipAddress, userAgent) {
 
 // --- Records ---
 
-async function listRecords(periodId) {
-  const { rows: [period] } = await query('SELECT id FROM payroll_periods WHERE id = $1', [periodId])
+async function listRecords(periodId, viewer) {
+  const { rows: [period] } = await query('SELECT id, status FROM payroll_periods WHERE id = $1', [periodId])
   if (!period) throw Object.assign(new Error('Payroll period not found'), { status: 404 })
+
+  const isStaff = viewer && viewer.role !== 'admin'
+  // Staff không được xem bảng lương của kỳ còn nháp.
+  if (isStaff && period.status === 'draft') {
+    throw Object.assign(new Error('Payroll period not found'), { status: 404 })
+  }
+
+  const params = [periodId]
+  let scope = ''
+  if (isStaff) { params.push(viewer.id); scope = `AND pr.user_id = $${params.length}` }
 
   const { rows } = await query(
     `SELECT pr.*, u.name AS user_name
      FROM payroll_records pr
      JOIN users u ON u.id = pr.user_id
-     WHERE pr.payroll_period_id = $1
+     WHERE pr.payroll_period_id = $1 ${scope}
      ORDER BY u.name`,
-    [periodId]
+    params
   )
   return rows.map(recordToDto)
 }

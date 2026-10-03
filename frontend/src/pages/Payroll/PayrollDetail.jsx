@@ -11,6 +11,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as payrollApi from '../../api/payroll'
 import * as usersApi from '../../api/users'
+import { getKpiPerformance } from '../../api/kpi'
 import s from './payroll.module.css'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -21,6 +22,21 @@ const STATUS_CLASS = { draft: s.badgeDraft, confirmed: s.badgeConfirmed, paid: s
 function fmtDate(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+// Ô nhập tiền: hiển thị có dấu chấm (1.000.000), hỗ trợ số ÂM (phạt). Lưu state = chuỗi số thô.
+function fmtMoneyInput(v) {
+  const raw = String(v ?? '')
+  const neg = raw.trim().startsWith('-')
+  const digits = raw.replace(/[^\d]/g, '')
+  if (!digits) return neg ? '-' : ''
+  return (neg ? '-' : '') + Number(digits).toLocaleString('vi-VN')
+}
+function toRawMoney(v) {
+  const raw = String(v)
+  const neg = raw.trim().startsWith('-')
+  const digits = raw.replace(/[^\d]/g, '')
+  return (neg && digits ? '-' : '') + digits
 }
 
 function fmtVND(n) {
@@ -257,9 +273,9 @@ function AllowanceItemsEditor({ label, items, onChange }) {
                   className={s.formInput}
                 />
                 <input
-                  type="number" min={0} step={1000} placeholder="0"
-                  value={item.amount}
-                  onChange={(e) => updateItem(idx, 'amount', e.target.value)}
+                  type="text" inputMode="numeric" placeholder="0"
+                  value={fmtMoneyInput(item.amount)}
+                  onChange={(e) => updateItem(idx, 'amount', toRawMoney(e.target.value))}
                   className={s.formInput}
                 />
                 <input
@@ -292,9 +308,11 @@ function AllowanceItemsEditor({ label, items, onChange }) {
 
 // ── UpsertRecordModal ─────────────────────────────────────────────────────────
 
-function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) {
+function UpsertRecordModal({ periodId, periodYear, periodMonth, existing, staffList, onClose, onSaved }) {
   const addToast = useToastStore((st) => st.toast)
   const emptyNum = (v) => (v != null && v !== 0 ? String(v) : '')
+  const [kpiRef, setKpiRef] = useState(null)      // { amount, gradeCode, gradeLabel, totalPoints } | null
+  const [refLoading, setRefLoading] = useState(false)
 
   const [form, setForm] = useState({
     userId:         existing?.userId ?? '',
@@ -317,6 +335,7 @@ function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) 
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
+  const [tab, setTab]       = useState('default')   // default | bonus | deduct
 
   function set(field) {
     return (e) => setForm((p) => ({ ...p, [field]: e.target.value }))
@@ -366,13 +385,36 @@ function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) 
     }
   }
 
+  // Tham chiếu kết quả ĐÁNH GIÁ (Tổng hợp theo NV) của chính NV + kỳ này — chỉ để hiển thị & thêm tay.
+  async function fetchKpiRef() {
+    if (!form.userId) { addToast('Chọn nhân viên trước', 'error'); return }
+    setRefLoading(true)
+    try {
+      const d = await getKpiPerformance(periodYear, periodMonth, { userIds: [form.userId] })
+      const r = (d.rows || []).find((x) => x.userId === form.userId) || (d.rows || [])[0]
+      if (!r) { addToast('Không có dữ liệu đánh giá cho kỳ này', 'error'); setKpiRef(null); return }
+      setKpiRef({ amount: Number(r.amount) || 0, gradeCode: r.gradeCode, gradeLabel: r.gradeLabel, totalPoints: r.totalPoints })
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Không lấy được đánh giá', 'error') }
+    finally { setRefLoading(false) }
+  }
+  function addKpiRefRow() {
+    if (!kpiRef) return
+    setForm((p) => ({ ...p, bonusItems: [...p.bonusItems, {
+      name: `Thưởng/phạt theo đánh giá T${periodMonth}/${periodYear}`,
+      project: kpiRef.gradeCode ? `Xếp loại ${kpiRef.gradeCode}` : '',
+      amount: String(kpiRef.amount),
+      note: kpiRef.gradeLabel ? `${kpiRef.gradeLabel} · Tổng điểm ${kpiRef.totalPoints}` : '',
+    }] }))
+    addToast('Đã thêm khoản từ đánh giá', 'success')
+  }
+
   const numInput = (field, label) => (
     <div className={s.formGroup}>
       <label className={s.formLabel}>{label}</label>
       <input
-        type="number" min={0} step={1000}
-        value={form[field]}
-        onChange={set(field)}
+        type="text" inputMode="numeric"
+        value={fmtMoneyInput(form[field])}
+        onChange={(e) => setForm((p) => ({ ...p, [field]: toRawMoney(e.target.value) }))}
         className={s.formInput}
         placeholder="0"
       />
@@ -403,49 +445,84 @@ function UpsertRecordModal({ periodId, existing, staffList, onClose, onSaved }) 
           </select>
         </div>
 
-        <div className={s.recordFormGrid}>
-          <div className={s.recordFormSection}>Thu nhập</div>
-          {numInput('baseSalary', 'Lương cơ bản (VND)')}
-          <div className={s.itemsEditorWrap}>
-            <AllowanceItemsEditor
-              label="Phụ cấp"
-              items={form.allowanceItems}
-              onChange={(items) => setForm((p) => ({ ...p, allowanceItems: items }))}
-            />
-          </div>
-          <div className={s.itemsEditorWrap}>
-            <AllowanceItemsEditor
-              label="Thưởng"
-              items={form.bonusItems}
-              onChange={(items) => setForm((p) => ({ ...p, bonusItems: items }))}
-            />
-          </div>
-
-          <div className={s.recordFormSection}>Khấu trừ NV</div>
-          {numInput('bhxhEmployee', 'BHXH nhân viên')}
-          {numInput('bhytEmployee', 'BHYT nhân viên')}
-          {numInput('bhtnEmployee', 'BHTN nhân viên')}
-
-          <div className={s.recordFormSection}>Đóng góp của công ty</div>
-          {numInput('bhxhEmployer', 'BHXH công ty')}
-          {numInput('bhytEmployer', 'BHYT công ty')}
-          {numInput('bhtnEmployer', 'BHTN công ty')}
-
-          <div className={s.recordFormSection}>Khấu trừ khác</div>
-          {numInput('pitDeduction',    'Thuế TNCN')}
-          {numInput('otherDeductions', 'Khấu trừ khác')}
+        {/* Tabs */}
+        <div style={{ display: 'inline-flex', gap: 3, background: 'var(--color-primary-bg)', border: '1.5px solid var(--color-primary-bg-strong)', borderRadius: 'var(--radius-md)', padding: 3, margin: '4px 0 14px' }}>
+          {[['default', 'Mặc định'], ['bonus', 'Thưởng / phạt'], ['deduct', 'Khấu trừ']].map(([k, lbl]) => (
+            <button type="button" key={k} className={`${s.tabBtn} ${tab === k ? s.tabBtnActive : ''}`} onClick={() => setTab(k)}>{lbl}</button>
+          ))}
         </div>
 
-        <div className={s.formGroup}>
-          <label className={s.formLabel}>Ghi chú</label>
-          <textarea
-            value={form.notes}
-            onChange={set('notes')}
-            className={s.formTextarea}
-            rows={5}
-            placeholder="Ghi chú về lương kỳ này..."
-          />
-        </div>
+        {tab === 'default' && (
+          <div className={s.recordFormGrid}>
+            <div className={s.recordFormSection}>Lương & phụ cấp</div>
+            {numInput('baseSalary', 'Lương cơ bản (VND)')}
+            <div className={s.itemsEditorWrap}>
+              <AllowanceItemsEditor label="Phụ cấp" items={form.allowanceItems} onChange={(items) => setForm((p) => ({ ...p, allowanceItems: items }))} />
+            </div>
+            <div className={s.formGroup} style={{ gridColumn: '1 / -1' }}>
+              <label className={s.formLabel}>Ghi chú</label>
+              <textarea value={form.notes} onChange={set('notes')} className={s.formTextarea} rows={6} placeholder="Ghi chú về lương kỳ này..." style={{ minHeight: 120 }} />
+            </div>
+          </div>
+        )}
+
+        {tab === 'bonus' && (
+          <div className={s.recordFormGrid}>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', lineHeight: 1.5, flex: '1 1 300px' }}>
+                Khoản <strong>dương (+)</strong> = thưởng, <strong>âm (−)</strong> = phạt — đều cộng/trừ vào tổng thu nhập.
+              </div>
+              <button type="button" className={s.btnSecondary} onClick={fetchKpiRef} disabled={refLoading || !form.userId}>
+                {refLoading ? <Loader2 size={13} className={s.spin} /> : <SlidersHorizontal size={13} />} Tham chiếu đánh giá
+              </button>
+            </div>
+            {kpiRef && (
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-bg)', border: '1px solid var(--color-primary-bg-strong)', fontSize: 'var(--fs-2xs)' }}>
+                <span>Kết quả đánh giá <strong>T{periodMonth}/{periodYear}</strong>:</span>
+                {kpiRef.gradeCode && <span style={{ fontWeight: 700 }}>Xếp loại {kpiRef.gradeCode}{kpiRef.gradeLabel ? ` · ${kpiRef.gradeLabel}` : ''}</span>}
+                <span>Tổng điểm <strong>{kpiRef.totalPoints}</strong></span>
+                <span style={{ fontSize: 'var(--fs-sm)' }}>Tiền: <strong style={{ color: kpiRef.amount >= 0 ? 'var(--color-success-text)' : 'var(--color-danger-text)' }}>{kpiRef.amount > 0 ? '+' : ''}{kpiRef.amount.toLocaleString('vi-VN')}đ</strong></span>
+                <button type="button" className={s.btnPrimary} style={{ marginLeft: 'auto' }} onClick={addKpiRefRow} disabled={!kpiRef.amount}>
+                  <Plus size={13} /> Thêm thành 1 khoản
+                </button>
+              </div>
+            )}
+            <div className={s.itemsEditorWrap}>
+              <AllowanceItemsEditor label="Thưởng / phạt" items={form.bonusItems} onChange={(items) => setForm((p) => ({ ...p, bonusItems: items }))} />
+            </div>
+          </div>
+        )}
+
+        {tab === 'deduct' && (
+          <div className={s.recordFormGrid}>
+            <div className={s.recordFormSection}>Khấu trừ nhân viên (trừ vào lương)</div>
+            {numInput('bhxhEmployee', 'BHXH nhân viên')}
+            {numInput('bhytEmployee', 'BHYT nhân viên')}
+            {numInput('bhtnEmployee', 'BHTN nhân viên')}
+            {numInput('pitDeduction', 'Thuế TNCN')}
+            {numInput('otherDeductions', 'Khấu trừ khác')}
+            <div className={s.recordFormSection}>Đóng góp của công ty (không trừ vào lương NV)</div>
+            {numInput('bhxhEmployer', 'BHXH công ty')}
+            {numInput('bhytEmployer', 'BHYT công ty')}
+            {numInput('bhtnEmployer', 'BHTN công ty')}
+          </div>
+        )}
+
+        {/* Tổng kết luôn hiển thị */}
+        {(() => {
+          const sum = (items) => (items || []).reduce((a, i) => a + numVal(i.amount), 0)
+          const gross = numVal(form.baseSalary) + sum(form.allowanceItems) + sum(form.bonusItems)
+          const deduct = numVal(form.bhxhEmployee) + numVal(form.bhytEmployee) + numVal(form.bhtnEmployee) + numVal(form.pitDeduction) + numVal(form.otherDeductions)
+          const net = gross - deduct
+          const fmt = (n) => (Number(n) || 0).toLocaleString('vi-VN')
+          return (
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', padding: '10px 14px', marginTop: 16, borderRadius: 'var(--radius-md)', background: 'var(--color-primary-bg)', border: '1px solid var(--color-primary-bg-strong)', fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)' }}>
+              <span>Tổng thu nhập: <strong style={{ color: 'var(--color-text-strong)' }}>{fmt(gross)}đ</strong></span>
+              <span>Khấu trừ NV: <strong style={{ color: 'var(--color-danger-text)' }}>−{fmt(deduct)}đ</strong></span>
+              <span style={{ marginLeft: 'auto', fontSize: 'var(--fs-sm)' }}>Thực nhận: <strong style={{ color: 'var(--color-primary)' }}>{fmt(net)}đ</strong></span>
+            </div>
+          )
+        })()}
 
         <div className={s.modalActions}>
           <button type="button" onClick={onClose} className={s.btnSecondary} disabled={saving}>Huỷ</button>
@@ -487,6 +564,108 @@ function DeleteRecordModal({ record, onClose, onDeleted }) {
   )
 }
 
+// ── StaffPayslip (nhân viên xem phiếu lương của chính mình, read-only) ─────────
+
+function PayslipLine({ label, sub, value, negative }) {
+  return (
+    <div className={s.payslipLine}>
+      <span className={s.payslipLabel}>{label}{sub ? <small>{sub}</small> : null}</span>
+      <span className={`${s.payslipVal} ${negative ? s.payslipValNeg : ''}`}>{value}</span>
+    </div>
+  )
+}
+
+function StaffPayslip({ period, record, onBack }) {
+  const money = (n) => (Number(n) || 0).toLocaleString('vi-VN') + 'đ'
+  const allowanceItems = record?.allowanceItems ?? []
+  const bonusItems     = record?.bonusItems ?? []
+  const gross   = record ? Number(record.grossIncome) : 0
+  const deductNV = record
+    ? Number(record.bhxhEmployee) + Number(record.bhytEmployee) + Number(record.bhtnEmployee) + Number(record.pitDeduction) + Number(record.otherDeductions)
+    : 0
+  const net = record ? calcNet(record) : 0
+  const employerTotal = record
+    ? Number(record.bhxhEmployer) + Number(record.bhytEmployer) + Number(record.bhtnEmployer)
+    : 0
+
+  return (
+    <AppLayout>
+      <div className={s.page}>
+        <div className={s.detailHeader}>
+          <div className={s.detailTitleRow}>
+            <button className={s.btnGhost} onClick={onBack}><ArrowLeft size={13} /> Danh sách</button>
+            <h2 className={s.detailTitle}>Phiếu lương tháng {period.periodMonth}/{period.periodYear}</h2>
+            <span className={STATUS_CLASS[period.status] ?? s.badgeDraft}>{STATUS_LABEL[period.status] ?? period.status}</span>
+          </div>
+          <div className={s.detailMeta}>
+            <span>Kỳ: {fmtDate(period.startDate)} — {fmtDate(period.endDate)}</span>
+            {record && <span className={s.detailTotal}>Thực nhận: {fmtVND(net)}</span>}
+          </div>
+        </div>
+
+        {!record ? (
+          <div className={s.recordsCard}>
+            <div className={s.emptyState}>
+              <DollarSign size={32} className={s.emptyIcon} />
+              <p className={s.emptyText}>Kỳ này chưa có bảng lương cho bạn.</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className={s.payslipGrid}>
+              {/* Thu nhập */}
+              <div className={s.payslipCard}>
+                <div className={s.payslipHead}>Thu nhập</div>
+                <div className={s.payslipBody}>
+                  <PayslipLine label="Lương cơ bản" value={money(record.baseSalary)} />
+                  {allowanceItems.map((i, idx) => (
+                    <PayslipLine key={`a${idx}`} label={i.name || 'Phụ cấp'} sub={i.project || i.note || null} value={money(i.amount)} />
+                  ))}
+                  {bonusItems.map((i, idx) => (
+                    <PayslipLine
+                      key={`b${idx}`}
+                      label={i.name || 'Thưởng/phạt'}
+                      sub={i.project || i.note || null}
+                      value={(Number(i.amount) > 0 ? '+' : '') + money(i.amount)}
+                      negative={Number(i.amount) < 0}
+                    />
+                  ))}
+                  <div className={s.payslipSub}><span>Tổng thu nhập</span><span>{money(gross)}</span></div>
+                </div>
+              </div>
+
+              {/* Khấu trừ */}
+              <div className={s.payslipCard}>
+                <div className={s.payslipHead}>Khấu trừ</div>
+                <div className={s.payslipBody}>
+                  <PayslipLine label="BHXH (nhân viên)" value={money(record.bhxhEmployee)} negative={Number(record.bhxhEmployee) > 0} />
+                  <PayslipLine label="BHYT (nhân viên)" value={money(record.bhytEmployee)} negative={Number(record.bhytEmployee) > 0} />
+                  <PayslipLine label="BHTN (nhân viên)" value={money(record.bhtnEmployee)} negative={Number(record.bhtnEmployee) > 0} />
+                  <PayslipLine label="Thuế TNCN" value={money(record.pitDeduction)} negative={Number(record.pitDeduction) > 0} />
+                  <PayslipLine label="Khấu trừ khác" value={money(record.otherDeductions)} negative={Number(record.otherDeductions) > 0} />
+                  <div className={s.payslipSub}><span>Tổng khấu trừ</span><span className={s.payslipValNeg}>−{money(deductNV)}</span></div>
+                  {employerTotal > 0 && (
+                    <p className={s.payslipHint}>Công ty đóng thêm (không trừ vào lương): {money(employerTotal)}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className={s.payslipNet}>
+              <span className={s.payslipNetLabel}>Thực nhận</span>
+              <span className={s.payslipNetVal}>{money(net)}</span>
+            </div>
+
+            {record.notes && (
+              <div className={s.payslipNote}><strong>Ghi chú từ kế toán:</strong> {record.notes}</div>
+            )}
+          </>
+        )}
+      </div>
+    </AppLayout>
+  )
+}
+
 // ── Main PayrollDetail ────────────────────────────────────────────────────────
 
 export default function PayrollDetail() {
@@ -518,7 +697,8 @@ export default function PayrollDetail() {
     Promise.all([
       payrollApi.getPeriod(id),
       payrollApi.listRecords(id),
-      usersApi.listUsers({ status: 'active', limit: 200 }).then((r) => r.users),
+      // Danh sách NV chỉ cần cho admin (dropdown thêm bảng lương); staff không gọi (endpoint admin-only).
+      isAdmin ? usersApi.listUsers({ status: 'active', limit: 200 }).then((r) => r.users) : Promise.resolve([]),
     ])
       .then(([p, r, staff]) => {
         if (cancelled) return
@@ -529,7 +709,7 @@ export default function PayrollDetail() {
       .catch(() => { if (!cancelled) setError('Không thể tải dữ liệu') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [id])
+  }, [id, isAdmin])
 
   async function handleGenerate() {
     setGenerating(true)
@@ -636,6 +816,11 @@ export default function PayrollDetail() {
         </div>
       </AppLayout>
     )
+  }
+
+  // Nhân viên: xem phiếu lương của chính mình (backend đã lọc records về đúng 1 bản ghi của họ).
+  if (!isAdmin) {
+    return <StaffPayslip period={period} record={records[0]} onBack={() => navigate('/payroll')} />
   }
 
   const isDraft = period.status === 'draft'
@@ -794,6 +979,8 @@ export default function PayrollDetail() {
         {showUpsert && (
           <UpsertRecordModal
             periodId={id}
+            periodYear={period.periodYear}
+            periodMonth={period.periodMonth}
             existing={editRecord}
             staffList={staffList}
             onClose={() => { setShowUpsert(false); setEditRecord(null) }}

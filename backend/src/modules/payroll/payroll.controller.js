@@ -9,6 +9,7 @@ async function listPeriods(req, res, next) {
       page:  Math.max(1, parseInt(page, 10)),
       limit: Math.min(60, Math.max(1, parseInt(limit, 10))),
       year:  year ? parseInt(year, 10) : null,
+      viewer: { role: req.user.role, id: req.user.id },
     })
     res.json({ success: true, data: result })
   } catch (err) { next(err) }
@@ -16,14 +17,14 @@ async function listPeriods(req, res, next) {
 
 async function listDistinctYears(req, res, next) {
   try {
-    const years = await svc.listDistinctYears()
+    const years = await svc.listDistinctYears({ role: req.user.role, id: req.user.id })
     res.json({ success: true, data: { years } })
   } catch (err) { next(err) }
 }
 
 async function getPeriod(req, res, next) {
   try {
-    const period = await svc.getPeriod(req.params.id)
+    const period = await svc.getPeriod(req.params.id, { role: req.user.role, id: req.user.id })
     res.json({ success: true, data: { period } })
   } catch (err) { next(err) }
 }
@@ -70,7 +71,7 @@ async function deletePeriod(req, res, next) {
 // --- Records ---
 async function listRecords(req, res, next) {
   try {
-    const records = await svc.listRecords(req.params.id)
+    const records = await svc.listRecords(req.params.id, { role: req.user.role, id: req.user.id })
     res.json({ success: true, data: { records } })
   } catch (err) { next(err) }
 }

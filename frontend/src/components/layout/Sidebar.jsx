@@ -29,7 +29,7 @@ const NAV_GROUPS = [
       { to: '/staff',             label: 'Nhân viên',         icon: Users,         adminOnly: true },
       { to: '/attendance',        label: 'Chấm công',         icon: CalendarCheck, staffOnly: true, end: true },
       { to: '/attendance/admin',  label: 'Quản lý chấm công', icon: CalendarCheck, adminOnly: true },
-      { to: '/payroll',           label: 'Bảng lương',       icon: Wallet,        adminOnly: true },
+      { to: '/payroll',           label: 'Bảng lương',       icon: Wallet },
       { to: '/reward-penalty',    label: 'Đánh giá nhân viên',     icon: Scale },
       { to: '/settings',          label: 'Cài đặt',          icon: Settings,      adminOnly: true },
     ],
