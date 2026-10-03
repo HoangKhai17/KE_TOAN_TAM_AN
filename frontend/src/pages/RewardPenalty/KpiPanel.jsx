@@ -114,6 +114,8 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
     const rows = data.rows || []
     const n = rows.length
     const sumVol = rows.reduce((a, r) => a + (Number(r.volumePoints) || 0), 0)
+    const sumVolRec = rows.reduce((a, r) => a + (Number(r.volumeRecurring) || 0), 0)
+    const sumVolOther = rows.reduce((a, r) => a + (Number(r.volumeOther) || 0), 0)
     const sumAssigned = rows.reduce((a, r) => a + (Number(r.assignedCount) || 0), 0)
     const sumOnTime = rows.reduce((a, r) => a + (Number(r.onTimeCount) || 0), 0)
     const avgPct = sumAssigned > 0 ? Math.round((sumOnTime * 100) / sumAssigned) : null
@@ -132,7 +134,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
     const volTop = [...rows].sort((a, b) => (b.volumePoints || 0) - (a.volumePoints || 0)).slice(0, 10)
     const volMax = Math.max(1, ...volTop.map((r) => r.volumePoints || 0))
     const otRows = [...rows].sort((a, b) => (b.onTimePct ?? -1) - (a.onTimePct ?? -1)).slice(0, 12)
-    return { n, sumVol, sumAssigned, sumOnTime, avgPct, sumAmount, rewardCnt, penaltyCnt, gradeDist, graded, volTop, volMax, otRows }
+    return { n, sumVol, sumVolRec, sumVolOther, sumAssigned, sumOnTime, avgPct, sumAmount, rewardCnt, penaltyCnt, gradeDist, graded, volTop, volMax, otRows }
   }, [data])
 
   // conic-gradient cho donut (E→S để màu chạy đỏ→xanh)
@@ -161,7 +163,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
       const total = (r.bySource || []).reduce((a, b) => a + (b.taskCount || 0), 0)
       return {
         userId: r.userId, name: r.userName, total,
-        segs: srcSet.map((k) => ({ source: k, count: map.get(k)?.taskCount || 0, onTime: map.get(k)?.onTimeCount || 0 })),
+        segs: srcSet.map((k) => ({ source: k, count: map.get(k)?.taskCount || 0, onTime: map.get(k)?.onTimeCount || 0, vol: map.get(k)?.volumePoints || 0 })),
       }
     }).filter((u) => u.total > 0).sort((a, b) => b.total - a.total).slice(0, 12)
     const maxTotal = Math.max(1, ...perUser.map((u) => u.total))
@@ -413,7 +415,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
             <div className={s.kpiCard}>
               <div className={s.kpiK}>Tổng điểm khối lượng</div>
               <div className={s.kpiV}>{fmtMoney(summary.sumVol)} <small>đ</small></div>
-              <div className={s.kpiSub}>TB {summary.n ? Math.round(summary.sumVol / summary.n) : 0}đ / người</div>
+              <div className={s.kpiSub}>Định kỳ <strong>{summary.sumVolRec}</strong> · Khác <strong>{summary.sumVolOther}</strong></div>
             </div>
             <div className={s.kpiCard}>
               <div className={s.kpiK}>Tỉ lệ đúng hạn TB</div>
@@ -465,21 +467,23 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                           <td title={r.jobTitle || undefined}>{r.userName}</td>
                           {sourceReport.srcSet.map((k) => {
                             const b = map.get(k)
-                            if (!b || b.dueCount === 0) return <td key={k} className={s.num}><span className={s.zero}>—</span></td>
-                            const pct = Math.round((b.onTimeCount * 100) / b.dueCount)
-                            return <td key={k} className={s.num} title={`${b.taskCount} việc (đến hạn ${b.dueCount})`}>
-                              <div>{b.onTimeCount}/{b.dueCount}</div>
-                              <div style={{ fontSize: 'var(--fs-3xs)', fontWeight: 700, color: pctColor(pct) }}>{pct}%</div>
+                            const vol = b?.volumePoints || 0
+                            if (!b || (b.dueCount === 0 && vol === 0)) return <td key={k} className={s.num}><span className={s.zero}>—</span></td>
+                            const pct = b.dueCount > 0 ? Math.round((b.onTimeCount * 100) / b.dueCount) : null
+                            return <td key={k} className={s.num} title={`${b.taskCount} việc (đến hạn ${b.dueCount}) · ${vol}đ`}>
+                              <div>{b.dueCount > 0 ? `${b.onTimeCount}/${b.dueCount}` : '—'}</div>
+                              {pct != null && <div style={{ fontSize: 'var(--fs-3xs)', fontWeight: 700, color: pctColor(pct) }}>{pct}%</div>}
+                              <div style={{ fontSize: 'var(--fs-3xs)', color: 'var(--color-primary)', fontWeight: 700 }}>{vol}đ</div>
                             </td>
                           })}
-                          <td className={s.num}><strong>{r.onTimeCount}/{r.assignedCount}</strong>{r.onTimePct != null ? <div style={{ fontSize: 'var(--fs-3xs)', fontWeight: 700, color: pctColor(r.onTimePct) }}>{r.onTimePct}%</div> : null}</td>
+                          <td className={s.num}><strong>{r.onTimeCount}/{r.assignedCount}</strong>{r.onTimePct != null ? <div style={{ fontSize: 'var(--fs-3xs)', fontWeight: 700, color: pctColor(r.onTimePct) }}>{r.onTimePct}%</div> : null}<div style={{ fontSize: 'var(--fs-3xs)', color: 'var(--color-primary)', fontWeight: 700 }}>{r.volumePoints || 0}đ</div></td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
               </div>
-              <div className={s.cardFoot}>ℹ️ Mỗi ô: <strong>đúng hạn / đã đến hạn</strong> + % theo nguồn. Bấm 1 dòng để xem chi tiết. Điểm KPI/xếp loại tính trên <strong>tổng</strong> (tất cả nguồn, hoặc các nguồn đang lọc).</div>
+              <div className={s.cardFoot}>ℹ️ Mỗi ô: <strong>đúng hạn / đã đến hạn</strong> + % + <strong style={{ color: 'var(--color-primary)' }}>điểm khối lượng</strong> theo nguồn (định kỳ = điểm cấu hình; nguồn khác = 1đ/bước). Bấm 1 dòng để xem chi tiết.</div>
             </>
           ) : (
           <>
@@ -496,7 +500,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                   <tr key={r.userId} className={s.kpiRowClick} onClick={() => openDetail(r)}>
                     <td className={s.colStt}>{i + 1}</td>
                     <td title={r.jobTitle || undefined}>{r.userName}</td>
-                    <td className={s.num}><strong>{r.volumePoints}</strong></td>
+                    <td className={s.num}><strong>{r.volumePoints}</strong><div style={{ fontSize: 'var(--fs-3xs)', color: 'var(--color-muted)', fontWeight: 400 }}>ĐK {r.volumeRecurring ?? 0} · Khác {r.volumeOther ?? 0}</div></td>
                     <td className={s.num}>{r.onTimeCount}/{r.assignedCount}</td>
                     <td>{r.onTimePct == null ? <span className={s.zero}>—</span> : (
                       <span className={s.kpiMini}><span className={s.kpiMiniTrack}><span className={s.kpiMiniFill} style={{ width: `${r.onTimePct}%`, background: pctColor(r.onTimePct) }} /></span><span className={s.num}>{r.onTimePct}%</span></span>
@@ -526,19 +530,29 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
           <div className={s.kpiCharts}>
             <div className={s.kpiPanel}>
               <h4>Điểm khối lượng theo nhân viên</h4>
-              <div className={s.kpiHint}>Điểm đã đạt / tổng điểm có thể đạt của công việc trong kỳ (phần xám = bước chưa hoàn thành).</div>
+              <div className={s.kpiHint}>Đạt / tổng điểm trong kỳ (phần xám = chưa xong). Thanh tách: <strong>Định kỳ</strong> (điểm cấu hình) + <strong>Task khác</strong> (1đ/bước).</div>
+              <div style={{ display: 'flex', gap: 14, margin: '6px 0 2px', fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-primary)' }} />Định kỳ (điểm cấu hình)</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--color-success-text)' }} />Task khác (1đ/bước)</span>
+              </div>
               {summary.sumVol === 0 ? (
-                <div className={s.empty} style={{ padding: 12 }}>Chưa có điểm khối lượng trong kỳ — công việc chưa chấm điểm checklist (hoặc đang lọc nguồn không có điểm).</div>
+                <div className={s.empty} style={{ padding: 12 }}>Chưa có điểm khối lượng trong kỳ — việc định kỳ chưa chấm điểm checklist & chưa hoàn thành bước nào ở task khác.</div>
               ) : (
                 <div className={s.kpiBars}>
                   {summary.volTop.map((r) => {
                     const got = r.volumePoints || 0
                     const poss = r.volumePossible || 0
-                    const pct = poss > 0 ? Math.round((got / poss) * 100) : 0
+                    const rec = r.volumeRecurring || 0
+                    const oth = r.volumeOther || 0
+                    const recPct = poss > 0 ? (rec / poss) * 100 : 0
+                    const othPct = poss > 0 ? (oth / poss) * 100 : 0
                     return (
                     <div className={s.kpiBarRow} key={r.userId}>
                       <span className={s.kpiNm} title={r.userName}>{shortName(r.userName)}</span>
-                      <span className={s.kpiTrack} title={`Đạt ${got} / ${poss} điểm (${pct}%)`}><span className={s.kpiFill} style={{ width: `${pct}%` }} /></span>
+                      <span className={s.kpiTrack} style={{ display: 'flex' }} title={`Định kỳ ${rec} · Khác ${oth} = ${got} / ${poss}`}>
+                        <span style={{ width: `${recPct}%`, background: 'var(--color-primary)' }} />
+                        <span style={{ width: `${othPct}%`, background: 'var(--color-success-text)' }} />
+                      </span>
                       <span className={s.kpiVal}>{got} <small style={{ color: 'var(--color-muted)', fontWeight: 'var(--fw-regular, 400)' }}>/ {poss}</small></span>
                     </div>
                     )
@@ -591,7 +605,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                     <span title={u.name} style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{shortName(u.name)}</span>
                     <span style={{ display: 'flex', height: 11, borderRadius: 6, overflow: 'hidden', background: 'var(--color-surface-muted)', width: `${Math.round((u.total / sourceReport.maxTotal) * 100)}%`, minWidth: 2 }}>
                       {u.segs.filter((sg) => sg.count > 0).map((sg) => (
-                        <span key={sg.source} title={`${getLabel('task_source', sg.source, sg.source)}: ${sg.count} việc · đúng hạn ${sg.onTime}`}
+                        <span key={sg.source} title={`${getLabel('task_source', sg.source, sg.source)}: ${sg.count} việc · đúng hạn ${sg.onTime} · ${sg.vol}đ`}
                           style={{ width: `${Math.round((sg.count / u.total) * 100)}%`, background: sourceReport.colors[sg.source] }} />
                       ))}
                     </span>
@@ -623,7 +637,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
               <div className={s.kpiDjt}>{detail.user.jobTitle || 'Nhân viên'} · {periodLabel}</div>
             </div>
             <div className={s.kpiDmetrics}>
-              <div className={s.kpiDm}><span>Điểm khối lượng</span><b>{detail.user.volumePoints ?? 0} / {detail.user.volumePossible ?? (detail.user.volumePoints ?? 0)}</b></div>
+              <div className={s.kpiDm}><span>Điểm KL — ĐK {detail.user.volumeRecurring ?? 0} · Khác {detail.user.volumeOther ?? 0}</span><b>{detail.user.volumePoints ?? 0} / {detail.user.volumePossible ?? (detail.user.volumePoints ?? 0)}</b></div>
               <div className={s.kpiDm}><span>% đúng hạn</span><b>{detail.user.onTimePct == null ? '—' : `${detail.user.onTimePct}%`}</b></div>
               <div className={s.kpiDm}><span>Đến hạn / đúng hạn</span><b>{detail.user.assignedCount ?? 0} / {detail.user.onTimeCount ?? 0}</b></div>
               <div className={s.kpiDm}><span>Điểm KPI</span><b>{detail.user.kpiPoints != null ? fmtSigned(detail.user.kpiPoints) : '—'}</b></div>

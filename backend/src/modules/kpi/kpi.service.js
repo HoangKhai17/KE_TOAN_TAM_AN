@@ -40,6 +40,10 @@ const LEAF_CTE = `
     FROM task_checklist_items ci
   )`
 
+// Giá trị điểm 1 bước LEAF: task ĐỊNH KỲ (source='auto', được setup) dùng điểm cấu hình;
+// MỌI nguồn khác KHÔNG setup → mỗi bước = 1 điểm. (cần JOIN tasks t trong truy vấn)
+const LEAF_PT = "(CASE WHEN t.source = 'auto' THEN COALESCE(leaf.points, 0) ELSE 1 END)"
+
 async function isMonthClosed(year, month) {
   const { y, m } = monthBounds(year, month)
   const { rows: [r] } = await query(
@@ -62,7 +66,10 @@ async function listLive(year, month, opts = {}) {
   const { rows } = await query(`
     ${LEAF_CTE},
     vol AS (
-      SELECT t.assigned_to AS user_id, COALESCE(SUM(leaf.points), 0)::int AS volume_points
+      -- Tách: điểm ĐỊNH KỲ (auto, điểm cấu hình) và điểm TASK KHÁC (1đ/bước).
+      SELECT t.assigned_to AS user_id,
+             COALESCE(SUM(leaf.points) FILTER (WHERE t.source = 'auto'), 0)::int AS vol_recurring,
+             COUNT(*) FILTER (WHERE t.source <> 'auto')::int AS vol_other
       FROM leaf JOIN tasks t ON t.id = leaf.task_id
       WHERE leaf.is_leaf AND leaf.is_completed
         AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date
@@ -84,7 +91,9 @@ async function listLive(year, month, opts = {}) {
     poss AS (
       -- TỔNG điểm có thể đạt trong kỳ (mẫu số cho "đạt/tổng"): cộng TẤT CẢ bước LEAF (xong hay chưa)
       -- của task đến hạn trong kỳ, CỘNG các bước đã tick trong kỳ của task ngoài kỳ → luôn ≥ điểm đã đạt.
-      SELECT t.assigned_to AS user_id, COALESCE(SUM(leaf.points), 0)::int AS possible_points
+      SELECT t.assigned_to AS user_id,
+             (COALESCE(SUM(leaf.points) FILTER (WHERE t.source = 'auto'), 0)
+              + COUNT(*) FILTER (WHERE t.source <> 'auto'))::int AS possible_points
       FROM leaf JOIN tasks t ON t.id = leaf.task_id
       WHERE leaf.is_leaf AND t.assigned_to IS NOT NULL${srcClause}
         AND ( (t.due_date >= $1::date AND t.due_date < $2::date)
@@ -92,7 +101,8 @@ async function listLive(year, month, opts = {}) {
       GROUP BY t.assigned_to
     )
     SELECT u.id AS user_id, u.name AS user_name, u.job_title,
-           COALESCE(vol.volume_points, 0) AS volume_points,
+           COALESCE(vol.vol_recurring, 0) AS vol_recurring,
+           COALESCE(vol.vol_other, 0) AS vol_other,
            COALESCE(poss.possible_points, 0) AS possible_points,
            COALESCE(ont.assigned_count, 0) AS assigned_count,
            COALESCE(ont.on_time_count, 0)  AS on_time_count
@@ -109,10 +119,13 @@ async function listLive(year, month, opts = {}) {
 function toKpiDto(r) {
   const assigned = parseInt(r.assigned_count, 10) || 0
   const onTime = parseInt(r.on_time_count, 10) || 0
+  const volRec = parseInt(r.vol_recurring, 10) || 0    // điểm task ĐỊNH KỲ (điểm cấu hình)
+  const volOther = parseInt(r.vol_other, 10) || 0      // điểm task KHÁC (1đ/bước)
+  const volumePoints = volRec + volOther
   return {
     userId: r.user_id, userName: r.user_name, jobTitle: r.job_title ?? null,
-    volumePoints: parseInt(r.volume_points, 10) || 0,
-    volumePossible: Math.max(parseInt(r.possible_points, 10) || 0, parseInt(r.volume_points, 10) || 0),
+    volumeRecurring: volRec, volumeOther: volOther, volumePoints,
+    volumePossible: Math.max(parseInt(r.possible_points, 10) || 0, volumePoints),
     assignedCount: assigned, onTimeCount: onTime,
     onTimePct: assigned > 0 ? Math.round((onTime * 100) / assigned) : null,
   }
@@ -138,7 +151,8 @@ async function listMonthly(year, month, opts = {}) {
       ORDER BY u.name`, params)
     return { closed: true, rows: rows.map((r) => ({
       userId: r.user_id, userName: r.user_name, jobTitle: r.job_title ?? null,
-      volumePoints: r.volume_points, volumePossible: r.volume_points, assignedCount: r.assigned_count,
+      volumePoints: r.volume_points, volumeRecurring: r.volume_points, volumeOther: 0,
+      volumePossible: r.volume_points, assignedCount: r.assigned_count,
       onTimeCount: r.on_time_count, onTimePct: r.on_time_pct,
     })) }
   }
@@ -152,7 +166,7 @@ async function detailLive(year, month, userId, opts = {}) {
   const [byCompany, byType, bySource, byDifficulty, byStatus] = await Promise.all([
     query(`
       ${LEAF_CTE}
-      SELECT c.id AS key, c.name AS label, COALESCE(SUM(leaf.points),0)::int AS volume_points
+      SELECT c.id AS key, c.name AS label, COALESCE(SUM(${LEAF_PT}),0)::int AS volume_points
       FROM leaf JOIN tasks t ON t.id = leaf.task_id JOIN companies c ON c.id = t.company_id
       WHERE leaf.is_leaf AND leaf.is_completed
         AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date AND t.assigned_to = $3
@@ -160,7 +174,7 @@ async function detailLive(year, month, userId, opts = {}) {
     query(`
       ${LEAF_CTE}
       SELECT COALESCE(tt.name, t.group_name, '(Không có loại)') AS label,
-             COALESCE(SUM(leaf.points),0)::int AS volume_points
+             COALESCE(SUM(${LEAF_PT}),0)::int AS volume_points
       FROM leaf JOIN tasks t ON t.id = leaf.task_id LEFT JOIN task_types tt ON tt.id = t.task_type_id
       WHERE leaf.is_leaf AND leaf.is_completed
         AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date AND t.assigned_to = $3
@@ -169,7 +183,7 @@ async function detailLive(year, month, userId, opts = {}) {
     query(`
       ${LEAF_CTE},
       pts AS (
-        SELECT t.id AS task_id, COALESCE(SUM(leaf.points),0)::int AS points
+        SELECT t.id AS task_id, COALESCE(SUM(${LEAF_PT}),0)::int AS points
         FROM leaf JOIN tasks t ON t.id = leaf.task_id
         WHERE leaf.is_leaf AND leaf.is_completed
           AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date AND t.assigned_to = $3
@@ -241,7 +255,7 @@ async function getUserTasks(year, month, userId, opts = {}) {
   const { rows } = await query(`
     ${LEAF_CTE},
     pts AS (
-      SELECT t.id AS task_id, COALESCE(SUM(leaf.points), 0)::int AS points
+      SELECT t.id AS task_id, COALESCE(SUM(${LEAF_PT}), 0)::int AS points
       FROM leaf JOIN tasks t ON t.id = leaf.task_id
       WHERE leaf.is_leaf AND leaf.is_completed
         AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date
@@ -404,9 +418,30 @@ async function getPerformance(year, month, opts = {}) {
       FROM tasks t
       WHERE t.assigned_to IS NOT NULL AND t.due_date >= $1::date AND t.due_date < $2::date${sClause}
       GROUP BY t.assigned_to, t.source`, sp)
+    const keyOf = (u, s) => `${u}||${s}`
+    const entryMap = new Map()
     for (const a of srcAgg) {
       if (!srcByUser.has(a.user_id)) srcByUser.set(a.user_id, [])
-      srcByUser.get(a.user_id).push({ source: a.source, taskCount: a.task_count, dueCount: a.due_count, onTimeCount: a.on_time_count })
+      const entry = { source: a.source, taskCount: a.task_count, dueCount: a.due_count, onTimeCount: a.on_time_count, volumePoints: 0 }
+      srcByUser.get(a.user_id).push(entry)
+      entryMap.set(keyOf(a.user_id, a.source), entry)
+    }
+    // Điểm khối lượng theo (NV × nguồn) — hoàn thành trong kỳ (auto = điểm cấu hình; khác = 1đ/bước).
+    const { rows: volAgg } = await query(`
+      ${LEAF_CTE}
+      SELECT t.assigned_to AS user_id, t.source, COALESCE(SUM(${LEAF_PT}),0)::int AS vol
+      FROM leaf JOIN tasks t ON t.id = leaf.task_id
+      WHERE leaf.is_leaf AND leaf.is_completed
+        AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date
+        AND t.assigned_to IS NOT NULL${sClause}
+      GROUP BY t.assigned_to, t.source`, sp)
+    for (const v of volAgg) {
+      const e = entryMap.get(keyOf(v.user_id, v.source))
+      if (e) { e.volumePoints = v.vol }
+      else {
+        if (!srcByUser.has(v.user_id)) srcByUser.set(v.user_id, [])
+        srcByUser.get(v.user_id).push({ source: v.source, taskCount: 0, dueCount: 0, onTimeCount: 0, volumePoints: v.vol })
+      }
     }
   }
 
@@ -470,7 +505,8 @@ async function getPerformance(year, month, opts = {}) {
     const tier = matchRange(r.onTimePct, tiers, 'minPct', 'maxPct')
     const kpiPoints = tier ? tier.points : 0
     const rpNet = netByUser.get(r.userId) ?? 0
-    const totalPoints = kpiPoints + rpNet
+    // Tổng điểm = 4 thành phần: điểm ĐỊNH KỲ + điểm TASK KHÁC + điểm % đúng hạn (KPI) + thưởng/phạt.
+    const totalPoints = (r.volumePoints || 0) + kpiPoints + rpNet
     const grade = matchRange(totalPoints, gradeList, 'minPoints', 'maxPoints')
     return {
       ...r,

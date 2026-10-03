@@ -14,7 +14,7 @@ import { useEnumsStore } from '../../hooks/useEnums'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { listUserOptions } from '../../api/users'
 import * as api from '../../api/rewardPenalty'
-import { listKpiTiers, createKpiTier, updateKpiTier, deleteKpiTier } from '../../api/kpi'
+import { listKpiTiers, createKpiTier, updateKpiTier, deleteKpiTier, getKpiPerformance } from '../../api/kpi'
 import KpiPanel from './KpiPanel'
 import PeriodPicker from '../Tasks/PeriodPicker'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -804,13 +804,15 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   useEffect(() => { api.listGrades({ activeOnly: 'true' }).then(setGrades).catch(() => {}) }, [])
-  const gradeOf = (r) => classifyGrade(r.netPoints, grades)
+  const gradeObj = (r) => grades.find((g) => g.code === r.gradeCode) || null   // để lấy màu badge; xếp loại/tiền lấy từ getKpiPerformance
 
   const cols = useMemo(() => [
-    { key: 'user', label: 'Nhân viên',   type: 'text',        getLabel: (r) => r.userName },
-    { key: 'rp',   label: 'Điểm thưởng', type: 'numberRange', num: true, getNumber: (r) => r.rewardPoints,  getLabel: (r) => String(r.rewardPoints) },
-    { key: 'pp',   label: 'Điểm phạt',   type: 'numberRange', num: true, getNumber: (r) => r.penaltyPoints, getLabel: (r) => String(r.penaltyPoints) },
-    { key: 'np',   label: 'Tổng điểm',   type: 'numberRange', num: true, getNumber: (r) => r.netPoints,     getLabel: (r) => String(r.netPoints) },
+    { key: 'user',  label: 'Nhân viên',    type: 'text',        getLabel: (r) => r.userName },
+    { key: 'vrec',  label: 'Định kỳ',      type: 'numberRange', num: true, getNumber: (r) => r.volumeRecurring, getLabel: (r) => String(r.volumeRecurring) },
+    { key: 'voth',  label: 'Task khác',    type: 'numberRange', num: true, getNumber: (r) => r.volumeOther,     getLabel: (r) => String(r.volumeOther) },
+    { key: 'kpi',   label: 'Điểm đúng hạn', type: 'numberRange', num: true, getNumber: (r) => r.kpiPoints,      getLabel: (r) => String(r.kpiPoints) },
+    { key: 'rp',    label: 'Thưởng/phạt',  type: 'numberRange', num: true, getNumber: (r) => r.rewardPenaltyNet, getLabel: (r) => String(r.rewardPenaltyNet) },
+    { key: 'total', label: 'Tổng điểm',    type: 'numberRange', num: true, getNumber: (r) => r.totalPoints,     getLabel: (r) => String(r.totalPoints) },
   ], [])
   const cf = useColFilter(cols)
   const view = cf.apply(rows)
@@ -821,26 +823,34 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
   const toggleAll = () => setSel(allChecked ? new Set() : new Set(rows.map((r) => r.userId)))
   const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
-  // Admin: gộp SẴN ở DB (getSummary). Staff (self): gom từ entry CỦA MÌNH (controller đã scope).
+  // Tổng hợp = KPI (điểm định kỳ + task khác + % đúng hạn) + thưởng/phạt → Tổng điểm → Xếp loại → Tiền.
+  // Lấy số & xếp loại từ getKpiPerformance (model 4 thành phần); lấy chi tiết "thưởng/phạt vì gì" để bung.
   useEffect(() => {
     setLoading(true); setSel(new Set()); setPage(1)
-    const load = self
+    const range = { from: ym.from, to: ym.to }
+    const kpiP = getKpiPerformance(ym.year || undefined, ym.month || undefined, range).then((d) => d.rows || []).catch(() => [])
+    const itemsP = self
       ? api.listEntries({ year: ym.year || undefined, month: ym.month || undefined, from: ym.from || undefined, to: ym.to || undefined }).then((entries) => {
-        const byUser = new Map()
+        const m = new Map()
         for (const e of entries) {
           if (e.status !== 'approved') continue
-          if (!byUser.has(e.userId)) byUser.set(e.userId, { userId: e.userId, userName: e.userName, rewardPoints: 0, penaltyPoints: 0, netPoints: 0, items: new Map() })
-          const u = byUser.get(e.userId); const p = Number(e.points) || 0
-          if (p > 0) u.rewardPoints += p; else if (p < 0) u.penaltyPoints += p
-          u.netPoints += p
-          const key = `${e.categoryLabel}||${e.kind}`
-          if (!u.items.has(key)) u.items.set(key, { label: e.categoryLabel, kind: e.kind, count: 0, points: 0 })
-          const it = u.items.get(key); it.count += 1; it.points += p
+          if (!m.has(e.userId)) m.set(e.userId, new Map())
+          const im = m.get(e.userId); const key = `${e.categoryLabel}||${e.kind}`
+          if (!im.has(key)) im.set(key, { label: e.categoryLabel, kind: e.kind, count: 0, points: 0 })
+          const it = im.get(key); it.count += 1; it.points += Number(e.points) || 0
         }
-        return [...byUser.values()].map((u) => ({ ...u, items: [...u.items.values()].sort((a, b) => Math.abs(b.points) - Math.abs(a.points)) }))
-      })
-      : api.getSummary(ym.year || undefined, ym.month || undefined, { from: ym.from, to: ym.to })
-    load.then((data) => setRows(Array.isArray(data) ? data : [])).catch(() => setRows([])).finally(() => setLoading(false))
+        return new Map([...m].map(([uid, im]) => [uid, [...im.values()].sort((a, b) => Math.abs(b.points) - Math.abs(a.points))]))
+      }).catch(() => new Map())
+      : api.getSummary(ym.year || undefined, ym.month || undefined, range).then((sum) => new Map((sum || []).map((u) => [u.userId, u.items || []]))).catch(() => new Map())
+    Promise.all([kpiP, itemsP]).then(([kpiRows, itemsMap]) => {
+      setRows(kpiRows.map((r) => ({
+        userId: r.userId, userName: r.userName,
+        volumeRecurring: r.volumeRecurring || 0, volumeOther: r.volumeOther || 0,
+        kpiPoints: r.kpiPoints || 0, rewardPenaltyNet: r.rewardPenaltyNet || 0, totalPoints: r.totalPoints || 0,
+        gradeCode: r.gradeCode, gradeLabel: r.gradeLabel, gradeSort: r.gradeSort, amount: r.amount || 0,
+        items: itemsMap.get(r.userId) || [],
+      })))
+    }).catch(() => setRows([])).finally(() => setLoading(false))
   }, [ym, self])
   useEffect(() => {
     onFooter(<PaginationFooter total={pg.total} from={pg.from} to={pg.to} itemLabel="nhân viên"
@@ -857,11 +867,13 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
   }))
   const exportCols = [
     { key: 'user', label: 'Nhân viên', width: 24, value: (r) => r.userName },
-    { key: 'rp', label: 'Điểm thưởng', width: 12, type: 'number', value: (r) => r.rewardPoints },
-    { key: 'pp', label: 'Điểm phạt', width: 12, type: 'number', value: (r) => r.penaltyPoints },
-    { key: 'np', label: 'Tổng điểm', width: 12, type: 'number', value: (r) => r.netPoints },
-    { key: 'grade', label: 'Xếp loại', width: 10, value: (r) => { const g = gradeOf(r); return g ? `${g.code}${g.label ? ` – ${g.label}` : ''}` : '' } },
-    { key: 'gamt', label: 'Thưởng', width: 14, type: 'number', thousands: true, value: (r) => { const g = gradeOf(r); return g ? g.amount : '' } },
+    { key: 'vrec', label: 'Điểm định kỳ', width: 12, type: 'number', value: (r) => r.volumeRecurring },
+    { key: 'voth', label: 'Điểm task khác', width: 12, type: 'number', value: (r) => r.volumeOther },
+    { key: 'kpi', label: 'Điểm đúng hạn', width: 12, type: 'number', value: (r) => r.kpiPoints },
+    { key: 'rp', label: 'Thưởng/phạt', width: 12, type: 'number', value: (r) => r.rewardPenaltyNet },
+    { key: 'total', label: 'Tổng điểm', width: 12, type: 'number', value: (r) => r.totalPoints },
+    { key: 'grade', label: 'Xếp loại', width: 10, value: (r) => r.gradeCode ? `${r.gradeCode}${r.gradeLabel ? ` – ${r.gradeLabel}` : ''}` : '' },
+    { key: 'gamt', label: 'Tiền', width: 14, type: 'number', thousands: true, value: (r) => Number(r.amount) || 0 },
     ...kindDetailCols,
   ]
 
@@ -901,28 +913,32 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
               <th className={s.colChk}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
               <th className={s.colStt}>STT</th>
               <FilterTh cf={cf} colKey="user">Nhân viên</FilterTh>
-              <FilterTh cf={cf} colKey="rp" num>Điểm thưởng</FilterTh>
-              <FilterTh cf={cf} colKey="pp" num>Điểm phạt</FilterTh>
-              <FilterTh cf={cf} colKey="np" num>Tổng điểm</FilterTh>
+              <FilterTh cf={cf} colKey="vrec" num>Định kỳ</FilterTh>
+              <FilterTh cf={cf} colKey="voth" num>Task khác</FilterTh>
+              <FilterTh cf={cf} colKey="kpi" num>Điểm đúng hạn</FilterTh>
+              <FilterTh cf={cf} colKey="rp" num>Thưởng/phạt</FilterTh>
+              <FilterTh cf={cf} colKey="total" num>Tổng điểm</FilterTh>
               <th>Xếp loại</th>
-              <th className={s.num}>Thưởng</th>
+              <th className={s.num}>Tiền (đ)</th>
             </tr></thead>
             <tbody>
-              {view.length === 0 && <tr><td colSpan={8} className={s.empty}>Chưa có dữ liệu đã duyệt trong kỳ.</td></tr>}
+              {view.length === 0 && <tr><td colSpan={10} className={s.empty}>Chưa có dữ liệu trong kỳ.</td></tr>}
               {pg.slice.map((r, i) => (
                 <Fragment key={r.userId}>
                   <tr className={s.sumRow}>
                     <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(r.userId)} onChange={() => toggle(r.userId)} /></td>
                     <td className={s.colStt}>{pg.start + i + 1}</td>
                     <td>{r.userName}</td>
-                    <td className={`${s.num} ${signCls(r.rewardPoints)}`}>{fmtPts(r.rewardPoints)}</td>
-                    <td className={`${s.num} ${signCls(r.penaltyPoints)}`}>{fmtPts(r.penaltyPoints)}</td>
-                    <td className={`${s.num} ${signCls(r.netPoints)}`}>{fmtPts(r.netPoints)}</td>
-                    <td>{(() => { const g = gradeOf(r); return g ? <span className={`${s.gradeBadge} ${gradeColorCls(g, grades)}`} title={g.label}>{g.code}{g.label ? ` · ${g.label}` : ''}</span> : <span className={s.zero}>—</span> })()}</td>
-                    <td className={`${s.num}`}>{(() => { const g = gradeOf(r); return g && Number(g.amount) ? fmtMoney(g.amount) : '—' })()}</td>
+                    <td className={s.num}>{r.volumeRecurring}</td>
+                    <td className={s.num}>{r.volumeOther}</td>
+                    <td className={`${s.num} ${signCls(r.kpiPoints)}`}>{fmtPts(r.kpiPoints)}</td>
+                    <td className={`${s.num} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td>
+                    <td className={`${s.num} ${signCls(r.totalPoints)}`}><strong>{fmtPts(r.totalPoints)}</strong></td>
+                    <td>{r.gradeCode ? <span className={`${s.gradeBadge} ${gradeColorCls(gradeObj(r), grades)}`} title={r.gradeLabel}>{r.gradeCode}{r.gradeLabel ? ` · ${r.gradeLabel}` : ''}</span> : <span className={s.zero}>—</span>}</td>
+                    <td className={s.num}>{Number(r.amount) ? fmtMoney(r.amount) : '—'}</td>
                   </tr>
                   <tr className={s.detailRow}>
-                    <td colSpan={8} className={s.detailCell}><BreakdownTable items={r.items} kinds={kinds} /></td>
+                    <td colSpan={10} className={s.detailCell}><BreakdownTable items={r.items} kinds={kinds} /></td>
                   </tr>
                 </Fragment>
               ))}
@@ -932,10 +948,12 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
       )}
       <ColFilterPortal cf={cf} allRows={rows} />
       {exportOpen && (
-        <ExportPreviewModal title="Xuất Excel — Tổng hợp KPI" filename={`tong_hop_kpi_${ym.year}-${String(ym.month).padStart(2, '0')}`}
-          sheetName={`T${ym.month}-${ym.year}`} columns={exportCols} data={exportData} onClose={() => setExportOpen(false)} />
+        <ExportPreviewModal title="Xuất Excel — Tổng hợp KPI"
+          filename={`tong_hop_kpi_${(ym.from || ym.to) ? `${ym.from || ''}_${ym.to || ''}` : `${ym.year || 'tatca'}${ym.month ? '-' + String(ym.month).padStart(2, '0') : ''}`}`}
+          sheetName={(ym.from || ym.to) ? 'Khoang_ngay' : (ym.month ? `T${ym.month}-${ym.year}` : `Nam_${ym.year || 'tatca'}`)}
+          columns={exportCols} data={exportData} onClose={() => setExportOpen(false)} />
       )}
-      <div className={s.cardFoot}>ℹ️ Mỗi nhân viên hiển thị tổng điểm kèm <strong>chi tiết thưởng/phạt vì gì</strong> (chỉ tính dòng <strong>đã duyệt</strong>). Quy đổi điểm → tiền để nối bảng lương sẽ bổ sung sau.</div>
+      <div className={s.cardFoot}>ℹ️ <strong>Tổng điểm = Định kỳ + Task khác + Điểm đúng hạn + Thưởng/phạt</strong> → quy ra <strong>Xếp loại</strong> → Tiền (theo tab Quy đổi xếp loại). Bấm 1 dòng xem <strong>chi tiết thưởng/phạt vì gì</strong> (chỉ tính dòng đã duyệt).</div>
     </div>
   )
 }
