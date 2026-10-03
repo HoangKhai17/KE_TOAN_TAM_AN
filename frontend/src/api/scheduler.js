@@ -11,6 +11,12 @@ export async function runSchedulerNow(companyId = null) {
   return data.data.result
 }
 
+// Đồng bộ điểm/độ khó từ cấu hình lịch → task định kỳ đã sinh (theo tháng). dryRun=true chỉ xem thử.
+export async function syncRecurringScores({ year, month, dryRun = true }) {
+  const { data } = await api.post('/admin/scheduler/sync-scores', { year, month, dryRun })
+  return data.data
+}
+
 export async function getSchedulerLogs(limit = 30) {
   const { data } = await api.get('/admin/scheduler/logs', { params: { limit } })
   return data.data.logs

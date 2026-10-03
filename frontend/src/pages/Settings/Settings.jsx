@@ -17,7 +17,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { listConfigs, updateConfig } from '../../api/systemConfigs'
 import { listUsers, createUser, updateUser, updateUserStatus, resetUserPassword } from '../../api/users'
-import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerConfig, deleteSchedulerLog, clearSchedulerLogs } from '../../api/scheduler'
+import { getSchedulerStatus, runSchedulerNow, getSchedulerLogs, updateSchedulerConfig, deleteSchedulerLog, clearSchedulerLogs, syncRecurringScores } from '../../api/scheduler'
 import { getRecurringOverview } from '../../api/schedules'
 import RecurringOverviewModal from './RecurringOverviewModal'
 import TaskTypesSection from './TaskTypesSection'
@@ -815,7 +815,29 @@ function TemplatesSection() {
   const [showOverview,    setShowOverview]    = useState(false)
   const [companyOptions,  setCompanyOptions]  = useState([])   // [{id, name}] công ty CÓ lịch định kỳ
   const [runCompanyId,    setRunCompanyId]    = useState('')   // '' = toàn hệ thống
+  // Đồng bộ điểm cấu hình lịch → task đã sinh (theo tháng)
+  const _now = new Date()
+  const [syncYM,      setSyncYM]      = useState({ year: _now.getFullYear(), month: _now.getMonth() + 1 })
+  const [syncPreview, setSyncPreview] = useState(null)
+  const [syncBusy,    setSyncBusy]    = useState(false)
+  const [syncConfirm, setSyncConfirm] = useState(false)
   const LOGS_PER_PAGE = 10
+
+  async function doSyncPreview() {
+    setSyncBusy(true); setSyncPreview(null); setSyncConfirm(false)
+    try { setSyncPreview(await syncRecurringScores({ year: syncYM.year, month: syncYM.month, dryRun: true })) }
+    catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi xem thử', 'error') }
+    finally { setSyncBusy(false) }
+  }
+  async function doSyncApply() {
+    setSyncBusy(true)
+    try {
+      const r = await syncRecurringScores({ year: syncYM.year, month: syncYM.month, dryRun: false })
+      addToast(`Đã đồng bộ ${r.applied} bước của ${r.tasksAffected} task`, 'success')
+      setSyncPreview(null); setSyncConfirm(false)
+    } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi đồng bộ', 'error') }
+    finally { setSyncBusy(false) }
+  }
 
   function fmtDt(iso) {
     if (!iso) return '—'
@@ -1087,6 +1109,57 @@ function TemplatesSection() {
               Đang giới hạn: chỉ sinh cho công ty đã chọn. Bỏ chọn để chạy toàn hệ thống.
             </div>
           )}
+
+          {/* ── Đồng bộ điểm/độ khó từ cấu hình lịch → task định kỳ đã sinh ── */}
+          <div className={s.schedulerResult} style={{ marginTop: 18 }}>
+            <div className={s.schedulerResultTitle}>Đồng bộ điểm từ cấu hình lịch → task định kỳ đã sinh</div>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-text-soft)', margin: '2px 0 12px', lineHeight: 1.5 }}>
+              Áp <strong>điểm & độ khó</strong> đã cấu hình trên LỊCH xuống các task định kỳ <strong>đã sinh</strong> (theo từng tháng, qua liên kết bước gốc). Chỉ đổi điểm/độ khó — <strong>giữ nguyên</strong> tiến độ/nội dung. Bỏ qua bước thêm thủ công. Nên <strong>xem thử</strong> trước; chạy lại nhiều lần an toàn.
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <select value={syncYM.month} onChange={(e) => { setSyncYM((p) => ({ ...p, month: Number(e.target.value) })); setSyncPreview(null); setSyncConfirm(false) }}
+                style={{ height: 36, padding: '0 10px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-white)', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-xs)' }}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>Tháng {m}</option>)}
+              </select>
+              <select value={syncYM.year} onChange={(e) => { setSyncYM((p) => ({ ...p, year: Number(e.target.value) })); setSyncPreview(null); setSyncConfirm(false) }}
+                style={{ height: 36, padding: '0 10px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-white)', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-xs)' }}>
+                {[_now.getFullYear() - 1, _now.getFullYear(), _now.getFullYear() + 1].map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <button className={s.btnOutline} onClick={doSyncPreview} disabled={syncBusy} style={{ height: 36 }}>
+                {syncBusy && !syncConfirm ? <Loader2 size={13} className={s.spin} /> : <Eye size={13} />} Xem thử
+              </button>
+            </div>
+
+            {syncPreview && (
+              <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--color-bg-soft)', border: '1px solid var(--color-border-muted)', fontFamily: 'var(--font-sans)', fontSize: 'var(--fs-xs)' }}>
+                {syncPreview.closed && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#b45309', marginBottom: 8, fontWeight: 600 }}>
+                    <AlertTriangle size={14} /> Tháng {syncPreview.month}/{syncPreview.year} đã <strong>CHỐT SỔ KPI</strong> — mở lại sổ trước khi đồng bộ.
+                  </div>
+                )}
+                {syncPreview.itemsToUpdate === 0 ? (
+                  <div style={{ color: 'var(--color-text-soft)' }}>✓ Không có gì cần cập nhật — điểm task đã khớp cấu hình lịch (hoặc chưa cấu hình điểm cho lịch).</div>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 10 }}>
+                      Sẽ cập nhật <strong style={{ color: 'var(--color-primary)' }}>{syncPreview.itemsToUpdate}</strong> bước checklist của <strong>{syncPreview.tasksAffected}</strong> task · thay đổi tổng điểm <strong style={{ color: syncPreview.pointsDelta >= 0 ? '#16a34a' : '#dc2626' }}>{syncPreview.pointsDelta > 0 ? '+' : ''}{syncPreview.pointsDelta}</strong>.
+                    </div>
+                    {!syncPreview.closed && (
+                      syncConfirm ? (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span style={{ color: '#b45309', fontWeight: 600 }}>Xác nhận ghi vào dữ liệu?</span>
+                          <button className={s.btnSave} onClick={doSyncApply} disabled={syncBusy} style={{ height: 34 }}>{syncBusy ? <><Loader2 size={13} className={s.spin} /> Đang đồng bộ…</> : <><RotateCcw size={13} /> Đồng bộ ngay</>}</button>
+                          <button className={s.btnOutline} onClick={() => setSyncConfirm(false)} disabled={syncBusy} style={{ height: 34 }}>Huỷ</button>
+                        </div>
+                      ) : (
+                        <button className={s.btnSave} onClick={() => setSyncConfirm(true)} style={{ height: 34 }}><RotateCcw size={13} /> Đồng bộ {syncPreview.itemsToUpdate} bước</button>
+                      )
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </>
       )}
 

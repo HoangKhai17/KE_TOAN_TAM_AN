@@ -10,6 +10,7 @@ const admin  = [authenticate, requireRole('admin')]
 
 router.get   ('/status',      ...admin, ctrl.getStatus)
 router.post  ('/run-now',    ...admin, ctrl.runNow)
+router.post  ('/sync-scores', ...admin, ctrl.syncScores)
 router.get   ('/logs',       ...admin, ctrl.getLogs)
 router.patch ('/config',     ...admin, ctrl.updateConfig)
 router.delete('/logs',       ...admin, ctrl.clearLogs)
