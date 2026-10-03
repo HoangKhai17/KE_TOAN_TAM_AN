@@ -54,6 +54,39 @@ export function parseClipboardGrid(text) {
   return rows
 }
 
+/**
+ * Đọc bảng từ clipboard HTML (Excel / Google Sheets / LibreOffice / bảng web).
+ * Trả về lưới [ [ô,…], … ] hoặc `null` nếu clipboard không chứa <table>.
+ * Ô có xuống dòng bên trong (<br>, đoạn) vẫn là MỘT ô — đây là tín hiệu
+ * tin cậy để phân biệt "dán khối thật" với "text nhiều dòng cho 1 ô".
+ */
+export function parseClipboardHtmlGrid(html) {
+  const source = String(html ?? '')
+  if (!/<table[\s>]/i.test(source)) return null
+  let doc
+  try { doc = new DOMParser().parseFromString(source, 'text/html') }
+  catch { return null }
+  const table = doc.querySelector('table')
+  if (!table) return null
+  const grid = []
+  table.querySelectorAll('tr').forEach((tr) => {
+    const cells = tr.querySelectorAll('th, td')
+    if (!cells.length) return
+    const row = []
+    cells.forEach((cell) => {
+      const clone = cell.cloneNode(true)
+      clone.querySelectorAll('br').forEach((br) => br.replaceWith('\n'))
+      const text = (clone.textContent ?? '')
+        .replace(/ /g, ' ')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+      row.push(text.trim())
+    })
+    grid.push(row)
+  })
+  return grid.length ? grid : null
+}
+
 export function normalizeClipboardValue(rawValue, column) {
   const raw = String(rawValue ?? '')
   const value = raw.trim()

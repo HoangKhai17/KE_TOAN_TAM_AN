@@ -9,7 +9,7 @@ import { exportXlsx } from '../../utils/exportXlsx'
 import { uploadFile, downloadFile, deleteFile, formatSize, canPreview, ACCEPT_ATTR, MAX_FILE_BYTES } from '../../api/attachments'
 import AttachmentPreviewModal from './AttachmentPreviewModal'
 import { evaluateFormula, extractRefs, splitRef } from '../../utils/formula'
-import { normalizeClipboardGrid, parseClipboardGrid } from '../../utils/clipboardGrid'
+import { normalizeClipboardGrid, parseClipboardGrid, parseClipboardHtmlGrid } from '../../utils/clipboardGrid'
 import Modal from '../../components/ui/Modal'
 import ExcelImportModal from '../../components/ui/ExcelImportModal'
 import { useCompanyFooter } from './companyFooter'
@@ -1122,13 +1122,32 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
     const startRowIndex = displayed.findIndex((row) => row.id === activeCell.rowId)
     if (startColumnIndex < 0 || startRowIndex < 0) return
 
+    const htmlData      = event.clipboardData?.getData('text/html') ?? ''
     const clipboardText = event.clipboardData?.getData('text/plain') ?? ''
-    const grid = parseClipboardGrid(clipboardText)
-    const isRangePaste = grid.length > 1 || (grid[0]?.length ?? 0) > 1
-    const startColumn = editableCols[startColumnIndex]
-    // Text/number/select một ô vẫn dùng paste native của editor. DateBox không có input text hiển thị,
-    // nên phải bắt clipboard tại table để chuẩn hóa ngày.
-    if (!isRangePaste && startColumn.dataType !== 'date') return
+    const startColumn   = editableCols[startColumnIndex]
+
+    // ── Phân biệt "DÁN KHỐI (bảng nhiều cột)" vs "nội dung 1 cột cho MỘT ô" ──
+    // Tiêu chí duy nhất, dễ đoán: chỉ coi là dán khối khi dữ liệu THỰC SỰ CÓ ≥2 CỘT
+    // (tồn tại một hàng có từ 2 ô KHÔNG RỖNG trở lên). Khi đó mỗi hàng = 1 dòng bảng.
+    //   • Ưu tiên <table> trong text/html (Excel/Sheets/web) — ô có xuống dòng bên trong vẫn là 1 ô.
+    //   • Nếu không, xét text/plain tách theo TAB.
+    // Dữ liệu 1 CỘT — dù nhiều dòng, dù có TAB thụt đầu dòng, dù nguồn bọc trong <table> layout
+    // (Outlook/web) — KHÔNG tách thành nhiều dòng mà dồn vào ĐÚNG 1 ô. Đây là trường hợp phổ biến
+    // khi copy danh sách/ghi chú nhiều dòng; trước đây bị hiểu nhầm thành nhiều dòng.
+    const hasMultiCols = (g) => Array.isArray(g)
+      && g.some((row) => row.filter((cell) => String(cell ?? '').trim() !== '').length > 1)
+    const htmlGrid = parseClipboardHtmlGrid(htmlData)
+    const textGrid = parseClipboardGrid(clipboardText)
+    let grid = null
+    if (hasMultiCols(htmlGrid)) grid = htmlGrid
+    else if (hasMultiCols(textGrid)) grid = textGrid
+
+    if (!grid) {
+      // 1 cột → ô đơn. DateBox không có input text để paste native nên tự chuẩn hoá vào 1 ô;
+      // các kiểu còn lại để editor (textarea/input) nhận native (giữ vị trí con trỏ, không tách dòng).
+      if (startColumn.dataType !== 'date') return
+      grid = [[clipboardText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()]]
+    }
 
     event.preventDefault()
     event.stopPropagation()
