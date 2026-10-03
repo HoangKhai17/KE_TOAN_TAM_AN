@@ -44,6 +44,9 @@ const srcColor = (key, i) => SOURCE_COLOR[key] || FALLBACK_COLORS[i % FALLBACK_C
 // Màu theo ĐỘ KHÓ — theo THỨ TỰ enum (dễ→khó = xanh→đỏ), KHÔNG neo theo key cứng.
 const DIFF_COLORS = ['var(--color-success-text)', 'var(--color-warning-text)', 'var(--color-danger-text)', '#8b5cf6', '#be123c']
 const diffColor = (i) => DIFF_COLORS[i % DIFF_COLORS.length]
+// Màu theo TRẠNG THÁI task — theo THỨ TỰ enum (index), KHÔNG neo key cứng.
+const STATUS_COLORS = ['var(--color-muted)', 'var(--color-primary)', 'var(--color-danger-text)', 'var(--color-success-text)', 'var(--color-warning-text)', '#8b5cf6']
+const statusColor = (i) => STATUS_COLORS[i % STATUS_COLORS.length]
 const ON_TIME_TARGET = 90
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : '—')
 // Tên ngắn cho nhãn biểu đồ: lấy 2 từ CUỐI = phần tên gọi (vd "Bùi Thị Thanh Thảo" → "Thanh Thảo").
@@ -239,6 +242,39 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
           )
         })}
         <div className={s.kpiDiffFoot}>Tổng: <b>{sumSteps} checklist</b> · <b>{sumDone} / {sumTotal}đ</b> ({sumTotal > 0 ? Math.round((sumDone / sumTotal) * 100) : 0}% điểm hoàn thành)</div>
+      </div>
+    )
+  }
+
+  // Thống kê theo TRẠNG THÁI task — dùng chung Tổng quan & popup. Thứ tự/nhãn theo ENUM (không hardcode).
+  const renderStatus = (report, overdue) => {
+    const opts = getOptions('task_status') || []
+    const map = new Map((report || []).map((x) => [x.status, x]))
+    const keys = opts.length ? opts.map((o) => o.key) : [...map.keys()]
+    for (const x of (report || [])) if (!keys.includes(x.status)) keys.push(x.status)   // trạng thái lạ (nếu có) xếp cuối
+    const rowsS = keys.map((k, i) => ({ key: k, label: getLabel('task_status', k, k), color: statusColor(i), count: map.get(k)?.count || 0 }))
+      .filter((r) => r.count > 0)
+    const total = rowsS.reduce((a, r) => a + r.count, 0)
+    if (total === 0) return <div className={s.empty} style={{ padding: 12 }}>Không có công việc đến hạn trong kỳ.</div>
+    return (
+      <div>
+        <div className={s.kpiStatBar}>
+          {rowsS.map((r) => (
+            <span key={r.key} title={`${r.label}: ${r.count} (${Math.round((r.count / total) * 100)}%)`} style={{ width: `${(r.count / total) * 100}%`, background: r.color }} />
+          ))}
+        </div>
+        <div className={s.kpiStatLegend}>
+          {rowsS.map((r) => (
+            <span key={r.key} className={s.kpiStatLg}>
+              <span className={s.kpiStatSw} style={{ background: r.color }} />{r.label} <b>{r.count}</b> <small>· {Math.round((r.count / total) * 100)}%</small>
+            </span>
+          ))}
+        </div>
+        {overdue > 0 && (
+          <div className={s.kpiOverdue} title="Task đã qua hạn mà chưa có mốc hoàn thành">
+            Quá hạn chưa hoàn thành: <b>{overdue}</b> việc
+          </div>
+        )}
       </div>
     )
   }
@@ -556,6 +592,15 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
             </div>
           </div>
 
+          {/* Trạng thái công việc trong kỳ */}
+          {(data.statusReport || []).some((x) => (x.count || 0) > 0) && (
+            <div className={s.kpiPanel} style={{ marginBottom: 14 }}>
+              <h4>Trạng thái công việc trong kỳ</h4>
+              <div className={s.kpiHint}>Số việc đến hạn trong kỳ theo trạng thái. “Quá hạn chưa hoàn thành” = đã qua hạn mà chưa xong (gồm cả việc còn ở trạng thái khác).</div>
+              {renderStatus(data.statusReport, data.overdueCount)}
+            </div>
+          )}
+
           {/* Đa nguồn: số việc theo nguồn mỗi NV (stacked bar) */}
           {sourceReport.hasData && (
             <div className={s.kpiPanel} style={{ marginBottom: 14 }}>
@@ -624,6 +669,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
               ['type',    `Theo loại CV (${detail.data.byType?.length || 0})`],
               ['source',  `Theo nguồn${detail.tasks ? ` · ${detail.tasks.length} việc` : ''}`],
               ['difficulty', `Theo độ khó (${detail.data.byDifficulty?.length || 0})`],
+              ['status',  `Theo trạng thái (${detail.data.byStatus?.length || 0})`],
             ]
             // Thẻ 1 công việc (dùng trong nhóm nguồn khi bung).
             const renderTask = (t) => (
@@ -713,6 +759,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                 })()}
 
                 {dTab === 'difficulty' && renderDifficulty(detail.data.byDifficulty)}
+                {dTab === 'status' && renderStatus(detail.data.byStatus, detail.data.overdueCount)}
               </>
             )
           })()}

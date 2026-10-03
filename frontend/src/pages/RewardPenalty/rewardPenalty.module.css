@@ -325,6 +325,16 @@
 .kpiDiffCnt small, .kpiDiffVal small { font-weight: var(--fw-regular, 400); color: var(--color-muted); }
 .kpiDiffVal { font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .kpiDiffFoot { margin-top: 3px; font-size: var(--fs-3xs); color: var(--color-muted); }
+
+/* Trạng thái công việc: thanh stacked ngang + chú thích + chip quá hạn */
+.kpiStatBar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--color-surface-muted); margin-top: 10px; }
+.kpiStatBar span { display: block; min-width: 2px; }
+.kpiStatLegend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; }
+.kpiStatLg { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2xs); color: var(--color-text-soft); }
+.kpiStatLg b { color: var(--color-text-strong); font-weight: var(--fw-bold); }
+.kpiStatLg small { color: var(--color-muted); }
+.kpiStatSw { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.kpiOverdue { margin-top: 10px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--color-warning-text); background: var(--color-warning-bg); border: 1px solid var(--color-warning-border); padding: 4px 10px; border-radius: 8px; }
 .kpiDsec { font-size: var(--fs-3xs); font-weight: var(--fw-extrabold); text-transform: uppercase; letter-spacing: .05em; color: var(--color-muted); margin: 14px 0 8px; display: flex; align-items: center; gap: 6px; }
 .kpiBrk { display: flex; flex-direction: column; gap: 8px; }
 .kpiBrk .kpiBrkR { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: var(--fs-2xs); }

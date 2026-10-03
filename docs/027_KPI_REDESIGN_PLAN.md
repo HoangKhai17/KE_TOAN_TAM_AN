@@ -133,3 +133,38 @@ Chọn 1 trong 2 mức (hoặc làm dần):
 2. **C1**: nguồn vào KPI — chọn (a)/(b)/(c)? (đề xuất (c): tính hết nhưng cho lọc xem riêng.)
 3. **C4**: nhóm = role là đủ, hay cần phòng ban/đội thật (làm phase 5)?
 4. **C2/C5**: có cần trọng số theo nguồn / nới mốc điểm không? (có thể để sau.)
+
+---
+
+## 9. Phase 6 — Thống kê theo TRẠNG THÁI công việc ✅ (ĐÃ LÀM 2026-10-03)
+
+> Đã triển khai đúng 3 khuyến nghị: cả Tổng quan + popup; enum breakdown + chỉ số suy ra "Quá hạn chưa hoàn thành" (`completed_at IS NULL AND due_date<today`, KHÔNG neo key enum); thanh stacked ngang + chú thích số/%. Backend `statusReport`/`overdueCount` (getPerformance) + `byStatus`/`overdueCount` (detailLive); FE `renderStatus` + panel Tổng quan + popup tab "Theo trạng thái".
+
+### (Thiết kế gốc)
+
+> Mục tiêu: trong kỳ có bao nhiêu task **Hoàn thành / Trễ hạn / Mới / Đang thực hiện / Tạm hoãn / Chờ xem**, dựa trên **enum `task_status`** (KHÔNG hardcode).
+
+**Dữ liệu (enum `task_status`, đọc qua `getOptions`/`getLabel`):**
+`pending`=Mới · `in_progress`=Đang thực hiện · `needs_revision`=**Trễ hạn** · `completed`=Hoàn thành · `on_hold`=Tạm hoãn · `pending_review`=Chờ xem. Màu theo **thứ tự enum** (palette index, không neo key cứng — giống `DIFF_COLORS`).
+
+**Phạm vi:** task có `due_date` trong kỳ (đồng bộ với % đúng hạn), tôn trọng **mọi bộ lọc** (vai trò / nhân viên / nguồn / khoảng ngày tùy chọn). Staff chỉ xem mình.
+
+**Điểm cần lưu ý (quan trọng):** "Trễ hạn" theo enum chỉ là các task có status = `needs_revision`. Nhiều task **quá hạn nhưng status vẫn "Mới"/"Đang làm"** → sẽ KHÔNG nằm trong nhóm Trễ hạn.
+→ **Đề xuất:** ngoài breakdown theo enum, bổ sung **1 chỉ số suy ra** = **"Quá hạn chưa hoàn thành"** (`due_date < hôm nay AND status <> 'completed'`), hiển thị **tách riêng** (chip cảnh báo) để phản ánh đúng thực tế mà vẫn giữ breakdown "thuần enum".
+
+**Backend:**
+- `getPerformance` thêm `statusReport = [{status, count}]` (gộp toàn NV theo bộ lọc) + `overdueCount` (quá hạn chưa xong).
+- `detailLive` thêm `byStatus` per NV (+ overdue).
+- Query: `COUNT(*) ... GROUP BY t.status WHERE t.due_date ∈ [start,end)` + điều kiện lọc; dùng `bounds` (đã có sẵn khoảng ngày).
+- (Tùy) lưu `statusReport` vào `breakdown` snapshot khi chốt sổ để tháng đã chốt vẫn xem được — làm sau.
+
+**Frontend:**
+- **Tổng quan:** panel *"Trạng thái công việc trong kỳ"* = **1 thanh stacked ngang** chia màu theo trạng thái + chú thích **số lượng & %** mỗi trạng thái; kèm **chip "Quá hạn chưa xong: N"** nổi bật.
+- **Popup chi tiết NV:** khối/tab *"Theo trạng thái"* tương tự (đồng bộ với tab "Theo độ khó").
+
+**Khuyến nghị chốt (đề xuất mặc định của mình):**
+1. **Đặt ở cả Tổng quan + popup NV** (đồng bộ phần Độ khó).
+2. **Breakdown theo đúng enum** `task_status` **+ bổ sung chỉ số "Quá hạn chưa hoàn thành"** suy ra (vì enum không bắt được task quá hạn còn đang "Mới").
+3. **Kiểu hiển thị: thanh stacked ngang + chú thích số/%** (gọn, thấy ngay tỉ lệ Hoàn thành vs còn lại), hơn là nhiều thẻ rời.
+
+→ Nếu bạn **đồng ý 3 điểm trên** là mình code luôn; muốn đổi điểm nào thì báo.
