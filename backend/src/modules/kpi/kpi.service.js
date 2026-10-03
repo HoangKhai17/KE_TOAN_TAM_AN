@@ -443,6 +443,8 @@ async function getPerformance(year, month, opts = {}) {
   // overdueCount = quá hạn chưa hoàn thành (completed_at NULL & qua hạn) — chỉ số suy ra, không neo key enum.
   let statusReport = []
   let overdueCount = 0
+  let completedCount = 0   // hoàn thành = completed_at IS NOT NULL (KHÔNG neo key enum)
+  let taskTotal = 0
   if (!base.closed) {
     const { start, end } = bounds
     const stp = [start, end]
@@ -453,12 +455,15 @@ async function getPerformance(year, month, opts = {}) {
     if (Array.isArray(opts.userIds) && opts.userIds.length) { stp.push(opts.userIds); stc.push(`u.id = ANY($${stp.length}::uuid[])`) }
     const { rows: stRows } = await query(`
       SELECT t.status AS key, COUNT(*)::int AS cnt,
-             COUNT(*) FILTER (WHERE t.due_date < CURRENT_DATE AND t.completed_at IS NULL)::int AS overdue
+             COUNT(*) FILTER (WHERE t.due_date < CURRENT_DATE AND t.completed_at IS NULL)::int AS overdue,
+             COUNT(*) FILTER (WHERE t.completed_at IS NOT NULL)::int AS done
       FROM tasks t JOIN users u ON u.id = t.assigned_to
       WHERE t.due_date >= $1::date AND t.due_date < $2::date AND ${stc.join(' AND ')}
       GROUP BY t.status`, stp)
     statusReport = stRows.map((r) => ({ status: r.key, count: r.cnt }))
     overdueCount = stRows.reduce((a, r) => a + r.overdue, 0)
+    completedCount = stRows.reduce((a, r) => a + r.done, 0)
+    taskTotal = stRows.reduce((a, r) => a + r.cnt, 0)
   }
 
   const rows = base.rows.map((r) => {
@@ -475,7 +480,7 @@ async function getPerformance(year, month, opts = {}) {
       bySource: srcByUser.get(r.userId) ?? [],
     }
   })
-  return { closed: base.closed, rows, difficultyReport, statusReport, overdueCount }
+  return { closed: base.closed, rows, difficultyReport, statusReport, overdueCount, completedCount, taskTotal }
 }
 
 module.exports = {

@@ -421,14 +421,9 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
               <div className={s.kpiSub}>{summary.sumOnTime}/{summary.sumAssigned} việc đúng hạn</div>
             </div>
             <div className={s.kpiCard}>
-              <div className={s.kpiK}>Tổng thưởng/phạt</div>
-              <div className={`${s.kpiV} ${summary.sumAmount >= 0 ? s.kpiPos : s.kpiNeg}`}>{summary.sumAmount > 0 ? '+' : ''}{fmtMoney(summary.sumAmount)}<small> đ</small></div>
-              <div className={s.kpiSub}><span className={s.kpiPos}>{summary.rewardCnt} thưởng</span> · <span className={s.kpiNeg}>{summary.penaltyCnt} phạt</span></div>
-            </div>
-            <div className={s.kpiCard}>
-              <div className={s.kpiK}>Đã xếp loại</div>
-              <div className={s.kpiV}>{summary.graded}<small> / {summary.n}</small></div>
-              <div className={s.kpiSub}>{summary.gradeDist.length} hạng xuất hiện</div>
+              <div className={s.kpiK}>Tỉ lệ hoàn thành</div>
+              <div className={s.kpiV}>{(data.taskTotal || 0) === 0 ? '—' : Math.round(((data.completedCount || 0) * 100) / data.taskTotal)}<small>%</small></div>
+              <div className={s.kpiSub}>{data.completedCount || 0}/{data.taskTotal || 0} việc hoàn thành</div>
             </div>
           </div>
 
@@ -494,8 +489,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
               <thead><tr>
                 <th className={s.colStt}>STT</th><th>Nhân viên</th>
                 <th className={s.num}>Điểm khối lượng</th><th className={s.num}>Đúng hạn</th><th>% đúng hạn</th>
-                <th className={s.num}>Điểm KPI</th><th className={s.num}>Thưởng/phạt</th><th className={s.num}>Tổng điểm</th>
-                <th>Xếp loại</th><th className={s.num}>Tiền (đ)</th><th></th>
+                <th className={s.num}>Điểm KPI</th><th></th>
               </tr></thead>
               <tbody>
                 {data.rows.map((r, i) => (
@@ -508,10 +502,6 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                       <span className={s.kpiMini}><span className={s.kpiMiniTrack}><span className={s.kpiMiniFill} style={{ width: `${r.onTimePct}%`, background: pctColor(r.onTimePct) }} /></span><span className={s.num}>{r.onTimePct}%</span></span>
                     )}</td>
                     <td className={s.num}>{fmtSigned(r.kpiPoints)}</td>
-                    <td className={s.num}>{fmtSigned(r.rewardPenaltyNet)}</td>
-                    <td className={s.num}><strong>{fmtSigned(r.totalPoints)}</strong></td>
-                    <td>{r.gradeCode ? <span className={`${s.gradeBadge} ${gradeCls(r.gradeSort)}`} title={r.gradeLabel}>{r.gradeCode}</span> : <span className={s.zero}>—</span>}</td>
-                    <td className={s.num}>{r.amount ? fmtMoney(r.amount) : <span className={s.zero}>—</span>}</td>
                     <td><ChevronRight size={15} style={{ color: 'var(--color-primary)' }} /></td>
                   </tr>
                 ))}
@@ -522,15 +512,13 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                   <td className={s.num}>{fmtMoney(summary.sumVol)}</td>
                   <td className={s.num}>{summary.sumOnTime}/{summary.sumAssigned}</td>
                   <td>{summary.avgPct == null ? '—' : `${summary.avgPct}%`}</td>
-                  <td className={s.num}>—</td><td className={s.num}>—</td><td className={s.num}>—</td>
-                  <td>—</td>
-                  <td className={`${s.num} ${summary.sumAmount >= 0 ? s.kpiPos : s.kpiNeg}`}>{summary.sumAmount > 0 ? '+' : ''}{fmtMoney(summary.sumAmount)}</td>
+                  <td className={s.num}>—</td>
                   <td></td>
                 </tr>
               </tfoot>
             </table>
           </div>
-          <div className={s.cardFoot}>ℹ️ Bấm 1 dòng để xem <strong>chi tiết từng công việc</strong> &amp; điểm theo công ty/loại/nguồn. <strong>Điểm KPI</strong> quy từ % đúng hạn → <strong>Tổng điểm</strong> = Điểm KPI + Thưởng/phạt → xếp loại → tiền.</div>
+          <div className={s.cardFoot}>ℹ️ Bấm 1 dòng để xem <strong>chi tiết từng công việc</strong> &amp; điểm theo công ty/loại/nguồn/độ khó/trạng thái. <strong>Điểm KPI</strong> quy từ % đúng hạn. (Xếp loại &amp; tiền thưởng/phạt xem ở tab <strong>Tổng hợp theo nhân viên</strong>.)</div>
           </>
           )}
 
@@ -560,25 +548,8 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
             </div>
 
             <div className={s.kpiPanel}>
-              <h4>Phân bố xếp loại</h4>
-              <div className={s.kpiHint}>Số nhân viên theo hạng trong kỳ.</div>
-              {summary.graded === 0 ? <div className={s.empty} style={{ padding: 12 }}>Chưa có xếp loại (cần cấu hình mốc &amp; xếp loại).</div> : (
-                <div className={s.kpiDonutWrap}>
-                  <div className={s.kpiDonut} style={{ background: donutBg }}>
-                    <div className={s.kpiCenter}><b>{summary.graded}</b><span>nhân viên</span></div>
-                  </div>
-                  <div className={s.kpiLegend}>
-                    {[...summary.gradeDist].sort((a, b) => b.sort - a.sort).map((g) => (
-                      <div className={s.kpiLg} key={g.code}>
-                        <span className={s.kpiSw} style={{ background: gradeColor(g.sort) }} />
-                        <span className={s.kpiLbl}>{g.code}{g.label ? ` · ${g.label}` : ''}</span>
-                        <span className={s.kpiCt}>{g.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className={s.kpiDsec} style={{ marginTop: 14 }}>% đúng hạn theo nhân viên</div>
+              <h4>% đúng hạn theo nhân viên</h4>
+              <div className={s.kpiHint}>Tỉ lệ việc hoàn thành đúng hạn mỗi nhân viên (đường mục tiêu {ON_TIME_TARGET}%).</div>
               <div className={s.kpiOt}>
                 <div className={s.kpiTarget} style={{ bottom: `${ON_TIME_TARGET}%` }}><span>Mục tiêu {ON_TIME_TARGET}%</span></div>
                 {summary.otRows.map((r) => (
@@ -650,16 +621,12 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
             <div className={s.kpiDHid}>
               <div className={s.kpiDnm}>{detail.user.userName}</div>
               <div className={s.kpiDjt}>{detail.user.jobTitle || 'Nhân viên'} · {periodLabel}</div>
-              <div className={s.kpiDbadges}>
-                {detail.user.gradeCode && <span className={`${s.gradeBadge} ${gradeCls(detail.user.gradeSort)}`} style={{ background: 'var(--color-white)', color: 'var(--color-primary)' }}>{detail.user.gradeCode}{detail.user.gradeLabel ? ` · ${detail.user.gradeLabel}` : ''}</span>}
-                {detail.user.amount != null && <span className={s.kpiDamt}>{detail.user.amount > 0 ? '+' : ''}{fmtMoney(detail.user.amount)} đ</span>}
-              </div>
             </div>
             <div className={s.kpiDmetrics}>
               <div className={s.kpiDm}><span>Điểm khối lượng</span><b>{detail.user.volumePoints ?? 0} / {detail.user.volumePossible ?? (detail.user.volumePoints ?? 0)}</b></div>
               <div className={s.kpiDm}><span>% đúng hạn</span><b>{detail.user.onTimePct == null ? '—' : `${detail.user.onTimePct}%`}</b></div>
               <div className={s.kpiDm}><span>Đến hạn / đúng hạn</span><b>{detail.user.assignedCount ?? 0} / {detail.user.onTimeCount ?? 0}</b></div>
-              <div className={s.kpiDm}><span>Thưởng/phạt (net)</span><b>{detail.user.rewardPenaltyNet != null ? fmtSigned(detail.user.rewardPenaltyNet) : '—'}</b></div>
+              <div className={s.kpiDm}><span>Điểm KPI</span><b>{detail.user.kpiPoints != null ? fmtSigned(detail.user.kpiPoints) : '—'}</b></div>
             </div>
           </div>
 

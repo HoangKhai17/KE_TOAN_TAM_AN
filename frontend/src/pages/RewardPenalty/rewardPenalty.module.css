@@ -52,6 +52,7 @@
 .table tbody tr:hover td { background: var(--color-bg-soft); }
 .table tfoot td { border-top: 1.5px solid var(--color-primary-bg-strong); background: var(--color-bg-soft); font-weight: var(--fw-bold); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
+.table th.num { text-align: right; }   /* header cột số phải căn PHẢI khớp giá trị (thắng .table th căn trái) */
 .colChk { width: 34px; text-align: center; }
 .colStt { width: 44px; text-align: center; color: var(--color-muted); font-variant-numeric: tabular-nums; }
 .check { width: 15px; height: 15px; accent-color: var(--color-primary); cursor: pointer; vertical-align: middle; }
@@ -244,7 +245,7 @@
 @media (max-width: 820px) { .form { grid-template-columns: 1fr; } }
 
 /* ── KPI · Tổng quan (thẻ tổng · biểu đồ · drawer chi tiết) ───────────────────── */
-.kpiCards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 14px; }
+.kpiCards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
 .kpiCard { background: var(--color-surface); border: 1px solid var(--color-border-muted); border-radius: var(--radius-lg); padding: 12px 13px; }
 .kpiCard .kpiK { font-size: var(--fs-3xs); color: var(--color-muted); font-weight: var(--fw-semibold); }
 .kpiCard .kpiV { font-size: var(--fs-xl); font-weight: var(--fw-extrabold); letter-spacing: -.02em; margin-top: 4px; color: var(--color-text-strong); }
