@@ -50,8 +50,11 @@ export async function listYears() {
 }
 
 // ── Tổng hợp (admin) ──
-export async function getSummary(year, month) {
-  const { data } = await api.get('/reward-penalty/summary', { params: { year, month } })
+export async function getSummary(year, month, range = {}) {
+  const params = { year, month }
+  if (range.from) params.from = range.from
+  if (range.to) params.to = range.to
+  const { data } = await api.get('/reward-penalty/summary', { params })
   return data.data.summary
 }
 

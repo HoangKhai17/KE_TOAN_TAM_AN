@@ -16,6 +16,7 @@ import { listUserOptions } from '../../api/users'
 import * as api from '../../api/rewardPenalty'
 import { listKpiTiers, createKpiTier, updateKpiTier, deleteKpiTier } from '../../api/kpi'
 import KpiPanel from './KpiPanel'
+import PeriodPicker from '../Tasks/PeriodPicker'
 import { useDataSync } from '../../hooks/useDataSync'
 import { useColFilter, FilterTh, ColFilterPortal } from './useColFilter'
 import ExportPreviewModal from './ExportPreviewModal'
@@ -24,6 +25,13 @@ import s from './rewardPenalty.module.css'
 const CUR_Y = new Date().getFullYear()
 const CUR_M = new Date().getMonth() + 1
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)   // tháng là phổ quát, không phải danh mục
+// Preset "Kỳ" (đồng bộ tab KPI): Tháng này / Tháng trước / Năm nay / Tất cả.
+function presetPeriod(key) {
+  if (key === 'lm') { let y = CUR_Y, m = CUR_M - 1; if (m < 1) { m = 12; y -= 1 }; return { year: String(y), month: String(m), from: '', to: '' } }
+  if (key === 'ty') return { year: String(CUR_Y), month: '', from: '', to: '' }
+  if (key === 'all') return { year: '', month: '', from: '', to: '' }
+  return { year: String(CUR_Y), month: String(CUR_M), from: '', to: '' }   // 'tm'
+}
 const TODAY = () => new Date().toISOString().slice(0, 10)
 const ISO = (v) => (v ? String(v).slice(0, 10) : '')
 
@@ -513,7 +521,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
   const [exportOpen, setExportOpen] = useState(false)
   const [createRuleFor, setCreateRuleFor] = useState(null)   // { prefill, apply(rule) }
   const [discussTarget, setDiscussTarget] = useState(null)   // entry đang mở hội thoại giải trình
-  const [flt, setFlt] = useState({ year: CUR_Y, month: CUR_M })
+  const [flt, setFlt] = useState({ year: CUR_Y, month: CUR_M, from: '', to: '' })
   const [sel, setSel] = useState(() => new Set())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
@@ -541,7 +549,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
   useEffect(() => { if (isAdmin) api.listRules({ activeOnly: 'true' }).then(setRules).catch(() => {}) }, [isAdmin])
   const reload = useCallback(() => {
     setLoading(true); setSel(new Set())
-    api.listEntries({ year: flt.year, month: flt.month }).then(setEntries).catch(() => setEntries([])).finally(() => setLoading(false))
+    api.listEntries({ year: flt.year || undefined, month: flt.month || undefined, from: flt.from || undefined, to: flt.to || undefined }).then(setEntries).catch(() => setEntries([])).finally(() => setLoading(false))
   }, [flt])
   useEffect(() => { reload() }, [reload])
   // Real-time: dòng mới được duyệt, hoặc có tin nhắn giải trình mới → tải lại.
@@ -628,8 +636,18 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
 
   const toolbar = (
     <div className={s.toolbar}>
-      <label className={s.toolField}>Năm <select className={s.select} value={flt.year} onChange={(e) => setFlt((p) => ({ ...p, year: Number(e.target.value) }))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select></label>
-      <label className={s.toolField}>Tháng <select className={s.select} value={flt.month} onChange={(e) => setFlt((p) => ({ ...p, month: Number(e.target.value) }))}>{MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}</select></label>
+      <span className={s.toolField} style={{ minWidth: 220 }}>
+        <span>Kỳ</span>
+        <PeriodPicker
+          year={flt.year ? String(flt.year) : ''} month={flt.month ? String(flt.month) : ''}
+          from={flt.from || ''} to={flt.to || ''} availableYears={years} align="right" fullRangeLabel
+          onYear={(v) => setFlt((p) => ({ ...p, year: v, month: v ? p.month : '' }))}
+          onMonth={(v) => setFlt((p) => ({ ...p, month: v }))}
+          onFrom={(v) => setFlt((p) => ({ ...p, from: v || '' }))}
+          onTo={(v) => setFlt((p) => ({ ...p, to: v || '' }))}
+          onPreset={(k) => setFlt(presetPeriod(k))}
+        />
+      </span>
       {isAdmin && <button className={s.btnSecondary} onClick={() => setImportOpen(true)}><Upload size={14} /> Nhập Excel</button>}
       <button className={s.btnSecondary} onClick={() => setExportOpen(true)}><Download size={14} /> Xuất Excel</button>
       {isAdmin && <button className={s.btnPrimary} onClick={openAdd}><Plus size={14} /> Ghi nhận</button>}
@@ -753,8 +771,10 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
         />
       )}
       {exportOpen && (
-        <ExportPreviewModal title="Xuất Excel — Sổ thưởng/phạt" filename={`so_thuong_phat_${flt.year}-${String(flt.month).padStart(2, '0')}`}
-          sheetName={`T${flt.month}-${flt.year}`} columns={exportCols} data={exportData} onClose={() => setExportOpen(false)} />
+        <ExportPreviewModal title="Xuất Excel — Sổ thưởng/phạt"
+          filename={`so_thuong_phat_${(flt.from || flt.to) ? `${flt.from || ''}_${flt.to || ''}` : `${flt.year || 'tatca'}${flt.month ? '-' + String(flt.month).padStart(2, '0') : ''}`}`}
+          sheetName={(flt.from || flt.to) ? 'Khoang_ngay' : (flt.month ? `T${flt.month}-${flt.year}` : `Nam_${flt.year || 'tatca'}`)}
+          columns={exportCols} data={exportData} onClose={() => setExportOpen(false)} />
       )}
       {createRuleFor && (
         <QuickRuleModal prefill={createRuleFor.prefill} getOptions={getOptions}
@@ -778,7 +798,7 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
   const [rows, setRows] = useState([])
   const [grades, setGrades] = useState([])
   const [loading, setLoading] = useState(true)
-  const [ym, setYm] = useState({ year: CUR_Y, month: CUR_M })
+  const [ym, setYm] = useState({ year: CUR_Y, month: CUR_M, from: '', to: '' })
   const [sel, setSel] = useState(() => new Set())
   const [exportOpen, setExportOpen] = useState(false)
   const [page, setPage] = useState(1)
@@ -805,7 +825,7 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
   useEffect(() => {
     setLoading(true); setSel(new Set()); setPage(1)
     const load = self
-      ? api.listEntries({ year: ym.year, month: ym.month }).then((entries) => {
+      ? api.listEntries({ year: ym.year || undefined, month: ym.month || undefined, from: ym.from || undefined, to: ym.to || undefined }).then((entries) => {
         const byUser = new Map()
         for (const e of entries) {
           if (e.status !== 'approved') continue
@@ -819,7 +839,7 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
         }
         return [...byUser.values()].map((u) => ({ ...u, items: [...u.items.values()].sort((a, b) => Math.abs(b.points) - Math.abs(a.points)) }))
       })
-      : api.getSummary(ym.year, ym.month)
+      : api.getSummary(ym.year || undefined, ym.month || undefined, { from: ym.from, to: ym.to })
     load.then((data) => setRows(Array.isArray(data) ? data : [])).catch(() => setRows([])).finally(() => setLoading(false))
   }, [ym, self])
   useEffect(() => {
@@ -847,8 +867,18 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
 
   const toolbar = (
     <div className={s.toolbar}>
-      <label className={s.toolField}>Năm <select className={s.select} value={ym.year} onChange={(e) => setYm((p) => ({ ...p, year: Number(e.target.value) }))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select></label>
-      <label className={s.toolField}>Tháng <select className={s.select} value={ym.month} onChange={(e) => setYm((p) => ({ ...p, month: Number(e.target.value) }))}>{MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}</select></label>
+      <span className={s.toolField} style={{ minWidth: 220 }}>
+        <span>Kỳ</span>
+        <PeriodPicker
+          year={ym.year ? String(ym.year) : ''} month={ym.month ? String(ym.month) : ''}
+          from={ym.from || ''} to={ym.to || ''} availableYears={years} align="right" fullRangeLabel
+          onYear={(v) => setYm((p) => ({ ...p, year: v, month: v ? p.month : '' }))}
+          onMonth={(v) => setYm((p) => ({ ...p, month: v }))}
+          onFrom={(v) => setYm((p) => ({ ...p, from: v || '' }))}
+          onTo={(v) => setYm((p) => ({ ...p, to: v || '' }))}
+          onPreset={(k) => setYm(presetPeriod(k))}
+        />
+      </span>
       <button className={s.btnSecondary} onClick={() => setExportOpen(true)}><Download size={14} /> Xuất Excel</button>
     </div>
   )

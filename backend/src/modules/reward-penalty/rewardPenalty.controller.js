@@ -22,11 +22,12 @@ async function deleteRule(req, res, next) {
 // ── Sổ ghi ──
 async function listEntries(req, res, next) {
   try {
-    const { year, month, userId, kind, status } = req.query
+    const { year, month, from, to, userId, kind, status } = req.query
     // Staff chỉ xem của MÌNH; admin xem tất cả (lọc tùy chọn).
     const scopeUserId = req.user.role === 'admin' ? undefined : req.user.id
     res.json({ success: true, data: { entries: await svc.listEntries({
       year: year ? Number(year) : undefined, month: month ? Number(month) : undefined,
+      from: from || undefined, to: to || undefined,
       userId, kind, status, scopeUserId,
     }) } })
   } catch (e) { next(e) }
@@ -55,9 +56,12 @@ async function listYears(req, res, next) {
 }
 async function getSummary(req, res, next) {
   try {
-    const year = Number(req.query.year); const month = Number(req.query.month)
-    if (!year || !month) { const e = new Error('Thiếu year/month'); e.status = 400; throw e }
-    res.json({ success: true, data: { summary: await svc.getSummary({ year, month }) } })
+    const { year, month, from, to } = req.query
+    if (!year && !month && !from && !to) { const e = new Error('Thiếu kỳ (year/month hoặc from/to)'); e.status = 400; throw e }
+    res.json({ success: true, data: { summary: await svc.getSummary({
+      year: year ? Number(year) : undefined, month: month ? Number(month) : undefined,
+      from: from || undefined, to: to || undefined,
+    }) } })
   } catch (e) { next(e) }
 }
 

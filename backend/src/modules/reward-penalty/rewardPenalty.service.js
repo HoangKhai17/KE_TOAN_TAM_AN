@@ -85,13 +85,19 @@ async function deleteRule(id) {
 
 // ── SỔ GHI ───────────────────────────────────────────────────────────────────
 // scopeUserId: nếu có → chỉ lấy dòng của user đó (staff xem của mình). Admin để trống.
-async function listEntries({ year, month, userId, kind, status, scopeUserId } = {}) {
+async function listEntries({ year, month, from, to, userId, kind, status, scopeUserId } = {}) {
   const conds = []; const params = []
   const add = (sql, val) => { params.push(val); conds.push(sql.replace('$?', `$${params.length}`)) }
   if (scopeUserId) add('s.user_id = $?', scopeUserId)
   else if (userId) add('s.user_id = $?', userId)
-  if (year)  add('s.period_year = $?', year)
-  if (month) add('s.period_month = $?', month)
+  // Khoảng ngày tùy chọn (from/to) ưu tiên — khớp theo THÁNG của kỳ (đồng bộ cách KPI gộp thưởng/phạt).
+  if (from || to) {
+    if (from) add("make_date(s.period_year, s.period_month, 1) >= date_trunc('month', $?::date)", from)
+    if (to)   add("make_date(s.period_year, s.period_month, 1) <= $?::date", to)
+  } else {
+    if (year)  add('s.period_year = $?', year)
+    if (month) add('s.period_month = $?', month)
+  }
   if (kind)  add('s.kind = $?', kind)
   if (status) add('s.status = $?', status)
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
@@ -218,14 +224,24 @@ async function getEntry(id) {
 // ── TỔNG HỢP theo kỳ (chỉ dòng ĐÃ DUYỆT) — ĐIỂM THUẦN (chưa quy ra tiền) ──
 // Gộp NGAY TẠI DB theo (nhân viên × tên quy tắc × loại) rồi roll-up ở server, nên
 // dữ liệu trả về gọn (không kéo từng dòng về client). Kèm chi tiết items để bung.
-async function getSummary({ year, month }) {
+async function getSummary({ year, month, from, to, scopeUserId } = {}) {
+  const conds = ["s.status = 'approved'"]; const params = []
+  const add = (sql, val) => { params.push(val); conds.push(sql.replace('$?', `$${params.length}`)) }
+  if (scopeUserId) add('s.user_id = $?', scopeUserId)
+  if (from || to) {
+    if (from) add("make_date(s.period_year, s.period_month, 1) >= date_trunc('month', $?::date)", from)
+    if (to)   add("make_date(s.period_year, s.period_month, 1) <= $?::date", to)
+  } else {
+    if (year)  add('s.period_year = $?', year)
+    if (month) add('s.period_month = $?', month)
+  }
   const { rows } = await query(
     `SELECT u.id AS user_id, u.name AS user_name, s.category_label, s.kind,
             COUNT(*)::int AS cnt, COALESCE(SUM(s.points), 0) AS points
        FROM staff_reward_penalty s JOIN users u ON u.id = s.user_id
-      WHERE s.period_year = $1 AND s.period_month = $2 AND s.status = 'approved'
+      WHERE ${conds.join(' AND ')}
       GROUP BY u.id, u.name, s.category_label, s.kind
-      ORDER BY u.name, ABS(SUM(s.points)) DESC`, [year, month])
+      ORDER BY u.name, ABS(SUM(s.points)) DESC`, params)
   const byUser = new Map()
   for (const r of rows) {
     if (!byUser.has(r.user_id)) {
