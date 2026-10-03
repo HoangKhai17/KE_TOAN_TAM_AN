@@ -197,8 +197,13 @@
 .sumRow:hover td { background: var(--color-bg-soft); }
 .userCell { display: inline-flex; align-items: center; gap: 4px; }
 .expandBtn { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; color: var(--color-muted); flex: 0 0 auto; }
-.detailRow td { background: var(--color-bg-soft); border-bottom: 1.5px solid var(--color-primary-bg-strong); }
+.detailRow td { background: var(--color-bg-soft); border-bottom: 3px solid var(--color-border-strong); }
 .detailCell { padding: 6px 16px 10px 40px; }
+.detailTable { width: 100%; border: 1.5px solid var(--color-primary-bg-strong); border-radius: var(--radius-sm); overflow: hidden; background: var(--color-surface); }
+.detailTable .detailMuted { color: var(--color-text-soft); word-break: break-word; }
+.bkTable .bkTotalRow td { border-top: 1.5px solid var(--color-primary-bg-strong); font-weight: var(--fw-bold); }
+/* Hàng Xếp loại → Tiền: nền nổi bật (kết quả cuối) */
+.detailTable .bkGradeRow td { background: var(--color-primary-bg); font-weight: var(--fw-bold); color: var(--color-primary-deep); }
 .bkTag { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: var(--fw-bold); white-space: nowrap; }
 /* Bảng con chi tiết thưởng/phạt — đường kẻ gạch mờ cho dễ phân biệt */
 .bkTable { width: 100%; border-collapse: collapse; font-size: var(--fs-2xs); margin: 2px 0 6px; }

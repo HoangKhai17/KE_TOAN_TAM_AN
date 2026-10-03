@@ -815,9 +815,12 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
     { key: 'total', label: 'Tổng điểm',    type: 'numberRange', num: true, getNumber: (r) => r.totalPoints,     getLabel: (r) => String(r.totalPoints) },
   ], [])
   const cf = useColFilter(cols)
-  const view = cf.apply(rows)
+  const [userFilter, setUserFilter] = useState([])   // lọc theo nhân viên (client-side)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const toggleUser = (id) => setUserFilter((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id])
+  const view = cf.apply(rows).filter((r) => !userFilter.length || userFilter.includes(r.userId))
   const pg = paginate(view, page, pageSize)
-  useEffect(() => { setPage(1) }, [cf.depKey])
+  useEffect(() => { setPage(1) }, [cf.depKey, userFilter.join(',')])
 
   const allChecked = rows.length > 0 && sel.size === rows.length
   const toggleAll = () => setSel(allChecked ? new Set() : new Set(rows.map((r) => r.userId)))
@@ -846,7 +849,10 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
       setRows(kpiRows.map((r) => ({
         userId: r.userId, userName: r.userName,
         volumeRecurring: r.volumeRecurring || 0, volumeOther: r.volumeOther || 0,
+        volumePoints: r.volumePoints || 0, volumePossible: r.volumePossible || 0,
         kpiPoints: r.kpiPoints || 0, rewardPenaltyNet: r.rewardPenaltyNet || 0, totalPoints: r.totalPoints || 0,
+        onTimePct: r.onTimePct, assignedCount: r.assignedCount || 0, onTimeCount: r.onTimeCount || 0,
+        bySource: r.bySource || [],
         gradeCode: r.gradeCode, gradeLabel: r.gradeLabel, gradeSort: r.gradeSort, amount: r.amount || 0,
         items: itemsMap.get(r.userId) || [],
       })))
@@ -879,6 +885,32 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
 
   const toolbar = (
     <div className={s.toolbar}>
+      <div style={{ position: 'relative' }}>
+        <button type="button" onClick={() => setShowUserMenu((v) => !v)}
+          style={{ height: 36, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', borderRadius: 'var(--radius-md)', border: '1.5px solid var(--color-primary-bg-strong)', background: 'var(--color-white)', color: userFilter.length ? 'var(--color-primary)' : 'var(--color-text-soft)', fontSize: 'var(--fs-2xs)', fontWeight: 600, cursor: 'pointer' }}>
+          <Users size={14} /> {userFilter.length ? `${userFilter.length} nhân viên` : 'Tất cả nhân viên'} <ChevronDown size={13} />
+        </button>
+        {showUserMenu && (
+          <>
+            <div onClick={() => setShowUserMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+            <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 21, minWidth: 220, maxHeight: 300, overflowY: 'auto', background: 'var(--color-white)', border: '1px solid var(--color-border-muted)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-floating, 0 8px 24px rgba(0,0,0,.12))', padding: 6 }}>
+              {rows.length === 0 ? <div style={{ padding: 8, fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)' }}>Không có nhân viên</div>
+                : rows.map((u) => (
+                <div key={u.userId} role="button" onClick={() => toggleUser(u.userId)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 'var(--fs-2xs)', userSelect: 'none' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-bg)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                  <span style={{ width: 15, height: 15, borderRadius: 4, border: '1.5px solid var(--color-primary-bg-strong)', background: userFilter.includes(u.userId) ? 'var(--color-primary)' : 'var(--color-white)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {userFilter.includes(u.userId) && <Check size={11} color="#fff" />}
+                  </span>
+                  <span>{u.userName}</span>
+                </div>
+              ))}
+              {userFilter.length > 0 && <button type="button" onClick={() => setUserFilter([])} style={{ width: '100%', marginTop: 4, padding: '6px', border: 'none', background: 'var(--color-surface-muted)', borderRadius: 6, fontSize: 'var(--fs-2xs)', color: 'var(--color-primary)', fontWeight: 600, cursor: 'pointer' }}>Bỏ chọn tất cả</button>}
+            </div>
+          </>
+        )}
+      </div>
       <span className={s.toolField} style={{ minWidth: 220 }}>
         <span>Kỳ</span>
         <PeriodPicker
@@ -938,7 +970,26 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
                     <td className={s.num}>{Number(r.amount) ? fmtMoney(r.amount) : '—'}</td>
                   </tr>
                   <tr className={s.detailRow}>
-                    <td colSpan={10} className={s.detailCell}><BreakdownTable items={r.items} kinds={kinds} /></td>
+                    <td colSpan={10} className={s.detailCell}>
+                      {(() => {
+                        const others = (r.bySource || []).filter((b) => b.source !== 'auto' && (b.volumePoints || 0) > 0)
+                        const otherDetail = others.length ? others.map((b) => `${enumLabel('task_source', b.source)} ${b.volumePoints}đ`).join(' · ') : '—'
+                        const rpDetail = (r.items || []).length ? r.items.map((it) => `${it.label} (${fmtPts(it.points)}${it.count > 1 ? ` ×${it.count}` : ''})`).join(' · ') : '—'
+                        return (
+                          <table className={`${s.bkTable} ${s.detailTable}`}>
+                            <thead><tr><th style={{ width: '26%' }}>Hạng mục</th><th>Chi tiết</th><th className={s.bkColNum}>Điểm</th></tr></thead>
+                            <tbody>
+                              <tr><td className={s.bkLabel}>① Điểm định kỳ</td><td className={s.detailMuted}>Σ điểm cấu hình checklist (việc định kỳ)</td><td className={s.bkColNum}>{r.volumeRecurring}</td></tr>
+                              <tr><td className={s.bkLabel}>② Điểm task khác</td><td className={s.detailMuted}>{otherDetail} <span style={{ color: 'var(--color-muted)' }}>· 1đ/bước</span></td><td className={s.bkColNum}>{r.volumeOther}</td></tr>
+                              <tr><td className={s.bkLabel}>③ Điểm đúng hạn</td><td className={s.detailMuted}>{r.onTimeCount}/{r.assignedCount} việc đúng hạn ({r.onTimePct ?? '—'}%) → quy mốc KPI</td><td className={`${s.bkColNum} ${signCls(r.kpiPoints)}`}>{fmtPts(r.kpiPoints)}</td></tr>
+                              <tr><td className={s.bkLabel}>④ Thưởng/phạt</td><td className={s.detailMuted}>{rpDetail}</td><td className={`${s.bkColNum} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td></tr>
+                              <tr className={s.bkTotalRow}><td className={s.bkLabel}>Tổng điểm</td><td /><td className={`${s.bkColNum} ${signCls(r.totalPoints)}`}>{fmtPts(r.totalPoints)}</td></tr>
+                              <tr className={s.bkGradeRow}><td className={s.bkLabel}>Xếp loại → Tiền</td><td className={s.detailMuted}>{r.gradeCode ? `${r.gradeCode}${r.gradeLabel ? ` · ${r.gradeLabel}` : ''}` : '—'}</td><td className={s.bkColNum}>{Number(r.amount) ? `${fmtMoney(r.amount)}đ` : '—'}</td></tr>
+                            </tbody>
+                          </table>
+                        )
+                      })()}
+                    </td>
                   </tr>
                 </Fragment>
               ))}
