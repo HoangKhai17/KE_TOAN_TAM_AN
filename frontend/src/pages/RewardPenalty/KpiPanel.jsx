@@ -468,15 +468,25 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                           {sourceReport.srcSet.map((k) => {
                             const b = map.get(k)
                             const vol = b?.volumePoints || 0
-                            if (!b || (b.dueCount === 0 && vol === 0)) return <td key={k} className={s.num}><span className={s.zero}>—</span></td>
+                            if (!b || (b.dueCount === 0 && vol === 0)) return <td key={k} className={s.srcCell}><span className={s.zero}>—</span></td>
                             const pct = b.dueCount > 0 ? Math.round((b.onTimeCount * 100) / b.dueCount) : null
-                            return <td key={k} className={s.num} title={`${b.taskCount} việc (đến hạn ${b.dueCount}) · ${vol}đ`}>
-                              <div>{b.dueCount > 0 ? `${b.onTimeCount}/${b.dueCount}` : '—'}</div>
-                              {pct != null && <div style={{ fontSize: 'var(--fs-3xs)', fontWeight: 700, color: pctColor(pct) }}>{pct}%</div>}
-                              <div style={{ fontSize: 'var(--fs-3xs)', color: 'var(--color-primary)', fontWeight: 700 }}>{vol}đ</div>
+                            return <td key={k} className={s.srcCell} title={`${b.taskCount} việc · đến hạn ${b.dueCount} · đúng hạn ${b.onTimeCount} · ${vol}đ`}>
+                              <div className={s.srcMain}>{b.dueCount > 0 ? `${b.onTimeCount}/${b.dueCount}` : '—'}</div>
+                              <div className={s.srcSub}>
+                                {pct != null && <span style={{ color: pctColor(pct), fontWeight: 700 }}>{pct}%</span>}
+                                {pct != null && vol > 0 && <span className={s.srcDot}>·</span>}
+                                {vol > 0 && <span style={{ color: 'var(--color-primary)', fontWeight: 700 }}>{vol}đ</span>}
+                              </div>
                             </td>
                           })}
-                          <td className={s.num}><strong>{r.onTimeCount}/{r.assignedCount}</strong>{r.onTimePct != null ? <div style={{ fontSize: 'var(--fs-3xs)', fontWeight: 700, color: pctColor(r.onTimePct) }}>{r.onTimePct}%</div> : null}<div style={{ fontSize: 'var(--fs-3xs)', color: 'var(--color-primary)', fontWeight: 700 }}>{r.volumePoints || 0}đ</div></td>
+                          <td className={s.srcCell}>
+                            <div className={s.srcMain}><strong>{r.onTimeCount}/{r.assignedCount}</strong></div>
+                            <div className={s.srcSub}>
+                              {r.onTimePct != null && <span style={{ color: pctColor(r.onTimePct), fontWeight: 700 }}>{r.onTimePct}%</span>}
+                              {r.onTimePct != null && (r.volumePoints || 0) > 0 && <span className={s.srcDot}>·</span>}
+                              {(r.volumePoints || 0) > 0 && <span style={{ color: 'var(--color-primary)', fontWeight: 700 }}>{r.volumePoints}đ</span>}
+                            </div>
+                          </td>
                         </tr>
                       )
                     })}
@@ -493,7 +503,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
               <thead><tr>
                 <th className={s.colStt}>STT</th><th>Nhân viên</th>
                 <th className={s.num}>Điểm khối lượng</th><th className={s.num}>Đúng hạn</th><th>% đúng hạn</th>
-                <th className={s.num}>Điểm KPI</th><th></th>
+                <th className={s.num}>Điểm KPI</th><th className={s.colDetail}>Chi tiết</th>
               </tr></thead>
               <tbody>
                 {data.rows.map((r, i) => (
@@ -506,7 +516,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                       <span className={s.kpiMini}><span className={s.kpiMiniTrack}><span className={s.kpiMiniFill} style={{ width: `${r.onTimePct}%`, background: pctColor(r.onTimePct) }} /></span><span className={s.num}>{r.onTimePct}%</span></span>
                     )}</td>
                     <td className={s.num}>{fmtSigned(r.kpiPoints)}</td>
-                    <td><ChevronRight size={15} style={{ color: 'var(--color-primary)' }} /></td>
+                    <td className={s.colDetail}><button type="button" className={s.viewDetail} onClick={(e) => { e.stopPropagation(); openDetail(r) }}>Chi tiết <ChevronRight size={12} /></button></td>
                   </tr>
                 ))}
               </tbody>

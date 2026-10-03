@@ -49,6 +49,15 @@
 .table th { padding: 7px 8px; text-align: left; font-size: var(--fs-2xs); font-weight: var(--fw-extrabold); color: var(--color-primary-deep); background: var(--gradient-table-head); border-bottom: 1.5px solid var(--color-primary-bg-strong); white-space: nowrap; }
 .table td { padding: 7px 8px; border-bottom: 1px solid var(--color-surface-muted); vertical-align: middle; color: var(--color-text-strong); font-size: var(--fs-2xs); font-weight: var(--fw-medium); }
 .table tbody tr:last-child td { border-bottom: none; }
+.table td + td, .table th + th { border-left: 1px solid var(--color-border-muted); }   /* kẻ dọc giữa cột cho dễ nhìn */
+.colDetail { width: 104px; text-align: center; }
+.viewDetail { display: inline-flex; align-items: center; gap: 3px; padding: 4px 10px; border: none; border-radius: var(--radius-sm); background: var(--gradient-primary); color: var(--color-white); font-weight: var(--fw-semibold); font-size: var(--fs-3xs); white-space: nowrap; cursor: pointer; box-shadow: var(--shadow-focus-blue); transition: opacity 0.12s; }
+.viewDetail:hover { opacity: 0.9; }
+/* Ô bảng "Tách theo nguồn": 2 dòng gọn (đúng hạn/đến hạn + %·điểm) */
+.srcCell { text-align: right; font-variant-numeric: tabular-nums; }
+.srcMain { font-weight: var(--fw-bold); }
+.srcSub { font-size: var(--fs-3xs); margin-top: 1px; white-space: nowrap; }
+.srcDot { color: var(--color-muted); margin: 0 3px; }
 .table tbody tr:hover td { background: var(--color-bg-soft); }
 .table tfoot td { border-top: 1.5px solid var(--color-primary-bg-strong); background: var(--color-bg-soft); font-weight: var(--fw-bold); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
