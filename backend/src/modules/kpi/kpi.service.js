@@ -16,6 +16,22 @@ function monthBounds(year, month) {
   return { y, m, start, end }
 }
 
+function addDays(dateStr, n) {
+  const d = new Date(`${dateStr}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10)
+}
+
+// Mốc [start, end) cho KPI. Ưu tiên KHOẢNG NGÀY tùy chọn (from/to); không có thì theo năm+tháng.
+// rpStart/rpEnd = mốc để cộng thưởng/phạt (neo theo THÁNG) — gồm mọi tháng mà khoảng chạm tới.
+function resolveBounds({ year, month, from, to }) {
+  if (from || to) {
+    const start = from || '1900-01-01'
+    const end = to ? addDays(to, 1) : '2999-01-01'
+    return { start, end, custom: true, rpStart: start, rpEnd: to || '2999-01-01' }
+  }
+  const { start, end } = monthBounds(year, month)
+  return { start, end, custom: false, rpStart: start, rpEnd: addDays(end, -1) }
+}
+
 // CTE xác định bước LEAF (mục phụ, hoặc mục chính không con) — khớp cách tính tiến độ.
 const LEAF_CTE = `
   WITH leaf AS (
@@ -34,7 +50,7 @@ async function isMonthClosed(year, month) {
 // ── Danh sách KPI (LIVE) — mỗi NV active 1 dòng ───────────────────────────────
 async function listLive(year, month, opts = {}) {
   const { userId = null, role = null, userIds = null, sources = null } = opts
-  const { start, end } = monthBounds(year, month)
+  const { start, end } = resolveBounds({ year, month, from: opts.from, to: opts.to })
   const params = [start, end]
   // Lọc theo NGUỒN (auto/manual/customer/…): thêm sớm để $3 cố định cho vol/ont. Bỏ trống = mọi nguồn.
   let srcClause = ''
@@ -105,6 +121,8 @@ function toKpiDto(r) {
 // ── Danh sách KPI (đọc snapshot nếu tháng đã chốt) ────────────────────────────
 async function listMonthly(year, month, opts = {}) {
   const { userId = null, role = null, userIds = null } = opts
+  // Khoảng ngày tùy chọn → luôn tính LIVE (không có snapshot cho khoảng tự do).
+  if (opts.from || opts.to) return { closed: false, rows: await listLive(year, month, opts) }
   const { y, m } = monthBounds(year, month)
   if (await isMonthClosed(y, m)) {
     const params = [y, m]
@@ -128,8 +146,8 @@ async function listMonthly(year, month, opts = {}) {
 }
 
 // ── Chi tiết breakdown (LIVE) theo công ty + loại CV cho 1 NV ──────────────────
-async function detailLive(year, month, userId) {
-  const { start, end } = monthBounds(year, month)
+async function detailLive(year, month, userId, opts = {}) {
+  const { start, end } = resolveBounds({ year, month, from: opts.from, to: opts.to })
   const p = [start, end, userId]
   const [byCompany, byType, bySource, byDifficulty] = await Promise.all([
     query(`
@@ -194,7 +212,8 @@ async function detailLive(year, month, userId) {
   }
 }
 
-async function getDetail(year, month, userId) {
+async function getDetail(year, month, userId, opts = {}) {
+  if (opts.from || opts.to) return { closed: false, ...(await detailLive(year, month, userId, opts)) }
   const { y, m } = monthBounds(year, month)
   if (await isMonthClosed(y, m)) {
     const { rows: [k] } = await query(
@@ -207,8 +226,8 @@ async function getDetail(year, month, userId) {
 
 // ── Danh sách TỪNG TASK của 1 NV trong kỳ (điểm khối lượng + đúng hạn) ─────────
 // Gồm task có điểm bước LEAF tick trong tháng (theo completed_at) HOẶC task đến hạn trong tháng.
-async function getUserTasks(year, month, userId) {
-  const { start, end } = monthBounds(year, month)
+async function getUserTasks(year, month, userId, opts = {}) {
+  const { start, end } = resolveBounds({ year, month, from: opts.from, to: opts.to })
   const { rows } = await query(`
     ${LEAF_CTE},
     pts AS (
@@ -335,8 +354,8 @@ function matchRange(value, list, minKey, maxKey) {
 // ── Phase D: HIỆU SUẤT TỔNG HỢP = điểm KPI (từ % đúng hạn) + net thưởng/phạt → xếp loại → tiền ──
 async function getPerformance(year, month, opts = {}) {
   const { userId = null } = opts
-  const { y, m } = monthBounds(year, month)
-  const base = await listMonthly(y, m, opts)                      // { closed, rows:[{...onTimePct, volumePoints}] }
+  const bounds = resolveBounds({ year, month, from: opts.from, to: opts.to })
+  const base = await listMonthly(year, month, opts)               // { closed, rows:[{...onTimePct, volumePoints}] }
   const tiers = await listTiers({ activeOnly: true })
   // grades ở bảng kpi_grades (module reward-penalty) — đọc trực tiếp.
   const { rows: grades } = await query(
@@ -347,13 +366,15 @@ async function getPerformance(year, month, opts = {}) {
     maxPoints: g.max_points != null ? Number(g.max_points) : null,
     amount: Number(g.amount),
   }))
-  // net thưởng/phạt (đã duyệt) theo NV trong kỳ.
-  const rpParams = [y, m]
+  // net thưởng/phạt (đã duyệt) theo NV — neo theo THÁNG: gộp mọi tháng mà kỳ lọc chạm tới.
+  const rpParams = [bounds.rpStart, bounds.rpEnd]
   let rpUserCond = ''
   if (userId) { rpParams.push(userId); rpUserCond = ` AND user_id = $${rpParams.length}` }
   const { rows: rp } = await query(
     `SELECT user_id, COALESCE(SUM(points),0)::numeric AS net FROM staff_reward_penalty
-     WHERE period_year = $1 AND period_month = $2 AND status = 'approved'${rpUserCond}
+     WHERE make_date(period_year, period_month, 1) >= date_trunc('month', $1::date)
+       AND make_date(period_year, period_month, 1) <= $2::date
+       AND status = 'approved'${rpUserCond}
      GROUP BY user_id`, rpParams)
   const netByUser = new Map(rp.map((r) => [r.user_id, Number(r.net)]))
 
@@ -361,7 +382,7 @@ async function getPerformance(year, month, opts = {}) {
   // ở Tổng quan. Tôn trọng bộ lọc nguồn (sources). CHỈ tính live (tháng đã chốt không có breakdown này).
   const srcByUser = new Map()   // userId → [{source, taskCount, dueCount, onTimeCount}]
   if (!base.closed) {
-    const { start, end } = monthBounds(y, m)
+    const { start, end } = bounds
     const sp = [start, end]
     let sClause = ''
     if (Array.isArray(opts.sources) && opts.sources.length) { sp.push(opts.sources); sClause = ` AND t.source = ANY($${sp.length}::text[])` }
@@ -384,7 +405,7 @@ async function getPerformance(year, month, opts = {}) {
   let difficultyReport = []
   const srcHasAuto = !(Array.isArray(opts.sources) && opts.sources.length) || opts.sources.includes('auto')
   if (!base.closed && srcHasAuto) {
-    const { start, end } = monthBounds(y, m)
+    const { start, end } = bounds
     const dp = [start, end]
     const uc = ["u.status = 'active'", "t.source = 'auto'", 't.assigned_to IS NOT NULL']
     if (opts.userId) { dp.push(opts.userId); uc.push(`u.id = $${dp.length}`) }

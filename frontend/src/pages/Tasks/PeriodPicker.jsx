@@ -29,7 +29,8 @@ export function FilterDateField({ value, onChange, placeholder }) {
 export default function PeriodPicker({
   year, month, from, to, availableYears, disabled,
   onYear, onMonth, onFrom, onTo, onPreset,
-  disabledTitle,
+  disabledTitle, align = 'left',   // 'right' = mở xổ canh phải (dùng ở thanh công cụ canh phải, tránh tràn mép phải)
+  fullRangeLabel = false,          // true = nút luôn hiện KHOẢNG NGÀY thật (vd 01/10/2026 – 31/10/2026) thay vì "T10/2026"
 }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
@@ -50,6 +51,7 @@ export default function PeriodPicker({
 
   let label = 'Tất cả thời gian'
   if (disabled)           label = disabledTitle ?? 'Không áp dụng'
+  else if (fullRangeLabel && (month || year || isCustom)) label = rangeLabel
   else if (isCustom)      label = rangeLabel
   else if (month && year) label = `T${month}/${year}`
   else if (year)          label = `Năm ${year}`
@@ -75,7 +77,7 @@ export default function PeriodPicker({
       </div>
 
       {open && !disabled && (
-        <div className={s.cpDropdown} style={{ width: 300, padding: 10 }}>
+        <div className={s.cpDropdown} style={{ width: 300, padding: 10, ...(align === 'right' ? { left: 'auto', right: 0 } : null) }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
             {PRESETS.map(([lbl, key]) => (
               <button

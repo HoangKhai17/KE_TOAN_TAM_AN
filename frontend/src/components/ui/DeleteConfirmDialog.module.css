@@ -69,7 +69,8 @@
 }
 
 .cancelButton,
-.deleteButton {
+.deleteButton,
+.confirmPrimary {
   min-height: 32px;
   display: inline-flex;
   align-items: center;
@@ -101,6 +102,15 @@
 .deleteButton:focus-visible { outline: none; box-shadow: var(--shadow-focus-danger); }
 .cancelButton:disabled,
 .deleteButton:disabled { cursor: not-allowed; opacity: 0.65; }
+
+/* Tông PRIMARY — dùng cho xác nhận KHÔNG phá huỷ (vd Chốt sổ / Mở lại sổ) */
+.dialog.tonePrimary { border-color: var(--color-primary-bg-strong); }
+.tonePrimary .iconWrap { background: var(--color-primary-bg); color: var(--color-primary); }
+.tonePrimary .warning { color: var(--color-primary-deep); }
+.confirmPrimary { border: 1px solid transparent; background: var(--gradient-primary); color: var(--color-white); }
+.confirmPrimary:hover:not(:disabled) { opacity: 0.92; }
+.confirmPrimary:focus-visible { outline: none; box-shadow: var(--shadow-focus-blue); }
+.confirmPrimary:disabled { cursor: not-allowed; opacity: 0.65; }
 
 .spinner { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

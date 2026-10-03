@@ -7,6 +7,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { getKpiDetail, getKpiUserTasks, closeKpiMonth, reopenKpiMonth, getKpiPerformance } from '../../api/kpi'
 import { listUserOptions } from '../../api/users'
+import PeriodPicker from '../Tasks/PeriodPicker'
 import s from './rewardPenalty.module.css'
 
 const ROLE_FILTERS = [['staff', 'Chỉ nhân viên'], ['all', 'Tất cả'], ['admin', 'Chỉ quản trị']]
@@ -19,7 +20,8 @@ function loadFilter() {
 }
 
 const now = new Date()
-const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
+const CUR_YEAR = now.getFullYear()
+const CUR_MONTH = now.getMonth() + 1
 const fmtMoney = (n) => (Number(n) || 0).toLocaleString('vi-VN')
 const fmtSigned = (n) => { const v = Number(n) || 0; return v > 0 ? `+${v}` : `${v}` }
 const gradeCls = (sort) => (sort != null ? s[`gradeC${sort}`] : '')
@@ -55,6 +57,9 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
 
   const [year, setYear]   = useState(years[0] ?? now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
+  const [from, setFrom]   = useState('')   // khoảng ngày tùy chọn (YYYY-MM-DD) — ưu tiên hơn năm/tháng
+  const [to, setTo]       = useState('')
+  const hasRange = !!(from || to)
   const [data, setData]   = useState({ closed: false, rows: [] })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy]   = useState(false)
@@ -82,13 +87,14 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
   }, [roleF, userIdsF, sourcesF])
 
   const load = useCallback(() => {
+    if (!hasRange && (!year || !month)) { setData({ closed: false, rows: [] }); setLoading(false); return }   // cần năm+tháng HOẶC khoảng ngày
     setLoading(true)
-    const filters = { sources: sourcesF, ...(isAdmin ? { role: roleF === 'all' ? null : roleF, userIds: userIdsF } : {}) }
+    const filters = { sources: sourcesF, from, to, ...(isAdmin ? { role: roleF === 'all' ? null : roleF, userIds: userIdsF } : {}) }
     getKpiPerformance(year, month, filters)
       .then(setData)
       .catch(() => { setData({ closed: false, rows: [] }); addToast('Không tải được KPI', 'error') })
       .finally(() => setLoading(false))
-  }, [year, month, roleF, userIdsF, sourcesF, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [year, month, from, to, roleF, userIdsF, sourcesF, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [load])
   const toggleSource = (k) => setSourcesF((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k])
 
@@ -161,7 +167,8 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
 
   async function handleClose() {
     if (!(await confirmAction({
-      title: 'Chốt sổ KPI tháng', confirmLabel: 'Chốt sổ',
+      title: 'Chốt sổ KPI tháng', confirmLabel: 'Chốt sổ', tone: 'primary',
+      confirmIcon: <Lock size={13} />, loadingLabel: 'Đang chốt…',
       warning: 'Sau khi chốt, số liệu tháng này được khóa (có thể Mở lại để tính lại).',
       message: <>Chốt sổ KPI <strong>Tháng {month}/{year}</strong>? Số liệu sẽ được lưu &amp; khóa lại.</>,
     }))) return
@@ -172,7 +179,8 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
   }
   async function handleReopen() {
     if (!(await confirmAction({
-      title: 'Mở lại sổ KPI', confirmLabel: 'Mở lại',
+      title: 'Mở lại sổ KPI', confirmLabel: 'Mở lại', tone: 'primary',
+      confirmIcon: <LockOpen size={13} />, loadingLabel: 'Đang mở…',
       warning: 'Snapshot đã chốt của tháng này sẽ bị xoá; KPI quay lại tính động (live).',
       message: <>Mở lại KPI <strong>Tháng {month}/{year}</strong> để tính lại?</>,
     }))) return
@@ -186,8 +194,8 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
     setSrcOpen(null)
     setDetail({ user: row, data: null, tasks: null })
     const [d, t] = await Promise.allSettled([
-      getKpiDetail(row.userId, year, month),
-      getKpiUserTasks(row.userId, year, month),
+      getKpiDetail(row.userId, year, month, { from, to }),
+      getKpiUserTasks(row.userId, year, month, { from, to }),
     ])
     setDetail({
       user: row,
@@ -235,13 +243,43 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
     )
   }
 
+  // Nhãn kỳ để hiển thị (thẻ tổng, popup): khoảng ngày → "dd/mm – dd/mm", không thì "Tháng m/yyyy".
+  const periodLabel = hasRange
+    ? `${from ? fmtDate(from) : '…'} – ${to ? fmtDate(to) : '…'}`
+    : `Tháng ${month}/${year}`
+
+  // Preset "Kỳ" — KPI theo THÁNG nên "Tháng này"/"Tháng trước" chọn 1 tháng cụ thể;
+  // "Năm nay"/"Tất cả" để trống tháng → hiện nhắc chọn tháng (không gộp nhiều tháng).
+  function applyPeriodPreset(key) {
+    setFrom(''); setTo('')   // preset theo tháng → bỏ khoảng ngày tùy chọn
+    if (key === 'tm') { setYear(String(CUR_YEAR)); setMonth(String(CUR_MONTH)); return }
+    if (key === 'lm') { let y = CUR_YEAR, m = CUR_MONTH - 1; if (m < 1) { m = 12; y -= 1 }; setYear(String(y)); setMonth(String(m)); return }
+    if (key === 'ty') { setYear(String(CUR_YEAR)); setMonth(''); return }
+    if (key === 'all') { setYear(''); setMonth(''); return }
+  }
+
   const toolbar = (
     <div className={s.toolbar}>
-      <label className={s.toolField}>Tháng <select className={s.select} value={month} onChange={(e) => setMonth(Number(e.target.value))}>{MONTHS.map((m) => <option key={m} value={m}>Tháng {m}</option>)}</select></label>
-      <label className={s.toolField}>Năm <select className={s.select} value={year} onChange={(e) => setYear(Number(e.target.value))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select></label>
-      <span className={`${s.gradeBadge} ${data.closed ? s.gradeC2 : s.gradeC4}`}>{data.closed ? <><Lock size={12} /> Đã chốt</> : <><LockOpen size={12} /> Đang mở</>}</span>
-      {isAdmin && (data.closed
-        ? <button className={s.btnSecondary} onClick={handleReopen} disabled={busy}>Mở lại sổ</button>
+      <span className={s.toolField} style={{ minWidth: 220 }}>
+        <span>Kỳ</span>
+        <PeriodPicker
+          year={year ? String(year) : ''}
+          month={month ? String(month) : ''}
+          from={from}
+          to={to}
+          availableYears={years}
+          align="right"
+          fullRangeLabel
+          onYear={(v) => { setYear(v); if (!v) setMonth('') }}
+          onMonth={(v) => setMonth(v)}
+          onFrom={(v) => setFrom(v || '')}
+          onTo={(v) => setTo(v || '')}
+          onPreset={applyPeriodPreset}
+        />
+      </span>
+      <span className={`${s.stBadge} ${hasRange ? s.stRange : data.closed ? s.stClosed : s.stOpen}`}>{hasRange ? 'Khoảng ngày' : data.closed ? <><Lock size={12} />Đã chốt</> : <><LockOpen size={12} />Đang mở</>}</span>
+      {isAdmin && month && !hasRange && (data.closed
+        ? <button className={s.btnReopen} onClick={handleReopen} disabled={busy}>{busy ? <Loader2 size={13} className={s.spin} /> : <LockOpen size={13} />} Mở lại sổ</button>
         : <button className={s.btnPrimary} onClick={handleClose} disabled={busy}>{busy ? <Loader2 size={13} className={s.spin} /> : <Lock size={13} />} Chốt sổ tháng</button>
       )}
     </div>
@@ -324,7 +362,8 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
         </div>
       )}
 
-      {loading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div>
+      {(!month && !hasRange) ? <div className={s.empty}>Hãy chọn một <strong>tháng</strong> hoặc một <strong>khoảng ngày</strong> ở bộ lọc “Kỳ” để xem KPI.</div>
+      : loading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div>
       : data.rows.length === 0 ? <div className={s.empty}>Chưa có dữ liệu KPI cho tháng này.</div>
       : (
         <>
@@ -333,7 +372,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
             <div className={s.kpiCard}>
               <div className={s.kpiK}>Nhân viên có KPI</div>
               <div className={s.kpiV}>{summary.n}</div>
-              <div className={s.kpiSub}>Tháng {month}/{year}</div>
+              <div className={s.kpiSub}>{periodLabel}</div>
             </div>
             <div className={s.kpiCard}>
               <div className={s.kpiK}>Tổng điểm khối lượng</div>
@@ -357,106 +396,9 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
             </div>
           </div>
 
-          {/* Biểu đồ */}
-          <div className={s.kpiCharts}>
-            <div className={s.kpiPanel}>
-              <h4>Điểm khối lượng theo nhân viên</h4>
-              <div className={s.kpiHint}>Điểm đã đạt / tổng điểm có thể đạt của công việc trong kỳ (phần xám = bước chưa hoàn thành).</div>
-              {summary.sumVol === 0 ? (
-                <div className={s.empty} style={{ padding: 12 }}>Chưa có điểm khối lượng trong kỳ — công việc chưa chấm điểm checklist (hoặc đang lọc nguồn không có điểm).</div>
-              ) : (
-                <div className={s.kpiBars}>
-                  {summary.volTop.map((r) => {
-                    const got = r.volumePoints || 0
-                    const poss = r.volumePossible || 0
-                    const pct = poss > 0 ? Math.round((got / poss) * 100) : 0
-                    return (
-                    <div className={s.kpiBarRow} key={r.userId}>
-                      <span className={s.kpiNm} title={r.userName}>{shortName(r.userName)}</span>
-                      <span className={s.kpiTrack} title={`Đạt ${got} / ${poss} điểm (${pct}%)`}><span className={s.kpiFill} style={{ width: `${pct}%` }} /></span>
-                      <span className={s.kpiVal}>{got} <small style={{ color: 'var(--color-muted)', fontWeight: 'var(--fw-regular, 400)' }}>/ {poss}</small></span>
-                    </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className={s.kpiPanel}>
-              <h4>Phân bố xếp loại</h4>
-              <div className={s.kpiHint}>Số nhân viên theo hạng trong kỳ.</div>
-              {summary.graded === 0 ? <div className={s.empty} style={{ padding: 12 }}>Chưa có xếp loại (cần cấu hình mốc &amp; xếp loại).</div> : (
-                <div className={s.kpiDonutWrap}>
-                  <div className={s.kpiDonut} style={{ background: donutBg }}>
-                    <div className={s.kpiCenter}><b>{summary.graded}</b><span>nhân viên</span></div>
-                  </div>
-                  <div className={s.kpiLegend}>
-                    {[...summary.gradeDist].sort((a, b) => b.sort - a.sort).map((g) => (
-                      <div className={s.kpiLg} key={g.code}>
-                        <span className={s.kpiSw} style={{ background: gradeColor(g.sort) }} />
-                        <span className={s.kpiLbl}>{g.code}{g.label ? ` · ${g.label}` : ''}</span>
-                        <span className={s.kpiCt}>{g.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className={s.kpiDsec} style={{ marginTop: 14 }}>% đúng hạn theo nhân viên</div>
-              <div className={s.kpiOt}>
-                <div className={s.kpiTarget} style={{ bottom: `${ON_TIME_TARGET}%` }}><span>Mục tiêu {ON_TIME_TARGET}%</span></div>
-                {summary.otRows.map((r) => (
-                  <div className={s.kpiOtBar} key={r.userId} title={`${r.userName}: ${r.onTimePct ?? '—'}%`}>
-                    <span className={s.kpiPc}>{r.onTimePct ?? '—'}</span>
-                    <span className={s.kpiCol} style={{ height: `${r.onTimePct ?? 0}%`, background: pctColor(r.onTimePct) }} />
-                    <span className={s.kpiLb}>{(r.userName || '').split(' ').slice(-1)[0]}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Đa nguồn: số việc theo nguồn mỗi NV (stacked bar) */}
-          {sourceReport.hasData && (
-            <div className={s.kpiPanel} style={{ marginBottom: 14 }}>
-              <h4>Số việc theo nguồn · mỗi nhân viên</h4>
-              <div className={s.kpiHint}>Mỗi thanh = tổng việc đến hạn trong kỳ, tách màu theo nguồn.</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '8px 0 10px' }}>
-                {sourceReport.srcSet.map((k) => (
-                  <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)' }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 3, background: sourceReport.colors[k] }} />
-                    {getLabel('task_source', k, k)}
-                  </span>
-                ))}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {sourceReport.perUser.map((u) => (
-                  <div key={u.userId} style={{ display: 'grid', gridTemplateColumns: '92px 1fr 40px', alignItems: 'center', gap: 9 }}>
-                    <span title={u.name} style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{shortName(u.name)}</span>
-                    <span style={{ display: 'flex', height: 11, borderRadius: 6, overflow: 'hidden', background: 'var(--color-surface-muted)', width: `${Math.round((u.total / sourceReport.maxTotal) * 100)}%`, minWidth: 2 }}>
-                      {u.segs.filter((sg) => sg.count > 0).map((sg) => (
-                        <span key={sg.source} title={`${getLabel('task_source', sg.source, sg.source)}: ${sg.count} việc · đúng hạn ${sg.onTime}`}
-                          style={{ width: `${Math.round((sg.count / u.total) * 100)}%`, background: sourceReport.colors[sg.source] }} />
-                      ))}
-                    </span>
-                    <span style={{ fontSize: 'var(--fs-2xs)', fontWeight: 'var(--fw-bold)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{u.total}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Phân bố theo độ khó checklist — chỉ việc định kỳ (auto) */}
-          {(data.difficultyReport || []).some((d) => (d.totalPoints || 0) > 0 || (d.stepCount || 0) > 0) && (
-            <div className={s.kpiPanel} style={{ marginBottom: 14 }}>
-              <h4>Phân bố điểm theo độ khó · việc định kỳ</h4>
-              <div className={s.kpiHint}>Điểm checklist theo mức độ (đạt / tổng). Chỉ tính công việc định kỳ — nguồn khác không gắn độ khó.</div>
-              {renderDifficulty(data.difficultyReport)}
-            </div>
-          )}
-
-          {/* Toggle kiểu bảng: Gộp ↔ Tách nguồn */}
+          {/* === BẢNG CHI TIẾT NHÂN VIÊN (ngay dưới thẻ tổng) === */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: '4px 2px 8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)' }}>Bảng chi tiết nhân viên</span>
+            <span style={{ fontSize: 'var(--fs-xs)', fontWeight: 'var(--fw-extrabold)', color: 'var(--color-text-strong)' }}>Bảng chi tiết nhân viên</span>
             {sourceReport.srcSet.length > 0 && (
               <div className={s.tabLinks} role="tablist">
                 <button className={`${s.tab} ${tableMode === 'merged' ? s.tabActive : ''}`} onClick={() => setTableMode('merged')}>Gộp</button>
@@ -555,16 +497,114 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
           <div className={s.cardFoot}>ℹ️ Bấm 1 dòng để xem <strong>chi tiết từng công việc</strong> &amp; điểm theo công ty/loại/nguồn. <strong>Điểm KPI</strong> quy từ % đúng hạn → <strong>Tổng điểm</strong> = Điểm KPI + Thưởng/phạt → xếp loại → tiền.</div>
           </>
           )}
+
+          {/* Biểu đồ */}
+          <div className={s.kpiCharts}>
+            <div className={s.kpiPanel}>
+              <h4>Điểm khối lượng theo nhân viên</h4>
+              <div className={s.kpiHint}>Điểm đã đạt / tổng điểm có thể đạt của công việc trong kỳ (phần xám = bước chưa hoàn thành).</div>
+              {summary.sumVol === 0 ? (
+                <div className={s.empty} style={{ padding: 12 }}>Chưa có điểm khối lượng trong kỳ — công việc chưa chấm điểm checklist (hoặc đang lọc nguồn không có điểm).</div>
+              ) : (
+                <div className={s.kpiBars}>
+                  {summary.volTop.map((r) => {
+                    const got = r.volumePoints || 0
+                    const poss = r.volumePossible || 0
+                    const pct = poss > 0 ? Math.round((got / poss) * 100) : 0
+                    return (
+                    <div className={s.kpiBarRow} key={r.userId}>
+                      <span className={s.kpiNm} title={r.userName}>{shortName(r.userName)}</span>
+                      <span className={s.kpiTrack} title={`Đạt ${got} / ${poss} điểm (${pct}%)`}><span className={s.kpiFill} style={{ width: `${pct}%` }} /></span>
+                      <span className={s.kpiVal}>{got} <small style={{ color: 'var(--color-muted)', fontWeight: 'var(--fw-regular, 400)' }}>/ {poss}</small></span>
+                    </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className={s.kpiPanel}>
+              <h4>Phân bố xếp loại</h4>
+              <div className={s.kpiHint}>Số nhân viên theo hạng trong kỳ.</div>
+              {summary.graded === 0 ? <div className={s.empty} style={{ padding: 12 }}>Chưa có xếp loại (cần cấu hình mốc &amp; xếp loại).</div> : (
+                <div className={s.kpiDonutWrap}>
+                  <div className={s.kpiDonut} style={{ background: donutBg }}>
+                    <div className={s.kpiCenter}><b>{summary.graded}</b><span>nhân viên</span></div>
+                  </div>
+                  <div className={s.kpiLegend}>
+                    {[...summary.gradeDist].sort((a, b) => b.sort - a.sort).map((g) => (
+                      <div className={s.kpiLg} key={g.code}>
+                        <span className={s.kpiSw} style={{ background: gradeColor(g.sort) }} />
+                        <span className={s.kpiLbl}>{g.code}{g.label ? ` · ${g.label}` : ''}</span>
+                        <span className={s.kpiCt}>{g.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className={s.kpiDsec} style={{ marginTop: 14 }}>% đúng hạn theo nhân viên</div>
+              <div className={s.kpiOt}>
+                <div className={s.kpiTarget} style={{ bottom: `${ON_TIME_TARGET}%` }}><span>Mục tiêu {ON_TIME_TARGET}%</span></div>
+                {summary.otRows.map((r) => (
+                  <div className={s.kpiOtBar} key={r.userId} title={`${r.userName}: ${r.onTimePct ?? '—'}%`}>
+                    <span className={s.kpiPc}>{r.onTimePct ?? '—'}</span>
+                    <span className={s.kpiCol} style={{ height: `${r.onTimePct ?? 0}%`, background: pctColor(r.onTimePct) }} />
+                    <span className={s.kpiLb}>{(r.userName || '').split(' ').slice(-1)[0]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Đa nguồn: số việc theo nguồn mỗi NV (stacked bar) */}
+          {sourceReport.hasData && (
+            <div className={s.kpiPanel} style={{ marginBottom: 14 }}>
+              <h4>Số việc theo nguồn · mỗi nhân viên</h4>
+              <div className={s.kpiHint}>Mỗi thanh = tổng việc đến hạn trong kỳ, tách màu theo nguồn.</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '8px 0 10px' }}>
+                {sourceReport.srcSet.map((k) => (
+                  <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 3, background: sourceReport.colors[k] }} />
+                    {getLabel('task_source', k, k)}
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {sourceReport.perUser.map((u) => (
+                  <div key={u.userId} style={{ display: 'grid', gridTemplateColumns: '92px 1fr 40px', alignItems: 'center', gap: 9 }}>
+                    <span title={u.name} style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{shortName(u.name)}</span>
+                    <span style={{ display: 'flex', height: 11, borderRadius: 6, overflow: 'hidden', background: 'var(--color-surface-muted)', width: `${Math.round((u.total / sourceReport.maxTotal) * 100)}%`, minWidth: 2 }}>
+                      {u.segs.filter((sg) => sg.count > 0).map((sg) => (
+                        <span key={sg.source} title={`${getLabel('task_source', sg.source, sg.source)}: ${sg.count} việc · đúng hạn ${sg.onTime}`}
+                          style={{ width: `${Math.round((sg.count / u.total) * 100)}%`, background: sourceReport.colors[sg.source] }} />
+                      ))}
+                    </span>
+                    <span style={{ fontSize: 'var(--fs-2xs)', fontWeight: 'var(--fw-bold)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{u.total}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Phân bố theo độ khó checklist — chỉ việc định kỳ (auto) */}
+          {(data.difficultyReport || []).some((d) => (d.totalPoints || 0) > 0 || (d.stepCount || 0) > 0) && (
+            <div className={s.kpiPanel} style={{ marginBottom: 14 }}>
+              <h4>Phân bố điểm theo độ khó · việc định kỳ</h4>
+              <div className={s.kpiHint}>Điểm checklist theo mức độ (đạt / tổng). Chỉ tính công việc định kỳ — nguồn khác không gắn độ khó.</div>
+              {renderDifficulty(data.difficultyReport)}
+            </div>
+          )}
+
         </>
       )}
 
       {detail && (
-        <Modal title={`KPI — ${detail.user.userName} · Tháng ${month}/${year}`} onClose={() => setDetail(null)} wide>
+        <Modal title={`KPI — ${detail.user.userName} · ${periodLabel}`} onClose={() => setDetail(null)} wide>
           {/* Header 1 hàng: tên + các chỉ số gộp chung */}
           <div className={s.kpiDHead}>
             <div className={s.kpiDHid}>
               <div className={s.kpiDnm}>{detail.user.userName}</div>
-              <div className={s.kpiDjt}>{detail.user.jobTitle || 'Nhân viên'} · Tháng {month}/{year}</div>
+              <div className={s.kpiDjt}>{detail.user.jobTitle || 'Nhân viên'} · {periodLabel}</div>
               <div className={s.kpiDbadges}>
                 {detail.user.gradeCode && <span className={`${s.gradeBadge} ${gradeCls(detail.user.gradeSort)}`} style={{ background: 'var(--color-white)', color: 'var(--color-primary)' }}>{detail.user.gradeCode}{detail.user.gradeLabel ? ` · ${detail.user.gradeLabel}` : ''}</span>}
                 {detail.user.amount != null && <span className={s.kpiDamt}>{detail.user.amount > 0 ? '+' : ''}{fmtMoney(detail.user.amount)} đ</span>}

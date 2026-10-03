@@ -24,9 +24,13 @@ export function DeleteConfirmDialog({
   confirmLabel = DEFAULT_OPTIONS.confirmLabel,
   cancelLabel = DEFAULT_OPTIONS.cancelLabel,
   loading = false,
+  tone = 'danger',          // 'danger' (mặc định, nút đỏ + icon thùng rác) | 'primary' (nút xanh)
+  confirmIcon = null,       // icon tuỳ chọn cho nút xác nhận (ReactNode); bỏ trống → Trash2 khi danger
+  loadingLabel = null,      // nhãn khi đang xử lý; bỏ trống → tự suy theo tone
   onConfirm,
   onCancel,
 }) {
+  const isPrimary = tone === 'primary'
   const cancelRef = useRef(null)
 
   useEffect(() => {
@@ -50,7 +54,7 @@ export function DeleteConfirmDialog({
     <div className={s.overlay} role="presentation">
       <div className={s.backdrop} onClick={() => !loading && onCancel?.()} />
       <div
-        className={s.dialog}
+        className={`${s.dialog}${isPrimary ? ` ${s.tonePrimary}` : ''}`}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="delete-confirm-title"
@@ -76,12 +80,12 @@ export function DeleteConfirmDialog({
           </button>
           <button
             type="button"
-            className={s.deleteButton}
+            className={isPrimary ? s.confirmPrimary : s.deleteButton}
             disabled={loading}
             onClick={onConfirm}
           >
-            {loading ? <Loader2 size={13} className={s.spinner} /> : <Trash2 size={13} />}
-            {loading ? 'Đang xóa...' : confirmLabel}
+            {loading ? <Loader2 size={13} className={s.spinner} /> : (confirmIcon ?? (isPrimary ? null : <Trash2 size={13} />))}
+            {loading ? (loadingLabel ?? (isPrimary ? 'Đang xử lý...' : 'Đang xóa...')) : confirmLabel}
           </button>
         </div>
       </div>
@@ -142,6 +146,9 @@ export function DeleteConfirmProvider({ children }) {
         warning={request?.warning}
         confirmLabel={request?.confirmLabel}
         cancelLabel={request?.cancelLabel}
+        tone={request?.tone}
+        confirmIcon={request?.confirmIcon}
+        loadingLabel={request?.loadingLabel}
         loading={loading}
         onCancel={() => close(false)}
         onConfirm={handleConfirm}
