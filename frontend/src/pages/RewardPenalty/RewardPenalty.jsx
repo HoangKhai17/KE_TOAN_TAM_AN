@@ -960,16 +960,47 @@ function GradesPanel({ slot, onFooter }) {
   const setD = (k, v) => setDraft((p) => ({ ...p, [k]: v }))
   const ACTIVE_OPTS = [{ key: '1', label: 'Đang bật' }, { key: '0', label: 'Tắt' }]
 
+  // ── Bảng MỐC % đúng hạn → điểm (kpi_ontime_tiers) — gộp chung tab, chuyển sang sub-tab ──
+  const [tiers, setTiers] = useState([])
+  const [tiersLoading, setTiersLoading] = useState(true)
+  const [savingTier, setSavingTier] = useState(false)
+  const tiersReload = useCallback(() => { setTiersLoading(true); listKpiTiers().then(setTiers).catch(() => setTiers([])).finally(() => setTiersLoading(false)) }, [])
+  useEffect(() => { tiersReload() }, [tiersReload])
+  async function tierPatch(t, p) {
+    setTiers((l) => l.map((x) => x.id === t.id ? { ...x, ...p } : x))
+    try { await updateKpiTier(t.id, p) } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); tiersReload() }
+  }
+  async function tierAdd() {
+    setSavingTier(true)
+    try { await createKpiTier({ minPct: null, maxPct: null, points: 0 }); tiersReload() }
+    catch { addToast('Không thêm được mốc', 'error') } finally { setSavingTier(false) }
+  }
+  async function tierRemove(t) {
+    if (!(await confirmDelete({ title: 'Xoá mốc', message: <>Xoá mốc điểm này?</> }))) return
+    try { await deleteKpiTier(t.id); tiersReload() } catch { addToast('Không xoá được', 'error') }
+  }
+  const [subTab, setSubTab] = useState('grades')   // 'grades' | 'tiers'
+
   const toolbar = (
     <div className={s.toolbar}>
-      <button className={s.btnPrimary} onClick={openAdd}><Plus size={14} /> Thêm xếp loại</button>
+      {subTab === 'grades'
+        ? <button className={s.btnPrimary} onClick={openAdd}><Plus size={14} /> Thêm xếp loại</button>
+        : <button className={s.btnPrimary} onClick={tierAdd} disabled={savingTier}>{savingTier ? <Loader2 size={13} className={s.spin} /> : <Plus size={14} />} Thêm mốc</button>}
     </div>
   )
 
   return (
-    <>
     <div className={s.card}>
       {slot && createPortal(toolbar, slot)}
+      <div style={{ padding: '12px 14px 0' }}>
+        <div className={s.tabLinks} role="tablist" style={{ display: 'inline-flex' }}>
+          <button className={`${s.tab} ${subTab === 'grades' ? s.tabActive : ''}`} onClick={() => setSubTab('grades')}>Bảng xếp loại</button>
+          <button className={`${s.tab} ${subTab === 'tiers' ? s.tabActive : ''}`} onClick={() => setSubTab('tiers')}>Mốc % đúng hạn → điểm</button>
+        </div>
+      </div>
+
+      {subTab === 'grades' ? (
+      <>
       {sel.size > 0 && (
         <div className={s.bulkWrap}>
           <BulkActionBar count={sel.size}>
@@ -1030,41 +1061,10 @@ function GradesPanel({ slot, onFooter }) {
         </div>
       )}
       <div className={s.cardFoot}>ℹ️ Xếp loại từ THẤP → CAO theo thứ tự dòng. Dải điểm dùng <strong>Tổng điểm</strong> của nhân viên trong kỳ (bỏ trống = không giới hạn). Mỗi loại gắn 1 mức <strong>thưởng/phạt</strong> (tiền), dùng khi quy đổi ra bảng lương.</div>
-    </div>
-    <OntimeTiersSection />
-    </>
-  )
-}
-
-// Mốc quy đổi: % ĐÚNG HẠN (KPI) → điểm — gộp trong tab Quy đổi xếp loại (không popup riêng).
-function OntimeTiersSection() {
-  const addToast = useToastStore((st) => st.toast)
-  const confirmDelete = useDeleteConfirm()
-  const [tiers, setTiers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [savingNew, setSavingNew] = useState(false)
-  const reload = useCallback(() => { setLoading(true); listKpiTiers().then(setTiers).catch(() => setTiers([])).finally(() => setLoading(false)) }, [])
-  useEffect(() => { reload() }, [reload])
-  async function patch(t, p) {
-    setTiers((l) => l.map((x) => x.id === t.id ? { ...x, ...p } : x))
-    try { await updateKpiTier(t.id, p) } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); reload() }
-  }
-  async function add() {
-    setSavingNew(true)
-    try { await createKpiTier({ minPct: null, maxPct: null, points: 0 }); reload() }
-    catch { addToast('Không thêm được mốc', 'error') } finally { setSavingNew(false) }
-  }
-  async function remove(t) {
-    if (!(await confirmDelete({ title: 'Xoá mốc', message: <>Xoá mốc điểm này?</> }))) return
-    try { await deleteKpiTier(t.id); reload() } catch { addToast('Không xoá được', 'error') }
-  }
-  return (
-    <div className={s.card} style={{ marginTop: 16 }}>
-      <div className={s.toolbar} style={{ justifyContent: 'space-between' }}>
-        <strong style={{ fontSize: 'var(--fs-xs)' }}>Mốc quy đổi: % đúng hạn (KPI) → điểm</strong>
-        <button className={s.btnMini} onClick={add} disabled={savingNew}>{savingNew ? <Loader2 size={13} className={s.spin} /> : <Plus size={13} />} Thêm mốc</button>
-      </div>
-      {loading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
+      </>
+      ) : (
+      <>
+      {tiersLoading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
         <div className={s.tableWrap}>
           <table className={s.table}>
             <thead><tr><th className={s.colStt}>STT</th><th className={s.num}>Từ %</th><th className={s.num}>Đến %</th><th className={s.num}>Điểm KPI</th><th>Hành động</th></tr></thead>
@@ -1073,10 +1073,10 @@ function OntimeTiersSection() {
               {tiers.map((t, i) => (
                 <tr key={t.id}>
                   <td className={s.colStt}>{i + 1}</td>
-                  <td><CellText value={t.minPct ?? ''} numeric placeholder="−∞" onCommit={(v) => patch(t, { minPct: v === '' ? null : Number(v) })} /></td>
-                  <td><CellText value={t.maxPct ?? ''} numeric placeholder="+∞" onCommit={(v) => patch(t, { maxPct: v === '' ? null : Number(v) })} /></td>
-                  <td><CellText value={t.points} numeric onCommit={(v) => patch(t, { points: Number(v) || 0 })} /></td>
-                  <td><span className={s.rowActions}><button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => remove(t)}><Trash2 size={13} /></button></span></td>
+                  <td><CellText value={t.minPct ?? ''} numeric placeholder="−∞" onCommit={(v) => tierPatch(t, { minPct: v === '' ? null : Number(v) })} /></td>
+                  <td><CellText value={t.maxPct ?? ''} numeric placeholder="+∞" onCommit={(v) => tierPatch(t, { maxPct: v === '' ? null : Number(v) })} /></td>
+                  <td><CellText value={t.points} numeric onCommit={(v) => tierPatch(t, { points: Number(v) || 0 })} /></td>
+                  <td><span className={s.rowActions}><button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => tierRemove(t)}><Trash2 size={13} /></button></span></td>
                 </tr>
               ))}
             </tbody>
@@ -1084,6 +1084,8 @@ function OntimeTiersSection() {
         </div>
       )}
       <div className={s.cardFoot}>ℹ️ <strong>Điểm KPI</strong> (từ % đúng hạn trong kỳ) cộng với <strong>Tổng điểm thưởng/phạt</strong> → ra <strong>Xếp loại</strong>. Bỏ trống = không giới hạn; điểm âm = trừ.</div>
+      </>
+      )}
     </div>
   )
 }
