@@ -49,6 +49,14 @@ async function getByCompany(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function getStaffCompanies(req, res, next) {
+  try {
+    const { staffId, month, year } = req.query
+    const companies = await svc.staffCompanies({ staffId, month, year, forceAssignedTo: staffScope(req) })
+    res.json({ success: true, data: { companies } })
+  } catch (err) { next(err) }
+}
+
 async function getCompanyMatrices(req, res, next) {
   try {
     const { companyId, month, year } = req.query
@@ -59,8 +67,8 @@ async function getCompanyMatrices(req, res, next) {
 
 async function getByStaff(req, res, next) {
   try {
-    const { staffId, month, year, source } = req.query
-    const data = await svc.byStaff({ staffId, month, year, source, includeChildren: wantChildren(req), forceAssignedTo: staffScope(req) })
+    const { staffId, companyId, month, year } = req.query
+    const data = await svc.byStaff({ staffId, companyId: companyId || undefined, month, year, includeChildren: wantChildren(req), forceAssignedTo: staffScope(req) })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
@@ -82,4 +90,4 @@ async function exportReport(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { getTaskTypes, getYears, getSources, getMatrix, getByCompany, getCompanyMatrices, getByStaff, exportReport }
+module.exports = { getTaskTypes, getYears, getSources, getMatrix, getByCompany, getCompanyMatrices, getByStaff, getStaffCompanies, exportReport }

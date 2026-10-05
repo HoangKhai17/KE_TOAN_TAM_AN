@@ -11,6 +11,7 @@ router.get('/sources',    ...auth, ctrl.getSources)
 router.get('/by-company',       ...auth, ctrl.getByCompany)
 router.get('/company-matrices', ...auth, ctrl.getCompanyMatrices)
 router.get('/by-staff',         ...auth, ctrl.getByStaff)
+router.get('/staff-companies',  ...auth, ctrl.getStaffCompanies)
 router.post('/export',    ...auth, ctrl.exportReport)
 router.get('/',           ...auth, ctrl.getMatrix)
 

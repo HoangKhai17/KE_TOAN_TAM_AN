@@ -482,3 +482,21 @@
 .clDone .clText { color: var(--color-text-soft); }
 .clTodo .clMark { color: var(--color-muted-subtle); }
 .clTodo .clText { color: var(--color-text); }
+
+/* ── Khối CHI TIẾT VIỆC CON dưới ma trận (Theo công ty) ─────────────── */
+.subtasksWrap { margin: 4px 0 2px 4px; padding: 8px 12px; border-left: 3px solid var(--color-primary-bg-strong); background: var(--color-bg-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.subtasksHead { font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--color-primary-deep); margin-bottom: 6px; }
+.subtaskItem { padding: 5px 0; border-top: 1px dashed var(--color-border-muted); }
+.subtaskItem:first-of-type { border-top: none; }
+.subtaskHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 3px; }
+.subtaskName { font-size: var(--fs-2xs); font-weight: var(--fw-semibold); color: var(--color-text-strong); }
+.subtaskMeta { font-size: var(--fs-2xs); color: var(--color-muted); white-space: nowrap; }
+.statusMini { padding: 0 6px; border-radius: var(--radius-pill); font-weight: var(--fw-semibold); }
+
+/* Hàng VIỆC CON ở tab Theo nhân viên — nhấn trái cho rõ là task con */
+.childRow td { background: var(--color-bg-soft); }
+.childRow td:first-child { border-left: 3px solid var(--color-primary-bg-strong); }
+
+/* Dòng việc con (Theo nhân viên) thụt vào dưới đợt cha */
+.td.subRowCell { padding-left: 28px; }
+.subRowName { color: var(--color-text-soft); font-size: var(--fs-2xs); }

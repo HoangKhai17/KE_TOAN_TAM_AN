@@ -42,6 +42,12 @@ export async function getByStaff(params) {
   return data.data
 }
 
+// Công ty mà 1 nhân viên có việc định kỳ trong kỳ (cho dropdown lọc)
+export async function getStaffCompanies(params) {
+  const { data } = await api.get('/progress-matrix/staff-companies', { params })
+  return data.data.companies
+}
+
 // Xuất Excel (POST) — body: { view, taskTypeId|companyId|staffId, month, year, columns } → Blob
 export async function exportReport(body) {
   const res = await api.post('/progress-matrix/export', body, { responseType: 'blob', timeout: 120000 })

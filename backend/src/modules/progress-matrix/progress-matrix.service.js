@@ -488,7 +488,7 @@ async function byCompany({ companyId, month, year, forceAssignedTo, includeChild
   return { ...base, rows }
 }
 
-async function byStaff({ staffId, month, year, forceAssignedTo, includeChildren = true }) {
+async function byStaff({ staffId, companyId, month, year, forceAssignedTo, includeChildren = true }) {
   const id = forceAssignedTo || staffId
   if (!id || !month || !year) throw Object.assign(new Error('Thiếu staffId / month / year'), { status: 400 })
   const { rows: uRows } = await query('SELECT name FROM users WHERE id = $1', [id])
@@ -498,30 +498,71 @@ async function byStaff({ staffId, month, year, forceAssignedTo, includeChildren 
   const srcLabels = await loadSourceLabels()
 
   const params = [id, periodStart]
-  const cond = "t.assigned_to = $1 AND t.source = 'auto'"
+  let cond = "t.assigned_to = $1 AND t.source = 'auto'"
+  if (companyId) { params.push(companyId); cond += ` AND t.company_id = $${params.length}` }
 
-  let rows = (await runProgressQuery(
-    `${cond} AND ${MONTH_COND}`, params, 'c.name, t.created_at DESC',
+  const monthRows = (await runProgressQuery(
+    `${cond} AND ${MONTH_COND}`, params, 'c.name, COALESCE(tt.name, t.title), t.created_at',
   )).map((r) => mapTaskRow(r, srcLabels))
 
-  // Đánh dấu việc con: gắn tên "đợt cha" (việc con có thể giao cho người khác cha).
-  if (includeChildren) {
-    const pIds = [...new Set(rows.filter((r) => r.parentTaskId).map((r) => r.parentTaskId))]
-    if (pIds.length) {
-      const { rows: pr } = await query('SELECT id, title FROM tasks WHERE id = ANY($1)', [pIds])
-      const titleById = new Map(pr.map((p) => [p.id, p.title]))
-      rows = rows.map((r) => (r.parentTaskId ? { ...r, isChild: true, parentTitle: titleById.get(r.parentTaskId) ?? null } : r))
-    }
-  }
-  attachChecklist(rows, await fetchChecklists(collectTaskIds(rows)))
-
-  return {
+  const base = {
     view: 'staff',
     subject: { id, name: uRows[0].name },
     period: { month: m, year: y, label: `Tháng ${m}/${y}` },
     includeChildren: !!includeChildren,
-    rows,
   }
+  if (!includeChildren) {
+    attachChecklist(monthRows, await fetchChecklists(collectTaskIds(monthRows)))
+    return { ...base, rows: monthRows }
+  }
+
+  // LỒNG việc con dưới đợt CHA (giống Theo công ty). Việc con lấy ĐỦ (mọi người được giao) để thấy nguyên đợt.
+  const monthIdSet = new Set(monthRows.map((r) => r.taskId))
+  const parentIds = monthRows.filter((r) => !r.parentTaskId).map((r) => r.taskId)
+  let children = []
+  if (parentIds.length) {
+    children = (await runProgressQuery(
+      "t.parent_task_id = ANY($1) AND t.source = 'auto'", [parentIds], 't.created_at',
+    )).map((r) => mapTaskRow(r, srcLabels))
+  }
+  const byParent = new Map()
+  for (const ch of children) {
+    if (!byParent.has(ch.parentTaskId)) byParent.set(ch.parentTaskId, [])
+    byParent.get(ch.parentTaskId).push(ch)
+  }
+  // Việc con MỒ CÔI (cha không nằm trong list của NV này) → hiện cấp cao nhất + gắn tên cha.
+  const orphanPIds = [...new Set(monthRows.filter((r) => r.parentTaskId && !monthIdSet.has(r.parentTaskId)).map((r) => r.parentTaskId))]
+  let orphanTitle = new Map()
+  if (orphanPIds.length) {
+    const { rows: pr } = await query('SELECT id, title FROM tasks WHERE id = ANY($1)', [orphanPIds])
+    orphanTitle = new Map(pr.map((p) => [p.id, p.title]))
+  }
+
+  const rows = []
+  for (const r of monthRows) {
+    if (r.parentTaskId && monthIdSet.has(r.parentTaskId)) continue   // con có cha trong list → lồng dưới cha
+    if (r.parentTaskId) { r.isChild = true; r.parentTitle = orphanTitle.get(r.parentTaskId) ?? null }
+    r.children = byParent.get(r.taskId) || []
+    rows.push(r)
+  }
+  attachChecklist(rows, await fetchChecklists(collectTaskIds(rows)))
+  return { ...base, rows }
+}
+
+// Danh sách CÔNG TY mà 1 nhân viên có việc định kỳ trong kỳ (cho dropdown lọc ở tab Theo nhân viên).
+async function staffCompanies({ staffId, month, year, forceAssignedTo }) {
+  const id = forceAssignedTo || staffId
+  if (!id || !month || !year) return []
+  const m = parseInt(month, 10), y = parseInt(year, 10)
+  const periodStart = `${y}-${String(m).padStart(2, '0')}-01`
+  const { rows } = await query(`
+    SELECT DISTINCT c.id, c.name
+    FROM tasks t JOIN companies c ON c.id = t.company_id
+    WHERE t.assigned_to = $1 AND t.source = 'auto'
+      AND COALESCE(t.start_date, t.due_date) >= $2::date
+      AND COALESCE(t.start_date, t.due_date) <  ($2::date + INTERVAL '1 month')
+    ORDER BY c.name`, [id, periodStart])
+  return rows.map((r) => ({ id: r.id, name: r.name }))
 }
 
 // Theo công ty dạng MA TRẬN (giống Theo quy trình mẫu) — MỖI LỊCH ĐỊNH KỲ của công ty = 1 ma trận.
@@ -588,6 +629,27 @@ async function companyMatrices({ companyId, month, year, includeChildren = true,
       matrices.push({ taskType: { id: g.key, name: g.name, groupName: g.groupLabel }, period, ...body })
     }
   }
+
+  // Bổ sung CHI TIẾT VIỆC CON cho các đợt cha (tên + tiến độ + checklist) để layout task cha–con rõ ràng.
+  if (includeChildren) {
+    const srcLabels = await loadSourceLabels()
+    const parentIds = []
+    for (const mx of matrices) for (const r of mx.rows) if (r.childTasks?.total > 0) parentIds.push(r.taskId)
+    if (parentIds.length) {
+      const childRows = (await runProgressQuery(
+        "t.parent_task_id = ANY($1) AND t.source = 'auto'", [parentIds], 't.created_at',
+      )).map((r) => mapTaskRow(r, srcLabels))
+      const clMap = await fetchChecklists(childRows.map((c) => c.taskId))
+      const byParent = new Map()
+      for (const c of childRows) {
+        c.checklist = clMap.get(c.taskId) || []
+        if (!byParent.has(c.parentTaskId)) byParent.set(c.parentTaskId, [])
+        byParent.get(c.parentTaskId).push(c)
+      }
+      for (const mx of matrices) for (const r of mx.rows) if (r.childTasks?.total > 0) r.children = byParent.get(r.taskId) || []
+    }
+  }
+
   return {
     view: 'company',
     subject: { id: companyId, name: coRows[0].name, taxCode: coRows[0].tax_code },
@@ -816,4 +878,4 @@ async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, m
   return { buffer: await exportMatrix(mx, includeSet), nameBase: slug(mx.taskType.name), period: mx.period }
 }
 
-module.exports = { listTaskTypes, listYears, listSources, getMatrix, byCompany, byStaff, companyMatrices, exportReport }
+module.exports = { listTaskTypes, listYears, listSources, getMatrix, byCompany, byStaff, staffCompanies, companyMatrices, exportReport }
