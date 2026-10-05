@@ -130,6 +130,10 @@
 .wNote { min-width: 220px; }
 .wDiscuss { min-width: 230px; }
 .wAction { width: 82px; }
+/* Danh sách quy tắc — phân bổ bề rộng cột (Tên rộng, Điểm hẹp, Nhóm vừa) */
+.wGroup { width: 140px; }
+.wRuleName { min-width: 320px; }
+.wDetect { width: 160px; }
 .btnDiscuss { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border: 1.5px solid var(--color-success-bg); border-radius: var(--radius-sm); background: var(--color-success-bg); color: var(--color-success-text); font-size: var(--fs-2xs); font-weight: var(--fw-bold); cursor: pointer; white-space: nowrap; }
 .btnDiscuss:hover { background: var(--color-success-dark, #16a34a); color: var(--color-white); border-color: transparent; }
 /* Thu nhỏ DateBox chuẩn về cỡ ô inline (nhân đôi class để thắng CSS gốc của DateBox) */

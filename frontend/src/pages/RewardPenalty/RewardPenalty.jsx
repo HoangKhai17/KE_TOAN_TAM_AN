@@ -446,13 +446,13 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
             <thead><tr>
               <th className={s.colChk}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
               <th className={s.colStt}>STT</th>
-              <FilterTh cf={cf} colKey="group">Nhóm quy tắc</FilterTh>
-              <FilterTh cf={cf} colKey="label">Tên quy tắc</FilterTh>
-              <FilterTh cf={cf} colKey="kind">Loại</FilterTh>
-              <FilterTh cf={cf} colKey="points" num>Điểm</FilterTh>
-              <FilterTh cf={cf} colKey="detect">Nguồn phát hiện</FilterTh>
-              <FilterTh cf={cf} colKey="active">Trạng thái</FilterTh>
-              <th>Hành động</th>
+              <FilterTh cf={cf} colKey="group" className={s.wGroup}>Nhóm quy tắc</FilterTh>
+              <FilterTh cf={cf} colKey="label" className={s.wRuleName}>Tên quy tắc</FilterTh>
+              <FilterTh cf={cf} colKey="kind" className={s.wKind}>Loại</FilterTh>
+              <FilterTh cf={cf} colKey="points" num className={s.wPoints}>Điểm</FilterTh>
+              <FilterTh cf={cf} colKey="detect" className={s.wDetect}>Nguồn phát hiện</FilterTh>
+              <FilterTh cf={cf} colKey="active" className={s.wStatus}>Trạng thái</FilterTh>
+              <th className={s.wAction}>Hành động</th>
             </tr></thead>
             <tbody>
               {draft && (
