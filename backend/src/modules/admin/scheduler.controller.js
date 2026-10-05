@@ -14,17 +14,36 @@ function monthRange(year, month) {
   return { y, m, start, end }
 }
 
-// Điều kiện khớp: bước checklist của TASK ĐỊNH KỲ (due trong kỳ) ↔ cấu hình LỊCH của chính nó
-// (schedule_checklist_items qua template step). CHỈ các bước LỆCH điểm/độ khó so với cấu hình.
-const SYNC_WHERE = `
-  FROM task_checklist_items ci
-  JOIN tasks t ON t.id = ci.task_id AND t.source = 'auto'
-       AND t.due_date >= $1::date AND t.due_date < $2::date
-  JOIN schedule_checklist_items sci
-       ON sci.schedule_id = t.customer_task_schedule_id
-      AND sci.source_template_step_id = ci.source_step_id
-  WHERE ci.source_step_id IS NOT NULL
-    AND (ci.points IS DISTINCT FROM sci.points OR ci.difficulty IS DISTINCT FROM sci.difficulty)`
+// Khớp bước checklist của TASK ĐỊNH KỲ (due trong kỳ) với CẤU HÌNH LỊCH của CHÍNH NÓ:
+//   schedule_checklist_items s WHERE s.schedule_id = t.customer_task_schedule_id
+//   → tức LỊCH ĐỊNH KỲ của TỪNG CÔNG TY (customer_task_schedules), KHÔNG phải template mẫu
+//     (task_type_checklist_templates). CTE này KHÔNG đụng tới bảng template.
+// Cách khớp 2 tầng (hướng B – lai) để phủ CẢ bước nhập từ mẫu LẪN nhập thủ công:
+//   (1) ưu tiên theo ID bước mẫu (source_template_step_id = source_step_id) — chính xác, giữ hành vi cũ;
+//   (2) fallback theo NỘI DUNG (step_text chuẩn hoá + level) — phủ bước THỦ CÔNG (source_step_id NULL).
+// LATERAL + LIMIT 1 → mỗi bước task chỉ khớp ĐÚNG 1 bước lịch (không nhân đôi, không nhập nhằng).
+const MATCH_CTE = `
+  WITH m AS (
+    SELECT ci.id AS ci_id, ci.task_id,
+           ci.points AS cur_points, ci.difficulty AS cur_diff,
+           sci.points AS new_points, sci.difficulty AS new_diff,
+           (ci.points IS DISTINCT FROM sci.points OR ci.difficulty IS DISTINCT FROM sci.difficulty) AS diff
+    FROM task_checklist_items ci
+    JOIN tasks t ON t.id = ci.task_id AND t.source = 'auto'
+         AND t.due_date >= $1::date AND t.due_date < $2::date
+    JOIN LATERAL (
+      SELECT s.points, s.difficulty
+      FROM schedule_checklist_items s
+      WHERE s.schedule_id = t.customer_task_schedule_id
+        AND (
+          (ci.source_step_id IS NOT NULL AND s.source_template_step_id = ci.source_step_id)
+          OR (lower(btrim(s.step_text)) = lower(btrim(ci.step_text)) AND COALESCE(s.level,0) = COALESCE(ci.level,0))
+        )
+      ORDER BY (CASE WHEN ci.source_step_id IS NOT NULL AND s.source_template_step_id = ci.source_step_id THEN 0 ELSE 1 END),
+               s.step_order
+      LIMIT 1
+    ) sci ON TRUE
+  )`
 
 // Đồng bộ điểm/độ khó từ cấu hình lịch → task định kỳ đã sinh (theo THÁNG). Mặc định DRY-RUN.
 async function syncScores(req, res, next) {
@@ -35,10 +54,11 @@ async function syncScores(req, res, next) {
     const closed = await kpiSvc.isMonthClosed(y, m)
 
     const { rows: [stat] } = await query(`
-      SELECT COUNT(*)::int AS items,
-             COUNT(DISTINCT ci.task_id)::int AS tasks,
-             COALESCE(SUM(COALESCE(sci.points,0) - COALESCE(ci.points,0)),0)::int AS points_delta
-      ${SYNC_WHERE}`, [start, end])
+      ${MATCH_CTE}
+      SELECT COUNT(*) FILTER (WHERE diff)::int AS items,
+             COUNT(DISTINCT task_id) FILTER (WHERE diff)::int AS tasks,
+             COALESCE(SUM(CASE WHEN diff THEN COALESCE(new_points,0) - COALESCE(cur_points,0) ELSE 0 END),0)::int AS points_delta
+      FROM m`, [start, end])
 
     if (dryRun) {
       return res.json({ success: true, data: { dryRun: true, year: y, month: m, closed,
@@ -50,15 +70,11 @@ async function syncScores(req, res, next) {
     try {
       await client.query('BEGIN')
       const { rowCount } = await client.query(`
+        ${MATCH_CTE}
         UPDATE task_checklist_items ci
-        SET points = sci.points, difficulty = sci.difficulty
-        FROM tasks t, schedule_checklist_items sci
-        WHERE ci.task_id = t.id AND t.source = 'auto'
-          AND t.due_date >= $1::date AND t.due_date < $2::date
-          AND sci.schedule_id = t.customer_task_schedule_id
-          AND sci.source_template_step_id = ci.source_step_id
-          AND ci.source_step_id IS NOT NULL
-          AND (ci.points IS DISTINCT FROM sci.points OR ci.difficulty IS DISTINCT FROM sci.difficulty)`,
+        SET points = m.new_points, difficulty = m.new_diff
+        FROM m
+        WHERE ci.id = m.ci_id AND m.diff`,
         [start, end])
       await client.query('COMMIT')
       await audit.log({ userId: req.user?.id ?? null, action: 'kpi.scores_synced', targetType: 'task_checklist_items',
