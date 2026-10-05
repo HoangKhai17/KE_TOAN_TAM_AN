@@ -378,3 +378,51 @@
   font-size: var(--fs-2xs);
   white-space: nowrap;
 }
+
+/* ── Task cha-con (việc con) ─────────────────────────────────────── */
+/* Ma trận: chỉ báo "Việc con x/y" trên hàng cha */
+.childBadge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary-dark);
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-primary-bg-strong);
+  border-radius: 10px;
+  white-space: nowrap;
+}
+/* Theo công ty: nút bung/thu việc con + badge số việc con */
+.expandBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.childCountBadge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--color-primary-dark);
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-primary-bg-strong);
+  border-radius: 10px;
+  white-space: nowrap;
+}
+/* Hàng việc con (lồng dưới cha) */
+.childRow td { background: var(--color-bg-soft); }
+.childRowCell { padding-left: 22px; color: var(--color-text-soft); font-weight: var(--fw-regular); }
+/* Theo nhân viên: chú thích "việc con của …" */
+.childOf { color: var(--color-muted-soft); font-style: italic; font-size: var(--fs-2xs); }

@@ -25,12 +25,18 @@ async function getSources(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// includeChildren mặc định TRUE; FE gửi includeChildren=false để tắt (chế độ phẳng như cũ).
+function wantChildren(req) {
+  const v = req.query.includeChildren
+  return !(v === 'false' || v === '0')
+}
+
 async function getMatrix(req, res, next) {
   try {
     const { taskTypeId, month, year, source, collapse, importantOnly } = req.query
     // Mặc định CHỈ hiện bước ★; FE gửi importantOnly=false để hiện tất cả.
     const impOnly = !(importantOnly === 'false' || importantOnly === '0')
-    const data = await svc.getMatrix({ taskTypeId, month, year, source, collapse: collapse === 'true' || collapse === '1', importantOnly: impOnly, forceAssignedTo: staffScope(req) })
+    const data = await svc.getMatrix({ taskTypeId, month, year, source, collapse: collapse === 'true' || collapse === '1', importantOnly: impOnly, includeChildren: wantChildren(req), forceAssignedTo: staffScope(req) })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
@@ -38,7 +44,7 @@ async function getMatrix(req, res, next) {
 async function getByCompany(req, res, next) {
   try {
     const { companyId, month, year, source } = req.query
-    const data = await svc.byCompany({ companyId, month, year, source, forceAssignedTo: staffScope(req) })
+    const data = await svc.byCompany({ companyId, month, year, source, includeChildren: wantChildren(req), forceAssignedTo: staffScope(req) })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
@@ -46,17 +52,18 @@ async function getByCompany(req, res, next) {
 async function getByStaff(req, res, next) {
   try {
     const { staffId, month, year, source } = req.query
-    const data = await svc.byStaff({ staffId, month, year, source, forceAssignedTo: staffScope(req) })
+    const data = await svc.byStaff({ staffId, month, year, source, includeChildren: wantChildren(req), forceAssignedTo: staffScope(req) })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
 
 async function exportReport(req, res, next) {
   try {
-    const { view, taskTypeId, companyId, staffId, month, year, source, columns, collapse, importantOnly } = req.body ?? {}
+    const { view, taskTypeId, companyId, staffId, month, year, source, columns, collapse, importantOnly, includeChildren } = req.body ?? {}
     const { buffer, nameBase, period } = await svc.exportReport({
       view, taskTypeId, companyId, staffId, month, year, source, columns, collapse: collapse === true,
       importantOnly: importantOnly !== false,
+      includeChildren: includeChildren !== false,
       forceAssignedTo: staffScope(req),
     })
     const filename = `bc-tien-do-${nameBase}-T${period.month}-${period.year}.xlsx`

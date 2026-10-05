@@ -40,7 +40,7 @@ async function listYears() {
 }
 
 // Ma trận tiến độ cho (taskTypeId, month, year). forceAssignedTo: staff chỉ thấy phiếu của mình.
-async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, collapse = false, importantOnly = true }) {
+async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, collapse = false, importantOnly = true, includeChildren = true }) {
   const m = parseInt(month, 10)
   const y = parseInt(year, 10)
   if (!taskTypeId || !m || !y) {
@@ -68,7 +68,10 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
   if (forceAssignedTo) { params.push(forceAssignedTo); staffCond += ` AND t.assigned_to = $${params.length}` }
   const srcArr = parseSources(source)
   if (srcArr) { params.push(srcArr); staffCond += ` AND t.source = ANY($${params.length})` }
-  // 1 dòng = 1 PHIẾU (đợt). Quy trình lặp (5 ngày/lần…) → 1 công ty có nhiều đợt/tháng, hiện đủ.
+  // 1 dòng = 1 PHIẾU CHA (đợt). Quy trình lặp (5 ngày/lần…) → 1 công ty có nhiều đợt/tháng, hiện đủ.
+  // CHỈ lấy task cấp cao nhất (parent_task_id IS NULL): "việc con" dùng chung task_type nhưng
+  // checklist riêng (không khớp bước quy trình) nên KHÔNG làm hàng ma trận — tiến độ của chúng
+  // được tổng hợp thành chỉ báo "Việc con x/y" trên hàng cha (xem childAgg bên dưới).
   const { rows: tasks } = await query(`
     SELECT t.id, t.company_id, t.assigned_to,
            t.start_date, t.due_date, t.period_label,
@@ -78,6 +81,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
     JOIN companies c ON c.id = t.company_id
     LEFT JOIN users u ON u.id = t.assigned_to
     WHERE t.task_type_id = $1
+      AND t.parent_task_id IS NULL
       AND COALESCE(t.start_date, t.due_date) >= $2::date
       AND COALESCE(t.start_date, t.due_date) <  ($2::date + INTERVAL '1 month')
       ${staffCond}
@@ -120,6 +124,19 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
       }
       if (it.source_parent_id != null) parentIds.add(it.source_parent_id)
     }
+  }
+
+  // Rollup VIỆC CON: mỗi phiếu cha → tổng số việc con + số đã hoàn thành (theo trạng thái task).
+  let childAgg = new Map()   // parent_task_id -> { total, done }
+  if (includeChildren && tasks.length) {
+    const { rows: ch } = await query(
+      `SELECT parent_task_id,
+              COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE status = 'completed')::int AS done
+       FROM tasks WHERE parent_task_id = ANY($1) GROUP BY parent_task_id`,
+      [tasks.map((t) => t.id)],
+    )
+    childAgg = new Map(ch.map((r) => [r.parent_task_id, { total: r.total, done: r.done }]))
   }
 
   const labelOf = (id) => stepAgg.get(id)?.text ?? templById.get(id)?.step_text ?? null
@@ -220,6 +237,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
         periodLabel:  t.period_label,
         cells: cols.map((col) => cellFor(col, map)),
         custom: { total: cust.total, done: cust.done },
+        childTasks: childAgg.get(t.id) || { total: 0, done: 0 },
       }
     })
     .sort((a, b) =>
@@ -235,6 +253,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
     collapse: !!collapse,
     importantOnly: !!importantOnly,
     importantFilterApplied,   // false = quy trình chưa có bước ★ nên đang hiện tất cả
+    includeChildren: !!includeChildren,
   }
 }
 
@@ -300,24 +319,10 @@ function slug(name) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'bc'
 }
 
-// Mỗi hàng = 1 phiếu, kèm tiến độ THÍCH ỨNG (checklist nếu có, không thì theo trạng thái) + nguồn
-async function summaryRows({ scope, id, month, year, source, forceAssignedTo }) {
-  const y = parseInt(year, 10)
-  const m = parseInt(month, 10)
-  const periodStart = `${y}-${String(m).padStart(2, '0')}-01`
-  const params = [id, periodStart]
-  let scopeCond = scope === 'company' ? 't.company_id = $1' : 't.assigned_to = $1'
-  if (scope === 'company' && forceAssignedTo) {
-    params.push(forceAssignedTo)
-    scopeCond += ` AND t.assigned_to = $${params.length}`
-  }
-  const srcArr = parseSources(source)
-  if (srcArr) { params.push(srcArr); scopeCond += ` AND t.source = ANY($${params.length})` }
-
-  // LEFT JOIN task_types: task ad-hoc (tự sắp xếp / KH yêu cầu / ra ngoài) KHÔNG có task_type
-  // → vẫn phải hiện. Tên "Quy trình" lấy tt.name, không có thì lấy tiêu đề task.
+// Chạy truy vấn tiến độ 1 lần (dùng chung company/staff + fetch việc con). Trả raw rows.
+async function runProgressQuery(whereCond, params, orderBy) {
   const { rows } = await query(`
-    SELECT t.id, t.title, t.status, t.source, t.due_date, t.period_label,
+    SELECT t.id, t.title, t.status, t.source, t.due_date, t.period_label, t.parent_task_id,
            COALESCE(tt.name, t.title) AS task_type_name,
            c.name AS company_name, c.tax_code,
            u.name AS assignee_name,
@@ -336,68 +341,154 @@ async function summaryRows({ scope, id, month, year, source, forceAssignedTo }) 
         FROM task_checklist_items WHERE task_id = t.id
       ) z
     ) cl ON TRUE
-    WHERE ${scopeCond}
-      AND COALESCE(t.start_date, t.due_date) >= $2::date
-      AND COALESCE(t.start_date, t.due_date) <  ($2::date + INTERVAL '1 month')
-    ORDER BY ${scope === 'company' ? 'COALESCE(tt.name, t.title)' : 'c.name'}, t.created_at DESC
+    WHERE ${whereCond}
+    ORDER BY ${orderBy}
   `, params)
-
-  const srcLabels = await loadSourceLabels()
-  return rows.map((r) => {
-    const total = parseInt(r.total, 10) || 0
-    const done = parseInt(r.done, 10) || 0
-    const hasChecklist = total > 0
-    const statusLabel = STATUS_LABELS[r.status] ?? r.status
-    // Tiến độ thích ứng: hoàn thành = 100; có checklist → done/total; không → suy từ trạng thái
-    const percent = r.status === 'completed'
-      ? 100
-      : hasChecklist ? Math.round(done * 100 / total) : (STATUS_PROGRESS[r.status] ?? 0)
-    return {
-      taskId:       r.id,
-      taskTypeName: r.task_type_name,
-      companyName:  r.company_name,
-      taxCode:      r.tax_code,
-      assigneeName: r.assignee_name,
-      source:       r.source,
-      sourceLabel:  srcLabels[r.source] ?? r.source,
-      hasChecklist,
-      doneSteps:    done,
-      totalSteps:   total,
-      percent,
-      progressMode: hasChecklist ? 'checklist' : 'status',
-      progressLabel: hasChecklist ? `${done}/${total}` : statusLabel,
-      status:       r.status,
-      statusLabel,
-      dueDate:      r.due_date,
-      periodLabel:  r.period_label,
-    }
-  })
+  return rows
 }
 
-async function byCompany({ companyId, month, year, source, forceAssignedTo }) {
-  if (!companyId || !month || !year) throw Object.assign(new Error('Thiếu companyId / month / year'), { status: 400 })
-  const { rows } = await query('SELECT name, tax_code FROM companies WHERE id = $1', [companyId])
-  if (!rows[0]) throw Object.assign(new Error('Công ty không tồn tại'), { status: 404 })
-  const m = parseInt(month, 10), y = parseInt(year, 10)
+// Map 1 task raw → DTO tiến độ thích ứng (checklist nếu có, không thì suy từ trạng thái).
+function mapTaskRow(r, srcLabels) {
+  const total = parseInt(r.total, 10) || 0
+  const done = parseInt(r.done, 10) || 0
+  const hasChecklist = total > 0
+  const statusLabel = STATUS_LABELS[r.status] ?? r.status
+  const percent = r.status === 'completed'
+    ? 100
+    : hasChecklist ? Math.round(done * 100 / total) : (STATUS_PROGRESS[r.status] ?? 0)
   return {
-    view: 'company',
-    subject: { id: companyId, name: rows[0].name, taxCode: rows[0].tax_code },
-    period: { month: m, year: y, label: `Tháng ${m}/${y}` },
-    rows: await summaryRows({ scope: 'company', id: companyId, month, year, source, forceAssignedTo }),
+    taskId:       r.id,
+    title:        r.title,
+    parentTaskId: r.parent_task_id ?? null,
+    taskTypeName: r.task_type_name,
+    companyName:  r.company_name,
+    taxCode:      r.tax_code,
+    assigneeName: r.assignee_name,
+    source:       r.source,
+    sourceLabel:  srcLabels[r.source] ?? r.source,
+    hasChecklist,
+    doneSteps:    done,
+    totalSteps:   total,
+    percent,
+    progressMode: hasChecklist ? 'checklist' : 'status',
+    progressLabel: hasChecklist ? `${done}/${total}` : statusLabel,
+    status:       r.status,
+    statusLabel,
+    dueDate:      r.due_date,
+    periodLabel:  r.period_label,
   }
 }
 
-async function byStaff({ staffId, month, year, source, forceAssignedTo }) {
+// Dòng TỔNG của 1 đợt = cha + các việc con. %: trung bình tiến độ các đơn vị; xong khi tất cả xong.
+function makeRollup(parent, kids) {
+  const units = [parent, ...kids]
+  const unitCount = units.length
+  const completedUnits = units.filter((u) => u.status === 'completed').length
+  const percent = Math.round(units.reduce((s, u) => s + (u.percent || 0), 0) / unitCount)
+  const allDone = completedUnits === unitCount
+  return {
+    ...parent,
+    isRollup:      true,
+    childCount:    kids.length,
+    children:      kids,
+    completedUnits, unitCount,
+    hasChecklist:  false,            // dòng tổng hiển thị %, không hiển thị x/y
+    percent,
+    progressLabel: `${percent}%`,
+    status:        allDone ? 'completed' : 'in_progress',
+    statusLabel:   allDone ? 'Hoàn thành' : `${completedUnits}/${unitCount} việc xong`,
+  }
+}
+
+const MONTH_COND = `COALESCE(t.start_date, t.due_date) >= $2::date
+      AND COALESCE(t.start_date, t.due_date) <  ($2::date + INTERVAL '1 month')`
+
+async function byCompany({ companyId, month, year, source, forceAssignedTo, includeChildren = true }) {
+  if (!companyId || !month || !year) throw Object.assign(new Error('Thiếu companyId / month / year'), { status: 400 })
+  const { rows: coRows } = await query('SELECT name, tax_code FROM companies WHERE id = $1', [companyId])
+  if (!coRows[0]) throw Object.assign(new Error('Công ty không tồn tại'), { status: 404 })
+  const m = parseInt(month, 10), y = parseInt(year, 10)
+  const periodStart = `${y}-${String(m).padStart(2, '0')}-01`
+  const srcLabels = await loadSourceLabels()
+  const srcArr = parseSources(source)
+
+  const params = [companyId, periodStart]
+  let cond = 't.company_id = $1'
+  if (forceAssignedTo) { params.push(forceAssignedTo); cond += ` AND t.assigned_to = $${params.length}` }
+  if (srcArr) { params.push(srcArr); cond += ` AND t.source = ANY($${params.length})` }
+
+  const monthRows = (await runProgressQuery(
+    `${cond} AND ${MONTH_COND}`, params, 'COALESCE(tt.name, t.title), t.created_at DESC',
+  )).map((r) => mapTaskRow(r, srcLabels))
+
+  const base = {
+    view: 'company',
+    subject: { id: companyId, name: coRows[0].name, taxCode: coRows[0].tax_code },
+    period: { month: m, year: y, label: `Tháng ${m}/${y}` },
+    includeChildren: !!includeChildren,
+  }
+  if (!includeChildren) return { ...base, rows: monthRows }
+
+  // Việc con của các phiếu trong tháng (lấy bất kể hạn con rơi tháng nào) → gộp đợt.
+  const parentIds = monthRows.map((r) => r.taskId)
+  let children = []
+  if (parentIds.length) {
+    const cp = [parentIds]
+    let ccond = 't.parent_task_id = ANY($1)'
+    if (forceAssignedTo) { cp.push(forceAssignedTo); ccond += ` AND t.assigned_to = $${cp.length}` }
+    if (srcArr) { cp.push(srcArr); ccond += ` AND t.source = ANY($${cp.length})` }
+    children = (await runProgressQuery(ccond, cp, 't.created_at')).map((r) => mapTaskRow(r, srcLabels))
+  }
+  const byParent = new Map()
+  for (const ch of children) {
+    if (!byParent.has(ch.parentTaskId)) byParent.set(ch.parentTaskId, [])
+    byParent.get(ch.parentTaskId).push(ch)
+  }
+  const monthIdSet = new Set(parentIds)
+  const rows = []
+  for (const r of monthRows) {
+    // Con mà CHA cũng trong tháng → bỏ khỏi cấp trên (sẽ hiện lồng dưới cha).
+    if (r.parentTaskId && monthIdSet.has(r.parentTaskId)) continue
+    const kids = byParent.get(r.taskId) || []
+    rows.push(kids.length ? makeRollup(r, kids) : { ...r, children: [], isRollup: false })
+  }
+  return { ...base, rows }
+}
+
+async function byStaff({ staffId, month, year, source, forceAssignedTo, includeChildren = true }) {
   const id = forceAssignedTo || staffId
   if (!id || !month || !year) throw Object.assign(new Error('Thiếu staffId / month / year'), { status: 400 })
-  const { rows } = await query('SELECT name FROM users WHERE id = $1', [id])
-  if (!rows[0]) throw Object.assign(new Error('Nhân viên không tồn tại'), { status: 404 })
+  const { rows: uRows } = await query('SELECT name FROM users WHERE id = $1', [id])
+  if (!uRows[0]) throw Object.assign(new Error('Nhân viên không tồn tại'), { status: 404 })
   const m = parseInt(month, 10), y = parseInt(year, 10)
+  const periodStart = `${y}-${String(m).padStart(2, '0')}-01`
+  const srcLabels = await loadSourceLabels()
+  const srcArr = parseSources(source)
+
+  const params = [id, periodStart]
+  let cond = 't.assigned_to = $1'
+  if (srcArr) { params.push(srcArr); cond += ` AND t.source = ANY($${params.length})` }
+
+  let rows = (await runProgressQuery(
+    `${cond} AND ${MONTH_COND}`, params, 'c.name, t.created_at DESC',
+  )).map((r) => mapTaskRow(r, srcLabels))
+
+  // Đánh dấu việc con: gắn tên "đợt cha" (việc con có thể giao cho người khác cha).
+  if (includeChildren) {
+    const pIds = [...new Set(rows.filter((r) => r.parentTaskId).map((r) => r.parentTaskId))]
+    if (pIds.length) {
+      const { rows: pr } = await query('SELECT id, title FROM tasks WHERE id = ANY($1)', [pIds])
+      const titleById = new Map(pr.map((p) => [p.id, p.title]))
+      rows = rows.map((r) => (r.parentTaskId ? { ...r, isChild: true, parentTitle: titleById.get(r.parentTaskId) ?? null } : r))
+    }
+  }
+
   return {
     view: 'staff',
-    subject: { id, name: rows[0].name },
+    subject: { id, name: uRows[0].name },
     period: { month: m, year: y, label: `Tháng ${m}/${y}` },
-    rows: await summaryRows({ scope: 'staff', id, month, year, source }),
+    includeChildren: !!includeChildren,
+    rows,
   }
 }
 
@@ -416,6 +507,7 @@ async function exportMatrix(matrix, includeSet) {
   ]
   if (has('taxCode'))  idCols.push({ header: 'Mã số thuế', get: (r) => r.taxCode || '' })
   if (has('assignee')) idCols.push({ header: 'NV quản lý', get: (r) => r.assigneeName || '' })
+  if (has('children')) idCols.push({ header: 'Việc con', get: (r) => (r.childTasks && r.childTasks.total ? `${r.childTasks.done}/${r.childTasks.total}` : '') })
   const idCount = idCols.length
 
   const stepCols  = matrix.columns
@@ -546,7 +638,8 @@ async function buildSummaryExcel(data, includeSet) {
   const progressText = (r) => (r.hasChecklist ? `${r.doneSteps}/${r.totalSteps} (${r.percent}%)` : `${r.percent}%`)
   const colDefs = data.view === 'company'
     ? [
-        { key: 'taskType', header: 'Quy trình',    always: true, get: (r) => r.taskTypeName },
+        // Việc con hiện lồng dưới cha (thụt "↳"); dòng cha gộp nhiều con hiển thị tên quy trình.
+        { key: 'taskType', header: 'Quy trình',    always: true, get: (r) => (r._child ? `    ↳ ${r.title || r.taskTypeName}` : r.taskTypeName) },
         { key: 'source',   header: 'Nguồn',                      get: (r) => r.sourceLabel },
         { key: 'assignee', header: 'NV phụ trách',               get: (r) => r.assigneeName || '' },
         { key: 'progress', header: 'Tiến độ',                    get: progressText },
@@ -555,7 +648,7 @@ async function buildSummaryExcel(data, includeSet) {
       ]
     : [
         { key: 'company',  header: 'Công ty',     always: true, get: (r) => r.companyName },
-        { key: 'taskType', header: 'Quy trình',                 get: (r) => r.taskTypeName },
+        { key: 'taskType', header: 'Quy trình',                 get: (r) => ((r.isChild && r.parentTitle) ? `↳ ${r.taskTypeName} (việc con của ${r.parentTitle})` : r.taskTypeName) },
         { key: 'source',   header: 'Nguồn',                     get: (r) => r.sourceLabel },
         { key: 'progress', header: 'Tiến độ',                   get: progressText },
         { key: 'status',   header: 'Trạng thái',                get: (r) => r.statusLabel },
@@ -563,6 +656,15 @@ async function buildSummaryExcel(data, includeSet) {
       ]
   const cols = colDefs.filter((c) => c.always || has(c.key))
   const totalCols = cols.length
+
+  // Company: bung việc con thành dòng lồng (thụt) ngay dưới dòng đợt cha.
+  const flatRows = []
+  for (const r of data.rows) {
+    flatRows.push(r)
+    if (data.view === 'company' && Array.isArray(r.children) && r.children.length) {
+      for (const ch of r.children) flatRows.push({ ...ch, _child: true })
+    }
+  }
 
   ws.mergeCells(1, 1, 1, totalCols)
   const titleCell = ws.getCell(1, 1)
@@ -579,7 +681,7 @@ async function buildSummaryExcel(data, includeSet) {
   headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
   headerRow.height = 28
 
-  for (const r of data.rows) ws.addRow(cols.map((c) => c.get(r)))
+  for (const r of flatRows) ws.addRow(cols.map((c) => c.get(r)))
 
   applyGrid(ws, totalCols, 1)
   ws.getColumn(1).width = 30
@@ -595,17 +697,17 @@ async function buildSummaryExcel(data, includeSet) {
 }
 
 // Entry export thống nhất 3 view + chọn cột → { buffer, nameBase }
-async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, month, year, source, columns, collapse = false, importantOnly = true, forceAssignedTo }) {
+async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, month, year, source, columns, collapse = false, importantOnly = true, includeChildren = true, forceAssignedTo }) {
   const includeSet = Array.isArray(columns) && columns.length ? new Set(columns) : null
   if (view === 'company') {
-    const data = await byCompany({ companyId, month, year, source, forceAssignedTo })
+    const data = await byCompany({ companyId, month, year, source, forceAssignedTo, includeChildren })
     return { buffer: await buildSummaryExcel(data, includeSet), nameBase: `cong-ty-${slug(data.subject.name)}`, period: data.period }
   }
   if (view === 'staff') {
-    const data = await byStaff({ staffId, month, year, source, forceAssignedTo })
+    const data = await byStaff({ staffId, month, year, source, forceAssignedTo, includeChildren })
     return { buffer: await buildSummaryExcel(data, includeSet), nameBase: `nhan-vien-${slug(data.subject.name)}`, period: data.period }
   }
-  const mx = await getMatrix({ taskTypeId, month, year, source, collapse, importantOnly, forceAssignedTo })
+  const mx = await getMatrix({ taskTypeId, month, year, source, collapse, importantOnly, includeChildren, forceAssignedTo })
   return { buffer: await exportMatrix(mx, includeSet), nameBase: slug(mx.taskType.name), period: mx.period }
 }
 

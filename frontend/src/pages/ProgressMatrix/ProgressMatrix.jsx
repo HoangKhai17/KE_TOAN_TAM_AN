@@ -30,7 +30,7 @@ const STATUS_CLASS = {
 
 // Cột tùy chọn cho popup xuất (theo view) — Tên-KH/Quy-trình/Công-ty là cột cố định luôn có
 const EXPORT_OPTIONAL_COLS = {
-  matrix:  [{ key: 'taxCode', label: 'Mã số thuế' }, { key: 'assignee', label: 'NV quản lý' }],
+  matrix:  [{ key: 'taxCode', label: 'Mã số thuế' }, { key: 'assignee', label: 'NV quản lý' }, { key: 'children', label: 'Việc con (x/y)' }],
   company: [{ key: 'source', label: 'Nguồn' }, { key: 'assignee', label: 'NV phụ trách' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
   staff:   [{ key: 'source', label: 'Nguồn' }, { key: 'taskType', label: 'Quy trình' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
 }
@@ -248,6 +248,11 @@ function MatrixTable({ matrix }) {
                     +{r.custom.total} riêng ({r.custom.done}/{r.custom.total})
                   </span>
                 )}
+                {matrix.includeChildren && r.childTasks?.total > 0 && (
+                  <span className={s.childBadge} title="Việc con của đợt này (task riêng, có checklist riêng)">
+                    Việc con {r.childTasks.done}/{r.childTasks.total}
+                  </span>
+                )}
               </td>
               <td className={`${s.td} ${s.colPeriod} ${s.tdMuted}`}
                 title={r.periodLabel ? `Kỳ: ${r.periodLabel}${r.startDate ? ` · Bắt đầu: ${fmtDate(r.startDate)}` : ''}` : undefined}>
@@ -303,6 +308,47 @@ function SummaryTable({ data }) {
   ]), [isCompany])
 
   const hf = useHeaderFilters(data.rows, colDefs)
+  const [expanded, setExpanded] = useState(() => new Set())
+  const toggleExpand = (id) => setExpanded((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  function renderRow(r, isChildRow) {
+    const pct = r.percent ?? 0
+    return (
+      <tr key={r.taskId} className={`${s.tr} ${isChildRow ? s.childRow : ''}`}>
+        <td className={`${s.td} ${s.tdName} ${isChildRow ? s.childRowCell : ''}`}>
+          {isCompany && r.isRollup && (
+            <button type="button" className={s.expandBtn} onClick={() => toggleExpand(r.taskId)} title="Xem/ẩn việc con">
+              {expanded.has(r.taskId) ? '▾' : '▸'}
+            </button>
+          )}
+          {isCompany ? (isChildRow ? `↳ ${r.title || r.taskTypeName}` : r.taskTypeName) : r.companyName}
+          {isCompany && r.isRollup && <span className={s.childCountBadge}>{r.childCount} việc con</span>}
+        </td>
+        <td className={s.td}><span className={s.sourceChip}>{r.sourceLabel}</span></td>
+        <td className={s.td}>
+          {isCompany
+            ? (r.assigneeName || '—')
+            : ((r.isChild && r.parentTitle)
+                ? <span title={`Việc con của: ${r.parentTitle}`}>↳ {r.taskTypeName} <em className={s.childOf}>(việc con của {r.parentTitle})</em></span>
+                : r.taskTypeName)}
+        </td>
+        <td className={s.td}>
+          <div className={s.progressCell}>
+            <div className={s.progressBar}>
+              <div className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`} style={{ '--pm-pct': `${pct}%` }} />
+            </div>
+            <span className={s.progressText}>
+              {r.hasChecklist ? `${r.doneSteps}/${r.totalSteps} · ${pct}%` : `${pct}%`}
+            </span>
+          </div>
+        </td>
+        <td className={s.td}>
+          <span className={`${s.statusBadge} ${STATUS_CLASS[r.status] ?? ''}`}>{r.statusLabel}</span>
+        </td>
+        <td className={`${s.td} ${s.tdMuted}`}>{fmtDate(r.dueDate)}</td>
+      </tr>
+    )
+  }
 
   return (
     <div className={s.tableWrap}>
@@ -317,29 +363,12 @@ function SummaryTable({ data }) {
         <tbody>
           {hf.displayed.length === 0 ? (
             <tr><td colSpan={colDefs.length} className={s.tdNoMatch}>Không có dòng nào khớp bộ lọc.</td></tr>
-          ) : hf.displayed.map((r) => {
-            const pct = r.percent ?? 0
-            return (
-              <tr key={r.taskId} className={s.tr}>
-                <td className={`${s.td} ${s.tdName}`}>{isCompany ? r.taskTypeName : r.companyName}</td>
-                <td className={s.td}><span className={s.sourceChip}>{r.sourceLabel}</span></td>
-                <td className={s.td}>{isCompany ? (r.assigneeName || '—') : r.taskTypeName}</td>
-                <td className={s.td}>
-                  <div className={s.progressCell}>
-                    <div className={s.progressBar}>
-                      <div className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`} style={{ '--pm-pct': `${pct}%` }} />
-                    </div>
-                    <span className={s.progressText}>
-                      {r.hasChecklist ? `${r.doneSteps}/${r.totalSteps} · ${pct}%` : `${pct}%`}
-                    </span>
-                  </div>
-                </td>
-                <td className={s.td}>
-                  <span className={`${s.statusBadge} ${STATUS_CLASS[r.status] ?? ''}`}>{r.statusLabel}</span>
-                </td>
-                <td className={`${s.td} ${s.tdMuted}`}>{fmtDate(r.dueDate)}</td>
-              </tr>
-            )
+          ) : hf.displayed.flatMap((r) => {
+            const out = [renderRow(r, false)]
+            if (isCompany && r.isRollup && expanded.has(r.taskId)) {
+              for (const ch of (r.children || [])) out.push(renderRow(ch, true))
+            }
+            return out
           })}
         </tbody>
       </table>
@@ -366,7 +395,7 @@ function ExportModal({ view, filters, data, onClose }) {
   async function handleExport() {
     setExporting(true)
     try {
-      const body = { view, month: filters.month, year: filters.year, source: filters.source, columns: [...selected] }
+      const body = { view, month: filters.month, year: filters.year, source: filters.source, columns: [...selected], includeChildren: filters.includeChildren }
       if (view === 'matrix') { body.taskTypeId = filters.taskTypeId; body.collapse = filters.collapse; body.importantOnly = filters.importantOnly }
       if (view === 'company') body.companyId = filters.companyId
       if (view === 'staff') body.staffId = filters.staffId
@@ -467,6 +496,7 @@ export default function ProgressMatrix() {
   const [year, setYear] = useState(CUR_YEAR)
   const [showChildren, setShowChildren] = useState(true)   // "Hiện mục con": bật = đầy đủ; tắt = gộp về cha
   const [importantOnly, setImportantOnly] = useState(true) // KPI v2: mặc định chỉ hiện bước ★ (quan trọng)
+  const [includeChildren, setIncludeChildren] = useState(true) // "Gồm việc con": tổng hợp việc con (task cha-con)
   // Dữ liệu tham chiếu — React Query (cache + gộp request dùng chung giữa các trang)
   const { data: taskTypes = [] } = useProgressTaskTypes()
   const { data: yearsData = [] } = useProgressYears()
@@ -511,16 +541,16 @@ export default function ProgressMatrix() {
     setLoading(true)
     const src = sourceFilter || undefined
     const fetcher = tab === 'matrix'
-      ? getMatrix({ taskTypeId, month, year, source: src, collapse: !showChildren, importantOnly })
+      ? getMatrix({ taskTypeId, month, year, source: src, collapse: !showChildren, importantOnly, includeChildren })
       : tab === 'company'
-        ? getByCompany({ companyId, month, year, source: src })
-        : getByStaff({ staffId: staffId || undefined, month, year, source: src })
+        ? getByCompany({ companyId, month, year, source: src, includeChildren })
+        : getByStaff({ staffId: staffId || undefined, month, year, source: src, includeChildren })
     fetcher
       .then((d) => { if (!cancelled) setData(d) })
       .catch(() => { if (!cancelled) { setData(null); addToast('Không tải được dữ liệu', 'error') } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [tab, taskTypeId, companyId, staffId, month, year, sourceFilter, showChildren, importantOnly, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, taskTypeId, companyId, staffId, month, year, sourceFilter, showChildren, importantOnly, includeChildren, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped = useMemo(() => {
     const map = new Map()
@@ -539,7 +569,7 @@ export default function ProgressMatrix() {
       ? `TIẾN ĐỘ CÔNG VIỆC — ${data.subject.name} — ${data.period.label}`
       : `TIẾN ĐỘ CÔNG VIỆC — NV ${data.subject.name} — ${data.period.label}`
 
-  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, source: sourceFilter || undefined, collapse: !showChildren, importantOnly }
+  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, source: sourceFilter || undefined, collapse: !showChildren, importantOnly, includeChildren }
 
   return (
     <AppLayout>
@@ -550,7 +580,6 @@ export default function ProgressMatrix() {
             <span className={s.titleIcon}><LayoutGrid size={18} /></span>
             <div>
               <h1 className={s.title}>BC Tiến độ CV</h1>
-              <p className={s.subtitle}>Theo dõi tiến độ quy trình theo khách hàng / nhân viên</p>
             </div>
           </div>
           <button className={s.btnExport} onClick={() => setShowExport(true)} disabled={loading || !rows.length}>
@@ -618,21 +647,27 @@ export default function ProgressMatrix() {
               {availableYears.map((y) => <option key={y} value={y}>Năm {y}</option>)}
             </select>
           </div>
-          {tab === 'matrix' && (
-            <div className={s.filterGroup}>
-              <label className={s.filterLabel}>Hiển thị</label>
-              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                <label className={s.toggleChildren} title="Chỉ hiện các bước ĐÁNH DẤU ★ (quan trọng). Tắt để xem tất cả bước.">
-                  <input type="checkbox" checked={importantOnly} onChange={(e) => setImportantOnly(e.target.checked)} />
-                  <span>Chỉ bước ★</span>
-                </label>
-                <label className={s.toggleChildren} title="Tắt để gộp các mục con vào mục cha (hiển thị x/N)">
-                  <input type="checkbox" checked={showChildren} onChange={(e) => setShowChildren(e.target.checked)} />
-                  <span>Hiện mục con</span>
-                </label>
-              </div>
+          <div className={s.filterGroup}>
+            <label className={s.filterLabel}>Hiển thị</label>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+              {tab === 'matrix' && (
+                <>
+                  <label className={s.toggleChildren} title="Chỉ hiện các bước ĐÁNH DẤU ★ (quan trọng). Tắt để xem tất cả bước.">
+                    <input type="checkbox" checked={importantOnly} onChange={(e) => setImportantOnly(e.target.checked)} />
+                    <span>Chỉ bước ★</span>
+                  </label>
+                  <label className={s.toggleChildren} title="Tắt để gộp các mục con vào mục cha (hiển thị x/N)">
+                    <input type="checkbox" checked={showChildren} onChange={(e) => setShowChildren(e.target.checked)} />
+                    <span>Hiện mục con</span>
+                  </label>
+                </>
+              )}
+              <label className={s.toggleChildren} title="Tổng hợp VIỆC CON (task cha-con). Ma trận: chỉ báo 'Việc con x/y' trên hàng cha · Theo công ty: gộp cây (bung được), tiến độ cha = gồm con · Theo nhân viên: đánh dấu '↳ việc con của…'">
+                <input type="checkbox" checked={includeChildren} onChange={(e) => setIncludeChildren(e.target.checked)} />
+                <span>Gồm việc con</span>
+              </label>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Title line */}
