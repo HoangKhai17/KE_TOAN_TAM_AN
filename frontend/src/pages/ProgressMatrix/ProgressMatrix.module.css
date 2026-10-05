@@ -445,3 +445,40 @@
 .detailChildBlock { padding-left: 12px; border-left: 2px solid var(--color-primary-bg-strong); }
 .detailChildHead { font-size: var(--fs-2xs); font-weight: var(--fw-semibold); color: var(--color-text-strong); margin-bottom: 4px; }
 .detailChildPct { color: var(--color-muted); font-weight: var(--fw-regular); }
+
+/* ── Theo công ty = nhiều ma trận (mỗi quy trình 1 bảng) ───────────── */
+.companyMatrices { display: flex; flex-direction: column; gap: 18px; }
+.processBlock { display: flex; flex-direction: column; gap: 6px; }
+.processTitle { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--color-primary-deep); margin: 0; }
+.processGroup { font-size: var(--fs-2xs); font-weight: var(--fw-regular); color: var(--color-muted); }
+
+/* Theo công ty: đã ẩn cột "Tên KH" → bỏ sticky các cột định danh để không để lại cột trắng */
+.matrixNoCompany .colTax,
+.matrixNoCompany .colStaff,
+.matrixNoCompany .th.colTax,
+.matrixNoCompany .th.colStaff {
+  position: static;
+  left: auto;
+  box-shadow: none;
+}
+
+/* ── Ô Trạng thái tô KÍN cả ô (giữ màu khi hover) ───────────────────── */
+.statusCell { text-align: center; font-weight: var(--fw-semibold); font-size: var(--fs-2xs); }
+.td.statusCell.stPending,  .tr:hover .td.statusCell.stPending  { background: var(--color-warning-bg);      color: var(--color-warning-text); }
+.td.statusCell.stProgress, .tr:hover .td.statusCell.stProgress { background: var(--color-primary-bg);      color: var(--color-primary-deep); }
+.td.statusCell.stHold,     .tr:hover .td.statusCell.stHold     { background: var(--color-bg-soft);         color: var(--color-muted); }
+.td.statusCell.stReview,   .tr:hover .td.statusCell.stReview   { background: var(--color-purple-bg);       color: var(--color-purple-text); }
+.td.statusCell.stRevision, .tr:hover .td.statusCell.stRevision { background: var(--color-accent-bg);       color: var(--color-accent-dark); }
+.td.statusCell.stDone,     .tr:hover .td.statusCell.stDone     { background: var(--color-success-bg-soft); color: var(--color-success-text); }
+
+/* ── Checklist chi tiết: danh sách dọc, phân cấp cha–con ───────────── */
+.clList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-width: 760px; }
+.clGroup { font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--color-primary-deep); padding: 5px 0 1px; }
+.clItem { display: flex; align-items: baseline; gap: 7px; font-size: var(--fs-2xs); padding: 1px 0; }
+.clItemChild { padding-left: 18px; }
+.clMark { flex: 0 0 13px; text-align: center; font-weight: var(--fw-bold); }
+.clText { flex: 1; line-height: 1.45; }
+.clDone .clMark { color: var(--color-success-text); }
+.clDone .clText { color: var(--color-text-soft); }
+.clTodo .clMark { color: var(--color-muted-subtle); }
+.clTodo .clText { color: var(--color-text); }

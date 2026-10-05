@@ -195,7 +195,7 @@ function MatrixTable({ matrix, hideCompanyCol = false }) {
 
   return (
     <div className={s.tableWrap}>
-      <table className={s.matrix}>
+      <table className={`${s.matrix} ${hideCompanyCol ? s.matrixNoCompany : ''}`}>
         <thead>
           {hasGroups ? (
             <>
@@ -286,7 +286,8 @@ function MatrixTable({ matrix, hideCompanyCol = false }) {
                 )
               })}
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
       <HeaderFilterPopup hf={hf} rows={matrix.rows} />
@@ -294,19 +295,23 @@ function MatrixTable({ matrix, hideCompanyCol = false }) {
   )
 }
 
-// Checklist chi tiết (dạng chip ✓/○) — dùng khi bung dòng xem chi tiết.
+// Checklist chi tiết — danh sách DỌC gọn gàng, có phân cấp CHA–CON (mục chính in đậm, mục con thụt).
 function ChecklistInline({ items }) {
-  if (!items || !items.length) return <span className={s.detailEmpty}>— Không có checklist —</span>
+  if (!items || !items.length) return <div className={s.detailEmpty}>— Không có checklist —</div>
   return (
-    <div className={s.detailSteps}>
-      {items.map((it, i) => (it.isLeaf ? (
-        <span key={i} className={`${s.stepChip} ${it.isCompleted ? s.stepDone : s.stepTodo}`}>
-          {it.isCompleted ? '✓' : '○'} {it.stepText}{it.isImportant ? ' ★' : ''}
-        </span>
-      ) : (
-        <span key={i} className={s.stepGroup}>{it.stepText}:</span>
-      )))}
-    </div>
+    <ul className={s.clList}>
+      {items.map((it, i) => {
+        const isGroup = it.level === 0 && !it.isLeaf   // mục chính có mục con → tiêu đề nhóm
+        if (isGroup) return <li key={i} className={s.clGroup}>{it.stepText}</li>
+        const child = it.level === 1
+        return (
+          <li key={i} className={`${s.clItem} ${child ? s.clItemChild : ''} ${it.isCompleted ? s.clDone : s.clTodo}`}>
+            <span className={s.clMark}>{it.isCompleted ? '✓' : '○'}</span>
+            <span className={s.clText}>{it.stepText}{it.isImportant ? ' ★' : ''}</span>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
@@ -360,8 +365,8 @@ function SummaryTable({ data }) {
             </span>
           </div>
         </td>
-        <td className={s.td}>
-          <span className={`${s.statusBadge} ${STATUS_CLASS[r.status] ?? ''}`}>{r.isRollup ? r.statusLabel : getLabel('task_status', r.status)}</span>
+        <td className={`${s.td} ${s.statusCell} ${STATUS_CLASS[r.status] ?? ''}`}>
+          {r.isRollup ? r.statusLabel : getLabel('task_status', r.status)}
         </td>
         <td className={`${s.td} ${s.tdMuted}`}>{fmtDate(r.dueDate)}</td>
       </tr>
