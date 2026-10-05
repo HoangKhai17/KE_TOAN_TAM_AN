@@ -4,8 +4,9 @@ import {
   ArrowLeft, Check, X, Plus, Trash2, Edit2, ChevronLeft, ChevronRight,
   Building2, User, Tag, Clock, Calendar, AlertTriangle,
   ClipboardList, MessageSquare, History, Timer, Sliders, GripVertical,
-  Lock, Globe, ListTree, CornerLeftUp,
+  Lock, Globe, ListTree, CornerLeftUp, ArrowRightLeft,
 } from 'lucide-react'
+import PushChecklistToTableModal from './PushChecklistToTableModal'
 import AppLayout from '../../components/layout/AppLayout'
 import DateBox from '../../components/ui/DateBox'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
@@ -156,7 +157,7 @@ function DescriptionTab({ taskId, initialDesc, onSaved }) {
 
 // ── Tab: Checklist ────────────────────────────────────────────────────────────
 
-function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
+function ChecklistTab({ taskId, companyId, companyName, onCountChange, onTaskChanged }) {
   const addToast = useToastStore((s) => s.toast)
   const getLabel = useEnumsStore((st) => st.getLabel)
   const [items, setItems]         = useState([])
@@ -166,6 +167,7 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
   const [adding, setAdding]       = useState(false)
   const [editId, setEditId]       = useState(null)
   const [editText, setEditText]   = useState('')
+  const [pushItem, setPushItem]   = useState(null)   // bước đang "ghi sang bảng"
 
   useEffect(() => {
     tasksApi.getTaskChecklist(taskId)
@@ -311,11 +313,12 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
               {item.difficulty && <span className={`${s.clItemDiff} ${s[`clItemDiff_${item.difficulty}`] || ''}`} title="Độ khó">{getLabel('checklist_difficulty', item.difficulty)}</span>}
               {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
               <div className={s.checklistItemActions}>
-                <button className={s.btnIcon} onClick={() => toggleLevel(item)} title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>
+                <button className={`${s.btnIcon} ${s.clMove}`} onClick={() => toggleLevel(item)} title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>
                   {isChild ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
                 </button>
-                <button className={s.btnIcon} onClick={() => { setEditId(item.id); setEditText(item.stepText) }} title="Sửa"><Edit2 size={11} /></button>
-                <button className={`${s.btnIcon} ${s.btnIconDanger}`} onClick={() => deleteItem(item.id)} title="Xoá"><Trash2 size={11} /></button>
+                <button className={`${s.btnIcon} ${s.clEdit}`} onClick={() => { setEditId(item.id); setEditText(item.stepText) }} title="Sửa"><Edit2 size={11} /></button>
+                <button className={`${s.btnIcon} ${s.clDel}`} onClick={() => deleteItem(item.id)} title="Xoá"><Trash2 size={11} /></button>
+                <button className={`${s.btnIcon} ${s.clPush}`} onClick={() => setPushItem(item)} title="Ghi bước này sang bảng dữ liệu"><ArrowRightLeft size={11} /></button>
               </div>
             </>
           )}
@@ -340,6 +343,15 @@ function ChecklistTab({ taskId, onCountChange, onTaskChanged }) {
           <Plus size={13} /> Thêm
         </button>
       </div>
+
+      {pushItem && (
+        <PushChecklistToTableModal
+          companyId={companyId}
+          companyName={companyName}
+          stepText={pushItem.stepText}
+          onClose={() => setPushItem(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1148,6 +1160,8 @@ export default function TaskDetail() {
               {activeTab === 'checklist' && (
                 <ChecklistTab
                   taskId={id}
+                  companyId={task.companyId}
+                  companyName={task.companyName}
                   onCountChange={(total, done, p) => { setClTotal(total); setClDone(done); setClPct(p ?? null) }}
                   onTaskChanged={() => { tasksApi.getTask(id).then((t) => setTask(t)).catch(() => {}) }}
                 />

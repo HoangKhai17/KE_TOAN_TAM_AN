@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import {
   X, ArrowUpRight, Check, Loader2, Plus, ChevronLeft, ChevronRight, Edit2,
   Building2, User, Users, Calendar, Clock, AlertTriangle, Flag, FileText, Tag, GripVertical,
-  Lock, Globe, ListTree, CornerLeftUp, Unlink,
+  Lock, Globe, ListTree, CornerLeftUp, Unlink, ArrowRightLeft,
 } from 'lucide-react'
 import * as tasksApi from '../../api/tasks'
+import PushChecklistToTableModal from './PushChecklistToTableModal'
 import DateBox from '../../components/ui/DateBox'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
 import { listUserOptions } from '../../api/users'
@@ -360,6 +361,7 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
   const [task,        setTask]        = useState(null)
   const [loading,     setLoading]     = useState(true)
   const [checklist,   setChecklist]   = useState([])
+  const [pushItem,    setPushItem]    = useState(null)   // bước đang "ghi sang bảng"
   const [togglingIds, setTogglingIds] = useState(new Set())
   const [saving,      setSaving]      = useState(false)
   const [staffList,   setStaffList]   = useState([])
@@ -1065,25 +1067,32 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                               {item.difficulty && <span className={`${s.clItemDiff} ${s[`clItemDiff_${item.difficulty}`] || ''}`} title="Độ khó">{getLabel('checklist_difficulty', item.difficulty)}</span>}
                               {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
                               <button
-                                className={s.qvChecklistDel}
+                                className={`${s.qvChecklistDel} ${s.clEdit}`}
                                 onClick={() => { setEditItemId(item.id); setEditItemText(item.stepText) }}
                                 title="Sửa nội dung"
                               >
                                 <Edit2 size={10} />
                               </button>
                               <button
-                                className={s.qvChecklistDel}
+                                className={`${s.qvChecklistDel} ${s.clMove}`}
                                 onClick={() => toggleChecklistLevel(item)}
                                 title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}
                               >
                                 {isChild ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}
                               </button>
                               <button
-                                className={s.qvChecklistDel}
+                                className={`${s.qvChecklistDel} ${s.clDel}`}
                                 onClick={() => removeChecklistItem(item.id)}
                                 title="Xóa"
                               >
                                 <X size={10} />
+                              </button>
+                              <button
+                                className={`${s.qvChecklistDel} ${s.clPush}`}
+                                onClick={() => setPushItem(item)}
+                                title="Ghi bước này sang bảng dữ liệu"
+                              >
+                                <ArrowRightLeft size={10} />
                               </button>
                             </>
                           )}
@@ -1166,6 +1175,17 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
             onClose={() => setShowCreateChild(false)}
             onSaved={() => { setShowCreateChild(false); refreshChain() }}
             onSavedAndOpen={(nt) => { setShowCreateChild(false); openTask(nt.id) }}
+          />
+        </div>
+      )}
+
+      {pushItem && task && (
+        <div style={{ position: 'relative', zIndex: 700 }}>
+          <PushChecklistToTableModal
+            companyId={task.companyId}
+            companyName={task.companyName}
+            stepText={pushItem.stepText}
+            onClose={() => setPushItem(null)}
           />
         </div>
       )}

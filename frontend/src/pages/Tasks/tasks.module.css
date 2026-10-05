@@ -2074,10 +2074,10 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   flex-shrink: 0;
   border: none;
   background: transparent;
-  color: var(--color-border-muted);
+  color: var(--color-muted-soft);
   cursor: grab;
   border-radius: 4px;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.12s, color 0.12s;
   touch-action: none;
   padding: 0;
@@ -2144,7 +2144,7 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   display: flex;
   align-items: center;
   gap: 2px;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.1s;
 }
 
@@ -3805,10 +3805,10 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   height: 18px;
   border: none;
   background: transparent;
-  color: var(--color-border-muted);
+  color: var(--color-muted-soft);
   cursor: grab;
   border-radius: 3px;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.12s, color 0.12s;
   flex-shrink: 0;
   padding: 0;
@@ -3842,14 +3842,24 @@ button.visibilityBadge:hover { filter: brightness(0.96); }
   color: var(--color-muted);
   cursor: pointer;
   border-radius: 3px;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.12s, background 0.12s, color 0.12s;
   flex-shrink: 0;
   padding: 0;
   margin-top: 1px;
 }
 
-.qvChecklistDel:hover { background: var(--color-danger-bg); color: var(--color-danger); }
+.qvChecklistDel:hover { background: var(--color-surface-muted); color: var(--color-text); }
+
+/* ── Màu phân biệt cho icon thao tác checklist (dùng cho cả TaskDetail .btnIcon & QuickView .qvChecklistDel) ── */
+.clEdit { color: var(--color-primary); }
+.clDel  { color: var(--color-danger); }
+.clPush { color: var(--color-success-text); }
+.clMove { color: var(--color-muted-soft); }
+.clEdit:hover { color: var(--color-primary);       background: var(--color-info-bg); }
+.clDel:hover  { color: var(--color-danger);        background: var(--color-danger-bg); }
+.clPush:hover { color: var(--color-success-text);  background: var(--color-success-bg); }
+.clMove:hover { color: var(--color-text);          background: var(--color-surface-muted); }
 
 .qvAddItem {
   display: flex;
