@@ -344,6 +344,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
   const [pageSize, setPageSize] = useState(20)
 
   const cols = useMemo(() => [
+    { key: 'group',  label: 'Nhóm quy tắc',   type: 'text',        getLabel: (r) => r.ruleGroup || '' },
     { key: 'label',  label: 'Tên quy tắc',    type: 'text',        getLabel: (r) => r.label },
     { key: 'kind',   label: 'Loại',           type: 'enum',        getLabel: (r) => enumLabel('reward_penalty_kind', r.kind) },
     { key: 'points', label: 'Điểm',           type: 'numberRange', num: true, getNumber: (r) => Number(r.defaultPoints), getLabel: (r) => String(r.defaultPoints) },
@@ -368,7 +369,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
     return () => onFooter(null)
   }, [onFooter, pg.total, pg.from, pg.to, pg.safePage, pg.totalPages, pageSize, loading])
 
-  function openAdd() { setDraft({ label: '', kind: kinds[0]?.key ?? 'violation', defaultPoints: 0, detectSource: detects[0]?.key ?? 'manual', isActive: true }) }
+  function openAdd() { setDraft({ ruleGroup: '', label: '', kind: kinds[0]?.key ?? 'violation', defaultPoints: 0, detectSource: detects[0]?.key ?? 'manual', isActive: true }) }
   async function patchRule(r, patch) {
     setRows((list) => list.map((x) => x.id === r.id ? { ...x, ...patch } : x))
     try { await api.updateRule(r.id, patch) }
@@ -378,7 +379,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
     if (!draft.label.trim()) { addToast('Nhập tên quy tắc', 'error'); return }
     setSavingNew(true)
     try {
-      await api.createRule({ label: draft.label.trim(), kind: draft.kind, defaultPoints: Number(draft.defaultPoints) || 0, detectSource: draft.detectSource, isActive: !!draft.isActive })
+      await api.createRule({ label: draft.label.trim(), ruleGroup: draft.ruleGroup?.trim() || null, kind: draft.kind, defaultPoints: Number(draft.defaultPoints) || 0, detectSource: draft.detectSource, isActive: !!draft.isActive })
       setDraft(null); reload()
     } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error') }
     finally { setSavingNew(false) }
@@ -395,6 +396,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
   }
   const exportData = sel.size ? view.filter((r) => sel.has(r.id)) : view
   const exportCols = [
+    { key: 'group', label: 'Nhóm quy tắc', width: 20, value: (r) => r.ruleGroup || '' },
     { key: 'label', label: 'Tên quy tắc', width: 36, value: (r) => r.label },
     { key: 'kind', label: 'Loại', width: 12, value: (r) => enumLabel('reward_penalty_kind', r.kind) },
     { key: 'points', label: 'Điểm', width: 10, type: 'number', value: (r) => Number(r.defaultPoints) },
@@ -406,7 +408,8 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
     for (const row of validRows) {
       try {
         await api.createRule({
-          label: String(row.label).trim(), kind: optKey(kinds, row.kind, kinds[0]?.key ?? 'violation'),
+          label: String(row.label).trim(), ruleGroup: row.group != null && String(row.group).trim() ? String(row.group).trim() : null,
+          kind: optKey(kinds, row.kind, kinds[0]?.key ?? 'violation'),
           defaultPoints: Number(row.points) || 0, detectSource: optKey(detects, row.detect, detects[0]?.key ?? 'manual'), isActive: parseActive(row.active),
         })
         inserted++
@@ -443,6 +446,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
             <thead><tr>
               <th className={s.colChk}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
               <th className={s.colStt}>STT</th>
+              <FilterTh cf={cf} colKey="group">Nhóm quy tắc</FilterTh>
               <FilterTh cf={cf} colKey="label">Tên quy tắc</FilterTh>
               <FilterTh cf={cf} colKey="kind">Loại</FilterTh>
               <FilterTh cf={cf} colKey="points" num>Điểm</FilterTh>
@@ -455,6 +459,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
                 <tr className={`${s.newRow} ${savingNew ? s.rowSaving : ''}`}>
                   <td className={s.colChk} />
                   <td className={s.colStt}>＋</td>
+                  <td><input className={s.cellInput} value={draft.ruleGroup} placeholder="Nhóm…" onChange={(e) => setD('ruleGroup', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveDraft()} /></td>
                   <td><input autoFocus className={s.cellInput} value={draft.label} placeholder="Tên quy tắc…" onChange={(e) => setD('label', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveDraft()} /></td>
                   <td><EnumSelect value={draft.kind} options={kinds} cls={kindColorCls(draft.kind, kinds)} onCommit={(v) => setD('kind', v)} /></td>
                   <td><input type="number" className={`${s.cellInput} ${s.cellInputNum}`} value={draft.defaultPoints} onChange={(e) => setD('defaultPoints', e.target.value)} /></td>
@@ -468,11 +473,12 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
                   </td>
                 </tr>
               )}
-              {rows.length === 0 && !draft && <tr><td colSpan={8} className={s.empty}>Chưa có quy tắc. Bấm “Thêm quy tắc”.</td></tr>}
+              {rows.length === 0 && !draft && <tr><td colSpan={9} className={s.empty}>Chưa có quy tắc. Bấm “Thêm quy tắc”.</td></tr>}
               {pg.slice.map((r, i) => (
                 <tr key={r.id}>
                   <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(r.id)} onChange={() => toggle(r.id)} /></td>
                   <td className={s.colStt}>{pg.start + i + 1}</td>
+                  <td><CellText value={r.ruleGroup || ''} placeholder="Nhóm…" onCommit={(v) => patchRule(r, { ruleGroup: v.trim() || null })} /></td>
                   <td><CellText value={r.label} onCommit={(v) => v.trim() && patchRule(r, { label: v.trim() })} /></td>
                   <td><EnumSelect value={r.kind} options={kinds} cls={kindColorCls(r.kind, kinds)} onCommit={(v) => patchRule(r, { kind: v })} /></td>
                   <td><CellText value={r.defaultPoints} numeric onCommit={(v) => patchRule(r, { defaultPoints: Number(v) || 0 })} /></td>
@@ -494,6 +500,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
         <ExcelImportModal
           title="Nhập quy tắc từ Excel" entityLabel="quy tắc" templateName="mau_quy_tac_diem_thuong.xlsx" sheetName="Quy tắc"
           fixedCols={[
+            { key: 'group', label: 'Nhóm quy tắc', required: false, type: 'text', example: 'Chấm công' },
             { key: 'label', label: 'Tên quy tắc', required: true, type: 'text', example: 'Không chấm công' },
             { key: 'kind', label: 'Loại', required: false, type: 'text', example: 'Vi phạm' },
             { key: 'points', label: 'Điểm', required: false, type: 'number', example: -5 },

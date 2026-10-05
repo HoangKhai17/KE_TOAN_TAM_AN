@@ -1,0 +1,3 @@
+-- Thêm "Nhóm quy tắc" (rule_group) cho bảng quy tắc điểm thưởng/phạt.
+-- Text tự do (KHÔNG dùng enum) — gom nhóm tiêu chí như Excel / MISA / PM nội bộ / Tương tác KH…
+ALTER TABLE kpi_rules ADD COLUMN IF NOT EXISTS rule_group VARCHAR(100);

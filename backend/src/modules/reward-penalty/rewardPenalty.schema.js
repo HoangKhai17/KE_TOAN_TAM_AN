@@ -5,6 +5,7 @@ const { z } = require('zod')
 
 const ruleSchema = z.object({
   label:         z.string().min(1).max(200),
+  ruleGroup:     z.string().max(100).optional().nullable(),
   kind:          z.string().max(40).optional(),
   defaultPoints: z.number().optional(),
   detectSource:  z.string().max(40).optional(),

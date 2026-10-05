@@ -21,7 +21,7 @@ async function assertEnum(typeKey, value, field) {
 // ── DTO ──────────────────────────────────────────────────────────────────────
 function ruleToDto(r) {
   return {
-    id: r.id, label: r.label, kind: r.kind,
+    id: r.id, label: r.label, ruleGroup: r.rule_group ?? null, kind: r.kind,
     defaultPoints: Number(r.default_points),
     detectSource: r.detect_source, isActive: r.is_active, sortOrder: r.sort_order,
     createdAt: r.created_at, updatedAt: r.updated_at,
@@ -52,9 +52,9 @@ async function createRule(data, actorId) {
   await assertEnum('reward_penalty_detect', data.detectSource, 'Nguồn phát hiện')
   const { rows: [m] } = await query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM kpi_rules')
   const { rows: [r] } = await query(
-    `INSERT INTO kpi_rules (label, kind, default_points, detect_source, sort_order, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [data.label, data.kind || 'violation', data.defaultPoints ?? 0,
+    `INSERT INTO kpi_rules (label, rule_group, kind, default_points, detect_source, sort_order, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [data.label, data.ruleGroup?.trim() || null, data.kind || 'violation', data.defaultPoints ?? 0,
      data.detectSource || 'manual', data.sortOrder ?? m.n, actorId])
   return ruleToDto(r)
 }
@@ -63,7 +63,7 @@ async function updateRule(id, data) {
   if (data.kind !== undefined) await assertEnum('reward_penalty_kind', data.kind, 'Loại')
   if (data.detectSource !== undefined) await assertEnum('reward_penalty_detect', data.detectSource, 'Nguồn phát hiện')
   const map = {
-    label: 'label', kind: 'kind', defaultPoints: 'default_points',
+    label: 'label', ruleGroup: 'rule_group', kind: 'kind', defaultPoints: 'default_points',
     detectSource: 'detect_source', isActive: 'is_active', sortOrder: 'sort_order',
   }
   const sets = []; const params = []
