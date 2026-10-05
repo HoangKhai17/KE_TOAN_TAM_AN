@@ -30,6 +30,12 @@ export async function getByCompany(params) {
   return data.data
 }
 
+// Theo công ty dạng ma trận (mỗi quy trình 1 ma trận)
+export async function getCompanyMatrices(params) {
+  const { data } = await api.get('/progress-matrix/company-matrices', { params })
+  return data.data
+}
+
 // Bảng tiến độ theo nhân viên
 export async function getByStaff(params) {
   const { data } = await api.get('/progress-matrix/by-staff', { params })

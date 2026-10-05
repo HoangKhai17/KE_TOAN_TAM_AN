@@ -7,9 +7,10 @@ import { matchColFilter, isColFilterActive } from '../../components/ui/columnFil
 import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData'
-import { useProgressTaskTypes, useProgressYears, useProgressSources } from '../../hooks/useProgressMatrixData'
+import { useProgressTaskTypes, useProgressYears } from '../../hooks/useProgressMatrixData'
+import { useEnumsStore } from '../../hooks/useEnums'
 import {
-  getMatrix, getByCompany, getByStaff, exportReport,
+  getMatrix, getByCompany, getCompanyMatrices, getByStaff, exportReport,
 } from '../../api/progressMatrix'
 import s from './ProgressMatrix.module.css'
 
@@ -18,7 +19,7 @@ const CUR_MONTH = NOW.getMonth() + 1
 const CUR_YEAR = NOW.getFullYear()
 
 const TABS = [
-  { id: 'matrix',  label: 'Theo quy trình' },
+  { id: 'matrix',  label: 'Theo quy trình mẫu' },
   { id: 'company', label: 'Theo công ty' },
   { id: 'staff',   label: 'Theo nhân viên' },
 ]
@@ -31,8 +32,8 @@ const STATUS_CLASS = {
 // Cột tùy chọn cho popup xuất (theo view) — Tên-KH/Quy-trình/Công-ty là cột cố định luôn có
 const EXPORT_OPTIONAL_COLS = {
   matrix:  [{ key: 'taxCode', label: 'Mã số thuế' }, { key: 'assignee', label: 'NV quản lý' }, { key: 'children', label: 'Việc con (x/y)' }],
-  company: [{ key: 'source', label: 'Nguồn' }, { key: 'assignee', label: 'NV phụ trách' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
-  staff:   [{ key: 'source', label: 'Nguồn' }, { key: 'taskType', label: 'Quy trình' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
+  company: [{ key: 'assignee', label: 'NV phụ trách' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
+  staff:   [{ key: 'taskType', label: 'Quy trình' }, { key: 'progress', label: 'Tiến độ' }, { key: 'status', label: 'Trạng thái' }, { key: 'dueDate', label: 'Hết hạn' }],
 }
 
 function fmtDate(iso) {
@@ -158,8 +159,8 @@ function HeaderFilterPopup({ hf, rows }) {
   )
 }
 
-// ── Matrix table (Theo quy trình) ───────────────────────────────────────────────
-function MatrixTable({ matrix }) {
+// ── Matrix table (Theo quy trình mẫu / Theo công ty) ─────────────────────────────
+function MatrixTable({ matrix, hideCompanyCol = false }) {
   const columns = matrix.columns
   const hasGroups = columns.some((c) => c.group)
   // Gom cột theo nhóm (mục chính) để dựng header 2 tầng
@@ -199,7 +200,7 @@ function MatrixTable({ matrix }) {
           {hasGroups ? (
             <>
               <tr>
-                <ThFilter colKey="companyName"  hf={hf} rowSpan={2} className={`${s.th} ${s.colName}`}>Tên khách hàng</ThFilter>
+                {!hideCompanyCol && <ThFilter colKey="companyName"  hf={hf} rowSpan={2} className={`${s.th} ${s.colName}`}>Tên khách hàng</ThFilter>}
                 <th rowSpan={2} className={`${s.th} ${s.colPeriod}`}>Đợt (hạn)</th>
                 <ThFilter colKey="taxCode"      hf={hf} rowSpan={2} className={`${s.th} ${s.colTax}`}>Mã số thuế</ThFilter>
                 <ThFilter colKey="assigneeName" hf={hf} rowSpan={2} className={`${s.th} ${s.colStaff}`}>NV quản lý</ThFilter>
@@ -217,7 +218,7 @@ function MatrixTable({ matrix }) {
             </>
           ) : (
             <tr>
-              <ThFilter colKey="companyName"  hf={hf} className={`${s.th} ${s.colName}`}>Tên khách hàng</ThFilter>
+              {!hideCompanyCol && <ThFilter colKey="companyName"  hf={hf} className={`${s.th} ${s.colName}`}>Tên khách hàng</ThFilter>}
               <th className={`${s.th} ${s.colPeriod}`}>Đợt (hạn)</th>
               <ThFilter colKey="taxCode"      hf={hf} className={`${s.th} ${s.colTax}`}>Mã số thuế</ThFilter>
               <ThFilter colKey="assigneeName" hf={hf} className={`${s.th} ${s.colStaff}`}>NV quản lý</ThFilter>
@@ -237,12 +238,11 @@ function MatrixTable({ matrix }) {
         <tbody>
           {hf.displayed.length === 0 ? (
             <tr>
-              <td colSpan={4 + stepColCount} className={s.tdNoMatch}>Không có dòng nào khớp bộ lọc.</td>
+              <td colSpan={(hideCompanyCol ? 3 : 4) + stepColCount} className={s.tdNoMatch}>Không có dòng nào khớp bộ lọc.</td>
             </tr>
-          ) : hf.displayed.map((r) => (
-            <tr key={r.taskId} className={s.tr}>
-              <td className={`${s.td} ${s.colName} ${s.tdName}`}>
-                {r.companyName}
+          ) : hf.displayed.map((r) => {
+            const badges = (
+              <>
                 {r.custom?.total > 0 && (
                   <span className={s.customBadge} title="Bước phát sinh trên phiếu này (không thuộc quy trình mẫu)">
                     +{r.custom.total} riêng ({r.custom.done}/{r.custom.total})
@@ -253,10 +253,17 @@ function MatrixTable({ matrix }) {
                     Việc con {r.childTasks.done}/{r.childTasks.total}
                   </span>
                 )}
-              </td>
+              </>
+            )
+            return (
+            <tr key={r.taskId} className={s.tr}>
+              {!hideCompanyCol && (
+                <td className={`${s.td} ${s.colName} ${s.tdName}`}>{r.companyName}{badges}</td>
+              )}
               <td className={`${s.td} ${s.colPeriod} ${s.tdMuted}`}
                 title={r.periodLabel ? `Kỳ: ${r.periodLabel}${r.startDate ? ` · Bắt đầu: ${fmtDate(r.startDate)}` : ''}` : undefined}>
                 {fmtDate(r.dueDate) || fmtDate(r.startDate) || '—'}
+                {hideCompanyCol && badges}
               </td>
               <td className={`${s.td} ${s.colTax} ${s.tdMuted}`}>{r.taxCode || '—'}</td>
               <td className={`${s.td} ${s.colStaff}`}>{r.assigneeName || '—'}</td>
@@ -287,20 +294,35 @@ function MatrixTable({ matrix }) {
   )
 }
 
-// ── Summary table (Theo công ty / Theo nhân viên) ───────────────────────────────
+// Checklist chi tiết (dạng chip ✓/○) — dùng khi bung dòng xem chi tiết.
+function ChecklistInline({ items }) {
+  if (!items || !items.length) return <span className={s.detailEmpty}>— Không có checklist —</span>
+  return (
+    <div className={s.detailSteps}>
+      {items.map((it, i) => (it.isLeaf ? (
+        <span key={i} className={`${s.stepChip} ${it.isCompleted ? s.stepDone : s.stepTodo}`}>
+          {it.isCompleted ? '✓' : '○'} {it.stepText}{it.isImportant ? ' ★' : ''}
+        </span>
+      ) : (
+        <span key={i} className={s.stepGroup}>{it.stepText}:</span>
+      )))}
+    </div>
+  )
+}
+
+// ── Summary table (Theo công ty / Theo nhân viên) — chỉ Lịch định kỳ, bung xem checklist ───
 function SummaryTable({ data }) {
   const isCompany = data.view === 'company'
+  const getLabel = useEnumsStore((st) => st.getLabel)
 
   const colDefs = useMemo(() => (isCompany ? [
     { key: 'taskTypeName', label: 'Quy trình',    type: 'enum',        get: (r) => r.taskTypeName },
-    { key: 'sourceLabel',  label: 'Nguồn',        type: 'enum',        get: (r) => r.sourceLabel },
     { key: 'assigneeName', label: 'NV phụ trách', type: 'enum',        get: (r) => r.assigneeName || '—' },
     { key: 'percent',      label: 'Tiến độ',      type: 'numberRange', get: (r) => r.percent ?? 0 },
     { key: 'statusLabel',  label: 'Trạng thái',   type: 'enum',        get: (r) => r.statusLabel },
     { key: 'dueDate',      label: 'Hết hạn',      type: 'dateRange',   get: (r) => r.dueDate },
   ] : [
     { key: 'companyName',  label: 'Công ty',      type: 'text',        get: (r) => r.companyName },
-    { key: 'sourceLabel',  label: 'Nguồn',        type: 'enum',        get: (r) => r.sourceLabel },
     { key: 'taskTypeName', label: 'Quy trình',    type: 'enum',        get: (r) => r.taskTypeName },
     { key: 'percent',      label: 'Tiến độ',      type: 'numberRange', get: (r) => r.percent ?? 0 },
     { key: 'statusLabel',  label: 'Trạng thái',   type: 'enum',        get: (r) => r.statusLabel },
@@ -311,20 +333,16 @@ function SummaryTable({ data }) {
   const [expanded, setExpanded] = useState(() => new Set())
   const toggleExpand = (id) => setExpanded((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
-  function renderRow(r, isChildRow) {
+  function renderRow(r) {
     const pct = r.percent ?? 0
+    const open = expanded.has(r.taskId)
     return (
-      <tr key={r.taskId} className={`${s.tr} ${isChildRow ? s.childRow : ''}`}>
-        <td className={`${s.td} ${s.tdName} ${isChildRow ? s.childRowCell : ''}`}>
-          {isCompany && r.isRollup && (
-            <button type="button" className={s.expandBtn} onClick={() => toggleExpand(r.taskId)} title="Xem/ẩn việc con">
-              {expanded.has(r.taskId) ? '▾' : '▸'}
-            </button>
-          )}
-          {isCompany ? (isChildRow ? `↳ ${r.title || r.taskTypeName}` : r.taskTypeName) : r.companyName}
+      <tr key={r.taskId} className={s.tr}>
+        <td className={`${s.td} ${s.tdName}`}>
+          <button type="button" className={s.expandBtn} onClick={() => toggleExpand(r.taskId)} title="Xem/ẩn chi tiết checklist">{open ? '▾' : '▸'}</button>
+          {isCompany ? r.taskTypeName : r.companyName}
           {isCompany && r.isRollup && <span className={s.childCountBadge}>{r.childCount} việc con</span>}
         </td>
-        <td className={s.td}><span className={s.sourceChip}>{r.sourceLabel}</span></td>
         <td className={s.td}>
           {isCompany
             ? (r.assigneeName || '—')
@@ -343,9 +361,33 @@ function SummaryTable({ data }) {
           </div>
         </td>
         <td className={s.td}>
-          <span className={`${s.statusBadge} ${STATUS_CLASS[r.status] ?? ''}`}>{r.statusLabel}</span>
+          <span className={`${s.statusBadge} ${STATUS_CLASS[r.status] ?? ''}`}>{r.isRollup ? r.statusLabel : getLabel('task_status', r.status)}</span>
         </td>
         <td className={`${s.td} ${s.tdMuted}`}>{fmtDate(r.dueDate)}</td>
+      </tr>
+    )
+  }
+
+  function renderDetail(r) {
+    return (
+      <tr key={`${r.taskId}-d`} className={s.detailRow}>
+        <td colSpan={colDefs.length} className={s.detailCell}>
+          <div className={s.detailTitle}>Checklist của đợt{isCompany ? '' : ` — ${r.taskTypeName}`}:</div>
+          <ChecklistInline items={r.checklist} />
+          {isCompany && Array.isArray(r.children) && r.children.length > 0 && (
+            <div className={s.detailChildren}>
+              {r.children.map((ch) => (
+                <div key={ch.taskId} className={s.detailChildBlock}>
+                  <div className={s.detailChildHead}>
+                    ↳ {ch.title || ch.taskTypeName}
+                    <span className={s.detailChildPct}> · {ch.hasChecklist ? `${ch.doneSteps}/${ch.totalSteps} · ` : ''}{ch.percent ?? 0}%</span>
+                  </div>
+                  <ChecklistInline items={ch.checklist} />
+                </div>
+              ))}
+            </div>
+          )}
+        </td>
       </tr>
     )
   }
@@ -364,10 +406,8 @@ function SummaryTable({ data }) {
           {hf.displayed.length === 0 ? (
             <tr><td colSpan={colDefs.length} className={s.tdNoMatch}>Không có dòng nào khớp bộ lọc.</td></tr>
           ) : hf.displayed.flatMap((r) => {
-            const out = [renderRow(r, false)]
-            if (isCompany && r.isRollup && expanded.has(r.taskId)) {
-              for (const ch of (r.children || [])) out.push(renderRow(ch, true))
-            }
+            const out = [renderRow(r)]
+            if (expanded.has(r.taskId)) out.push(renderDetail(r))
             return out
           })}
         </tbody>
@@ -500,7 +540,6 @@ export default function ProgressMatrix() {
   // Dữ liệu tham chiếu — React Query (cache + gộp request dùng chung giữa các trang)
   const { data: taskTypes = [] } = useProgressTaskTypes()
   const { data: yearsData = [] } = useProgressYears()
-  const { data: sources = [] }   = useProgressSources()
   const { data: companies = [] } = useCompanyOptions()
   const { data: staffList = [] } = useStaffOptions({ enabled: isAdmin })
   const availableYears = yearsData.length ? yearsData : [CUR_YEAR]
@@ -508,7 +547,6 @@ export default function ProgressMatrix() {
   const [taskTypeId, setTaskTypeId] = useState('')
   const [companyId, setCompanyId] = useState('')
   const [staffId, setStaffId] = useState('')
-  const [sourceFilter, setSourceFilter] = useState('')   // '' = tất cả nguồn
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -539,18 +577,17 @@ export default function ProgressMatrix() {
     if (!canLoad) { setData(null); return }
     let cancelled = false
     setLoading(true)
-    const src = sourceFilter || undefined
     const fetcher = tab === 'matrix'
-      ? getMatrix({ taskTypeId, month, year, source: src, collapse: !showChildren, importantOnly, includeChildren })
+      ? getMatrix({ taskTypeId, month, year, collapse: !showChildren, importantOnly, includeChildren })
       : tab === 'company'
-        ? getByCompany({ companyId, month, year, source: src, includeChildren })
-        : getByStaff({ staffId: staffId || undefined, month, year, source: src, includeChildren })
+        ? getCompanyMatrices({ companyId, month, year, includeChildren })
+        : getByStaff({ staffId: staffId || undefined, month, year, includeChildren })
     fetcher
       .then((d) => { if (!cancelled) setData(d) })
       .catch(() => { if (!cancelled) { setData(null); addToast('Không tải được dữ liệu', 'error') } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [tab, taskTypeId, companyId, staffId, month, year, sourceFilter, showChildren, importantOnly, includeChildren, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, taskTypeId, companyId, staffId, month, year, showChildren, importantOnly, includeChildren, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped = useMemo(() => {
     const map = new Map()
@@ -562,6 +599,8 @@ export default function ProgressMatrix() {
   const dataView = data ? (data.view ?? 'matrix') : null
   const ready = dataView === tab
   const rows = ready ? (data.rows ?? []) : []
+  const matrices = ready && tab === 'company' ? (data.matrices ?? []) : []   // Theo công ty = nhiều ma trận
+  const hasAny = tab === 'company' ? matrices.length > 0 : rows.length > 0
   const hasNoColumns = ready && tab === 'matrix' && (data.columns?.length ?? 0) === 0
   const titleLine = !ready ? '' : tab === 'matrix'
     ? `BẢNG THEO DÕI TIẾN ĐỘ ${data.taskType.name.toUpperCase()} VỚI KH — ${data.period.label}`
@@ -569,7 +608,7 @@ export default function ProgressMatrix() {
       ? `TIẾN ĐỘ CÔNG VIỆC — ${data.subject.name} — ${data.period.label}`
       : `TIẾN ĐỘ CÔNG VIỆC — NV ${data.subject.name} — ${data.period.label}`
 
-  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, source: sourceFilter || undefined, collapse: !showChildren, importantOnly, includeChildren }
+  const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, collapse: !showChildren, importantOnly, includeChildren }
 
   return (
     <AppLayout>
@@ -582,7 +621,7 @@ export default function ProgressMatrix() {
               <h1 className={s.title}>BC Tiến độ CV</h1>
             </div>
           </div>
-          <button className={s.btnExport} onClick={() => setShowExport(true)} disabled={loading || !rows.length}>
+          <button className={s.btnExport} onClick={() => setShowExport(true)} disabled={loading || !hasAny}>
             <FileSpreadsheet size={14} /> Xuất Excel
           </button>
         </div>
@@ -629,13 +668,6 @@ export default function ProgressMatrix() {
             </div>
           )}
           <div className={s.filterGroup}>
-            <label className={s.filterLabel}>Nguồn</label>
-            <select className={s.select} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
-              <option value="">Tất cả nguồn</option>
-              {sources.map((sc) => <option key={sc.key} value={sc.key}>{sc.label}</option>)}
-            </select>
-          </div>
-          <div className={s.filterGroup}>
             <label className={s.filterLabel}>Tháng</label>
             <select className={s.select} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>Tháng {m}</option>)}
@@ -658,7 +690,7 @@ export default function ProgressMatrix() {
                   </label>
                   <label className={s.toggleChildren} title="Tắt để gộp các mục con vào mục cha (hiển thị x/N)">
                     <input type="checkbox" checked={showChildren} onChange={(e) => setShowChildren(e.target.checked)} />
-                    <span>Hiện mục con</span>
+                    <span>Checklist con</span>
                   </label>
                 </>
               )}
@@ -671,7 +703,7 @@ export default function ProgressMatrix() {
         </div>
 
         {/* Title line */}
-        {data && !hasNoColumns && rows.length > 0 && <h2 className={s.matrixTitle}>{titleLine}</h2>}
+        {data && !hasNoColumns && hasAny && <h2 className={s.matrixTitle}>{titleLine}</h2>}
 
         {/* Content */}
         {!canLoad ? (
@@ -686,15 +718,27 @@ export default function ProgressMatrix() {
             <AlertTriangle size={20} className={s.warnIcon} />
             Quy trình này chưa cấu hình bước công việc (checklist). Vào <strong>Cài đặt → Loại công việc</strong> để thêm các bước.
           </div>
-        ) : rows.length === 0 ? (
+        ) : !hasAny ? (
           <div className={s.stateBox}>
             <LayoutGrid size={22} className={s.emptyIcon} />
             Không có dữ liệu trong {data?.period?.label ?? 'kỳ đã chọn'}.
           </div>
         ) : tab === 'matrix' ? (
-          <MatrixTable key={`matrix:${taskTypeId}:${month}:${year}:${sourceFilter}`} matrix={data} />
+          <MatrixTable key={`matrix:${taskTypeId}:${month}:${year}`} matrix={data} />
+        ) : tab === 'company' ? (
+          <div className={s.companyMatrices}>
+            {matrices.map((mx) => (
+              <div key={mx.taskType.id} className={s.processBlock}>
+                <h3 className={s.processTitle}>
+                  {mx.taskType.name}
+                  {mx.taskType.groupName && <span className={s.processGroup}> · {mx.taskType.groupName}</span>}
+                </h3>
+                <MatrixTable matrix={mx} hideCompanyCol />
+              </div>
+            ))}
+          </div>
         ) : (
-          <SummaryTable key={`${tab}:${subjectId}:${month}:${year}:${sourceFilter}`} data={data} />
+          <SummaryTable key={`${tab}:${subjectId}:${month}:${year}`} data={data} />
         )}
 
         {showExport && ready && (

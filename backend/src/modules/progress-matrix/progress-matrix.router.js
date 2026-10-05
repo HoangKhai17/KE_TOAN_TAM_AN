@@ -8,8 +8,9 @@ const auth = [authenticate]
 router.get('/task-types', ...auth, ctrl.getTaskTypes)
 router.get('/years',      ...auth, ctrl.getYears)
 router.get('/sources',    ...auth, ctrl.getSources)
-router.get('/by-company', ...auth, ctrl.getByCompany)
-router.get('/by-staff',   ...auth, ctrl.getByStaff)
+router.get('/by-company',       ...auth, ctrl.getByCompany)
+router.get('/company-matrices', ...auth, ctrl.getCompanyMatrices)
+router.get('/by-staff',         ...auth, ctrl.getByStaff)
 router.post('/export',    ...auth, ctrl.exportReport)
 router.get('/',           ...auth, ctrl.getMatrix)
 

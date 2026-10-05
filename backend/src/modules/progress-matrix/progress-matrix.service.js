@@ -40,7 +40,7 @@ async function listYears() {
 }
 
 // Ma trận tiến độ cho (taskTypeId, month, year). forceAssignedTo: staff chỉ thấy phiếu của mình.
-async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, collapse = false, importantOnly = true, includeChildren = true }) {
+async function getMatrix({ taskTypeId, companyId, month, year, source, forceAssignedTo, collapse = false, importantOnly = true, includeChildren = true, useManualCols = false }) {
   const m = parseInt(month, 10)
   const y = parseInt(year, 10)
   if (!taskTypeId || !m || !y) {
@@ -66,6 +66,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
   const params = [taskTypeId, periodStart]
   let staffCond = ''
   if (forceAssignedTo) { params.push(forceAssignedTo); staffCond += ` AND t.assigned_to = $${params.length}` }
+  if (companyId) { params.push(companyId); staffCond += ` AND t.company_id = $${params.length}` }
   const srcArr = parseSources(source)
   if (srcArr) { params.push(srcArr); staffCond += ` AND t.source = ANY($${params.length})` }
   // 1 dòng = 1 PHIẾU CHA (đợt). Quy trình lặp (5 ngày/lần…) → 1 công ty có nhiều đợt/tháng, hiện đủ.
@@ -82,47 +83,53 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
     LEFT JOIN users u ON u.id = t.assigned_to
     WHERE t.task_type_id = $1
       AND t.parent_task_id IS NULL
+      AND t.source = 'auto'
       AND COALESCE(t.start_date, t.due_date) >= $2::date
       AND COALESCE(t.start_date, t.due_date) <  ($2::date + INTERVAL '1 month')
       ${staffCond}
     ORDER BY c.name, COALESCE(t.due_date, t.start_date), t.created_at
   `, params)
 
-  // Gom checklist items của các phiếu — KHỚP THEO source_step_id (không theo chữ).
-  const itemsByTask = new Map()   // task_id -> Map(source_step_id -> item)
-  const customByTask = new Map()  // task_id -> { total, done }  (bước user tự thêm: source_step_id null)
-  const stepAgg = new Map()       // source_step_id -> { sourceStepId, stepOrder, text, parentId }
-  const parentIds = new Set()     // source_step_id nào từng làm CHA của bước khác
+  // Gom checklist items. MẶC ĐỊNH khớp theo source_step_id (THEO MẪU) — bước nhập tay lẻ → badge.
+  // useManualCols=true (Theo công ty): gộp CẢ bước nhập tay theo nội dung (txt:) → lịch TỰ TẠO cũng
+  // thành cột (trong 1 công ty+1 quy trình nên không phân mảnh).
+  const itemsByTask = new Map()   // task_id -> Map(colKey -> item)
+  const customByTask = new Map()  // task_id -> { total, done }
+  const stepAgg = new Map()       // colKey -> { sourceStepId(=colKey), stepOrder, text, parentId, important }
+  const parentIds = new Set()
+
+  const colKeyOf = (it) => (it.source_step_id != null
+    ? `tpl:${it.source_step_id}`
+    : (useManualCols ? `txt:${String(it.step_text || '').trim().toLowerCase()}|${it.level === 1 ? 1 : 0}` : null))
 
   if (tasks.length) {
     const taskIds = tasks.map((t) => t.id)
     const { rows: items } = await query(
-      `SELECT task_id, source_step_id, source_parent_id, level, step_text, step_order, is_completed, completed_at
+      `SELECT task_id, source_step_id, source_parent_id, level, step_text, step_order, is_important, is_completed, completed_at
        FROM task_checklist_items WHERE task_id = ANY($1)`,
       [taskIds],
     )
     for (const it of items) {
-      // Bước tự thêm (không thuộc mẫu) → gộp vào badge "bước riêng", không thành cột.
-      if (it.source_step_id == null) {
+      const key = colKeyOf(it)
+      if (key == null) {   // bước nhập tay + chế độ theo-mẫu → gộp badge "+N riêng"
         const c = customByTask.get(it.task_id) || { total: 0, done: 0 }
         c.total++; if (it.is_completed) c.done++
         customByTask.set(it.task_id, c)
         continue
       }
       if (!itemsByTask.has(it.task_id)) itemsByTask.set(it.task_id, new Map())
-      itemsByTask.get(it.task_id).set(it.source_step_id, it)
-
-      if (!stepAgg.has(it.source_step_id)) {
-        const t = templById.get(it.source_step_id)
-        stepAgg.set(it.source_step_id, {
-          sourceStepId: it.source_step_id,
-          stepOrder:    t?.step_order ?? it.step_order ?? 0,
-          text:         t?.step_text ?? it.step_text,   // đổi tên mẫu → hiện tên mới; mẫu bị xoá → giữ tên lúc tạo
-          parentId:     it.source_parent_id ?? null,
-          important:    !!(t?.is_important),             // bước ★ (then chốt của quy trình) — lọc mặc định
+      itemsByTask.get(it.task_id).set(key, it)
+      if (!stepAgg.has(key)) {
+        const tpl = it.source_step_id != null ? templById.get(it.source_step_id) : null
+        stepAgg.set(key, {
+          sourceStepId: key,
+          stepOrder:    tpl?.step_order ?? it.step_order ?? 0,
+          text:         tpl?.step_text ?? it.step_text,
+          parentId:     it.source_parent_id != null ? `tpl:${it.source_parent_id}` : null,
+          important:    it.source_step_id != null ? !!(tpl?.is_important) : !!it.is_important,
         })
       }
-      if (it.source_parent_id != null) parentIds.add(it.source_parent_id)
+      if (it.source_parent_id != null) parentIds.add(`tpl:${it.source_parent_id}`)
     }
   }
 
@@ -139,7 +146,9 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
     childAgg = new Map(ch.map((r) => [r.parent_task_id, { total: r.total, done: r.done }]))
   }
 
-  const labelOf = (id) => stepAgg.get(id)?.text ?? templById.get(id)?.step_text ?? null
+  const labelOf = (id) => stepAgg.get(id)?.text
+    ?? (typeof id === 'string' && id.startsWith('tpl:') ? templById.get(id.slice(4))?.step_text : null)
+    ?? null
 
   // Map cha → danh sách con (source_step_id) để tính "x/N" và badge "(N mục)".
   const childrenByParent = new Map()
@@ -223,6 +232,7 @@ async function getMatrix({ taskTypeId, month, year, source, forceAssignedTo, col
   }
 
   const rows = tasks
+    .filter((t) => itemsByTask.has(t.id))   // CHỈ phiếu THEO MẪU (có bước khớp template); lịch tự tạo loại ra
     .map((t) => {
       const map  = itemsByTask.get(t.id) || new Map()
       const cust = customByTask.get(t.id) || { total: 0, done: 0 }
@@ -403,19 +413,48 @@ function makeRollup(parent, kids) {
 const MONTH_COND = `COALESCE(t.start_date, t.due_date) >= $2::date
       AND COALESCE(t.start_date, t.due_date) <  ($2::date + INTERVAL '1 month')`
 
-async function byCompany({ companyId, month, year, source, forceAssignedTo, includeChildren = true }) {
+// Nạp checklist chi tiết theo task (để BUNG xem). is_leaf = mục lá (mục chính có con là nhóm).
+async function fetchChecklists(taskIds) {
+  const map = new Map()
+  if (!taskIds.length) return map
+  const { rows } = await query(
+    `SELECT task_id, step_text, level, is_completed, is_important, step_order,
+            NOT (level = 0 AND COALESCE(LEAD(level) OVER (PARTITION BY task_id ORDER BY step_order, id), 0) = 1) AS is_leaf
+     FROM task_checklist_items WHERE task_id = ANY($1) ORDER BY task_id, step_order, id`,
+    [taskIds])
+  for (const r of rows) {
+    if (!map.has(r.task_id)) map.set(r.task_id, [])
+    map.get(r.task_id).push({
+      stepText: r.step_text, level: r.level ?? 0,
+      isCompleted: !!r.is_completed, isImportant: !!r.is_important, isLeaf: !!r.is_leaf,
+    })
+  }
+  return map
+}
+function collectTaskIds(rows) {
+  const ids = []
+  const go = (r) => { ids.push(r.taskId); if (Array.isArray(r.children)) r.children.forEach(go) }
+  rows.forEach(go)
+  return ids
+}
+function attachChecklist(rows, clMap) {
+  const go = (r) => { r.checklist = clMap.get(r.taskId) || []; if (Array.isArray(r.children)) r.children.forEach(go) }
+  rows.forEach(go)
+  return rows
+}
+
+// CHỈ Lịch định kỳ (source='auto') — báo cáo không thống kê CV tự sắp xếp / KH yêu cầu / đi ra ngoài.
+async function byCompany({ companyId, month, year, forceAssignedTo, includeChildren = true }) {
   if (!companyId || !month || !year) throw Object.assign(new Error('Thiếu companyId / month / year'), { status: 400 })
   const { rows: coRows } = await query('SELECT name, tax_code FROM companies WHERE id = $1', [companyId])
   if (!coRows[0]) throw Object.assign(new Error('Công ty không tồn tại'), { status: 404 })
   const m = parseInt(month, 10), y = parseInt(year, 10)
   const periodStart = `${y}-${String(m).padStart(2, '0')}-01`
   const srcLabels = await loadSourceLabels()
-  const srcArr = parseSources(source)
 
   const params = [companyId, periodStart]
-  let cond = 't.company_id = $1'
+  let cond = "t.company_id = $1 AND t.source = 'auto'"
   if (forceAssignedTo) { params.push(forceAssignedTo); cond += ` AND t.assigned_to = $${params.length}` }
-  if (srcArr) { params.push(srcArr); cond += ` AND t.source = ANY($${params.length})` }
 
   const monthRows = (await runProgressQuery(
     `${cond} AND ${MONTH_COND}`, params, 'COALESCE(tt.name, t.title), t.created_at DESC',
@@ -427,16 +466,18 @@ async function byCompany({ companyId, month, year, source, forceAssignedTo, incl
     period: { month: m, year: y, label: `Tháng ${m}/${y}` },
     includeChildren: !!includeChildren,
   }
-  if (!includeChildren) return { ...base, rows: monthRows }
+  if (!includeChildren) {
+    attachChecklist(monthRows, await fetchChecklists(collectTaskIds(monthRows)))
+    return { ...base, rows: monthRows }
+  }
 
   // Việc con của các phiếu trong tháng (lấy bất kể hạn con rơi tháng nào) → gộp đợt.
   const parentIds = monthRows.map((r) => r.taskId)
   let children = []
   if (parentIds.length) {
     const cp = [parentIds]
-    let ccond = 't.parent_task_id = ANY($1)'
+    let ccond = "t.parent_task_id = ANY($1) AND t.source = 'auto'"
     if (forceAssignedTo) { cp.push(forceAssignedTo); ccond += ` AND t.assigned_to = $${cp.length}` }
-    if (srcArr) { cp.push(srcArr); ccond += ` AND t.source = ANY($${cp.length})` }
     children = (await runProgressQuery(ccond, cp, 't.created_at')).map((r) => mapTaskRow(r, srcLabels))
   }
   const byParent = new Map()
@@ -452,10 +493,11 @@ async function byCompany({ companyId, month, year, source, forceAssignedTo, incl
     const kids = byParent.get(r.taskId) || []
     rows.push(kids.length ? makeRollup(r, kids) : { ...r, children: [], isRollup: false })
   }
+  attachChecklist(rows, await fetchChecklists(collectTaskIds(rows)))
   return { ...base, rows }
 }
 
-async function byStaff({ staffId, month, year, source, forceAssignedTo, includeChildren = true }) {
+async function byStaff({ staffId, month, year, forceAssignedTo, includeChildren = true }) {
   const id = forceAssignedTo || staffId
   if (!id || !month || !year) throw Object.assign(new Error('Thiếu staffId / month / year'), { status: 400 })
   const { rows: uRows } = await query('SELECT name FROM users WHERE id = $1', [id])
@@ -463,11 +505,9 @@ async function byStaff({ staffId, month, year, source, forceAssignedTo, includeC
   const m = parseInt(month, 10), y = parseInt(year, 10)
   const periodStart = `${y}-${String(m).padStart(2, '0')}-01`
   const srcLabels = await loadSourceLabels()
-  const srcArr = parseSources(source)
 
   const params = [id, periodStart]
-  let cond = 't.assigned_to = $1'
-  if (srcArr) { params.push(srcArr); cond += ` AND t.source = ANY($${params.length})` }
+  const cond = "t.assigned_to = $1 AND t.source = 'auto'"
 
   let rows = (await runProgressQuery(
     `${cond} AND ${MONTH_COND}`, params, 'c.name, t.created_at DESC',
@@ -482,6 +522,7 @@ async function byStaff({ staffId, month, year, source, forceAssignedTo, includeC
       rows = rows.map((r) => (r.parentTaskId ? { ...r, isChild: true, parentTitle: titleById.get(r.parentTaskId) ?? null } : r))
     }
   }
+  attachChecklist(rows, await fetchChecklists(collectTaskIds(rows)))
 
   return {
     view: 'staff',
@@ -489,6 +530,42 @@ async function byStaff({ staffId, month, year, source, forceAssignedTo, includeC
     period: { month: m, year: y, label: `Tháng ${m}/${y}` },
     includeChildren: !!includeChildren,
     rows,
+  }
+}
+
+// Theo công ty dạng MA TRẬN (giống Theo quy trình mẫu) — mỗi quy trình của công ty = 1 ma trận.
+// Dùng useManualCols=true → lịch TỰ TẠO cũng hiện cột (trong 1 công ty+1 quy trình nên không phân mảnh).
+async function companyMatrices({ companyId, month, year, includeChildren = true, forceAssignedTo }) {
+  if (!companyId || !month || !year) throw Object.assign(new Error('Thiếu companyId / month / year'), { status: 400 })
+  const { rows: coRows } = await query('SELECT name, tax_code FROM companies WHERE id = $1', [companyId])
+  if (!coRows[0]) throw Object.assign(new Error('Công ty không tồn tại'), { status: 404 })
+  const m = parseInt(month, 10), y = parseInt(year, 10)
+  const periodStart = `${y}-${String(m).padStart(2, '0')}-01`
+
+  const params = [companyId, periodStart]
+  let cond = "t.company_id = $1 AND t.source = 'auto' AND t.parent_task_id IS NULL AND t.task_type_id IS NOT NULL"
+  if (forceAssignedTo) { params.push(forceAssignedTo); cond += ` AND t.assigned_to = $${params.length}` }
+  const { rows: types } = await query(`
+    SELECT t.task_type_id AS id, COALESCE(tt.name, '(Không tên)') AS name, tt.group_name
+    FROM tasks t LEFT JOIN task_types tt ON tt.id = t.task_type_id
+    WHERE ${cond} AND ${MONTH_COND}
+    GROUP BY t.task_type_id, tt.name, tt.group_name
+    ORDER BY tt.group_name NULLS LAST, name`, params)
+
+  const matrices = []
+  for (const ty of types) {
+    const mx = await getMatrix({
+      taskTypeId: ty.id, companyId, month, year,
+      importantOnly: false, collapse: false, includeChildren, useManualCols: true, forceAssignedTo,
+    })
+    if (mx.rows.length) matrices.push(mx)
+  }
+  return {
+    view: 'company',
+    subject: { id: companyId, name: coRows[0].name, taxCode: coRows[0].tax_code },
+    period: { month: m, year: y, label: `Tháng ${m}/${y}` },
+    includeChildren: !!includeChildren,
+    matrices,
   }
 }
 
@@ -711,4 +788,4 @@ async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, m
   return { buffer: await exportMatrix(mx, includeSet), nameBase: slug(mx.taskType.name), period: mx.period }
 }
 
-module.exports = { listTaskTypes, listYears, listSources, getMatrix, byCompany, byStaff, exportReport }
+module.exports = { listTaskTypes, listYears, listSources, getMatrix, byCompany, byStaff, companyMatrices, exportReport }
