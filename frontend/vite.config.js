@@ -11,6 +11,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Cho phép truy cập qua tunnel ngrok (mỗi lần chạy subdomain đổi → dùng hậu tố).
+    // Entry bắt đầu bằng '.' khớp domain đó và mọi subdomain.
+    allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.app', '.ngrok.io'],
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

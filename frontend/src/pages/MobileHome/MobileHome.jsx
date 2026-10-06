@@ -7,6 +7,7 @@ import { getToday, checkIn, checkOut } from '../../api/attendance'
 import { collectDeviceInfo, detectMethod } from '../../utils/deviceInfo'
 import { logout as apiLogout } from '../../api/auth'
 import QuickNotes from '../../components/quicknotes/QuickNotes'
+import SelfieCaptureModal from '../../components/attendance/SelfieCaptureModal'
 import s from './mobileHome.module.css'
 
 // Màn hình gọn cho user dùng điện thoại: Chấm công + Ghi chú nhanh.
@@ -17,24 +18,36 @@ export default function MobileHome() {
   const addToast  = useToastStore((st) => st.toast)
   const [today, setToday] = useState(null)
   const [busy, setBusy]   = useState(false)
+  const [capture, setCapture] = useState(null) // { kind:'in'|'out', method, deviceInfo }
 
   const isAdmin = user?.role === 'admin'
 
   useEffect(() => { getToday().then(setToday).catch(() => {}) }, [])
 
-  async function doCheck(kind) {
+  // Gửi 1 lần chấm công kèm ảnh (có thể null nếu từ chối camera).
+  async function submitCheck(kind, method, deviceInfo, photo) {
     setBusy(true)
     try {
-      const deviceInfo = await collectDeviceInfo()
-      const method     = detectMethod(deviceInfo.type)
-      if (kind === 'in') await checkIn({ method, deviceInfo })
-      else               await checkOut({ method, deviceInfo })
+      if (kind === 'in') await checkIn({ method, deviceInfo, photo })
+      else               await checkOut({ method, deviceInfo, photo })
       setToday(await getToday())
       addToast(kind === 'in' ? 'Chấm công vào thành công!' : 'Chấm công ra thành công!', 'success')
+      setCapture(null)
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể chấm công', 'error')
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Mobile/tablet → mở camera chụp ảnh trước; thiết bị khác → chấm thẳng.
+  async function doCheck(kind) {
+    const deviceInfo = await collectDeviceInfo()
+    const method     = detectMethod(deviceInfo.type)
+    if (method === 'mobile') {
+      setCapture({ kind, method, deviceInfo })
+    } else {
+      submitCheck(kind, method, deviceInfo, null)
     }
   }
 
@@ -94,6 +107,15 @@ export default function MobileHome() {
           <QuickNotes />
         </section>
       </main>
+
+      {capture && (
+        <SelfieCaptureModal
+          action={capture.kind}
+          onConfirm={(blob) => submitCheck(capture.kind, capture.method, capture.deviceInfo, blob)}
+          onSkip={() => submitCheck(capture.kind, capture.method, capture.deviceInfo, null)}
+          onCancel={() => setCapture(null)}
+        />
+      )}
     </div>
   )
 }

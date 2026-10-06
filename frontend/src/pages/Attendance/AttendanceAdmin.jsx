@@ -56,9 +56,11 @@ const ADMIN_TABS = [
   { id: 'leave',        label: 'Duyệt nghỉ phép',   icon: ClipboardList },
   { id: 'overtime',     label: 'Duyệt tăng ca',     icon: Clock },
   { id: 'report',       label: 'Báo cáo',           icon: BarChart3 },
+  { id: 'photos',       label: 'Ảnh chấm công',     icon: Camera },
   { id: 'att-settings', label: 'Cài đặt',           icon: Settings },
   ...(import.meta.env.DEV ? [{ id: 'devtools', label: 'Dev Tools', icon: Terminal, dev: true }] : []),
 ]
+const TAB_LS_KEY = 'attendanceAdmin.tab'
 
 const DAY_NAMES = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 
@@ -248,7 +250,17 @@ function buildCalendar(year, month, recordMap, holidaySet = new Set()) {
 export default function AttendanceAdmin() {
   const now         = new Date()
   const currentUser = useAuthStore((st) => st.user)
-  const [activeTab, setActiveTab] = useState('calendar')
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const t = localStorage.getItem(TAB_LS_KEY)
+      if (t && ADMIN_TABS.some((x) => x.id === t)) return t
+    } catch { /* ignore */ }
+    return 'calendar'
+  })
+  // Nhớ tab đang xem qua lần F5
+  useEffect(() => {
+    try { localStorage.setItem(TAB_LS_KEY, activeTab) } catch { /* ignore */ }
+  }, [activeTab])
   const [year,      setYear]      = useState(now.getFullYear())
   const [month,     setMonth]     = useState(now.getMonth() + 1)
   const [staffList, setStaffList] = useState([])
@@ -319,6 +331,7 @@ export default function AttendanceAdmin() {
         {activeTab === 'leave'        && <AdminLeaveTab staffList={staffList} />}
         {activeTab === 'overtime'     && <AdminOvertimeTab staffList={staffList} />}
         {activeTab === 'report'       && <ReportTab year={year} month={month} />}
+        {activeTab === 'photos'       && <PhotoManagerTab staffList={staffList} />}
         {activeTab === 'att-settings' && <AttendanceSettingsTab />}
         {activeTab === 'devtools'     && <AdminDevToolsTab staffList={staffList} />}
 
@@ -3611,6 +3624,200 @@ function SyncPayrollModal({ year, month, onClose }) {
         </div>
       </div>
     </Modal>
+  )
+}
+
+// ── PhotoManagerTab — quản lý ảnh selfie chấm công ────────────────────────────
+function fmtBytes(n) {
+  if (!n) return '0 B'
+  const u = ['B', 'KB', 'MB', 'GB']
+  const i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)))
+  return `${(n / Math.pow(1024, i)).toFixed(i ? 1 : 0)} ${u[i]}`
+}
+const fmtMonth = (ym) => { const [y, m] = ym.split('-'); return `Tháng ${parseInt(m, 10)}/${y}` }
+
+function PhotoManagerTab({ staffList }) {
+  const confirmDelete = useDeleteConfirm()
+  const addToast = useToastStore((st) => st.toast)
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [retention, setRetention] = useState(3)
+  const [savingRet, setSavingRet] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
+
+  // Duyệt ảnh
+  const [fMonth, setFMonth] = useState('')
+  const [fUser, setFUser] = useState('')
+  const [photos, setPhotos] = useState(null)
+  const [loadingPhotos, setLoadingPhotos] = useState(false)
+  const [page, setPage] = useState(1)
+
+  const loadStats = () => {
+    setLoading(true)
+    attendanceApi.getPhotoStats()
+      .then((d) => { setStats(d); setRetention(d.retentionMonths) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }
+  useEffect(() => { loadStats() }, [])
+
+  const loadPhotos = (p = 1) => {
+    setLoadingPhotos(true)
+    attendanceApi.listAttendancePhotos({ month: fMonth || undefined, userId: fUser || undefined, page: p, limit: 24 })
+      .then((d) => { setPhotos(d); setPage(d.page) })
+      .catch(() => {})
+      .finally(() => setLoadingPhotos(false))
+  }
+
+  async function saveRetention() {
+    setSavingRet(true)
+    try {
+      await attendanceApi.setPhotoRetention(retention)
+      addToast('Đã lưu số tháng giữ ảnh', 'success')
+      loadStats()
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Lưu thất bại', 'error')
+    } finally { setSavingRet(false) }
+  }
+
+  // payload: { beforeMonth } = xoá TRƯỚC tháng đó; { month } = xoá đúng tháng đó.
+  async function doCleanup(payload, label) {
+    const scope = payload.month ? <>của <strong>{label}</strong></> : <>trước <strong>{label}</strong></>
+    const ok = await confirmDelete({
+      title: 'Xóa ảnh chấm công',
+      message: <>Xoá toàn bộ ảnh {scope}? Giờ chấm công vẫn được giữ nguyên, chỉ xoá ảnh để nhẹ hệ thống.</>,
+      confirmLabel: 'Xóa ảnh',
+    })
+    if (!ok) return
+    setCleaning(true)
+    try {
+      const r = await attendanceApi.cleanupAttendancePhotos(payload)
+      addToast(`Đã xóa ${r.deletedCount} ảnh, giải phóng ${fmtBytes(r.freedBytes)}`, 'success')
+      loadStats()
+      if (photos) loadPhotos(1)
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Xóa thất bại', 'error')
+    } finally { setCleaning(false) }
+  }
+
+  if (loading) return <div className={sa.deviceLoading}><Loader2 size={16} className={s.spin} /> Đang tải…</div>
+
+  const cutoffMonth = stats?.cutoff?.slice(0, 7)
+
+  return (
+    <div className={sa.photoManager}>
+      {/* Thống kê */}
+      <div className={sa.photoStats}>
+        <div className={sa.photoStatCard}>
+          <span className={sa.photoStatLabel}>Tổng ảnh</span>
+          <strong className={sa.photoStatValue}>{stats.totalCount}</strong>
+        </div>
+        <div className={sa.photoStatCard}>
+          <span className={sa.photoStatLabel}>Dung lượng</span>
+          <strong className={sa.photoStatValue}>{fmtBytes(stats.totalBytes)}</strong>
+        </div>
+        <div className={`${sa.photoStatCard} ${stats.deletableCount ? sa.photoStatWarn : ''}`}>
+          <span className={sa.photoStatLabel}>Sẽ tự dọn (trước {fmtMonth(cutoffMonth)})</span>
+          <strong className={sa.photoStatValue}>{stats.deletableCount} ảnh · {fmtBytes(stats.deletableBytes)}</strong>
+        </div>
+      </div>
+
+      {/* Cấu hình số tháng giữ + dọn theo cấu hình */}
+      <div className={sa.photoConfigRow}>
+        <div className={sa.photoConfigItem}>
+          <label className={sa.photoConfigLabel}>Giữ ảnh gần nhất</label>
+          <input type="number" min={1} max={60} value={retention}
+            onChange={(e) => setRetention(e.target.value)} className={sa.photoRetInput} />
+          <span className={sa.photoConfigUnit}>tháng</span>
+          <button className={sa.photoBtnSave} onClick={saveRetention} disabled={savingRet}>
+            {savingRet ? <Loader2 size={14} className={s.spin} /> : <Check size={14} />} Lưu
+          </button>
+        </div>
+        {stats.deletableCount > 0 && (
+          <button className={sa.photoBtnClean} onClick={() => doCleanup({ beforeMonth: cutoffMonth }, fmtMonth(cutoffMonth))} disabled={cleaning}>
+            {cleaning ? <Loader2 size={14} className={s.spin} /> : <ImageOff size={14} />}
+            Dọn ảnh cũ ngay ({stats.deletableCount} ảnh)
+          </button>
+        )}
+      </div>
+      <p className={sa.photoHint}>
+        Ảnh cũ hơn số tháng giữ sẽ tự động dọn mỗi đêm. Dọn ảnh chỉ xoá hình, <strong>không</strong> ảnh hưởng giờ chấm công.
+      </p>
+
+      {/* Chia theo tháng */}
+      {stats.byMonth.length > 0 && (
+        <div className={sa.tableWrap}>
+          <table className={s.table}>
+            <thead><tr><th>Tháng</th><th>Số ảnh</th><th>Dung lượng</th><th></th></tr></thead>
+            <tbody>
+              {stats.byMonth.map((m) => (
+                <tr key={m.month}>
+                  <td className={s.tableStrong}>{fmtMonth(m.month)}</td>
+                  <td>{m.count}</td>
+                  <td className={s.tableMuted}>{fmtBytes(m.bytes)}</td>
+                  <td>
+                    <button className={sa.photoRowClean}
+                      onClick={() => doCleanup({ month: m.month }, fmtMonth(m.month))} disabled={cleaning}
+                      title={`Xóa toàn bộ ảnh của ${fmtMonth(m.month)}`}>
+                      Xóa ảnh tháng này
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Duyệt ảnh */}
+      <div className={sa.photoBrowseHead}>
+        <select className={sa.photoFilter} value={fMonth} onChange={(e) => setFMonth(e.target.value)}>
+          <option value="">Tất cả tháng</option>
+          {stats.byMonth.map((m) => <option key={m.month} value={m.month}>{fmtMonth(m.month)}</option>)}
+        </select>
+        <select className={sa.photoFilter} value={fUser} onChange={(e) => setFUser(e.target.value)}>
+          <option value="">Tất cả nhân viên</option>
+          {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+        <button className={sa.photoBtnSave} onClick={() => loadPhotos(1)} disabled={loadingPhotos}>
+          {loadingPhotos ? <Loader2 size={14} className={s.spin} /> : <Camera size={14} />} Xem ảnh
+        </button>
+      </div>
+
+      {photos && (
+        loadingPhotos ? (
+          <div className={sa.deviceLoading}><Loader2 size={16} className={s.spin} /> Đang tải…</div>
+        ) : photos.items.length === 0 ? (
+          <div className={sa.deviceEmpty}>Không có ảnh phù hợp.</div>
+        ) : (
+          <>
+            <div className={sa.photoGrid}>
+              {photos.items.map((it) => (
+                <div key={it.logId} className={sa.photoGridItem}>
+                  <LogPhotoThumb logId={it.logId} />
+                  <div className={sa.photoGridMeta}>
+                    <strong>{it.userName}</strong>
+                    <span className={it.logType === 'check_in' ? sa.photoIn : sa.photoOut}>
+                      {it.logType === 'check_in' ? '▶ Vào' : '◀ Ra'}
+                    </span>
+                    <span className={sa.photoGridTime}>
+                      {new Date(it.loggedAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {photos.total > photos.limit && (
+              <div className={sa.photoPager}>
+                <button disabled={page <= 1 || loadingPhotos} onClick={() => loadPhotos(page - 1)}>‹ Trước</button>
+                <span>Trang {page} / {Math.ceil(photos.total / photos.limit)}</span>
+                <button disabled={page >= Math.ceil(photos.total / photos.limit) || loadingPhotos} onClick={() => loadPhotos(page + 1)}>Sau ›</button>
+              </div>
+            )}
+          </>
+        )
+      )}
+    </div>
   )
 }
 

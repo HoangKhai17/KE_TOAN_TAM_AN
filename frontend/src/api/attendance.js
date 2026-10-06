@@ -33,6 +33,17 @@ export const fetchLogPhoto = (logId) =>
   api.get(`/attendance/logs/${logId}/photo`, { responseType: 'blob' })
     .then(r => URL.createObjectURL(r.data))
 
+// ── Quản lý ảnh chấm công (admin) ─────────────────────────────────────────────
+export const getPhotoStats = () =>
+  api.get('/attendance/photos/stats').then(r => r.data.data)
+export const listAttendancePhotos = (params) =>
+  api.get('/attendance/photos', { params }).then(r => r.data.data)
+// body: { beforeMonth } = xoá ảnh TRƯỚC tháng đó; { month } = xoá đúng ảnh CỦA tháng đó.
+export const cleanupAttendancePhotos = (payload) =>
+  api.post('/attendance/photos/cleanup', payload).then(r => r.data.data)
+export const setPhotoRetention = (months) =>
+  api.put('/attendance/photos/retention', { months }).then(r => r.data.data)
+
 // ── Records ───────────────────────────────────────────────────────────────────
 
 export const listAttendanceRecords = (params) =>

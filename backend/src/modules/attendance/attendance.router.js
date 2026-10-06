@@ -179,6 +179,12 @@ router.get('/logs', ...admin, ctrl.getLogs)
 // Ảnh selfie của 1 log chấm công — stream về. Quyền (admin / chính chủ) kiểm trong service.
 router.get('/logs/:id/photo', ...auth, ctrl.getLogPhoto)
 
+// Quản lý ảnh chấm công (admin): thống kê, liệt kê, dọn ảnh cũ, cấu hình số tháng giữ.
+router.get('/photos/stats',    ...admin, ctrl.getPhotoStats)
+router.get('/photos',          ...admin, ctrl.listPhotos)
+router.post('/photos/cleanup', ...admin, ctrl.cleanupPhotos)
+router.put('/photos/retention',...admin, ctrl.setPhotoRetention)
+
 // Device summary — first check-in device per user per day (month batch) — admin calendar/table
 router.get('/logs/device-summary', ...admin, ctrl.getDeviceSummary)
 

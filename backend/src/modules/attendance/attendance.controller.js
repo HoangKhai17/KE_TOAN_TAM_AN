@@ -2,6 +2,7 @@ const svc        = require('./attendance.service')
 const adjSvc     = require('./adjustments.service')
 const reportSvc  = require('./report.service')
 const settingsSvc = require('./settings.service')
+const photoSvc   = require('./photo.service')
 const storage    = require('../../lib/storage')
 
 // deviceInfo đến từ body: JSON object (khi gửi JSON) hoặc chuỗi JSON (khi gửi multipart form).
@@ -60,6 +61,37 @@ async function getLogPhoto(req, res, next) {
   try {
     const absPath = await svc.getLogPhoto(req.params.id, req.user)
     res.sendFile(absPath)
+  } catch (err) { next(err) }
+}
+
+// ── Quản lý ảnh chấm công (admin) ─────────────────────────────────────────────
+async function getPhotoStats(req, res, next) {
+  try {
+    const stats = await photoSvc.getPhotoStats()
+    res.json({ success: true, data: stats })
+  } catch (err) { next(err) }
+}
+
+async function listPhotos(req, res, next) {
+  try {
+    const { month, userId, page, limit } = req.query
+    const data = await photoSvc.listPhotos({ month, userId, page, limit })
+    res.json({ success: true, data })
+  } catch (err) { next(err) }
+}
+
+async function cleanupPhotos(req, res, next) {
+  try {
+    const { beforeMonth, month } = req.body ?? {}
+    const result = await photoSvc.cleanupBefore({ beforeMonth, month })
+    res.json({ success: true, data: result })
+  } catch (err) { next(err) }
+}
+
+async function setPhotoRetention(req, res, next) {
+  try {
+    const months = await photoSvc.setRetentionMonths(req.body?.months, req.user.id)
+    res.json({ success: true, data: { retentionMonths: months } })
   } catch (err) { next(err) }
 }
 
@@ -324,5 +356,6 @@ module.exports = {
   sendConfirmation,
   getLogs,
   getLogPhoto,
+  getPhotoStats, listPhotos, cleanupPhotos, setPhotoRetention,
   getDeviceSummary,
 }

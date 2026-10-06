@@ -11,6 +11,7 @@ const { runMorningSummary }        = require('./morningSummary.job')
 const { runAdminAttendanceJob }    = require('./adminAttendance.job')
 const { runClientDocOverdueJob }   = require('./clientDocOverdue.job')
 const { runBirthday }              = require('./birthday.job')
+const { runAttendancePhotoCleanup } = require('./attendancePhotoCleanup.job')
 
 let schedulerTask = null
 let lastRunAt     = null
@@ -259,7 +260,14 @@ async function startNotificationJobs() {
     }
   }, { timezone: 'UTC' })
 
-  logger.info('[Jobs] Notification cron jobs scheduled (07:00 morning · 08:05 on-hold · 08:30 client-doc · 08:00 birthday · 06:30 admin attendance — giờ VN)')
+  // Dọn ảnh chấm công cũ — 02:00 VN = 19:00 UTC (giờ thấp điểm). Giữ N tháng theo cấu hình.
+  cron.schedule('0 19 * * *', async () => {
+    try { await runAttendancePhotoCleanup() } catch (err) {
+      logger.error('[Jobs] Attendance photo cleanup failed', { error: err.message })
+    }
+  }, { timezone: 'UTC' })
+
+  logger.info('[Jobs] Notification cron jobs scheduled (07:00 morning · 08:05 on-hold · 08:30 client-doc · 08:00 birthday · 06:30 admin attendance · 02:00 photo-cleanup — giờ VN)')
 }
 
 module.exports = {

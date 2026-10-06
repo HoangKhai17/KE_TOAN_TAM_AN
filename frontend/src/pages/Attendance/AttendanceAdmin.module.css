@@ -1300,6 +1300,117 @@
   box-shadow: var(--shadow-md);
 }
 
+/* ── Quản lý ảnh chấm công ──────────────────────────────────────────────────── */
+
+.photoManager { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.photoStats { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+
+.photoStatCard {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.photoStatWarn { border-color: var(--color-warning, #d97706); background: var(--color-warning-bg, #fff7ed); }
+.photoStatLabel { font-size: var(--fs-xs); color: var(--color-muted); }
+.photoStatValue { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--color-text); }
+
+.photoConfigRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+.photoConfigItem { display: inline-flex; align-items: center; gap: var(--space-2); }
+.photoConfigLabel { font-size: var(--fs-sm); color: var(--color-text); font-weight: var(--fw-semibold); }
+.photoConfigUnit { font-size: var(--fs-sm); color: var(--color-muted); }
+.photoRetInput {
+  width: 64px;
+  padding: 6px 8px;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.photoBtnSave, .photoBtnClean, .photoRowClean {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.photoBtnSave { background: var(--color-primary); color: var(--color-white); }
+.photoBtnSave:hover:not(:disabled) { background: var(--color-primary-dark); }
+.photoBtnClean { background: var(--color-warning, #d97706); color: var(--color-white); }
+.photoBtnClean:hover:not(:disabled) { filter: brightness(0.95); }
+.photoRowClean {
+  padding: 4px 10px;
+  font-size: var(--fs-xs);
+  background: transparent;
+  color: var(--color-warning, #d97706);
+  border-color: var(--color-warning, #d97706);
+}
+.photoRowClean:hover:not(:disabled) { background: var(--color-warning-bg, #fff7ed); }
+.photoBtnSave:disabled, .photoBtnClean:disabled, .photoRowClean:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.photoHint { margin: 0; font-size: var(--fs-xs); color: var(--color-muted); }
+
+.photoBrowseHead { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin-top: var(--space-2); }
+.photoFilter {
+  padding: 7px 10px;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-3);
+}
+.photoGridItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.photoGridItem .photoThumbRow { width: 100%; }
+.photoGridItem .photoThumb { width: 100%; height: 110px; }
+.photoGridMeta { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-2xs); }
+.photoGridMeta strong { font-size: var(--fs-xs); color: var(--color-text); }
+.photoGridTime { color: var(--color-muted); }
+.photoIn  { color: var(--color-success, #16a34a); font-weight: var(--fw-semibold); }
+.photoOut { color: var(--color-primary); font-weight: var(--fw-semibold); }
+
+.photoPager { display: flex; align-items: center; justify-content: center; gap: var(--space-4); margin-top: var(--space-3); font-size: var(--fs-sm); color: var(--color-muted); }
+.photoPager button {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.photoPager button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Thumbnail trong lưới duyệt dùng chung class .photoThumb (đã định nghĩa phía trên) */
+
 /* ── Device chip — calendar cell ────────────────────────────────────────────── */
 
 .calendarDeviceChip {
