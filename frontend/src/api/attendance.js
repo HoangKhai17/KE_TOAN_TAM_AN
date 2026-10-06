@@ -1,14 +1,18 @@
 import api from './axios'
+import { getDeviceId, deviceLabelFrom } from '../utils/deviceInfo'
 
 // ── Check-in / Check-out ──────────────────────────────────────────────────────
 // payload: { method, notes?, deviceInfo? (object), photo? (Blob/File) }.
 // Có ảnh → gửi multipart/form-data; không có ảnh → gửi FormData không kèm file (vẫn ok).
+// Tự đính kèm deviceId + deviceLabel (thiết bị tin cậy) cho mọi lần chấm công.
 const PHOTO_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
 function buildCheckPayload({ method, notes, deviceInfo, photo } = {}) {
   const fd = new FormData()
   if (method) fd.append('method', method)
   if (notes)  fd.append('notes', notes)
   if (deviceInfo) fd.append('deviceInfo', JSON.stringify(deviceInfo))
+  const deviceId = getDeviceId()
+  if (deviceId) { fd.append('deviceId', deviceId); fd.append('deviceLabel', deviceLabelFrom(deviceInfo)) }
   if (photo) {
     // Đuôi file PHẢI khớp kiểu blob thực tế, nếu không backend báo lệch MIME.
     const ext = PHOTO_EXT[photo.type] ?? 'jpg'
@@ -43,6 +47,22 @@ export const cleanupAttendancePhotos = (payload) =>
   api.post('/attendance/photos/cleanup', payload).then(r => r.data.data)
 export const setPhotoRetention = (months) =>
   api.put('/attendance/photos/retention', { months }).then(r => r.data.data)
+
+// ── Thiết bị tin cậy (admin) ──────────────────────────────────────────────────
+export const listDevices = (params) =>
+  api.get('/attendance/devices', { params }).then(r => r.data.data)
+export const setDeviceLock = (enabled) =>
+  api.put('/attendance/devices/lock', { enabled }).then(r => r.data.data)
+export const approveDevice = (id) =>
+  api.post(`/attendance/devices/${id}/approve`).then(r => r.data)
+export const approveAllDevices = () =>
+  api.post('/attendance/devices/approve-all').then(r => r.data.data)
+export const revokeDevice = (id) =>
+  api.post(`/attendance/devices/${id}/revoke`).then(r => r.data)
+export const renameDevice = (id, label) =>
+  api.patch(`/attendance/devices/${id}`, { label }).then(r => r.data)
+export const deleteDevice = (id) =>
+  api.delete(`/attendance/devices/${id}`).then(r => r.data)
 
 // ── Records ───────────────────────────────────────────────────────────────────
 

@@ -79,3 +79,25 @@ export async function collectDeviceInfo() {
 export function detectMethod(deviceType) {
   return deviceType === 'mobile' || deviceType === 'tablet' ? 'mobile' : 'web'
 }
+
+// ID thiết bị ổn định (sinh 1 lần, lưu localStorage) — dùng cho "thiết bị tin cậy".
+// Mỗi trình duyệt/máy 1 ID riêng; xoá dữ liệu site sẽ sinh ID mới (coi như máy mới).
+const DEVICE_ID_KEY = 'ktta_device_id'
+export function getDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY)
+    if (!id) {
+      id = (crypto?.randomUUID?.() ?? `dev-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+      localStorage.setItem(DEVICE_ID_KEY, id)
+    }
+    return id
+  } catch { return null }
+}
+
+// Nhãn thiết bị gợi ý từ deviceInfo (admin có thể đổi sau).
+export function deviceLabelFrom(info) {
+  if (!info) return 'Thiết bị không rõ'
+  const parts = [info.os, info.browser].filter(Boolean)
+  const base = parts.join(' · ') || 'Thiết bị'
+  return info.isPWA ? `${base} (PWA)` : base
+}

@@ -2,12 +2,15 @@ const authService = require('./auth.service')
 const env = require('../../config/env')
 
 const COOKIE_NAME = 'refreshToken'
+// sameSite 'lax': cookie vẫn chảy khi mở app từ icon PWA / điều hướng trên mobile
+// (strict hay chặn → bắt đăng nhập lại), vẫn an toàn CSRF cho luồng refresh.
+// maxAge 30 ngày = "giữ đăng nhập 30 ngày", PHẢI khớp REFRESH_TTL_MS ở auth.service.js.
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: env.isProd,
-  sameSite: 'strict',
+  sameSite: 'lax',
   path: '/api/auth',
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+  maxAge: 30 * 24 * 60 * 60 * 1000,
 }
 
 function setRefreshCookie(res, token) {

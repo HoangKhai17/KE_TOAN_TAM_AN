@@ -10,6 +10,7 @@ import {
   Download, BarChart3, Settings, Terminal, Pencil, LayoutGrid,
   Mail, SendHorizonal, CheckCircle2,
   Smartphone, Laptop, Monitor, Globe, Camera, ImageOff,
+  Trash2, ShieldCheck, Ban,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -57,6 +58,7 @@ const ADMIN_TABS = [
   { id: 'overtime',     label: 'Duyệt tăng ca',     icon: Clock },
   { id: 'report',       label: 'Báo cáo',           icon: BarChart3 },
   { id: 'photos',       label: 'Ảnh chấm công',     icon: Camera },
+  { id: 'devices',      label: 'Thiết bị',          icon: Smartphone },
   { id: 'att-settings', label: 'Cài đặt',           icon: Settings },
   ...(import.meta.env.DEV ? [{ id: 'devtools', label: 'Dev Tools', icon: Terminal, dev: true }] : []),
 ]
@@ -332,6 +334,7 @@ export default function AttendanceAdmin() {
         {activeTab === 'overtime'     && <AdminOvertimeTab staffList={staffList} />}
         {activeTab === 'report'       && <ReportTab year={year} month={month} />}
         {activeTab === 'photos'       && <PhotoManagerTab staffList={staffList} />}
+        {activeTab === 'devices'      && <DeviceManagerTab staffList={staffList} />}
         {activeTab === 'att-settings' && <AttendanceSettingsTab />}
         {activeTab === 'devtools'     && <AdminDevToolsTab staffList={staffList} />}
 
@@ -3648,6 +3651,7 @@ function PhotoManagerTab({ staffList }) {
   // Duyệt ảnh
   const [fMonth, setFMonth] = useState('')
   const [fUser, setFUser] = useState('')
+  const [fType, setFType] = useState('')   // '' | 'check_in' | 'check_out'
   const [photos, setPhotos] = useState(null)
   const [loadingPhotos, setLoadingPhotos] = useState(false)
   const [page, setPage] = useState(1)
@@ -3663,7 +3667,7 @@ function PhotoManagerTab({ staffList }) {
 
   const loadPhotos = (p = 1) => {
     setLoadingPhotos(true)
-    attendanceApi.listAttendancePhotos({ month: fMonth || undefined, userId: fUser || undefined, page: p, limit: 24 })
+    attendanceApi.listAttendancePhotos({ month: fMonth || undefined, userId: fUser || undefined, logType: fType || undefined, page: p, limit: 24 })
       .then((d) => { setPhotos(d); setPage(d.page) })
       .catch(() => {})
       .finally(() => setLoadingPhotos(false))
@@ -3779,6 +3783,11 @@ function PhotoManagerTab({ staffList }) {
           <option value="">Tất cả nhân viên</option>
           {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
+        <select className={sa.photoFilter} value={fType} onChange={(e) => setFType(e.target.value)}>
+          <option value="">Vào & Ra</option>
+          <option value="check_in">Chỉ ảnh Vào</option>
+          <option value="check_out">Chỉ ảnh Ra</option>
+        </select>
         <button className={sa.photoBtnSave} onClick={() => loadPhotos(1)} disabled={loadingPhotos}>
           {loadingPhotos ? <Loader2 size={14} className={s.spin} /> : <Camera size={14} />} Xem ảnh
         </button>
@@ -3816,6 +3825,186 @@ function PhotoManagerTab({ staffList }) {
             )}
           </>
         )
+      )}
+    </div>
+  )
+}
+
+// ── DeviceManagerTab — quản lý & duyệt thiết bị chấm công ─────────────────────
+const DEVICE_STATUS = {
+  pending:  { label: 'Chờ duyệt',  cls: 'devStPending' },
+  approved: { label: 'Đã duyệt',   cls: 'devStApproved' },
+  revoked:  { label: 'Đã thu hồi', cls: 'devStRevoked' },
+}
+
+function DeviceManagerTab({ staffList }) {
+  const confirmDelete = useDeleteConfirm()
+  const addToast = useToastStore((st) => st.toast)
+  const [data, setData] = useState(null)   // { devices, pendingCount, lockEnabled }
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [fStatus, setFStatus] = useState('')
+  const [fUser, setFUser] = useState('')
+
+  const load = () => {
+    setLoading(true)
+    attendanceApi.listDevices({ status: fStatus || undefined, userId: fUser || undefined })
+      .then(setData).catch(() => {}).finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [fStatus, fUser]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function toggleLock() {
+    const turnOn = !data.lockEnabled
+    if (turnOn) {
+      const ok = await confirmDelete({
+        title: 'Bật khóa thiết bị',
+        message: <>Khi bật, <strong>chỉ thiết bị đã duyệt</strong> mới chấm công được. Hãy chắc chắn bạn đã duyệt thiết bị cho các nhân viên, nếu không họ sẽ bị chặn chấm công.</>,
+        confirmLabel: 'Bật khóa',
+        danger: false,
+      })
+      if (!ok) return
+    }
+    setBusy(true)
+    try {
+      const r = await attendanceApi.setDeviceLock(turnOn)
+      setData((d) => ({ ...d, lockEnabled: r.lockEnabled }))
+      addToast(r.lockEnabled ? 'Đã BẬT khóa thiết bị' : 'Đã TẮT khóa thiết bị', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Thao tác thất bại', 'error')
+    } finally { setBusy(false) }
+  }
+
+  async function act(fn, id, okMsg) {
+    setBusy(true)
+    try { await fn(id); addToast(okMsg, 'success'); load() }
+    catch (err) { addToast(err.response?.data?.error?.message ?? 'Thao tác thất bại', 'error') }
+    finally { setBusy(false) }
+  }
+
+  async function approveAll() {
+    const ok = await confirmDelete({
+      title: 'Duyệt tất cả thiết bị đang chờ',
+      message: <>Duyệt <strong>{data.pendingCount}</strong> thiết bị đang chờ? Dùng khi rollout — hãy chắc các thiết bị này đúng là của nhân viên.</>,
+      confirmLabel: 'Duyệt tất cả', danger: false,
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      const r = await attendanceApi.approveAllDevices()
+      addToast(`Đã duyệt ${r.approved} thiết bị`, 'success')
+      load()
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Thao tác thất bại', 'error')
+    } finally { setBusy(false) }
+  }
+
+  async function onRevoke(d) {
+    const ok = await confirmDelete({
+      title: 'Thu hồi thiết bị', confirmLabel: 'Thu hồi',
+      message: <>Thu hồi quyền chấm công của thiết bị <strong>{d.label || d.deviceId}</strong> ({d.userName})?</>,
+    })
+    if (ok) act(attendanceApi.revokeDevice, d.id, 'Đã thu hồi thiết bị')
+  }
+  async function onDelete(d) {
+    const ok = await confirmDelete({
+      title: 'Xóa thiết bị',
+      message: <>Xóa hẳn thiết bị <strong>{d.label || d.deviceId}</strong> ({d.userName})? Lần sau máy đó chấm công sẽ được ghi nhận lại như thiết bị mới.</>,
+    })
+    if (ok) act(attendanceApi.deleteDevice, d.id, 'Đã xóa thiết bị')
+  }
+
+  if (loading) return <div className={sa.deviceLoading}><Loader2 size={16} className={s.spin} /> Đang tải…</div>
+
+  const fmtTs = (iso) => iso ? new Date(iso).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
+
+  return (
+    <div className={sa.photoManager}>
+      {/* Khóa thiết bị */}
+      <div className={`${sa.devLockBox} ${data.lockEnabled ? sa.devLockOn : ''}`}>
+        <div className={sa.devLockInfo}>
+          <ShieldCheck size={18} />
+          <div>
+            <strong>Khóa chấm công theo thiết bị: {data.lockEnabled ? 'ĐANG BẬT' : 'đang tắt'}</strong>
+            <p className={sa.photoHint}>
+              {data.lockEnabled
+                ? 'Chỉ thiết bị đã duyệt mới chấm công được.'
+                : 'Mọi thiết bị vẫn chấm công được; hệ thống chỉ ghi nhận để bạn duyệt trước khi bật khóa.'}
+            </p>
+          </div>
+        </div>
+        <button className={data.lockEnabled ? sa.photoRowClean : sa.photoBtnSave} onClick={toggleLock} disabled={busy}>
+          {data.lockEnabled ? 'Tắt khóa' : 'Bật khóa'}
+        </button>
+      </div>
+
+      {data.pendingCount > 0 && (
+        <div className={sa.devPendingNote}>
+          <span>Có <strong>{data.pendingCount}</strong> thiết bị đang chờ duyệt.</span>
+          <button className={sa.devBtnApprove} onClick={approveAll} disabled={busy}>
+            <ShieldCheck size={13} /> Duyệt tất cả đang chờ
+          </button>
+        </div>
+      )}
+
+      {/* Bộ lọc */}
+      <div className={sa.photoBrowseHead}>
+        <select className={sa.photoFilter} value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
+          <option value="">Tất cả trạng thái</option>
+          <option value="pending">Chờ duyệt</option>
+          <option value="approved">Đã duyệt</option>
+          <option value="revoked">Đã thu hồi</option>
+        </select>
+        <select className={sa.photoFilter} value={fUser} onChange={(e) => setFUser(e.target.value)}>
+          <option value="">Tất cả nhân viên</option>
+          {staffList.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+      </div>
+
+      {data.devices.length === 0 ? (
+        <div className={sa.deviceEmpty}>Chưa có thiết bị nào.</div>
+      ) : (
+        <div className={sa.tableWrap}>
+          <table className={s.table}>
+            <thead><tr>
+              <th>Nhân viên</th><th>Thiết bị</th><th>Trạng thái</th><th>Lần cuối</th><th>IP</th><th></th>
+            </tr></thead>
+            <tbody>
+              {data.devices.map((d) => {
+                const st = DEVICE_STATUS[d.status] ?? DEVICE_STATUS.pending
+                return (
+                  <tr key={d.id}>
+                    <td className={s.tableStrong}>{d.userName}</td>
+                    <td>
+                      <div className={sa.devLabel}>{d.label || '—'}</div>
+                      <div className={sa.devMeta}>{d.deviceInfo || d.deviceId}</div>
+                    </td>
+                    <td><span className={`${sa.devBadge} ${sa[st.cls]}`}>{st.label}</span></td>
+                    <td className={s.tableMuted}>{fmtTs(d.lastSeen)}</td>
+                    <td className={s.tableMuted}><code className={sa.deviceIp}>{d.lastIp || '—'}</code></td>
+                    <td>
+                      <div className={sa.devActions}>
+                        {d.status !== 'approved' && (
+                          <button className={sa.devBtnApprove} disabled={busy}
+                            onClick={() => act(attendanceApi.approveDevice, d.id, 'Đã duyệt thiết bị')}>
+                            <ShieldCheck size={13} /> Duyệt
+                          </button>
+                        )}
+                        {d.status === 'approved' && (
+                          <button className={sa.devBtnRevoke} disabled={busy} onClick={() => onRevoke(d)}>
+                            <Ban size={13} /> Thu hồi
+                          </button>
+                        )}
+                        <button className={sa.devBtnDelete} disabled={busy} onClick={() => onDelete(d)} title="Xóa thiết bị">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )

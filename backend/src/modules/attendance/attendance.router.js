@@ -185,6 +185,15 @@ router.get('/photos',          ...admin, ctrl.listPhotos)
 router.post('/photos/cleanup', ...admin, ctrl.cleanupPhotos)
 router.put('/photos/retention',...admin, ctrl.setPhotoRetention)
 
+// Thiết bị tin cậy (admin): danh sách, bật/tắt khóa, duyệt/thu hồi/đổi tên/xoá.
+router.get('/devices',             ...admin, ctrl.listDevices)
+router.put('/devices/lock',        ...admin, ctrl.setDeviceLock)
+router.post('/devices/approve-all',...admin, ctrl.approveAllDevices)
+router.post('/devices/:id/approve',...admin, ctrl.approveDevice)
+router.post('/devices/:id/revoke', ...admin, ctrl.revokeDevice)
+router.patch('/devices/:id',       ...admin, ctrl.renameDevice)
+router.delete('/devices/:id',      ...admin, ctrl.deleteDevice)
+
 // Device summary — first check-in device per user per day (month batch) — admin calendar/table
 router.get('/logs/device-summary', ...admin, ctrl.getDeviceSummary)
 

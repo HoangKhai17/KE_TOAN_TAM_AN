@@ -3,6 +3,7 @@ const adjSvc     = require('./adjustments.service')
 const reportSvc  = require('./report.service')
 const settingsSvc = require('./settings.service')
 const photoSvc   = require('./photo.service')
+const deviceSvc  = require('./device.service')
 const storage    = require('../../lib/storage')
 
 // deviceInfo đến từ body: JSON object (khi gửi JSON) hoặc chuỗi JSON (khi gửi multipart form).
@@ -37,23 +38,64 @@ function resolveDeviceInfo(bodyDeviceInfo, ua) {
 
 async function checkIn(req, res, next) {
   try {
-    const { method, notes } = req.body
+    const { method, notes, deviceId, deviceLabel } = req.body
     const ip         = resolveClientIp(req)
     const deviceInfo = resolveDeviceInfo(parseDeviceInfo(req.body.deviceInfo), req.headers['user-agent'])
     const photoPath  = req.file ? storage.toRelative(req.file.path) : null
-    const result = await svc.checkIn({ userId: req.user.id, method, notes, ip, deviceInfo, photoPath })
+    const result = await svc.checkIn({ userId: req.user.id, method, notes, ip, deviceInfo, photoPath, deviceId, deviceLabel })
     res.status(201).json(result)
   } catch (err) { next(err) }
 }
 
 async function checkOut(req, res, next) {
   try {
-    const { method, notes } = req.body
+    const { method, notes, deviceId, deviceLabel } = req.body
     const ip         = resolveClientIp(req)
     const deviceInfo = resolveDeviceInfo(parseDeviceInfo(req.body.deviceInfo), req.headers['user-agent'])
     const photoPath  = req.file ? storage.toRelative(req.file.path) : null
-    const result = await svc.checkOut({ userId: req.user.id, method, notes, ip, deviceInfo, photoPath })
+    const result = await svc.checkOut({ userId: req.user.id, method, notes, ip, deviceInfo, photoPath, deviceId, deviceLabel })
     res.json(result)
+  } catch (err) { next(err) }
+}
+
+// ── Thiết bị tin cậy (admin) ──────────────────────────────────────────────────
+async function listDevices(req, res, next) {
+  try {
+    const { status, userId } = req.query
+    const [devices, pending, lockEnabled] = await Promise.all([
+      deviceSvc.listDevices({ status, userId }),
+      deviceSvc.countPending(),
+      deviceSvc.isLockEnabled(),
+    ])
+    res.json({ success: true, data: { devices, pendingCount: pending, lockEnabled } })
+  } catch (err) { next(err) }
+}
+
+async function approveDevice(req, res, next) {
+  try { await deviceSvc.setStatus(req.params.id, 'approved', req.user.id); res.json({ success: true }) }
+  catch (err) { next(err) }
+}
+async function revokeDevice(req, res, next) {
+  try { await deviceSvc.setStatus(req.params.id, 'revoked', req.user.id); res.json({ success: true }) }
+  catch (err) { next(err) }
+}
+async function approveAllDevices(req, res, next) {
+  try { const count = await deviceSvc.approveAllPending(req.user.id); res.json({ success: true, data: { approved: count } }) }
+  catch (err) { next(err) }
+}
+async function renameDevice(req, res, next) {
+  try { await deviceSvc.renameDevice(req.params.id, req.body?.label); res.json({ success: true }) }
+  catch (err) { next(err) }
+}
+async function deleteDevice(req, res, next) {
+  try { await deviceSvc.deleteDevice(req.params.id); res.status(204).end() }
+  catch (err) { next(err) }
+}
+async function setDeviceLock(req, res, next) {
+  try {
+    const on = req.body?.enabled === true || req.body?.enabled === 'true' || req.body?.enabled === 1
+    const enabled = await deviceSvc.setLockEnabled(on, req.user.id)
+    res.json({ success: true, data: { lockEnabled: enabled } })
   } catch (err) { next(err) }
 }
 
@@ -74,8 +116,8 @@ async function getPhotoStats(req, res, next) {
 
 async function listPhotos(req, res, next) {
   try {
-    const { month, userId, page, limit } = req.query
-    const data = await photoSvc.listPhotos({ month, userId, page, limit })
+    const { month, userId, logType, page, limit } = req.query
+    const data = await photoSvc.listPhotos({ month, userId, logType, page, limit })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
@@ -357,5 +399,6 @@ module.exports = {
   getLogs,
   getLogPhoto,
   getPhotoStats, listPhotos, cleanupPhotos, setPhotoRetention,
+  listDevices, approveDevice, approveAllDevices, revokeDevice, renameDevice, deleteDevice, setDeviceLock,
   getDeviceSummary,
 }

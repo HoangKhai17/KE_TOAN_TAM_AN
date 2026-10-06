@@ -77,12 +77,13 @@ async function getPhotoStats() {
   }
 }
 
-// Liệt kê ảnh (phân trang) để admin duyệt — lọc theo tháng (YYYY-MM) và/hoặc nhân viên.
-async function listPhotos({ month, userId, page = 1, limit = 30 }) {
+// Liệt kê ảnh (phân trang) để admin duyệt — lọc theo tháng (YYYY-MM), nhân viên, loại (Vào/Ra).
+async function listPhotos({ month, userId, logType, page = 1, limit = 30 }) {
   const where = ['l.photo_path IS NOT NULL']
   const params = []
   if (month && /^\d{4}-\d{2}$/.test(month)) { params.push(month); where.push(`to_char(l.logged_at, 'YYYY-MM') = $${params.length}`) }
   if (userId) { params.push(userId); where.push(`l.user_id = $${params.length}`) }
+  if (logType === 'check_in' || logType === 'check_out') { params.push(logType); where.push(`l.log_type = $${params.length}`) }
   const whereSql = where.join(' AND ')
 
   const totalRes = await query(`SELECT count(*)::int n FROM attendance_logs l WHERE ${whereSql}`, params)

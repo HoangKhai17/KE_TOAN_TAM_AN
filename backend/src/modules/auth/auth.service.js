@@ -26,9 +26,13 @@ function generateRefreshToken() {
   return crypto.randomBytes(48).toString('hex')
 }
 
+// Thời hạn refresh token = thời gian "giữ đăng nhập" trên thiết bị.
+// PHẢI khớp maxAge cookie refreshToken ở auth.controller.js.
+const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 ngày
+
 async function storeRefreshToken(userId, rawToken, familyId) {
   const tokenHash = hashToken(rawToken)
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  const expiresAt = new Date(Date.now() + REFRESH_TTL_MS)
   await query(
     `INSERT INTO refresh_tokens (user_id, token_hash, family_id, expires_at)
      VALUES ($1, $2, $3, $4)`,

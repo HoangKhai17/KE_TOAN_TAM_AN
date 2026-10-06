@@ -1,5 +1,6 @@
 const { query }                          = require('../../config/db')
 const storage                            = require('../../lib/storage')
+const deviceSvc                          = require('./device.service')
 const { sendMail }                       = require('../../utils/mailer')
 const { getTemplate, renderTemplate }    = require('../../utils/emailTemplates')
 const { DAILY_VIEW, summaryColumns, getStrictUnpaidFrom } = require('./aggregate.sql')
@@ -389,9 +390,12 @@ async function recomputeDate(date) {
 
 // ── Check-in / Check-out ──────────────────────────────────────────────────────
 
-async function checkIn({ userId, method = 'web', notes, ip, deviceInfo, photoPath = null }) {
+async function checkIn({ userId, method = 'web', notes, ip, deviceInfo, photoPath = null, deviceId, deviceLabel }) {
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  // Ghi nhận + (nếu bật khóa) chặn thiết bị chưa duyệt — trước khi ghi log.
+  await deviceSvc.assertDeviceAllowed({ userId, deviceId, label: deviceLabel, deviceInfo, ip })
 
   const { rows: logRows } = await query(
     `INSERT INTO attendance_logs (user_id, log_type, method, device_info, ip_address, notes, photo_path)
@@ -404,9 +408,12 @@ async function checkIn({ userId, method = 'web', notes, ip, deviceInfo, photoPat
   return { log: toLogDto(logRows[0]), record }
 }
 
-async function checkOut({ userId, method = 'web', notes, ip, deviceInfo, photoPath = null }) {
+async function checkOut({ userId, method = 'web', notes, ip, deviceInfo, photoPath = null, deviceId, deviceLabel }) {
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  // Ghi nhận + (nếu bật khóa) chặn thiết bị chưa duyệt — trước khi ghi log.
+  await deviceSvc.assertDeviceAllowed({ userId, deviceId, label: deviceLabel, deviceInfo, ip })
 
   const hasCheckIn = await query(
     `SELECT id FROM attendance_logs WHERE user_id = $1 AND log_type = 'check_in' AND logged_at::date = $2 LIMIT 1`,
