@@ -36,6 +36,11 @@ function resolveDeviceInfo(bodyDeviceInfo, ua) {
   return ua?.slice(0, 200) ?? null
 }
 
+// Dọn ảnh selfie đã upload nếu lần chấm công bị từ chối (vd thiết bị chưa duyệt) → tránh file rác.
+function cleanupUploadedPhoto(req) {
+  if (req.file) { try { storage.removeFile(storage.toRelative(req.file.path)) } catch { /* bỏ qua */ } }
+}
+
 async function checkIn(req, res, next) {
   try {
     const { method, notes, deviceId, deviceLabel } = req.body
@@ -44,7 +49,7 @@ async function checkIn(req, res, next) {
     const photoPath  = req.file ? storage.toRelative(req.file.path) : null
     const result = await svc.checkIn({ userId: req.user.id, method, notes, ip, deviceInfo, photoPath, deviceId, deviceLabel })
     res.status(201).json(result)
-  } catch (err) { next(err) }
+  } catch (err) { cleanupUploadedPhoto(req); next(err) }
 }
 
 async function checkOut(req, res, next) {
@@ -55,7 +60,7 @@ async function checkOut(req, res, next) {
     const photoPath  = req.file ? storage.toRelative(req.file.path) : null
     const result = await svc.checkOut({ userId: req.user.id, method, notes, ip, deviceInfo, photoPath, deviceId, deviceLabel })
     res.json(result)
-  } catch (err) { next(err) }
+  } catch (err) { cleanupUploadedPhoto(req); next(err) }
 }
 
 // ── Thiết bị tin cậy (admin) ──────────────────────────────────────────────────

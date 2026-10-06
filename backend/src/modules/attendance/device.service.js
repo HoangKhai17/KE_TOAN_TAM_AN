@@ -5,10 +5,17 @@
 const { query } = require('../../config/db')
 
 const LOCK_KEY = 'attendance.device_lock_enabled'
+const LOCK_AT_KEY = 'attendance.device_lock_enabled_at' // mốc thời gian BẬT khóa gần nhất
 
 async function isLockEnabled() {
   const { rows: [row] } = await query('SELECT value FROM system_configs WHERE key = $1', [LOCK_KEY])
   return row?.value === '1' || row?.value === 'true'
+}
+
+// Mốc BẬT khóa gần nhất (để phân biệt thiết bị có-từ-trước vs mới-xuất-hiện-sau-khi-khóa).
+async function getLockEnabledAt() {
+  const { rows: [row] } = await query('SELECT value FROM system_configs WHERE key = $1', [LOCK_AT_KEY])
+  return row?.value ? new Date(row.value) : null
 }
 
 async function setLockEnabled(on, updatedBy) {
@@ -19,6 +26,17 @@ async function setLockEnabled(on, updatedBy) {
        SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
     [LOCK_KEY, on ? '1' : '0', updatedBy ?? null]
   )
+  // Ghi mốc thời gian lúc BẬT (để xác định "grandfather": máy đã có trước mốc này được treo,
+  // máy mới xuất hiện sau mốc này bị chặn hẳn → chống spam).
+  if (on) {
+    await query(
+      `INSERT INTO system_configs (key, value, description, updated_by, updated_at)
+       VALUES ($1, $2, 'Mốc thời gian bật khóa thiết bị gần nhất.', $3, NOW())
+       ON CONFLICT (key) DO UPDATE
+         SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
+      [LOCK_AT_KEY, new Date().toISOString(), updatedBy ?? null]
+    )
+  }
   return !!on
 }
 
@@ -44,10 +62,31 @@ async function touchDevice({ userId, deviceId, label, deviceInfo, ip }) {
 // Gọi trước khi ghi log chấm công. Luôn ghi nhận thiết bị và trả quyết định:
 //   { held: false } → chấm công bình thường (tính công ngay).
 //   { held: true }  → VẪN cho chấm nhưng TREO (chờ admin duyệt thiết bị mới tính công).
-// Chỉ CHẶN (throw) với thiết bị đã bị thu hồi, hoặc không gửi deviceId (không định danh được).
+//   throw 403       → CHẶN hẳn (không tạo log chấm công).
+//
+// Quy tắc khi khóa BẬT:
+//   - approved                                   → tính ngay.
+//   - revoked                                    → chặn.
+//   - pending & ĐÃ CÓ TRƯỚC mốc bật khóa         → treo (grandfather: máy đang dùng lúc bật khóa).
+//   - pending & MỚI xuất hiện SAU mốc bật khóa   → chặn (chống spam: máy lạ phải được duyệt trước).
+//   - không gửi deviceId                         → chặn.
 async function evaluateDevice({ userId, deviceId, label, deviceInfo, ip }) {
+  const lockOn = await isLockEnabled()
+
+  // Tra thiết bị TRƯỚC khi upsert để biết nó đã tồn tại từ bao giờ.
+  let existing = null
+  if (deviceId) {
+    const { rows: [row] } = await query(
+      'SELECT status, first_seen FROM trusted_devices WHERE user_id = $1 AND device_id = $2',
+      [userId, String(deviceId).slice(0, 64)]
+    )
+    existing = row || null
+  }
+
+  // Luôn ghi nhận/ cập nhật thiết bị (để admin thấy cả máy mới thử chấm → duyệt được).
   const status = await touchDevice({ userId, deviceId, label, deviceInfo, ip })
-  if (!(await isLockEnabled())) return { held: false } // khóa tắt → tính ngay
+
+  if (!lockOn) return { held: false } // khóa tắt → tính ngay
 
   if (!deviceId) {
     throw Object.assign(new Error('Thiết bị chưa định danh được. Vui lòng chấm công bằng ứng dụng trên điện thoại.'), { status: 403, code: 'DEVICE_NOT_REGISTERED' })
@@ -56,7 +95,16 @@ async function evaluateDevice({ userId, deviceId, label, deviceInfo, ip }) {
   if (status === 'revoked') {
     throw Object.assign(new Error('Thiết bị này đã bị thu hồi quyền chấm công. Liên hệ quản trị viên.'), { status: 403, code: 'DEVICE_REVOKED' })
   }
-  return { held: true } // pending / vừa tạo → treo
+
+  // pending: treo nếu máy đã đăng ký TRƯỚC khi bật khóa; ngược lại chặn hẳn.
+  const lockAt = await getLockEnabledAt()
+  const registeredBeforeLock = existing && lockAt && new Date(existing.first_seen) < lockAt
+  if (registeredBeforeLock) return { held: true }
+
+  throw Object.assign(
+    new Error('Thiết bị chưa được duyệt. Vui lòng báo quản trị viên duyệt thiết bị này, sau đó chấm công lại.'),
+    { status: 403, code: 'DEVICE_PENDING' }
+  )
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
