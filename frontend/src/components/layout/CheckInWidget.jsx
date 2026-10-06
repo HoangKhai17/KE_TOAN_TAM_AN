@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { getToday, checkIn, checkOut } from '../../api/attendance'
 import { collectDeviceInfo, detectMethod } from '../../utils/deviceInfo'
+import SelfieCaptureModal from '../attendance/SelfieCaptureModal'
 import s from './layout.module.css'
 
 export default function CheckInWidget() {
@@ -11,6 +12,7 @@ export default function CheckInWidget() {
   const addToast = useToastStore((st) => st.toast)
   const [state, setState] = useState(null)
   const [busy, setBusy]   = useState(false)
+  const [capture, setCapture] = useState(null) // { action: 'in'|'out', method, deviceInfo }
 
   const visible = user?.role === 'staff' || user?.role === 'admin'
 
@@ -26,37 +28,38 @@ export default function CheckInWidget() {
     return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
   }
 
-  async function handleCheckIn() {
+  // Gửi 1 lần chấm công (vào/ra) kèm ảnh (có thể null).
+  async function submitCheck(action, method, deviceInfo, photo) {
     setBusy(true)
     try {
-      const deviceInfo = await collectDeviceInfo()
-      const method     = detectMethod(deviceInfo.type)
-      await checkIn({ method, deviceInfo })
+      const fn = action === 'out' ? checkOut : checkIn
+      await fn({ method, deviceInfo, photo })
       const fresh = await getToday()
       setState(fresh)
-      addToast('Chấm công vào thành công!', 'success')
+      addToast(action === 'out' ? 'Chấm công ra thành công!' : 'Chấm công vào thành công!', 'success')
+      setCapture(null)
     } catch (err) {
-      addToast(err.response?.data?.error?.message ?? 'Không thể chấm công vào', 'error')
+      const msg = err.response?.data?.error?.message
+        ?? (action === 'out' ? 'Không thể chấm công ra' : 'Không thể chấm công vào')
+      addToast(msg, 'error')
     } finally {
       setBusy(false)
     }
   }
 
-  async function handleCheckOut() {
-    setBusy(true)
-    try {
-      const deviceInfo = await collectDeviceInfo()
-      const method     = detectMethod(deviceInfo.type)
-      await checkOut({ method, deviceInfo })
-      const fresh = await getToday()
-      setState(fresh)
-      addToast('Chấm công ra thành công!', 'success')
-    } catch (err) {
-      addToast(err.response?.data?.error?.message ?? 'Không thể chấm công ra', 'error')
-    } finally {
-      setBusy(false)
+  // Mobile/tablet → mở camera chụp ảnh trước. Desktop/laptop → chấm thẳng (phải đến VP).
+  async function startCheck(action) {
+    const deviceInfo = await collectDeviceInfo()
+    const method     = detectMethod(deviceInfo.type)
+    if (method === 'mobile') {
+      setCapture({ action, method, deviceInfo })
+    } else {
+      submitCheck(action, method, deviceInfo, null)
     }
   }
+
+  const handleCheckIn  = () => startCheck('in')
+  const handleCheckOut = () => startCheck('out')
 
   const isAdmin     = user?.role === 'admin'
   const canCheckIn  = !isAdmin && !state?.hasCheckedIn
@@ -101,6 +104,15 @@ export default function CheckInWidget() {
         >
           <LogOut size={12} /> Ra
         </button>
+      )}
+
+      {capture && (
+        <SelfieCaptureModal
+          action={capture.action}
+          onConfirm={(blob) => submitCheck(capture.action, capture.method, capture.deviceInfo, blob)}
+          onSkip={() => submitCheck(capture.action, capture.method, capture.deviceInfo, null)}
+          onCancel={() => setCapture(null)}
+        />
       )}
     </div>
   )

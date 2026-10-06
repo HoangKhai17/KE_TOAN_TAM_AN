@@ -1,10 +1,37 @@
 import api from './axios'
 
 // ── Check-in / Check-out ──────────────────────────────────────────────────────
+// payload: { method, notes?, deviceInfo? (object), photo? (Blob/File) }.
+// Có ảnh → gửi multipart/form-data; không có ảnh → gửi FormData không kèm file (vẫn ok).
+const PHOTO_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+function buildCheckPayload({ method, notes, deviceInfo, photo } = {}) {
+  const fd = new FormData()
+  if (method) fd.append('method', method)
+  if (notes)  fd.append('notes', notes)
+  if (deviceInfo) fd.append('deviceInfo', JSON.stringify(deviceInfo))
+  if (photo) {
+    // Đuôi file PHẢI khớp kiểu blob thực tế, nếu không backend báo lệch MIME.
+    const ext = PHOTO_EXT[photo.type] ?? 'jpg'
+    fd.append('photo', photo, `selfie.${ext}`)
+  }
+  return fd
+}
 
-export const checkIn  = (body = {}) => api.post('/attendance/check-in', body).then(r => r.data)
-export const checkOut = (body = {}) => api.post('/attendance/check-out', body).then(r => r.data)
+// Content-Type: undefined → bỏ default 'application/json', để trình duyệt tự gắn
+// multipart/form-data kèm boundary (nếu không multer không parse được).
+const MULTIPART = { headers: { 'Content-Type': undefined } }
+export const checkIn  = (payload = {}) =>
+  api.post('/attendance/check-in', buildCheckPayload(payload), MULTIPART).then(r => r.data)
+export const checkOut = (payload = {}) =>
+  api.post('/attendance/check-out', buildCheckPayload(payload), MULTIPART).then(r => r.data)
 export const getToday = ()           => api.get('/attendance/today').then(r => r.data)
+
+// Tải ảnh selfie của 1 log qua axios (kèm Bearer token) → trả object URL cho <img>.
+// Không dùng <img src> trực tiếp được vì auth là header, không phải cookie.
+// Nhớ gọi URL.revokeObjectURL khi gỡ ảnh để tránh rò bộ nhớ.
+export const fetchLogPhoto = (logId) =>
+  api.get(`/attendance/logs/${logId}/photo`, { responseType: 'blob' })
+    .then(r => URL.createObjectURL(r.data))
 
 // ── Records ───────────────────────────────────────────────────────────────────
 

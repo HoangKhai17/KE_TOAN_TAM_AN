@@ -1,4 +1,5 @@
 const { query }                          = require('../../config/db')
+const storage                            = require('../../lib/storage')
 const { sendMail }                       = require('../../utils/mailer')
 const { getTemplate, renderTemplate }    = require('../../utils/emailTemplates')
 const { DAILY_VIEW, summaryColumns, getStrictUnpaidFrom } = require('./aggregate.sql')
@@ -50,6 +51,8 @@ function toLogDto(r) {
     deviceInfo: r.device_info,
     ipAddress:  r.ip_address,
     notes:      r.notes,
+    photoPath:  r.photo_path ?? null,
+    hasPhoto:   !!r.photo_path,
   }
 }
 
@@ -386,22 +389,22 @@ async function recomputeDate(date) {
 
 // ── Check-in / Check-out ──────────────────────────────────────────────────────
 
-async function checkIn({ userId, method = 'web', notes, ip, deviceInfo }) {
+async function checkIn({ userId, method = 'web', notes, ip, deviceInfo, photoPath = null }) {
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   const { rows: logRows } = await query(
-    `INSERT INTO attendance_logs (user_id, log_type, method, device_info, ip_address, notes)
-     VALUES ($1, 'check_in', $2, $3, $4, $5)
+    `INSERT INTO attendance_logs (user_id, log_type, method, device_info, ip_address, notes, photo_path)
+     VALUES ($1, 'check_in', $2, $3, $4, $5, $6)
      RETURNING *`,
-    [userId, method, deviceInfo ?? null, ip ?? null, notes ?? null]
+    [userId, method, deviceInfo ?? null, ip ?? null, notes ?? null, photoPath]
   )
 
   const record = await calculateAttendanceRecord(userId, dateStr)
   return { log: toLogDto(logRows[0]), record }
 }
 
-async function checkOut({ userId, method = 'web', notes, ip, deviceInfo }) {
+async function checkOut({ userId, method = 'web', notes, ip, deviceInfo, photoPath = null }) {
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
@@ -414,10 +417,10 @@ async function checkOut({ userId, method = 'web', notes, ip, deviceInfo }) {
   }
 
   const { rows: logRows } = await query(
-    `INSERT INTO attendance_logs (user_id, log_type, method, device_info, ip_address, notes)
-     VALUES ($1, 'check_out', $2, $3, $4, $5)
+    `INSERT INTO attendance_logs (user_id, log_type, method, device_info, ip_address, notes, photo_path)
+     VALUES ($1, 'check_out', $2, $3, $4, $5, $6)
      RETURNING *`,
-    [userId, method, deviceInfo ?? null, ip ?? null, notes ?? null]
+    [userId, method, deviceInfo ?? null, ip ?? null, notes ?? null, photoPath]
   )
 
   const record = await calculateAttendanceRecord(userId, dateStr)
@@ -769,13 +772,29 @@ async function getDeviceSummary({ userId, month, year }) {
 
 async function getAttendanceLogs(userId, date) {
   const { rows } = await query(
-    `SELECT id, log_type, logged_at, method, device_info, ip_address, notes
+    `SELECT id, log_type, logged_at, method, device_info, ip_address, notes, photo_path
      FROM attendance_logs
      WHERE user_id = $1 AND logged_at::date = $2
      ORDER BY logged_at ASC`,
     [userId, date]
   )
   return rows.map(toLogDto)
+}
+
+// Lấy đường dẫn ảnh selfie của 1 log để stream về.
+// Quyền: admin xem mọi ảnh; nhân viên chỉ xem ảnh của chính mình (chống IDOR).
+async function getLogPhoto(logId, viewer) {
+  const { rows: [row] } = await query(
+    `SELECT user_id, photo_path FROM attendance_logs WHERE id = $1`,
+    [logId]
+  )
+  if (!row || !row.photo_path) {
+    throw Object.assign(new Error('Không tìm thấy ảnh chấm công'), { status: 404 })
+  }
+  if (viewer.role !== 'admin' && viewer.id !== row.user_id) {
+    throw Object.assign(new Error('Bạn không có quyền xem ảnh này'), { status: 403 })
+  }
+  return storage.toAbsolute(row.photo_path)
 }
 
 module.exports = {
@@ -788,5 +807,6 @@ module.exports = {
   getAttendanceSummary,
   sendAttendanceConfirmation,
   getAttendanceLogs,
+  getLogPhoto,
   getDeviceSummary,
 }

@@ -2,6 +2,14 @@ const svc        = require('./attendance.service')
 const adjSvc     = require('./adjustments.service')
 const reportSvc  = require('./report.service')
 const settingsSvc = require('./settings.service')
+const storage    = require('../../lib/storage')
+
+// deviceInfo đến từ body: JSON object (khi gửi JSON) hoặc chuỗi JSON (khi gửi multipart form).
+function parseDeviceInfo(raw) {
+  if (!raw) return undefined
+  if (typeof raw === 'object') return raw
+  try { return JSON.parse(raw) } catch { return undefined }
+}
 
 // Extract real client IP, handling Docker/Nginx proxy headers correctly.
 // X-Forwarded-For can be a comma-separated list; the first entry is the origin client.
@@ -28,21 +36,30 @@ function resolveDeviceInfo(bodyDeviceInfo, ua) {
 
 async function checkIn(req, res, next) {
   try {
-    const { method, notes, deviceInfo: bodyDeviceInfo } = req.body
+    const { method, notes } = req.body
     const ip         = resolveClientIp(req)
-    const deviceInfo = resolveDeviceInfo(bodyDeviceInfo, req.headers['user-agent'])
-    const result = await svc.checkIn({ userId: req.user.id, method, notes, ip, deviceInfo })
+    const deviceInfo = resolveDeviceInfo(parseDeviceInfo(req.body.deviceInfo), req.headers['user-agent'])
+    const photoPath  = req.file ? storage.toRelative(req.file.path) : null
+    const result = await svc.checkIn({ userId: req.user.id, method, notes, ip, deviceInfo, photoPath })
     res.status(201).json(result)
   } catch (err) { next(err) }
 }
 
 async function checkOut(req, res, next) {
   try {
-    const { method, notes, deviceInfo: bodyDeviceInfo } = req.body
+    const { method, notes } = req.body
     const ip         = resolveClientIp(req)
-    const deviceInfo = resolveDeviceInfo(bodyDeviceInfo, req.headers['user-agent'])
-    const result = await svc.checkOut({ userId: req.user.id, method, notes, ip, deviceInfo })
+    const deviceInfo = resolveDeviceInfo(parseDeviceInfo(req.body.deviceInfo), req.headers['user-agent'])
+    const photoPath  = req.file ? storage.toRelative(req.file.path) : null
+    const result = await svc.checkOut({ userId: req.user.id, method, notes, ip, deviceInfo, photoPath })
     res.json(result)
+  } catch (err) { next(err) }
+}
+
+async function getLogPhoto(req, res, next) {
+  try {
+    const absPath = await svc.getLogPhoto(req.params.id, req.user)
+    res.sendFile(absPath)
   } catch (err) { next(err) }
 }
 
@@ -306,5 +323,6 @@ module.exports = {
   getSettings, updateSettings,
   sendConfirmation,
   getLogs,
+  getLogPhoto,
   getDeviceSummary,
 }

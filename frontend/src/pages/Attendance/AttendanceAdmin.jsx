@@ -9,7 +9,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Loader2, Check, X, RefreshCw,
   Download, BarChart3, Settings, Terminal, Pencil, LayoutGrid,
   Mail, SendHorizonal, CheckCircle2,
-  Smartphone, Laptop, Monitor, Globe,
+  Smartphone, Laptop, Monitor, Globe, Camera, ImageOff,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
@@ -1901,6 +1901,40 @@ function formatIp(ip) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Ảnh selfie của 1 log — tải qua axios (kèm token) rồi hiện thumbnail; bấm để phóng to.
+function LogPhotoThumb({ logId }) {
+  const [url, setUrl]   = useState(null)
+  const [zoom, setZoom] = useState(false)
+  const [err, setErr]   = useState(false)
+
+  useEffect(() => {
+    let active = true
+    let objUrl = null
+    attendanceApi.fetchLogPhoto(logId)
+      .then((u) => { if (active) { objUrl = u; setUrl(u) } else { URL.revokeObjectURL(u) } })
+      .catch(() => { if (active) setErr(true) })
+    return () => { active = false; if (objUrl) URL.revokeObjectURL(objUrl) }
+  }, [logId])
+
+  if (err) return null
+  return (
+    <div className={sa.photoThumbRow}>
+      {url ? (
+        <>
+          <img src={url} alt="Ảnh chấm công" className={sa.photoThumb} onClick={() => setZoom(true)} />
+          {zoom && (
+            <div className={sa.photoZoomBackdrop} onClick={() => setZoom(false)}>
+              <img src={url} alt="Ảnh chấm công" className={sa.photoZoomImg} />
+            </div>
+          )}
+        </>
+      ) : (
+        <div className={sa.photoThumbLoading}><Loader2 size={14} className={s.spin} /></div>
+      )}
+    </div>
+  )
+}
+
 function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
   const addToast        = useToastStore((st) => st.toast)
   const [y, m, d]       = dateStr.split('-')
@@ -2108,6 +2142,18 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
                             <code className={sa.deviceIp}>{ip}</code>
                           </div>
                         )}
+                        {log.hasPhoto ? (
+                          <div className={sa.devicePhotoRow}>
+                            <Camera size={13} className={sa.deviceIcon} />
+                            <span className={sa.deviceMeta}>Ảnh xác minh</span>
+                            <LogPhotoThumb logId={log.id} />
+                          </div>
+                        ) : log.method === 'mobile' ? (
+                          <div className={sa.deviceNoPhotoRow}>
+                            <ImageOff size={13} />
+                            <span>Thiếu ảnh (chấm bằng điện thoại không kèm ảnh)</span>
+                          </div>
+                        ) : null}
                       </div>
                     )
                   })}

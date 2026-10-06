@@ -1,6 +1,7 @@
 const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
 const { requireRole } = require('../../middleware/rbac')
+const storage = require('../../lib/storage')
 const ctrl = require('./attendance.controller')
 
 const router = Router()
@@ -48,8 +49,12 @@ const admin = [authenticate, requireRole('admin')]
  *             schema: { $ref: '#/components/schemas/AttendanceRecord' }
  *       400: { description: No check-in found for today }
  */
-router.post('/check-in',  ...auth,  ctrl.checkIn)
-router.post('/check-out', ...auth,  ctrl.checkOut)
+// storage.singleOptional('photo'): ảnh selfie (jpg/png/webp, ≤5MB) — KHÔNG bắt buộc.
+// Gửi multipart/form-data (method, notes, deviceInfo dạng chuỗi JSON, photo = file).
+// setModule: xếp ảnh vào thư mục uploads/attendance/<năm>/<tháng>/ cho gọn.
+const setModule = (req, _res, next) => { req.params.module = 'attendance'; next() }
+router.post('/check-in',  ...auth, setModule, storage.singleOptional('photo'), ctrl.checkIn)
+router.post('/check-out', ...auth, setModule, storage.singleOptional('photo'), ctrl.checkOut)
 
 /**
  * @openapi
@@ -170,6 +175,9 @@ router.post('/manual-record',             ...admin, ctrl.createManualAttendanceR
 
 // Raw check-in/out logs for a user on a specific date — used by admin detail popup
 router.get('/logs', ...admin, ctrl.getLogs)
+
+// Ảnh selfie của 1 log chấm công — stream về. Quyền (admin / chính chủ) kiểm trong service.
+router.get('/logs/:id/photo', ...auth, ctrl.getLogPhoto)
 
 // Device summary — first check-in device per user per day (month batch) — admin calendar/table
 router.get('/logs/device-summary', ...admin, ctrl.getDeviceSummary)

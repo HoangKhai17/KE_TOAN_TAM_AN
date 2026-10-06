@@ -148,6 +148,33 @@ function single(field = 'file') {
   }
 }
 
+// Giống single() nhưng KHÔNG bắt buộc có file: không gửi file thì bỏ qua,
+// có file thì vẫn kiểm whitelist + magic bytes như thường.
+// Dùng cho ảnh selfie chấm công — NV từ chối camera/máy lỗi vẫn chấm được.
+function singleOptional(field = 'file') {
+  const mw = upload.single(field)
+  return (req, res, next) => {
+    mw(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return next(badRequest(`File vượt quá ${MAX_BYTES / 1024 / 1024}MB.`, 'FILE_TOO_LARGE'))
+        }
+        return next(err)
+      }
+      if (!req.file) return next() // không có ảnh → cho qua
+
+      const ext = extOf(req.file.originalname)
+      if (!verifyMagic(req.file.path, ext)) {
+        removeFile(path.relative(UPLOAD_ROOT, req.file.path))
+        return next(badRequest(
+          `Nội dung file không khớp với đuôi ".${ext}" (nghi ngờ đổi tên đuôi).`,
+          'FILE_CONTENT_MISMATCH'))
+      }
+      next()
+    })
+  }
+}
+
 // Đường dẫn tương đối (lưu DB) ⇄ tuyệt đối (đọc/xoá)
 const toRelative = (absPath) => path.relative(UPLOAD_ROOT, absPath).split(path.sep).join('/')
 
@@ -169,6 +196,6 @@ function removeFile(relPath) {
 }
 
 module.exports = {
-  single, toRelative, toAbsolute, removeFile,
+  single, singleOptional, toRelative, toAbsolute, removeFile,
   UPLOAD_ROOT, MAX_BYTES, ALLOWED_EXTS,
 }

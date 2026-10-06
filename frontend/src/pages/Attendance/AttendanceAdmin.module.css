@@ -1243,6 +1243,63 @@
   padding: 1px 6px;
 }
 
+/* ── Ảnh selfie xác minh chấm công ──────────────────────────────────────────── */
+
+.devicePhotoRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 4px;
+}
+
+.deviceNoPhotoRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  color: var(--color-warning, #d97706);
+}
+
+.photoThumbRow { display: inline-flex; }
+
+.photoThumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  cursor: zoom-in;
+}
+
+.photoThumbLoading {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+}
+
+.photoZoomBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  padding: 24px;
+}
+
+.photoZoomImg {
+  max-width: min(90vw, 560px);
+  max-height: 90vh;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
 /* ── Device chip — calendar cell ────────────────────────────────────────────── */
 
 .calendarDeviceChip {
