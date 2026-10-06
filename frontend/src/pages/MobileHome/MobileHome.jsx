@@ -28,10 +28,15 @@ export default function MobileHome() {
   async function submitCheck(kind, method, deviceInfo, photo) {
     setBusy(true)
     try {
-      if (kind === 'in') await checkIn({ method, deviceInfo, photo })
-      else               await checkOut({ method, deviceInfo, photo })
+      const res = kind === 'in'
+        ? await checkIn({ method, deviceInfo, photo })
+        : await checkOut({ method, deviceInfo, photo })
       setToday(await getToday())
-      addToast(kind === 'in' ? 'Chấm công vào thành công!' : 'Chấm công ra thành công!', 'success')
+      if (res?.held) {
+        addToast('Đã chấm công — thiết bị chưa được duyệt nên đang CHỜ GHI NHẬN. Admin duyệt thiết bị sẽ tự động tính công.', 'warning', 6000)
+      } else {
+        addToast(kind === 'in' ? 'Chấm công vào thành công!' : 'Chấm công ra thành công!', 'success')
+      }
       setCapture(null)
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể chấm công', 'error')
@@ -87,6 +92,11 @@ export default function MobileHome() {
             <div className={s.statusItem}><span>Giờ vào</span><strong>{fmt(today?.checkInTime)}</strong></div>
             <div className={s.statusItem}><span>Giờ ra</span><strong>{fmt(today?.checkOutTime)}</strong></div>
           </div>
+          {today?.heldPending && (
+            <div className={s.heldNote}>
+              ⏳ Đang chờ admin duyệt thiết bị — lần chấm công này chưa được ghi nhận. Khi duyệt xong sẽ tự động tính công.
+            </div>
+          )}
           {isAdmin ? (
             <div className={s.adminNote}>Tài khoản admin chấm công tự động.</div>
           ) : (

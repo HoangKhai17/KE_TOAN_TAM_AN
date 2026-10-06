@@ -54,6 +54,7 @@ function toLogDto(r) {
     notes:      r.notes,
     photoPath:  r.photo_path ?? null,
     hasPhoto:   !!r.photo_path,
+    held:       r.held === true,
   }
 }
 
@@ -250,7 +251,7 @@ async function calculateAttendanceRecord(userId, date) {
            MIN(logged_at) FILTER (WHERE log_type = 'check_in')  AS check_in_time,
            MAX(logged_at) FILTER (WHERE log_type = 'check_out') AS check_out_time
          FROM attendance_logs
-         WHERE user_id = $1 AND logged_at::date = $2`,
+         WHERE user_id = $1 AND logged_at::date = $2 AND held = false`,
         [userId, date]
       )
       checkInTime  = timesRes.rows[0].check_in_time  ?? null
@@ -394,27 +395,28 @@ async function checkIn({ userId, method = 'web', notes, ip, deviceInfo, photoPat
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
-  // Ghi nhận + (nếu bật khóa) chặn thiết bị chưa duyệt — trước khi ghi log.
-  await deviceSvc.assertDeviceAllowed({ userId, deviceId, label: deviceLabel, deviceInfo, ip })
+  // Ghi nhận thiết bị + quyết định treo (khóa bật & máy chưa duyệt → held=true, vẫn cho chấm).
+  const { held } = await deviceSvc.evaluateDevice({ userId, deviceId, label: deviceLabel, deviceInfo, ip })
 
   const { rows: logRows } = await query(
-    `INSERT INTO attendance_logs (user_id, log_type, method, device_info, ip_address, notes, photo_path)
-     VALUES ($1, 'check_in', $2, $3, $4, $5, $6)
+    `INSERT INTO attendance_logs (user_id, log_type, method, device_info, ip_address, notes, photo_path, held, device_id)
+     VALUES ($1, 'check_in', $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [userId, method, deviceInfo ?? null, ip ?? null, notes ?? null, photoPath]
+    [userId, method, deviceInfo ?? null, ip ?? null, notes ?? null, photoPath, held, deviceId ?? null]
   )
 
   const record = await calculateAttendanceRecord(userId, dateStr)
-  return { log: toLogDto(logRows[0]), record }
+  return { log: toLogDto(logRows[0]), record, held }
 }
 
 async function checkOut({ userId, method = 'web', notes, ip, deviceInfo, photoPath = null, deviceId, deviceLabel }) {
   const today = new Date()
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
-  // Ghi nhận + (nếu bật khóa) chặn thiết bị chưa duyệt — trước khi ghi log.
-  await deviceSvc.assertDeviceAllowed({ userId, deviceId, label: deviceLabel, deviceInfo, ip })
+  // Ghi nhận thiết bị + quyết định treo (khóa bật & máy chưa duyệt → held=true, vẫn cho chấm).
+  const { held } = await deviceSvc.evaluateDevice({ userId, deviceId, label: deviceLabel, deviceInfo, ip })
 
+  // Phải có check-in trong ngày (kể cả log đang treo) mới cho check-out.
   const hasCheckIn = await query(
     `SELECT id FROM attendance_logs WHERE user_id = $1 AND log_type = 'check_in' AND logged_at::date = $2 LIMIT 1`,
     [userId, dateStr]
@@ -424,14 +426,14 @@ async function checkOut({ userId, method = 'web', notes, ip, deviceInfo, photoPa
   }
 
   const { rows: logRows } = await query(
-    `INSERT INTO attendance_logs (user_id, log_type, method, device_info, ip_address, notes, photo_path)
-     VALUES ($1, 'check_out', $2, $3, $4, $5, $6)
+    `INSERT INTO attendance_logs (user_id, log_type, method, device_info, ip_address, notes, photo_path, held, device_id)
+     VALUES ($1, 'check_out', $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [userId, method, deviceInfo ?? null, ip ?? null, notes ?? null, photoPath]
+    [userId, method, deviceInfo ?? null, ip ?? null, notes ?? null, photoPath, held, deviceId ?? null]
   )
 
   const record = await calculateAttendanceRecord(userId, dateStr)
-  return { log: toLogDto(logRows[0]), record }
+  return { log: toLogDto(logRows[0]), record, held }
 }
 
 async function getToday(userId) {
@@ -440,7 +442,7 @@ async function getToday(userId) {
 
   const [logsRes, recordRes] = await Promise.all([
     query(
-      `SELECT log_type, logged_at, method
+      `SELECT log_type, logged_at, method, held
        FROM attendance_logs
        WHERE user_id = $1 AND logged_at::date = $2
        ORDER BY logged_at`,
@@ -458,6 +460,9 @@ async function getToday(userId) {
   const checkIns  = logsRes.rows.filter((l) => l.log_type === 'check_in')
   const checkOuts = logsRes.rows.filter((l) => l.log_type === 'check_out')
 
+  // Có lần chấm nào đang treo (chờ duyệt thiết bị) không → FE hiện "chờ duyệt".
+  const heldPending = logsRes.rows.some((l) => l.held === true)
+
   return {
     date:          dateStr,
     hasCheckedIn:  checkIns.length  > 0,
@@ -466,6 +471,7 @@ async function getToday(userId) {
     checkOutTime:  checkOuts[checkOuts.length - 1]?.logged_at ?? null,
     checkInCount:  checkIns.length,
     checkOutCount: checkOuts.length,
+    heldPending,
     record:        recordRes.rows[0] ? toRecordDto(recordRes.rows[0]) : null,
   }
 }
@@ -779,7 +785,7 @@ async function getDeviceSummary({ userId, month, year }) {
 
 async function getAttendanceLogs(userId, date) {
   const { rows } = await query(
-    `SELECT id, log_type, logged_at, method, device_info, ip_address, notes, photo_path
+    `SELECT id, log_type, logged_at, method, device_info, ip_address, notes, photo_path, held
      FROM attendance_logs
      WHERE user_id = $1 AND logged_at::date = $2
      ORDER BY logged_at ASC`,

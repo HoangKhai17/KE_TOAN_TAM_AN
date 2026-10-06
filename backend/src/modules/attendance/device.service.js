@@ -41,21 +41,22 @@ async function touchDevice({ userId, deviceId, label, deviceInfo, ip }) {
   return row.status
 }
 
-// Gọi trước khi ghi log chấm công. Luôn ghi nhận thiết bị; nếu khóa bật thì chặn
-// khi thiết bị chưa approved.
-async function assertDeviceAllowed({ userId, deviceId, label, deviceInfo, ip }) {
+// Gọi trước khi ghi log chấm công. Luôn ghi nhận thiết bị và trả quyết định:
+//   { held: false } → chấm công bình thường (tính công ngay).
+//   { held: true }  → VẪN cho chấm nhưng TREO (chờ admin duyệt thiết bị mới tính công).
+// Chỉ CHẶN (throw) với thiết bị đã bị thu hồi, hoặc không gửi deviceId (không định danh được).
+async function evaluateDevice({ userId, deviceId, label, deviceInfo, ip }) {
   const status = await touchDevice({ userId, deviceId, label, deviceInfo, ip })
-  if (!(await isLockEnabled())) return // khóa tắt → chỉ theo dõi, không chặn
+  if (!(await isLockEnabled())) return { held: false } // khóa tắt → tính ngay
 
   if (!deviceId) {
-    throw Object.assign(new Error('Thiết bị chưa được đăng ký. Vui lòng chấm công bằng ứng dụng trên điện thoại.'), { status: 403, code: 'DEVICE_NOT_REGISTERED' })
+    throw Object.assign(new Error('Thiết bị chưa định danh được. Vui lòng chấm công bằng ứng dụng trên điện thoại.'), { status: 403, code: 'DEVICE_NOT_REGISTERED' })
   }
-  if (status === 'approved') return
+  if (status === 'approved') return { held: false }
   if (status === 'revoked') {
     throw Object.assign(new Error('Thiết bị này đã bị thu hồi quyền chấm công. Liên hệ quản trị viên.'), { status: 403, code: 'DEVICE_REVOKED' })
   }
-  // pending (hoặc vừa tạo)
-  throw Object.assign(new Error('Thiết bị đang chờ quản trị viên duyệt. Vui lòng báo admin duyệt thiết bị này.'), { status: 403, code: 'DEVICE_PENDING' })
+  return { held: true } // pending / vừa tạo → treo
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -92,6 +93,19 @@ async function countPending() {
   return row.n
 }
 
+// Bỏ treo mọi log của đúng (user, device) → trả danh sách ngày cần tính lại công.
+async function releaseHeld(userId, deviceId) {
+  if (!deviceId) return { userId, dates: [] }
+  const { rows } = await query(
+    `UPDATE attendance_logs SET held = false
+     WHERE user_id = $1 AND device_id = $2 AND held = true
+     RETURNING to_char(logged_at::date, 'YYYY-MM-DD') AS d`,
+    [userId, deviceId]
+  )
+  return { userId, dates: [...new Set(rows.map((r) => r.d))] }
+}
+
+// Đổi trạng thái thiết bị. Khi DUYỆT → giải phóng log treo, trả { userId, dates } để tính lại công.
 async function setStatus(id, status, adminId) {
   const approved = status === 'approved'
   const { rows: [row] } = await query(
@@ -100,22 +114,27 @@ async function setStatus(id, status, adminId) {
            approved_by = $3,
            approved_at = $4
      WHERE id = $1
-     RETURNING id`,
+     RETURNING user_id, device_id`,
     [id, status, approved ? adminId : null, approved ? new Date() : null]
   )
   if (!row) throw Object.assign(new Error('Không tìm thấy thiết bị'), { status: 404 })
-  return row.id
+  if (approved) return releaseHeld(row.user_id, row.device_id)
+  return { userId: row.user_id, dates: [] }
 }
 
 // Duyệt hàng loạt mọi thiết bị đang chờ — dùng khi rollout khóa thiết bị.
+// Trả { approved, affected: [{userId, dates}] } để tính lại công các log vừa được giải phóng.
 async function approveAllPending(adminId) {
-  const { rowCount } = await query(
+  const { rows } = await query(
     `UPDATE trusted_devices
        SET status = 'approved', approved_by = $1, approved_at = NOW()
-     WHERE status = 'pending'`,
+     WHERE status = 'pending'
+     RETURNING user_id, device_id`,
     [adminId]
   )
-  return rowCount
+  const affected = []
+  for (const r of rows) affected.push(await releaseHeld(r.user_id, r.device_id))
+  return { approved: rows.length, affected }
 }
 
 async function renameDevice(id, label) {
@@ -133,6 +152,6 @@ async function deleteDevice(id) {
 
 module.exports = {
   isLockEnabled, setLockEnabled,
-  touchDevice, assertDeviceAllowed,
+  touchDevice, evaluateDevice,
   listDevices, countPending, setStatus, approveAllPending, renameDevice, deleteDevice,
 }

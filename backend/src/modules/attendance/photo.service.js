@@ -93,7 +93,8 @@ async function listPhotos({ month, userId, logType, page = 1, limit = 30 }) {
   const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 30))
   params.push(lim); params.push((p - 1) * lim)
   const { rows } = await query(
-    `SELECT l.id, l.user_id, u.name AS user_name, l.log_type, l.logged_at, l.method
+    `SELECT l.id, l.user_id, u.name AS user_name, l.log_type, l.logged_at, l.method,
+            l.device_info, l.ip_address
      FROM attendance_logs l JOIN users u ON u.id = l.user_id
      WHERE ${whereSql}
      ORDER BY l.logged_at DESC
@@ -104,6 +105,7 @@ async function listPhotos({ month, userId, logType, page = 1, limit = 30 }) {
     items: rows.map((r) => ({
       logId: r.id, userId: r.user_id, userName: r.user_name,
       logType: r.log_type, loggedAt: r.logged_at, method: r.method,
+      deviceInfo: r.device_info, ipAddress: r.ip_address,
     })),
     total, page: p, limit: lim,
   }

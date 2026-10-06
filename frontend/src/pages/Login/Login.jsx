@@ -88,7 +88,7 @@ export default function Login() {
 
   const [email,       setEmail]       = useState('')
   const [password,    setPassword]    = useState('')
-  // rememberMe: UI only — backend does not yet support session duration control
+  // rememberMe: tick → giữ đăng nhập N ngày (admin cấu hình); bỏ tick → phiên ngắn.
   const [rememberMe,  setRememberMe]  = useState(true)
   const [showPw,      setShowPw]      = useState(false)
   const [loading,     setLoading]     = useState(false)
@@ -121,7 +121,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const data = await login({ email: email.trim(), password })
+      const data = await login({ email: email.trim(), password, rememberMe })
       setAuth(data.user, data.accessToken)
       navigate(data.user.mustChangePw ? '/change-password' : homePath(), { replace: true })
     } catch (err) {

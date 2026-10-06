@@ -26,13 +26,39 @@ function generateRefreshToken() {
   return crypto.randomBytes(48).toString('hex')
 }
 
-// Thời hạn refresh token = thời gian "giữ đăng nhập" trên thiết bị.
-// PHẢI khớp maxAge cookie refreshToken ở auth.controller.js.
-const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 ngày
+const DAY_MS = 24 * 60 * 60 * 1000
+const SESSION_DAYS_KEY = 'auth.session_days'
+const DEFAULT_SESSION_DAYS = 30
+// Phiên "không ghi nhớ" (bỏ tick Ghi nhớ đăng nhập): sống ngắn, hết khi đóng trình duyệt.
+const NONPERSISTENT_TTL_MS = 1 * DAY_MS
 
-async function storeRefreshToken(userId, rawToken, familyId) {
+// Số ngày "giữ đăng nhập" — admin cấu hình, đọc từ system_configs.
+async function getSessionDays() {
+  try {
+    const { rows: [row] } = await query('SELECT value FROM system_configs WHERE key = $1', [SESSION_DAYS_KEY])
+    const n = parseInt(row?.value, 10)
+    return Number.isInteger(n) && n >= 1 && n <= 365 ? n : DEFAULT_SESSION_DAYS
+  } catch { return DEFAULT_SESSION_DAYS }
+}
+
+async function setSessionDays(days, adminId) {
+  const n = parseInt(days, 10)
+  if (!Number.isInteger(n) || n < 1 || n > 365) {
+    throw Object.assign(new Error('Số ngày giữ đăng nhập phải từ 1 đến 365'), { status: 400 })
+  }
+  await query(
+    `INSERT INTO system_configs (key, value, description, updated_by, updated_at)
+     VALUES ($1, $2, 'Số ngày giữ đăng nhập (refresh token) khi tick Ghi nhớ đăng nhập.', $3, NOW())
+     ON CONFLICT (key) DO UPDATE
+       SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
+    [SESSION_DAYS_KEY, String(n), adminId ?? null]
+  )
+  return n
+}
+
+async function storeRefreshToken(userId, rawToken, familyId, ttlMs) {
   const tokenHash = hashToken(rawToken)
-  const expiresAt = new Date(Date.now() + REFRESH_TTL_MS)
+  const expiresAt = new Date(Date.now() + (ttlMs ?? DEFAULT_SESSION_DAYS * DAY_MS))
   await query(
     `INSERT INTO refresh_tokens (user_id, token_hash, family_id, expires_at)
      VALUES ($1, $2, $3, $4)`,
@@ -40,7 +66,7 @@ async function storeRefreshToken(userId, rawToken, familyId) {
   )
 }
 
-async function login(email, password, ipAddress, userAgent) {
+async function login(email, password, ipAddress, userAgent, rememberMe = true) {
   const { rows } = await query(
     `SELECT id, name, email, password_hash, role, status, job_title, avatar_url,
             must_change_pw, login_attempts, locked_until
@@ -101,7 +127,10 @@ async function login(email, password, ipAddress, userAgent) {
   const accessToken = generateAccessToken(user)
   const rawRefreshToken = generateRefreshToken()
   const familyId = uuidv4()
-  await storeRefreshToken(user.id, rawRefreshToken, familyId)
+  // Ghi nhớ → giữ N ngày (admin cấu hình); bỏ tick → phiên ngắn 1 ngày.
+  const sessionDays = await getSessionDays()
+  const ttlMs = rememberMe ? sessionDays * DAY_MS : NONPERSISTENT_TTL_MS
+  await storeRefreshToken(user.id, rawRefreshToken, familyId, ttlMs)
 
   await audit.log({
     userId: user.id,
@@ -124,6 +153,8 @@ async function login(email, password, ipAddress, userAgent) {
       avatarUrl: user.avatar_url,
       mustChangePw: user.must_change_pw,
     },
+    persistent: !!rememberMe,
+    sessionDays,
   }
 }
 
@@ -179,11 +210,13 @@ async function refreshToken(rawToken, ipAddress, userAgent) {
   const user = { id: rt.user_id, role: rt.role }
   const newAccessToken = generateAccessToken(user)
   const newRawRefreshToken = generateRefreshToken()
-  await storeRefreshToken(rt.user_id, newRawRefreshToken, rt.family_id)
+  const sessionDays = await getSessionDays()
+  await storeRefreshToken(rt.user_id, newRawRefreshToken, rt.family_id, sessionDays * DAY_MS)
 
   return {
     accessToken: newAccessToken,
     rawRefreshToken: newRawRefreshToken,
+    sessionDays,
     user: {
       id: rt.user_id,
       name: rt.name,
@@ -270,4 +303,4 @@ async function getMe(userId) {
   }
 }
 
-module.exports = { login, refreshToken, logout, logoutAll, changePassword, getMe }
+module.exports = { login, refreshToken, logout, logoutAll, changePassword, getMe, getSessionDays, setSessionDays }

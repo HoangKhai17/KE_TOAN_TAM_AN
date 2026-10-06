@@ -19,6 +19,7 @@ import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import * as attendanceApi from '../../api/attendance'
+import * as authApi from '../../api/auth'
 import { useLeavePolicies, LEAVE_LABELS, dayPartSuffix, dayPartLabel } from './leavePolicies'
 import * as usersApi from '../../api/users'
 import * as payrollApi from '../../api/payroll'
@@ -2144,6 +2145,11 @@ function AdminDayModal({ dateStr, record, userId, onClose, onSaved }) {
                           <span className={sa.deviceMethodBadge}>
                             {METHOD_LABEL[log.method] ?? log.method}
                           </span>
+                          {log.held && (
+                            <span className={`${s.badge} ${s.badgePending}`} title="Chấm công đang chờ duyệt thiết bị — chưa tính công">
+                              ⏳ Chờ duyệt
+                            </span>
+                          )}
                         </div>
                         <div className={sa.deviceInfoRow}>
                           <Icon size={13} className={sa.deviceIcon} />
@@ -3638,6 +3644,13 @@ function fmtBytes(n) {
   return `${(n / Math.pow(1024, i)).toFixed(i ? 1 : 0)} ${u[i]}`
 }
 const fmtMonth = (ym) => { const [y, m] = ym.split('-'); return `Tháng ${parseInt(m, 10)}/${y}` }
+// Nhãn thiết bị gọn từ device_info (chuỗi JSON) → "iOS · Safari".
+function deviceLabelStr(raw) {
+  const info = parseDeviceInfo(raw)
+  if (!info) return '—'
+  const parts = [info.os, info.browser].filter(Boolean)
+  return parts.join(' · ') || (info.type ? (DEVICE_TYPE_CFG[info.type]?.label ?? info.type) : '—')
+}
 
 function PhotoManagerTab({ staffList }) {
   const confirmDelete = useDeleteConfirm()
@@ -3710,39 +3723,34 @@ function PhotoManagerTab({ staffList }) {
 
   return (
     <div className={sa.photoManager}>
-      {/* Thống kê */}
-      <div className={sa.photoStats}>
-        <div className={sa.photoStatCard}>
-          <span className={sa.photoStatLabel}>Tổng ảnh</span>
-          <strong className={sa.photoStatValue}>{stats.totalCount}</strong>
+      {/* Header gọn: 1 dải thống kê + cấu hình + dọn */}
+      <div className={sa.photoBar}>
+        <div className={sa.photoBarGroup}>
+          <span className={sa.photoBarLabel}>Tổng</span>
+          <strong>{stats.totalCount} ảnh</strong>
+          <span className={sa.photoBarSep}>·</span>
+          <strong>{fmtBytes(stats.totalBytes)}</strong>
         </div>
-        <div className={sa.photoStatCard}>
-          <span className={sa.photoStatLabel}>Dung lượng</span>
-          <strong className={sa.photoStatValue}>{fmtBytes(stats.totalBytes)}</strong>
-        </div>
-        <div className={`${sa.photoStatCard} ${stats.deletableCount ? sa.photoStatWarn : ''}`}>
-          <span className={sa.photoStatLabel}>Sẽ tự dọn (trước {fmtMonth(cutoffMonth)})</span>
-          <strong className={sa.photoStatValue}>{stats.deletableCount} ảnh · {fmtBytes(stats.deletableBytes)}</strong>
-        </div>
-      </div>
-
-      {/* Cấu hình số tháng giữ + dọn theo cấu hình */}
-      <div className={sa.photoConfigRow}>
-        <div className={sa.photoConfigItem}>
-          <label className={sa.photoConfigLabel}>Giữ ảnh gần nhất</label>
+        <div className={sa.photoBarDivider} />
+        <div className={sa.photoBarGroup}>
+          <span className={sa.photoBarLabel}>Giữ gần nhất</span>
           <input type="number" min={1} max={60} value={retention}
             onChange={(e) => setRetention(e.target.value)} className={sa.photoRetInput} />
-          <span className={sa.photoConfigUnit}>tháng</span>
-          <button className={sa.photoBtnSave} onClick={saveRetention} disabled={savingRet}>
-            {savingRet ? <Loader2 size={14} className={s.spin} /> : <Check size={14} />} Lưu
+          <span className={sa.photoBarLabel}>tháng</span>
+          <button className={`${s.btnPrimary} ${s.btnShort}`} onClick={saveRetention} disabled={savingRet}>
+            {savingRet ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />} Lưu
           </button>
         </div>
-        {stats.deletableCount > 0 && (
-          <button className={sa.photoBtnClean} onClick={() => doCleanup({ beforeMonth: cutoffMonth }, fmtMonth(cutoffMonth))} disabled={cleaning}>
-            {cleaning ? <Loader2 size={14} className={s.spin} /> : <ImageOff size={14} />}
-            Dọn ảnh cũ ngay ({stats.deletableCount} ảnh)
-          </button>
-        )}
+        <div className={sa.photoBarDivider} />
+        <div className={sa.photoBarGroup}>
+          <span className={sa.photoBarLabel}>Sẽ tự dọn trước {fmtMonth(cutoffMonth)}:</span>
+          <strong className={stats.deletableCount ? sa.photoBarWarn : ''}>{stats.deletableCount} ảnh</strong>
+          {stats.deletableCount > 0 && (
+            <button className={`${s.btnSecondary} ${s.btnShort}`} onClick={() => doCleanup({ beforeMonth: cutoffMonth }, fmtMonth(cutoffMonth))} disabled={cleaning}>
+              {cleaning ? <Loader2 size={13} className={s.spin} /> : <ImageOff size={13} />} Dọn ngay
+            </button>
+          )}
+        </div>
       </div>
       <p className={sa.photoHint}>
         Ảnh cũ hơn số tháng giữ sẽ tự động dọn mỗi đêm. Dọn ảnh chỉ xoá hình, <strong>không</strong> ảnh hưởng giờ chấm công.
@@ -3750,7 +3758,7 @@ function PhotoManagerTab({ staffList }) {
 
       {/* Chia theo tháng */}
       {stats.byMonth.length > 0 && (
-        <div className={sa.tableWrap}>
+        <div className={s.tableWrap}>
           <table className={s.table}>
             <thead><tr><th>Tháng</th><th>Số ảnh</th><th>Dung lượng</th><th></th></tr></thead>
             <tbody>
@@ -3760,10 +3768,10 @@ function PhotoManagerTab({ staffList }) {
                   <td>{m.count}</td>
                   <td className={s.tableMuted}>{fmtBytes(m.bytes)}</td>
                   <td>
-                    <button className={sa.photoRowClean}
+                    <button className={`${s.btnDanger} ${s.btnShort}`}
                       onClick={() => doCleanup({ month: m.month }, fmtMonth(m.month))} disabled={cleaning}
                       title={`Xóa toàn bộ ảnh của ${fmtMonth(m.month)}`}>
-                      Xóa ảnh tháng này
+                      <Trash2 size={13} /> Xóa ảnh tháng này
                     </button>
                   </td>
                 </tr>
@@ -3773,7 +3781,7 @@ function PhotoManagerTab({ staffList }) {
         </div>
       )}
 
-      {/* Duyệt ảnh */}
+      {/* Bộ lọc duyệt ảnh */}
       <div className={sa.photoBrowseHead}>
         <select className={sa.photoFilter} value={fMonth} onChange={(e) => setFMonth(e.target.value)}>
           <option value="">Tất cả tháng</option>
@@ -3788,33 +3796,41 @@ function PhotoManagerTab({ staffList }) {
           <option value="check_in">Chỉ ảnh Vào</option>
           <option value="check_out">Chỉ ảnh Ra</option>
         </select>
-        <button className={sa.photoBtnSave} onClick={() => loadPhotos(1)} disabled={loadingPhotos}>
-          {loadingPhotos ? <Loader2 size={14} className={s.spin} /> : <Camera size={14} />} Xem ảnh
+        <button className={`${s.btnPrimary} ${s.btnShort}`} onClick={() => loadPhotos(1)} disabled={loadingPhotos}>
+          {loadingPhotos ? <Loader2 size={13} className={s.spin} /> : <Camera size={13} />} Xem ảnh
         </button>
       </div>
 
       {photos && (
         loadingPhotos ? (
-          <div className={sa.deviceLoading}><Loader2 size={16} className={s.spin} /> Đang tải…</div>
+          <div className={s.centered}><Loader2 size={16} className={s.spin} /> Đang tải…</div>
         ) : photos.items.length === 0 ? (
-          <div className={sa.deviceEmpty}>Không có ảnh phù hợp.</div>
+          <div className={sa.deviceEmpty}>Không có ảnh phù hợp. Bấm “Xem ảnh” để tải.</div>
         ) : (
           <>
-            <div className={sa.photoGrid}>
-              {photos.items.map((it) => (
-                <div key={it.logId} className={sa.photoGridItem}>
-                  <LogPhotoThumb logId={it.logId} />
-                  <div className={sa.photoGridMeta}>
-                    <strong>{it.userName}</strong>
-                    <span className={it.logType === 'check_in' ? sa.photoIn : sa.photoOut}>
-                      {it.logType === 'check_in' ? '▶ Vào' : '◀ Ra'}
-                    </span>
-                    <span className={sa.photoGridTime}>
-                      {new Date(it.loggedAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </div>
-              ))}
+            <div className={s.tableWrap}>
+              <table className={s.table}>
+                <thead><tr>
+                  <th>Ảnh</th><th>Nhân viên</th><th>Loại</th><th>Thiết bị</th><th>Thời gian</th>
+                </tr></thead>
+                <tbody>
+                  {photos.items.map((it) => (
+                    <tr key={it.logId}>
+                      <td><div className={sa.photoCellThumb}><LogPhotoThumb logId={it.logId} /></div></td>
+                      <td className={s.tableStrong}>{it.userName}</td>
+                      <td>
+                        <span className={`${s.badge} ${it.logType === 'check_in' ? s.badgeApproved : s.badgeRemote}`}>
+                          {it.logType === 'check_in' ? '▶ Vào' : '◀ Ra'}
+                        </span>
+                      </td>
+                      <td className={s.tableMuted}>{deviceLabelStr(it.deviceInfo)}</td>
+                      <td className={s.tableMuted}>
+                        {new Date(it.loggedAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             {photos.total > photos.limit && (
               <div className={sa.photoPager}>
@@ -3832,9 +3848,9 @@ function PhotoManagerTab({ staffList }) {
 
 // ── DeviceManagerTab — quản lý & duyệt thiết bị chấm công ─────────────────────
 const DEVICE_STATUS = {
-  pending:  { label: 'Chờ duyệt',  cls: 'devStPending' },
-  approved: { label: 'Đã duyệt',   cls: 'devStApproved' },
-  revoked:  { label: 'Đã thu hồi', cls: 'devStRevoked' },
+  pending:  { label: 'Chờ duyệt',  badge: 'badgePending' },
+  approved: { label: 'Đã duyệt',   badge: 'badgeApproved' },
+  revoked:  { label: 'Đã thu hồi', badge: 'badgeRejected' },
 }
 
 function DeviceManagerTab({ staffList }) {
@@ -3845,6 +3861,8 @@ function DeviceManagerTab({ staffList }) {
   const [busy, setBusy] = useState(false)
   const [fStatus, setFStatus] = useState('')
   const [fUser, setFUser] = useState('')
+  const [sessionDays, setSessionDays] = useState(30)
+  const [savingSession, setSavingSession] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -3852,6 +3870,18 @@ function DeviceManagerTab({ staffList }) {
       .then(setData).catch(() => {}).finally(() => setLoading(false))
   }
   useEffect(() => { load() }, [fStatus, fUser]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { authApi.getSessionConfig().then((c) => setSessionDays(c.sessionDays)).catch(() => {}) }, [])
+
+  async function saveSession() {
+    setSavingSession(true)
+    try {
+      const c = await authApi.setSessionConfig(sessionDays)
+      setSessionDays(c.sessionDays)
+      addToast(`Đã lưu: giữ đăng nhập ${c.sessionDays} ngày`, 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Lưu thất bại', 'error')
+    } finally { setSavingSession(false) }
+  }
 
   async function toggleLock() {
     const turnOn = !data.lockEnabled
@@ -3919,6 +3949,22 @@ function DeviceManagerTab({ staffList }) {
 
   return (
     <div className={sa.photoManager}>
+      {/* Giữ đăng nhập (phiên) */}
+      <div className={sa.photoBar}>
+        <div className={sa.photoBarGroup}>
+          <span className={sa.photoBarLabel}>Giữ đăng nhập (không phải nhập lại mật khẩu)</span>
+          <input type="number" min={1} max={365} value={sessionDays}
+            onChange={(e) => setSessionDays(e.target.value)} className={sa.photoRetInput} />
+          <span className={sa.photoBarLabel}>ngày</span>
+          <button className={`${s.btnPrimary} ${s.btnShort}`} onClick={saveSession} disabled={savingSession}>
+            {savingSession ? <Loader2 size={13} className={s.spin} /> : <Check size={13} />} Lưu
+          </button>
+        </div>
+      </div>
+      <p className={sa.photoHint}>
+        Khi nhân viên tick <strong>“Ghi nhớ đăng nhập”</strong> lúc đăng nhập, họ sẽ không phải nhập lại mật khẩu trong <strong>{sessionDays} ngày</strong> (mở app là vào thẳng). Bỏ tick thì thoát khi đóng trình duyệt.
+      </p>
+
       {/* Khóa thiết bị */}
       <div className={`${sa.devLockBox} ${data.lockEnabled ? sa.devLockOn : ''}`}>
         <div className={sa.devLockInfo}>
@@ -3932,7 +3978,7 @@ function DeviceManagerTab({ staffList }) {
             </p>
           </div>
         </div>
-        <button className={data.lockEnabled ? sa.photoRowClean : sa.photoBtnSave} onClick={toggleLock} disabled={busy}>
+        <button className={`${data.lockEnabled ? s.btnSecondary : s.btnPrimary} ${s.btnShort}`} onClick={toggleLock} disabled={busy}>
           {data.lockEnabled ? 'Tắt khóa' : 'Bật khóa'}
         </button>
       </div>
@@ -3940,7 +3986,7 @@ function DeviceManagerTab({ staffList }) {
       {data.pendingCount > 0 && (
         <div className={sa.devPendingNote}>
           <span>Có <strong>{data.pendingCount}</strong> thiết bị đang chờ duyệt.</span>
-          <button className={sa.devBtnApprove} onClick={approveAll} disabled={busy}>
+          <button className={`${s.btnSuccess} ${s.btnShort}`} onClick={approveAll} disabled={busy}>
             <ShieldCheck size={13} /> Duyệt tất cả đang chờ
           </button>
         </div>
@@ -3963,10 +4009,10 @@ function DeviceManagerTab({ staffList }) {
       {data.devices.length === 0 ? (
         <div className={sa.deviceEmpty}>Chưa có thiết bị nào.</div>
       ) : (
-        <div className={sa.tableWrap}>
+        <div className={s.tableWrap}>
           <table className={s.table}>
             <thead><tr>
-              <th>Nhân viên</th><th>Thiết bị</th><th>Trạng thái</th><th>Lần cuối</th><th>IP</th><th></th>
+              <th>Nhân viên</th><th className={sa.devDeviceCol}>Thiết bị</th><th>Trạng thái</th><th>Lần cuối</th><th>IP</th><th></th>
             </tr></thead>
             <tbody>
               {data.devices.map((d) => {
@@ -3974,27 +4020,30 @@ function DeviceManagerTab({ staffList }) {
                 return (
                   <tr key={d.id}>
                     <td className={s.tableStrong}>{d.userName}</td>
-                    <td>
-                      <div className={sa.devLabel}>{d.label || '—'}</div>
-                      <div className={sa.devMeta}>{d.deviceInfo || d.deviceId}</div>
+                    <td className={sa.devDeviceCol}>
+                      <div className={sa.devLabel}>{d.label || deviceLabelStr(d.deviceInfo)}</div>
+                      <div className={sa.devMeta}>
+                        {(parseDeviceInfo(d.deviceInfo)?.type && DEVICE_TYPE_CFG[parseDeviceInfo(d.deviceInfo).type]?.label) || 'Thiết bị'}
+                        {' · ID '}<code className={sa.devIdCode}>{d.deviceId}</code>
+                      </div>
                     </td>
-                    <td><span className={`${sa.devBadge} ${sa[st.cls]}`}>{st.label}</span></td>
+                    <td><span className={`${s.badge} ${s[st.badge]}`}>{st.label}</span></td>
                     <td className={s.tableMuted}>{fmtTs(d.lastSeen)}</td>
-                    <td className={s.tableMuted}><code className={sa.deviceIp}>{d.lastIp || '—'}</code></td>
+                    <td className={s.tableMuted}><code className={sa.deviceIp}>{formatIp(d.lastIp) || '—'}</code></td>
                     <td>
                       <div className={sa.devActions}>
                         {d.status !== 'approved' && (
-                          <button className={sa.devBtnApprove} disabled={busy}
+                          <button className={`${s.btnSuccess} ${s.btnShort}`} disabled={busy}
                             onClick={() => act(attendanceApi.approveDevice, d.id, 'Đã duyệt thiết bị')}>
                             <ShieldCheck size={13} /> Duyệt
                           </button>
                         )}
                         {d.status === 'approved' && (
-                          <button className={sa.devBtnRevoke} disabled={busy} onClick={() => onRevoke(d)}>
+                          <button className={`${s.btnSecondary} ${s.btnShort}`} disabled={busy} onClick={() => onRevoke(d)}>
                             <Ban size={13} /> Thu hồi
                           </button>
                         )}
-                        <button className={sa.devBtnDelete} disabled={busy} onClick={() => onDelete(d)} title="Xóa thiết bị">
+                        <button className={`${s.btnDanger} ${s.btnShort}`} disabled={busy} onClick={() => onDelete(d)} title="Xóa thiết bị">
                           <Trash2 size={13} />
                         </button>
                       </div>

@@ -2,19 +2,21 @@ const authService = require('./auth.service')
 const env = require('../../config/env')
 
 const COOKIE_NAME = 'refreshToken'
+const DAY_MS = 24 * 60 * 60 * 1000
 // sameSite 'lax': cookie vẫn chảy khi mở app từ icon PWA / điều hướng trên mobile
 // (strict hay chặn → bắt đăng nhập lại), vẫn an toàn CSRF cho luồng refresh.
-// maxAge 30 ngày = "giữ đăng nhập 30 ngày", PHẢI khớp REFRESH_TTL_MS ở auth.service.js.
-const COOKIE_OPTS = {
+const COOKIE_BASE = {
   httpOnly: true,
   secure: env.isProd,
   sameSite: 'lax',
   path: '/api/auth',
-  maxAge: 30 * 24 * 60 * 60 * 1000,
 }
 
-function setRefreshCookie(res, token) {
-  res.cookie(COOKIE_NAME, token, COOKIE_OPTS)
+// maxAgeMs: số ms giữ cookie. undefined/null → cookie phiên (hết khi đóng trình duyệt).
+function setRefreshCookie(res, token, maxAgeMs) {
+  const opts = { ...COOKIE_BASE }
+  if (maxAgeMs) opts.maxAge = maxAgeMs
+  res.cookie(COOKIE_NAME, token, opts)
 }
 
 function clearRefreshCookie(res) {
@@ -23,10 +25,12 @@ function clearRefreshCookie(res) {
 
 async function postLogin(req, res, next) {
   try {
-    const { accessToken, rawRefreshToken, user } = await authService.login(
-      req.body.email, req.body.password, req.ip, req.headers['user-agent']
+    const rememberMe = req.body.rememberMe !== false // mặc định true
+    const { accessToken, rawRefreshToken, user, persistent, sessionDays } = await authService.login(
+      req.body.email, req.body.password, req.ip, req.headers['user-agent'], rememberMe
     )
-    setRefreshCookie(res, rawRefreshToken)
+    // Ghi nhớ → cookie sống N ngày; bỏ tick → cookie phiên (hết khi đóng trình duyệt).
+    setRefreshCookie(res, rawRefreshToken, persistent ? sessionDays * DAY_MS : undefined)
     res.json({ success: true, data: { accessToken, user } })
   } catch (err) {
     next(err)
@@ -36,14 +40,28 @@ async function postLogin(req, res, next) {
 async function postRefresh(req, res, next) {
   try {
     const rawToken = req.cookies?.[COOKIE_NAME]
-    const { accessToken, rawRefreshToken, user } = await authService.refreshToken(
+    const { accessToken, rawRefreshToken, user, sessionDays } = await authService.refreshToken(
       rawToken, req.ip, req.headers['user-agent']
     )
-    setRefreshCookie(res, rawRefreshToken)
+    setRefreshCookie(res, rawRefreshToken, (sessionDays ?? 30) * DAY_MS)
     res.json({ success: true, data: { accessToken, user } })
   } catch (err) {
     next(err)
   }
+}
+
+// Cấu hình số ngày giữ đăng nhập (admin)
+async function getSessionConfig(req, res, next) {
+  try {
+    const sessionDays = await authService.getSessionDays()
+    res.json({ success: true, data: { sessionDays } })
+  } catch (err) { next(err) }
+}
+async function setSessionConfig(req, res, next) {
+  try {
+    const sessionDays = await authService.setSessionDays(req.body?.days, req.user.id)
+    res.json({ success: true, data: { sessionDays } })
+  } catch (err) { next(err) }
 }
 
 async function postLogout(req, res, next) {
@@ -96,4 +114,4 @@ async function getMe(req, res, next) {
   }
 }
 
-module.exports = { postLogin, postRefresh, postLogout, postLogoutAll, postChangePassword, getMe }
+module.exports = { postLogin, postRefresh, postLogout, postLogoutAll, postChangePassword, getMe, getSessionConfig, setSessionConfig }

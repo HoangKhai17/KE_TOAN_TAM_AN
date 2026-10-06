@@ -33,10 +33,14 @@ export default function CheckInWidget() {
     setBusy(true)
     try {
       const fn = action === 'out' ? checkOut : checkIn
-      await fn({ method, deviceInfo, photo })
+      const res = await fn({ method, deviceInfo, photo })
       const fresh = await getToday()
       setState(fresh)
-      addToast(action === 'out' ? 'Chấm công ra thành công!' : 'Chấm công vào thành công!', 'success')
+      if (res?.held) {
+        addToast('Đã chấm công — thiết bị chưa duyệt nên đang chờ ghi nhận. Admin duyệt sẽ tự tính công.', 'warning', 6000)
+      } else {
+        addToast(action === 'out' ? 'Chấm công ra thành công!' : 'Chấm công vào thành công!', 'success')
+      }
       setCapture(null)
     } catch (err) {
       const msg = err.response?.data?.error?.message

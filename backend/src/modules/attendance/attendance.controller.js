@@ -71,17 +71,32 @@ async function listDevices(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Tính lại công cho các (user, ngày) có log vừa được bỏ treo.
+async function recomputeReleased(items) {
+  for (const { userId, dates } of items) {
+    for (const d of dates) {
+      try { await svc.calculateAttendanceRecord(userId, d) } catch (e) { /* bỏ qua lỗi lẻ */ }
+    }
+  }
+}
+
 async function approveDevice(req, res, next) {
-  try { await deviceSvc.setStatus(req.params.id, 'approved', req.user.id); res.json({ success: true }) }
-  catch (err) { next(err) }
+  try {
+    const released = await deviceSvc.setStatus(req.params.id, 'approved', req.user.id)
+    await recomputeReleased([released])
+    res.json({ success: true, data: { released: released.dates.length } })
+  } catch (err) { next(err) }
 }
 async function revokeDevice(req, res, next) {
   try { await deviceSvc.setStatus(req.params.id, 'revoked', req.user.id); res.json({ success: true }) }
   catch (err) { next(err) }
 }
 async function approveAllDevices(req, res, next) {
-  try { const count = await deviceSvc.approveAllPending(req.user.id); res.json({ success: true, data: { approved: count } }) }
-  catch (err) { next(err) }
+  try {
+    const { approved, affected } = await deviceSvc.approveAllPending(req.user.id)
+    await recomputeReleased(affected)
+    res.json({ success: true, data: { approved } })
+  } catch (err) { next(err) }
 }
 async function renameDevice(req, res, next) {
   try { await deviceSvc.renameDevice(req.params.id, req.body?.label); res.json({ success: true }) }

@@ -80,6 +80,15 @@
 .statusItem strong { font-size: var(--fs-xl); color: var(--color-text); }
 
 .adminNote { font-size: var(--fs-sm); color: var(--color-muted); text-align: center; padding: var(--space-2) 0; }
+.heldNote {
+  margin-top: var(--space-2);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-warning-bg, #fff7ed);
+  color: var(--color-warning, #d97706);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
 
 .actions { display: flex; flex-direction: column; gap: var(--space-4); }
 .bigBtn {

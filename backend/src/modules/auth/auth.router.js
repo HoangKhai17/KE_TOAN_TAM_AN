@@ -1,5 +1,6 @@
 const { Router } = require('express')
 const { authenticate } = require('../../middleware/auth')
+const { requireRole } = require('../../middleware/rbac')
 const { validate } = require('../../middleware/validate')
 const { loginSchema, changePasswordSchema } = require('./auth.schema')
 const ctrl = require('./auth.controller')
@@ -155,5 +156,9 @@ router.post('/change-password', authenticate, validate(changePasswordSchema), ct
  *       401: { description: Unauthorized }
  */
 router.get('/me', authenticate, ctrl.getMe)
+
+// Cấu hình "giữ đăng nhập" (số ngày) — admin
+router.get('/session-config',  authenticate, requireRole('admin'), ctrl.getSessionConfig)
+router.put('/session-config',  authenticate, requireRole('admin'), ctrl.setSessionConfig)
 
 module.exports = router
