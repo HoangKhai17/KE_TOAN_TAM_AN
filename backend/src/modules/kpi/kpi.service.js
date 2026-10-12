@@ -381,15 +381,20 @@ async function getPerformance(year, month, opts = {}) {
   const bounds = resolveBounds({ year, month, from: opts.from, to: opts.to })
   const base = await listMonthly(year, month, opts)               // { closed, rows:[{...onTimePct, volumePoints}] }
   const tiers = await listTiers({ activeOnly: true })
-  // grades ở bảng kpi_grades (module reward-penalty) — đọc trực tiếp.
+  // grades ở bảng kpi_grades (module reward-penalty) — đọc trực tiếp, TÁCH 2 nhánh theo category.
   const { rows: grades } = await query(
-    `SELECT code, label, min_points, max_points, amount, sort_order FROM kpi_grades WHERE is_active = TRUE ORDER BY sort_order, created_at`)
-  const gradeList = grades.map((g, idx) => ({
-    code: g.code, label: g.label, sortOrder: idx,
-    minPoints: g.min_points != null ? Number(g.min_points) : null,
-    maxPoints: g.max_points != null ? Number(g.max_points) : null,
-    amount: Number(g.amount),
-  }))
+    `SELECT code, label, category, min_points, max_points, amount, sort_order
+     FROM kpi_grades WHERE is_active = TRUE ORDER BY category, sort_order, created_at`)
+  const mapGrades = (cat) => grades
+    .filter((g) => (g.category || 'progress') === cat)
+    .map((g, idx) => ({
+      code: g.code, label: g.label, sortOrder: idx,
+      minPoints: g.min_points != null ? Number(g.min_points) : null,
+      maxPoints: g.max_points != null ? Number(g.max_points) : null,
+      amount: Number(g.amount),
+    }))
+  const progressGrades = mapGrades('progress')
+  const rpGrades = mapGrades('reward_penalty')
   // net thưởng/phạt (đã duyệt) theo NV — neo theo THÁNG: gộp mọi tháng mà kỳ lọc chạm tới.
   const rpParams = [bounds.rpStart, bounds.rpEnd]
   let rpUserCond = ''
@@ -505,14 +510,35 @@ async function getPerformance(year, month, opts = {}) {
     const tier = matchRange(r.onTimePct, tiers, 'minPct', 'maxPct')
     const kpiPoints = tier ? tier.points : 0
     const rpNet = netByUser.get(r.userId) ?? 0
-    // Tổng điểm = 4 thành phần: điểm ĐỊNH KỲ + điểm TASK KHÁC + điểm % đúng hạn (KPI) + thưởng/phạt.
-    const totalPoints = (r.volumePoints || 0) + kpiPoints + rpNet
-    const grade = matchRange(totalPoints, gradeList, 'minPoints', 'maxPoints')
+
+    // NHÁNH 1 — Tiến độ công việc: định kỳ + task khác + điểm % đúng hạn.
+    const progressPoints = (r.volumePoints || 0) + kpiPoints
+    const pGrade = matchRange(progressPoints, progressGrades, 'minPoints', 'maxPoints')
+    const progressAmount = pGrade ? pGrade.amount : 0
+
+    // NHÁNH 2 — Thưởng/phạt quy chế: tính riêng trên tổng điểm thưởng/phạt.
+    const rpGrade = matchRange(rpNet, rpGrades, 'minPoints', 'maxPoints')
+    const rpAmount = rpGrade ? rpGrade.amount : 0
+
+    const totalAmount = progressAmount + rpAmount
+
     return {
       ...r,
-      kpiPoints, rewardPenaltyNet: rpNet, totalPoints,
-      gradeCode: grade?.code ?? null, gradeLabel: grade?.label ?? null, gradeSort: grade?.sortOrder ?? null,
-      amount: grade ? grade.amount : 0,
+      kpiPoints, rewardPenaltyNet: rpNet,
+      // Nhánh tiến độ
+      progressPoints,
+      progressGradeCode: pGrade?.code ?? null, progressGradeLabel: pGrade?.label ?? null,
+      progressGradeSort: pGrade?.sortOrder ?? null, progressAmount,
+      // Nhánh thưởng/phạt
+      rpGradeCode: rpGrade?.code ?? null, rpGradeLabel: rpGrade?.label ?? null,
+      rpGradeSort: rpGrade?.sortOrder ?? null, rpAmount,
+      // Tổng tiền
+      totalAmount,
+      // ── Tương thích ngược (KpiPanel/PayrollDetail): "grade/amount" trỏ về nhánh tiến độ,
+      //    totalPoints = điểm tiến độ, amount = TỔNG tiền (cho payroll kéo đủ).
+      totalPoints: progressPoints,
+      gradeCode: pGrade?.code ?? null, gradeLabel: pGrade?.label ?? null, gradeSort: pGrade?.sortOrder ?? null,
+      amount: totalAmount,
       bySource: srcByUser.get(r.userId) ?? [],
     }
   })

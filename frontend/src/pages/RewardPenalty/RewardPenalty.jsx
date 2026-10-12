@@ -817,15 +817,18 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   useEffect(() => { api.listGrades({ activeOnly: 'true' }).then(setGrades).catch(() => {}) }, [])
-  const gradeObj = (r) => grades.find((g) => g.code === r.gradeCode) || null   // để lấy màu badge; xếp loại/tiền lấy từ getKpiPerformance
+  // 2 nhánh xếp loại tách theo category (để tô màu badge đúng danh sách).
+  const pGradeList  = useMemo(() => grades.filter((g) => (g.category || 'progress') === 'progress'), [grades])
+  const rpGradeList = useMemo(() => grades.filter((g) => g.category === 'reward_penalty'), [grades])
+  const findGrade = (list, code) => list.find((g) => g.code === code) || null
 
   const cols = useMemo(() => [
-    { key: 'user',  label: 'Nhân viên',    type: 'text',        getLabel: (r) => r.userName },
-    { key: 'vrec',  label: 'Định kỳ',      type: 'numberRange', num: true, getNumber: (r) => r.volumeRecurring, getLabel: (r) => String(r.volumeRecurring) },
-    { key: 'voth',  label: 'Task khác',    type: 'numberRange', num: true, getNumber: (r) => r.volumeOther,     getLabel: (r) => String(r.volumeOther) },
-    { key: 'kpi',   label: 'Điểm đúng hạn', type: 'numberRange', num: true, getNumber: (r) => r.kpiPoints,      getLabel: (r) => String(r.kpiPoints) },
-    { key: 'rp',    label: 'Thưởng/phạt',  type: 'numberRange', num: true, getNumber: (r) => r.rewardPenaltyNet, getLabel: (r) => String(r.rewardPenaltyNet) },
-    { key: 'total', label: 'Tổng điểm',    type: 'numberRange', num: true, getNumber: (r) => r.totalPoints,     getLabel: (r) => String(r.totalPoints) },
+    { key: 'user',   label: 'Nhân viên',       type: 'text',        getLabel: (r) => r.userName },
+    { key: 'vrec',   label: 'Định kỳ',         type: 'numberRange', num: true, getNumber: (r) => r.volumeRecurring,  getLabel: (r) => String(r.volumeRecurring) },
+    { key: 'voth',   label: 'Task khác',       type: 'numberRange', num: true, getNumber: (r) => r.volumeOther,      getLabel: (r) => String(r.volumeOther) },
+    { key: 'kpi',    label: 'Điểm đúng hạn',   type: 'numberRange', num: true, getNumber: (r) => r.kpiPoints,        getLabel: (r) => String(r.kpiPoints) },
+    { key: 'ptotal', label: 'Tổng tiến độ',    type: 'numberRange', num: true, getNumber: (r) => r.progressPoints,   getLabel: (r) => String(r.progressPoints) },
+    { key: 'rp',     label: 'Điểm thưởng/phạt', type: 'numberRange', num: true, getNumber: (r) => r.rewardPenaltyNet, getLabel: (r) => String(r.rewardPenaltyNet) },
   ], [])
   const cf = useColFilter(cols)
   const [userFilter, setUserFilter] = useState([])   // lọc theo nhân viên (client-side)
@@ -863,10 +866,16 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
         userId: r.userId, userName: r.userName,
         volumeRecurring: r.volumeRecurring || 0, volumeOther: r.volumeOther || 0,
         volumePoints: r.volumePoints || 0, volumePossible: r.volumePossible || 0,
-        kpiPoints: r.kpiPoints || 0, rewardPenaltyNet: r.rewardPenaltyNet || 0, totalPoints: r.totalPoints || 0,
+        kpiPoints: r.kpiPoints || 0, rewardPenaltyNet: r.rewardPenaltyNet || 0,
         onTimePct: r.onTimePct, assignedCount: r.assignedCount || 0, onTimeCount: r.onTimeCount || 0,
         bySource: r.bySource || [],
-        gradeCode: r.gradeCode, gradeLabel: r.gradeLabel, gradeSort: r.gradeSort, amount: r.amount || 0,
+        // Nhánh tiến độ
+        progressPoints: r.progressPoints || 0,
+        progressGradeCode: r.progressGradeCode, progressGradeLabel: r.progressGradeLabel, progressAmount: r.progressAmount || 0,
+        // Nhánh thưởng/phạt
+        rpGradeCode: r.rpGradeCode, rpGradeLabel: r.rpGradeLabel, rpAmount: r.rpAmount || 0,
+        // Tổng tiền
+        totalAmount: r.totalAmount || 0,
         items: itemsMap.get(r.userId) || [],
       })))
     }).catch(() => setRows([])).finally(() => setLoading(false))
@@ -886,15 +895,20 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
   }))
   const exportCols = [
     { key: 'user', label: 'Nhân viên', width: 24, value: (r) => r.userName },
+    // Nhánh 1 — Tiến độ công việc
     { key: 'vrec', label: 'Điểm định kỳ', width: 12, type: 'number', value: (r) => r.volumeRecurring },
     { key: 'voth', label: 'Điểm task khác', width: 12, type: 'number', value: (r) => r.volumeOther },
     { key: 'otpct', label: '% đúng hạn', width: 10, value: (r) => r.onTimePct == null ? '' : `${r.onTimePct}%` },
-    { key: 'otn', label: 'Đúng hạn/Đến hạn', width: 14, value: (r) => `${r.onTimeCount}/${r.assignedCount}` },
     { key: 'kpi', label: 'Điểm đúng hạn', width: 12, type: 'number', value: (r) => r.kpiPoints },
-    { key: 'rp', label: 'Thưởng/phạt', width: 12, type: 'number', value: (r) => r.rewardPenaltyNet },
-    { key: 'total', label: 'Tổng điểm', width: 12, type: 'number', value: (r) => r.totalPoints },
-    { key: 'grade', label: 'Xếp loại', width: 10, value: (r) => r.gradeCode ? `${r.gradeCode}${r.gradeLabel ? ` – ${r.gradeLabel}` : ''}` : '' },
-    { key: 'gamt', label: 'Tiền', width: 14, type: 'number', thousands: true, value: (r) => Number(r.amount) || 0 },
+    { key: 'ptotal', label: 'Tổng tiến độ', width: 12, type: 'number', value: (r) => r.progressPoints },
+    { key: 'pgrade', label: 'Xếp loại tiến độ', width: 14, value: (r) => r.progressGradeCode ? `${r.progressGradeCode}${r.progressGradeLabel ? ` – ${r.progressGradeLabel}` : ''}` : '' },
+    { key: 'pamt', label: 'Thưởng tiến độ', width: 14, type: 'number', thousands: true, value: (r) => Number(r.progressAmount) || 0 },
+    // Nhánh 2 — Thưởng/phạt quy chế
+    { key: 'rp', label: 'Điểm thưởng/phạt', width: 12, type: 'number', value: (r) => r.rewardPenaltyNet },
+    { key: 'rpgrade', label: 'Xếp loại thưởng/phạt', width: 14, value: (r) => r.rpGradeCode ? `${r.rpGradeCode}${r.rpGradeLabel ? ` – ${r.rpGradeLabel}` : ''}` : '' },
+    { key: 'rpamt', label: 'Tiền thưởng/phạt', width: 14, type: 'number', thousands: true, value: (r) => Number(r.rpAmount) || 0 },
+    // Tổng tiền
+    { key: 'tamt', label: 'Tổng tiền', width: 14, type: 'number', thousands: true, value: (r) => Number(r.totalAmount) || 0 },
     ...kindDetailCols,
   ]
 
@@ -956,36 +970,51 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
       {loading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
         <div className={s.tableWrap}>
           <table className={s.table}>
-            <thead><tr>
-              <th className={s.colChk}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
-              <th className={s.colStt}>STT</th>
-              <FilterTh cf={cf} colKey="user">Nhân viên</FilterTh>
-              <FilterTh cf={cf} colKey="vrec" num>Định kỳ</FilterTh>
-              <FilterTh cf={cf} colKey="voth" num>Task khác</FilterTh>
-              <FilterTh cf={cf} colKey="kpi" num>Điểm đúng hạn</FilterTh>
-              <FilterTh cf={cf} colKey="rp" num>Thưởng/phạt</FilterTh>
-              <FilterTh cf={cf} colKey="total" num>Tổng điểm</FilterTh>
-              <th>Xếp loại</th>
-              <th className={s.num}>Tiền (đ)</th>
-            </tr></thead>
+            <thead>
+              <tr>
+                <th className={s.colChk} rowSpan={2}><input type="checkbox" className={s.check} checked={allChecked} onChange={toggleAll} title="Chọn tất cả" /></th>
+                <th className={s.colStt} rowSpan={2}>STT</th>
+                <FilterTh cf={cf} colKey="user" rowSpan={2}>Nhân viên</FilterTh>
+                <th colSpan={6} style={{ textAlign: 'center', background: 'var(--color-primary-bg)', borderLeft: '2px solid var(--color-primary-bg-strong)' }}>① Tiến độ công việc</th>
+                <th colSpan={3} style={{ textAlign: 'center', background: 'var(--color-accent-bg-soft)', borderLeft: '2px solid var(--color-primary-bg-strong)' }}>② Thưởng/phạt quy chế</th>
+                <th className={s.num} rowSpan={2} style={{ borderLeft: '2px solid var(--color-primary-bg-strong)' }}>Tổng tiền (đ)</th>
+              </tr>
+              <tr>
+                <FilterTh cf={cf} colKey="vrec" num className={s.grpStart}>Định kỳ</FilterTh>
+                <FilterTh cf={cf} colKey="voth" num>Task khác</FilterTh>
+                <FilterTh cf={cf} colKey="kpi" num>Đúng hạn</FilterTh>
+                <FilterTh cf={cf} colKey="ptotal" num>Tổng điểm</FilterTh>
+                <th>Xếp loại</th>
+                <th className={s.num}>Thưởng (đ)</th>
+                <FilterTh cf={cf} colKey="rp" num className={s.grpStart}>Điểm</FilterTh>
+                <th>Xếp loại</th>
+                <th className={s.num}>Tiền (đ)</th>
+              </tr>
+            </thead>
             <tbody>
-              {view.length === 0 && <tr><td colSpan={10} className={s.empty}>Chưa có dữ liệu trong kỳ.</td></tr>}
-              {pg.slice.map((r, i) => (
+              {view.length === 0 && <tr><td colSpan={13} className={s.empty}>Chưa có dữ liệu trong kỳ.</td></tr>}
+              {pg.slice.map((r, i) => {
+                const pGrade = findGrade(pGradeList, r.progressGradeCode)
+                const rGrade = findGrade(rpGradeList, r.rpGradeCode)
+                return (
                 <Fragment key={r.userId}>
                   <tr className={s.sumRow}>
                     <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(r.userId)} onChange={() => toggle(r.userId)} /></td>
                     <td className={s.colStt}>{pg.start + i + 1}</td>
                     <td>{r.userName}</td>
-                    <td className={s.num}>{r.volumeRecurring}</td>
+                    <td className={`${s.num} ${s.grpStart}`}>{r.volumeRecurring}</td>
                     <td className={s.num}>{r.volumeOther}</td>
                     <td className={`${s.num} ${signCls(r.kpiPoints)}`}>{fmtPts(r.kpiPoints)}</td>
-                    <td className={`${s.num} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td>
-                    <td className={`${s.num} ${signCls(r.totalPoints)}`}><strong>{fmtPts(r.totalPoints)}</strong></td>
-                    <td>{r.gradeCode ? <span className={`${s.gradeBadge} ${gradeColorCls(gradeObj(r), grades)}`} title={r.gradeLabel}>{r.gradeCode}{r.gradeLabel ? ` · ${r.gradeLabel}` : ''}</span> : <span className={s.zero}>—</span>}</td>
-                    <td className={s.num}>{Number(r.amount) ? fmtMoney(r.amount) : '—'}</td>
+                    <td className={`${s.num} ${signCls(r.progressPoints)}`}><strong>{fmtPts(r.progressPoints)}</strong></td>
+                    <td>{r.progressGradeCode ? <span className={`${s.gradeBadge} ${gradeColorCls(pGrade, pGradeList)}`} title={r.progressGradeLabel}>{r.progressGradeCode}</span> : <span className={s.zero}>—</span>}</td>
+                    <td className={s.num}>{Number(r.progressAmount) ? fmtMoney(r.progressAmount) : '—'}</td>
+                    <td className={`${s.num} ${s.grpStart} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td>
+                    <td>{r.rpGradeCode ? <span className={`${s.gradeBadge} ${gradeColorCls(rGrade, rpGradeList)}`} title={r.rpGradeLabel}>{r.rpGradeCode}</span> : <span className={s.zero}>—</span>}</td>
+                    <td className={s.num}>{Number(r.rpAmount) ? fmtMoney(r.rpAmount) : '—'}</td>
+                    <td className={`${s.num}`} style={{ borderLeft: '2px solid var(--color-primary-bg-strong)' }}><strong>{Number(r.totalAmount) ? fmtMoney(r.totalAmount) : '—'}</strong></td>
                   </tr>
                   <tr className={s.detailRow}>
-                    <td colSpan={10} className={s.detailCell}>
+                    <td colSpan={13} className={s.detailCell}>
                       {(() => {
                         const others = (r.bySource || []).filter((b) => b.source !== 'auto' && (b.volumePoints || 0) > 0)
                         const otherDetail = others.length ? others.map((b) => `${enumLabel('task_source', b.source)} ${b.volumePoints}đ`).join(' · ') : '—'
@@ -994,12 +1023,15 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
                           <table className={`${s.bkTable} ${s.detailTable}`}>
                             <thead><tr><th style={{ width: '26%' }}>Hạng mục</th><th>Chi tiết</th><th className={s.bkColNum}>Điểm</th></tr></thead>
                             <tbody>
-                              <tr><td className={s.bkLabel}>① Điểm định kỳ</td><td className={s.detailMuted}>Σ điểm cấu hình checklist (việc định kỳ)</td><td className={s.bkColNum}>{r.volumeRecurring}</td></tr>
-                              <tr><td className={s.bkLabel}>② Điểm task khác</td><td className={s.detailMuted}>{otherDetail} <span style={{ color: 'var(--color-muted)' }}>· 1đ/bước</span></td><td className={s.bkColNum}>{r.volumeOther}</td></tr>
-                              <tr><td className={s.bkLabel}>③ Điểm đúng hạn</td><td className={s.detailMuted}>{r.onTimeCount}/{r.assignedCount} việc đúng hạn ({r.onTimePct ?? '—'}%) → quy mốc KPI</td><td className={`${s.bkColNum} ${signCls(r.kpiPoints)}`}>{fmtPts(r.kpiPoints)}</td></tr>
-                              <tr><td className={s.bkLabel}>④ Thưởng/phạt</td><td className={s.detailMuted}>{rpDetail}</td><td className={`${s.bkColNum} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td></tr>
-                              <tr className={s.bkTotalRow}><td className={s.bkLabel}>Tổng điểm</td><td /><td className={`${s.bkColNum} ${signCls(r.totalPoints)}`}>{fmtPts(r.totalPoints)}</td></tr>
-                              <tr className={s.bkGradeRow}><td className={s.bkLabel}>Xếp loại → Tiền</td><td className={s.detailMuted}>{r.gradeCode ? `${r.gradeCode}${r.gradeLabel ? ` · ${r.gradeLabel}` : ''}` : '—'}</td><td className={s.bkColNum}>{Number(r.amount) ? `${fmtMoney(r.amount)}đ` : '—'}</td></tr>
+                              <tr className={s.bkGroupRow}><td colSpan={3} className={s.bkLabel}>① TIẾN ĐỘ CÔNG VIỆC</td></tr>
+                              <tr><td className={s.bkLabel}>Điểm định kỳ</td><td className={s.detailMuted}>Σ điểm cấu hình checklist (việc định kỳ)</td><td className={s.bkColNum}>{r.volumeRecurring}</td></tr>
+                              <tr><td className={s.bkLabel}>Điểm task khác</td><td className={s.detailMuted}>{otherDetail} <span style={{ color: 'var(--color-muted)' }}>· 1đ/bước</span></td><td className={s.bkColNum}>{r.volumeOther}</td></tr>
+                              <tr><td className={s.bkLabel}>Điểm đúng hạn</td><td className={s.detailMuted}>{r.onTimeCount}/{r.assignedCount} việc đúng hạn ({r.onTimePct ?? '—'}%) → quy mốc KPI</td><td className={`${s.bkColNum} ${signCls(r.kpiPoints)}`}>{fmtPts(r.kpiPoints)}</td></tr>
+                              <tr className={s.bkTotalRow}><td className={s.bkLabel}>Tổng điểm tiến độ → Xếp loại → Thưởng</td><td className={s.detailMuted}>{r.progressGradeCode ? `${r.progressGradeCode}${r.progressGradeLabel ? ` · ${r.progressGradeLabel}` : ''}` : '—'} {Number(r.progressAmount) ? `→ ${fmtMoney(r.progressAmount)}đ` : ''}</td><td className={`${s.bkColNum} ${signCls(r.progressPoints)}`}>{fmtPts(r.progressPoints)}</td></tr>
+                              <tr className={s.bkGroupRow}><td colSpan={3} className={s.bkLabel}>② THƯỞNG/PHẠT QUY CHẾ</td></tr>
+                              <tr><td className={s.bkLabel}>Chi tiết thưởng/phạt</td><td className={s.detailMuted}>{rpDetail}</td><td className={`${s.bkColNum} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td></tr>
+                              <tr className={s.bkTotalRow}><td className={s.bkLabel}>Điểm thưởng/phạt → Xếp loại → Tiền</td><td className={s.detailMuted}>{r.rpGradeCode ? `${r.rpGradeCode}${r.rpGradeLabel ? ` · ${r.rpGradeLabel}` : ''}` : '—'} {Number(r.rpAmount) ? `→ ${fmtMoney(r.rpAmount)}đ` : ''}</td><td className={`${s.bkColNum} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td></tr>
+                              <tr className={s.bkGradeRow}><td className={s.bkLabel}>TỔNG TIỀN</td><td /><td className={s.bkColNum}>{Number(r.totalAmount) ? `${fmtMoney(r.totalAmount)}đ` : '—'}</td></tr>
                             </tbody>
                           </table>
                         )
@@ -1007,7 +1039,8 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
                     </td>
                   </tr>
                 </Fragment>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -1019,7 +1052,7 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
           sheetName={(ym.from || ym.to) ? 'Khoang_ngay' : (ym.month ? `T${ym.month}-${ym.year}` : `Nam_${ym.year || 'tatca'}`)}
           columns={exportCols} data={exportData} onClose={() => setExportOpen(false)} />
       )}
-      <div className={s.cardFoot}>ℹ️ <strong>Tổng điểm = Định kỳ + Task khác + Điểm đúng hạn + Thưởng/phạt</strong> → quy ra <strong>Xếp loại</strong> → Tiền (theo tab Quy đổi xếp loại). Bấm 1 dòng xem <strong>chi tiết thưởng/phạt vì gì</strong> (chỉ tính dòng đã duyệt).</div>
+      <div className={s.cardFoot}>ℹ️ Đánh giá tách <strong>2 nhánh độc lập</strong>: <strong>① Tiến độ</strong> = Định kỳ + Task khác + Đúng hạn → Xếp loại tiến độ → Thưởng; <strong>② Thưởng/phạt quy chế</strong> = điểm thưởng/phạt → Xếp loại riêng → Tiền. <strong>Tổng tiền</strong> = Thưởng tiến độ + Tiền thưởng/phạt (xếp loại theo tab Quy đổi xếp loại). Bấm 1 dòng xem chi tiết.</div>
     </div>
   )
 }
@@ -1033,8 +1066,10 @@ function GradesPanel({ slot, onFooter }) {
   const [draft, setDraft] = useState(null)
   const [savingNew, setSavingNew] = useState(false)
   const [sel, setSel] = useState(() => new Set())
+  const [subTab, setSubTab] = useState('progress')   // 'progress' | 'rp' | 'tiers'
+  const gradeCat = subTab === 'rp' ? 'reward_penalty' : 'progress'
 
-  const reload = useCallback(() => { setLoading(true); setSel(new Set()); api.listGrades().then(setRows).catch(() => setRows([])).finally(() => setLoading(false)) }, [])
+  const reload = useCallback(() => { setLoading(true); setSel(new Set()); setDraft(null); api.listGrades({ category: gradeCat }).then(setRows).catch(() => setRows([])).finally(() => setLoading(false)) }, [gradeCat])
   useEffect(() => { reload() }, [reload])
   useEffect(() => { onFooter(null); return () => onFooter(null) }, [onFooter])
 
@@ -1043,6 +1078,7 @@ function GradesPanel({ slot, onFooter }) {
   const toggle = (id) => setSel((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   function openAdd() { setDraft({ code: '', label: '', minPoints: '', maxPoints: '', amount: 0, isActive: true }) }
+  // category gắn theo sub-tab đang xem
   async function patchGrade(g, patch) {
     setRows((list) => list.map((x) => x.id === g.id ? { ...x, ...patch } : x))
     try { await api.updateGrade(g.id, patch) } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); reload() }
@@ -1052,7 +1088,7 @@ function GradesPanel({ slot, onFooter }) {
     setSavingNew(true)
     try {
       await api.createGrade({
-        code: draft.code.trim(), label: draft.label.trim(),
+        code: draft.code.trim(), label: draft.label.trim(), category: gradeCat,
         minPoints: draft.minPoints === '' ? null : Number(draft.minPoints),
         maxPoints: draft.maxPoints === '' ? null : Number(draft.maxPoints),
         amount: Number(draft.amount) || 0, isActive: !!draft.isActive,
@@ -1093,11 +1129,10 @@ function GradesPanel({ slot, onFooter }) {
     if (!(await confirmDelete({ title: 'Xoá mốc', message: <>Xoá mốc điểm này?</> }))) return
     try { await deleteKpiTier(t.id); tiersReload() } catch { addToast('Không xoá được', 'error') }
   }
-  const [subTab, setSubTab] = useState('grades')   // 'grades' | 'tiers'
-
+  const isGradeTab = subTab === 'progress' || subTab === 'rp'
   const toolbar = (
     <div className={s.toolbar}>
-      {subTab === 'grades'
+      {isGradeTab
         ? <button className={s.btnPrimary} onClick={openAdd}><Plus size={14} /> Thêm xếp loại</button>
         : <button className={s.btnPrimary} onClick={tierAdd} disabled={savingTier}>{savingTier ? <Loader2 size={13} className={s.spin} /> : <Plus size={14} />} Thêm mốc</button>}
     </div>
@@ -1108,12 +1143,13 @@ function GradesPanel({ slot, onFooter }) {
       {slot && createPortal(toolbar, slot)}
       <div style={{ padding: '12px 14px 0' }}>
         <div className={s.tabLinks} role="tablist" style={{ display: 'inline-flex' }}>
-          <button className={`${s.tab} ${subTab === 'grades' ? s.tabActive : ''}`} onClick={() => setSubTab('grades')}>Bảng xếp loại</button>
+          <button className={`${s.tab} ${subTab === 'progress' ? s.tabActive : ''}`} onClick={() => setSubTab('progress')}>Xếp loại · Tiến độ</button>
+          <button className={`${s.tab} ${subTab === 'rp' ? s.tabActive : ''}`} onClick={() => setSubTab('rp')}>Xếp loại · Thưởng/phạt</button>
           <button className={`${s.tab} ${subTab === 'tiers' ? s.tabActive : ''}`} onClick={() => setSubTab('tiers')}>Mốc % đúng hạn → điểm</button>
         </div>
       </div>
 
-      {subTab === 'grades' ? (
+      {isGradeTab ? (
       <>
       {sel.size > 0 && (
         <div className={s.bulkWrap}>
@@ -1174,7 +1210,11 @@ function GradesPanel({ slot, onFooter }) {
           </table>
         </div>
       )}
-      <div className={s.cardFoot}>ℹ️ Xếp loại từ THẤP → CAO theo thứ tự dòng. Dải điểm dùng <strong>Tổng điểm</strong> của nhân viên trong kỳ (bỏ trống = không giới hạn). Mỗi loại gắn 1 mức <strong>thưởng/phạt</strong> (tiền), dùng khi quy đổi ra bảng lương.</div>
+      <div className={s.cardFoot}>
+        {subTab === 'rp'
+          ? <>ℹ️ Xếp loại theo <strong>điểm thưởng/phạt quy chế</strong> (tính riêng). Dải điểm dùng <strong>tổng điểm thưởng/phạt</strong> trong kỳ (âm = vi phạm). Mỗi loại gắn 1 mức tiền riêng.</>
+          : <>ℹ️ Xếp loại theo <strong>tiến độ công việc</strong> = Định kỳ + Task khác + Điểm đúng hạn. Dải điểm dùng <strong>tổng điểm tiến độ</strong> trong kỳ (bỏ trống = không giới hạn). Mỗi loại gắn 1 mức thưởng riêng.</>}
+      </div>
       </>
       ) : (
       <>

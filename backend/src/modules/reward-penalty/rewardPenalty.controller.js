@@ -76,7 +76,7 @@ async function discussEntry(req, res, next) {
 
 // ── Quy đổi xếp loại (grades) ──
 async function listGrades(req, res, next) {
-  try { res.json({ success: true, data: { grades: await svc.listGrades({ activeOnly: req.query.activeOnly === 'true' }) } }) }
+  try { res.json({ success: true, data: { grades: await svc.listGrades({ activeOnly: req.query.activeOnly === 'true', category: req.query.category }) } }) }
   catch (e) { next(e) }
 }
 async function createGrade(req, res, next) {

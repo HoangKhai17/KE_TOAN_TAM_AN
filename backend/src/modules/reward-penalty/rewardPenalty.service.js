@@ -268,27 +268,39 @@ async function listYears({ scopeUserId } = {}) {
 }
 
 // ── QUY ĐỔI XẾP LOẠI (grades) ────────────────────────────────────────────────
+const GRADE_CATEGORIES = ['progress', 'reward_penalty']
+const normCategory = (c) => (GRADE_CATEGORIES.includes(c) ? c : 'progress')
+
 function gradeToDto(g) {
   return {
-    id: g.id, code: g.code, label: g.label,
+    id: g.id, code: g.code, label: g.label, category: g.category,
     minPoints: g.min_points != null ? Number(g.min_points) : null,
     maxPoints: g.max_points != null ? Number(g.max_points) : null,
     amount: Number(g.amount), sortOrder: g.sort_order, isActive: g.is_active,
     createdAt: g.created_at, updatedAt: g.updated_at,
   }
 }
-async function listGrades({ activeOnly = false } = {}) {
+// category: 'progress' | 'reward_penalty' | undefined (= tất cả).
+async function listGrades({ activeOnly = false, category } = {}) {
+  const where = []
+  const params = []
+  if (activeOnly) where.push('is_active = TRUE')
+  if (category) { params.push(normCategory(category)); where.push(`category = $${params.length}`) }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
   const { rows } = await query(
-    `SELECT * FROM kpi_grades ${activeOnly ? 'WHERE is_active = TRUE' : ''} ORDER BY sort_order, created_at`)
+    `SELECT * FROM kpi_grades ${whereSql} ORDER BY category, sort_order, created_at`, params)
   return rows.map(gradeToDto)
 }
 async function createGrade(data, actorId) {
-  const { rows: [m] } = await query('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM kpi_grades')
+  const category = normCategory(data.category)
+  // sort_order riêng theo từng category.
+  const { rows: [m] } = await query(
+    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM kpi_grades WHERE category = $1', [category])
   const { rows: [g] } = await query(
-    `INSERT INTO kpi_grades (code, label, min_points, max_points, amount, sort_order, is_active, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    `INSERT INTO kpi_grades (code, label, min_points, max_points, amount, sort_order, is_active, created_by, category)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
     [data.code || '', data.label, data.minPoints ?? null, data.maxPoints ?? null,
-     data.amount ?? 0, data.sortOrder ?? m.n, data.isActive ?? true, actorId])
+     data.amount ?? 0, data.sortOrder ?? m.n, data.isActive ?? true, actorId, category])
   return gradeToDto(g)
 }
 async function updateGrade(id, data) {

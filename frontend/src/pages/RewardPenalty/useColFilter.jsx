@@ -75,11 +75,11 @@ export function useColFilter(colDefs) {
 }
 
 // Header cell có nút lọc/sắp xếp. `num` = canh phải.
-export function FilterTh({ cf, colKey, children, num, className }) {
+export function FilterTh({ cf, colKey, children, num, className, rowSpan }) {
   const filterable = cf.typeOf(colKey) !== 'none'
   const active = cf.hasColFilter(colKey) || cf.sort.col === colKey
   return (
-    <th className={className}>
+    <th className={className} rowSpan={rowSpan}>
       <div className={`${s.thInner} ${num ? s.thInnerNum : ''}`}>
         <span className={s.thLabel}>{children}</span>
         {filterable && (

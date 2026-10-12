@@ -217,6 +217,10 @@
 .bkTable .bkTotalRow td { border-top: 1.5px solid var(--color-primary-bg-strong); font-weight: var(--fw-bold); }
 /* Hàng Xếp loại → Tiền: nền nổi bật (kết quả cuối) */
 .detailTable .bkGradeRow td { background: var(--color-primary-bg); font-weight: var(--fw-bold); color: var(--color-primary-deep); }
+/* Hàng tiêu đề nhóm trong bảng chi tiết (① Tiến độ / ② Thưởng phạt) */
+.detailTable .bkGroupRow td { background: var(--color-primary-bg-strong); font-weight: var(--fw-bold); color: var(--color-primary-deep); letter-spacing: 0.3px; }
+/* Vạch ngăn giữa 2 nhóm cột ở bảng Tổng hợp theo NV */
+.grpStart { border-left: 2px solid var(--color-primary-bg-strong) !important; }
 .bkTag { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: var(--fw-bold); white-space: nowrap; }
 /* Bảng con chi tiết thưởng/phạt — đường kẻ gạch mờ cho dễ phân biệt */
 .bkTable { width: 100%; border-collapse: collapse; font-size: var(--fs-2xs); margin: 2px 0 6px; }

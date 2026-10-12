@@ -39,6 +39,7 @@ const entryUpdateSchema = z.object({
 const gradeSchema = z.object({
   code:       z.string().max(20).optional(),
   label:      z.string().min(1).max(200),
+  category:   z.enum(['progress', 'reward_penalty']).optional(),
   minPoints:  z.number().optional().nullable(),
   maxPoints:  z.number().optional().nullable(),
   amount:     z.number().optional(),
