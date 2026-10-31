@@ -1064,7 +1064,6 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                                 {item.stepText}
                               </span>
                               {item.isImportant && <span className={s.clItemStar} title="Bước quan trọng">★</span>}
-                              {item.difficulty && <span className={`${s.clItemDiff} ${s[`clItemDiff_${item.difficulty}`] || ''}`} title="Độ khó">{getLabel('checklist_difficulty', item.difficulty)}</span>}
                               {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
                               <button
                                 className={`${s.qvChecklistDel} ${s.clEdit}`}

@@ -25,14 +25,14 @@ function monthRange(year, month) {
 const MATCH_CTE = `
   WITH m AS (
     SELECT ci.id AS ci_id, ci.task_id,
-           ci.points AS cur_points, ci.difficulty AS cur_diff,
-           sci.points AS new_points, sci.difficulty AS new_diff,
-           (ci.points IS DISTINCT FROM sci.points OR ci.difficulty IS DISTINCT FROM sci.difficulty) AS diff
+           ci.points AS cur_points,
+           sci.points AS new_points,
+           (ci.points IS DISTINCT FROM sci.points) AS diff
     FROM task_checklist_items ci
     JOIN tasks t ON t.id = ci.task_id AND t.source = 'auto'
          AND t.due_date >= $1::date AND t.due_date < $2::date
     JOIN LATERAL (
-      SELECT s.points, s.difficulty
+      SELECT s.points
       FROM schedule_checklist_items s
       WHERE s.schedule_id = t.customer_task_schedule_id
         AND (
@@ -72,7 +72,7 @@ async function syncScores(req, res, next) {
       const { rowCount } = await client.query(`
         ${MATCH_CTE}
         UPDATE task_checklist_items ci
-        SET points = m.new_points, difficulty = m.new_diff
+        SET points = m.new_points
         FROM m
         WHERE ci.id = m.ci_id AND m.diff`,
         [start, end])

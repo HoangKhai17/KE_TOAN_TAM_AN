@@ -9,7 +9,6 @@ import { listTaskTypes, getChecklist, getSubtaskTemplates } from '../../api/task
 import { listUserOptions } from '../../api/users'
 import { listHolidays } from '../../api/attendance'
 import { getNextOccurrences, rollForwardToWorkday } from '../../utils/recurrencePreview'
-import { diffOptionsOr, defaultPointsFor } from '../../utils/checklistDifficulty'
 import { useEnumsStore } from '../../hooks/useEnums'
 import { useToastStore } from '../../stores/toastStore'
 import Modal from '../../components/ui/Modal'
@@ -110,7 +109,7 @@ function emptyForm() {
     recurrenceType: 'monthly_by_date',
     recurrenceConfig: { day: 1 },
     deadlineOffsetDays: 0,
-    checklist: [],   // KPI v2: checklist RIÊNG của lịch (draft: [{_key, stepText, level, difficulty, points, isImportant, sourceTemplateStepId}])
+    checklist: [],   // KPI v2: checklist RIÊNG của lịch (draft: [{_key, stepText, level, points, isImportant, sourceTemplateStepId}])
     subtasks: [],    // KPI v2: VIỆC CON của lịch (draft: [{_key, title, startOffset, deadlineOffset, sourceTemplateSubtaskId, items:[...]}])
     notes: '',
   }
@@ -122,14 +121,14 @@ function clKey() { return `cl_${Date.now()}_${_clSeq++}` }
 function mapTemplateToDraft(steps) {
   return (steps || []).map((s) => ({
     _key: clKey(), stepText: s.stepText, level: s.level ?? 0,
-    difficulty: s.difficulty ?? 'trung_binh', points: s.points ?? 4,
+    points: s.points ?? 4,
     isImportant: !!s.isImportant, sourceTemplateStepId: s.id ?? null,
   }))
 }
 function mapScheduleToDraft(items) {
   return (items || []).map((it) => ({
     _key: clKey(), stepText: it.stepText, level: it.level ?? 0,
-    difficulty: it.difficulty ?? 'trung_binh', points: it.points ?? 4,
+    points: it.points ?? 4,
     isImportant: !!it.isImportant, sourceTemplateStepId: it.sourceTemplateStepId ?? null,
   }))
 }
@@ -137,7 +136,7 @@ function mapScheduleToDraft(items) {
 // ── VIỆC CON của lịch: helper draft ──────────────────────────────────────────
 let _subSeq = 0
 function subKey() { return `sub_${Date.now()}_${_subSeq++}` }
-// Từ MẪU (getSubtaskTemplates → {title, dueOffsetDays, steps:[{stepText,level,difficulty,points,isImportant,id}]})
+// Từ MẪU (getSubtaskTemplates → {title, dueOffsetDays, steps:[{stepText,level,points,isImportant,id}]})
 function mapTemplateSubsToDraft(subs) {
   return (subs || []).map((sub) => ({
     _key: subKey(), title: sub.title || '', startOffset: 0, deadlineOffset: sub.dueOffsetDays ?? 0,
@@ -157,7 +156,7 @@ function newSubtaskDraft() {
   return { _key: subKey(), title: '', startOffset: 0, deadlineOffset: 0, sourceTemplateSubtaskId: null, items: [] }
 }
 function newSubStepDraft() {
-  return { _key: clKey(), stepText: '', level: 0, difficulty: 'trung_binh', points: 4, isImportant: false, sourceTemplateStepId: null }
+  return { _key: clKey(), stepText: '', level: 0, points: 4, isImportant: false, sourceTemplateStepId: null }
 }
 
 function defaultConfig(type) {
@@ -545,13 +544,11 @@ function cloneSubtaskDraft(sub) {
   return { ...sub, items: (sub.items || []).map((it) => ({ ...it })) }
 }
 
-// Hiển thị điểm/độ khó/★ CHỈ ĐỌC cho nhân viên (không phải admin) — cơ sở KPI do admin đặt.
-function ReadonlyScore({ it, diffOptions }) {
-  const label = diffOptionsOr(diffOptions).find((o) => o.key === it.difficulty)?.label || it.difficulty || '—'
+// Hiển thị điểm/★ CHỈ ĐỌC cho nhân viên (không phải admin) — cơ sở KPI do admin đặt.
+function ReadonlyScore({ it }) {
   return (
     <>
       {it.isImportant && <Star size={13} fill="currentColor" style={{ color: '#f59e0b' }} title="Bước quan trọng (admin đặt)" />}
-      <span className={s.scDeadlineTag} title="Độ khó — admin đặt">{label}</span>
       <span className={s.scDeadlineTag} title="Điểm — admin đặt">{Number(it.points) || 0}đ</span>
     </>
   )
@@ -606,8 +603,8 @@ function SubtaskList({ subtasks, onAdd, onEdit, onRemove, onResetFromTemplate, s
   )
 }
 
-// ── Popup THÊM/SỬA 1 việc con: tên + offset + checklist riêng (độ khó/điểm/★) ──
-function SubtaskFormModal({ initial, isNew, diffOptions, subPreviewOcc, previewSubDate, canScore = true, onCancel, onSave }) {
+// ── Popup THÊM/SỬA 1 việc con: tên + offset + checklist riêng (điểm/★) ──
+function SubtaskFormModal({ initial, isNew, subPreviewOcc, previewSubDate, canScore = true, onCancel, onSave }) {
   const [draft, setDraft] = useState(() => cloneSubtaskDraft(initial))
   const [err, setErr] = useState('')
 
@@ -616,9 +613,7 @@ function SubtaskFormModal({ initial, isNew, diffOptions, subPreviewOcc, previewS
     ...d,
     items: d.items.map((it, k) => {
       if (k !== j) return it
-      const nx = { ...it, [field]: value }
-      if (field === 'difficulty') nx.points = defaultPointsFor(value)
-      return nx
+      return { ...it, [field]: value }
     }),
   }))
   const addItem = () => setDraft((d) => ({ ...d, items: [...d.items, { ...newSubStepDraft(), points: canScore ? 4 : 0 }] }))
@@ -697,8 +692,8 @@ function SubtaskFormModal({ initial, isNew, diffOptions, subPreviewOcc, previewS
         </label>
         <div className={s.scStepPickHint}>
           {canScore
-            ? <>Đổi độ khó (tự gợi ý điểm) hoặc nhập điểm tay. <b>★</b> = bước quan trọng (hiện mặc định ở báo cáo).</>
-            : <><b>Độ khó/điểm/★ do Quản trị viên đặt</b> — bước bạn thêm mới sẽ 0đ đến khi admin chấm.</>}
+            ? <>Nhập điểm cho từng bước. <b>★</b> = bước quan trọng (hiện mặc định ở báo cáo).</>
+            : <><b>Điểm/★ do Quản trị viên đặt</b> — bước bạn thêm mới sẽ 0đ đến khi admin chấm.</>}
         </div>
         <div className={s.scClList}>
           {draft.items.length === 0 && <div className={s.scClEmpty}>Chưa có bước nào. Bấm “+ Thêm bước”.</div>}
@@ -717,14 +712,11 @@ function SubtaskFormModal({ initial, isNew, diffOptions, subPreviewOcc, previewS
                   <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setItemField(j, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>
                     <Star size={13} fill={it.isImportant ? 'currentColor' : 'none'} />
                   </button>
-                  <select className={s.scClDiff} value={it.difficulty} onChange={(e) => setItemField(j, 'difficulty', e.target.value)} title="Độ khó">
-                    {diffOptionsOr(diffOptions).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                  </select>
                   <input type="number" min={0} max={100} className={s.scClPoints} value={it.points} onChange={(e) => setItemField(j, 'points', e.target.value)} title="Điểm" />
                   <span className={s.scClUnit}>đ</span>
                 </>
               ) : (
-                <ReadonlyScore it={it} diffOptions={diffOptions} />
+                <ReadonlyScore it={it} />
               )}
               <button type="button" className={s.scClDel} onClick={() => removeItem(j)} title="Xoá bước"><Trash2 size={13} /></button>
             </div>
@@ -815,7 +807,6 @@ export default function SchedulesTab({ company, isAdmin = false }) {
   const canScore = isAdmin   // độ khó/điểm/★ (cơ sở KPI) chỉ admin đặt; NV xem read-only
   const confirmDelete = useDeleteConfirm()
   const toast = useToastStore(st => st.toast)
-  const diffOptions = useEnumsStore((st) => st.getOptions)('checklist_difficulty')
 
   const [schedules,  setSchedules]  = useState([])
   const [loading,    setLoading]    = useState(true)
@@ -909,16 +900,13 @@ export default function SchedulesTab({ company, isAdmin = false }) {
   function setClField(idx, field, value) {
     setForm((f) => {
       const cl = f.checklist.slice()
-      const it = { ...cl[idx], [field]: value }
-      // Đổi độ khó → gợi ý điểm mặc định (vẫn cho sửa sau).
-      if (field === 'difficulty') it.points = defaultPointsFor(value)
-      cl[idx] = it
+      cl[idx] = { ...cl[idx], [field]: value }
       return { ...f, checklist: cl }
     })
   }
   function addClRow() {
     setForm((f) => ({ ...f, checklist: [...f.checklist, {
-      _key: clKey(), stepText: '', level: 0, difficulty: 'trung_binh',
+      _key: clKey(), stepText: '', level: 0,
       points: canScore ? 4 : 0, isImportant: false, sourceTemplateStepId: null,
     }] }))
   }
@@ -1102,7 +1090,6 @@ export default function SchedulesTab({ company, isAdmin = false }) {
           .filter((it) => it.stepText && it.stepText.trim())
           .map((it) => ({
             stepText: it.stepText.trim(), level: it.level === 1 ? 1 : 0,
-            difficulty: it.difficulty || 'trung_binh',
             points: Math.max(0, Number(it.points) || 0),
             isImportant: !!it.isImportant,
             sourceTemplateStepId: it.sourceTemplateStepId ?? null,
@@ -1115,7 +1102,6 @@ export default function SchedulesTab({ company, isAdmin = false }) {
       .filter((it) => it.stepText && it.stepText.trim())
       .map((it) => ({
         stepText: it.stepText.trim(), level: it.level === 1 ? 1 : 0,
-        difficulty: it.difficulty || 'trung_binh',
         points: Math.max(0, Number(it.points) || 0),
         isImportant: !!it.isImportant,
         sourceTemplateStepId: it.sourceTemplateStepId ?? null,
@@ -1570,14 +1556,11 @@ export default function SchedulesTab({ company, isAdmin = false }) {
                             <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setClField(idx, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>
                               <Star size={13} fill={it.isImportant ? 'currentColor' : 'none'} />
                             </button>
-                            <select className={s.scClDiff} value={it.difficulty} onChange={(e) => setClField(idx, 'difficulty', e.target.value)} title="Độ khó">
-                              {diffOptionsOr(diffOptions).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                            </select>
                             <input type="number" min={0} max={100} className={s.scClPoints} value={it.points} onChange={(e) => setClField(idx, 'points', e.target.value)} title="Điểm" />
                             <span className={s.scClUnit}>đ</span>
                           </>
                         ) : (
-                          <ReadonlyScore it={it} diffOptions={diffOptions} />
+                          <ReadonlyScore it={it} />
                         )}
                         <button type="button" className={s.scClDel} onClick={() => removeClRow(idx)} title="Xoá bước"><Trash2 size={13} /></button>
                       </div>
@@ -1727,7 +1710,6 @@ export default function SchedulesTab({ company, isAdmin = false }) {
         <SubtaskFormModal
           initial={subEdit.draft}
           isNew={subEdit.index === -1}
-          diffOptions={diffOptions}
           subPreviewOcc={subPreviewOcc}
           previewSubDate={previewSubDate}
           canScore={canScore}

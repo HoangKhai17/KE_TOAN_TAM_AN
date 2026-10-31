@@ -310,7 +310,6 @@ function ChecklistTab({ taskId, companyId, companyName, onCountChange, onTaskCha
             <>
               <span className={`${s.checklistText} ${isParent ? s.checklistTextParent : ''} ${(!isParent && item.isCompleted) ? s.checklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>{item.stepText}</span>
               {item.isImportant && <span className={s.clItemStar} title="Bước quan trọng">★</span>}
-              {item.difficulty && <span className={`${s.clItemDiff} ${s[`clItemDiff_${item.difficulty}`] || ''}`} title="Độ khó">{getLabel('checklist_difficulty', item.difficulty)}</span>}
               {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
               <div className={s.checklistItemActions}>
                 <button className={`${s.btnIcon} ${s.clMove}`} onClick={() => toggleLevel(item)} title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>

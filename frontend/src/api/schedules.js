@@ -45,7 +45,7 @@ export async function getScheduleChecklist(id) {
   const { data } = await api.get(`/schedules/${id}/checklist`)
   return data.data.checklist
 }
-// Ghi đè toàn bộ checklist của lịch (items = [{stepText, level?, difficulty?, points?, isImportant?, sourceTemplateStepId?}])
+// Ghi đè toàn bộ checklist của lịch (items = [{stepText, level?, points?, isImportant?, sourceTemplateStepId?}])
 export async function replaceScheduleChecklist(id, items) {
   const { data } = await api.put(`/schedules/${id}/checklist`, { items })
   return data.data.checklist
@@ -57,7 +57,7 @@ export async function getScheduleSubtasks(id) {
   return data.data.subtasks
 }
 // Ghi đè toàn bộ việc con của lịch. subtasks = [{title, startOffset?, deadlineOffset?,
-//   sourceTemplateSubtaskId?, items?: [{stepText, level?, difficulty?, points?, isImportant?, sourceTemplateStepId?}]}]
+//   sourceTemplateSubtaskId?, items?: [{stepText, level?, points?, isImportant?, sourceTemplateStepId?}]}]
 export async function replaceScheduleSubtasks(id, subtasks) {
   const { data } = await api.put(`/schedules/${id}/subtasks`, { subtasks })
   return data.data.subtasks

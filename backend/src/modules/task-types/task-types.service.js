@@ -1,20 +1,8 @@
 const { query, getClient } = require('../../config/db')
 const audit = require('../../lib/audit')
-const enums = require('../../lib/enums')
 
-// KPI v2 · điểm gợi ý theo độ khó checklist (Dễ=2 / Trung bình=4 / Khó=6).
-const CHECKLIST_POINTS_BY_DIFFICULTY = { de: 2, trung_binh: 4, kho: 6 }
-function defaultPointsFor(difficulty) {
-  return CHECKLIST_POINTS_BY_DIFFICULTY[difficulty] ?? 4
-}
-// Độ khó phải là 1 mã hợp lệ của enum động 'checklist_difficulty'.
-async function assertDifficulty(v) {
-  if (v == null) return
-  const valid = await enums.getValues('checklist_difficulty')
-  if (!valid.includes(String(v))) {
-    throw Object.assign(new Error(`Độ khó checklist không hợp lệ: ${v}`), { status: 422 })
-  }
-}
+// Điểm mặc định cho 1 bước checklist khi không nhập điểm.
+const DEFAULT_CHECKLIST_POINTS = 4
 
 function toTaskTypeDto(row) {
   return {
@@ -36,7 +24,6 @@ function toStepDto(row) {
     stepOrder:   row.step_order,
     stepText:    row.step_text,
     level:       row.level ?? 0,
-    difficulty:  row.difficulty ?? 'trung_binh',
     points:      row.points ?? 4,
     isImportant: row.is_important ?? false,
     createdAt:   row.created_at,
@@ -47,7 +34,7 @@ function toStepDto(row) {
 function toSubStepDto(row) {
   return {
     id: row.id, stepText: row.step_text, stepOrder: row.step_order, level: row.level ?? 0,
-    difficulty: row.difficulty ?? 'trung_binh', points: row.points ?? 4, isImportant: row.is_important ?? false,
+    points: row.points ?? 4, isImportant: row.is_important ?? false,
   }
 }
 function toSubtaskDto(row, steps = []) {
@@ -263,32 +250,28 @@ async function getChecklist(taskTypeId) {
 
 async function addChecklistStep(taskTypeId, data = {}) {
   await assertTaskTypeExists(taskTypeId)
-  const { stepText, level = 0, difficulty = 'trung_binh', isImportant = false } = data
-  await assertDifficulty(difficulty)
-  // Không nhập điểm → lấy điểm gợi ý theo độ khó.
-  const points = data.points != null ? Number(data.points) : defaultPointsFor(difficulty)
+  const { stepText, level = 0, isImportant = false } = data
+  const points = data.points != null ? Number(data.points) : DEFAULT_CHECKLIST_POINTS
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_checklist_templates WHERE task_type_id = $1',
     [taskTypeId]
   )
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [step] } = await query(
-    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text, level, difficulty, points, is_important)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0, difficulty, points, !!isImportant]
+    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text, level, points, is_important)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0, points, !!isImportant]
   )
   return toStepDto(step)
 }
 
 async function updateChecklistStep(taskTypeId, stepId, data) {
   await assertTaskTypeExists(taskTypeId)
-  if (data.difficulty !== undefined) await assertDifficulty(data.difficulty)
   const updates = []
   const params = []
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
   if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
-  if (data.difficulty !== undefined) { params.push(data.difficulty); updates.push(`difficulty = $${params.length}`) }
   if (data.points !== undefined) { params.push(Number(data.points)); updates.push(`points = $${params.length}`) }
   if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
 
@@ -385,15 +368,15 @@ async function assertSubtask(taskTypeId, subtaskId) {
 
 async function addSubtaskStep(taskTypeId, subtaskId, data = {}) {
   await assertSubtask(taskTypeId, subtaskId)
-  const { stepText, level = 0, difficulty = 'trung_binh', isImportant = false } = data
-  const points = data.points != null ? Math.max(0, Number(data.points) || 0) : defaultPointsFor(difficulty)
+  const { stepText, level = 0, isImportant = false } = data
+  const points = data.points != null ? Math.max(0, Number(data.points) || 0) : DEFAULT_CHECKLIST_POINTS
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_subtask_steps WHERE subtask_template_id = $1', [subtaskId])
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [row] } = await query(
-    `INSERT INTO task_type_subtask_steps (subtask_template_id, step_order, step_text, level, difficulty, points, is_important)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [subtaskId, nextOrder, stepText, level === 1 ? 1 : 0, difficulty, points, !!isImportant])
+    `INSERT INTO task_type_subtask_steps (subtask_template_id, step_order, step_text, level, points, is_important)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [subtaskId, nextOrder, stepText, level === 1 ? 1 : 0, points, !!isImportant])
   return toSubStepDto(row)
 }
 
@@ -403,7 +386,6 @@ async function updateSubtaskStep(taskTypeId, subtaskId, stepId, data) {
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
   if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
-  if (data.difficulty !== undefined) { params.push(data.difficulty); updates.push(`difficulty = $${params.length}`) }
   if (data.points !== undefined) { params.push(Math.max(0, Number(data.points) || 0)); updates.push(`points = $${params.length}`) }
   if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })

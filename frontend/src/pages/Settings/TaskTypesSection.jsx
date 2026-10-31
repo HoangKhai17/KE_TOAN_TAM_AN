@@ -15,7 +15,6 @@ import { CSS } from '@dnd-kit/utilities'
 import Modal from '../../components/ui/Modal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useToastStore } from '../../stores/toastStore'
-import { diffOptionsOr, defaultPointsFor } from '../../utils/checklistDifficulty'
 import { useEnumsStore } from '../../hooks/useEnums'
 import {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
@@ -305,7 +304,7 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
 // ── Checklist Panel ───────────────────────────────────────────────────────────
 
 function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel,
-  withPoints, diffOptions, onChangeDifficulty, onChangePoints, onToggleImportant }) {
+  withPoints, onChangePoints, onToggleImportant }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: step.id })
 
@@ -366,14 +365,6 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
                 onClick={() => onToggleImportant(step)}
                 title={step.isImportant ? 'Bỏ đánh dấu quan trọng' : 'Đánh dấu quan trọng (★)'}
               >★</button>
-              <select
-                className={s.clDiffSelect}
-                value={step.difficulty ?? 'trung_binh'}
-                onChange={(e) => onChangeDifficulty(step, e.target.value)}
-                title="Độ khó"
-              >
-                {diffOptionsOr(diffOptions).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-              </select>
               <input
                 type="number" min={0} max={100}
                 className={s.clPointsInput}
@@ -405,7 +396,6 @@ const DEFAULT_CL_API = {
 function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, addPlaceholder, withPoints }) {
   const A = api ?? DEFAULT_CL_API
   const addToast = useToastStore((st) => st.toast)
-  const diffOptions = useEnumsStore((st) => st.getOptions)('checklist_difficulty')
   const [items, setItems]       = useState(checklist)
   const [saving, setSaving]     = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -457,13 +447,6 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, ad
     setSaving(false)
   }
 
-  // Đổi độ khó → gợi ý điểm mặc định (vẫn cho sửa điểm sau).
-  async function handleChangeDifficulty(step, difficulty) {
-    setSaving(true)
-    try { await A.update(taskTypeId, step.id, { difficulty, points: defaultPointsFor(difficulty) }); onRefresh() }
-    catch { addToast('Không thể đổi độ khó', 'error') }
-    setSaving(false)
-  }
   async function handleChangePoints(step, value) {
     setSaving(true)
     try { await A.update(taskTypeId, step.id, { points: Math.max(0, Number(value) || 0) }); onRefresh() }
@@ -505,8 +488,6 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, ad
               onDelete={() => handleDelete(step.id)}
               onToggleLevel={() => handleToggleLevel(step)}
               withPoints={withPoints}
-              diffOptions={diffOptions}
-              onChangeDifficulty={handleChangeDifficulty}
               onChangePoints={handleChangePoints}
               onToggleImportant={handleToggleImportant}
             />

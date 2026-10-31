@@ -1,17 +1,8 @@
 const { query } = require('../../config/db')
 const audit = require('../../lib/audit')
-const enums = require('../../lib/enums')
 
-// KPI v2 · điểm gợi ý theo độ khó (khớp task-types.service + FE).
-const CHECKLIST_POINTS_BY_DIFFICULTY = { de: 2, trung_binh: 4, kho: 6 }
-function defaultPointsFor(difficulty) { return CHECKLIST_POINTS_BY_DIFFICULTY[difficulty] ?? 4 }
-async function assertDifficulty(v) {
-  if (v == null) return
-  const valid = await enums.getValues('checklist_difficulty')
-  if (!valid.includes(String(v))) {
-    throw Object.assign(new Error(`Độ khó checklist không hợp lệ: ${v}`), { status: 422 })
-  }
-}
+// Điểm mặc định cho 1 bước checklist khi không nhập điểm.
+const DEFAULT_CHECKLIST_POINTS = 4
 function toScheduleStepDto(row) {
   return {
     id:          row.id,
@@ -19,7 +10,6 @@ function toScheduleStepDto(row) {
     stepOrder:   row.step_order,
     stepText:    row.step_text,
     level:       row.level ?? 0,
-    difficulty:  row.difficulty ?? 'trung_binh',
     points:      row.points ?? 4,
     isImportant: row.is_important ?? false,
     sourceTemplateStepId: row.source_template_step_id ?? null,
@@ -155,7 +145,7 @@ async function listSchedules(companyId) {
 async function seedScheduleChecklistFromTemplate(scheduleId, taskTypeId, excludedStepIds = []) {
   const excluded = new Set((Array.isArray(excludedStepIds) ? excludedStepIds : []).map(String))
   const { rows: tpl } = await query(
-    `SELECT id, step_order, step_text, level, difficulty, points, is_important
+    `SELECT id, step_order, step_text, level, points, is_important
      FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order`,
     [taskTypeId]
   )
@@ -165,9 +155,9 @@ async function seedScheduleChecklistFromTemplate(scheduleId, taskTypeId, exclude
     order += 1
     await query(
       `INSERT INTO schedule_checklist_items
-         (schedule_id, step_order, step_text, level, difficulty, points, is_important, source_template_step_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scheduleId, order, t.step_text, t.level ?? 0, t.difficulty ?? 'trung_binh',
+         (schedule_id, step_order, step_text, level, points, is_important, source_template_step_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scheduleId, order, t.step_text, t.level ?? 0,
        t.points ?? 4, !!t.is_important, t.id]
     )
   }
@@ -189,27 +179,24 @@ async function addScheduleChecklistItem(scheduleId, data, user) {
   await assertScheduleAccess(scheduleId, user)
   const isAdmin = user?.role === 'admin'
   const { stepText, level = 0 } = data
-  // Non-admin KHÔNG đặt điểm/độ khó/★ (cơ sở KPI) → bước mới 0đ, chờ admin chấm.
-  const difficulty = isAdmin ? (data.difficulty ?? 'trung_binh') : 'trung_binh'
+  // Non-admin KHÔNG đặt điểm/★ (cơ sở KPI) → bước mới 0đ, chờ admin chấm.
   const isImportant = isAdmin ? !!data.isImportant : false
-  await assertDifficulty(difficulty)
-  const points = !isAdmin ? 0 : (data.points != null ? Number(data.points) : defaultPointsFor(difficulty))
+  const points = !isAdmin ? 0 : (data.points != null ? Number(data.points) : DEFAULT_CHECKLIST_POINTS)
   const { rows: [{ max }] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM schedule_checklist_items WHERE schedule_id = $1', [scheduleId])
   const { rows: [row] } = await query(
     `INSERT INTO schedule_checklist_items
-       (schedule_id, step_order, step_text, level, difficulty, points, is_important)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [scheduleId, parseInt(max, 10) + 1, stepText, level === 1 ? 1 : 0, difficulty, points, !!isImportant])
+       (schedule_id, step_order, step_text, level, points, is_important)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [scheduleId, parseInt(max, 10) + 1, stepText, level === 1 ? 1 : 0, points, !!isImportant])
   return toScheduleStepDto(row)
 }
 
 async function updateScheduleChecklistItem(scheduleId, itemId, data, user) {
   await assertScheduleAccess(scheduleId, user)
-  // Non-admin không được sửa điểm/độ khó/★ (cơ sở KPI) → gỡ khỏi payload.
-  if (user?.role !== 'admin') { data = { ...data }; delete data.difficulty; delete data.points; delete data.isImportant }
-  if (data.difficulty !== undefined) await assertDifficulty(data.difficulty)
-  const map = { stepText: 'step_text', stepOrder: 'step_order', difficulty: 'difficulty',
+  // Non-admin không được sửa điểm/★ (cơ sở KPI) → gỡ khỏi payload.
+  if (user?.role !== 'admin') { data = { ...data }; delete data.points; delete data.isImportant }
+  const map = { stepText: 'step_text', stepOrder: 'step_order',
     points: 'points', isImportant: 'is_important' }
   const updates = []; const params = []
   for (const [k, col] of Object.entries(map)) {
@@ -254,37 +241,37 @@ async function reorderScheduleChecklist(scheduleId, items, user) {
 // hoặc từ giá trị đã lưu (khớp nội dung+cấp); bước NV tự thêm MỚI → 0đ (chờ admin chấm).
 function scoreKeyOf(text, level) { return `${String(text || '').trim().toLowerCase()}|${level === 1 ? 1 : 0}` }
 function pickScore(row) {
-  return { difficulty: row?.difficulty ?? 'trung_binh', points: row?.points ?? 0, isImportant: !!row?.is_important }
+  return { points: row?.points ?? 0, isImportant: !!row?.is_important }
 }
 async function buildChecklistScoreResolver(scheduleId, taskTypeId) {
   const { rows: tpl } = await query(
-    'SELECT id, difficulty, points, is_important FROM task_type_checklist_templates WHERE task_type_id = $1', [taskTypeId])
+    'SELECT id, points, is_important FROM task_type_checklist_templates WHERE task_type_id = $1', [taskTypeId])
   const byTpl = new Map(tpl.map((t) => [String(t.id), t]))
   const { rows: cur } = await query(
-    'SELECT step_text, level, difficulty, points, is_important FROM schedule_checklist_items WHERE schedule_id = $1', [scheduleId])
+    'SELECT step_text, level, points, is_important FROM schedule_checklist_items WHERE schedule_id = $1', [scheduleId])
   const byKey = new Map(cur.map((r) => [scoreKeyOf(r.step_text, r.level), r]))
   return (it) => {
     const src = it.sourceTemplateStepId != null ? byTpl.get(String(it.sourceTemplateStepId)) : null
     const match = src || byKey.get(scoreKeyOf(it.stepText, it.level))
-    return match ? pickScore(match) : { difficulty: 'trung_binh', points: 0, isImportant: false }
+    return match ? pickScore(match) : { points: 0, isImportant: false }
   }
 }
 async function buildSubtaskItemScoreResolver(scheduleId, taskTypeId) {
   const { rows: tpl } = await query(
-    `SELECT sts.id, sts.difficulty, sts.points, sts.is_important
+    `SELECT sts.id, sts.points, sts.is_important
      FROM task_type_subtask_steps sts
      JOIN task_type_subtask_templates t ON t.id = sts.subtask_template_id
      WHERE t.task_type_id = $1`, [taskTypeId])
   const byTpl = new Map(tpl.map((t) => [String(t.id), t]))
   const { rows: cur } = await query(
-    `SELECT i.step_text, i.level, i.difficulty, i.points, i.is_important
+    `SELECT i.step_text, i.level, i.points, i.is_important
      FROM schedule_subtask_items i JOIN schedule_subtasks ss ON ss.id = i.schedule_subtask_id
      WHERE ss.schedule_id = $1`, [scheduleId])
   const byKey = new Map(cur.map((r) => [scoreKeyOf(r.step_text, r.level), r]))
   return (it) => {
     const src = it.sourceTemplateStepId != null ? byTpl.get(String(it.sourceTemplateStepId)) : null
     const match = src || byKey.get(scoreKeyOf(it.stepText, it.level))
-    return match ? pickScore(match) : { difficulty: 'trung_binh', points: 0, isImportant: false }
+    return match ? pickScore(match) : { points: 0, isImportant: false }
   }
 }
 async function scheduleTaskTypeId(scheduleId) {
@@ -297,26 +284,24 @@ async function replaceScheduleChecklist(scheduleId, items, user) {
   await assertScheduleAccess(scheduleId, user)
   const isAdmin = user?.role === 'admin'
   const list = Array.isArray(items) ? items : []
-  if (isAdmin) { for (const it of list) { if (it.difficulty != null) await assertDifficulty(it.difficulty) } }
   // Non-admin: dựng resolver TRƯỚC khi xoá (đọc giá trị điểm hiện có/ mẫu).
   const resolve = isAdmin ? null : await buildChecklistScoreResolver(scheduleId, await scheduleTaskTypeId(scheduleId))
   await query('DELETE FROM schedule_checklist_items WHERE schedule_id = $1', [scheduleId])
   let order = 0
   for (const it of list) {
     order += 1
-    let difficulty, points, isImportant
+    let points, isImportant
     if (isAdmin) {
-      difficulty = it.difficulty || 'trung_binh'
-      points = it.points != null ? Math.max(0, Number(it.points) || 0) : defaultPointsFor(difficulty)
+      points = it.points != null ? Math.max(0, Number(it.points) || 0) : DEFAULT_CHECKLIST_POINTS
       isImportant = !!it.isImportant
     } else {
-      ({ difficulty, points, isImportant } = resolve(it))   // client KHÔNG đặt được điểm
+      ({ points, isImportant } = resolve(it))   // client KHÔNG đặt được điểm
     }
     await query(
       `INSERT INTO schedule_checklist_items
-         (schedule_id, step_order, step_text, level, difficulty, points, is_important, source_template_step_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scheduleId, order, it.stepText, it.level === 1 ? 1 : 0, difficulty, points, isImportant,
+         (schedule_id, step_order, step_text, level, points, is_important, source_template_step_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scheduleId, order, it.stepText, it.level === 1 ? 1 : 0, points, isImportant,
        it.sourceTemplateStepId ?? null])
   }
   return listScheduleChecklist(scheduleId)
@@ -336,7 +321,7 @@ async function resetScheduleChecklistFromTemplate(scheduleId, user) {
 function toScheduleSubtaskItemDto(r) {
   return {
     id: r.id, stepOrder: r.step_order, stepText: r.step_text, level: r.level ?? 0,
-    difficulty: r.difficulty ?? 'trung_binh', points: r.points ?? 4, isImportant: r.is_important ?? false,
+    points: r.points ?? 4, isImportant: r.is_important ?? false,
     sourceTemplateStepId: r.source_template_step_id ?? null,
   }
 }
@@ -380,9 +365,9 @@ async function seedScheduleSubtasksFromTemplate(scheduleId, taskTypeId) {
     for (const st of steps) {
       order += 1
       await query(
-        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, difficulty, points, is_important, source_template_step_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [sub.id, order, st.step_text, st.level ?? 0, st.difficulty ?? 'trung_binh', st.points ?? 4, !!st.is_important, st.id])
+        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, points, is_important, source_template_step_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [sub.id, order, st.step_text, st.level ?? 0, st.points ?? 4, !!st.is_important, st.id])
     }
   }
 }
@@ -392,8 +377,7 @@ async function replaceScheduleSubtasks(scheduleId, subtasks, user) {
   await assertScheduleAccess(scheduleId, user)
   const isAdmin = user?.role === 'admin'
   const list = Array.isArray(subtasks) ? subtasks : []
-  if (isAdmin) { for (const sub of list) for (const it of (sub.items || [])) if (it.difficulty != null) await assertDifficulty(it.difficulty) }
-  // Non-admin: dựng resolver TRƯỚC khi xoá — điểm/độ khó/★ khoá theo mẫu/giá trị đã lưu; bước mới → 0đ.
+  // Non-admin: dựng resolver TRƯỚC khi xoá — điểm/★ khoá theo mẫu/giá trị đã lưu; bước mới → 0đ.
   const resolve = isAdmin ? null : await buildSubtaskItemScoreResolver(scheduleId, await scheduleTaskTypeId(scheduleId))
   await query('DELETE FROM schedule_subtasks WHERE schedule_id = $1', [scheduleId])   // cascade items
   let so = 0
@@ -410,18 +394,17 @@ async function replaceScheduleSubtasks(scheduleId, subtasks, user) {
     for (const it of (sub.items || [])) {
       if (!it.stepText || !String(it.stepText).trim()) continue
       io += 1
-      let difficulty, points, isImportant
+      let points, isImportant
       if (isAdmin) {
-        difficulty = it.difficulty || 'trung_binh'
-        points = it.points != null ? Math.max(0, Number(it.points) || 0) : defaultPointsFor(difficulty)
+        points = it.points != null ? Math.max(0, Number(it.points) || 0) : DEFAULT_CHECKLIST_POINTS
         isImportant = !!it.isImportant
       } else {
-        ({ difficulty, points, isImportant } = resolve({ ...it, stepText: String(it.stepText).trim() }))
+        ({ points, isImportant } = resolve({ ...it, stepText: String(it.stepText).trim() }))
       }
       await query(
-        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, difficulty, points, is_important, source_template_step_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [row.id, io, String(it.stepText).trim(), it.level === 1 ? 1 : 0, difficulty, points, isImportant, it.sourceTemplateStepId ?? null])
+        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, points, is_important, source_template_step_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [row.id, io, String(it.stepText).trim(), it.level === 1 ? 1 : 0, points, isImportant, it.sourceTemplateStepId ?? null])
     }
   }
   return listScheduleSubtasks(scheduleId)

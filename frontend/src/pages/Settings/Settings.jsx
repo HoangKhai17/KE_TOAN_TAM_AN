@@ -1110,11 +1110,11 @@ function TemplatesSection() {
             </div>
           )}
 
-          {/* ── Đồng bộ điểm/độ khó từ cấu hình lịch → task định kỳ đã sinh ── */}
+          {/* ── Đồng bộ điểm từ cấu hình lịch → task định kỳ đã sinh ── */}
           <div className={s.schedulerResult} style={{ marginTop: 18 }}>
             <div className={s.schedulerResultTitle}>Đồng bộ điểm từ cấu hình lịch → task định kỳ đã sinh</div>
             <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-text-soft)', margin: '2px 0 12px', lineHeight: 1.5 }}>
-              Áp <strong>điểm & độ khó</strong> đã cấu hình trên LỊCH xuống các task định kỳ <strong>đã sinh</strong> (theo từng tháng, qua liên kết bước gốc). Chỉ đổi điểm/độ khó — <strong>giữ nguyên</strong> tiến độ/nội dung. Bỏ qua bước thêm thủ công. Nên <strong>xem thử</strong> trước; chạy lại nhiều lần an toàn.
+              Áp <strong>điểm</strong> đã cấu hình trên LỊCH xuống các task định kỳ <strong>đã sinh</strong> (theo từng tháng, qua liên kết bước gốc). Chỉ đổi điểm — <strong>giữ nguyên</strong> tiến độ/nội dung. Bỏ qua bước thêm thủ công. Nên <strong>xem thử</strong> trước; chạy lại nhiều lần an toàn.
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <select value={syncYM.month} onChange={(e) => { setSyncYM((p) => ({ ...p, month: Number(e.target.value) })); setSyncPreview(null); setSyncConfirm(false) }}
