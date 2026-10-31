@@ -15,7 +15,6 @@ import { CSS } from '@dnd-kit/utilities'
 import Modal from '../../components/ui/Modal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useToastStore } from '../../stores/toastStore'
-import { useEnumsStore } from '../../hooks/useEnums'
 import {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
