@@ -1,6 +1,6 @@
 'use strict'
 // KPI THÁNG (Phase C). Tháng CHƯA chốt → tính LIVE từ checklist/tasks. Tháng ĐÃ chốt → đọc snapshot
-// từ kpi_monthly_results (khóa số liệu lịch sử). Điểm khối lượng = Σ điểm bước LEAF đã tick trong
+// từ kpi_monthly_results (khóa số liệu lịch sử). Điểm khối lượng = Σ điểm MỤC CHA đã đạt (rollup) trong
 // tháng (theo completed_at, gom theo người phụ trách). Đúng hạn = task đúng hạn / được giao (due_date
 // trong tháng). "Được giao" & "khối lượng" neo mốc khác nhau — cố ý (đo 2 thứ khác nhau).
 const { query } = require('../../config/db')
@@ -32,17 +32,35 @@ function resolveBounds({ year, month, from, to }) {
   return { start, end, custom: false, rpStart: start, rpEnd: addDays(end, -1) }
 }
 
-// CTE xác định bước LEAF (mục phụ, hoặc mục chính không con) — khớp cách tính tiến độ.
-const LEAF_CTE = `
-  WITH leaf AS (
-    SELECT ci.task_id, ci.points, ci.is_completed, ci.completed_at,
-           NOT (ci.level = 0 AND COALESCE(LEAD(ci.level) OVER (PARTITION BY ci.task_id ORDER BY ci.step_order, ci.id), 0) = 1) AS is_leaf
+// CTE: ĐƠN VỊ CHẤM ĐIỂM = MỤC CHA (level 0). Điểm nằm ở mục cha; mục con (level 1) chỉ là bước phụ.
+// Mỗi mục cha "đạt điểm" theo ROLLUP:
+//   · có con   → khi MỌI con đã tick; mốc hoàn thành = lần tick con cuối (MAX completed_at con)
+//   · không con → theo tick của chính nó.
+// grp_no = số thứ tự nhóm (đếm dồn mục cha) → mọi dòng cùng nhóm (1 cha + các con theo sau) chung grp_no.
+const UNIT_CTE = `
+  WITH ord AS (
+    SELECT ci.task_id, ci.points, ci.level, ci.is_completed, ci.completed_at,
+           SUM(CASE WHEN ci.level = 0 THEN 1 ELSE 0 END)
+             OVER (PARTITION BY ci.task_id ORDER BY ci.step_order, ci.id ROWS UNBOUNDED PRECEDING) AS grp_no
     FROM task_checklist_items ci
+  ),
+  unit AS (
+    SELECT g.task_id,
+           COALESCE(MAX(g.points) FILTER (WHERE g.level = 0), 0) AS points,
+           CASE WHEN COUNT(*) FILTER (WHERE g.level = 1) > 0
+                THEN COALESCE(bool_and(g.is_completed) FILTER (WHERE g.level = 1), FALSE)
+                ELSE COALESCE(bool_or(g.is_completed)  FILTER (WHERE g.level = 0), FALSE) END AS is_completed,
+           CASE WHEN COUNT(*) FILTER (WHERE g.level = 1) > 0
+                THEN MAX(g.completed_at) FILTER (WHERE g.level = 1)
+                ELSE MAX(g.completed_at) FILTER (WHERE g.level = 0) END AS completed_at
+    FROM ord g
+    GROUP BY g.task_id, g.grp_no
+    HAVING bool_or(g.level = 0)   -- bỏ nhóm con mồ côi (không có mục cha đứng trước)
   )`
 
-// Giá trị điểm 1 bước LEAF: task ĐỊNH KỲ (source='auto', được setup) dùng điểm cấu hình;
-// MỌI nguồn khác KHÔNG setup → mỗi bước = 1 điểm. (cần JOIN tasks t trong truy vấn)
-const LEAF_PT = "(CASE WHEN t.source = 'auto' THEN COALESCE(leaf.points, 0) ELSE 1 END)"
+// Giá trị điểm 1 ĐƠN VỊ (mục cha): task ĐỊNH KỲ (source='auto') dùng điểm cấu hình;
+// MỌI nguồn khác → mỗi mục cha = 1 điểm. (cần JOIN tasks t trong truy vấn)
+const UNIT_PT = "(CASE WHEN t.source = 'auto' THEN COALESCE(unit.points, 0) ELSE 1 END)"
 
 async function isMonthClosed(year, month) {
   const { y, m } = monthBounds(year, month)
@@ -64,15 +82,15 @@ async function listLive(year, month, opts = {}) {
   if (role) { params.push(role); uConds.push(`u.role = $${params.length}`) }
   if (Array.isArray(userIds) && userIds.length) { params.push(userIds); uConds.push(`u.id = ANY($${params.length}::uuid[])`) }
   const { rows } = await query(`
-    ${LEAF_CTE},
+    ${UNIT_CTE},
     vol AS (
-      -- Tách: điểm ĐỊNH KỲ (auto, điểm cấu hình) và điểm TASK KHÁC (1đ/bước).
+      -- Tách: điểm ĐỊNH KỲ (auto, điểm cấu hình mục cha) và điểm TASK KHÁC (1đ/mục cha).
       SELECT t.assigned_to AS user_id,
-             COALESCE(SUM(leaf.points) FILTER (WHERE t.source = 'auto'), 0)::int AS vol_recurring,
+             COALESCE(SUM(unit.points) FILTER (WHERE t.source = 'auto'), 0)::int AS vol_recurring,
              COUNT(*) FILTER (WHERE t.source <> 'auto')::int AS vol_other
-      FROM leaf JOIN tasks t ON t.id = leaf.task_id
-      WHERE leaf.is_leaf AND leaf.is_completed
-        AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date
+      FROM unit JOIN tasks t ON t.id = unit.task_id
+      WHERE unit.is_completed
+        AND unit.completed_at >= $1::date AND unit.completed_at < $2::date
         AND t.assigned_to IS NOT NULL${srcClause}
       GROUP BY t.assigned_to
     ),
@@ -89,15 +107,15 @@ async function listLive(year, month, opts = {}) {
       GROUP BY t.assigned_to
     ),
     poss AS (
-      -- TỔNG điểm có thể đạt trong kỳ (mẫu số cho "đạt/tổng"): cộng TẤT CẢ bước LEAF (xong hay chưa)
-      -- của task đến hạn trong kỳ, CỘNG các bước đã tick trong kỳ của task ngoài kỳ → luôn ≥ điểm đã đạt.
+      -- TỔNG điểm có thể đạt trong kỳ (mẫu số cho "đạt/tổng"): cộng TẤT CẢ mục cha (đạt hay chưa)
+      -- của task đến hạn trong kỳ, CỘNG các mục cha đã đạt trong kỳ của task ngoài kỳ → luôn ≥ điểm đã đạt.
       SELECT t.assigned_to AS user_id,
-             (COALESCE(SUM(leaf.points) FILTER (WHERE t.source = 'auto'), 0)
+             (COALESCE(SUM(unit.points) FILTER (WHERE t.source = 'auto'), 0)
               + COUNT(*) FILTER (WHERE t.source <> 'auto'))::int AS possible_points
-      FROM leaf JOIN tasks t ON t.id = leaf.task_id
-      WHERE leaf.is_leaf AND t.assigned_to IS NOT NULL${srcClause}
+      FROM unit JOIN tasks t ON t.id = unit.task_id
+      WHERE t.assigned_to IS NOT NULL${srcClause}
         AND ( (t.due_date >= $1::date AND t.due_date < $2::date)
-              OR (leaf.is_completed AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date) )
+              OR (unit.is_completed AND unit.completed_at >= $1::date AND unit.completed_at < $2::date) )
       GROUP BY t.assigned_to
     )
     SELECT u.id AS user_id, u.name AS user_name, u.job_title,
@@ -165,28 +183,28 @@ async function detailLive(year, month, userId, opts = {}) {
   const p = [start, end, userId]
   const [byCompany, byType, bySource, byStatus] = await Promise.all([
     query(`
-      ${LEAF_CTE}
-      SELECT c.id AS key, c.name AS label, COALESCE(SUM(${LEAF_PT}),0)::int AS volume_points
-      FROM leaf JOIN tasks t ON t.id = leaf.task_id JOIN companies c ON c.id = t.company_id
-      WHERE leaf.is_leaf AND leaf.is_completed
-        AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date AND t.assigned_to = $3
+      ${UNIT_CTE}
+      SELECT c.id AS key, c.name AS label, COALESCE(SUM(${UNIT_PT}),0)::int AS volume_points
+      FROM unit JOIN tasks t ON t.id = unit.task_id JOIN companies c ON c.id = t.company_id
+      WHERE unit.is_completed
+        AND unit.completed_at >= $1::date AND unit.completed_at < $2::date AND t.assigned_to = $3
       GROUP BY c.id, c.name ORDER BY volume_points DESC`, p),
     query(`
-      ${LEAF_CTE}
+      ${UNIT_CTE}
       SELECT COALESCE(tt.name, t.group_name, '(Không có loại)') AS label,
-             COALESCE(SUM(${LEAF_PT}),0)::int AS volume_points
-      FROM leaf JOIN tasks t ON t.id = leaf.task_id LEFT JOIN task_types tt ON tt.id = t.task_type_id
-      WHERE leaf.is_leaf AND leaf.is_completed
-        AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date AND t.assigned_to = $3
+             COALESCE(SUM(${UNIT_PT}),0)::int AS volume_points
+      FROM unit JOIN tasks t ON t.id = unit.task_id LEFT JOIN task_types tt ON tt.id = t.task_type_id
+      WHERE unit.is_completed
+        AND unit.completed_at >= $1::date AND unit.completed_at < $2::date AND t.assigned_to = $3
       GROUP BY COALESCE(tt.name, t.group_name, '(Không có loại)') ORDER BY volume_points DESC`, p),
     // Tách theo NGUỒN task: định kỳ (auto) vs tự tạo (manual) — số lượng + đã đến hạn + đúng hạn + điểm.
     query(`
-      ${LEAF_CTE},
+      ${UNIT_CTE},
       pts AS (
-        SELECT t.id AS task_id, COALESCE(SUM(${LEAF_PT}),0)::int AS points
-        FROM leaf JOIN tasks t ON t.id = leaf.task_id
-        WHERE leaf.is_leaf AND leaf.is_completed
-          AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date AND t.assigned_to = $3
+        SELECT t.id AS task_id, COALESCE(SUM(${UNIT_PT}),0)::int AS points
+        FROM unit JOIN tasks t ON t.id = unit.task_id
+        WHERE unit.is_completed
+          AND unit.completed_at >= $1::date AND unit.completed_at < $2::date AND t.assigned_to = $3
         GROUP BY t.id
       )
       SELECT t.source AS key,
@@ -232,16 +250,16 @@ async function getDetail(year, month, userId, opts = {}) {
 }
 
 // ── Danh sách TỪNG TASK của 1 NV trong kỳ (điểm khối lượng + đúng hạn) ─────────
-// Gồm task có điểm bước LEAF tick trong tháng (theo completed_at) HOẶC task đến hạn trong tháng.
+// Gồm task có MỤC CHA đạt điểm trong tháng (theo completed_at rollup) HOẶC task đến hạn trong tháng.
 async function getUserTasks(year, month, userId, opts = {}) {
   const { start, end } = resolveBounds({ year, month, from: opts.from, to: opts.to })
   const { rows } = await query(`
-    ${LEAF_CTE},
+    ${UNIT_CTE},
     pts AS (
-      SELECT t.id AS task_id, COALESCE(SUM(${LEAF_PT}), 0)::int AS points
-      FROM leaf JOIN tasks t ON t.id = leaf.task_id
-      WHERE leaf.is_leaf AND leaf.is_completed
-        AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date
+      SELECT t.id AS task_id, COALESCE(SUM(${UNIT_PT}), 0)::int AS points
+      FROM unit JOIN tasks t ON t.id = unit.task_id
+      WHERE unit.is_completed
+        AND unit.completed_at >= $1::date AND unit.completed_at < $2::date
         AND t.assigned_to = $3
       GROUP BY t.id
     )
@@ -416,11 +434,11 @@ async function getPerformance(year, month, opts = {}) {
     }
     // Điểm khối lượng theo (NV × nguồn) — hoàn thành trong kỳ (auto = điểm cấu hình; khác = 1đ/bước).
     const { rows: volAgg } = await query(`
-      ${LEAF_CTE}
-      SELECT t.assigned_to AS user_id, t.source, COALESCE(SUM(${LEAF_PT}),0)::int AS vol
-      FROM leaf JOIN tasks t ON t.id = leaf.task_id
-      WHERE leaf.is_leaf AND leaf.is_completed
-        AND leaf.completed_at >= $1::date AND leaf.completed_at < $2::date
+      ${UNIT_CTE}
+      SELECT t.assigned_to AS user_id, t.source, COALESCE(SUM(${UNIT_PT}),0)::int AS vol
+      FROM unit JOIN tasks t ON t.id = unit.task_id
+      WHERE unit.is_completed
+        AND unit.completed_at >= $1::date AND unit.completed_at < $2::date
         AND t.assigned_to IS NOT NULL${sClause}
       GROUP BY t.assigned_to, t.source`, sp)
     for (const v of volAgg) {

@@ -181,7 +181,8 @@ async function addScheduleChecklistItem(scheduleId, data, user) {
   const { stepText, level = 0 } = data
   // Non-admin KHÔNG đặt điểm/★ (cơ sở KPI) → bước mới 0đ, chờ admin chấm.
   const isImportant = isAdmin ? !!data.isImportant : false
-  const points = !isAdmin ? 0 : (data.points != null ? Number(data.points) : DEFAULT_CHECKLIST_POINTS)
+  // Điểm chỉ ở MỤC CHA (level 0); mục con (level 1) hoặc non-admin → 0đ.
+  const points = (!isAdmin || level === 1) ? 0 : (data.points != null ? Number(data.points) : DEFAULT_CHECKLIST_POINTS)
   const { rows: [{ max }] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM schedule_checklist_items WHERE schedule_id = $1', [scheduleId])
   const { rows: [row] } = await query(
@@ -196,18 +197,15 @@ async function updateScheduleChecklistItem(scheduleId, itemId, data, user) {
   await assertScheduleAccess(scheduleId, user)
   // Non-admin không được sửa điểm/★ (cơ sở KPI) → gỡ khỏi payload.
   if (user?.role !== 'admin') { data = { ...data }; delete data.points; delete data.isImportant }
-  const map = { stepText: 'step_text', stepOrder: 'step_order',
-    points: 'points', isImportant: 'is_important' }
+  // Chuyển thành MỤC CON (level 1) → ép điểm 0 (điểm chỉ ở mục cha).
+  const toChild = data.level === 1
   const updates = []; const params = []
-  for (const [k, col] of Object.entries(map)) {
-    if (data[k] !== undefined) {
-      let v = data[k]
-      if (k === 'points') v = Math.max(0, Number(v) || 0)
-      if (k === 'isImportant') v = !!v
-      params.push(v); updates.push(`${col} = $${params.length}`)
-    }
-  }
-  if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
+  if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
+  if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
+  if (data.level !== undefined) { params.push(toChild ? 1 : 0); updates.push(`level = $${params.length}`) }
+  if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
+  if (toChild) { params.push(0); updates.push(`points = $${params.length}`) }
+  else if (data.points !== undefined) { params.push(Math.max(0, Number(data.points) || 0)); updates.push(`points = $${params.length}`) }
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(itemId, scheduleId)
   const { rows: [row] } = await query(
@@ -292,7 +290,7 @@ async function replaceScheduleChecklist(scheduleId, items, user) {
     order += 1
     let points, isImportant
     if (isAdmin) {
-      points = it.points != null ? Math.max(0, Number(it.points) || 0) : DEFAULT_CHECKLIST_POINTS
+      points = it.level === 1 ? 0 : (it.points != null ? Math.max(0, Number(it.points) || 0) : DEFAULT_CHECKLIST_POINTS)
       isImportant = !!it.isImportant
     } else {
       ({ points, isImportant } = resolve(it))   // client KHÔNG đặt được điểm
@@ -396,7 +394,7 @@ async function replaceScheduleSubtasks(scheduleId, subtasks, user) {
       io += 1
       let points, isImportant
       if (isAdmin) {
-        points = it.points != null ? Math.max(0, Number(it.points) || 0) : DEFAULT_CHECKLIST_POINTS
+        points = it.level === 1 ? 0 : (it.points != null ? Math.max(0, Number(it.points) || 0) : DEFAULT_CHECKLIST_POINTS)
         isImportant = !!it.isImportant
       } else {
         ({ points, isImportant } = resolve({ ...it, stepText: String(it.stepText).trim() }))

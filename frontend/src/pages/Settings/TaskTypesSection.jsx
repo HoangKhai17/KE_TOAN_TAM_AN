@@ -364,15 +364,20 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
                 onClick={() => onToggleImportant(step)}
                 title={step.isImportant ? 'Bỏ đánh dấu quan trọng' : 'Đánh dấu quan trọng (★)'}
               >★</button>
-              <input
-                type="number" min={0} max={100}
-                className={s.clPointsInput}
-                value={pointsDraft}
-                onChange={(e) => setPointsDraft(e.target.value)}
-                onBlur={() => { if (Number(pointsDraft) !== Number(step.points ?? 0)) onChangePoints(step, pointsDraft) }}
-                title="Điểm"
-              />
-              <span className={s.clPointsUnit}>đ</span>
+              {/* Điểm CHỈ ở mục cha (level 0); mục con không có điểm. */}
+              {!isChild && (
+                <>
+                  <input
+                    type="number" min={0} max={100}
+                    className={s.clPointsInput}
+                    value={pointsDraft}
+                    onChange={(e) => setPointsDraft(e.target.value)}
+                    onBlur={() => { if (Number(pointsDraft) !== Number(step.points ?? 0)) onChangePoints(step, pointsDraft) }}
+                    title="Điểm"
+                  />
+                  <span className={s.clPointsUnit}>đ</span>
+                </>
+              )}
             </span>
           )}
           <button className={`${s.clActionBtn} ${s.clDeleteBtn}`} onClick={onDelete} title="Xóa bước">

@@ -251,7 +251,8 @@ async function getChecklist(taskTypeId) {
 async function addChecklistStep(taskTypeId, data = {}) {
   await assertTaskTypeExists(taskTypeId)
   const { stepText, level = 0, isImportant = false } = data
-  const points = data.points != null ? Number(data.points) : DEFAULT_CHECKLIST_POINTS
+  // Điểm nằm ở MỤC CHA (level 0); mục con (level 1) luôn 0đ.
+  const points = level === 1 ? 0 : (data.points != null ? Number(data.points) : DEFAULT_CHECKLIST_POINTS)
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_checklist_templates WHERE task_type_id = $1',
     [taskTypeId]
@@ -271,8 +272,11 @@ async function updateChecklistStep(taskTypeId, stepId, data) {
   const params = []
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
-  if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
-  if (data.points !== undefined) { params.push(Number(data.points)); updates.push(`points = $${params.length}`) }
+  // Khi chuyển thành MỤC CON (level 1) → ép điểm về 0 (điểm chỉ ở mục cha).
+  let forcePointsZero = false
+  if (data.level !== undefined) { const lv = data.level === 1 ? 1 : 0; params.push(lv); updates.push(`level = $${params.length}`); if (lv === 1) forcePointsZero = true }
+  if (forcePointsZero) { params.push(0); updates.push(`points = $${params.length}`) }
+  else if (data.points !== undefined) { params.push(Number(data.points)); updates.push(`points = $${params.length}`) }
   if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
 
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
@@ -369,7 +373,7 @@ async function assertSubtask(taskTypeId, subtaskId) {
 async function addSubtaskStep(taskTypeId, subtaskId, data = {}) {
   await assertSubtask(taskTypeId, subtaskId)
   const { stepText, level = 0, isImportant = false } = data
-  const points = data.points != null ? Math.max(0, Number(data.points) || 0) : DEFAULT_CHECKLIST_POINTS
+  const points = level === 1 ? 0 : (data.points != null ? Math.max(0, Number(data.points) || 0) : DEFAULT_CHECKLIST_POINTS)
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_subtask_steps WHERE subtask_template_id = $1', [subtaskId])
   const nextOrder = parseInt(maxRow.max, 10) + 1
@@ -385,8 +389,10 @@ async function updateSubtaskStep(taskTypeId, subtaskId, stepId, data) {
   const updates = []; const params = []
   if (data.stepText !== undefined) { params.push(data.stepText); updates.push(`step_text = $${params.length}`) }
   if (data.stepOrder !== undefined) { params.push(data.stepOrder); updates.push(`step_order = $${params.length}`) }
-  if (data.level !== undefined) { params.push(data.level === 1 ? 1 : 0); updates.push(`level = $${params.length}`) }
-  if (data.points !== undefined) { params.push(Math.max(0, Number(data.points) || 0)); updates.push(`points = $${params.length}`) }
+  let forcePointsZero = false
+  if (data.level !== undefined) { const lv = data.level === 1 ? 1 : 0; params.push(lv); updates.push(`level = $${params.length}`); if (lv === 1) forcePointsZero = true }
+  if (forcePointsZero) { params.push(0); updates.push(`points = $${params.length}`) }
+  else if (data.points !== undefined) { params.push(Math.max(0, Number(data.points) || 0)); updates.push(`points = $${params.length}`) }
   if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(stepId, subtaskId)

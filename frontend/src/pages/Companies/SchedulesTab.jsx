@@ -548,7 +548,7 @@ function ReadonlyScore({ it }) {
   return (
     <>
       {it.isImportant && <Star size={13} fill="currentColor" style={{ color: '#f59e0b' }} title="Bước quan trọng (admin đặt)" />}
-      <span className={s.scDeadlineTag} title="Điểm — admin đặt">{Number(it.points) || 0}đ</span>
+      {it.level !== 1 && <span className={s.scDeadlineTag} title="Điểm — admin đặt">{Number(it.points) || 0}đ</span>}
     </>
   )
 }
@@ -612,7 +612,9 @@ function SubtaskFormModal({ initial, isNew, subPreviewOcc, previewSubDate, canSc
     ...d,
     items: d.items.map((it, k) => {
       if (k !== j) return it
-      return { ...it, [field]: value }
+      const nx = { ...it, [field]: value }
+      if (field === 'level' && value === 1) nx.points = 0   // con không có điểm
+      return nx
     }),
   }))
   const addItem = () => setDraft((d) => ({ ...d, items: [...d.items, { ...newSubStepDraft(), points: canScore ? 4 : 0 }] }))
@@ -711,8 +713,11 @@ function SubtaskFormModal({ initial, isNew, subPreviewOcc, previewSubDate, canSc
                   <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setItemField(j, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>
                     <Star size={13} fill={it.isImportant ? 'currentColor' : 'none'} />
                   </button>
-                  <input type="number" min={0} max={100} className={s.scClPoints} value={it.points} onChange={(e) => setItemField(j, 'points', e.target.value)} title="Điểm" />
-                  <span className={s.scClUnit}>đ</span>
+                  {/* Điểm chỉ ở mục cha (level 0) */}
+                  {it.level !== 1 && (<>
+                    <input type="number" min={0} max={100} className={s.scClPoints} value={it.points} onChange={(e) => setItemField(j, 'points', e.target.value)} title="Điểm" />
+                    <span className={s.scClUnit}>đ</span>
+                  </>)}
                 </>
               ) : (
                 <ReadonlyScore it={it} />
@@ -899,7 +904,9 @@ export default function SchedulesTab({ company, isAdmin = false }) {
   function setClField(idx, field, value) {
     setForm((f) => {
       const cl = f.checklist.slice()
-      cl[idx] = { ...cl[idx], [field]: value }
+      const it = { ...cl[idx], [field]: value }
+      if (field === 'level' && value === 1) it.points = 0   // con không có điểm
+      cl[idx] = it
       return { ...f, checklist: cl }
     })
   }
@@ -1555,8 +1562,11 @@ export default function SchedulesTab({ company, isAdmin = false }) {
                             <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setClField(idx, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>
                               <Star size={13} fill={it.isImportant ? 'currentColor' : 'none'} />
                             </button>
-                            <input type="number" min={0} max={100} className={s.scClPoints} value={it.points} onChange={(e) => setClField(idx, 'points', e.target.value)} title="Điểm" />
-                            <span className={s.scClUnit}>đ</span>
+                            {/* Điểm chỉ ở mục cha (level 0) */}
+                            {it.level !== 1 && (<>
+                              <input type="number" min={0} max={100} className={s.scClPoints} value={it.points} onChange={(e) => setClField(idx, 'points', e.target.value)} title="Điểm" />
+                              <span className={s.scClUnit}>đ</span>
+                            </>)}
                           </>
                         ) : (
                           <ReadonlyScore it={it} />
