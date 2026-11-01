@@ -21,6 +21,7 @@ import PeriodPicker from '../Tasks/PeriodPicker'
 import { useDataSync } from '../../hooks/useDataSync'
 import { useColFilter, FilterTh, ColFilterPortal } from './useColFilter'
 import ExportPreviewModal from './ExportPreviewModal'
+import { exportXlsx } from '../../utils/exportXlsx'
 import s from './rewardPenalty.module.css'
 
 const CUR_Y = new Date().getFullYear()
@@ -425,7 +426,7 @@ function RulesPanel({ slot, getOptions, enumLabel, onFooter }) {
   const toolbar = (
     <div className={s.toolbar}>
       <button className={s.btnSecondary} onClick={() => setImportOpen(true)}><Upload size={14} /> Nhập Excel</button>
-      <button className={s.btnSecondary} onClick={() => setExportOpen(true)}><Download size={14} /> Xuất Excel</button>
+      <button className={s.btnSecondary} onClick={() => setExportOpen(true)} style={{ background: 'var(--gradient-success)', borderColor: 'var(--color-success)', color: 'var(--color-white)', fontWeight: 700 }}><Download size={14} /> Xuất Excel</button>
       <button className={s.btnPrimary} onClick={openAdd}><Plus size={14} /> Thêm quy tắc</button>
     </div>
   )
@@ -663,7 +664,7 @@ function LedgerPanel({ isAdmin, slot, years, getOptions, enumLabel, onFooter }) 
         />
       </span>
       {isAdmin && <button className={s.btnSecondary} onClick={() => setImportOpen(true)}><Upload size={14} /> Nhập Excel</button>}
-      <button className={s.btnSecondary} onClick={() => setExportOpen(true)}><Download size={14} /> Xuất Excel</button>
+      <button className={s.btnSecondary} onClick={() => setExportOpen(true)} style={{ background: 'var(--gradient-success)', borderColor: 'var(--color-success)', color: 'var(--color-white)', fontWeight: 700 }}><Download size={14} /> Xuất Excel</button>
       {isAdmin && <button className={s.btnPrimary} onClick={openAdd}><Plus size={14} /> Ghi nhận</button>}
     </div>
   )
@@ -896,22 +897,75 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
     key: `k_${k.key}`, label: `${k.label} vì`, width: 40,
     value: (r) => (r.items || []).filter((it) => it.kind === k.key).map((it) => `${it.label} (${fmtPts(it.points)}${it.count > 1 ? `, ${it.count} lần` : ''})`).join('; '),
   }))
+  // Cột lũy tuyến TÁCH theo mức trễ (động — chỉ mức có việc) như layout mới
+  const lateLevels = [...new Set(view.flatMap((r) => Object.entries(r.lateByLevel || {}).filter(([, v]) => (v.count || 0) > 0).map(([k]) => Number(k))))].sort((a, b) => a - b)
+  const lateLevelCols = lateLevels.flatMap((k) => [
+    { key: `lt${k}_c`, label: `Trễ ${k}th · Số việc`, width: 11, type: 'number', value: (r) => r.lateByLevel?.[k]?.count || 0 },
+    { key: `lt${k}_g`, label: `Trễ ${k}th · Điểm gốc`, width: 11, type: 'number', value: (r) => r.lateByLevel?.[k]?.gross || 0 },
+    { key: `lt${k}_l`, label: `Trễ ${k}th · Điểm mất`, width: 11, type: 'number', value: (r) => r.lateByLevel?.[k]?.lost || 0 },
+  ])
   const exportCols = [
     { key: 'user', label: 'Nhân viên', width: 24, value: (r) => r.userName },
-    // Nhánh 1 — Tiến độ công việc
-    { key: 'vrec', label: 'Điểm định kỳ', width: 12, type: 'number', value: (r) => r.volumeRecurring },
-    { key: 'voth', label: 'Số việc khác', width: 12, type: 'number', value: (r) => r.volumeOther },
+    // ① KPI công việc — tách điểm tháng này / việc cũ (lũy tuyến) như layout mới
+    { key: 'ptm', label: 'Điểm tháng này', width: 12, type: 'number', value: (r) => r.ptMonth ?? 0 },
+    { key: 'pto', label: 'Điểm việc cũ (làm bù)', width: 14, type: 'number', value: (r) => r.ptOld ?? 0 },
+    { key: 'ltcut', label: 'Lũy tuyến cắt', width: 12, type: 'number', value: (r) => r.oldLost ?? 0 },
+    ...lateLevelCols,
+    { key: 'vrec', label: 'Σ Điểm định kỳ', width: 12, type: 'number', value: (r) => r.volumeRecurring },
+    { key: 'voth', label: 'Việc khác (số việc)', width: 12, type: 'number', value: (r) => r.volumeOther },
     { key: 'otpct', label: '% đúng hạn', width: 10, value: (r) => r.onTimePct == null ? '' : `${r.onTimePct}%` },
     { key: 'kpi', label: 'Điểm đúng hạn', width: 12, type: 'number', value: (r) => r.kpiPoints },
-    { key: 'ptotal', label: 'Tổng tiến độ', width: 12, type: 'number', value: (r) => r.progressPoints },
-    { key: 'pgrade', label: 'Xếp loại tiến độ', width: 14, value: (r) => r.progressGradeCode ? `${r.progressGradeCode}${r.progressGradeLabel ? ` – ${r.progressGradeLabel}` : ''}` : '' },
-    { key: 'pamt', label: 'Thưởng tiến độ', width: 14, type: 'number', thousands: true, value: (r) => Number(r.progressAmount) || 0 },
-    // Nhánh 2 — Thưởng/phạt quy chế
+    { key: 'ptotal', label: 'Tổng điểm KPI', width: 12, type: 'number', value: (r) => r.progressPoints },
+    { key: 'pgrade', label: 'Xếp loại KPI', width: 14, value: (r) => r.progressGradeCode ? `${r.progressGradeCode}${r.progressGradeLabel ? ` – ${r.progressGradeLabel}` : ''}` : '' },
+    { key: 'pamt', label: 'Thưởng KPI', width: 14, type: 'number', thousands: true, value: (r) => Number(r.progressAmount) || 0 },
+    // ② Thưởng/phạt nội quy
     { key: 'rp', label: 'Điểm thưởng/phạt', width: 12, type: 'number', value: (r) => r.rewardPenaltyNet },
     { key: 'rpgrade', label: 'Xếp loại thưởng/phạt', width: 14, value: (r) => r.rpGradeCode ? `${r.rpGradeCode}${r.rpGradeLabel ? ` – ${r.rpGradeLabel}` : ''}` : '' },
-    { key: 'rpamt', label: 'Tiền thưởng/phạt', width: 14, type: 'number', thousands: true, value: (r) => Number(r.rpAmount) || 0 },
+    { key: 'rpamt', label: 'Tiền nội quy', width: 14, type: 'number', thousands: true, value: (r) => Number(r.rpAmount) || 0 },
+    // Tổng thưởng = Thưởng KPI + Tiền nội quy
+    { key: 'total', label: 'TỔNG THƯỞNG', width: 16, type: 'number', thousands: true, value: (r) => Number(r.totalAmount) || 0 },
     ...kindDetailCols,
   ]
+
+  // Xuất Excel BÁM Y MÀN HÌNH: mỗi NV = dòng tổng + khối chi tiết (① KPI · lũy tuyến · ② nội quy · TỔNG THƯỞNG).
+  async function exportScreenXlsx() {
+    const data = exportData
+    if (!data.length) return
+    const kyLabel = (ym.from && ym.to) ? `${ym.from} → ${ym.to}` : `Tháng ${ym.month}/${ym.year}`
+    const G = (code, label) => (code ? `${code}${label ? ` – ${label}` : ''}` : '—')
+    const raw = []
+    raw.push({ cells: [`KPI — TỔNG HỢP THEO NHÂN VIÊN · Kỳ ${kyLabel}`], kind: 'title', merges: [[1, 12]] })
+    raw.push({ cells: [''], kind: 'spacer' })
+    raw.push({ cells: ['', '', '① KPI công việc', '', '', '', '', '', '② Thưởng/phạt (nội quy)', '', '', 'Tổng thưởng'], kind: 'header', merges: [[3, 8], [9, 11]] })
+    raw.push({ cells: ['STT', 'Nhân viên', 'Định kỳ', 'Việc khác', 'Đúng hạn', 'Tổng điểm', 'Xếp loại', 'Thưởng (đ)', 'Điểm', 'Xếp loại', 'Tiền (đ)', 'Tổng thưởng (đ)'], kind: 'header' })
+    data.forEach((r, i) => {
+      raw.push({ cells: [i + 1, r.userName, Number(r.volumeRecurring) || 0, Number(r.volumeOther) || 0, Number(r.kpiPoints) || 0, Number(r.progressPoints) || 0, r.progressGradeCode || '—', Number(r.progressAmount) || 0, Number(r.rewardPenaltyNet) || 0, r.rpGradeCode || '—', Number(r.rpAmount) || 0, Number(r.totalAmount) || 0], kind: 'data', bold: true })
+      // ① KPI công việc
+      raw.push({ cells: ['① KPI công việc'], kind: 'section', merges: [[1, 12]] })
+      raw.push({ cells: ['Điểm tháng này', 'Việc cũ (làm bù)', 'Lũy tuyến cắt', 'Σ Điểm định kỳ', 'Việc khác', '% đúng hạn', 'Điểm đúng hạn', 'Tổng điểm KPI', 'Xếp loại', 'Thưởng (đ)'], kind: 'header', merges: [[11, 12]] })
+      raw.push({ cells: [Number(r.ptMonth) || 0, Number(r.ptOld) || 0, Number(r.oldLost) || 0, Number(r.volumeRecurring) || 0, Number(r.volumeOther) || 0, (r.onTimePct == null ? '—' : `${r.onTimePct}%`), Number(r.kpiPoints) || 0, Number(r.progressPoints) || 0, G(r.progressGradeCode, r.progressGradeLabel), Number(r.progressAmount) || 0], kind: 'data', merges: [[11, 12]] })
+      const lateLv = Object.entries(r.lateByLevel || {}).map(([k, v]) => ({ k: Number(k), ...v })).filter((v) => v.count > 0).sort((a, b) => a.k - b.k)
+      if (lateLv.length) {
+        const ltM = [[lateLv.length + 2, 12]]   // merge phần trống còn lại tới cột cuối
+        raw.push({ cells: ['Lũy tuyến chi tiết', ...lateLv.map((v) => `Trễ ${v.k} tháng`)], kind: 'header', merges: ltM })
+        raw.push({ cells: ['Số việc', ...lateLv.map((v) => v.count)], kind: 'data', merges: ltM })
+        raw.push({ cells: ['Điểm gốc', ...lateLv.map((v) => v.gross)], kind: 'data', merges: ltM })
+        raw.push({ cells: ['Hệ số', ...lateLv.map((v) => (v.gross > 0 ? `${Math.round(((v.gross - v.lost) / v.gross) * 100)}%` : '—'))], kind: 'data', merges: ltM })
+        raw.push({ cells: ['Điểm mất', ...lateLv.map((v) => (v.lost > 0 ? -v.lost : 0))], kind: 'data', merges: ltM })
+      }
+      // ② Thưởng/phạt (nội quy)
+      raw.push({ cells: ['② Thưởng/phạt (nội quy)'], kind: 'section', merges: [[1, 12]] })
+      const rpDetail = (r.items || []).length ? r.items.map((it) => `${it.label} (${fmtPts(it.points)}${it.count > 1 ? ` ×${it.count}` : ''})`).join('; ') : '—'
+      raw.push({ cells: ['Chi tiết thưởng/phạt', '', '', '', 'Điểm', 'Xếp loại', 'Tiền (đ)'], kind: 'header', merges: [[1, 4], [8, 12]] })
+      raw.push({ cells: [rpDetail, '', '', '', Number(r.rewardPenaltyNet) || 0, G(r.rpGradeCode, r.rpGradeLabel), Number(r.rpAmount) || 0], kind: 'data', merges: [[1, 4], [8, 12]] })
+      // TỔNG THƯỞNG
+      raw.push({ cells: ['TỔNG THƯỞNG = Thưởng KPI + Tiền nội quy', '', '', '', '', '', '', '', '', '', '', Number(r.totalAmount) || 0], kind: 'total', merges: [[1, 11]] })
+      raw.push({ cells: [''], kind: 'spacer' })
+    })
+    const widths = [6, 24, 13, 12, 12, 12, 14, 14, 22, 12, 14, 16]
+    const fn = `kpi_tong_hop_${(ym.from && ym.to) ? `${ym.from}_${ym.to}` : `${ym.year}-${String(ym.month).padStart(2, '0')}`}`
+    await exportXlsx({ filename: fn, sheets: [{ name: 'Tổng hợp KPI', widths, rawRows: raw }] })
+  }
 
   const toolbar = (
     <div className={s.toolbar}>
@@ -953,7 +1007,7 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
           onPreset={(k) => setYm(presetPeriod(k))}
         />
       </span>
-      <button className={s.btnSecondary} onClick={() => setExportOpen(true)}><Download size={14} /> Xuất Excel</button>
+      <button className={s.btnSecondary} onClick={exportScreenXlsx} style={{ background: 'var(--gradient-success)', borderColor: 'var(--color-success)', color: 'var(--color-white)', fontWeight: 700 }}><Download size={14} /> Xuất Excel</button>
     </div>
   )
 
@@ -963,7 +1017,7 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
       {sel.size > 0 && (
         <div className={s.bulkWrap}>
           <BulkActionBar count={sel.size}>
-            <button className={s.btnMini} onClick={() => setExportOpen(true)}><Download size={13} /> Xuất đã chọn</button>
+            <button className={s.btnMini} onClick={exportScreenXlsx}><Download size={13} /> Xuất đã chọn</button>
             <button className={s.btnMini} onClick={() => setSel(new Set())}>Bỏ chọn</button>
           </BulkActionBar>
         </div>

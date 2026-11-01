@@ -12,6 +12,8 @@ const STD_FONT = { name: 'Calibri', size: 11 }
 const THIN = { style: 'thin', color: { argb: 'FF000000' } }
 const BORDER = { top: THIN, left: THIN, bottom: THIN, right: THIN }
 const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } } // nền header nhạt
+const SECTION_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF1FB' } } // nền dải nhóm (nhạt hơn)
+const TOTAL_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF7EE' } }  // nền dòng tổng (xanh lá nhạt)
 
 function alignFor(type) {
   if (type === 'number') return 'right'
@@ -82,8 +84,38 @@ function buildWorkbook({ sheets } = {}) {
   list.forEach((sheet, idx) => {
     const cols = Array.isArray(sheet.columns) ? sheet.columns : []
     const ws = wb.addWorksheet(sanitizeSheetName(sheet.name, idx), {
-      views: [{ state: 'frozen', ySplit: 1 }], // đóng băng hàng tiêu đề
+      views: [{ state: 'frozen', ySplit: Array.isArray(sheet.rawRows) ? 0 : 1 }], // đóng băng hàng tiêu đề
     })
+
+    // ── Layout TỰ DO (bám màn hình): mảng hàng {cells, kind:'header'|'section'|'total'|'data', merges} ──
+    if (Array.isArray(sheet.rawRows)) {
+      if (Array.isArray(sheet.widths)) ws.columns = sheet.widths.map((w) => ({ width: Number(w) || 16 }))
+      const H = { title: 30, section: 22, header: 20, total: 20, data: 18, spacer: 8 }
+      const ncol = Array.isArray(sheet.widths) && sheet.widths.length ? sheet.widths.length : 1
+      for (const rr of sheet.rawRows) {
+        const cells = Array.isArray(rr) ? rr : (rr.cells || [])
+        const kind = (Array.isArray(rr) ? 'data' : rr.kind) || 'data'
+        const strong = ['title', 'header', 'section', 'total'].includes(kind) || (!Array.isArray(rr) && rr.bold)
+        const fill = kind === 'header' ? HEADER_FILL : kind === 'section' ? SECTION_FILL : kind === 'total' ? TOTAL_FILL : null
+        const row = ws.addRow(cells.map((v) => (v == null ? '' : v)))
+        row.height = (!Array.isArray(rr) && rr.height) || H[kind] || 18
+        // Style phủ ĐỦ bề rộng (ncol) để ô merge phần đuôi vẫn có viền/nền, nhìn liền mạch.
+        for (let i = 1; i <= Math.max(cells.length, ncol); i++) {
+          const cell = row.getCell(i)
+          const val = cells[i - 1]
+          cell.font = { ...STD_FONT, size: kind === 'title' ? 15 : 11, bold: !!strong, color: kind === 'title' ? { argb: 'FF1F4E79' } : undefined }
+          if (kind !== 'spacer') cell.border = BORDER
+          const hz = kind === 'title' ? 'center' : ((!Array.isArray(rr) && rr.align) || (typeof val === 'number' ? 'right' : 'left'))
+          cell.alignment = { vertical: 'middle', horizontal: hz, wrapText: false, indent: kind === 'data' && typeof val !== 'number' ? 1 : 0 }
+          if (fill) cell.fill = fill
+          if (typeof val === 'number') cell.numFmt = '#,##0'
+        }
+        const merges = (!Array.isArray(rr) && Array.isArray(rr.merges)) ? rr.merges : []
+        for (const m of merges) { try { ws.mergeCells(row.number, m[0], row.number, m[1]) } catch { /* bỏ qua merge lỗi */ } }
+      }
+      return
+    }
+
     if (cols.length) ws.columns = cols.map((c) => ({ width: Number(c.width) || 18 }))
 
     // Header

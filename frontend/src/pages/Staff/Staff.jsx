@@ -204,6 +204,7 @@ export default function Staff() {
                 <thead>
                   <tr>
                     <th>Nhân viên</th>
+                    <th>Email</th>
                     <th className={s.hideMd}>Chức danh</th>
                     <th>Vai trò</th>
                     <th>Trạng thái</th>
@@ -218,7 +219,7 @@ export default function Staff() {
                     ))
                   ) : users.length === 0 ? (
                     <tr>
-                      <td colSpan={isAdmin ? 6 : 5}>
+                      <td colSpan={isAdmin ? 7 : 6}>
                         <div className={s.emptyState}>
                           <Users size={32} className={s.emptyIcon} />
                           Không tìm thấy nhân viên nào
@@ -305,10 +306,10 @@ function UserRow({ user, isAdmin, isSelf, onRowClick, onEdit, onStatusChange, on
           />
           <div>
             <div className={s.userName}>{user.name}</div>
-            <div className={s.userEmail}>{user.email}</div>
           </div>
         </div>
       </td>
+      <td className={s.textMuted} title={user.email}>{user.email || <span className={s.textSubtle}>—</span>}</td>
       <td className={`${s.hideMd} ${s.textMuted}`}>
         {user.jobTitle ?? <span className={s.textSubtle}>—</span>}
       </td>
@@ -385,10 +386,10 @@ function SkeletonRow({ hasActions }) {
           <div className={`${s.skeleton} ${s.skeletonAvatar}`} />
           <div>
             <div className={`${s.skeleton} ${s.skeletonName}`} />
-            <div className={`${s.skeleton} ${s.skeletonEmail}`} />
           </div>
         </div>
       </td>
+      <td><div className={`${s.skeleton} ${s.skeletonEmail}`} /></td>
       <td className={s.hideMd}><div className={`${s.skeleton} ${s.skeletonJob}`} /></td>
       <td><div className={`${s.skeleton} ${s.skeletonRole}`} /></td>
       <td><div className={`${s.skeleton} ${s.skeletonStatus}`} /></td>
