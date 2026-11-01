@@ -9,74 +9,20 @@ function ymdLocal(d) {
   return `${y}-${m}-${day}`
 }
 
-function defaultDateRange() {
-  const to   = new Date()
-  const from = new Date()
-  from.setMonth(from.getMonth() - 3)
-  return { from: ymdLocal(from), to: ymdLocal(to) }
-}
-
-async function getStaffPerformance(req, res, next) {
-  try {
-    const { from, to, staffIds } = req.query
-    const range = from && to ? { from, to } : defaultDateRange()
-    const ids = staffIds ? (Array.isArray(staffIds) ? staffIds : [staffIds]) : null
-    const data = await svc.staffPerformance({ ...range, staffIds: ids, user: req.user })
-    res.json(data)
-  } catch (err) { next(err) }
-}
-
-async function getCompanyStatus(req, res, next) {
-  try {
-    const { from, to, companyIds } = req.query
-    const range = from && to ? { from, to } : defaultDateRange()
-    const ids = companyIds ? (Array.isArray(companyIds) ? companyIds : [companyIds]) : null
-    const data = await svc.companyStatus({ ...range, companyIds: ids, user: req.user })
-    res.json(data)
-  } catch (err) { next(err) }
-}
-
-async function getSlaCompliance(req, res, next) {
-  try {
-    const { from, to, groupBy = 'staff' } = req.query
-    const range = from && to ? { from, to } : defaultDateRange()
-    const data = await svc.slaCompliance({ ...range, groupBy, user: req.user })
-    res.json(data)
-  } catch (err) { next(err) }
-}
-
-async function getAging(req, res, next) {
-  try {
-    const { assignedTo, companyId } = req.query
-    const data = await svc.aging({ assignedTo, companyId, user: req.user })
-    res.json(data)
-  } catch (err) { next(err) }
-}
-
-async function getVelocity(req, res, next) {
-  try {
-    const { from, to, period = 'week' } = req.query
-    const range = from && to ? { from, to } : defaultDateRange()
-    const data = await svc.velocity({ ...range, period, user: req.user })
-    res.json(data)
-  } catch (err) { next(err) }
+// Mặc định dự báo = THÁNG SAU, tự cuộn năm đúng (tránh lỗi tháng 13 vào tháng 12).
+function defaultForecastPeriod() {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() + 1)
+  return { month: d.getMonth() + 1, year: d.getFullYear() }
 }
 
 async function getForecast(req, res, next) {
   try {
-    const now = new Date()
-    const month = req.query.month || now.getMonth() + 2  // next month default
-    const year  = req.query.year  || now.getFullYear()
+    const def = defaultForecastPeriod()
+    const month = req.query.month || def.month
+    const year  = req.query.year  || def.year
     const data = await svc.forecast({ month, year, user: req.user })
-    res.json(data)
-  } catch (err) { next(err) }
-}
-
-async function getOverview(req, res, next) {
-  try {
-    const { from, to, prevFrom, prevTo } = req.query
-    const range = from && to ? { from, to } : defaultDateRange()
-    const data = await svc.overviewReport({ ...range, prevFrom, prevTo, user: req.user })
     res.json(data)
   } catch (err) { next(err) }
 }
@@ -84,27 +30,16 @@ async function getOverview(req, res, next) {
 async function exportReport(req, res, next) {
   try {
     const { type } = req.params
-    const validTypes = ['staff', 'company', 'sla', 'aging', 'velocity', 'forecast']
-    if (!validTypes.includes(type)) {
+    if (type !== 'forecast') {
       return res.status(400).json({ error: 'Invalid report type' })
     }
 
-    let data
     const now = new Date()
-    const defaultRange = { from: ymdLocal(new Date(now.getFullYear(), now.getMonth() - 2, 1)), to: ymdLocal(now) }
     const q = req.query
-
-    if      (type === 'staff')    data = await svc.staffPerformance({ ...defaultRange, ...q })
-    else if (type === 'company')  data = await svc.companyStatus({ ...defaultRange, ...q })
-    else if (type === 'sla')      data = await svc.slaCompliance({ ...defaultRange, groupBy: q.groupBy || 'staff' })
-    else if (type === 'aging')    data = await svc.aging(q)
-    else if (type === 'velocity') data = await svc.velocity({ ...defaultRange, period: q.period || 'week' })
-    else if (type === 'forecast') data = await svc.forecast({ month: q.month || now.getMonth() + 2, year: q.year || now.getFullYear() })
-
+    const def = defaultForecastPeriod()
+    const data = await svc.forecast({ month: q.month || def.month, year: q.year || def.year })
     const buffer = await svc.exportToExcel(type, data)
-
-    const names = { staff: 'hieu-suat-nhan-su', company: 'tinh-trang-khach-hang', sla: 'tuan-thu-sla', aging: 'ton-dong', velocity: 'hieu-suat', forecast: 'du-bao' }
-    const filename = `${names[type]}-${ymdLocal(now)}.xlsx`
+    const filename = `du-bao-${ymdLocal(now)}.xlsx`
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
@@ -112,4 +47,4 @@ async function exportReport(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { getOverview, getStaffPerformance, getCompanyStatus, getSlaCompliance, getAging, getVelocity, getForecast, exportReport }
+module.exports = { getForecast, exportReport }

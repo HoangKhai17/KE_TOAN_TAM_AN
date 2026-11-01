@@ -36,6 +36,7 @@ function toAssignmentDto(row) {
     createdAt:    row.created_at,
     updatedAt:    row.updated_at,
     latestComment: row.latest_comment ?? null,
+    latestCommentBy: row.latest_comment_by ?? null,
   }
 }
 
@@ -56,6 +57,8 @@ function toCommentDto(row) {
     id:        row.id,
     user:      { id: row.user_id, name: row.user_name ?? null },
     content:   row.content,
+    isEdited:  row.is_edited ?? false,
+    editedAt:  row.edited_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -239,6 +242,13 @@ async function listAssignments(actorId, actorRole, filters = {}) {
              ORDER BY iac.created_at DESC
              LIMIT 1
             ) AS latest_comment,
+            (SELECT ucm.name
+             FROM internal_assignment_comments iac
+             JOIN users ucm ON ucm.id = iac.user_id
+             WHERE iac.assignment_id = ia.id
+             ORDER BY iac.created_at DESC
+             LIMIT 1
+            ) AS latest_comment_by,
             (SELECT json_agg(json_build_object(
                'userId', iaa.user_id, 'name', us.name,
                'status', iaa.status, 'acceptedAt', iaa.accepted_at,
@@ -750,13 +760,34 @@ async function addComment(id, actorId, actorRole, content) {
   return toCommentDto(full)
 }
 
+async function updateComment(assignmentId, commentId, actorId, actorRole, content) {
+  const { rows: [comment] } = await query(
+    'SELECT * FROM internal_assignment_comments WHERE id = $1 AND assignment_id = $2',
+    [commentId, assignmentId]
+  )
+  if (!comment) throw Object.assign(new Error('Comment không tồn tại'), { status: 404 })
+  if (comment.user_id !== actorId && actorRole !== 'admin') {
+    throw Object.assign(new Error('Bạn chỉ có thể sửa comment của mình'), { status: 403 })
+  }
+  await query(
+    'UPDATE internal_assignment_comments SET content = $1, is_edited = TRUE, edited_at = NOW(), updated_at = NOW() WHERE id = $2',
+    [content, commentId]
+  )
+  const { rows: [full] } = await query(
+    `SELECT iac.*, u.name AS user_name FROM internal_assignment_comments iac
+     JOIN users u ON u.id = iac.user_id WHERE iac.id = $1`,
+    [commentId]
+  )
+  return toCommentDto(full)
+}
+
 async function deleteComment(assignmentId, commentId, actorId, actorRole) {
   const { rows: [comment] } = await query(
     'SELECT * FROM internal_assignment_comments WHERE id = $1 AND assignment_id = $2',
     [commentId, assignmentId]
   )
   if (!comment) throw Object.assign(new Error('Comment không tồn tại'), { status: 404 })
-  if (comment.user_id !== actorId) {
+  if (comment.user_id !== actorId && actorRole !== 'admin') {
     throw Object.assign(new Error('Bạn chỉ có thể xóa comment của mình'), { status: 403 })
   }
   await query('DELETE FROM internal_assignment_comments WHERE id = $1', [commentId])
@@ -767,5 +798,5 @@ module.exports = {
   createAssignment, updateAssignment, deleteAssignment,
   sendAssignment, cancelAssignment, closeAssignment,
   acceptAssignment, progressAssignment, completeAssignment, rejectAssignment,
-  addComment, deleteComment,
+  addComment, updateComment, deleteComment,
 }

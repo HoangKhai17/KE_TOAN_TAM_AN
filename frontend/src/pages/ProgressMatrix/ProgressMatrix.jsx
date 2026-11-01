@@ -677,7 +677,7 @@ export default function ProgressMatrix() {
   return (
     <AppLayout>
       <div className={s.page}>
-        {/* Toolbar */}
+        {/* Toolbar — tiêu đề + tab dạng pill + Xuất Excel (gọn 1 hàng) */}
         <div className={s.toolbar}>
           <div className={s.titleGroup}>
             <span className={s.titleIcon}><LayoutGrid size={18} /></span>
@@ -685,18 +685,18 @@ export default function ProgressMatrix() {
               <h1 className={s.title}>BC Tiến độ CV</h1>
             </div>
           </div>
+
+          <div className={s.tabBar}>
+            {TABS.map((t) => (
+              <button key={t.id} className={`${s.tabBtn} ${tab === t.id ? s.tabBtnActive : ''}`} onClick={() => setTab(t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
           <button className={s.btnExport} onClick={() => setShowExport(true)} disabled={loading || !hasAny}>
             <FileSpreadsheet size={14} /> Xuất Excel
           </button>
-        </div>
-
-        {/* Tabs */}
-        <div className={s.tabBar}>
-          {TABS.map((t) => (
-            <button key={t.id} className={`${s.tabBtn} ${tab === t.id ? s.tabBtnActive : ''}`} onClick={() => setTab(t.id)}>
-              {t.label}
-            </button>
-          ))}
         </div>
 
         {/* Filters */}

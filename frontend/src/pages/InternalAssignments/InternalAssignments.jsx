@@ -4,7 +4,7 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 const EMPTY_ITEMS = []   // ref ổn định để useMemo phía dưới không recompute mỗi render
 import {
   Plus, Search, ClipboardCheck, Loader2, Check,
-  List, Columns, Filter, RotateCcw,
+  List, Columns, Filter, RotateCcw, SlidersHorizontal,
   ChevronDown, Trash2, ArrowUpRight, X,
 } from 'lucide-react'
 import {
@@ -66,6 +66,13 @@ const PRIORITY_CSS = {
   normal: s.badgeNormal,
   high:   s.badgeHigh,
   urgent: s.badgeUrgent,
+}
+// Badge Mức độ cho BOARD: nền đậm, chữ trắng, font nhỏ (y như board Tasks)
+const BOARD_PRIO_CSS = {
+  low:    s.boardPrioLow,
+  normal: s.boardPrioMedium,
+  high:   s.boardPrioHigh,
+  urgent: s.boardPrioUrgent,
 }
 
 // Ô select màu kiểu trang Tasks (đồng bộ giao diện danh sách)
@@ -314,38 +321,59 @@ function DeleteModal({ item, deleting, onClose, onConfirm }) {
 
 // ── Board card inner ──────────────────────────────────────────────────────────
 
-function BoardCardInner({ item }) {
+function BoardCardInner({ item, onOpen, onDelete, isAdmin }) {
   const overdue = isOverdue(item)
+  const pct = progressPct(item)
+  const company = item.company ? (item.company.shortName || item.company.name) : null
+  const startShort = item.startDate    ? fmtDate(item.startDate).slice(0, 5)    : null
+  const endShort   = item.deadlineDate ? fmtDate(item.deadlineDate).slice(0, 5) : null
   return (
     <>
-      <div className={s.boardCardTitle}>{item.title}</div>
-      <div className={s.boardCardCompany}>
-        {item.company ? item.company.name : <span className={s.internalBadge}>Công việc nội bộ</span>}
+      {/* Hàng tiêu đề + icon thao tác (hover) — gọn như board Tasks */}
+      <div className={s.boardCardHead}>
+        <div className={s.boardCardTitle}>{item.title}</div>
+        {(onOpen || onDelete) && (
+          <div className={s.boardCardActions}>
+            {onOpen && (
+              <button className={s.boardCardViewBtn} onClick={(e) => { e.stopPropagation(); onOpen(item.id) }} title="Xem nhanh">
+                <ArrowUpRight size={11} />
+              </button>
+            )}
+            {onDelete && isAdmin && (
+              <button className={s.boardCardDeleteBtn} onClick={(e) => { e.stopPropagation(); onDelete(item) }} title="Xóa phiếu">
+                <Trash2 size={11} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      <div className={s.boardCardCompany}>
+        {company ?? <span className={s.internalBadge}>Nội bộ</span>}
+      </div>
+
+      {/* Hàng gọn (như Tasks): mức độ + trễ hạn + nhân sự + ngày (canh phải) */}
       <div className={s.boardCardMeta}>
-        <span className={`${s.badge} ${PRIORITY_CSS[item.priority]}`}>
-          {PRIORITY_LABELS[item.priority]}
-        </span>
-        {item.deadlineDate && (
-          <span className={overdue ? s.boardCardDeadlineOver : s.boardCardDeadline}>
-            {fmtDate(item.deadlineDate)}{overdue ? ' • Quá hạn' : ''}
+        <span className={`${s.boardPrioBadge} ${BOARD_PRIO_CSS[item.priority] ?? s.boardPrioMedium}`}>{PRIORITY_LABELS[item.priority]}</span>
+        {overdue && <span className={`${s.boardCompBadge} ${s.boardCompLate}`}>Trễ hạn</span>}
+        {item.assignees?.length > 0 && (
+          <span className={s.boardCardAssigneeName} title={item.assignees.map((a) => a.name).join(', ')}>
+            {item.assignees.map((a) => shortName(a.name)).join(', ')}
+          </span>
+        )}
+        {(startShort || endShort) && (
+          <span className={`${s.boardCardDates} ${overdue ? s.boardCardDateOver : ''}`}>
+            {startShort ?? '—'} → {endShort ?? '—'}
           </span>
         )}
       </div>
-      {item.assignees?.length > 0 && (
-        <div className={s.boardCardAssignees}>
-          {item.assignees.slice(0, 4).map((a) => (
-            <span
-              key={a.userId}
-              className={`${s.assigneeChip} ${ASSIGNEE_STATUS_CSS[a.status]}`}
-              title={`${a.name} — ${ASSIGNEE_STATUS_LABELS[a.status]}`}
-            >
-              {a.name}
-            </span>
-          ))}
-          {item.assignees.length > 4 && (
-            <span className={`${s.assigneeChip} ${s.chipPending}`}>+{item.assignees.length - 4}</span>
-          )}
+
+      {pct !== null && (
+        <div className={s.boardCardProgress}>
+          <div className={s.progressBar}>
+            <div className={`${s.progressFill} ${pct === 100 ? s.progressFillDone : ''}`} style={{ width: `${pct}%` }} />
+          </div>
+          <span className={s.boardCardProgressText}>{pct}%</span>
         </div>
       )}
     </>
@@ -354,7 +382,7 @@ function BoardCardInner({ item }) {
 
 // ── DraggableCard ─────────────────────────────────────────────────────────────
 
-function DraggableCard({ item, onOpen, isAdmin }) {
+function DraggableCard({ item, onOpen, onDelete, isAdmin }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.id,
     data: { status: item.status },
@@ -370,14 +398,14 @@ function DraggableCard({ item, onOpen, isAdmin }) {
       style={transform ? { '--drag-x': `${transform.x}px`, '--drag-y': `${transform.y}px` } : undefined}
       onClick={() => !isDragging && onOpen(item.id)}
     >
-      <BoardCardInner item={item} />
+      <BoardCardInner item={item} onOpen={onOpen} onDelete={onDelete} isAdmin={isAdmin} />
     </div>
   )
 }
 
 // ── DroppableColumn ───────────────────────────────────────────────────────────
 
-function DroppableColumn({ status, items, onOpen, isAdmin }) {
+function DroppableColumn({ status, items, onOpen, onDelete, isAdmin }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
 
   return (
@@ -389,7 +417,7 @@ function DroppableColumn({ status, items, onOpen, isAdmin }) {
       </div>
       <div ref={setNodeRef} className={`${s.boardCards} ${isOver ? s.boardCardsOver : ''}`}>
         {items.map((item) => (
-          <DraggableCard key={item.id} item={item} onOpen={onOpen} isAdmin={isAdmin} />
+          <DraggableCard key={item.id} item={item} onOpen={onOpen} onDelete={onDelete} isAdmin={isAdmin} />
         ))}
         {items.length === 0 && (
           <p className={s.boardEmptyText}>Không có</p>
@@ -401,7 +429,7 @@ function DroppableColumn({ status, items, onOpen, isAdmin }) {
 
 // ── BoardView ─────────────────────────────────────────────────────────────────
 
-function BoardView({ items, onOpen, onStatusChange, isAdmin }) {
+function BoardView({ items, onOpen, onDelete, onStatusChange, isAdmin }) {
   const [activeItem, setActiveItem] = useState(null)
   const addToast = useToastStore((st) => st.toast)
 
@@ -449,6 +477,7 @@ function BoardView({ items, onOpen, onStatusChange, isAdmin }) {
             status={status}
             items={byStatus[status] ?? []}
             onOpen={onOpen}
+            onDelete={onDelete}
             isAdmin={isAdmin}
           />
         ))}
@@ -484,8 +513,10 @@ function ListView({
   onOpen, isAdmin, onDelete,
   selectedIds, allSelected, someSelected, onToggleSelect, onSelectAll,
   onStatusChange, onPriorityChange, onDeadlineChange,
-  sortColState, hasColFilter, onOpenColFilter,
+  sortColState, hasColFilter, onOpenColFilter, hiddenCols,
 }) {
+  const vis = (k) => !hiddenCols?.has(k)
+  const colSpan = 3 + IA_COLUMNS.filter((c) => c.fixed || vis(c.key)).length
   const getLabel   = useEnumsStore((st) => st.getLabel)
   const getOptions = useEnumsStore((st) => st.getOptions)
   const statusLabel   = (k) => getLabel('assignment_status', k, STATUS_LABELS[k] ?? k)
@@ -521,15 +552,15 @@ function ListView({
               <SelectionHeaderCell allSelected={allSelected} someSelected={someSelected} onToggle={onSelectAll} className={s.thCheck} />
               <IndexHeaderCell className={s.thIndex} />
               <Th colKey="title">Tiêu đề</Th>
-              <Th colKey="companyShort" w={160}>Khách hàng</Th>
-              <Th colKey="startDate" w={104}>Ngày bắt đầu</Th>
-              <Th colKey="deadlineDate" w={124}>Ngày kết thúc</Th>
-              <Th colKey="createdAt" w={112}>Ngày tạo</Th>
-              <Th colKey="status" w={132}>Trạng thái</Th>
-              <Th colKey="priority" w={106}>Ưu tiên</Th>
-              <Th colKey="progress" w={110}>Tiến độ</Th>
-              <Th colKey="assignedToName" w={150}>Giao cho</Th>
-              <Th colKey="latestComment" w={180}>Bình luận mới nhất</Th>
+              {vis('companyShort')   && <Th colKey="companyShort" w={160}>Khách hàng</Th>}
+              {vis('startDate')      && <Th colKey="startDate" w={104}>Ngày bắt đầu</Th>}
+              {vis('deadlineDate')   && <Th colKey="deadlineDate" w={124}>Ngày kết thúc</Th>}
+              {vis('createdAt')      && <Th colKey="createdAt" w={112}>Ngày tạo</Th>}
+              {vis('status')         && <Th colKey="status" w={132}>Trạng thái</Th>}
+              {vis('priority')       && <Th colKey="priority" w={106}>Ưu tiên</Th>}
+              {vis('progress')       && <Th colKey="progress" w={110}>Tiến độ</Th>}
+              {vis('assignedToName') && <Th colKey="assignedToName" w={150}>Giao cho</Th>}
+              {vis('latestComment')  && <Th colKey="latestComment" w={180}>Bình luận mới nhất</Th>}
               <th className={`${s.th} ${s.thAction}`}>Hành động</th>
             </tr>
           </thead>
@@ -539,16 +570,16 @@ function ListView({
                 <tr key={i} className={s.tr}>
                   <td className={s.tdCheck} />
                   <td className={s.tdIndex} />
-                  {[280, 150, 90, 90, 90, 110, 90, 100, 130, 160, 70].map((w, j) => (
+                  {Array.from({ length: colSpan - 2 }).map((_, j) => (
                     <td key={j} className={s.td}>
-                      <div className={s.tableSkeletonBar} style={{ '--skeleton-w': `${w}px`, width: `${w}px` }} />
+                      <div className={s.tableSkeletonBar} style={{ '--skeleton-w': `${j === 0 ? 260 : 100}px`, width: `${j === 0 ? 260 : 100}px` }} />
                     </td>
                   ))}
                 </tr>
               ))
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={13}>
+                <td colSpan={colSpan}>
                   <div className={s.emptyBox}>
                     <div className={s.emptyIcon}><ClipboardCheck size={28} /></div>
                     <p className={s.emptyTitle}>Không có phiếu giao việc</p>
@@ -575,20 +606,25 @@ function ListView({
                   </td>
 
                   {/* Khách hàng — ưu tiên tên viết tắt */}
+                  {vis('companyShort') && (
                   <td className={s.td}>
                     {item.company?.shortName || item.company?.name
                       ? <span className={s.companyShort}>{item.company.shortName || item.company.name}</span>
-                      : <span className={s.mutedDash}>—</span>}
+                      : <span className={s.internalText}>Nội bộ</span>}
                   </td>
+                  )}
 
                   {/* Ngày bắt đầu */}
+                  {vis('startDate') && (
                   <td className={s.td}>
                     {item.startDate
                       ? <span className={s.dueDateNormal}>{fmtDate(item.startDate)}</span>
                       : <span className={s.mutedDash}>—</span>}
                   </td>
+                  )}
 
                   {/* Ngày kết thúc — ô viền kiểu Tasks (viền đỏ khi quá hạn); admin sửa được */}
+                  {vis('deadlineDate') && (
                   <td className={s.td} onClick={(e) => e.stopPropagation()}>
                     {isAdmin ? (
                       <IaListDateField
@@ -603,15 +639,19 @@ function ListView({
                       </span>
                     ) : <span className={s.mutedDash}>—</span>}
                   </td>
+                  )}
 
                   {/* Ngày tạo */}
+                  {vis('createdAt') && (
                   <td className={s.td}>
                     {item.createdAt
                       ? <span className={s.dueDateNormal}>{fmtDate(item.createdAt)}</span>
                       : <span className={s.mutedDash}>—</span>}
                   </td>
+                  )}
 
                   {/* Trạng thái — select màu kiểu Tasks; admin đổi được (theo bước cho phép) */}
+                  {vis('status') && (
                   <td className={s.td} onClick={(e) => e.stopPropagation()}>
                     {isAdmin && (IA_STATUS_TRANSITIONS[item.status] ?? []).length > 0 ? (
                       <select
@@ -631,8 +671,10 @@ function ListView({
                       </span>
                     )}
                   </td>
+                  )}
 
                   {/* Ưu tiên — select màu kiểu Tasks */}
+                  {vis('priority') && (
                   <td className={s.td} onClick={(e) => e.stopPropagation()}>
                     {isAdmin ? (
                       <select
@@ -651,8 +693,10 @@ function ListView({
                       </span>
                     )}
                   </td>
+                  )}
 
                   {/* Tiến độ */}
+                  {vis('progress') && (
                   <td className={s.td}>
                     {pct !== null ? (
                       <div className={s.progressWrap}>
@@ -666,8 +710,10 @@ function ListView({
                       </div>
                     ) : <span className={s.mutedDash}>—</span>}
                   </td>
+                  )}
 
                   {/* Giao cho — rút gọn tên 2 từ cuối (như Tasks) */}
+                  {vis('assignedToName') && (
                   <td className={s.td}>
                     {item.assignees?.length
                       ? <span className={s.assignedName} title={item.assignees.map((a) => a.name).filter(Boolean).join(', ')}>
@@ -675,13 +721,19 @@ function ListView({
                         </span>
                       : <span className={s.mutedDash}>—</span>}
                   </td>
+                  )}
 
                   {/* Bình luận mới nhất */}
+                  {vis('latestComment') && (
                   <td className={s.td}>
-                    {item.latestComment
-                      ? <span className={s.latestComment}>{item.latestComment}</span>
-                      : <span className={s.mutedDash}>—</span>}
+                    {item.latestComment ? (
+                      <div className={s.latestCommentCell} title={`${item.latestCommentBy ?? ''}: ${item.latestComment}`}>
+                        {item.latestCommentBy && <span className={s.latestCommentBy}>{shortName(item.latestCommentBy)}:</span>}
+                        <span className={s.latestCommentText}>{item.latestComment}</span>
+                      </div>
+                    ) : <span className={s.mutedDash}>—</span>}
                   </td>
+                  )}
 
                   {/* Hành động */}
                   <td className={s.tdAction} onClick={(e) => e.stopPropagation()}>
@@ -727,6 +779,27 @@ function saveFilters(obj) {
   try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(obj)) } catch (_) { /* ignore */ }
 }
 
+// Danh mục cột danh sách (ẩn/hiện cột — đồng bộ Tasks/CDR). fixed: luôn hiện.
+const IA_COLUMNS = [
+  { key: 'title',          label: 'Tiêu đề', fixed: true },
+  { key: 'companyShort',   label: 'Khách hàng' },
+  { key: 'startDate',      label: 'Ngày bắt đầu' },
+  { key: 'deadlineDate',   label: 'Ngày kết thúc' },
+  { key: 'createdAt',      label: 'Ngày tạo' },
+  { key: 'status',         label: 'Trạng thái' },
+  { key: 'priority',       label: 'Ưu tiên' },
+  { key: 'progress',       label: 'Tiến độ' },
+  { key: 'assignedToName', label: 'Giao cho' },
+  { key: 'latestComment',  label: 'Bình luận mới nhất' },
+]
+const IA_COLS_KEY = 'ia_hidden_cols_v1'
+function loadHiddenCols() {
+  try { const raw = sessionStorage.getItem(IA_COLS_KEY); if (raw == null) return new Set(); const a = JSON.parse(raw); return new Set(Array.isArray(a) ? a : []) } catch { return new Set() }
+}
+function saveHiddenCols(set) {
+  try { sessionStorage.setItem(IA_COLS_KEY, JSON.stringify([...set])) } catch (_) { /* ignore */ }
+}
+
 export default function InternalAssignments() {
   const currentUser = useAuthStore((st) => st.user)
   const addToast    = useToastStore((st) => st.toast)
@@ -735,6 +808,21 @@ export default function InternalAssignments() {
   const loadEnums   = useEnumsStore((st) => st.load)
 
   const [initF] = useState(() => loadSavedFilters())
+
+  // Ẩn/hiện cột (đồng bộ Tasks/CDR)
+  const [hiddenCols, setHiddenCols] = useState(loadHiddenCols)
+  useEffect(() => { saveHiddenCols(hiddenCols) }, [hiddenCols])
+  const [showColMenu, setShowColMenu] = useState(false)
+  const colMenuRef = useRef(null)
+  useEffect(() => {
+    if (!showColMenu) return undefined
+    function onDoc(e) { if (colMenuRef.current && !colMenuRef.current.contains(e.target)) setShowColMenu(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [showColMenu])
+  function toggleColVisible(key) {
+    setHiddenCols((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
 
   // View
   const [view, setView] = useState(initF.view ?? 'list')
@@ -1226,6 +1314,36 @@ export default function InternalAssignments() {
                   <Columns size={13} /> Board
                 </button>
               </div>
+              {view === 'list' && (
+                <div className={s.colMenuWrap} ref={colMenuRef}>
+                  <button
+                    className={`${s.colMenuBtn} ${showColMenu ? s.colMenuBtnActive : ''}`}
+                    onClick={() => setShowColMenu((v) => !v)}
+                    title="Chọn cột hiển thị"
+                  >
+                    <SlidersHorizontal size={14} />
+                  </button>
+                  {showColMenu && (
+                    <div className={s.colMenu}>
+                      <div className={s.colMenuHead}>
+                        <span>Cột hiển thị</span>
+                        <button className={s.colMenuReset} onClick={() => setHiddenCols(new Set())}>Hiện tất cả</button>
+                      </div>
+                      {IA_COLUMNS.map((c) => (
+                        <label key={c.key} className={`${s.colMenuItem} ${c.fixed ? s.colMenuItemFixed : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={c.fixed || !hiddenCols.has(c.key)}
+                            disabled={c.fixed}
+                            onChange={() => toggleColVisible(c.key)}
+                          />
+                          <span>{c.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
                 <Plus size={14} /> Tạo phiếu
               </button>
@@ -1427,6 +1545,7 @@ export default function InternalAssignments() {
             sortColState={sortColState}
             hasColFilter={hasColFilter}
             onOpenColFilter={openColFilter}
+            hiddenCols={hiddenCols}
           />
         )}
 
@@ -1454,6 +1573,7 @@ export default function InternalAssignments() {
           <BoardView
             items={items}
             onOpen={setSelectedId}
+            onDelete={setDeleteTarget}
             onStatusChange={handleBoardStatusChange}
             isAdmin={isAdmin}
           />

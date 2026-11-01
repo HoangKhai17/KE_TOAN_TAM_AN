@@ -124,6 +124,13 @@ async function addComment(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function updateComment(req, res, next) {
+  try {
+    const comment = await svc.updateComment(req.params.id, req.params.cid, req.user.id, req.user.role, req.body.content)
+    res.json({ success: true, data: { comment } })
+  } catch (err) { next(err) }
+}
+
 async function deleteComment(req, res, next) {
   try {
     await svc.deleteComment(req.params.id, req.params.cid, req.user.id, req.user.role)
@@ -197,7 +204,7 @@ module.exports = {
   createAssignment, updateAssignment, deleteAssignment,
   sendAssignment, cancelAssignment, closeAssignment,
   acceptAssignment, progressAssignment, completeAssignment, rejectAssignment,
-  addComment, deleteComment,
+  addComment, updateComment, deleteComment,
   listChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem, reorderChecklist,
   listLinks, addLink, deleteLink,
 }

@@ -108,6 +108,8 @@ const shortName = (nm) => { const p = (nm || '').trim().split(/\s+/); return p.l
 // Mức độ / Ưu tiên (đồng bộ Tasks)
 const PRIORITY_LABEL = { high: 'Cao', medium: 'Trung bình', low: 'Thấp' }
 const PRIORITY_CLASS = { high: s.prioHigh, medium: s.prioMedium, low: s.prioLow }
+// Badge Mức độ cho BOARD: nền đậm, chữ trắng, font nhỏ (y như board Tasks)
+const BOARD_PRIO_CLASS = { high: s.boardPrioHigh, medium: s.boardPrioMedium, low: s.boardPrioLow }
 
 // Danh mục cột danh sách (thứ tự + nhãn) — bộ chọn ẩn/hiện cột, đồng bộ Tasks.
 // fixed: luôn hiện (không cho tắt). Cột "Hành động" luôn hiện (không nằm trong list).
@@ -776,26 +778,45 @@ function BoardView({ items, isAdmin, navigate, actionLoading, onEdit, onReceive,
               const isOverdue  = item.status === 'overdue'
 
               return (
-                <div key={item.id} className={`${s.boardCard} ${isOverdue ? s.boardCardOverdue : ''}`}>
+                <div
+                  key={item.id}
+                  className={`${s.boardCard} ${isOverdue ? s.boardCardOverdue : ''}`}
+                  onClick={(e) => { if (e.target.closest('button, a')) return; onEdit(item) }}
+                  title="Nhấp để xem nhanh"
+                >
                   <div className={s.boardCardTitle}>{item.documentName}</div>
                   {item.companyName && (
                     <div
                       className={s.boardCardCompany}
-                      onClick={() => navigate(`/companies/${item.companyId}?tab=client-requests`)}
+                      onClick={(e) => { e.stopPropagation(); navigate(`/companies/${item.companyId}?tab=client-requests`) }}
                       title={item.companyName}
                     >
-                      <Building2 size={10} />
                       {item.companyName}
                     </div>
                   )}
                   <div className={s.boardCardMeta}>
-                    {item.periodLabel && <span className={s.boardCardDeadline}>{item.periodLabel}</span>}
+                    <span className={`${s.boardPrioBadge} ${BOARD_PRIO_CLASS[item.priority || 'medium']}`}>{PRIORITY_LABEL[item.priority || 'medium']}</span>
+                    {isOverdue && <span className={`${s.boardCompBadge} ${s.boardCompLate}`}>Quá hạn</span>}
+                    {item.requestedByName && (
+                      <span className={s.boardCardAssigneeName} title={item.requestedByName}>{shortName(item.requestedByName)}</span>
+                    )}
                     {item.deadlineDate && (
-                      <span className={isOverdue ? s.boardCardDeadlineOver : s.boardCardDeadline}>
-                        Hạn: {fmtDate(item.deadlineDate)}
+                      <span className={`${s.boardCardDates} ${isOverdue ? s.boardCardDateOver : ''}`}>
+                        {item.periodLabel ? `${item.periodLabel} · ` : ''}{fmtDate(item.deadlineDate).slice(0, 5)}
                       </span>
                     )}
                   </div>
+                  {item.checklistTotal > 0 && (() => {
+                    const pct = Math.round((item.checklistDone / item.checklistTotal) * 100)
+                    return (
+                      <div className={s.boardCardProgress}>
+                        <div className={s.progressBarMini}>
+                          <div className={`${s.progressFillMini} ${pct >= 100 ? s.progressFillMiniDone : ''}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className={s.boardCardProgressText}>{pct}%</span>
+                      </div>
+                    )
+                  })()}
                   <div className={s.boardCardActions}>
                     {item.tokenSubmittedAt && (
                       <button className={`${s.boardCardBtn}`} onClick={() => onViewSubmitted(item)} title="Xem dữ liệu KH">
@@ -1887,10 +1908,10 @@ export default function AdminClientRequests() {
                         {vis('latestComment') && (
                         <td className={s.td}>
                           {item.latestComment ? (
-                            <span className={s.commentPreview} title={item.latestComment}>
-                              {item.commentCount > 1 && <span className={s.commentCountBadge}>{item.commentCount}</span>}
-                              {item.latestComment}
-                            </span>
+                            <div className={s.commentCell} title={`${item.latestCommentBy ?? ''}: ${item.latestComment}`}>
+                              {item.latestCommentBy && <span className={s.commentBy}>{shortName(item.latestCommentBy)}:</span>}
+                              <span className={s.commentTextPreview}>{item.latestComment}</span>
+                            </div>
                           ) : <span className={s.mutedDash}>—</span>}
                         </td>
                         )}

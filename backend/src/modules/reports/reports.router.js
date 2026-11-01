@@ -7,12 +7,7 @@ const router = Router()
 const auth  = [authenticate]
 const admin = [authenticate, requireRole('admin')]
 
-router.get('/overview', ...auth,  ctrl.getOverview)
-router.get('/staff',    ...auth,  ctrl.getStaffPerformance)
-router.get('/company',  ...auth,  ctrl.getCompanyStatus)
-router.get('/sla',      ...auth,  ctrl.getSlaCompliance)
-router.get('/aging',    ...auth,  ctrl.getAging)
-router.get('/velocity', ...auth,  ctrl.getVelocity)
+// Chỉ còn báo cáo Dự báo (các loại khác đã gỡ bỏ theo yêu cầu).
 router.get('/forecast', ...auth,  ctrl.getForecast)
 router.get('/export/:type', ...admin, ctrl.exportReport)
 

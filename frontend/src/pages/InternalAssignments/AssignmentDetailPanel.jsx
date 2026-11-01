@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   X, Check, ThumbsUp, Play, XCircle, Trash2, Loader2,
   MessageSquare, Plus, Search, Users, Building2, Calendar, Flag, FileText,
+  Send, Edit2,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useToastStore } from '../../stores/toastStore'
@@ -14,6 +15,7 @@ import IaLinksSection from './IaLinksSection'
 import DeleteConfirmDialog from '../../components/ui/DeleteConfirmDialog'
 import DateBox from '../../components/ui/DateBox'
 import s from './internalAssignments.module.css'
+import ts from '../Tasks/tasks.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -250,6 +252,8 @@ export default function AssignmentDetailPanel({
 
   // Comment
   const [commentText, setCommentText] = useState('')
+  const [editCommentId, setEditCommentId]     = useState(null)
+  const [editCommentText, setEditCommentText] = useState('')
   const [submitting,  setSubmitting]  = useState(false)
 
   // Modal / action
@@ -449,6 +453,18 @@ export default function AssignmentDetailPanel({
     } catch (err) {
       addToast(err?.response?.data?.error?.message ?? 'Không thể gửi comment', 'error')
     } finally { setSubmitting(false) }
+  }
+
+  async function handleUpdateComment(commentId) {
+    const text = editCommentText.trim()
+    if (!text) return
+    try {
+      const updated = await api.updateComment(assignmentId, commentId, text)
+      setItem((prev) => ({ ...prev, comments: (prev?.comments ?? []).map((c) => c.id === updated.id ? updated : c) }))
+      setEditCommentId(null)
+    } catch (err) {
+      addToast(err?.response?.data?.error?.message ?? 'Không thể sửa comment', 'error')
+    }
   }
 
   async function handleDeleteComment(commentId) {
@@ -665,13 +681,9 @@ export default function AssignmentDetailPanel({
                       <span className={s.iaQvValue}>{fmtDateTime(item.closedAt)}</span>
                     </div>
                   )}
-                </div>
 
-                {/* ── Right column — content ── */}
-                <div className={s.iaQvRight}>
-
-                  {/* Nhân sự thực hiện */}
-                  <div className={s.iaQvSection}>
+                  {/* Nhân sự thực hiện — nằm trong phần Thông tin (đồng bộ Giao cho/Hỗ trợ ở Tasks/CDR) */}
+                  <div className={s.iaQvAssignees}>
                     <div className={s.iaQvSectionTitle}>
                       <Users size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
                       Nhân sự thực hiện ({item.assignees?.length ?? 0})
@@ -738,6 +750,10 @@ export default function AssignmentDetailPanel({
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* ── Right column — content ── */}
+                <div className={s.iaQvRight}>
 
                   {/* Checklist */}
                   <div className={s.iaQvSection}>
@@ -801,49 +817,76 @@ export default function AssignmentDetailPanel({
                       Bình luận ({item.comments?.length ?? 0})
                     </div>
 
-                    <div className={s.commentList}>
-                      {(item.comments ?? []).map((c) => (
-                        <div key={c.id} className={s.commentItem}>
-                          <div className={s.avatarSm}>{initials(c.user?.name)}</div>
-                          <div className={s.commentBody}>
-                            <div className={s.commentHeader}>
-                              <span className={s.commentAuthor}>{c.user?.name}</span>
-                              <span className={s.commentTime}>{fmtDateTime(c.createdAt)}</span>
+                    <div className={ts.commentList}>
+                      {(item.comments ?? []).length === 0 && (
+                        <p className={ts.emptyInline}>Chưa có bình luận.</p>
+                      )}
+                      {(item.comments ?? []).map((c) => {
+                        const canEditComment = c.user?.id === currentUser?.id
+                        return (
+                          <div key={c.id} className={ts.commentItem}>
+                            <div className={ts.commentAvatar}>{initials(c.user?.name)}</div>
+                            <div className={ts.commentBody}>
+                              <div className={ts.commentMeta}>
+                                <span className={ts.commentAuthor}>{c.user?.name}</span>
+                                <span className={ts.commentTime}>{fmtDateTime(c.createdAt)}</span>
+                                {c.isEdited && <span className={ts.commentEdited}>(đã sửa)</span>}
+                              </div>
+                              {editCommentId === c.id ? (
+                                <div className={ts.commentEditRow}>
+                                  <textarea
+                                    value={editCommentText}
+                                    onChange={(e) => setEditCommentText(e.target.value)}
+                                    className={`${ts.commentInput} ${ts.commentInputEdit}`}
+                                    autoFocus
+                                  />
+                                  <div className={ts.commentEditActions}>
+                                    <button className={ts.btnIcon} onClick={() => handleUpdateComment(c.id)} title="Lưu"><Check size={12} /></button>
+                                    <button className={ts.btnIcon} onClick={() => setEditCommentId(null)} title="Huỷ"><X size={12} /></button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className={ts.commentContent}>{c.content}</p>
+                              )}
+                              {canEditComment && editCommentId !== c.id && (
+                                <div className={ts.commentActions}>
+                                  <button className={`${ts.btnGhost} ${ts.btnTiny}`} onClick={() => { setEditCommentId(c.id); setEditCommentText(c.content) }}>
+                                    <Edit2 size={10} /> Sửa
+                                  </button>
+                                  <button className={`${ts.btnGhost} ${ts.btnTiny} ${ts.btnDangerText}`} onClick={() => handleDeleteComment(c.id)}>
+                                    <Trash2 size={10} /> Xoá
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            <p className={s.commentText}>{c.content}</p>
                           </div>
-                          {c.user?.id === currentUser?.id && (
-                            <button
-                              className={s.commentDelete}
-                              onClick={() => handleDeleteComment(c.id)}
-                              title="Xóa"
-                            >
-                              <X size={11} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
 
                     {item.status !== 'cancelled' && (
-                      <div className={s.commentForm}>
-                        <textarea
-                          className={s.commentTextarea}
-                          placeholder="Thêm bình luận..."
-                          value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddComment()
-                          }}
-                          rows={2}
-                        />
-                        <button
-                          className={`${s.btnPrimary} ${s.commentSendBtn}`}
-                          onClick={handleAddComment}
-                          disabled={submitting || !commentText.trim()}
-                        >
-                          {submitting ? <Loader2 size={13} className={s.spinIcon} /> : <Plus size={14} />}
-                        </button>
+                      <div className={ts.commentAddRow}>
+                        <div className={ts.commentAvatar}>{initials(currentUser?.name)}</div>
+                        <div className={ts.commentInputWrap}>
+                          <textarea
+                            value={commentText}
+                            onChange={(e) => setCommentText(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) handleAddComment() }}
+                            placeholder="Viết bình luận... (Ctrl+Enter để gửi)"
+                            className={ts.commentInput}
+                          />
+                          <div className={ts.commentSendRow}>
+                            <span className={ts.commentShortcut}>Ctrl + Enter để gửi</span>
+                            <button
+                              className={`${ts.btnPrimary} ${ts.btnCompactWide}`}
+                              onClick={handleAddComment}
+                              disabled={submitting || !commentText.trim()}
+                            >
+                              {submitting ? <Loader2 size={13} className={ts.spin} /> : <Send size={13} />}
+                              Gửi
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

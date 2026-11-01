@@ -39,6 +39,7 @@ router.post('/:id/reject',   ...auth, validate(noteSchema),         ctrl.rejectA
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
 router.post('/:id/comments',          ...auth, validate(commentSchema), ctrl.addComment)
+router.patch('/:id/comments/:cid',    ...auth, validate(commentSchema), ctrl.updateComment)
 router.delete('/:id/comments/:cid',   ...auth, ctrl.deleteComment)
 
 // ─── Checklist ────────────────────────────────────────────────────────────────

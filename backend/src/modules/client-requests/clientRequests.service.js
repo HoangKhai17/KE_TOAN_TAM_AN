@@ -46,6 +46,7 @@ function toDto(row) {
     collaborators:      Array.isArray(row.collaborators) ? row.collaborators : [],
     commentCount:       row.comment_count != null ? Number(row.comment_count) : 0,
     latestComment:      row.latest_comment ?? null,
+    latestCommentBy:    row.latest_comment_by ?? null,
     checklistTotal:     row.checklist_total != null ? Number(row.checklist_total) : 0,
     checklistDone:      row.checklist_done != null ? Number(row.checklist_done) : 0,
     createdAt:          row.created_at,
@@ -111,6 +112,8 @@ const CDR_COLS = `
   (SELECT COUNT(*) FROM client_request_comments crcm WHERE crcm.request_id = cdr.id) AS comment_count,
   (SELECT crcm.content FROM client_request_comments crcm WHERE crcm.request_id = cdr.id
      ORDER BY crcm.created_at DESC LIMIT 1) AS latest_comment,
+  (SELECT u2.name FROM client_request_comments crcm JOIN users u2 ON u2.id = crcm.user_id
+     WHERE crcm.request_id = cdr.id ORDER BY crcm.created_at DESC LIMIT 1) AS latest_comment_by,
   (SELECT COUNT(*) FROM client_request_checklist_items cci WHERE cci.request_id = cdr.id) AS checklist_total,
   (SELECT COUNT(*) FROM client_request_checklist_items cci WHERE cci.request_id = cdr.id AND cci.is_completed) AS checklist_done`
 

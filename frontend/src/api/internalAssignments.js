@@ -79,6 +79,11 @@ export async function addComment(id, content) {
   return data.data.comment
 }
 
+export async function updateComment(id, commentId, content) {
+  const { data } = await api.patch(`/internal-assignments/${id}/comments/${commentId}`, { content })
+  return data.data.comment
+}
+
 export async function deleteComment(id, commentId) {
   await api.delete(`/internal-assignments/${id}/comments/${commentId}`)
 }
