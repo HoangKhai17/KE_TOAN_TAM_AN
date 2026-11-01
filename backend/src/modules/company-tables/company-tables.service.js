@@ -1,4 +1,6 @@
 const { query, getClient } = require('../../config/db')
+const ExcelJS = require('exceljs')
+const { applyStandardStyle } = require('../export/excel-renderer')
 const attachmentsSvc = require('../attachments/attachments.service')
 
 // Chuẩn hoá cột kiểu 'link' → mảng {url,label}. Chấp nhận string | object | mảng.
@@ -70,6 +72,7 @@ function defToDto(d, columns) {
   return {
     id: d.id, tableKey: d.table_key, name: d.name, description: d.description ?? null,
     icon: d.icon ?? null, sortOrder: d.sort_order, isActive: d.is_active,
+    showInCompany: d.show_in_company ?? true,   // false = ẩn khỏi tab Bảng dữ liệu của công ty (chỉ xem ở Báo cáo quy trình)
     section: d.section ?? 'data',   // 'data' = Bảng dữ liệu; 'important_note' = Điều cần lưu ý
     allowCompanyColumns: d.allow_company_columns, isSystem: d.is_system,
     parentDefId: d.parent_def_id ?? null,   // null = bảng cấp cao; có = bảng con (sub-tab)
@@ -160,6 +163,7 @@ async function updateDef(id, body) {
   if (body.icon !== undefined)        push('icon', body.icon || null)
   if (body.sortOrder !== undefined)   push('sort_order', body.sortOrder)
   if (body.isActive !== undefined)    push('is_active', body.isActive)
+  if (body.showInCompany !== undefined) push('show_in_company', body.showInCompany)
   if (body.allowCompanyColumns !== undefined) push('allow_company_columns', body.allowCompanyColumns)
   if (body.groupConfig !== undefined) push('group_config', body.groupConfig ? JSON.stringify(body.groupConfig) : null)
   if (!fields.length) { const e = new Error('Không có gì để cập nhật'); e.status = 400; throw e }
@@ -334,6 +338,24 @@ async function listRows(defId, companyId, user) {
     'SELECT * FROM company_table_rows WHERE def_id = $1 AND company_id = $2 ORDER BY position, created_at LIMIT 1000',
     [defId, companyId])
   return rows.map(rowToDto)
+}
+
+// Danh sách công ty CÓ dòng cho 1 bảng (dùng cho Báo cáo quy trình gộp nhiều công ty).
+// RBAC: staff chỉ thấy công ty MÌNH PHỤ TRÁCH (không hiện công ty của người khác).
+async function rowCompanies(defId, user) {
+  const params = [defId]
+  let scope = ''
+  if (user && user.role !== 'admin') { params.push(user.id); scope = ` AND c.assigned_staff_id = $${params.length}` }
+  const { rows } = await query(
+    `SELECT c.id, c.name, c.short_name AS "shortName",
+            c.assigned_staff_id AS "assignedStaffId", COUNT(r.id)::int AS "rowCount"
+       FROM companies c
+       JOIN company_table_rows r ON r.company_id = c.id AND r.def_id = $1
+      WHERE 1=1${scope}
+      GROUP BY c.id, c.name, c.short_name, c.assigned_staff_id
+      ORDER BY c.name`,
+    params)
+  return rows
 }
 
 async function createRow(defId, companyId, user, data) {
@@ -595,10 +617,93 @@ async function syncGroups(childDefId, companyId, user) {
   return { added, removed }
 }
 
+// ── Xuất Excel tổng (gộp nhiều công ty) cho Báo cáo quy trình ──────────────────
+function ctFmtDateVN(v) {
+  if (!v) return ''
+  const s = String(v).substring(0, 10)
+  const [y, m, d] = s.split('-')
+  return (y && m && d) ? `${d}/${m}/${y}` : s
+}
+function ctComputeCell(col, data) {
+  const t = col.computed_type
+  const cfg = col.computed_config || {}
+  if (t === 'days_since') {
+    const src = data[cfg.source_col]
+    if (!src) return ''
+    const d = new Date(String(src).substring(0, 10))
+    if (isNaN(d.getTime())) return ''
+    const now = new Date(); now.setHours(0, 0, 0, 0); d.setHours(0, 0, 0, 0)
+    return Math.round((now - d) / 86400000)
+  }
+  if (t === 'days_between') {
+    const a = data[cfg.from_col], b = data[cfg.to_col]
+    if (!a || !b) return ''
+    const da = new Date(String(a).substring(0, 10)), db = new Date(String(b).substring(0, 10))
+    if (isNaN(da.getTime()) || isNaN(db.getTime())) return ''
+    return Math.round((db - da) / 86400000)
+  }
+  return ''   // formula/khác: bỏ qua ở xuất tổng
+}
+function ctCellValue(col, data) {
+  if (col.data_type === 'computed') return ctComputeCell(col, data)
+  const v = data[col.col_key]
+  if (v === null || v === undefined) return ''
+  if (col.data_type === 'date') return ctFmtDateVN(v)
+  if (col.data_type === 'link') return Array.isArray(v) ? v.map((l) => (l && l.url) ? l.url : l).join(', ') : String(v)
+  if (col.data_type === 'file') return ''
+  return v
+}
+
+async function exportAllCompanies(defId, companyIds, user) {
+  const { rows: [defRow] } = await query('SELECT * FROM company_table_defs WHERE id = $1', [defId])
+  if (!defRow) { const e = new Error('Không tìm thấy bảng'); e.status = 404; throw e }
+  const { rows: cols } = await query(
+    'SELECT * FROM company_table_columns WHERE def_id = $1 AND is_active = TRUE ORDER BY sort_order, created_at', [defId])
+  const exportCols = cols.filter((c) => c.data_type !== 'file')
+
+  const params = [defId]
+  const conds = ['r.def_id = $1']
+  if (user && user.role !== 'admin') { params.push(user.id); conds.push(`c.assigned_staff_id = $${params.length}`) }
+  if (Array.isArray(companyIds) && companyIds.length) { params.push(companyIds); conds.push(`r.company_id = ANY($${params.length}::uuid[])`) }
+  const { rows } = await query(
+    `SELECT r.data, r.position, c.name AS company_name
+       FROM company_table_rows r JOIN companies c ON c.id = r.company_id
+      WHERE ${conds.join(' AND ')}
+      ORDER BY c.name, r.position, r.created_at`, params)
+
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Kế Toán Tâm An'
+  const ws = wb.addWorksheet('Tổng hợp quy trình')
+  ws.columns = [
+    { header: 'STT', key: '__stt', width: 6 },
+    { header: 'Công ty', key: '__company', width: 34 },
+    ...exportCols.map((c) => ({ header: c.label, key: c.col_key, width: 22 })),
+  ]
+  let cur = null, stt = 0
+  for (const r of rows) {
+    if (r.company_name !== cur) { cur = r.company_name; stt = 0 }
+    stt++
+    const obj = { __stt: stt, __company: r.company_name }
+    for (const c of exportCols) obj[c.col_key] = ctCellValue(c, r.data || {})
+    ws.addRow(obj)
+  }
+  const hr = ws.getRow(1)
+  hr.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  hr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1d4ed8' } }
+  hr.alignment = { vertical: 'middle', horizontal: 'center' }
+  hr.height = 22
+  applyStandardStyle(ws, { headerRows: 1 })
+
+  const buffer = await wb.xlsx.writeBuffer()
+  const now = new Date()
+  const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  return { buffer, filename: `tong-hop-quy-trinh-${stamp}.xlsx` }
+}
+
 module.exports = {
   listDefs, getDef, createDef, updateDef, deleteDef, reorderDefs,
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,
   listRows, createRow, updateRow, deleteRow, reorderRows, batchCreateRows, upsertRows,
-  listDefFiles, syncGroups,
+  listDefFiles, syncGroups, rowCompanies, exportAllCompanies,
 }

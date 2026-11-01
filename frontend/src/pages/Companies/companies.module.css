@@ -5226,6 +5226,33 @@
 .hdldToolbar      { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); flex-wrap: wrap; }
 .hdldToolbarRight { margin-left: auto; display: flex; gap: var(--space-3); }
 .hdldToolbarCount { font-size: var(--fs-xs); color: var(--color-muted); }
+/* Khi dùng ở Báo cáo quy trình: gắn tên công ty + đếm + nút trên cùng 1 hàng header */
+.hdldToolbarTitle {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 800;
+  font-size: var(--fs-sm);
+  color: var(--color-primary-deep, #1e3a8a);
+  margin-right: 10px;
+  max-width: 460px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hdldToolbarWithTitle {
+  align-items: center;
+  background: linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%);
+  border-bottom: 1.5px solid #dbeafe;
+  padding: 10px 14px;
+  border-radius: 10px 10px 0 0;
+  margin-bottom: 0;   /* bỏ dải trắng thừa giữa header và bảng */
+}
+/* Ở Báo cáo quy trình: bảng dính liền ngay dưới header (không bo góc trên, không margin) */
+.hdldToolbarWithTitle + .tableWrap {
+  border-top: none;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  margin-bottom: 0;
+}
 
 .hdldFilterSelect {
   height: var(--control-h-sm);

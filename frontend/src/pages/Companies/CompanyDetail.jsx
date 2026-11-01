@@ -187,7 +187,10 @@ export default function CompanyDetail() {
   }, [mode, isTablesMode, tabId, activeTab, customDefs, id])
 
   const refetchCustomDefs = useCallback(() => {
-    companyTablesApi.listDefs({ activeOnly: true }).then(setCustomDefs).catch(() => {})
+    // Ẩn các bảng "chỉ xem ở Báo cáo quy trình" (showInCompany = false) khỏi tab Bảng dữ liệu công ty
+    companyTablesApi.listDefs({ activeOnly: true })
+      .then((defs) => setCustomDefs((defs ?? []).filter((d) => d.showInCompany !== false)))
+      .catch(() => {})
   }, [])
   useEffect(() => { refetchCustomDefs() }, [refetchCustomDefs])
 

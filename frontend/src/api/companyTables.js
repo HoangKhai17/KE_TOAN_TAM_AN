@@ -5,6 +5,31 @@ export async function listDefs(params = {}) {
   const { data } = await api.get('/company-tables/defs', { params })
   return data.data.defs
 }
+// Công ty có dòng cho 1 bảng (Báo cáo quy trình)
+export async function getRowCompanies(defId) {
+  const { data } = await api.get(`/company-tables/defs/${defId}/row-companies`)
+  return data.data.companies
+}
+
+// Xuất Excel tổng (gộp nhiều công ty) — tải file
+export async function exportAllCompanies(defId, companyIds = []) {
+  const res = await api.get(`/company-tables/defs/${defId}/export-all`, {
+    params: companyIds.length ? { companyIds: companyIds.join(',') } : {},
+    responseType: 'blob',
+    timeout: 120000,
+  })
+  const url  = window.URL.createObjectURL(new Blob([res.data]))
+  const link = document.createElement('a')
+  link.href  = url
+  const today = new Date()
+  const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  link.setAttribute('download', `tong-hop-quy-trinh-${stamp}.xlsx`)
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 export async function getDef(id) {
   const { data } = await api.get(`/company-tables/defs/${id}`)
   return data.data.def

@@ -9,6 +9,8 @@ const router = Router()
 
 // Defs (read = any auth; write = admin)
 router.get('/defs',      ...auth,  ctrl.listDefs)
+router.get('/defs/:id/row-companies', ...auth, ctrl.rowCompanies)
+router.get('/defs/:id/export-all',    ...auth, ctrl.exportAllCompanies)
 router.get('/defs/:id',  ...auth,  ctrl.getDef)
 router.post('/defs',     ...admin, ctrl.createDef)
 // PHẢI đặt trước '/defs/:id', nếu không 'reorder' sẽ bị bắt làm :id

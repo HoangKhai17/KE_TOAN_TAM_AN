@@ -770,7 +770,7 @@ const NON_SIMPLE_TYPES = ['computed', 'formula', 'file', 'link']
 const PAGE_SIZE = 20
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs = [] }) {
+export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs = [], title = null }) {
   const confirmDelete = useDeleteConfirm()
   const companyId = company.id
   const user     = useAuthStore((st) => st.user)
@@ -1259,7 +1259,8 @@ export default function CustomTableTab({ def, company, onDefUpdated, clusterDefs
   return (
     <div ref={tabRef}>
       {/* Toolbar */}
-      <div className={s.hdldToolbar}>
+      <div className={`${s.hdldToolbar} ${title ? s.hdldToolbarWithTitle : ''}`}>
+        {title && <span className={s.hdldToolbarTitle} title={title}>{title}</span>}
         {!loading && (
           <span className={s.hdldToolbarCount}>
             {displayed.length}{displayed.length < rows.length && `/${rows.length}`} dòng

@@ -16,7 +16,7 @@ const ROUTE_LABELS = {
   'task-types':           'Loại công việc',
   schedules:              'Lịch định kỳ',
   staff:                  'Nhân viên',
-  reports:                'Báo cáo quy trình',
+  reports:                'BC Quy trình',
   credentials:            'Thông tin đăng nhập',
   settings:               'Cài đặt',
   profile:                'Hồ sơ',

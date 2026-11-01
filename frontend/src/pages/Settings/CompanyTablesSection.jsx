@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Loader2, Columns, Power, ChevronUp, ChevronDown, GripVertical } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, Columns, Power, ChevronUp, ChevronDown, GripVertical, Eye, EyeOff } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { SortableList, SortableItem } from '../../components/ui/SortableList'
@@ -431,6 +431,15 @@ export default function CompanyTablesSection({ section = 'data' }) {
     try { await api.updateDef(def.id, { isActive: !def.isActive }); reload() }
     catch { addToast('Không thể đổi trạng thái', 'error') }
   }
+  // Ẩn/hiện bảng khỏi tab "Bảng dữ liệu" của công ty (dữ liệu giữ nguyên; vẫn xem/sửa ở Báo cáo quy trình)
+  async function toggleShowInCompany(def) {
+    const next = def.showInCompany === false
+    try {
+      await api.updateDef(def.id, { showInCompany: next })
+      addToast(next ? 'Đã hiện lại ở Bảng dữ liệu công ty' : 'Đã ẩn khỏi Bảng dữ liệu công ty — chỉ xem ở Báo cáo quy trình', 'success')
+      reload()
+    } catch { addToast('Không thể đổi chế độ hiển thị', 'error') }
+  }
   async function removeDef(def) {
     if (!(await confirmDelete({ title: 'Xóa bảng dữ liệu', message: <>Xóa bảng <strong>“{def.name}”</strong> và toàn bộ dữ liệu của bảng này ở mọi công ty?</> }))) return
     try { await api.deleteDef(def.id); if (selected === def.id) setSelected(null); reload() }
@@ -511,6 +520,15 @@ export default function CompanyTablesSection({ section = 'data' }) {
                 </td>
                 <td>
                   <div style={row}>
+                    <button
+                      className={s.btnOutline}
+                      onClick={() => toggleShowInCompany(d)}
+                      title={d.showInCompany === false
+                        ? 'Đang ẩn khỏi Bảng dữ liệu công ty (chỉ xem ở Báo cáo quy trình) — bấm để hiện lại'
+                        : 'Đang hiện ở Bảng dữ liệu công ty — bấm để ẩn (chỉ xem ở Báo cáo quy trình)'}
+                    >
+                      {d.showInCompany === false ? <EyeOff size={13} color="var(--color-accent)" /> : <Eye size={13} />}
+                    </button>
                     <button className={s.btnOutline} onClick={() => setSelected(d.id)}><Columns size={13} /> Cột</button>
                     <button className={s.btnOutline} onClick={() => setDefModal({ def: d })}><Pencil size={13} /></button>
                     {!d.isSystem && <button className={s.btnOutline} onClick={() => removeDef(d)}><Trash2 size={13} color="var(--color-danger)" /></button>}

@@ -13,6 +13,19 @@ async function getDef(req, res, next) {
   try { res.json({ success: true, data: { def: await svc.getDef(req.params.id) } }) }
   catch (e) { next(e) }
 }
+async function rowCompanies(req, res, next) {
+  try { res.json({ success: true, data: { companies: await svc.rowCompanies(req.params.id, req.user) } }) }
+  catch (e) { next(e) }
+}
+async function exportAllCompanies(req, res, next) {
+  try {
+    const ids = req.query.companyIds ? String(req.query.companyIds).split(',').map((x) => x.trim()).filter(Boolean) : null
+    const { buffer, filename } = await svc.exportAllCompanies(req.params.id, ids, req.user)
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(buffer)
+  } catch (e) { next(e) }
+}
 async function createDef(req, res, next) {
   try { res.status(201).json({ success: true, data: { def: await svc.createDef(req.body, req.user.id) } }) }
   catch (e) { next(e) }
@@ -127,7 +140,7 @@ async function deleteCompanyColumn(req, res, next) {
 }
 
 module.exports = {
-  listDefs, getDef, createDef, updateDef, deleteDef, reorderDefs,
+  listDefs, getDef, rowCompanies, exportAllCompanies, createDef, updateDef, deleteDef, reorderDefs,
   addColumn, updateColumn, deleteColumn, reorderColumns,
   listRows, createRow, updateRow, deleteRow, reorderRows, batchRows, upsertRows,
   listCompanyColumns, addCompanyColumn, deleteCompanyColumn,

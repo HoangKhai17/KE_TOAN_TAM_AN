@@ -5,13 +5,15 @@ import {
 } from 'recharts'
 import {
   Building2, CalendarDays, Download, Loader2, AlertTriangle,
-  Maximize2, Minimize2, TrendingUp, TrendingDown, Minus, RefreshCw, FileText,
+  Maximize2, Minimize2, TrendingUp, TrendingDown, Minus, RefreshCw, FileText, ClipboardList,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { getForecastReport, getForecastYears, exportReport } from '../../api/reports'
+import * as ctApi from '../../api/companyTables'
+import ProcessReportTab, { findProcessDef } from './ProcessReportTab'
 import s from './Reports.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -46,6 +48,7 @@ export default function Reports() {
   const queryClient = useQueryClient()
   const isAdmin = user?.role === 'admin' || user?.role === 'manager'
 
+  const [activeTab,     setActiveTab]     = useState('process')
   const [forecastMonth, setForecastMonth] = useState(() => defaultForecastPeriod().month)
   const [forecastYear,  setForecastYear]  = useState(() => defaultForecastPeriod().year)
   const [exporting,     setExporting]     = useState(false)
@@ -64,6 +67,14 @@ export default function Reports() {
     set.add(forecastYear)      // đảm bảo năm đang chọn luôn nằm trong danh sách
     return [...set].sort((a, b) => b - a)
   }, [yearsQuery.data, currentYear, forecastYear])
+
+  // Nhãn tab "Quy trình" = tên bảng trong Cài đặt (dùng chung cache với ProcessReportTab)
+  const processDefsQuery = useQuery({
+    queryKey: ['company-tables', 'defs', 'data'],
+    queryFn: () => ctApi.listDefs({ section: 'data' }),
+    staleTime: 5 * 60_000,
+  })
+  const processTabLabel = findProcessDef(processDefsQuery.data ?? [])?.name ?? 'Quy trình'
 
   const reportQuery = useQuery({
     queryKey: ['reports', 'forecast', forecastMonth, forecastYear],
@@ -91,72 +102,84 @@ export default function Reports() {
   }
 
   return (
-    <AppLayout title="Báo cáo quy trình">
+    <AppLayout title="BC Quy trình">
       <div className={`${s.page} ${fullscreen ? s.fullscreen : ''}`}>
 
-        {/* ── Tab nav (chỉ còn Dự báo) ── */}
+        {/* ── Tab nav ── */}
         <div className={s.tabBar}>
-          <button className={`${s.tab} ${s.tabActive}`}>
+          <button className={`${s.tab} ${activeTab === 'process' ? s.tabActive : ''}`} onClick={() => setActiveTab('process')} title={processTabLabel}>
+            <ClipboardList size={14} />
+            {processTabLabel}
+          </button>
+          <button className={`${s.tab} ${activeTab === 'forecast' ? s.tabActive : ''}`} onClick={() => setActiveTab('forecast')}>
             <CalendarDays size={14} />
             Dự báo
           </button>
         </div>
 
-        {/* ── Filter bar ── */}
-        <div className={s.filterBar}>
-          <div className={s.filterLeft}>
-            <div className={s.forecastFilters}>
-              <select className={s.filterSelect} value={forecastMonth} onChange={(e) => setForecastMonth(Number(e.target.value))}>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                  <option key={m} value={m}>Tháng {m}</option>
-                ))}
-              </select>
-              <select className={s.filterSelect} value={forecastYear} onChange={(e) => setForecastYear(Number(e.target.value))}>
-                {yearOptions.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
+        {activeTab === 'process' && (
+          <div className={s.body}>
+            <ProcessReportTab />
           </div>
+        )}
 
-          <div className={s.filterRight}>
-            <button className={s.iconBtn} onClick={handleRefresh} title="Làm mới" disabled={loading}>
-              <RefreshCw size={14} className={loading ? s.spin : ''} />
-            </button>
-            <button
-              className={`${s.iconBtn} ${fullscreen ? s.iconBtnActive : ''}`}
-              onClick={() => setFullscreen((f) => !f)}
-              title={fullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}
-            >
-              {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
-            {isAdmin && data && (
-              <button className={s.btnExport} onClick={handleExport} disabled={exporting}>
-                {exporting ? <Loader2 size={13} className={s.spin} /> : <Download size={13} />}
-                Xuất Excel
-              </button>
-            )}
-          </div>
-        </div>
+        {activeTab === 'forecast' && (
+          <>
+            {/* ── Filter bar ── */}
+            <div className={s.filterBar}>
+              <div className={s.filterLeft}>
+                <div className={s.forecastFilters}>
+                  <select className={s.filterSelect} value={forecastMonth} onChange={(e) => setForecastMonth(Number(e.target.value))}>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                      <option key={m} value={m}>Tháng {m}</option>
+                    ))}
+                  </select>
+                  <select className={s.filterSelect} value={forecastYear} onChange={(e) => setForecastYear(Number(e.target.value))}>
+                    {yearOptions.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-        {/* ── Body ── */}
-        <div className={s.body}>
-          {loading && (
-            <div className={s.centered}>
-              <Loader2 size={28} className={s.spin} />
-              <p className={s.loadingText}>Đang tải dữ liệu...</p>
+              <div className={s.filterRight}>
+                <button className={s.iconBtn} onClick={handleRefresh} title="Làm mới" disabled={loading}>
+                  <RefreshCw size={14} className={loading ? s.spin : ''} />
+                </button>
+                <button
+                  className={`${s.iconBtn} ${fullscreen ? s.iconBtnActive : ''}`}
+                  onClick={() => setFullscreen((f) => !f)}
+                  title={fullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}
+                >
+                  {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                </button>
+                {isAdmin && data && (
+                  <button className={s.btnExport} onClick={handleExport} disabled={exporting}>
+                    {exporting ? <Loader2 size={13} className={s.spin} /> : <Download size={13} />}
+                    Xuất Excel
+                  </button>
+                )}
+              </div>
             </div>
-          )}
 
-          {!loading && error && (
-            <div className={s.errorBox}>
-              <AlertTriangle size={18} />
-              {error}
+            {/* ── Body ── */}
+            <div className={s.body}>
+              {loading && (
+                <div className={s.centered}>
+                  <Loader2 size={28} className={s.spin} />
+                  <p className={s.loadingText}>Đang tải dữ liệu...</p>
+                </div>
+              )}
+              {!loading && error && (
+                <div className={s.errorBox}>
+                  <AlertTriangle size={18} />
+                  {error}
+                </div>
+              )}
+              {!loading && !error && data && <ForecastTab data={data} />}
             </div>
-          )}
-
-          {!loading && !error && data && <ForecastTab data={data} />}
-        </div>
+          </>
+        )}
       </div>
     </AppLayout>
   )
