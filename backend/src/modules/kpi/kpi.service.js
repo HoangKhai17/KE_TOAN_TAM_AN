@@ -58,9 +58,9 @@ const UNIT_CTE = `
     HAVING bool_or(g.level = 0)   -- bỏ nhóm con mồ côi (không có mục cha đứng trước)
   )`
 
-// Giá trị điểm 1 ĐƠN VỊ (mục cha): task ĐỊNH KỲ (source='auto') dùng điểm cấu hình;
-// MỌI nguồn khác → mỗi mục cha = 1 điểm. (cần JOIN tasks t trong truy vấn)
-const UNIT_PT = "(CASE WHEN t.source = 'auto' THEN COALESCE(unit.points, 0) ELSE 1 END)"
+// Giá trị điểm 1 ĐƠN VỊ (mục cha): CHỈ task ĐỊNH KỲ (source='auto') mới có điểm (điểm cấu hình).
+// MỌI nguồn khác (tự sắp xếp / KH yêu cầu / …) = 0 điểm — chỉ THỐNG KÊ số việc, không tính KPI.
+const UNIT_PT = "(CASE WHEN t.source = 'auto' THEN COALESCE(unit.points, 0) ELSE 0 END)"
 
 async function isMonthClosed(year, month) {
   const { y, m } = monthBounds(year, month)
@@ -84,10 +84,10 @@ async function listLive(year, month, opts = {}) {
   const { rows } = await query(`
     ${UNIT_CTE},
     vol AS (
-      -- Tách: điểm ĐỊNH KỲ (auto, điểm cấu hình mục cha) và điểm TASK KHÁC (1đ/mục cha).
+      -- vol_recurring = điểm ĐỊNH KỲ (auto). vol_other = SỐ VIỆC nguồn khác đã xong (THỐNG KÊ, KHÔNG điểm).
       SELECT t.assigned_to AS user_id,
              COALESCE(SUM(unit.points) FILTER (WHERE t.source = 'auto'), 0)::int AS vol_recurring,
-             COUNT(*) FILTER (WHERE t.source <> 'auto')::int AS vol_other
+             COUNT(DISTINCT unit.task_id) FILTER (WHERE t.source <> 'auto')::int AS vol_other
       FROM unit JOIN tasks t ON t.id = unit.task_id
       WHERE unit.is_completed
         AND unit.completed_at >= $1::date AND unit.completed_at < $2::date
@@ -107,11 +107,11 @@ async function listLive(year, month, opts = {}) {
       GROUP BY t.assigned_to
     ),
     poss AS (
-      -- TỔNG điểm có thể đạt trong kỳ (mẫu số cho "đạt/tổng"): cộng TẤT CẢ mục cha (đạt hay chưa)
-      -- của task đến hạn trong kỳ, CỘNG các mục cha đã đạt trong kỳ của task ngoài kỳ → luôn ≥ điểm đã đạt.
+      -- TỔNG điểm có thể đạt trong kỳ (mẫu số "đạt/tổng") — CHỈ task ĐỊNH KỲ (nguồn khác không có điểm):
+      -- cộng điểm mọi mục cha (đạt hay chưa) của task auto đến hạn trong kỳ, CỘNG mục cha auto đã đạt
+      -- trong kỳ của task ngoài kỳ → luôn ≥ điểm đã đạt.
       SELECT t.assigned_to AS user_id,
-             (COALESCE(SUM(unit.points) FILTER (WHERE t.source = 'auto'), 0)
-              + COUNT(*) FILTER (WHERE t.source <> 'auto'))::int AS possible_points
+             COALESCE(SUM(unit.points) FILTER (WHERE t.source = 'auto'), 0)::int AS possible_points
       FROM unit JOIN tasks t ON t.id = unit.task_id
       WHERE t.assigned_to IS NOT NULL${srcClause}
         AND ( (t.due_date >= $1::date AND t.due_date < $2::date)
@@ -138,8 +138,9 @@ function toKpiDto(r) {
   const assigned = parseInt(r.assigned_count, 10) || 0
   const onTime = parseInt(r.on_time_count, 10) || 0
   const volRec = parseInt(r.vol_recurring, 10) || 0    // điểm task ĐỊNH KỲ (điểm cấu hình)
-  const volOther = parseInt(r.vol_other, 10) || 0      // điểm task KHÁC (1đ/bước)
-  const volumePoints = volRec + volOther
+  const volOther = parseInt(r.vol_other, 10) || 0      // SỐ VIỆC nguồn khác đã xong (thống kê, KHÔNG điểm)
+  // Điểm khối lượng KPI = CHỈ điểm định kỳ. Task nguồn khác không tính điểm (chỉ thống kê số việc).
+  const volumePoints = volRec
   return {
     userId: r.user_id, userName: r.user_name, jobTitle: r.job_title ?? null,
     volumeRecurring: volRec, volumeOther: volOther, volumePoints,
