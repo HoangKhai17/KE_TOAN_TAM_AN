@@ -278,7 +278,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
     try {
       const task = await createTask({ ...buildParentPayload(form), spawnSubtasks: typeStructureKnown ? false : true })
       for (const item of checklistItems) {
-        await addTaskChecklistItem(task.id, { stepText: item.text, level: item.level ?? 0 })
+        await addTaskChecklistItem(task.id, { stepText: item.text, level: item.level ?? 0, fetchSource: item.fetchSource || null })
       }
       await Promise.all(linkItems.map((l) => addTaskLink(task.id, { name: l.name, url: l.url })))
       if (openAfter) onSavedAndOpen(task)
@@ -346,7 +346,7 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
       if (!parentCreated) {
         const parent = await createTask(buildParentPayload(chain.parentForm))
         for (const item of chain.parentChecklist) {
-          await addTaskChecklistItem(parent.id, { stepText: item.text, level: item.level ?? 0 })
+          await addTaskChecklistItem(parent.id, { stepText: item.text, level: item.level ?? 0, fetchSource: item.fetchSource || null })
         }
         await Promise.all(chain.parentLinks.map((l) => addTaskLink(parent.id, { name: l.name, url: l.url })))
         parentCreated = parent
@@ -827,6 +827,16 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
                           {item.text}
                         </span>
                       )}
+                      {/* "Cách lấy" — áp cho mọi bước (cha & con) */}
+                      <select
+                        value={item.fetchSource ?? ''}
+                        onChange={(e) => setChecklistItems((prev) => prev.map((x) => x.id === item.id ? { ...x, fetchSource: e.target.value || null } : x))}
+                        title="Cách lấy"
+                        style={{ fontSize: 'var(--fs-2xs)', padding: '2px 4px', border: '1px solid var(--color-border)', borderRadius: 4, maxWidth: 130, color: 'var(--color-text-soft)' }}
+                      >
+                        <option value="">— Cách lấy —</option>
+                        {(getOptions('checklist_fetch_source') || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                      </select>
                       <button
                         type="button"
                         className={s.fmClDel}

@@ -12,6 +12,7 @@ function toScheduleStepDto(row) {
     level:       row.level ?? 0,
     points:      row.points ?? 4,
     isImportant: row.is_important ?? false,
+    fetchSource: row.fetch_source ?? null,
     sourceTemplateStepId: row.source_template_step_id ?? null,
     createdAt:   row.created_at,
   }
@@ -145,7 +146,7 @@ async function listSchedules(companyId) {
 async function seedScheduleChecklistFromTemplate(scheduleId, taskTypeId, excludedStepIds = []) {
   const excluded = new Set((Array.isArray(excludedStepIds) ? excludedStepIds : []).map(String))
   const { rows: tpl } = await query(
-    `SELECT id, step_order, step_text, level, points, is_important
+    `SELECT id, step_order, step_text, level, points, is_important, fetch_source
      FROM task_type_checklist_templates WHERE task_type_id = $1 ORDER BY step_order`,
     [taskTypeId]
   )
@@ -155,10 +156,10 @@ async function seedScheduleChecklistFromTemplate(scheduleId, taskTypeId, exclude
     order += 1
     await query(
       `INSERT INTO schedule_checklist_items
-         (schedule_id, step_order, step_text, level, points, is_important, source_template_step_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+         (schedule_id, step_order, step_text, level, points, is_important, fetch_source, source_template_step_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scheduleId, order, t.step_text, t.level ?? 0,
-       t.points ?? 4, !!t.is_important, t.id]
+       t.points ?? 4, !!t.is_important, t.fetch_source ?? null, t.id]
     )
   }
 }
@@ -178,7 +179,7 @@ async function listScheduleChecklist(scheduleId) {
 async function addScheduleChecklistItem(scheduleId, data, user) {
   await assertScheduleAccess(scheduleId, user)
   const isAdmin = user?.role === 'admin'
-  const { stepText, level = 0 } = data
+  const { stepText, level = 0, fetchSource = null } = data   // "Cách lấy" ai sửa bước cũng đặt được
   // Non-admin KHÔNG đặt điểm/★ (cơ sở KPI) → bước mới 0đ, chờ admin chấm.
   const isImportant = isAdmin ? !!data.isImportant : false
   // Điểm chỉ ở MỤC CHA (level 0); mục con (level 1) hoặc non-admin → 0đ.
@@ -187,9 +188,9 @@ async function addScheduleChecklistItem(scheduleId, data, user) {
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM schedule_checklist_items WHERE schedule_id = $1', [scheduleId])
   const { rows: [row] } = await query(
     `INSERT INTO schedule_checklist_items
-       (schedule_id, step_order, step_text, level, points, is_important)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [scheduleId, parseInt(max, 10) + 1, stepText, level === 1 ? 1 : 0, points, !!isImportant])
+       (schedule_id, step_order, step_text, level, points, is_important, fetch_source)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [scheduleId, parseInt(max, 10) + 1, stepText, level === 1 ? 1 : 0, points, !!isImportant, fetchSource || null])
   return toScheduleStepDto(row)
 }
 
@@ -206,6 +207,7 @@ async function updateScheduleChecklistItem(scheduleId, itemId, data, user) {
   if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
   if (toChild) { params.push(0); updates.push(`points = $${params.length}`) }
   else if (data.points !== undefined) { params.push(Math.max(0, Number(data.points) || 0)); updates.push(`points = $${params.length}`) }
+  if (data.fetchSource !== undefined) { params.push(data.fetchSource || null); updates.push(`fetch_source = $${params.length}`) }
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(itemId, scheduleId)
   const { rows: [row] } = await query(
@@ -297,10 +299,10 @@ async function replaceScheduleChecklist(scheduleId, items, user) {
     }
     await query(
       `INSERT INTO schedule_checklist_items
-         (schedule_id, step_order, step_text, level, points, is_important, source_template_step_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+         (schedule_id, step_order, step_text, level, points, is_important, fetch_source, source_template_step_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scheduleId, order, it.stepText, it.level === 1 ? 1 : 0, points, isImportant,
-       it.sourceTemplateStepId ?? null])
+       it.fetchSource || null, it.sourceTemplateStepId ?? null])
   }
   return listScheduleChecklist(scheduleId)
 }
@@ -319,7 +321,7 @@ async function resetScheduleChecklistFromTemplate(scheduleId, user) {
 function toScheduleSubtaskItemDto(r) {
   return {
     id: r.id, stepOrder: r.step_order, stepText: r.step_text, level: r.level ?? 0,
-    points: r.points ?? 4, isImportant: r.is_important ?? false,
+    points: r.points ?? 4, isImportant: r.is_important ?? false, fetchSource: r.fetch_source ?? null,
     sourceTemplateStepId: r.source_template_step_id ?? null,
   }
 }
@@ -363,9 +365,9 @@ async function seedScheduleSubtasksFromTemplate(scheduleId, taskTypeId) {
     for (const st of steps) {
       order += 1
       await query(
-        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, points, is_important, source_template_step_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [sub.id, order, st.step_text, st.level ?? 0, st.points ?? 4, !!st.is_important, st.id])
+        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, points, is_important, fetch_source, source_template_step_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [sub.id, order, st.step_text, st.level ?? 0, st.points ?? 4, !!st.is_important, st.fetch_source ?? null, st.id])
     }
   }
 }
@@ -400,9 +402,9 @@ async function replaceScheduleSubtasks(scheduleId, subtasks, user) {
         ({ points, isImportant } = resolve({ ...it, stepText: String(it.stepText).trim() }))
       }
       await query(
-        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, points, is_important, source_template_step_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [row.id, io, String(it.stepText).trim(), it.level === 1 ? 1 : 0, points, isImportant, it.sourceTemplateStepId ?? null])
+        `INSERT INTO schedule_subtask_items (schedule_subtask_id, step_order, step_text, level, points, is_important, fetch_source, source_template_step_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [row.id, io, String(it.stepText).trim(), it.level === 1 ? 1 : 0, points, isImportant, it.fetchSource || null, it.sourceTemplateStepId ?? null])
     }
   }
   return listScheduleSubtasks(scheduleId)

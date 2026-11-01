@@ -22,6 +22,7 @@ const checklistStepSchema = z.object({
   // KPI v2: điểm + cờ quan trọng cho bước checklist.
   points:      z.number().int().min(0).max(100).optional(),
   isImportant: z.boolean().optional(),
+  fetchSource: z.string().max(30).optional().nullable(),   // "Cách lấy" (enum động)
 })
 
 const updateChecklistStepSchema = z.object({
@@ -30,6 +31,7 @@ const updateChecklistStepSchema = z.object({
   level:       z.number().int().min(0).max(1).optional(),
   points:      z.number().int().min(0).max(100).optional(),
   isImportant: z.boolean().optional(),
+  fetchSource: z.string().max(30).optional().nullable(),
 }).refine((d) => Object.keys(d).length > 0, {
   message: 'Provide at least one field to update',
 })
@@ -52,6 +54,7 @@ const subtaskStepSchema = z.object({
   level:       z.number().int().min(0).max(1).optional().default(0),
   points:      z.number().int().min(0).max(100).optional(),
   isImportant: z.boolean().optional(),
+  fetchSource: z.string().max(30).optional().nullable(),
 })
 const updateSubtaskStepSchema = z.object({
   stepText:    z.string().min(1).max(300).optional(),
@@ -59,6 +62,7 @@ const updateSubtaskStepSchema = z.object({
   level:       z.number().int().min(0).max(1).optional(),
   points:      z.number().int().min(0).max(100).optional(),
   isImportant: z.boolean().optional(),
+  fetchSource: z.string().max(30).optional().nullable(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' })
 
 const reorderChecklistSchema = z.object({

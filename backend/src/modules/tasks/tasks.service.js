@@ -806,8 +806,8 @@ async function createTask(data, actorId, ipAddress, userAgent) {
   //  • Ngược lại, nếu có loại công việc → copy checklist template của LOẠI (đóng băng cha-con qua source_*).
   if (subtaskTemplateId) {
     await query(
-      `INSERT INTO task_checklist_items (task_id, step_order, step_text, level)
-       SELECT $1, step_order, step_text, level
+      `INSERT INTO task_checklist_items (task_id, step_order, step_text, level, fetch_source)
+       SELECT $1, step_order, step_text, level, fetch_source
        FROM task_type_subtask_steps WHERE subtask_template_id = $2
        ORDER BY step_order, created_at`,
       [task.id, subtaskTemplateId]
@@ -817,8 +817,8 @@ async function createTask(data, actorId, ipAddress, userAgent) {
     // KPI v2: copy kèm điểm/★ từ template (task tay cũng mang điểm; % tính ở Phase B).
     await query(
       `INSERT INTO task_checklist_items
-         (task_id, step_order, step_text, level, points, is_important, source_step_id, source_parent_id)
-       SELECT $1, t.step_order, t.step_text, t.level, t.points, t.is_important, t.id,
+         (task_id, step_order, step_text, level, points, is_important, fetch_source, source_step_id, source_parent_id)
+       SELECT $1, t.step_order, t.step_text, t.level, t.points, t.is_important, t.fetch_source, t.id,
               CASE WHEN t.level = 1 THEN (
                 SELECT p.id FROM task_type_checklist_templates p
                 WHERE p.task_type_id = t.task_type_id AND p.level = 0 AND p.step_order < t.step_order
@@ -852,13 +852,13 @@ async function createTask(data, actorId, ipAddress, userAgent) {
         ]
       )
       const { rows: subSteps } = await query(
-        'SELECT step_order, step_text, level FROM task_type_subtask_steps WHERE subtask_template_id = $1 ORDER BY step_order, created_at',
+        'SELECT step_order, step_text, level, fetch_source FROM task_type_subtask_steps WHERE subtask_template_id = $1 ORDER BY step_order, created_at',
         [sub.id]
       )
       for (const ss of subSteps) {
         await query(
-          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level) VALUES ($1,$2,$3,$4)`,
-          [child.id, ss.step_order, ss.step_text, ss.level ?? 0]
+          `INSERT INTO task_checklist_items (task_id, step_order, step_text, level, fetch_source) VALUES ($1,$2,$3,$4,$5)`,
+          [child.id, ss.step_order, ss.step_text, ss.level ?? 0, ss.fetch_source ?? null]
         )
       }
     }

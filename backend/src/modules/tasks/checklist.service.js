@@ -10,6 +10,7 @@ function toDto(row) {
     level:       row.level ?? 0,
     points:      row.points ?? 0,
     isImportant: row.is_important ?? false,
+    fetchSource: row.fetch_source ?? null,
     isCompleted: row.is_completed,
     completedBy: row.completed_by ?? null,
     completedAt: row.completed_at ?? null,
@@ -31,15 +32,15 @@ async function listChecklist(taskId) {
   return rows.map(toDto)
 }
 
-async function addItem(taskId, { stepText, level = 0 }, actorId) {
+async function addItem(taskId, { stepText, level = 0, fetchSource = null }, actorId) {
   await assertTask(taskId)
   const { rows: [{ max_order }] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max_order FROM task_checklist_items WHERE task_id = $1',
     [taskId]
   )
   const { rows: [item] } = await query(
-    'INSERT INTO task_checklist_items (task_id, step_order, step_text, level) VALUES ($1,$2,$3,$4) RETURNING *',
-    [taskId, max_order + 1, stepText, level === 1 ? 1 : 0]
+    'INSERT INTO task_checklist_items (task_id, step_order, step_text, level, fetch_source) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+    [taskId, max_order + 1, stepText, level === 1 ? 1 : 0, fetchSource || null]
   )
   return toDto(item)
 }
@@ -57,7 +58,7 @@ async function countUncheckedLeaves(taskId) {
   return r.n
 }
 
-async function updateItem(taskId, itemId, { stepText, isCompleted, level }, actorId) {
+async function updateItem(taskId, itemId, { stepText, isCompleted, level, fetchSource }, actorId) {
   const { rows: [item] } = await query(
     'SELECT * FROM task_checklist_items WHERE id = $1 AND task_id = $2',
     [itemId, taskId]
@@ -85,6 +86,10 @@ async function updateItem(taskId, itemId, { stepText, isCompleted, level }, acto
   if (level !== undefined) {
     params.push(level === 1 ? 1 : 0)
     updates.push(`level = $${params.length}`)
+  }
+  if (fetchSource !== undefined) {
+    params.push(fetchSource || null)
+    updates.push(`fetch_source = $${params.length}`)
   }
   if (isCompleted !== undefined) {
     params.push(isCompleted)

@@ -87,6 +87,7 @@ const scheduleChecklistItemSchema = z.object({
   level:       z.number().int().min(0).max(1).optional().default(0),
   points:      z.number().int().min(0).max(100).optional(),
   isImportant: z.boolean().optional(),
+  fetchSource: z.string().max(30).optional().nullable(),
 })
 const updateScheduleChecklistItemSchema = z.object({
   stepText:    z.string().min(1).max(2000).optional(),
@@ -94,6 +95,7 @@ const updateScheduleChecklistItemSchema = z.object({
   level:       z.number().int().min(0).max(1).optional(),
   points:      z.number().int().min(0).max(100).optional(),
   isImportant: z.boolean().optional(),
+  fetchSource: z.string().max(30).optional().nullable(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' })
 const reorderScheduleChecklistSchema = z.object({
   items: z.array(z.object({ id: z.string().uuid(), stepOrder: z.number().int().min(1) })).min(1),
@@ -105,6 +107,7 @@ const replaceScheduleChecklistSchema = z.object({
     level:       z.number().int().min(0).max(1).optional(),
     points:      z.number().int().min(0).max(100).optional(),
     isImportant: z.boolean().optional(),
+    fetchSource: z.string().max(30).optional().nullable(),
     sourceTemplateStepId: z.string().uuid().optional().nullable(),
   })).max(200),
 })
@@ -121,6 +124,7 @@ const replaceScheduleSubtasksSchema = z.object({
       level:       z.number().int().min(0).max(1).optional(),
       points:      z.number().int().min(0).max(100).optional(),
       isImportant: z.boolean().optional(),
+      fetchSource: z.string().max(30).optional().nullable(),
       sourceTemplateStepId: z.string().uuid().optional().nullable(),
     })).max(200).optional(),
   })).max(100),

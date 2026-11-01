@@ -638,6 +638,13 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
     }
   }
 
+  async function changeItemFetch(item, value) {
+    try {
+      const updated = await tasksApi.updateTaskChecklistItem(taskId, item.id, { fetchSource: value || null })
+      setChecklist(checklist.map((i) => i.id === updated.id ? updated : i))
+    } catch { addToast('Không thể đổi Cách lấy', 'error') }
+  }
+
   async function reorderChecklist(newIds) {
     const prev = checklist
     const newCl = newIds.map((id) => prev.find((i) => i.id === id))
@@ -1065,6 +1072,15 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                               </span>
                               {item.isImportant && <span className={s.clItemStar} title="Bước quan trọng">★</span>}
                               {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
+                              <select
+                                value={item.fetchSource ?? ''}
+                                onChange={(e) => changeItemFetch(item, e.target.value)}
+                                title="Cách lấy"
+                                style={{ fontSize: 'var(--fs-2xs)', padding: '1px 3px', border: '1px solid var(--color-border)', borderRadius: 4, maxWidth: 120, color: 'var(--color-text-soft)' }}
+                              >
+                                <option value="">— Cách lấy —</option>
+                                {(getOptions('checklist_fetch_source') || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                              </select>
                               <button
                                 className={`${s.qvChecklistDel} ${s.clEdit}`}
                                 onClick={() => { setEditItemId(item.id); setEditItemText(item.stepText) }}

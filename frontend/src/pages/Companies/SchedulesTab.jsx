@@ -10,6 +10,7 @@ import { listUserOptions } from '../../api/users'
 import { listHolidays } from '../../api/attendance'
 import { getNextOccurrences, rollForwardToWorkday } from '../../utils/recurrencePreview'
 import { useToastStore } from '../../stores/toastStore'
+import { useEnumsStore } from '../../hooks/useEnums'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import DateBox from './DateBox'
@@ -120,14 +121,14 @@ function clKey() { return `cl_${Date.now()}_${_clSeq++}` }
 function mapTemplateToDraft(steps) {
   return (steps || []).map((s) => ({
     _key: clKey(), stepText: s.stepText, level: s.level ?? 0,
-    points: s.points ?? 4,
+    points: s.points ?? 4, fetchSource: s.fetchSource ?? null,
     isImportant: !!s.isImportant, sourceTemplateStepId: s.id ?? null,
   }))
 }
 function mapScheduleToDraft(items) {
   return (items || []).map((it) => ({
     _key: clKey(), stepText: it.stepText, level: it.level ?? 0,
-    points: it.points ?? 4,
+    points: it.points ?? 4, fetchSource: it.fetchSource ?? null,
     isImportant: !!it.isImportant, sourceTemplateStepId: it.sourceTemplateStepId ?? null,
   }))
 }
@@ -155,7 +156,7 @@ function newSubtaskDraft() {
   return { _key: subKey(), title: '', startOffset: 0, deadlineOffset: 0, sourceTemplateSubtaskId: null, items: [] }
 }
 function newSubStepDraft() {
-  return { _key: clKey(), stepText: '', level: 0, points: 4, isImportant: false, sourceTemplateStepId: null }
+  return { _key: clKey(), stepText: '', level: 0, points: 4, isImportant: false, fetchSource: null, sourceTemplateStepId: null }
 }
 
 function defaultConfig(type) {
@@ -606,6 +607,7 @@ function SubtaskList({ subtasks, onAdd, onEdit, onRemove, onResetFromTemplate, s
 function SubtaskFormModal({ initial, isNew, subPreviewOcc, previewSubDate, canScore = true, onCancel, onSave }) {
   const [draft, setDraft] = useState(() => cloneSubtaskDraft(initial))
   const [err, setErr] = useState('')
+  const fetchOptions = useEnumsStore((st) => st.getOptions)('checklist_fetch_source')
 
   const setNum = (field, v) => setDraft((d) => ({ ...d, [field]: v === '' ? 0 : Math.max(0, parseInt(v, 10) || 0) }))
   const setItemField = (j, field, value) => setDraft((d) => ({
@@ -708,6 +710,10 @@ function SubtaskFormModal({ initial, isNew, subPreviewOcc, previewSubDate, canSc
                 {it.level === 1 ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
               </button>
               <input className={s.scClText} value={it.stepText} onChange={(e) => setItemField(j, 'stepText', e.target.value)} placeholder="Nội dung bước…" />
+              <select className={s.scClDiff} value={it.fetchSource ?? ''} onChange={(e) => setItemField(j, 'fetchSource', e.target.value)} title="Cách lấy">
+                <option value="">— Cách lấy —</option>
+                {(fetchOptions || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
               {canScore ? (
                 <>
                   <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setItemField(j, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>
@@ -809,6 +815,7 @@ function SimScheduleCard({ sc }) {
 
 export default function SchedulesTab({ company, isAdmin = false }) {
   const canScore = isAdmin   // độ khó/điểm/★ (cơ sở KPI) chỉ admin đặt; NV xem read-only
+  const fetchOptions = useEnumsStore((st) => st.getOptions)('checklist_fetch_source')
   const confirmDelete = useDeleteConfirm()
   const toast = useToastStore(st => st.toast)
 
@@ -913,7 +920,7 @@ export default function SchedulesTab({ company, isAdmin = false }) {
   function addClRow() {
     setForm((f) => ({ ...f, checklist: [...f.checklist, {
       _key: clKey(), stepText: '', level: 0,
-      points: canScore ? 4 : 0, isImportant: false, sourceTemplateStepId: null,
+      points: canScore ? 4 : 0, isImportant: false, fetchSource: null, sourceTemplateStepId: null,
     }] }))
   }
   function removeClRow(idx) {
@@ -1097,7 +1104,7 @@ export default function SchedulesTab({ company, isAdmin = false }) {
           .map((it) => ({
             stepText: it.stepText.trim(), level: it.level === 1 ? 1 : 0,
             points: Math.max(0, Number(it.points) || 0),
-            isImportant: !!it.isImportant,
+            isImportant: !!it.isImportant, fetchSource: it.fetchSource || null,
             sourceTemplateStepId: it.sourceTemplateStepId ?? null,
           })),
       })
@@ -1109,7 +1116,7 @@ export default function SchedulesTab({ company, isAdmin = false }) {
       .map((it) => ({
         stepText: it.stepText.trim(), level: it.level === 1 ? 1 : 0,
         points: Math.max(0, Number(it.points) || 0),
-        isImportant: !!it.isImportant,
+        isImportant: !!it.isImportant, fetchSource: it.fetchSource || null,
         sourceTemplateStepId: it.sourceTemplateStepId ?? null,
       }))
 
@@ -1557,6 +1564,10 @@ export default function SchedulesTab({ company, isAdmin = false }) {
                           onChange={(e) => setClField(idx, 'stepText', e.target.value)}
                           placeholder="Nội dung bước..."
                         />
+                        <select className={s.scClDiff} value={it.fetchSource ?? ''} onChange={(e) => setClField(idx, 'fetchSource', e.target.value)} title="Cách lấy">
+                          <option value="">— Cách lấy —</option>
+                          {(fetchOptions || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                        </select>
                         {canScore ? (
                           <>
                             <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setClField(idx, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>

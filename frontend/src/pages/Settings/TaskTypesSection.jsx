@@ -15,6 +15,7 @@ import { CSS } from '@dnd-kit/utilities'
 import Modal from '../../components/ui/Modal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useToastStore } from '../../stores/toastStore'
+import { useEnumsStore } from '../../hooks/useEnums'
 import {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
@@ -303,7 +304,7 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
 // ── Checklist Panel ───────────────────────────────────────────────────────────
 
 function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel,
-  withPoints, onChangePoints, onToggleImportant }) {
+  withPoints, onChangePoints, onToggleImportant, fetchOptions, onChangeFetch }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: step.id })
 
@@ -357,6 +358,11 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
           <span className={s.clStepText} onClick={onStartEdit} title="Nhấp để chỉnh sửa" style={{ whiteSpace: 'pre-wrap' }}>
             {step.stepText}
           </span>
+          {/* "Cách lấy" — áp cho MỌI bước (cha & con) */}
+          <select className={s.clDiffSelect} value={step.fetchSource ?? ''} onChange={(e) => onChangeFetch(step, e.target.value)} title="Cách lấy">
+            <option value="">— Cách lấy —</option>
+            {(fetchOptions || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
           {withPoints && (
             <span className={s.clPointsGroup}>
               <button
@@ -400,6 +406,7 @@ const DEFAULT_CL_API = {
 function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, addPlaceholder, withPoints }) {
   const A = api ?? DEFAULT_CL_API
   const addToast = useToastStore((st) => st.toast)
+  const fetchOptions = useEnumsStore((st) => st.getOptions)('checklist_fetch_source')
   const [items, setItems]       = useState(checklist)
   const [saving, setSaving]     = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -463,6 +470,12 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, ad
     catch { addToast('Không thể đổi đánh dấu', 'error') }
     setSaving(false)
   }
+  async function handleChangeFetch(step, value) {
+    setSaving(true)
+    try { await A.update(taskTypeId, step.id, { fetchSource: value || null }); onRefresh() }
+    catch { addToast('Không thể đổi Cách lấy', 'error') }
+    setSaving(false)
+  }
 
   async function handleAdd() {
     const text = addText.trim()
@@ -494,6 +507,8 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, ad
               withPoints={withPoints}
               onChangePoints={handleChangePoints}
               onToggleImportant={handleToggleImportant}
+              fetchOptions={fetchOptions}
+              onChangeFetch={handleChangeFetch}
             />
           ))}
         </SortableContext>

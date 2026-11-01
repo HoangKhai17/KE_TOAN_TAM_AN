@@ -160,6 +160,7 @@ function DescriptionTab({ taskId, initialDesc, onSaved }) {
 function ChecklistTab({ taskId, companyId, companyName, onCountChange, onTaskChanged }) {
   const addToast = useToastStore((s) => s.toast)
   const getLabel = useEnumsStore((st) => st.getLabel)
+  const getOptions = useEnumsStore((st) => st.getOptions)
   const [items, setItems]         = useState([])
   const [loading, setLoading]     = useState(true)
   const [togglingIds, setTogglingIds] = useState(new Set())
@@ -221,6 +222,13 @@ function ChecklistTab({ taskId, companyId, companyName, onCountChange, onTaskCha
       setItems((prev) => prev.map((i) => i.id === updated.id ? updated : i))
       setEditId(null)
     } catch { addToast('Không thể cập nhật', 'error') }
+  }
+
+  async function changeFetch(item, value) {
+    try {
+      const updated = await tasksApi.updateTaskChecklistItem(taskId, item.id, { fetchSource: value || null })
+      setItems((prev) => prev.map((i) => i.id === updated.id ? updated : i))
+    } catch { addToast('Không thể đổi Cách lấy', 'error') }
   }
 
   async function deleteItem(id) {
@@ -311,6 +319,15 @@ function ChecklistTab({ taskId, companyId, companyName, onCountChange, onTaskCha
               <span className={`${s.checklistText} ${isParent ? s.checklistTextParent : ''} ${(!isParent && item.isCompleted) ? s.checklistTextDone : ''}`} style={{ whiteSpace: 'pre-wrap' }}>{item.stepText}</span>
               {item.isImportant && <span className={s.clItemStar} title="Bước quan trọng">★</span>}
               {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
+              <select
+                value={item.fetchSource ?? ''}
+                onChange={(e) => changeFetch(item, e.target.value)}
+                title="Cách lấy"
+                style={{ fontSize: 'var(--fs-2xs)', padding: '1px 3px', border: '1px solid var(--color-border)', borderRadius: 4, maxWidth: 120, color: 'var(--color-text-soft)' }}
+              >
+                <option value="">— Cách lấy —</option>
+                {(getOptions('checklist_fetch_source') || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
               <div className={s.checklistItemActions}>
                 <button className={`${s.btnIcon} ${s.clMove}`} onClick={() => toggleLevel(item)} title={isChild ? 'Đưa lên mục chính' : 'Thụt thành mục phụ'}>
                   {isChild ? <ChevronLeft size={11} /> : <ChevronRight size={11} />}

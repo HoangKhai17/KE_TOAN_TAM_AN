@@ -26,6 +26,7 @@ function toStepDto(row) {
     level:       row.level ?? 0,
     points:      row.points ?? 4,
     isImportant: row.is_important ?? false,
+    fetchSource: row.fetch_source ?? null,
     createdAt:   row.created_at,
   }
 }
@@ -34,7 +35,7 @@ function toStepDto(row) {
 function toSubStepDto(row) {
   return {
     id: row.id, stepText: row.step_text, stepOrder: row.step_order, level: row.level ?? 0,
-    points: row.points ?? 4, isImportant: row.is_important ?? false,
+    points: row.points ?? 4, isImportant: row.is_important ?? false, fetchSource: row.fetch_source ?? null,
   }
 }
 function toSubtaskDto(row, steps = []) {
@@ -250,8 +251,8 @@ async function getChecklist(taskTypeId) {
 
 async function addChecklistStep(taskTypeId, data = {}) {
   await assertTaskTypeExists(taskTypeId)
-  const { stepText, level = 0, isImportant = false } = data
-  // Điểm nằm ở MỤC CHA (level 0); mục con (level 1) luôn 0đ.
+  const { stepText, level = 0, isImportant = false, fetchSource = null } = data
+  // Điểm nằm ở MỤC CHA (level 0); mục con (level 1) luôn 0đ. "Cách lấy" áp cho mọi bước.
   const points = level === 1 ? 0 : (data.points != null ? Number(data.points) : DEFAULT_CHECKLIST_POINTS)
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_checklist_templates WHERE task_type_id = $1',
@@ -259,9 +260,9 @@ async function addChecklistStep(taskTypeId, data = {}) {
   )
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [step] } = await query(
-    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text, level, points, is_important)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0, points, !!isImportant]
+    `INSERT INTO task_type_checklist_templates (task_type_id, step_order, step_text, level, points, is_important, fetch_source)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [taskTypeId, nextOrder, stepText, level === 1 ? 1 : 0, points, !!isImportant, fetchSource || null]
   )
   return toStepDto(step)
 }
@@ -278,6 +279,7 @@ async function updateChecklistStep(taskTypeId, stepId, data) {
   if (forcePointsZero) { params.push(0); updates.push(`points = $${params.length}`) }
   else if (data.points !== undefined) { params.push(Number(data.points)); updates.push(`points = $${params.length}`) }
   if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
+  if (data.fetchSource !== undefined) { params.push(data.fetchSource || null); updates.push(`fetch_source = $${params.length}`) }
 
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(stepId, taskTypeId)
@@ -372,15 +374,15 @@ async function assertSubtask(taskTypeId, subtaskId) {
 
 async function addSubtaskStep(taskTypeId, subtaskId, data = {}) {
   await assertSubtask(taskTypeId, subtaskId)
-  const { stepText, level = 0, isImportant = false } = data
+  const { stepText, level = 0, isImportant = false, fetchSource = null } = data
   const points = level === 1 ? 0 : (data.points != null ? Math.max(0, Number(data.points) || 0) : DEFAULT_CHECKLIST_POINTS)
   const { rows: [maxRow] } = await query(
     'SELECT COALESCE(MAX(step_order), 0) AS max FROM task_type_subtask_steps WHERE subtask_template_id = $1', [subtaskId])
   const nextOrder = parseInt(maxRow.max, 10) + 1
   const { rows: [row] } = await query(
-    `INSERT INTO task_type_subtask_steps (subtask_template_id, step_order, step_text, level, points, is_important)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [subtaskId, nextOrder, stepText, level === 1 ? 1 : 0, points, !!isImportant])
+    `INSERT INTO task_type_subtask_steps (subtask_template_id, step_order, step_text, level, points, is_important, fetch_source)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [subtaskId, nextOrder, stepText, level === 1 ? 1 : 0, points, !!isImportant, fetchSource || null])
   return toSubStepDto(row)
 }
 
@@ -394,6 +396,7 @@ async function updateSubtaskStep(taskTypeId, subtaskId, stepId, data) {
   if (forcePointsZero) { params.push(0); updates.push(`points = $${params.length}`) }
   else if (data.points !== undefined) { params.push(Math.max(0, Number(data.points) || 0)); updates.push(`points = $${params.length}`) }
   if (data.isImportant !== undefined) { params.push(!!data.isImportant); updates.push(`is_important = $${params.length}`) }
+  if (data.fetchSource !== undefined) { params.push(data.fetchSource || null); updates.push(`fetch_source = $${params.length}`) }
   if (!updates.length) throw Object.assign(new Error('No fields to update'), { status: 400 })
   params.push(stepId, subtaskId)
   const { rows: [row] } = await query(
