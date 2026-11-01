@@ -568,61 +568,104 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
           {!detail.data ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (() => {
             const lateTasks = (detail.tasks || []).filter((t) => t.isRecurring && t.monthsLate > 0)
             const lostPoints = lateTasks.reduce((a, t) => a + ((t.grossPoints || 0) - (t.points || 0)), 0)
-            const tasks = detail.tasks || []
+            const TABS = [
+              ['company', `Theo công ty (${detail.data.byCompany?.length || 0})`],
+              ['type',    `Theo loại CV (${detail.data.byType?.length || 0})`],
+              ['source',  `Theo nguồn${detail.tasks ? ` · ${detail.tasks.length} việc` : ''}`],
+            ]
+            // Thẻ 1 công việc (dùng trong tab "Theo nguồn" khi bung).
+            const renderTask = (t) => (
+              <div className={s.kpiTask} key={t.taskId}>
+                <div className={s.kpiT1}>
+                  <b title={t.title}>{t.title}</b>
+                  <span className={`${s.kpiPt} ${t.points > 0 ? s.kpiPos : ''}`}>{t.points > 0 ? `+${t.points}` : t.points}đ</span>
+                </div>
+                <div className={s.kpiT2}>
+                  {t.companyName && <span>{t.companyName}</span>}
+                  {t.typeName && <span>· {t.typeName}</span>}
+                  {t.dueInPeriod && <>
+                    <span>· Hạn {fmtDate(t.dueDate)}{t.completedAt ? ` · Xong ${fmtDate(t.completedAt)}` : ''}</span>
+                    {t.status === 'completed'
+                      ? <span className={`${s.kpiSt} ${t.onTime ? s.kpiStOk : s.kpiStLate}`}>{t.onTime ? 'Đúng hạn' : 'Trễ'}</span>
+                      : t.notDueYet
+                        ? <span className={s.kpiSt} style={{ background: 'var(--color-surface-muted)', color: 'var(--color-muted)' }}>Chưa tới hạn</span>
+                        : <span className={`${s.kpiSt} ${s.kpiStLate}`}>Quá hạn chưa xong</span>}
+                  </>}
+                  {t.isRecurring && t.monthsLate > 0 && <span style={{ color: 'var(--color-warning-text)', fontWeight: 700 }}>· ⏳ Trễ {t.monthsLate} th · lũy tuyến {t.grossPoints}→{t.points}đ</span>}
+                </div>
+              </div>
+            )
+            // Báo cáo gộp theo công ty / loại — thanh điểm.
+            const brk = (rows) => {
+              if (!rows || rows.length === 0) return <div className={s.empty} style={{ padding: 10 }}>Chưa có dữ liệu.</div>
+              const mx = Math.max(1, ...rows.map((x) => x.volumePoints || 0))
+              return <div className={s.kpiBrk}>{rows.map((x, i) => (
+                <div key={x.key ?? i}>
+                  <div className={s.kpiBrkR}><span>{x.label}</span><b>{x.volumePoints}đ</b></div>
+                  <div className={s.kpiBrkBar}><i style={{ width: `${Math.round(((x.volumePoints || 0) / mx) * 100)}%` }} /></div>
+                </div>
+              ))}</div>
+            }
             return (
               <>
                 {lateTasks.length > 0 && (
                   <div style={{ margin: '0 0 10px', padding: '7px 11px', borderRadius: 8, background: 'var(--color-warning-bg)', color: 'var(--color-warning-text)', fontSize: 'var(--fs-2xs)', fontWeight: 600 }}>
-                    ⏳ {lateTasks.length} việc định kỳ hoàn thành TRỄ tháng → bị lũy tuyến <strong>giảm {lostPoints}đ</strong> trong kỳ (xem cột Điểm bên dưới).
+                    ⏳ {lateTasks.length} việc hoàn thành TRỄ tháng → bị lũy tuyến <strong>giảm {lostPoints}đ</strong> trong kỳ.
                   </div>
                 )}
-                {tasks.length === 0 ? (
-                  <div className={s.empty} style={{ padding: 12 }}>Không có công việc trong kỳ.</div>
-                ) : (
-                  <div className={s.tableWrap}>
-                    <table className={s.table}>
-                      <thead><tr>
-                        <th className={s.colStt}>STT</th>
-                        <th>Công việc</th>
-                        <th>Công ty / Loại</th>
-                        <th>Nguồn</th>
-                        <th className={s.num}>Hạn</th>
-                        <th className={s.num}>Hoàn thành</th>
-                        <th>Trạng thái</th>
-                        <th className={s.num}>Điểm</th>
-                      </tr></thead>
-                      <tbody>
-                        {tasks.map((t, i) => {
-                          const stLabel = t.status === 'completed' ? (t.onTime ? 'Đúng hạn' : 'Trễ') : (t.notDueYet ? 'Chưa tới hạn' : 'Quá hạn chưa xong')
-                          const stCls   = t.status === 'completed' ? (t.onTime ? s.kpiStOk : s.kpiStLate) : (t.notDueYet ? '' : s.kpiStLate)
-                          const srcLbl  = t.source === 'auto' ? 'Định kỳ' : getLabel('task_source', t.source, t.source)
-                          return (
-                            <tr key={t.taskId}>
-                              <td className={s.colStt}>{i + 1}</td>
-                              <td>
-                                <div style={{ fontWeight: 600 }} title={t.title}>{t.title}</div>
-                                {t.isRecurring && t.monthsLate > 0 && (
-                                  <span style={{ fontSize: 'var(--fs-3xs)', fontWeight: 700, color: 'var(--color-warning-text)' }} title={`Hoàn thành trễ ${t.monthsLate} tháng → lũy tuyến ${t.grossPoints}đ → ${t.points}đ`}>
-                                    ⏳ Trễ {t.monthsLate} th · {t.grossPoints}→{t.points}đ
-                                  </span>
-                                )}
-                              </td>
-                              <td>
-                                {t.companyName || '—'}
-                                {t.typeName && <div style={{ fontSize: 'var(--fs-3xs)', color: 'var(--color-muted)' }}>{t.typeName}</div>}
-                              </td>
-                              <td>{srcLbl}</td>
-                              <td className={s.num}>{t.dueDate ? fmtDate(t.dueDate) : '—'}</td>
-                              <td className={s.num}>{t.completedAt ? fmtDate(t.completedAt) : '—'}</td>
-                              <td><span className={`${s.kpiSt} ${stCls}`} style={stCls ? undefined : { background: 'var(--color-surface-muted)', color: 'var(--color-muted)' }}>{stLabel}</span></td>
-                              <td className={`${s.num} ${t.points > 0 ? s.kpiPos : ''}`}>{t.points > 0 ? `+${t.points}` : t.points}đ</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <div className={s.tabLinks} role="tablist" style={{ margin: '4px 0 12px', alignSelf: 'flex-start' }}>
+                  {TABS.map(([k, lbl]) => (
+                    <button key={k} className={`${s.tab} ${dTab === k ? s.tabActive : ''}`} onClick={() => setDTab(k)}>{lbl}</button>
+                  ))}
+                </div>
+
+                {dTab === 'company' && brk(detail.data.byCompany)}
+                {dTab === 'type' && brk(detail.data.byType)}
+
+                {dTab === 'source' && (() => {
+                  const bySrc = new Map((detail.data.bySource || []).map((x) => [x.source, x]))
+                  const opts = getOptions('task_source') || []
+                  const keys = opts.length ? opts.map((o) => o.key) : [...bySrc.keys()]
+                  if (keys.length === 0) return <div className={s.empty} style={{ padding: 10 }}>Không có công việc trong kỳ.</div>
+                  return (
+                    <div className={s.kpiSrcList}>
+                      <div className={`${s.kpiSrcRow} ${s.kpiSrcHd}`}>
+                        <span>Nguồn</span><span className={s.num}>Số việc</span><span className={s.num}>Đến hạn</span><span className={s.num}>Đúng hạn</span><span className={s.num}>% ĐH</span><span className={s.num}>Điểm KL</span>
+                      </div>
+                      {keys.map((key, i) => {
+                        const x = bySrc.get(key)
+                        const taskCount = x?.taskCount || 0, dueCount = x?.dueCount || 0, onTimeCount = x?.onTimeCount || 0, vol = x?.volumePoints || 0
+                        const pct = dueCount > 0 ? Math.round((onTimeCount * 100) / dueCount) : null
+                        const open = srcOpen === key
+                        const tasksOfSrc = (detail.tasks || []).filter((t) => t.source === key)
+                        const lbl = key === 'auto' ? 'Định kỳ (tự sinh)' : getLabel('task_source', key, key)
+                        return (
+                          <div key={key}>
+                            <div className={`${s.kpiSrcRow} ${s.kpiSrcClick} ${open ? s.kpiSrcOpen : ''}`} role="button" onClick={() => setSrcOpen(open ? null : key)}>
+                              <span className={s.kpiSrcNm}>
+                                {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                <span style={{ width: 9, height: 9, borderRadius: 2, background: srcColor(key, i), flexShrink: 0 }} />
+                                {lbl}
+                              </span>
+                              <span className={s.num}>{taskCount}</span>
+                              <span className={s.num}>{dueCount}</span>
+                              <span className={s.num}>{onTimeCount}</span>
+                              <span className={s.num}>{pct == null ? <span className={s.zero}>—</span> : `${pct}%`}</span>
+                              <span className={s.num}>{vol}đ</span>
+                            </div>
+                            {open && (
+                              <div className={s.kpiSrcTasks}>
+                                {tasksOfSrc.length === 0
+                                  ? <div className={s.empty} style={{ padding: 8 }}>Không có công việc nguồn này trong kỳ.</div>
+                                  : <div className={s.kpiTasks}>{tasksOfSrc.map(renderTask)}</div>}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
               </>
             )
           })()}
