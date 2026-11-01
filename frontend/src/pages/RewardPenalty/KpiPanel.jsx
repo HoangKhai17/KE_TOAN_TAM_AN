@@ -525,6 +525,12 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
               <div className={s.kpiTask} key={t.taskId}>
                 <div className={s.kpiT1}>
                   <b title={t.title}>{t.title}</b>
+                  {t.isRecurring && t.monthsLate > 0 && (
+                    <span style={{ fontSize: 'var(--fs-2xs)', fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'var(--color-warning-bg)', color: 'var(--color-warning-text)', whiteSpace: 'nowrap' }}
+                      title={`Hoàn thành trễ ${t.monthsLate} tháng → lũy tuyến: ${t.grossPoints}đ → ${t.points}đ`}>
+                      Trễ {t.monthsLate} th · {t.grossPoints}→{t.points}đ
+                    </span>
+                  )}
                   <span className={`${s.kpiPt} ${t.points > 0 ? s.kpiPos : ''}`}>{t.points > 0 ? `+${t.points}` : t.points}đ</span>
                 </div>
                 <div className={s.kpiT2}>
@@ -551,8 +557,15 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
                 </div>
               ))}</div>
             }
+            const lateTasks = (detail.tasks || []).filter((t) => t.isRecurring && t.monthsLate > 0)
+            const lostPoints = lateTasks.reduce((a, t) => a + ((t.grossPoints || 0) - (t.points || 0)), 0)
             return (
               <>
+                {lateTasks.length > 0 && (
+                  <div style={{ margin: '0 0 10px', padding: '7px 11px', borderRadius: 8, background: 'var(--color-warning-bg)', color: 'var(--color-warning-text)', fontSize: 'var(--fs-2xs)', fontWeight: 600 }}>
+                    ⏳ {lateTasks.length} việc định kỳ hoàn thành TRỄ tháng → bị lũy tuyến <strong>giảm {lostPoints}đ</strong> trong kỳ. (Chi tiết ở tab <strong>Theo nguồn → Định kỳ</strong>)
+                  </div>
+                )}
                 <div className={s.tabLinks} role="tablist" style={{ margin: '4px 0 12px', alignSelf: 'flex-start' }}>
                   {TABS.map(([k, lbl]) => (
                     <button key={k} className={`${s.tab} ${dTab === k ? s.tabActive : ''}`} onClick={() => setDTab(k)}>{lbl}</button>

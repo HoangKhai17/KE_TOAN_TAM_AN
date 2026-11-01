@@ -81,7 +81,8 @@ function buildDecayExpr(factors) {
 // Giá trị điểm 1 ĐƠN VỊ (mục cha): CHỈ task ĐỊNH KỲ (source='auto') mới có điểm × hệ số lũy tuyến.
 // MỌI nguồn khác = 0 điểm (chỉ thống kê số việc). `decay` = biểu thức từ buildDecayExpr().
 function unitPt(decay) {
-  return `(CASE WHEN t.source = 'auto' THEN COALESCE(unit.points, 0) * ${decay} ELSE 0 END)`
+  // Làm tròn TỪNG đơn vị rồi mới cộng → headline khớp với tổng từng task (tránh lệch làm tròn).
+  return `ROUND(CASE WHEN t.source = 'auto' THEN COALESCE(unit.points, 0) * ${decay} ELSE 0 END)`
 }
 
 async function isMonthClosed(year, month) {
@@ -109,7 +110,7 @@ async function listLive(year, month, opts = {}) {
     vol AS (
       -- vol_recurring = điểm ĐỊNH KỲ (auto) × hệ số lũy tuyến theo tháng trễ. vol_other = SỐ VIỆC nguồn khác (thống kê).
       SELECT t.assigned_to AS user_id,
-             ROUND(COALESCE(SUM(unit.points * ${decay}) FILTER (WHERE t.source = 'auto'), 0))::int AS vol_recurring,
+             COALESCE(SUM(ROUND(unit.points * ${decay})) FILTER (WHERE t.source = 'auto'), 0)::int AS vol_recurring,
              COUNT(DISTINCT unit.task_id) FILTER (WHERE t.source <> 'auto')::int AS vol_other
       FROM unit JOIN tasks t ON t.id = unit.task_id
       WHERE unit.is_completed
@@ -282,7 +283,13 @@ async function getUserTasks(year, month, userId, opts = {}) {
   const { rows } = await query(`
     ${UNIT_CTE},
     pts AS (
-      SELECT t.id AS task_id, ROUND(COALESCE(SUM(${UNIT_PT}), 0))::int AS points
+      SELECT t.id AS task_id,
+             ROUND(COALESCE(SUM(${UNIT_PT}), 0))::int AS points,
+             ROUND(COALESCE(SUM(CASE WHEN t.source = 'auto' THEN COALESCE(unit.points, 0) ELSE 0 END), 0))::int AS gross_points,
+             COALESCE(MAX(CASE WHEN t.source = 'auto' AND t.due_date IS NOT NULL
+                       THEN GREATEST(0, (EXTRACT(YEAR FROM unit.completed_at)::int*12 + EXTRACT(MONTH FROM unit.completed_at)::int)
+                                       - (EXTRACT(YEAR FROM t.due_date)::int*12 + EXTRACT(MONTH FROM t.due_date)::int))
+                       ELSE 0 END), 0) AS months_late
       FROM unit JOIN tasks t ON t.id = unit.task_id
       WHERE unit.is_completed
         AND unit.completed_at >= $1::date AND unit.completed_at < $2::date
@@ -293,6 +300,8 @@ async function getUserTasks(year, month, userId, opts = {}) {
            c.name AS company_name,
            COALESCE(tt.name, t.group_name) AS type_name,
            COALESCE(pts.points, 0) AS points,
+           COALESCE(pts.gross_points, 0) AS gross_points,
+           COALESCE(pts.months_late, 0) AS months_late,
            (t.due_date >= $1::date AND t.due_date < $2::date) AS due_in_period,
            (t.due_date >= CURRENT_DATE AND t.status <> 'completed') AS not_due_yet,
            (t.status = 'completed' AND t.completed_at::date <= t.due_date) AS on_time
@@ -308,7 +317,9 @@ async function getUserTasks(year, month, userId, opts = {}) {
     taskId: r.id, title: r.title, status: r.status,
     source: r.source ?? null, isRecurring: r.source === 'auto',
     companyName: r.company_name ?? null, typeName: r.type_name ?? null,
-    points: parseInt(r.points, 10) || 0,
+    points: parseInt(r.points, 10) || 0,             // điểm sau lũy tuyến (đã giảm)
+    grossPoints: parseInt(r.gross_points, 10) || 0,  // điểm gốc (chưa giảm) — chỉ task định kỳ
+    monthsLate: parseInt(r.months_late, 10) || 0,    // số tháng hoàn thành trễ
     dueDate: r.due_date, completedAt: r.completed_at,
     dueInPeriod: !!r.due_in_period,
     notDueYet: !!r.not_due_yet,   // chưa tới hạn & chưa xong → KHÔNG tính trượt
