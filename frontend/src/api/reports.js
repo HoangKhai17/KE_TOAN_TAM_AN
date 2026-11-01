@@ -2,6 +2,7 @@ import api from './axios'
 
 // Chỉ còn báo cáo Dự báo (các loại khác đã gỡ bỏ theo yêu cầu).
 export const getForecastReport = (params) => api.get('/reports/forecast', { params }).then((r) => r.data)
+export const getForecastYears  = () => api.get('/reports/forecast/years').then((r) => r.data.years)
 
 export async function exportReport(type, params = {}) {
   const res = await api.get(`/reports/export/${type}`, {

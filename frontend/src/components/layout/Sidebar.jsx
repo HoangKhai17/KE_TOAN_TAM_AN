@@ -20,7 +20,7 @@ const NAV_GROUPS = [
       { to: '/internal-assignments',   label: 'Nội bộ',             icon: ClipboardCheck },
       { to: '/client-requests',        label: 'Yêu cầu KH',        icon: ClipboardList },
       { to: '/progress-matrix',        label: 'BC Tiến độ CV',      icon: LayoutGrid },
-      { to: '/reports',                label: 'Báo cáo',            icon: BarChart3 },
+      { to: '/reports',                label: 'Báo cáo quy trình',  icon: BarChart3 },
     ],
   },
   {

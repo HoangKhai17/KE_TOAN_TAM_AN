@@ -9,6 +9,7 @@ const admin = [authenticate, requireRole('admin')]
 
 // Chỉ còn báo cáo Dự báo (các loại khác đã gỡ bỏ theo yêu cầu).
 router.get('/forecast', ...auth,  ctrl.getForecast)
+router.get('/forecast/years', ...auth, ctrl.getForecastYears)
 router.get('/export/:type', ...admin, ctrl.exportReport)
 
 module.exports = router

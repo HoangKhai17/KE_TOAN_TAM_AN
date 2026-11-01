@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -11,16 +11,17 @@ import { format } from 'date-fns'
 import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
-import { getForecastReport, exportReport } from '../../api/reports'
+import { getForecastReport, getForecastYears, exportReport } from '../../api/reports'
 import s from './Reports.module.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CHART_COLORS = ['#2563eb', '#059669', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2', '#ea580c', '#84cc16']
 
+// Mặc định = tháng SAU, nhưng GIỮ trong năm hiện tại (không nhảy sang năm chưa có dữ liệu).
 function defaultForecastPeriod() {
   const d = new Date()
-  d.setMonth(d.getMonth() + 1)
-  return { month: d.getMonth() + 1, year: d.getFullYear() }
+  const month = Math.min(d.getMonth() + 2, 12)   // getMonth() 0-indexed → +2 = tháng sau (1-indexed), chặn ở 12
+  return { month, year: d.getFullYear() }
 }
 
 // ── Custom chart tooltip ──────────────────────────────────────────────────────
@@ -50,6 +51,20 @@ export default function Reports() {
   const [exporting,     setExporting]     = useState(false)
   const [fullscreen,    setFullscreen]    = useState(false)
 
+  // Năm có dữ liệu thực của hệ thống (không hardcode năm tương lai)
+  const yearsQuery = useQuery({
+    queryKey: ['reports', 'forecast', 'years'],
+    queryFn: getForecastYears,
+    staleTime: 5 * 60_000,
+  })
+  const currentYear = new Date().getFullYear()
+  const yearOptions = useMemo(() => {
+    const set = new Set(yearsQuery.data ?? [])
+    set.add(currentYear)       // luôn có năm hiện tại
+    set.add(forecastYear)      // đảm bảo năm đang chọn luôn nằm trong danh sách
+    return [...set].sort((a, b) => b - a)
+  }, [yearsQuery.data, currentYear, forecastYear])
+
   const reportQuery = useQuery({
     queryKey: ['reports', 'forecast', forecastMonth, forecastYear],
     queryFn: () => getForecastReport({ month: forecastMonth, year: forecastYear }),
@@ -75,10 +90,8 @@ export default function Reports() {
     queryClient.invalidateQueries({ queryKey: ['reports'] })
   }
 
-  const currentYear = new Date().getFullYear()
-
   return (
-    <AppLayout title="Báo cáo">
+    <AppLayout title="Báo cáo quy trình">
       <div className={`${s.page} ${fullscreen ? s.fullscreen : ''}`}>
 
         {/* ── Tab nav (chỉ còn Dự báo) ── */}
@@ -99,7 +112,7 @@ export default function Reports() {
                 ))}
               </select>
               <select className={s.filterSelect} value={forecastYear} onChange={(e) => setForecastYear(Number(e.target.value))}>
-                {[currentYear, currentYear + 1, currentYear + 2].map((y) => (
+                {yearOptions.map((y) => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>

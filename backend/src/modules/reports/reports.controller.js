@@ -27,6 +27,13 @@ async function getForecast(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function getForecastYears(req, res, next) {
+  try {
+    const years = await svc.forecastYears()
+    res.json({ years })
+  } catch (err) { next(err) }
+}
+
 async function exportReport(req, res, next) {
   try {
     const { type } = req.params
@@ -47,4 +54,4 @@ async function exportReport(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { getForecast, exportReport }
+module.exports = { getForecast, getForecastYears, exportReport }

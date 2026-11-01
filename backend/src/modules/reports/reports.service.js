@@ -87,6 +87,23 @@ async function forecast({ month, year, user }) {
   return result.sort((a, b) => a.triggerDate.localeCompare(b.triggerDate))
 }
 
+// Năm có dữ liệu thực của hệ thống (để lọc Dự báo) — không hardcode năm tương lai.
+// Gộp: năm của task đã có + năm của lịch định kỳ (theo last_generated_at) + năm hiện tại.
+async function forecastYears() {
+  const { rows } = await query(`
+    SELECT DISTINCT y FROM (
+      SELECT EXTRACT(YEAR FROM due_date)::int AS y FROM tasks WHERE due_date IS NOT NULL
+      UNION
+      SELECT EXTRACT(YEAR FROM last_generated_at)::int AS y FROM customer_task_schedules WHERE last_generated_at IS NOT NULL
+    ) t WHERE y IS NOT NULL
+    ORDER BY y DESC
+  `)
+  const years = rows.map((r) => r.y)
+  const cur = new Date().getFullYear()
+  if (!years.includes(cur)) years.push(cur)
+  return years.sort((a, b) => b - a)
+}
+
 // ── Export helpers ────────────────────────────────────────────────────────────
 
 function styleHeader(sheet) {
@@ -121,5 +138,6 @@ async function exportToExcel(type, data) {
 
 module.exports = {
   forecast,
+  forecastYears,
   exportToExcel,
 }
