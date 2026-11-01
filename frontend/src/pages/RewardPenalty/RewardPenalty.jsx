@@ -14,7 +14,8 @@ import { useEnumsStore } from '../../hooks/useEnums'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { listUserOptions } from '../../api/users'
 import * as api from '../../api/rewardPenalty'
-import { listKpiTiers, createKpiTier, updateKpiTier, deleteKpiTier, getKpiPerformance } from '../../api/kpi'
+import { listKpiTiers, createKpiTier, updateKpiTier, deleteKpiTier, getKpiPerformance,
+  listKpiDelayFactors, createKpiDelayFactor, updateKpiDelayFactor, deleteKpiDelayFactor } from '../../api/kpi'
 import KpiPanel from './KpiPanel'
 import PeriodPicker from '../Tasks/PeriodPicker'
 import { useDataSync } from '../../hooks/useDataSync'
@@ -1124,12 +1125,36 @@ function GradesPanel({ slot, onFooter }) {
     if (!(await confirmDelete({ title: 'Xoá mốc', message: <>Xoá mốc điểm này?</> }))) return
     try { await deleteKpiTier(t.id); tiersReload() } catch { addToast('Không xoá được', 'error') }
   }
+
+  // ── Bảng HỆ SỐ LŨY TUYẾN theo tháng trễ (kpi_delay_factors) ──
+  const [delays, setDelays] = useState([])
+  const [delaysLoading, setDelaysLoading] = useState(true)
+  const [savingDelay, setSavingDelay] = useState(false)
+  const delaysReload = useCallback(() => { setDelaysLoading(true); listKpiDelayFactors().then(setDelays).catch(() => setDelays([])).finally(() => setDelaysLoading(false)) }, [])
+  useEffect(() => { delaysReload() }, [delaysReload])
+  async function delayPatch(d, p) {
+    setDelays((l) => l.map((x) => x.id === d.id ? { ...x, ...p } : x))
+    try { await updateKpiDelayFactor(d.id, p) } catch (e) { addToast(e.response?.data?.error?.message ?? 'Lỗi khi lưu', 'error'); delaysReload() }
+  }
+  async function delayAdd() {
+    setSavingDelay(true)
+    const nextMonth = delays.length ? Math.max(...delays.map((x) => x.monthsLate)) + 1 : 0
+    try { await createKpiDelayFactor({ monthsLate: nextMonth, factorPct: 0 }); delaysReload() }
+    catch (e) { addToast(e.response?.data?.error?.message ?? 'Không thêm được', 'error') } finally { setSavingDelay(false) }
+  }
+  async function delayRemove(d) {
+    if (!(await confirmDelete({ title: 'Xoá dòng', message: <>Xoá hệ số cho trễ {d.monthsLate} tháng?</> }))) return
+    try { await deleteKpiDelayFactor(d.id); delaysReload() } catch { addToast('Không xoá được', 'error') }
+  }
+
   const isGradeTab = subTab === 'progress' || subTab === 'rp'
   const toolbar = (
     <div className={s.toolbar}>
       {isGradeTab
         ? <button className={s.btnPrimary} onClick={openAdd}><Plus size={14} /> Thêm xếp loại</button>
-        : <button className={s.btnPrimary} onClick={tierAdd} disabled={savingTier}>{savingTier ? <Loader2 size={13} className={s.spin} /> : <Plus size={14} />} Thêm mốc</button>}
+        : subTab === 'tiers'
+        ? <button className={s.btnPrimary} onClick={tierAdd} disabled={savingTier}>{savingTier ? <Loader2 size={13} className={s.spin} /> : <Plus size={14} />} Thêm mốc</button>
+        : <button className={s.btnPrimary} onClick={delayAdd} disabled={savingDelay}>{savingDelay ? <Loader2 size={13} className={s.spin} /> : <Plus size={14} />} Thêm dòng</button>}
     </div>
   )
 
@@ -1141,6 +1166,7 @@ function GradesPanel({ slot, onFooter }) {
           <button className={`${s.tab} ${subTab === 'progress' ? s.tabActive : ''}`} onClick={() => setSubTab('progress')}>Xếp loại · Tiến độ</button>
           <button className={`${s.tab} ${subTab === 'rp' ? s.tabActive : ''}`} onClick={() => setSubTab('rp')}>Xếp loại · Thưởng/phạt</button>
           <button className={`${s.tab} ${subTab === 'tiers' ? s.tabActive : ''}`} onClick={() => setSubTab('tiers')}>Mốc % đúng hạn → điểm</button>
+          <button className={`${s.tab} ${subTab === 'delay' ? s.tabActive : ''}`} onClick={() => setSubTab('delay')}>Hệ số trễ hạn (lũy tuyến)</button>
         </div>
       </div>
 
@@ -1211,7 +1237,7 @@ function GradesPanel({ slot, onFooter }) {
           : <>ℹ️ Xếp loại theo <strong>tiến độ công việc</strong> = Định kỳ + Task khác + Điểm đúng hạn. Dải điểm dùng <strong>tổng điểm tiến độ</strong> trong kỳ (bỏ trống = không giới hạn). Mỗi loại gắn 1 mức thưởng riêng.</>}
       </div>
       </>
-      ) : (
+      ) : subTab === 'tiers' ? (
       <>
       {tiersLoading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
         <div className={s.tableWrap}>
@@ -1233,6 +1259,28 @@ function GradesPanel({ slot, onFooter }) {
         </div>
       )}
       <div className={s.cardFoot}>ℹ️ <strong>Điểm KPI</strong> (từ % đúng hạn trong kỳ) cộng với <strong>Tổng điểm thưởng/phạt</strong> → ra <strong>Xếp loại</strong>. Bỏ trống = không giới hạn; điểm âm = trừ.</div>
+      </>
+      ) : (
+      <>
+      {delaysLoading ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (
+        <div className={s.tableWrap}>
+          <table className={s.table}>
+            <thead><tr><th className={s.colStt}>STT</th><th className={s.num}>Số tháng trễ</th><th className={s.num}>Hệ số (%)</th><th>Hành động</th></tr></thead>
+            <tbody>
+              {delays.length === 0 && <tr><td colSpan={4} className={s.empty}>Chưa có dòng. Bấm “Thêm dòng”.</td></tr>}
+              {delays.map((d, i) => (
+                <tr key={d.id}>
+                  <td className={s.colStt}>{i + 1}</td>
+                  <td><CellText value={d.monthsLate} numeric onCommit={(v) => delayPatch(d, { monthsLate: Number(v) || 0 })} /></td>
+                  <td><CellText value={d.factorPct} numeric onCommit={(v) => delayPatch(d, { factorPct: Number(v) || 0 })} /></td>
+                  <td><span className={s.rowActions}><button className={`${s.iconBtn} ${s.iconBtnDanger}`} title="Xoá" onClick={() => delayRemove(d)}><Trash2 size={13} /></button></span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className={s.cardFoot}>ℹ️ Áp cho <strong>điểm task định kỳ</strong>: điểm thực nhận = điểm gốc × hệ số theo <strong>số tháng hoàn thành TRỄ</strong> (tháng xong − tháng hạn). VD 0 tháng = 100%, 1 = 50%, 2 = 0%, trễ hơn có thể <strong>âm</strong> (trừ điểm). Trễ vượt dòng cuối → giữ hệ số dòng cuối.</div>
       </>
       )}
     </div>

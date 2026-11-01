@@ -100,4 +100,19 @@ async function deleteTier(req, res, next) {
   try { await svc.deleteTier(req.params.id); res.status(204).end() } catch (err) { next(err) }
 }
 
-module.exports = { list, detail, userTasks, close, reopen, performance, listTiers, createTier, updateTier, deleteTier }
+// ── Hệ số lũy tuyến theo tháng trễ (admin) ──
+async function listDelayFactors(req, res, next) {
+  try { res.json({ success: true, data: { factors: await svc.listDelayFactorRows() } }) } catch (err) { next(err) }
+}
+async function createDelayFactor(req, res, next) {
+  try { res.status(201).json({ success: true, data: { factor: await svc.createDelayFactor(req.body, req.user.id) } }) } catch (err) { next(err) }
+}
+async function updateDelayFactor(req, res, next) {
+  try { res.json({ success: true, data: { factor: await svc.updateDelayFactor(req.params.id, req.body) } }) } catch (err) { next(err) }
+}
+async function deleteDelayFactor(req, res, next) {
+  try { await svc.deleteDelayFactor(req.params.id); res.status(204).end() } catch (err) { next(err) }
+}
+
+module.exports = { list, detail, userTasks, close, reopen, performance, listTiers, createTier, updateTier, deleteTier,
+  listDelayFactors, createDelayFactor, updateDelayFactor, deleteDelayFactor }

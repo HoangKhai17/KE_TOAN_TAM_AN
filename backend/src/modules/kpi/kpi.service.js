@@ -58,9 +58,31 @@ const UNIT_CTE = `
     HAVING bool_or(g.level = 0)   -- bỏ nhóm con mồ côi (không có mục cha đứng trước)
   )`
 
-// Giá trị điểm 1 ĐƠN VỊ (mục cha): CHỈ task ĐỊNH KỲ (source='auto') mới có điểm (điểm cấu hình).
-// MỌI nguồn khác (tự sắp xếp / KH yêu cầu / …) = 0 điểm — chỉ THỐNG KÊ số việc, không tính KPI.
-const UNIT_PT = "(CASE WHEN t.source = 'auto' THEN COALESCE(unit.points, 0) ELSE 0 END)"
+// ── LŨY TUYẾN: hệ số theo số tháng hoàn thành TRỄ (bảng kpi_delay_factors) ─────
+// Đọc hệ số đang bật, sắp theo số tháng trễ tăng dần.
+async function loadDelayFactors() {
+  const { rows } = await query(
+    'SELECT months_late, factor_pct FROM kpi_delay_factors WHERE is_active = TRUE ORDER BY months_late')
+  return rows.map((r) => ({ monthsLate: r.months_late, factorPct: Number(r.factor_pct) }))
+}
+// Trả MỘT biểu thức SQL = hệ số (thang 0..1, CÓ THỂ ÂM) cho 1 đơn vị, dựa trên:
+//   mlate = số tháng trễ = max(0, tháng(unit.completed_at) − tháng(t.due_date)); due_date NULL → hệ số 1.
+//   mlate ≥ mốc lớn nhất cấu hình → lấy hệ số dòng cuối (giữ nguyên). Mốc không cấu hình → 1 (an toàn).
+// (cần có bí danh `unit` + JOIN tasks `t` trong truy vấn)
+function buildDecayExpr(factors) {
+  if (!factors || !factors.length) return '1'
+  const maxM = factors[factors.length - 1].monthsLate
+  const maxF = factors[factors.length - 1].factorPct / 100
+  const L = '(GREATEST(0, (EXTRACT(YEAR FROM unit.completed_at)::int*12 + EXTRACT(MONTH FROM unit.completed_at)::int)'
+          + ' - (EXTRACT(YEAR FROM t.due_date)::int*12 + EXTRACT(MONTH FROM t.due_date)::int)))'
+  const whens = factors.map((f) => `WHEN ${L} = ${f.monthsLate} THEN ${f.factorPct / 100}`).join(' ')
+  return `(CASE WHEN t.due_date IS NULL THEN 1 WHEN ${L} >= ${maxM} THEN ${maxF} ${whens} ELSE 1 END)`
+}
+// Giá trị điểm 1 ĐƠN VỊ (mục cha): CHỈ task ĐỊNH KỲ (source='auto') mới có điểm × hệ số lũy tuyến.
+// MỌI nguồn khác = 0 điểm (chỉ thống kê số việc). `decay` = biểu thức từ buildDecayExpr().
+function unitPt(decay) {
+  return `(CASE WHEN t.source = 'auto' THEN COALESCE(unit.points, 0) * ${decay} ELSE 0 END)`
+}
 
 async function isMonthClosed(year, month) {
   const { y, m } = monthBounds(year, month)
@@ -73,6 +95,7 @@ async function isMonthClosed(year, month) {
 async function listLive(year, month, opts = {}) {
   const { userId = null, role = null, userIds = null, sources = null } = opts
   const { start, end } = resolveBounds({ year, month, from: opts.from, to: opts.to })
+  const decay = buildDecayExpr(await loadDelayFactors())
   const params = [start, end]
   // Lọc theo NGUỒN (auto/manual/customer/…): thêm sớm để $3 cố định cho vol/ont. Bỏ trống = mọi nguồn.
   let srcClause = ''
@@ -84,9 +107,9 @@ async function listLive(year, month, opts = {}) {
   const { rows } = await query(`
     ${UNIT_CTE},
     vol AS (
-      -- vol_recurring = điểm ĐỊNH KỲ (auto). vol_other = SỐ VIỆC nguồn khác đã xong (THỐNG KÊ, KHÔNG điểm).
+      -- vol_recurring = điểm ĐỊNH KỲ (auto) × hệ số lũy tuyến theo tháng trễ. vol_other = SỐ VIỆC nguồn khác (thống kê).
       SELECT t.assigned_to AS user_id,
-             COALESCE(SUM(unit.points) FILTER (WHERE t.source = 'auto'), 0)::int AS vol_recurring,
+             ROUND(COALESCE(SUM(unit.points * ${decay}) FILTER (WHERE t.source = 'auto'), 0))::int AS vol_recurring,
              COUNT(DISTINCT unit.task_id) FILTER (WHERE t.source <> 'auto')::int AS vol_other
       FROM unit JOIN tasks t ON t.id = unit.task_id
       WHERE unit.is_completed
@@ -181,11 +204,12 @@ async function listMonthly(year, month, opts = {}) {
 // ── Chi tiết breakdown (LIVE) theo công ty + loại CV cho 1 NV ──────────────────
 async function detailLive(year, month, userId, opts = {}) {
   const { start, end } = resolveBounds({ year, month, from: opts.from, to: opts.to })
+  const UNIT_PT = unitPt(buildDecayExpr(await loadDelayFactors()))
   const p = [start, end, userId]
   const [byCompany, byType, bySource, byStatus] = await Promise.all([
     query(`
       ${UNIT_CTE}
-      SELECT c.id AS key, c.name AS label, COALESCE(SUM(${UNIT_PT}),0)::int AS volume_points
+      SELECT c.id AS key, c.name AS label, ROUND(COALESCE(SUM(${UNIT_PT}),0))::int AS volume_points
       FROM unit JOIN tasks t ON t.id = unit.task_id JOIN companies c ON c.id = t.company_id
       WHERE unit.is_completed
         AND unit.completed_at >= $1::date AND unit.completed_at < $2::date AND t.assigned_to = $3
@@ -193,7 +217,7 @@ async function detailLive(year, month, userId, opts = {}) {
     query(`
       ${UNIT_CTE}
       SELECT COALESCE(tt.name, t.group_name, '(Không có loại)') AS label,
-             COALESCE(SUM(${UNIT_PT}),0)::int AS volume_points
+             ROUND(COALESCE(SUM(${UNIT_PT}),0))::int AS volume_points
       FROM unit JOIN tasks t ON t.id = unit.task_id LEFT JOIN task_types tt ON tt.id = t.task_type_id
       WHERE unit.is_completed
         AND unit.completed_at >= $1::date AND unit.completed_at < $2::date AND t.assigned_to = $3
@@ -202,7 +226,7 @@ async function detailLive(year, month, userId, opts = {}) {
     query(`
       ${UNIT_CTE},
       pts AS (
-        SELECT t.id AS task_id, COALESCE(SUM(${UNIT_PT}),0)::int AS points
+        SELECT t.id AS task_id, ROUND(COALESCE(SUM(${UNIT_PT}),0))::int AS points
         FROM unit JOIN tasks t ON t.id = unit.task_id
         WHERE unit.is_completed
           AND unit.completed_at >= $1::date AND unit.completed_at < $2::date AND t.assigned_to = $3
@@ -254,10 +278,11 @@ async function getDetail(year, month, userId, opts = {}) {
 // Gồm task có MỤC CHA đạt điểm trong tháng (theo completed_at rollup) HOẶC task đến hạn trong tháng.
 async function getUserTasks(year, month, userId, opts = {}) {
   const { start, end } = resolveBounds({ year, month, from: opts.from, to: opts.to })
+  const UNIT_PT = unitPt(buildDecayExpr(await loadDelayFactors()))
   const { rows } = await query(`
     ${UNIT_CTE},
     pts AS (
-      SELECT t.id AS task_id, COALESCE(SUM(${UNIT_PT}), 0)::int AS points
+      SELECT t.id AS task_id, ROUND(COALESCE(SUM(${UNIT_PT}), 0))::int AS points
       FROM unit JOIN tasks t ON t.id = unit.task_id
       WHERE unit.is_completed
         AND unit.completed_at >= $1::date AND unit.completed_at < $2::date
@@ -365,6 +390,49 @@ async function deleteTier(id) {
   if (!rows.length) { const e = new Error('Không tìm thấy mốc'); e.status = 404; throw e }
 }
 
+// ── Hệ số LŨY TUYẾN theo số tháng trễ (kpi_delay_factors) — admin cấu hình ─────
+function delayToDto(r) {
+  return { id: r.id, monthsLate: r.months_late, factorPct: Number(r.factor_pct), sortOrder: r.sort_order, isActive: r.is_active }
+}
+async function listDelayFactorRows() {
+  const { rows } = await query('SELECT * FROM kpi_delay_factors ORDER BY months_late, sort_order')
+  return rows.map(delayToDto)
+}
+async function createDelayFactor(data, actorId) {
+  try {
+    const { rows: [r] } = await query(
+      `INSERT INTO kpi_delay_factors (months_late, factor_pct, sort_order, is_active, created_by)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [data.monthsLate ?? 0, data.factorPct ?? 0, data.sortOrder ?? (data.monthsLate ?? 0), data.isActive ?? true, actorId])
+    return delayToDto(r)
+  } catch (e) {
+    if (e.code === '23505') { const err = new Error('Đã có dòng cho số tháng trễ này'); err.status = 409; throw err }
+    throw e
+  }
+}
+async function updateDelayFactor(id, data) {
+  const map = { monthsLate: 'months_late', factorPct: 'factor_pct', sortOrder: 'sort_order', isActive: 'is_active' }
+  const sets = []; const params = []
+  for (const [k, col] of Object.entries(map)) {
+    if (data[k] !== undefined) { params.push(data[k]); sets.push(`${col} = $${params.length}`) }
+  }
+  if (!sets.length) { const e = new Error('Không có gì để cập nhật'); e.status = 400; throw e }
+  params.push(id)
+  try {
+    const { rows: [r] } = await query(
+      `UPDATE kpi_delay_factors SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`, params)
+    if (!r) { const e = new Error('Không tìm thấy dòng'); e.status = 404; throw e }
+    return delayToDto(r)
+  } catch (e) {
+    if (e.code === '23505') { const err = new Error('Đã có dòng cho số tháng trễ này'); err.status = 409; throw err }
+    throw e
+  }
+}
+async function deleteDelayFactor(id) {
+  const { rows } = await query('DELETE FROM kpi_delay_factors WHERE id = $1 RETURNING id', [id])
+  if (!rows.length) { const e = new Error('Không tìm thấy dòng'); e.status = 404; throw e }
+}
+
 // Dò mốc/xếp loại theo dải [min, max] (bao gồm 2 đầu; NULL = không giới hạn).
 // Chịu được trường hợp admin nhập min/max NGƯỢC (vd E: -21..-100) → tự chuẩn hoá lo≤hi.
 function matchRange(value, list, minKey, maxKey) {
@@ -381,6 +449,7 @@ function matchRange(value, list, minKey, maxKey) {
 async function getPerformance(year, month, opts = {}) {
   const { userId = null } = opts
   const bounds = resolveBounds({ year, month, from: opts.from, to: opts.to })
+  const UNIT_PT = unitPt(buildDecayExpr(await loadDelayFactors()))
   const base = await listMonthly(year, month, opts)               // { closed, rows:[{...onTimePct, volumePoints}] }
   const tiers = await listTiers({ activeOnly: true })
   // grades ở bảng kpi_grades (module reward-penalty) — đọc trực tiếp, TÁCH 2 nhánh theo category.
@@ -436,7 +505,7 @@ async function getPerformance(year, month, opts = {}) {
     // Điểm khối lượng theo (NV × nguồn) — hoàn thành trong kỳ (auto = điểm cấu hình; khác = 1đ/bước).
     const { rows: volAgg } = await query(`
       ${UNIT_CTE}
-      SELECT t.assigned_to AS user_id, t.source, COALESCE(SUM(${UNIT_PT}),0)::int AS vol
+      SELECT t.assigned_to AS user_id, t.source, ROUND(COALESCE(SUM(${UNIT_PT}),0))::int AS vol
       FROM unit JOIN tasks t ON t.id = unit.task_id
       WHERE unit.is_completed
         AND unit.completed_at >= $1::date AND unit.completed_at < $2::date
@@ -521,4 +590,5 @@ async function getPerformance(year, month, opts = {}) {
 module.exports = {
   listMonthly, getDetail, getUserTasks, closeMonth, reopenMonth, isMonthClosed,
   listTiers, createTier, updateTier, deleteTier, getPerformance,
+  listDelayFactorRows, createDelayFactor, updateDelayFactor, deleteDelayFactor,
 }

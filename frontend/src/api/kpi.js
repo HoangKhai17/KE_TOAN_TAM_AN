@@ -63,3 +63,20 @@ export async function updateKpiTier(id, body) {
 export async function deleteKpiTier(id) {
   await api.delete(`/kpi/tiers/${id}`)
 }
+
+// Hệ số lũy tuyến theo số tháng trễ
+export async function listKpiDelayFactors() {
+  const { data } = await api.get('/kpi/delay-factors')
+  return data.data.factors
+}
+export async function createKpiDelayFactor(body) {
+  const { data } = await api.post('/kpi/delay-factors', body)
+  return data.data.factor
+}
+export async function updateKpiDelayFactor(id, body) {
+  const { data } = await api.patch(`/kpi/delay-factors/${id}`, body)
+  return data.data.factor
+}
+export async function deleteKpiDelayFactor(id) {
+  await api.delete(`/kpi/delay-factors/${id}`)
+}

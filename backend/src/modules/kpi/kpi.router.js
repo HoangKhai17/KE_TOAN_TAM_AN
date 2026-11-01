@@ -19,6 +19,12 @@ router.post('/tiers',      ...admin, ctrl.createTier)
 router.patch('/tiers/:id', ...admin, ctrl.updateTier)
 router.delete('/tiers/:id', ...admin, ctrl.deleteTier)
 
+// Hệ số lũy tuyến theo tháng trễ (ĐẶT TRƯỚC '/:userId')
+router.get('/delay-factors',        ...auth,  ctrl.listDelayFactors)
+router.post('/delay-factors',       ...admin, ctrl.createDelayFactor)
+router.patch('/delay-factors/:id',  ...admin, ctrl.updateDelayFactor)
+router.delete('/delay-factors/:id', ...admin, ctrl.deleteDelayFactor)
+
 router.get('/',        ...auth, ctrl.list)
 router.get('/:userId/tasks', ...auth, ctrl.userTasks)   // từng task của NV trong kỳ
 router.get('/:userId', ...auth, ctrl.detail)
