@@ -108,9 +108,16 @@ async function listLive(year, month, opts = {}) {
   const { rows } = await query(`
     ${UNIT_CTE},
     vol AS (
-      -- vol_recurring = điểm ĐỊNH KỲ (auto) × hệ số lũy tuyến theo tháng trễ. vol_other = SỐ VIỆC nguồn khác (thống kê).
+      -- ĐIỂM = việc ĐỊNH KỲ HOÀN THÀNH trong kỳ (completed_at trong kỳ) — tổng này giữ nguyên gốc (payroll).
+      -- Tách 2 phần theo due_date để bày riêng:
+      --   pt_month = việc của THÁNG NÀY (due trong kỳ / chưa có hạn) → đúng lịch, hệ số 1.
+      --   pt_old   = việc CŨ làm bù (due TRƯỚC kỳ) → bị lũy tuyến (hệ số <1). old_gross = điểm GỐC việc cũ;
+      --   old_count = số việc cũ. vol_other = SỐ VIỆC nguồn khác đã xong.
       SELECT t.assigned_to AS user_id,
-             COALESCE(SUM(ROUND(unit.points * ${decay})) FILTER (WHERE t.source = 'auto'), 0)::int AS vol_recurring,
+             COALESCE(SUM(ROUND(unit.points * ${decay})) FILTER (WHERE t.source = 'auto' AND NOT (t.due_date < $1::date)), 0)::int AS pt_month,
+             COALESCE(SUM(ROUND(unit.points * ${decay})) FILTER (WHERE t.source = 'auto' AND t.due_date < $1::date), 0)::int AS pt_old,
+             COALESCE(SUM(unit.points) FILTER (WHERE t.source = 'auto' AND t.due_date < $1::date), 0)::int AS old_gross,
+             COUNT(DISTINCT unit.task_id) FILTER (WHERE t.source = 'auto' AND t.due_date < $1::date)::int AS old_count,
              COUNT(DISTINCT unit.task_id) FILTER (WHERE t.source <> 'auto')::int AS vol_other
       FROM unit JOIN tasks t ON t.id = unit.task_id
       WHERE unit.is_completed
@@ -131,19 +138,20 @@ async function listLive(year, month, opts = {}) {
       GROUP BY t.assigned_to
     ),
     poss AS (
-      -- TỔNG điểm có thể đạt trong kỳ (mẫu số "đạt/tổng") — CHỈ task ĐỊNH KỲ (nguồn khác không có điểm):
-      -- cộng điểm mọi mục cha (đạt hay chưa) của task auto đến hạn trong kỳ, CỘNG mục cha auto đã đạt
-      -- trong kỳ của task ngoài kỳ → luôn ≥ điểm đã đạt.
+      -- TỔNG điểm GỐC có thể đạt trong kỳ (mẫu số "đạt/tổng") — CHỈ task ĐỊNH KỲ (nguồn khác không có điểm):
+      -- cùng rổ với vol = mọi mục cha (đạt hay chưa) của task auto ĐẾN HẠN trong kỳ. Luôn ≥ điểm đã đạt.
       SELECT t.assigned_to AS user_id,
              COALESCE(SUM(unit.points) FILTER (WHERE t.source = 'auto'), 0)::int AS possible_points
       FROM unit JOIN tasks t ON t.id = unit.task_id
       WHERE t.assigned_to IS NOT NULL${srcClause}
-        AND ( (t.due_date >= $1::date AND t.due_date < $2::date)
-              OR (unit.is_completed AND unit.completed_at >= $1::date AND unit.completed_at < $2::date) )
+        AND t.due_date >= $1::date AND t.due_date < $2::date
       GROUP BY t.assigned_to
     )
     SELECT u.id AS user_id, u.name AS user_name, u.job_title,
-           COALESCE(vol.vol_recurring, 0) AS vol_recurring,
+           COALESCE(vol.pt_month, 0) AS pt_month,
+           COALESCE(vol.pt_old, 0) AS pt_old,
+           COALESCE(vol.old_gross, 0) AS old_gross,
+           COALESCE(vol.old_count, 0) AS old_count,
            COALESCE(vol.vol_other, 0) AS vol_other,
            COALESCE(poss.possible_points, 0) AS possible_points,
            COALESCE(ont.assigned_count, 0) AS assigned_count,
@@ -161,14 +169,19 @@ async function listLive(year, month, opts = {}) {
 function toKpiDto(r) {
   const assigned = parseInt(r.assigned_count, 10) || 0
   const onTime = parseInt(r.on_time_count, 10) || 0
-  const volRec = parseInt(r.vol_recurring, 10) || 0    // điểm task ĐỊNH KỲ (điểm cấu hình)
+  const ptMonth = parseInt(r.pt_month, 10) || 0        // điểm việc ĐỊNH KỲ của THÁNG NÀY (đúng lịch)
+  const ptOld = parseInt(r.pt_old, 10) || 0            // điểm việc CŨ làm bù (sau lũy tuyến)
+  const oldGross = parseInt(r.old_gross, 10) || 0      // điểm GỐC việc cũ (trước lũy tuyến)
+  const oldCount = parseInt(r.old_count, 10) || 0      // số việc cũ làm bù
+  const volRec = ptMonth + ptOld                        // TỔNG điểm định kỳ hoàn thành trong kỳ (= gốc, cho payroll)
   const volOther = parseInt(r.vol_other, 10) || 0      // SỐ VIỆC nguồn khác đã xong (thống kê, KHÔNG điểm)
   // Điểm khối lượng KPI = CHỈ điểm định kỳ. Task nguồn khác không tính điểm (chỉ thống kê số việc).
   const volumePoints = volRec
   return {
     userId: r.user_id, userName: r.user_name, jobTitle: r.job_title ?? null,
     volumeRecurring: volRec, volumeOther: volOther, volumePoints,
-    volumePossible: Math.max(parseInt(r.possible_points, 10) || 0, volumePoints),
+    volumePtMonth: ptMonth, volumePtOld: ptOld, oldGross, oldCount, oldLost: oldGross - ptOld,
+    volumePossible: Math.max(parseInt(r.possible_points, 10) || 0, ptMonth),
     assignedCount: assigned, onTimeCount: onTime,
     onTimePct: assigned > 0 ? Math.round((onTime * 100) / assigned) : null,
   }
@@ -195,6 +208,7 @@ async function listMonthly(year, month, opts = {}) {
     return { closed: true, rows: rows.map((r) => ({
       userId: r.user_id, userName: r.user_name, jobTitle: r.job_title ?? null,
       volumePoints: r.volume_points, volumeRecurring: r.volume_points, volumeOther: 0,
+      volumePtMonth: r.volume_points, volumePtOld: 0, oldGross: 0, oldCount: 0, oldLost: 0,
       volumePossible: r.volume_points, assignedCount: r.assigned_count,
       onTimeCount: r.on_time_count, onTimePct: r.on_time_pct,
     })) }
@@ -460,7 +474,11 @@ function matchRange(value, list, minKey, maxKey) {
 async function getPerformance(year, month, opts = {}) {
   const { userId = null } = opts
   const bounds = resolveBounds({ year, month, from: opts.from, to: opts.to })
-  const UNIT_PT = unitPt(buildDecayExpr(await loadDelayFactors()))
+  const delayFactors = await loadDelayFactors()
+  const UNIT_PT = unitPt(buildDecayExpr(delayFactors))
+  // Các MỨC TRỄ để bày cột "Lũy tuyến · việc cũ" (chỉ mốc trễ ≥1 tháng; mốc 0 = đúng hạn, bỏ).
+  const delayLevels = delayFactors.filter((f) => f.monthsLate >= 1).map((f) => ({ monthsLate: f.monthsLate, factorPct: f.factorPct }))
+  const maxLvl = delayLevels.length ? delayLevels[delayLevels.length - 1].monthsLate : 1
   const base = await listMonthly(year, month, opts)               // { closed, rows:[{...onTimePct, volumePoints}] }
   const tiers = await listTiers({ activeOnly: true })
   // grades ở bảng kpi_grades (module reward-penalty) — đọc trực tiếp, TÁCH 2 nhánh theo category.
@@ -492,6 +510,8 @@ async function getPerformance(year, month, opts = {}) {
   // Báo cáo ĐA NGUỒN: số việc đến hạn / đúng hạn theo (NV × nguồn) trong kỳ — để vẽ stacked bar
   // ở Tổng quan. Tôn trọng bộ lọc nguồn (sources). CHỈ tính live (tháng đã chốt không có breakdown này).
   const srcByUser = new Map()   // userId → [{source, taskCount, dueCount, onTimeCount}]
+  const lateByUser = new Map()  // userId → { [mứcTrễ]: {count, gross, lost} } — việc CŨ định kỳ làm bù, theo mức trễ
+  const otherOldByUser = new Map() // userId → số việc KHÁC (ngoài định kỳ) cũ làm bù trong kỳ
   if (!base.closed) {
     const { start, end } = bounds
     const sp = [start, end]
@@ -501,6 +521,7 @@ async function getPerformance(year, month, opts = {}) {
       SELECT t.assigned_to AS user_id, t.source,
              COUNT(*)::int AS task_count,
              COUNT(*) FILTER (WHERE t.status='completed' OR t.due_date < CURRENT_DATE)::int AS due_count,
+             COUNT(*) FILTER (WHERE t.status='completed')::int AS done_count,
              COUNT(*) FILTER (WHERE t.status='completed' AND t.completed_at::date <= t.due_date)::int AS on_time_count
       FROM tasks t
       WHERE t.assigned_to IS NOT NULL AND t.due_date >= $1::date AND t.due_date < $2::date${sClause}
@@ -509,27 +530,63 @@ async function getPerformance(year, month, opts = {}) {
     const entryMap = new Map()
     for (const a of srcAgg) {
       if (!srcByUser.has(a.user_id)) srcByUser.set(a.user_id, [])
-      const entry = { source: a.source, taskCount: a.task_count, dueCount: a.due_count, onTimeCount: a.on_time_count, volumePoints: 0 }
+      const entry = { source: a.source, taskCount: a.task_count, dueCount: a.due_count, doneCount: a.done_count, onTimeCount: a.on_time_count, volumePoints: 0, gross: 0, lateCount: 0 }
       srcByUser.get(a.user_id).push(entry)
       entryMap.set(keyOf(a.user_id, a.source), entry)
     }
-    // Điểm khối lượng theo (NV × nguồn) — hoàn thành trong kỳ (auto = điểm cấu hình; khác = 1đ/bước).
+    // Điểm theo (NV × nguồn) — RỔ THỐNG NHẤT = việc ĐẾN HẠN trong kỳ (due_date trong kỳ), chỉ cộng mục ĐÃ XONG.
+    // vol = sau lũy tuyến; gross = điểm GỐC đã xong (trước lũy tuyến); late_count = số việc đến-hạn-kỳ-này xong TRỄ tháng.
     const { rows: volAgg } = await query(`
       ${UNIT_CTE}
-      SELECT t.assigned_to AS user_id, t.source, ROUND(COALESCE(SUM(${UNIT_PT}),0))::int AS vol
+      SELECT t.assigned_to AS user_id, t.source,
+             ROUND(COALESCE(SUM(${UNIT_PT}) FILTER (WHERE unit.is_completed),0))::int AS vol,
+             ROUND(COALESCE(SUM(CASE WHEN t.source='auto' AND unit.is_completed THEN COALESCE(unit.points,0) ELSE 0 END),0))::int AS gross,
+             COUNT(DISTINCT unit.task_id) FILTER (WHERE t.source='auto' AND unit.is_completed AND t.due_date IS NOT NULL
+               AND (EXTRACT(YEAR FROM unit.completed_at)::int*12 + EXTRACT(MONTH FROM unit.completed_at)::int)
+                 > (EXTRACT(YEAR FROM t.due_date)::int*12 + EXTRACT(MONTH FROM t.due_date)::int))::int AS late_count
       FROM unit JOIN tasks t ON t.id = unit.task_id
-      WHERE unit.is_completed
-        AND unit.completed_at >= $1::date AND unit.completed_at < $2::date
+      WHERE t.due_date >= $1::date AND t.due_date < $2::date
         AND t.assigned_to IS NOT NULL${sClause}
       GROUP BY t.assigned_to, t.source`, sp)
     for (const v of volAgg) {
       const e = entryMap.get(keyOf(v.user_id, v.source))
-      if (e) { e.volumePoints = v.vol }
+      if (e) { e.volumePoints = v.vol; e.gross = v.gross; e.lateCount = v.late_count }
       else {
         if (!srcByUser.has(v.user_id)) srcByUser.set(v.user_id, [])
-        srcByUser.get(v.user_id).push({ source: v.source, taskCount: 0, dueCount: 0, onTimeCount: 0, volumePoints: v.vol })
+        srcByUser.get(v.user_id).push({ source: v.source, taskCount: 0, dueCount: 0, doneCount: 0, onTimeCount: 0, volumePoints: v.vol, gross: v.gross, lateCount: v.late_count })
       }
     }
+
+    // VIỆC CŨ ĐỊNH KỲ làm bù trong kỳ, TÁCH theo MỨC TRỄ (tháng hoàn thành − tháng đến hạn), cộng từng mục ĐÃ XONG.
+    // lvl = số tháng trễ (chặn trần = maxLvl). gross = điểm gốc; net = sau lũy tuyến; lost = gross − net.
+    const { rows: lateAgg } = await query(`
+      ${UNIT_CTE}
+      SELECT t.assigned_to AS user_id,
+             LEAST((EXTRACT(YEAR FROM unit.completed_at)::int*12 + EXTRACT(MONTH FROM unit.completed_at)::int)
+                 - (EXTRACT(YEAR FROM t.due_date)::int*12 + EXTRACT(MONTH FROM t.due_date)::int), ${maxLvl}) AS lvl,
+             COUNT(DISTINCT unit.task_id)::int AS cnt,
+             COALESCE(SUM(unit.points), 0)::int AS gross,
+             ROUND(COALESCE(SUM(${UNIT_PT}), 0))::int AS net
+      FROM unit JOIN tasks t ON t.id = unit.task_id
+      WHERE unit.is_completed
+        AND unit.completed_at >= $1::date AND unit.completed_at < $2::date
+        AND t.source = 'auto' AND t.due_date IS NOT NULL AND t.due_date < $1::date
+        AND t.assigned_to IS NOT NULL${sClause}
+      GROUP BY t.assigned_to, lvl`, sp)
+    for (const r of lateAgg) {
+      if (!lateByUser.has(r.user_id)) lateByUser.set(r.user_id, {})
+      lateByUser.get(r.user_id)[r.lvl] = { count: r.cnt, gross: r.gross, lost: r.gross - r.net }
+    }
+
+    // VIỆC KHÁC (ngoài định kỳ) CŨ làm bù: đến hạn tháng trước, hoàn thành trong kỳ (không tính điểm, chỉ đếm).
+    const { rows: otherOldAgg } = await query(`
+      SELECT t.assigned_to AS user_id, COUNT(*)::int AS cnt
+      FROM tasks t
+      WHERE t.source <> 'auto' AND t.assigned_to IS NOT NULL
+        AND t.completed_at >= $1::date AND t.completed_at < $2::date
+        AND t.due_date IS NOT NULL AND t.due_date < $1::date${sClause}
+      GROUP BY t.assigned_to`, sp)
+    for (const r of otherOldAgg) otherOldByUser.set(r.user_id, r.cnt)
   }
 
   // Thống kê theo TRẠNG THÁI task (Tổng quan) — gộp toàn NV theo bộ lọc. GROUP BY động (enum, không hardcode).
@@ -564,6 +621,26 @@ async function getPerformance(year, month, opts = {}) {
     const kpiPoints = tier ? tier.points : 0
     const rpNet = netByUser.get(r.userId) ?? 0
 
+    // Thống kê VIỆC ĐỊNH KỲ cho bảng ngoài. Số việc (giao/làm) lấy theo ĐẾN HẠN trong kỳ (srcAgg),
+    // điểm lấy theo HOÀN THÀNH trong kỳ đã tách tháng này / việc cũ (base DTO: ptMonth/ptOld/old*).
+    const srcEntries = srcByUser.get(r.userId) ?? []
+    const autoE = srcEntries.find((e) => e.source === 'auto')
+    const recDue   = autoE?.taskCount ?? 0          // số việc định kỳ đến hạn trong kỳ
+    const recDone  = autoE?.doneCount ?? 0          // số việc định kỳ đã hoàn thành
+    const ptMonth  = r.volumePtMonth ?? 0           // điểm việc định kỳ THÁNG NÀY (đúng lịch)
+    const ptOld    = r.volumePtOld ?? 0             // điểm việc CŨ làm bù (sau lũy tuyến)
+    const oldCount = r.oldCount ?? 0                // số việc cũ làm bù
+    const oldGross = r.oldGross ?? 0                // điểm GỐC việc cũ (trước lũy tuyến)
+    const oldLost  = r.oldLost ?? (oldGross - ptOld) // điểm việc cũ bị lũy tuyến cắt
+    const netRecurring = r.volumeRecurring ?? 0     // TỔNG điểm định kỳ (tháng này + việc cũ)
+    // VIỆC KHÁC (mọi nguồn ≠ auto) — giao/làm, KHÔNG tính điểm.
+    const otherEntries = srcEntries.filter((e) => e.source !== 'auto')
+    const otherDue  = otherEntries.reduce((a, e) => a + (e.taskCount ?? 0), 0)
+    const otherDone = otherEntries.reduce((a, e) => a + (e.doneCount ?? 0), 0)
+    // Việc cũ TÁCH theo mức trễ (định kỳ) + số việc khác cũ.
+    const lateByLevel = lateByUser.get(r.userId) ?? {}
+    const otherOldCount = otherOldByUser.get(r.userId) ?? 0
+
     // NHÁNH 1 — Tiến độ công việc: định kỳ + task khác + điểm % đúng hạn.
     const progressPoints = (r.volumePoints || 0) + kpiPoints
     const pGrade = matchRange(progressPoints, progressGrades, 'minPoints', 'maxPoints')
@@ -587,6 +664,11 @@ async function getPerformance(year, month, opts = {}) {
       rpGradeSort: rpGrade?.sortOrder ?? null, rpAmount,
       // Tổng tiền
       totalAmount,
+      // Thống kê việc định kỳ (bảng ngoài): số việc (giao/làm) + điểm tách tháng này / việc cũ (lũy tuyến)
+      recDue, recDone, netRecurring,
+      ptMonth, ptOld, oldCount, oldGross, oldLost,
+      otherDue, otherDone,
+      lateByLevel, otherOldCount,   // việc cũ tách theo mức trễ + việc khác cũ
       // ── Tương thích ngược (KpiPanel/PayrollDetail): "grade/amount" trỏ về nhánh tiến độ,
       //    totalPoints = điểm tiến độ, amount = TỔNG tiền (cho payroll kéo đủ).
       totalPoints: progressPoints,
@@ -595,7 +677,7 @@ async function getPerformance(year, month, opts = {}) {
       bySource: srcByUser.get(r.userId) ?? [],
     }
   })
-  return { closed: base.closed, rows, statusReport, overdueCount, completedCount, taskTotal }
+  return { closed: base.closed, rows, statusReport, overdueCount, completedCount, taskTotal, delayLevels }
 }
 
 module.exports = {
