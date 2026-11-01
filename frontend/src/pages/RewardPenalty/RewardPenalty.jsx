@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { createPortal } from 'react-dom'
-import { Loader2, Plus, Check, X, Trash2, Upload, Download, ListChecks, ClipboardList, Users, ChevronDown, Search, Award, MessageSquare, Target } from 'lucide-react'
+import { Loader2, Plus, Check, X, Trash2, Upload, Download, ListChecks, ClipboardList, Users, ChevronDown, ChevronRight, Search, Award, MessageSquare, Target } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import Modal from '../../components/ui/Modal'
 import PaginationFooter from '../../components/layout/PaginationFooter'
@@ -815,6 +815,8 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
   const [ym, setYm] = useState({ year: CUR_Y, month: CUR_M, from: '', to: '' })
   const [sel, setSel] = useState(() => new Set())
   const [exportOpen, setExportOpen] = useState(false)
+  const [sumOpen, setSumOpen] = useState(() => new Set())   // NV đang mở chi tiết (mặc định đóng, mỗi NV 1 dòng)
+  const toggleSumOpen = (id) => setSumOpen((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   useEffect(() => { api.listGrades({ activeOnly: 'true' }).then(setGrades).catch(() => {}) }, [])
@@ -976,6 +978,7 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
                 <FilterTh cf={cf} colKey="user" rowSpan={2}>Nhân viên</FilterTh>
                 <th colSpan={6} style={{ textAlign: 'center', background: 'var(--color-primary-bg)', borderLeft: '2px solid var(--color-primary-bg-strong)' }}>① KPI công việc</th>
                 <th colSpan={3} style={{ textAlign: 'center', background: 'var(--color-accent-bg-soft)', borderLeft: '2px solid var(--color-primary-bg-strong)' }}>② Thưởng/phạt (nội quy)</th>
+                <th className={s.num} rowSpan={2} style={{ borderLeft: '2px solid var(--color-primary-bg-strong)', background: 'var(--color-success-bg-soft)' }}>Tổng thưởng (đ)</th>
               </tr>
               <tr>
                 <FilterTh cf={cf} colKey="vrec" num className={s.grpStart}>Định kỳ</FilterTh>
@@ -990,16 +993,17 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
               </tr>
             </thead>
             <tbody>
-              {view.length === 0 && <tr><td colSpan={12} className={s.empty}>Chưa có dữ liệu trong kỳ.</td></tr>}
+              {view.length === 0 && <tr><td colSpan={13} className={s.empty}>Chưa có dữ liệu trong kỳ.</td></tr>}
               {pg.slice.map((r, i) => {
                 const pGrade = findGrade(pGradeList, r.progressGradeCode)
                 const rGrade = findGrade(rpGradeList, r.rpGradeCode)
+                const open = sumOpen.has(r.userId)
                 return (
                 <Fragment key={r.userId}>
-                  <tr className={s.sumRow}>
-                    <td className={s.colChk}><input type="checkbox" className={s.check} checked={sel.has(r.userId)} onChange={() => toggle(r.userId)} /></td>
+                  <tr className={`${s.sumRow} ${s.kpiRowClick}`} onClick={() => toggleSumOpen(r.userId)}>
+                    <td className={s.colChk} onClick={(e) => e.stopPropagation()}><input type="checkbox" className={s.check} checked={sel.has(r.userId)} onChange={() => toggle(r.userId)} /></td>
                     <td className={s.colStt}>{pg.start + i + 1}</td>
-                    <td>{r.userName}</td>
+                    <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}{r.userName}</span></td>
                     <td className={`${s.num} ${s.grpStart}`}>{r.volumeRecurring}</td>
                     <td className={s.num}>{r.volumeOther}</td>
                     <td className={`${s.num} ${signCls(r.kpiPoints)}`}>{fmtPts(r.kpiPoints)}</td>
@@ -1009,31 +1013,91 @@ function SummaryPanel({ slot, years, onFooter, self = false }) {
                     <td className={`${s.num} ${s.grpStart} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td>
                     <td>{r.rpGradeCode ? <span className={`${s.gradeBadge} ${gradeColorCls(rGrade, rpGradeList)}`} title={r.rpGradeLabel}>{r.rpGradeCode}</span> : <span className={s.zero}>—</span>}</td>
                     <td className={s.num}>{Number(r.rpAmount) ? fmtMoney(r.rpAmount) : '—'}</td>
+                    <td className={s.num} style={{ borderLeft: '2px solid var(--color-primary-bg-strong)', background: 'var(--color-success-bg-soft)' }}><strong>{Number(r.totalAmount) ? fmtMoney(r.totalAmount) : '—'}</strong></td>
                   </tr>
+                  {open && (
                   <tr className={s.detailRow}>
-                    <td colSpan={12} className={s.detailCell}>
+                    <td colSpan={13} className={s.detailCell}>
                       {(() => {
                         const others = (r.bySource || []).filter((b) => b.source !== 'auto' && (b.taskCount || 0) > 0)
                         const otherDetail = others.length ? others.map((b) => `${enumLabel('task_source', b.source)} ${b.taskCount} việc`).join(' · ') : '—'
                         const rpDetail = (r.items || []).length ? r.items.map((it) => `${it.label} (${fmtPts(it.points)}${it.count > 1 ? ` ×${it.count}` : ''})`).join(' · ') : '—'
+                        const ptMonth = r.ptMonth ?? 0, ptOld = r.ptOld ?? 0, oldLost = r.oldLost ?? 0
+                        const lateLv = Object.entries(r.lateByLevel || {}).map(([k, v]) => ({ k: Number(k), ...v })).filter((v) => v.count > 0).sort((a, b) => a.k - b.k)
+                        const badge = (code, label, gr, list) => code ? <span className={`${s.gradeBadge} ${gradeColorCls(gr, list)}`} title={label}>{code}</span> : <span className={s.zero}>—</span>
+                        const secTitle = { fontWeight: 700, color: 'var(--color-primary-deep)', fontSize: 'var(--fs-2xs)', margin: '0 0 5px' }
                         return (
-                          <table className={`${s.bkTable} ${s.detailTable}`}>
-                            <thead><tr><th style={{ width: '26%' }}>Hạng mục</th><th>Chi tiết</th><th className={s.bkColNum}>Điểm</th></tr></thead>
-                            <tbody>
-                              <tr className={s.bkGroupRow}><td colSpan={3} className={s.bkLabel}>① KPI CÔNG VIỆC</td></tr>
-                              <tr><td className={s.bkLabel}>Điểm định kỳ</td><td className={s.detailMuted}>Σ điểm cấu hình checklist (việc định kỳ)</td><td className={s.bkColNum}>{r.volumeRecurring}</td></tr>
-                              <tr><td className={s.bkLabel}>Số việc khác (thống kê)</td><td className={s.detailMuted}>{otherDetail} <span style={{ color: 'var(--color-muted)' }}>· không tính điểm</span></td><td className={s.bkColNum}>{r.volumeOther}</td></tr>
-                              <tr><td className={s.bkLabel}>Điểm đúng hạn</td><td className={s.detailMuted}>{r.onTimeCount}/{r.assignedCount} việc đúng hạn ({r.onTimePct ?? '—'}%) → quy mốc KPI</td><td className={`${s.bkColNum} ${signCls(r.kpiPoints)}`}>{fmtPts(r.kpiPoints)}</td></tr>
-                              <tr className={s.bkTotalRow}><td className={s.bkLabel}>Tổng điểm KPI → Xếp loại → Thưởng</td><td className={s.detailMuted}>{r.progressGradeCode ? `${r.progressGradeCode}${r.progressGradeLabel ? ` · ${r.progressGradeLabel}` : ''}` : '—'} {Number(r.progressAmount) ? `→ ${fmtMoney(r.progressAmount)}đ` : ''}</td><td className={`${s.bkColNum} ${signCls(r.progressPoints)}`}>{fmtPts(r.progressPoints)}</td></tr>
-                              <tr className={s.bkGroupRow}><td colSpan={3} className={s.bkLabel}>② THƯỞNG/PHẠT (NỘI QUY)</td></tr>
-                              <tr><td className={s.bkLabel}>Chi tiết thưởng/phạt</td><td className={s.detailMuted}>{rpDetail}</td><td className={`${s.bkColNum} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td></tr>
-                              <tr className={s.bkTotalRow}><td className={s.bkLabel}>Điểm thưởng/phạt → Xếp loại → Tiền</td><td className={s.detailMuted}>{r.rpGradeCode ? `${r.rpGradeCode}${r.rpGradeLabel ? ` · ${r.rpGradeLabel}` : ''}` : '—'} {Number(r.rpAmount) ? `→ ${fmtMoney(r.rpAmount)}đ` : ''}</td><td className={`${s.bkColNum} ${signCls(r.rewardPenaltyNet)}`}>{fmtPts(r.rewardPenaltyNet)}</td></tr>
-                            </tbody>
-                          </table>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '2px 0 4px' }}>
+                            {/* ① KPI công việc — mỗi mục 1 CỘT */}
+                            <div>
+                              <div style={secTitle}>① KPI công việc</div>
+                              <div className={s.tableWrap}>
+                                <table className={s.table} style={{ minWidth: 0 }}>
+                                  <thead><tr>
+                                    <th className={s.num}>Điểm tháng này</th>
+                                    <th className={s.num}>Việc cũ (làm bù)</th>
+                                    <th className={s.num}>Lũy tuyến cắt</th>
+                                    <th className={s.num}>Σ Điểm định kỳ</th>
+                                    <th className={s.num}>Việc khác</th>
+                                    <th className={s.num}>% đúng hạn</th>
+                                    <th className={s.num}>Điểm đúng hạn</th>
+                                    <th className={s.num}>Tổng điểm KPI</th>
+                                    <th>Xếp loại</th>
+                                    <th className={s.num}>Thưởng (đ)</th>
+                                  </tr></thead>
+                                  <tbody><tr>
+                                    <td className={s.num}>{ptMonth}</td>
+                                    <td className={s.num}>{ptOld}</td>
+                                    <td className={s.num}>{oldLost > 0 ? <span style={{ color: 'var(--color-danger-text)', fontWeight: 700 }}>−{oldLost}</span> : <span className={s.zero}>—</span>}</td>
+                                    <td className={s.num}><strong>{r.volumeRecurring}</strong></td>
+                                    <td className={s.num}>{r.volumeOther}</td>
+                                    <td className={s.num}>{r.onTimePct == null ? '—' : `${r.onTimePct}%`}</td>
+                                    <td className={`${s.num} ${signCls(r.kpiPoints)}`}>{fmtPts(r.kpiPoints)}</td>
+                                    <td className={`${s.num} ${signCls(r.progressPoints)}`}><strong>{fmtPts(r.progressPoints)}</strong></td>
+                                    <td>{badge(r.progressGradeCode, r.progressGradeLabel, pGrade, pGradeList)}</td>
+                                    <td className={s.num}>{Number(r.progressAmount) ? fmtMoney(r.progressAmount) : '—'}</td>
+                                  </tr></tbody>
+                                </table>
+                              </div>
+                              {lateLv.length > 0 && (
+                                <div className={s.tableWrap} style={{ marginTop: 6 }}>
+                                  <table className={s.table} style={{ minWidth: 0 }}>
+                                    <thead><tr><th>Lũy tuyến chi tiết</th>{lateLv.map((v) => <th key={v.k} className={s.num}>Trễ {v.k} tháng</th>)}</tr></thead>
+                                    <tbody><tr>
+                                      <td style={{ color: 'var(--color-muted)' }}>Số việc · Gốc · Hệ số · Mất</td>
+                                      {lateLv.map((v) => { const hs = v.gross > 0 ? Math.round(((v.gross - v.lost) / v.gross) * 100) : null; return (
+                                        <td key={v.k} className={s.num}>{v.count} việc · {v.gross}đ · {hs == null ? '—' : `${hs}%`} · {v.lost > 0 ? <span style={{ color: 'var(--color-danger-text)', fontWeight: 700 }}>−{v.lost}</span> : 0}</td>
+                                      )})}
+                                    </tr></tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                            {/* ② Thưởng/phạt nội quy — mỗi mục 1 CỘT */}
+                            <div>
+                              <div style={secTitle}>② Thưởng/phạt (nội quy)</div>
+                              <div className={s.tableWrap}>
+                                <table className={s.table} style={{ minWidth: 0 }}>
+                                  <thead><tr><th>Chi tiết thưởng/phạt</th><th className={s.num}>Điểm</th><th>Xếp loại</th><th className={s.num}>Tiền (đ)</th></tr></thead>
+                                  <tbody><tr>
+                                    <td style={{ color: 'var(--color-text-soft)', wordBreak: 'break-word' }}>{rpDetail}</td>
+                                    <td className={`${s.num} ${signCls(r.rewardPenaltyNet)}`}><strong>{fmtPts(r.rewardPenaltyNet)}</strong></td>
+                                    <td>{badge(r.rpGradeCode, r.rpGradeLabel, rGrade, rpGradeList)}</td>
+                                    <td className={s.num}>{Number(r.rpAmount) ? fmtMoney(r.rpAmount) : '—'}</td>
+                                  </tr></tbody>
+                                </table>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, padding: '6px 12px', background: 'var(--color-success-bg-soft)', borderRadius: 'var(--radius-sm)', fontWeight: 700 }}>
+                              <span>TỔNG THƯỞNG = Thưởng KPI + Tiền nội quy</span>
+                              <strong style={{ fontSize: 'var(--fs-md)', color: 'var(--color-success-text)' }}>{Number(r.totalAmount) ? fmtMoney(r.totalAmount) : '0'}đ</strong>
+                            </div>
+                          </div>
                         )
                       })()}
                     </td>
                   </tr>
+                  )}
                 </Fragment>
                 )
               })}

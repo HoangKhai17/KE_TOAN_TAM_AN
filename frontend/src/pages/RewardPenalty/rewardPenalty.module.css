@@ -239,10 +239,10 @@
 .bkTag { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: var(--fw-bold); white-space: nowrap; }
 /* Bảng con chi tiết thưởng/phạt — đường kẻ gạch mờ cho dễ phân biệt */
 .bkTable { width: 100%; border-collapse: collapse; font-size: var(--fs-2xs); margin: 2px 0 6px; }
-.bkTable th { text-align: left; padding: 4px 8px; color: var(--color-muted); font-weight: var(--fw-semibold); border-bottom: 1px dashed var(--color-border-muted); }
-.bkTable td { padding: 4px 8px; border-bottom: 1px dashed var(--color-border-muted); vertical-align: middle; }
+.bkTable th { text-align: left; padding: 6px 9px; color: var(--color-muted); font-weight: var(--fw-semibold); border-bottom: 1px solid var(--color-border-muted); }
+.bkTable td { padding: 6px 9px; border-bottom: 1px solid var(--color-surface-muted); vertical-align: middle; }
 .bkTable tbody tr:last-child td { border-bottom: 0; }
-.bkTable td + td, .bkTable th + th { border-left: 1px dashed var(--color-border-muted); }
+.bkTable td + td, .bkTable th + th { border-left: 1px solid var(--color-border-muted); }
 .bkTable tbody tr:hover td { background: var(--color-surface); }
 .bkColKind { width: 130px; }
 .bkTable .bkColNum { width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -292,8 +292,8 @@
   transition: box-shadow var(--duration-base, .18s), transform var(--duration-fast, .12s);
 }
 .kpiCard:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
-.kpiCardInner { display: flex; align-items: flex-start; gap: 11px; }
-.kpiIcon { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; background: var(--kpi-icon-bg, var(--color-surface-muted)); color: var(--kpi-accent, var(--color-text-soft)); }
+.kpiCardInner { display: flex; align-items: center; gap: 13px; }
+.kpiIcon { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0; background: var(--kpi-icon-bg, var(--color-surface-muted)); color: var(--kpi-accent, var(--color-text-soft)); }
 .kpiText { flex: 1; min-width: 0; }
 .kpiCard .kpiK { font-size: var(--fs-2xs); color: var(--kpi-accent, var(--color-muted)); font-weight: var(--fw-bold); }
 .kpiCard .kpiV { font-size: var(--fs-2xl); font-weight: var(--fw-extrabold); letter-spacing: -.02em; line-height: 1.05; margin-top: 3px; color: var(--kpi-value, var(--color-text-strong)); font-variant-numeric: tabular-nums; }
@@ -349,15 +349,16 @@
 
 /* Drawer chi tiết NV — header gộp 1 hàng: tên + các chỉ số */
 .kpiDHead { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; padding: 12px 16px; background: var(--gradient-primary); color: var(--color-white); border-radius: var(--radius-md) var(--radius-md) 0 0; margin: -1px -1px 14px; }
-.kpiDHead .kpiDHid { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; min-width: 0; }
-.kpiDHead .kpiDnm { font-size: var(--fs-md); font-weight: var(--fw-extrabold); }
-.kpiDHead .kpiDjt { font-size: var(--fs-3xs); opacity: .9; }
+.kpiDHead .kpiDHid { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.kpiDHead .kpiDnm { font-size: var(--fs-lg); font-weight: var(--fw-extrabold); line-height: 1.1; }
+.kpiDHead .kpiDjt { font-size: var(--fs-2xs); opacity: .85; font-weight: var(--fw-medium); }
 .kpiDHead .kpiDbadges { display: flex; align-items: center; gap: 8px; }
 .kpiDHead .kpiDamt { font-size: var(--fs-sm); font-weight: var(--fw-extrabold); }
-.kpiDmetrics { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
-.kpiDmetrics .kpiDm { display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
-.kpiDmetrics .kpiDm span { font-size: var(--fs-4xs, 9px); text-transform: uppercase; letter-spacing: .04em; opacity: .85; }
-.kpiDmetrics .kpiDm b { font-size: var(--fs-md); font-weight: var(--fw-extrabold); font-variant-numeric: tabular-nums; }
+.kpiDmetrics { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+.kpiDmetrics .kpiDm { display: flex; flex-direction: column; justify-content: center; gap: 3px; white-space: nowrap; padding: 2px 20px; border-left: 1px solid rgba(255, 255, 255, 0.22); }
+.kpiDmetrics .kpiDm:first-child { border-left: none; padding-left: 0; }
+.kpiDmetrics .kpiDm span { font-size: var(--fs-4xs, 9px); text-transform: uppercase; letter-spacing: .05em; opacity: .8; font-weight: var(--fw-semibold); }
+.kpiDmetrics .kpiDm b { font-size: var(--fs-lg); font-weight: var(--fw-extrabold); font-variant-numeric: tabular-nums; line-height: 1.05; }
 
 /* Tab Theo nguồn: danh sách nguồn (đủ enum) + bung công việc khi click */
 .kpiSrcList { display: flex; flex-direction: column; gap: 2px; }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, Lock, LockOpen, ChevronRight, Users, ChevronDown, Check, Award, Clock, CheckCircle2 } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
@@ -49,6 +49,41 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-di
 // Tên ngắn cho nhãn biểu đồ: lấy 2 từ CUỐI = phần tên gọi (vd "Bùi Thị Thanh Thảo" → "Thanh Thảo").
 const shortName = (nm) => (nm || '').trim().split(/\s+/).slice(-2).join(' ')
 
+// Kéo-thả chuột để cuộn ngang (grab) — đỡ phải dùng thanh scroll.
+// Dùng CALLBACK REF để gắn listener đúng lúc node xuất hiện (bảng chỉ render sau khi data tải xong).
+function useDragScroll() {
+  const cleanup = useRef(null)
+  return useCallback((el) => {
+    if (cleanup.current) { cleanup.current(); cleanup.current = null }
+    if (!el) return
+    let down = false, startX = 0, startLeft = 0, moved = false
+    const onDown = (e) => {
+      if (e.button !== 0 || (e.target.closest && e.target.closest('button, a, input, select, textarea, label'))) return
+      down = true; moved = false; startX = e.pageX; startLeft = el.scrollLeft
+      el.style.cursor = 'grabbing'; el.style.userSelect = 'none'
+    }
+    const onMove = (e) => {
+      if (!down) return
+      const dx = e.pageX - startX
+      if (Math.abs(dx) > 4) moved = true
+      el.scrollLeft = startLeft - dx
+    }
+    const onUp = () => { if (!down) return; down = false; el.style.cursor = 'grab'; el.style.userSelect = '' }
+    const onClick = (e) => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false } }
+    el.style.cursor = 'grab'
+    el.addEventListener('mousedown', onDown)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    el.addEventListener('click', onClick, true)
+    cleanup.current = () => {
+      el.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      el.removeEventListener('click', onClick, true)
+    }
+  }, [])
+}
+
 export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] }) {
   const addToast = useToastStore((st) => st.toast)
   const confirmAction = useDeleteConfirm()
@@ -66,6 +101,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
   const [detail, setDetail] = useState(null)
   const [dTab, setDTab]   = useState('company')   // tab trong popup chi tiết NV
   const [srcOpen, setSrcOpen] = useState(null)    // nguồn đang bung xem công việc (tab Theo nguồn)
+  const dragRef = useDragScroll()                 // kéo chuột cuộn ngang bảng KPI
 
   // Bộ lọc Tổng quan (chỉ admin) — vai trò + nhân viên cụ thể. Nhớ qua localStorage.
   const initF = loadFilter()
@@ -397,8 +433,8 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
 
           {(
           <>
-          {/* Bảng chi tiết — bấm 1 dòng để mở chi tiết */}
-          <div className={s.tableWrap}>
+          {/* Bảng chi tiết — bấm 1 dòng để mở chi tiết · kéo chuột để cuộn ngang */}
+          <div className={s.tableWrap} ref={dragRef}>
             <table className={`${s.table} ${s.kpiTable}`}>
               <thead>
                 <tr>
@@ -558,7 +594,7 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
               <div className={s.kpiDjt}>{detail.user.jobTitle || 'Nhân viên'} · {periodLabel}</div>
             </div>
             <div className={s.kpiDmetrics}>
-              <div className={s.kpiDm}><span>Điểm KL — ĐK {detail.user.volumeRecurring ?? 0} · Khác {detail.user.volumeOther ?? 0}</span><b>{detail.user.volumePoints ?? 0} / {detail.user.volumePossible ?? (detail.user.volumePoints ?? 0)}</b></div>
+              <div className={s.kpiDm}><span>Điểm khối lượng</span><b>{detail.user.volumePoints ?? 0} / {detail.user.volumePossible ?? (detail.user.volumePoints ?? 0)}</b></div>
               <div className={s.kpiDm}><span>% đúng hạn</span><b>{detail.user.onTimePct == null ? '—' : `${detail.user.onTimePct}%`}</b></div>
               <div className={s.kpiDm}><span>Đến hạn / đúng hạn</span><b>{detail.user.assignedCount ?? 0} / {detail.user.onTimeCount ?? 0}</b></div>
               <div className={s.kpiDm}><span>Điểm KPI</span><b>{detail.user.kpiPoints != null ? fmtSigned(detail.user.kpiPoints) : '—'}</b></div>
@@ -566,106 +602,130 @@ export default function KpiPanel({ isAdmin, slot, years = [now.getFullYear()] })
           </div>
 
           {!detail.data ? <div className={s.loading}><Loader2 size={14} className={s.spin} /> Đang tải…</div> : (() => {
-            const lateTasks = (detail.tasks || []).filter((t) => t.isRecurring && t.monthsLate > 0)
-            const lostPoints = lateTasks.reduce((a, t) => a + ((t.grossPoints || 0) - (t.points || 0)), 0)
-            const TABS = [
-              ['company', `Theo công ty (${detail.data.byCompany?.length || 0})`],
-              ['type',    `Theo loại CV (${detail.data.byType?.length || 0})`],
-              ['source',  `Theo nguồn${detail.tasks ? ` · ${detail.tasks.length} việc` : ''}`],
-            ]
-            // Thẻ 1 công việc (dùng trong tab "Theo nguồn" khi bung).
-            const renderTask = (t) => (
-              <div className={s.kpiTask} key={t.taskId}>
-                <div className={s.kpiT1}>
-                  <b title={t.title}>{t.title}</b>
-                  <span className={`${s.kpiPt} ${t.points > 0 ? s.kpiPos : ''}`}>{t.points > 0 ? `+${t.points}` : t.points}đ</span>
+            const u = detail.user
+            const tasks = detail.tasks || []
+            const totGross = tasks.reduce((a, t) => a + (t.grossPoints || 0), 0)   // điểm gốc việc ĐÃ LÀM (xong mục cha)
+            const totNet   = tasks.reduce((a, t) => a + (t.points || 0), 0)         // điểm thực nhận (sau lũy tuyến)
+            const totLost  = totGross - totNet
+            const achPct   = u.volumePossible > 0 ? Math.round(((u.ptMonth ?? 0) / u.volumePossible) * 100) : 0
+            const fmtDateFull = (d) => (d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
+            // Màu TÔ NGUYÊN Ô cột trạng thái.
+            const statusStyle = (t) => {
+              if (t.status === 'completed') return t.onTime
+                ? { label: 'Đúng hạn', bg: 'var(--color-success-bg)', color: 'var(--color-success-text)' }
+                : { label: 'Trễ', bg: 'var(--color-warning-bg-strong)', color: 'var(--color-warning-text)' }
+              return t.notDueYet
+                ? { label: 'Chưa tới hạn', bg: 'var(--color-surface-muted)', color: 'var(--color-muted)' }
+                : { label: 'Quá hạn chưa xong', bg: 'var(--color-danger-bg)', color: 'var(--color-danger-text)' }
+            }
+            // Gom nhóm tasks theo 1 chiều (công ty / loại / nguồn) → {key,label,tasks,count,done,gross,net}.
+            const groupBy = (keyFn, labelFn) => {
+              const m = new Map()
+              for (const t of tasks) {
+                const k = keyFn(t) ?? '—'
+                if (!m.has(k)) m.set(k, { key: k, label: labelFn ? labelFn(t, k) : k, tasks: [], count: 0, done: 0, gross: 0, net: 0 })
+                const g = m.get(k); g.tasks.push(t); g.count++
+                if (t.status === 'completed') g.done++
+                g.gross += t.grossPoints || 0; g.net += t.points || 0
+              }
+              return [...m.values()].sort((a, b) => b.net - a.net || b.gross - a.gross)
+            }
+            // Bảng báo cáo 1 chiều: mỗi NHÓM là 1 dải tiêu đề + các dòng việc (mỗi trường 1 cột) + dòng TỔNG.
+            const GroupTable = ({ groups, dimLabel }) => {
+              if (!groups.length) return <div className={s.empty} style={{ padding: 12 }}>Không có công việc trong kỳ.</div>
+              const tot = groups.reduce((a, g) => ({ count: a.count + g.count, done: a.done + g.done, gross: a.gross + g.gross, net: a.net + g.net }), { count: 0, done: 0, gross: 0, net: 0 })
+              let idx = 0
+              const hasCo = dTab !== 'company'   // tab Loại/Nguồn: hiện thêm cột Công ty cho từng việc
+              const nCols = hasCo ? 12 : 11
+              return (
+                <div className={s.tableWrap}>
+                  <table className={s.table}>
+                    <thead><tr>
+                      <th className={s.colStt}>STT</th>
+                      <th>Công việc</th>
+                      {hasCo && <th>Công ty</th>}
+                      <th>Nguồn</th>
+                      <th className={s.num}>Hạn</th>
+                      <th className={s.num}>Hoàn thành</th>
+                      <th style={{ textAlign: 'center' }}>Trạng thái</th>
+                      <th>Lũy tuyến</th>
+                      <th className={s.num}>Hệ số</th>
+                      <th className={s.num}>Điểm gốc</th>
+                      <th className={s.num}>Điểm mất</th>
+                      <th className={s.num}>Điểm nhận</th>
+                    </tr></thead>
+                    <tbody>
+                      {groups.map((g) => {
+                        const mat = g.gross - g.net
+                        const gk = `${dTab}:${g.key}`
+                        const open = srcOpen === gk
+                        return [
+                          <tr key={'h:' + g.key} className={s.kpiRowClick} style={{ background: 'var(--color-primary-bg)' }} onClick={() => setSrcOpen(open ? null : gk)}>
+                            <td colSpan={2} style={{ fontWeight: 700, color: 'var(--color-primary-deep)' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                <span>{g.label}</span>
+                                <span style={{ fontWeight: 400, color: 'var(--color-text-soft)', fontSize: 'var(--fs-3xs)' }}>· {g.count} việc · xong {g.done}</span>
+                              </span>
+                            </td>
+                            <td colSpan={nCols - 5} />
+                            <td className={s.num} style={{ fontWeight: 700, color: 'var(--color-muted)' }}>{g.gross || '—'}</td>
+                            <td className={s.num} style={{ fontWeight: 700, color: 'var(--color-danger-text)' }}>{mat > 0 ? `−${mat}` : '—'}</td>
+                            <td className={s.num} style={{ fontWeight: 800, color: 'var(--color-success-text)' }}>{g.net}</td>
+                          </tr>,
+                          ...(open ? g.tasks.map((t) => {
+                            const m2 = (t.grossPoints || 0) - (t.points || 0)
+                            const hs = t.isRecurring && (t.grossPoints || 0) > 0 ? Math.round(((t.points || 0) / t.grossPoints) * 100) : null
+                            const st = statusStyle(t)
+                            const makeup = t.isRecurring && t.monthsLate > 0
+                            return (
+                              <tr key={t.taskId}>
+                                <td className={s.colStt}>{++idx}</td>
+                                <td title={t.title} style={{ maxWidth: 300 }}>{t.title}</td>
+                                {hasCo && <td title={t.companyName || undefined} style={{ maxWidth: 200 }}>{t.companyName || <span className={s.zero}>—</span>}</td>}
+                                <td>{t.source === 'auto' ? 'Định kỳ' : getLabel('task_source', t.source, t.source || '—')}</td>
+                                <td className={s.num}>{fmtDateFull(t.dueDate)}</td>
+                                <td className={s.num}>{fmtDateFull(t.completedAt)}</td>
+                                <td style={{ background: st.bg, color: st.color, fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>{st.label}</td>
+                                <td style={makeup ? { background: 'var(--color-warning-bg-strong)', color: 'var(--color-warning-text)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' } : undefined}>{makeup ? `⏳ Làm bù · trễ ${t.monthsLate} th` : <span className={s.zero}>—</span>}</td>
+                                <td className={s.num}>{hs == null ? <span className={s.zero}>—</span> : <span style={{ color: hs < 50 ? 'var(--color-danger-text)' : hs < 100 ? 'var(--color-warning-text)' : undefined, fontWeight: 600 }}>{hs}%</span>}</td>
+                                <td className={s.num} style={{ color: 'var(--color-muted)' }}>{t.isRecurring ? (t.grossPoints || 0) : <span className={s.zero}>—</span>}</td>
+                                <td className={s.num}>{m2 > 0 ? <span style={{ color: 'var(--color-danger-text)' }}>−{m2}</span> : <span className={s.zero}>—</span>}</td>
+                                <td className={s.num}><strong>{t.points || 0}</strong></td>
+                              </tr>
+                            )
+                          }) : []),
+                        ]
+                      })}
+                    </tbody>
+                    <tfoot><tr>
+                      <td colSpan={nCols - 3}><strong>TỔNG · {tot.count} việc · xong {tot.done}</strong></td>
+                      <td className={s.num}><strong>{tot.gross}</strong></td>
+                      <td className={s.num}>{(tot.gross - tot.net) > 0 ? <strong style={{ color: 'var(--color-danger-text)' }}>−{tot.gross - tot.net}</strong> : '—'}</td>
+                      <td className={s.num}><strong>{tot.net}</strong></td>
+                    </tr></tfoot>
+                  </table>
                 </div>
-                <div className={s.kpiT2}>
-                  {t.companyName && <span>{t.companyName}</span>}
-                  {t.typeName && <span>· {t.typeName}</span>}
-                  {t.dueInPeriod && <>
-                    <span>· Hạn {fmtDate(t.dueDate)}{t.completedAt ? ` · Xong ${fmtDate(t.completedAt)}` : ''}</span>
-                    {t.status === 'completed'
-                      ? <span className={`${s.kpiSt} ${t.onTime ? s.kpiStOk : s.kpiStLate}`}>{t.onTime ? 'Đúng hạn' : 'Trễ'}</span>
-                      : t.notDueYet
-                        ? <span className={s.kpiSt} style={{ background: 'var(--color-surface-muted)', color: 'var(--color-muted)' }}>Chưa tới hạn</span>
-                        : <span className={`${s.kpiSt} ${s.kpiStLate}`}>Quá hạn chưa xong</span>}
-                  </>}
-                  {t.isRecurring && t.monthsLate > 0 && <span style={{ color: 'var(--color-warning-text)', fontWeight: 700 }}>· ⏳ Trễ {t.monthsLate} th · lũy tuyến {t.grossPoints}→{t.points}đ</span>}
-                </div>
-              </div>
-            )
-            // Báo cáo gộp theo công ty / loại — thanh điểm.
-            const brk = (rows) => {
-              if (!rows || rows.length === 0) return <div className={s.empty} style={{ padding: 10 }}>Chưa có dữ liệu.</div>
-              const mx = Math.max(1, ...rows.map((x) => x.volumePoints || 0))
-              return <div className={s.kpiBrk}>{rows.map((x, i) => (
-                <div key={x.key ?? i}>
-                  <div className={s.kpiBrkR}><span>{x.label}</span><b>{x.volumePoints}đ</b></div>
-                  <div className={s.kpiBrkBar}><i style={{ width: `${Math.round(((x.volumePoints || 0) / mx) * 100)}%` }} /></div>
-                </div>
-              ))}</div>
+              )
             }
             return (
               <>
-                {lateTasks.length > 0 && (
-                  <div style={{ margin: '0 0 10px', padding: '7px 11px', borderRadius: 8, background: 'var(--color-warning-bg)', color: 'var(--color-warning-text)', fontSize: 'var(--fs-2xs)', fontWeight: 600 }}>
-                    ⏳ {lateTasks.length} việc hoàn thành TRỄ tháng → bị lũy tuyến <strong>giảm {lostPoints}đ</strong> trong kỳ.
-                  </div>
-                )}
+                {/* Dòng đối chiếu điểm — giải thích con số ở bảng ngoài */}
+                <div style={{ margin: '0 0 12px', padding: '9px 13px', borderRadius: 8, background: 'var(--color-primary-bg)', fontSize: 'var(--fs-2xs)', lineHeight: 1.6 }}>
+                  <div><strong>Điểm thực nhận {u.volumeRecurring ?? 0}đ</strong> = Tháng này <strong>{u.ptMonth ?? 0}</strong> + Việc cũ làm bù <strong>{u.ptOld ?? 0}</strong> (sau lũy tuyến).</div>
+                  <div style={{ color: 'var(--color-text-soft)' }}>Điểm gốc việc đã làm {totGross}đ {totLost > 0 && <>− lũy tuyến <span style={{ color: 'var(--color-warning-text)', fontWeight: 700 }}>{totLost}đ</span> </>}= {totNet}đ. · Tổng điểm gốc tối đa (gồm cả việc chưa xong): <strong>{u.volumePossible ?? 0}đ</strong> → %Đạt {achPct}%.</div>
+                </div>
                 <div className={s.tabLinks} role="tablist" style={{ margin: '4px 0 12px', alignSelf: 'flex-start' }}>
-                  {TABS.map(([k, lbl]) => (
-                    <button key={k} className={`${s.tab} ${dTab === k ? s.tabActive : ''}`} onClick={() => setDTab(k)}>{lbl}</button>
+                  {[['company', 'Theo công ty'], ['type', 'Theo loại CV'], ['source', 'Theo nguồn']].map(([k, lbl]) => (
+                    <button key={k} className={`${s.tab} ${dTab === k ? s.tabActive : ''}`} onClick={() => { setDTab(k); setSrcOpen(null) }}>{lbl}</button>
                   ))}
                 </div>
 
-                {dTab === 'company' && brk(detail.data.byCompany)}
-                {dTab === 'type' && brk(detail.data.byType)}
+                {dTab === 'company' && <GroupTable dimLabel="Công ty" groups={groupBy((t) => t.companyName || '(Không công ty)')} />}
+                {dTab === 'type' && <GroupTable dimLabel="Loại công việc" groups={groupBy((t) => t.typeName || '(Không loại)')} />}
+                {dTab === 'source' && <GroupTable dimLabel="Nguồn" groups={groupBy((t) => t.source || '—', (t) => t.source === 'auto' ? 'Định kỳ (tự sinh)' : getLabel('task_source', t.source, t.source || '(Khác)'))} />}
 
-                {dTab === 'source' && (() => {
-                  const bySrc = new Map((detail.data.bySource || []).map((x) => [x.source, x]))
-                  const opts = getOptions('task_source') || []
-                  const keys = opts.length ? opts.map((o) => o.key) : [...bySrc.keys()]
-                  if (keys.length === 0) return <div className={s.empty} style={{ padding: 10 }}>Không có công việc trong kỳ.</div>
-                  return (
-                    <div className={s.kpiSrcList}>
-                      <div className={`${s.kpiSrcRow} ${s.kpiSrcHd}`}>
-                        <span>Nguồn</span><span className={s.num}>Số việc</span><span className={s.num}>Đến hạn</span><span className={s.num}>Đúng hạn</span><span className={s.num}>% ĐH</span><span className={s.num}>Điểm KL</span>
-                      </div>
-                      {keys.map((key, i) => {
-                        const x = bySrc.get(key)
-                        const taskCount = x?.taskCount || 0, dueCount = x?.dueCount || 0, onTimeCount = x?.onTimeCount || 0, vol = x?.volumePoints || 0
-                        const pct = dueCount > 0 ? Math.round((onTimeCount * 100) / dueCount) : null
-                        const open = srcOpen === key
-                        const tasksOfSrc = (detail.tasks || []).filter((t) => t.source === key)
-                        const lbl = key === 'auto' ? 'Định kỳ (tự sinh)' : getLabel('task_source', key, key)
-                        return (
-                          <div key={key}>
-                            <div className={`${s.kpiSrcRow} ${s.kpiSrcClick} ${open ? s.kpiSrcOpen : ''}`} role="button" onClick={() => setSrcOpen(open ? null : key)}>
-                              <span className={s.kpiSrcNm}>
-                                {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                <span style={{ width: 9, height: 9, borderRadius: 2, background: srcColor(key, i), flexShrink: 0 }} />
-                                {lbl}
-                              </span>
-                              <span className={s.num}>{taskCount}</span>
-                              <span className={s.num}>{dueCount}</span>
-                              <span className={s.num}>{onTimeCount}</span>
-                              <span className={s.num}>{pct == null ? <span className={s.zero}>—</span> : `${pct}%`}</span>
-                              <span className={s.num}>{vol}đ</span>
-                            </div>
-                            {open && (
-                              <div className={s.kpiSrcTasks}>
-                                {tasksOfSrc.length === 0
-                                  ? <div className={s.empty} style={{ padding: 8 }}>Không có công việc nguồn này trong kỳ.</div>
-                                  : <div className={s.kpiTasks}>{tasksOfSrc.map(renderTask)}</div>}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })()}
+                <div className={s.cardFoot} style={{ marginTop: 10 }}>ℹ️ Mỗi việc 1 dòng · nhóm theo {dTab === 'company' ? 'công ty' : dTab === 'type' ? 'loại CV' : 'nguồn'}. <strong>Lũy tuyến</strong> = việc cũ (tháng trước) làm bù trễ tháng · <strong>Hệ số</strong> = % điểm giữ lại theo độ trễ (đúng hạn 100%) · <strong>Điểm gốc</strong> = điểm mục cha đã xong (trước lũy tuyến) · <strong>Điểm mất</strong> = phần bị lũy tuyến cắt · <strong>Điểm nhận</strong> = Điểm gốc − Điểm mất (cộng vào tổng).</div>
               </>
             )
           })()}
