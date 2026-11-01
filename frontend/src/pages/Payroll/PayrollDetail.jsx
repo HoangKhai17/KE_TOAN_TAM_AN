@@ -472,7 +472,8 @@ function UpsertRecordModal({ periodId, periodYear, periodMonth, existing, staffL
               <div style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-muted)', lineHeight: 1.5, flex: '1 1 300px' }}>
                 Khoản <strong>dương (+)</strong> = thưởng, <strong>âm (−)</strong> = phạt — đều cộng/trừ vào tổng thu nhập.
               </div>
-              <button type="button" className={s.btnSecondary} onClick={fetchKpiRef} disabled={refLoading || !form.userId}>
+              <button type="button" className={s.btnSecondary} onClick={fetchKpiRef} disabled={refLoading || !form.userId}
+                style={{ background: 'var(--color-accent)', borderColor: 'var(--color-accent)', color: 'var(--color-white)', fontWeight: 700, boxShadow: '0 2px 8px rgba(217,119,6,0.3)' }}>
                 {refLoading ? <Loader2 size={13} className={s.spin} /> : <SlidersHorizontal size={13} />} Tham chiếu đánh giá
               </button>
             </div>
@@ -929,8 +930,9 @@ export default function PayrollDetail() {
                 <tbody>
                   {records.map((rec) => {
                     const net = calcNet(rec)
+                    const editable = isAdmin && isDraft
                     return (
-                      <tr key={rec.id}>
+                      <tr key={rec.id} onClick={editable ? () => { setEditRecord(rec); setShowUpsert(true) } : undefined} style={editable ? { cursor: 'pointer' } : undefined} title={editable ? 'Bấm để sửa lương' : undefined}>
                         <td className={s.recordName}>{rec.userName ?? '—'}</td>
                         <td className={s.moneyCol}>{fmtVND(rec.baseSalary)}</td>
                         <td className={s.moneyCol}>{fmtVND(rec.allowances)}</td>
@@ -944,14 +946,14 @@ export default function PayrollDetail() {
                             <div className={s.recordActions}>
                               <button
                                 className={s.iconBtn}
-                                onClick={() => { setEditRecord(rec); setShowUpsert(true) }}
+                                onClick={(e) => { e.stopPropagation(); setEditRecord(rec); setShowUpsert(true) }}
                                 title="Chỉnh sửa"
                               >
                                 <Pencil size={12} />
                               </button>
                               <button
                                 className={`${s.iconBtn} ${s.iconBtnDanger}`}
-                                onClick={() => setDeleteRecord(rec)}
+                                onClick={(e) => { e.stopPropagation(); setDeleteRecord(rec) }}
                                 title="Xoá"
                               >
                                 <Trash2 size={12} />
