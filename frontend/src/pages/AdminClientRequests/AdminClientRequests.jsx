@@ -4,7 +4,7 @@ import {
   ClipboardList, Search, Filter, RotateCcw, Plus, Loader2,
   Trash2, AlertTriangle, Link2, Link2Off, CheckCircle2, XCircle,
   Eye, Copy, Check, Bell, ExternalLink, PenLine, Building2, List, Columns,
-  ChevronDown, X,
+  ChevronDown, X, SlidersHorizontal,
 } from 'lucide-react'
 import AppLayout from '../../components/layout/AppLayout'
 import PaginationFooter from '../../components/layout/PaginationFooter'
@@ -20,6 +20,7 @@ import ColumnFilterDropdown from '../../components/ui/ColumnFilterDropdown'
 import { matchColFilter, isColFilterActive } from '../../components/ui/columnFilter'
 import CollaboratorPicker from '../Tasks/CollaboratorPicker'
 import PeriodPicker from '../Tasks/PeriodPicker'
+import CdrQuickView from './CdrQuickView'
 import {
   BulkActionBar,
   IndexHeaderCell,
@@ -101,6 +102,44 @@ function saveFilters(obj) {
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
+// Tên rút gọn: lấy 2 chữ CUỐI (vd "Bùi Thị Đức Thảo" → "Đức Thảo"), như Tasks.
+const shortName = (nm) => { const p = (nm || '').trim().split(/\s+/); return p.length <= 2 ? (nm || '') : p.slice(-2).join(' ') }
+
+// Mức độ / Ưu tiên (đồng bộ Tasks)
+const PRIORITY_LABEL = { high: 'Cao', medium: 'Trung bình', low: 'Thấp' }
+const PRIORITY_CLASS = { high: s.prioHigh, medium: s.prioMedium, low: s.prioLow }
+
+// Danh mục cột danh sách (thứ tự + nhãn) — bộ chọn ẩn/hiện cột, đồng bộ Tasks.
+// fixed: luôn hiện (không cho tắt). Cột "Hành động" luôn hiện (không nằm trong list).
+const CDR_COLUMNS = [
+  { key: 'documentName', label: 'Tài liệu yêu cầu', fixed: true },
+  { key: 'companyName',  label: 'Khách hàng' },
+  { key: 'periodLabel',  label: 'Kỳ' },
+  { key: 'startDate',    label: 'Ngày bắt đầu' },
+  { key: 'deadlineDate', label: 'Hạn nộp' },
+  { key: 'contactEmail', label: 'Email KH' },
+  { key: 'createdAt',    label: 'Ngày tạo' },
+  { key: 'priority',     label: 'Mức độ' },
+  { key: 'status',       label: 'Trạng thái' },
+  { key: 'progress',     label: 'Tiến độ' },
+  { key: 'ownerName',    label: 'Người phụ trách' },
+  { key: 'data',         label: 'Dữ liệu KH' },
+  { key: 'link',         label: 'Link' },
+  { key: 'latestComment', label: 'Bình luận' },
+]
+const CDR_COLS_KEY = 'cdr_hidden_cols_v1'
+function loadHiddenCols() {
+  try {
+    const raw = sessionStorage.getItem(CDR_COLS_KEY)
+    if (raw == null) return new Set()
+    const a = JSON.parse(raw)
+    return new Set(Array.isArray(a) ? a : [])
+  } catch { return new Set() }
+}
+function saveHiddenCols(set) {
+  try { sessionStorage.setItem(CDR_COLS_KEY, JSON.stringify([...set])) } catch { /* ignore */ }
+}
+
 function StatusBadge({ status }) {
   return (
     <span className={`${s.statusBadge} ${STATUS_CLASS[status] ?? s.statusPending}`}>
@@ -140,6 +179,7 @@ function CdrFormModal({ companies, staffList = [], ownerId, initial, onClose, on
     companyId:    initial?.companyId ?? '',
     documentName: initial?.documentName ?? '',
     description:  initial?.description ?? '',
+    startDate:    initial?.startDate ? initial.startDate.slice(0, 10) : '',
     deadlineDate: initial?.deadlineDate ? initial.deadlineDate.slice(0, 10) : '',
     periodLabel:  initial?.periodLabel ?? '',
     contactEmail: initial?.contactEmail ?? '',
@@ -163,6 +203,7 @@ function CdrFormModal({ companies, staffList = [], ownerId, initial, onClose, on
         saved = await cdrApi.updateClientRequest(initial.id, {
           documentName: form.documentName.trim() || undefined,
           description:  form.description.trim() || null,
+          startDate:    form.startDate || null,
           deadlineDate: form.deadlineDate || null,
           periodLabel:  form.periodLabel.trim() || null,
           contactEmail: form.contactEmail.trim() || null,
@@ -173,6 +214,7 @@ function CdrFormModal({ companies, staffList = [], ownerId, initial, onClose, on
           companyId:     form.companyId,
           documentName:  form.documentName.trim(),
           description:   form.description.trim() || null,
+          startDate:     form.startDate || null,
           deadlineDate:  form.deadlineDate || null,
           periodLabel:   form.periodLabel.trim() || null,
           remindedEmail: form.contactEmail.trim() || null,
@@ -229,15 +271,22 @@ function CdrFormModal({ companies, staffList = [], ownerId, initial, onClose, on
           </div>
 
           <div className={s.formGroup}>
-            <label className={s.formLabel}>Hạn nộp</label>
-            <DateBox value={form.deadlineDate ?? ''} onChange={(v) => set('deadlineDate', v)} block />
+            <label className={s.formLabel}>Ngày bắt đầu</label>
+            <DateBox value={form.startDate ?? ''} onChange={(v) => set('startDate', v)} block />
           </div>
         </div>
 
-        <div className={s.formGroup}>
-          <label className={s.formLabel}>Email khách hàng</label>
-          <input type="email" value={form.contactEmail} onChange={(e) => set('contactEmail', e.target.value)}
-            className={s.formInput} placeholder="Để gửi nhắc nhở qua email" />
+        <div className={`${s.formRow2} ${s.cdrFormFull}`}>
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Hạn nộp</label>
+            <DateBox value={form.deadlineDate ?? ''} onChange={(v) => set('deadlineDate', v)} block />
+          </div>
+
+          <div className={s.formGroup}>
+            <label className={s.formLabel}>Email khách hàng</label>
+            <input type="email" value={form.contactEmail} onChange={(e) => set('contactEmail', e.target.value)}
+              className={s.formInput} placeholder="Để gửi nhắc nhở qua email" />
+          </div>
         </div>
 
         <div className={s.formGroup}>
@@ -553,22 +602,31 @@ function ReminderModal({ item, onClose, onSent }) {
 // ── Column-header filter helpers (docs/018) ─────────────────────────────────────
 const CDR_STATUS_RANK = { pending: 1, overdue: 2, received: 3, not_required: 4 }
 const CDR_COL_TYPE = {
-  documentName: 'text', companyName: 'enum', status: 'enum',
-  periodLabel: 'text', deadlineDate: 'dateRange', contactEmail: 'text',
+  documentName: 'text', companyName: 'enum', status: 'enum', priority: 'enum',
+  periodLabel: 'text', startDate: 'dateRange', deadlineDate: 'dateRange', contactEmail: 'text',
+  ownerName: 'text', createdAt: 'dateRange',
 }
 function cdrColFilterType(k) { return CDR_COL_TYPE[k] ?? 'text' }
 function cdrColDisplayLabel(it, k) {
   switch (k) {
     case 'status':       return STATUS_LABEL[it.status] ?? it.status ?? '(Trống)'
+    case 'priority':     return PRIORITY_LABEL[it.priority || 'medium'] ?? '(Trống)'
     case 'companyName':  return it.companyName || '(Không có)'
+    case 'ownerName':    return it.requestedByName || '(Không có)'
+    case 'startDate':    return it.startDate ? fmtDate(it.startDate) : '(Trống)'
     case 'deadlineDate': return it.deadlineDate ? fmtDate(it.deadlineDate) : '(Trống)'
+    case 'createdAt':    return it.createdAt ? fmtDate(it.createdAt) : '(Trống)'
     default: { const v = it[k]; return v != null && v !== '' ? String(v) : '(Trống)' }
   }
 }
 function cdrColSortKey(it, k) {
   switch (k) {
     case 'status':       return CDR_STATUS_RANK[it.status] ?? 99
+    case 'priority':     return { high: 1, medium: 2, low: 3 }[it.priority || 'medium'] ?? 9
+    case 'ownerName':    return (it.requestedByName || '').toLowerCase()
+    case 'startDate':    return it.startDate || ''
     case 'deadlineDate': return it.deadlineDate || ''
+    case 'createdAt':    return it.createdAt || ''
     default:             return (it[k] || '').toLowerCase()
   }
 }
@@ -819,6 +877,7 @@ export default function AdminClientRequests() {
 
   // Filters
   const [statusFilter, setStatusFilter]       = useState(() => Array.isArray(initF.statusFilter)  ? initF.statusFilter  : [])
+  const [priorityFilter, setPriorityFilter]   = useState(() => Array.isArray(initF.priorityFilter) ? initF.priorityFilter : [])
   const [companyFilter, setCompanyFilter]     = useState(() => Array.isArray(initF.companyFilter) ? initF.companyFilter : [])
   const [staffFilter, setStaffFilter]         = useState(() => Array.isArray(initF.staffFilter)   ? initF.staffFilter   : [])
   // "CV hỗ trợ": mảng userId là NGƯỜI HỖ TRỢ. Admin = multi-select NV; nhân viên = chính mình (toggle).
@@ -829,13 +888,31 @@ export default function AdminClientRequests() {
   const [sortColState, setSortColState] = useState({ col: null, dir: 'asc' })
   const [filterPopup, setFilterPopup]   = useState(null)
   const [colVals, setColVals] = useState({ colKey: null, values: null, loading: false })
+
+  // Ẩn/hiện cột — lưu sessionStorage (giữ sau F5), đồng bộ Tasks
+  const [hiddenCols, setHiddenCols] = useState(loadHiddenCols)
+  useEffect(() => { saveHiddenCols(hiddenCols) }, [hiddenCols])
+  const vis = (key) => !hiddenCols.has(key)
+  function toggleColVisible(key) {
+    setHiddenCols((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+  const [showColMenu, setShowColMenu] = useState(false)
+  const colMenuRef = useRef(null)
+  useEffect(() => {
+    if (!showColMenu) return undefined
+    function onDoc(e) { if (colMenuRef.current && !colMenuRef.current.contains(e.target)) setShowColMenu(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [showColMenu])
+  // Tổng số cột đang hiện (selection + STT + cột dữ liệu hiện + Hành động)
+  const visibleColSpan = 2 + CDR_COLUMNS.filter((c) => c.fixed || vis(c.key)).length + 1
+
   const [searchQuery, setSearchQuery]         = useState(initF.searchQuery   ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(initF.searchQuery   ?? '')
   const [sortFilter, setSortFilter]           = useState(initF.sortFilter    ?? 'deadline_date:asc')
 
   // Modals
   const [showCreate, setShowCreate]                 = useState(false)
-  const [editTarget, setEditTarget]                 = useState(null)
   const [deleteTarget, setDeleteTarget]             = useState(null)
   const [deleting, setDeleting]                     = useState(false)
   const [linkTarget, setLinkTarget]                 = useState(null)
@@ -843,6 +920,7 @@ export default function AdminClientRequests() {
   const [generatedUrl, setGeneratedUrl]             = useState(null)
   const [linkCopied, setLinkCopied]                 = useState(false)
   const [viewSubmitted, setViewSubmitted]           = useState(null)
+  const [quickViewId, setQuickViewId]               = useState(null)
   const [reminderTarget, setReminderTarget]         = useState(null)
   const [manualSubmitTarget, setManualSubmitTarget] = useState(null)
   const [actionLoading, setActionLoading]           = useState({})
@@ -926,7 +1004,7 @@ export default function AdminClientRequests() {
   }, [searchQuery])
 
   // Reset page on filter change
-  useEffect(() => { setPage(1) }, [statusFilter, companyFilter, staffFilter, supportFilter, debouncedSearch, sortFilter, deadlineFrom, deadlineTo, pageSize])
+  useEffect(() => { setPage(1) }, [statusFilter, priorityFilter, companyFilter, staffFilter, supportFilter, debouncedSearch, sortFilter, deadlineFrom, deadlineTo, pageSize])
 
   // Refresh when another user makes a CDR change (broadcast via socket)
   useEffect(() => {
@@ -942,9 +1020,9 @@ export default function AdminClientRequests() {
   useEffect(() => {
     saveFilters({
       view, yearFilter, monthFilter, deadlineFrom, deadlineTo,
-      sortFilter, searchQuery, companyFilter, staffFilter, supportFilter, statusFilter, pageSize,
+      sortFilter, searchQuery, companyFilter, staffFilter, supportFilter, statusFilter, priorityFilter, pageSize,
     })
-  }, [view, yearFilter, monthFilter, deadlineFrom, deadlineTo, sortFilter, searchQuery, companyFilter, staffFilter, supportFilter, statusFilter, pageSize])
+  }, [view, yearFilter, monthFilter, deadlineFrom, deadlineTo, sortFilter, searchQuery, companyFilter, staffFilter, supportFilter, statusFilter, priorityFilter, pageSize])
 
   // ── CDR list — React Query (cache theo bộ lọc + dedup + giữ data cũ khi đổi filter) ──
   // Tải working set 1 lần; lọc/sắp/phân trang phía client (docs/018).
@@ -959,6 +1037,7 @@ export default function AdminClientRequests() {
     const [sortBy, sortDir] = sortFilter.split(':')
     const base = {
       status:           statusFilter.length  ? statusFilter.join(',')  : undefined,
+      priority:         priorityFilter.length ? priorityFilter.join(',') : undefined,
       companyId:        companyFilter.length ? companyFilter.join(',') : undefined,
       requestedBy:      isAdmin ? (staffFilter.length ? staffFilter.join(',') : undefined) : undefined,
       staffScopeId:     !isAdmin ? currentUser?.id : undefined,
@@ -975,7 +1054,7 @@ export default function AdminClientRequests() {
       colFilters: Object.keys(serverColFilters).length ? JSON.stringify(serverColFilters) : undefined,
       colSort:    sortColState.col ? JSON.stringify(sortColState) : undefined,
     }
-  }, [statusFilter, companyFilter, staffFilter, supportFilter, debouncedSearch, sortFilter, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, isServer, page, pageSize, serverColFilters, sortColState])
+  }, [statusFilter, priorityFilter, companyFilter, staffFilter, supportFilter, debouncedSearch, sortFilter, isAdmin, currentUser?.id, deadlineFrom, deadlineTo, isServer, page, pageSize, serverColFilters, sortColState])
 
   const listQuery = useQuery({
     queryKey: ['cdr', 'list', listParams],
@@ -1047,6 +1126,37 @@ export default function AdminClientRequests() {
       setItems((prev) => prev.map((r) => r.id === item.id ? updated : r))
       setStatsKey((k) => k + 1)
       addToast(`Đã đánh dấu "${item.documentName}" không cần nộp`, 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
+    } finally { setActionLoading((p) => ({ ...p, [item.id]: null })) }
+  }
+
+  // Đổi MỨC ĐỘ / ƯU TIÊN inline.
+  async function changePriority(item, next) {
+    if (next === (item.priority || 'medium')) return
+    setActionLoading((p) => ({ ...p, [item.id]: 'priority' }))
+    try {
+      const updated = await cdrApi.setPriorityClientRequest(item.id, next)
+      setItems((prev) => prev.map((r) => r.id === item.id ? updated : r))
+      addToast('Đã cập nhật mức độ', 'success')
+    } catch (err) {
+      addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
+    } finally { setActionLoading((p) => ({ ...p, [item.id]: null })) }
+  }
+
+  // Đổi trạng thái INLINE (dropdown cột Trạng thái): Chờ KH / Đã nhận / Không cần.
+  async function changeStatus(item, next) {
+    const cur = item.status === 'overdue' ? 'pending' : item.status
+    if (next === cur) return
+    const fn = next === 'received' ? cdrApi.receiveClientRequest
+             : next === 'not_required' ? cdrApi.dismissClientRequest
+             : cdrApi.unreceiveClientRequest   // 'pending' → mở lại
+    setActionLoading((p) => ({ ...p, [item.id]: 'status' }))
+    try {
+      const updated = await fn(item.id)
+      setItems((prev) => prev.map((r) => r.id === item.id ? updated : r))
+      setStatsKey((k) => k + 1)
+      addToast('Đã cập nhật trạng thái', 'success')
     } catch (err) {
       addToast(err.response?.data?.error?.message ?? 'Không thể cập nhật', 'error')
     } finally { setActionLoading((p) => ({ ...p, [item.id]: null })) }
@@ -1141,7 +1251,7 @@ export default function AdminClientRequests() {
   }
 
   function resetFilters() {
-    setStatusFilter([]); setCompanyFilter([]); setStaffFilter([]); setSupportFilter([])
+    setStatusFilter([]); setPriorityFilter([]); setCompanyFilter([]); setStaffFilter([]); setSupportFilter([])
     setColFilters({}); setSortColState({ col: null, dir: 'asc' })
     setSearchQuery(''); setSortFilter('deadline_date:asc'); setPage(1)
     setYearFilter(CUR_YEAR); setMonthFilter(CUR_MONTH)
@@ -1224,6 +1334,7 @@ export default function AdminClientRequests() {
   }
 
   const activeFilterCount = (statusFilter.length ? 1 : 0)
+    + (priorityFilter.length ? 1 : 0)
     + (companyFilter.length ? 1 : 0)
     + (staffFilter.length ? 1 : 0)
     + (supportFilter.length ? 1 : 0)
@@ -1232,12 +1343,18 @@ export default function AdminClientRequests() {
     + (yearFilter !== CUR_YEAR || monthFilter !== CUR_MONTH ? 1 : 0)
 
   const statItems = [
-    { label: 'Tổng',      value: stats?.total        ?? 0, cls: s.statTotal },
-    { label: 'Chờ KH',    value: stats?.pending      ?? 0, cls: s.statPending },
-    { label: 'Quá hạn',   value: stats?.overdue      ?? 0, cls: s.statOverdue },
-    { label: 'Đã nhận',   value: stats?.received     ?? 0, cls: s.statReceived },
-    { label: 'Không cần', value: stats?.not_required ?? 0, cls: s.statNotRequired },
+    { key: '',             label: 'Tổng',      value: stats?.total        ?? 0, cls: s.statTotal },
+    { key: 'pending',      label: 'Chờ KH',    value: stats?.pending      ?? 0, cls: s.statPending },
+    { key: 'overdue',      label: 'Quá hạn',   value: stats?.overdue      ?? 0, cls: s.statOverdue },
+    { key: 'received',     label: 'Đã nhận',   value: stats?.received     ?? 0, cls: s.statReceived },
+    { key: 'not_required', label: 'Không cần', value: stats?.not_required ?? 0, cls: s.statNotRequired },
   ]
+  // Bấm 1 ô thống kê để lọc nhanh theo trạng thái (đồng bộ Tasks): "Tổng" = xoá lọc.
+  function toggleStatStatus(key) {
+    if (!key) { setStatusFilter([]); setPage(1); return }
+    setStatusFilter((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])
+    setPage(1)
+  }
 
   const from = listTotal === 0 ? 0 : (safePage - 1) * pageSize + 1
   const to   = Math.min(safePage * pageSize, listTotal)
@@ -1266,30 +1383,7 @@ export default function AdminClientRequests() {
     ) : undefined}>
       <div className={s.page}>
 
-        {/* ── Toolbar ── */}
-        <div className={s.toolbar}>
-          <div className={s.toolbarLeft}>
-            <h1 className={s.pageTitle}>Yêu cầu KH</h1>
-            {pagination.total > 0 && !loading && (
-              <span className={s.totalBadge}>{pagination.total}</span>
-            )}
-          </div>
-          <div className={s.toolbarRight}>
-            <div className={s.viewSwitch}>
-              <button className={`${s.viewBtn} ${view === 'list' ? s.viewBtnActive : ''}`} onClick={() => setView('list')}>
-                <List size={13} /> Danh sách
-              </button>
-              <button className={`${s.viewBtn} ${view === 'board' ? s.viewBtnActive : ''}`} onClick={() => setView('board')}>
-                <Columns size={13} /> Board
-              </button>
-            </div>
-            <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
-              <Plus size={14} /> Tạo yêu cầu
-            </button>
-          </div>
-        </div>
-
-        {/* ── Filter bar ── */}
+        {/* ── Filter bar (gồm cả nút chuyển view + tạo yêu cầu) ── */}
         <div className={s.filterBar} ref={filterBarRef}>
           <div className={s.filterBarHead}>
             <div className={s.filterBarHeadLeft}>
@@ -1309,23 +1403,74 @@ export default function AdminClientRequests() {
 
               {/* Thống kê — sát bên trái, cạnh nút Bộ lọc */}
               <div className={`${s.statsRow} ${s.statsRowHead}`}>
-                {statItems.map((item, i) => (
-                  <Fragment key={item.label}>
-                    <div className={s.statItem}>
-                      <span className={`${s.statValue} ${item.cls}`}>
-                        {statsLoading ? '…' : item.value}
-                      </span>
-                      <span className={s.statLabel}>{item.label}</span>
-                    </div>
-                    {i < statItems.length - 1 && <span className={s.statDivider} />}
-                  </Fragment>
-                ))}
+                {statItems.map((item, i) => {
+                  const active = item.key ? statusFilter.includes(item.key) : statusFilter.length === 0
+                  return (
+                    <Fragment key={item.label}>
+                      <button
+                        type="button"
+                        className={`${s.statItem} ${active ? s.statItemActive : ''}`}
+                        onClick={() => toggleStatStatus(item.key)}
+                        title={item.key ? (active ? `Bỏ lọc: ${item.label}` : `Lọc theo: ${item.label}`) : 'Xem tất cả trạng thái'}
+                      >
+                        <span className={`${s.statValue} ${item.cls}`}>
+                          {statsLoading ? '…' : item.value}
+                        </span>
+                        <span className={s.statLabel}>{item.label}</span>
+                      </button>
+                      {i < statItems.length - 1 && <span className={s.statDivider} />}
+                    </Fragment>
+                  )
+                })}
               </div>
             </div>
 
-            <button className={s.filterReset} onClick={resetFilters}>
-              <RotateCcw size={11} /> Đặt lại
-            </button>
+            <div className={s.filterBarHeadRight}>
+              <div className={s.viewSwitch}>
+                <button className={`${s.viewBtn} ${view === 'list' ? s.viewBtnActive : ''}`} onClick={() => setView('list')}>
+                  <List size={13} /> Danh sách
+                </button>
+                <button className={`${s.viewBtn} ${view === 'board' ? s.viewBtnActive : ''}`} onClick={() => setView('board')}>
+                  <Columns size={13} /> Board
+                </button>
+              </div>
+              {view === 'list' && (
+                <div className={s.colMenuWrap} ref={colMenuRef}>
+                  <button
+                    className={`${s.colMenuBtn} ${showColMenu ? s.colMenuBtnActive : ''}`}
+                    onClick={() => setShowColMenu((v) => !v)}
+                    title="Chọn cột hiển thị"
+                  >
+                    <SlidersHorizontal size={14} />
+                  </button>
+                  {showColMenu && (
+                    <div className={s.colMenu}>
+                      <div className={s.colMenuHead}>
+                        <span>Cột hiển thị</span>
+                        <button className={s.colMenuReset} onClick={() => setHiddenCols(new Set())}>Hiện tất cả</button>
+                      </div>
+                      {CDR_COLUMNS.map((c) => (
+                        <label key={c.key} className={`${s.colMenuItem} ${c.fixed ? s.colMenuItemFixed : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={c.fixed || !hiddenCols.has(c.key)}
+                            disabled={c.fixed}
+                            onChange={() => toggleColVisible(c.key)}
+                          />
+                          <span>{c.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <button className={s.btnPrimary} onClick={() => setShowCreate(true)}>
+                <Plus size={14} /> Tạo yêu cầu
+              </button>
+              <button className={s.filterReset} onClick={resetFilters}>
+                <RotateCcw size={11} /> Đặt lại
+              </button>
+            </div>
           </div>
 
           {/* ── Lọc nhanh (luôn hiện) ── */}
@@ -1391,6 +1536,18 @@ export default function AdminClientRequests() {
                     <select value={sortFilter} onChange={(e) => setSortFilter(e.target.value)} className={s.filterSelect}>
                       {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
+                  </div>
+
+                  {/* Mức độ — multi-select */}
+                  <div className={s.filterGroup}>
+                    <label className={s.filterLabel}>Mức độ</label>
+                    <FilterMultiPicker
+                      options={[{ id: 'high', name: 'Cao' }, { id: 'medium', name: 'Trung bình' }, { id: 'low', name: 'Thấp' }]}
+                      value={priorityFilter}
+                      onChange={(v) => { setPriorityFilter(v); setPage(1) }}
+                      placeholder="Tất cả mức độ"
+                      searchPlaceholder="Tìm mức độ..."
+                    />
                   </div>
 
                   {/* Công ty — multi-select */}
@@ -1520,7 +1677,7 @@ export default function AdminClientRequests() {
             isAdmin={isAdmin}
             navigate={navigate}
             actionLoading={actionLoading}
-            onEdit={setEditTarget}
+            onEdit={(it) => setQuickViewId(it.id)}
             onReceive={handleReceive}
             onUnreceive={handleUnreceive}
             onDismiss={setDismissTarget}
@@ -1541,13 +1698,19 @@ export default function AdminClientRequests() {
                     <SelectionHeaderCell allSelected={allSelected} someSelected={someSelected} onToggle={selectAll} />
                     <IndexHeaderCell />
                     <ColTh colKey="documentName" className={s.colDoc}>Tài liệu yêu cầu</ColTh>
-                    <ColTh colKey="companyName" className={s.colCompany}>Công ty</ColTh>
-                    <ColTh colKey="status" className={s.colStatus}>Trạng thái</ColTh>
-                    <th className={`${s.th} ${s.thCenter} ${s.colData}`}>Dữ liệu KH</th>
-                    <ColTh colKey="periodLabel" className={s.colPeriod}>Kỳ</ColTh>
-                    <ColTh colKey="deadlineDate" className={s.colDeadline}>Hạn nộp</ColTh>
-                    <ColTh colKey="contactEmail" className={s.colEmail}>Email KH</ColTh>
-                    <th className={`${s.th} ${s.thCenter} ${s.colLink}`}>Link</th>
+                    {vis('companyName')  && <ColTh colKey="companyName" className={s.colCompany}>Khách hàng</ColTh>}
+                    {vis('periodLabel')  && <ColTh colKey="periodLabel" className={s.colPeriod}>Kỳ</ColTh>}
+                    {vis('startDate')    && <ColTh colKey="startDate" className={s.colDeadline}>Ngày bắt đầu</ColTh>}
+                    {vis('deadlineDate') && <ColTh colKey="deadlineDate" className={s.colDeadline}>Hạn nộp</ColTh>}
+                    {vis('contactEmail') && <ColTh colKey="contactEmail" className={s.colEmail}>Email KH</ColTh>}
+                    {vis('createdAt')    && <ColTh colKey="createdAt" className={s.colCreated}>Ngày tạo</ColTh>}
+                    {vis('priority')     && <ColTh colKey="priority" className={s.colPriority}>Mức độ</ColTh>}
+                    {vis('status')       && <ColTh colKey="status" className={s.colStatus}>Trạng thái</ColTh>}
+                    {vis('progress')     && <th className={`${s.th} ${s.thCenter} ${s.colProgress}`}>Tiến độ</th>}
+                    {vis('ownerName')    && <ColTh colKey="ownerName" className={s.colOwner}>Người phụ trách</ColTh>}
+                    {vis('data')         && <th className={`${s.th} ${s.thCenter} ${s.colData}`}>Dữ liệu KH</th>}
+                    {vis('link')         && <th className={`${s.th} ${s.thCenter} ${s.colLink}`}>Link</th>}
+                    {vis('latestComment') && <th className={`${s.th} ${s.colComment}`}>Bình luận</th>}
                     <th className={`${s.th} ${s.thCenter} ${s.colActions}`}>Hành động</th>
                   </tr>
                 </thead>
@@ -1555,16 +1718,16 @@ export default function AdminClientRequests() {
                   {loading ? (
                     Array.from({ length: 6 }).map((_, i) => (
                       <tr key={i}>
-                        {[28, 36, 200, 150, 100, 60, 100, 90, 140, 50, 110].map((w, j) => (
+                        {Array.from({ length: visibleColSpan }).map((_, j) => (
                           <td key={j} className={s.td}>
-                            <div className={s.tableSkeletonBar} style={{ width: w }} />
+                            <div className={s.tableSkeletonBar} style={{ width: j < 2 ? 32 : 100 }} />
                           </td>
                         ))}
                       </tr>
                     ))
                   ) : listTotal === 0 ? (
                     <tr>
-                      <td colSpan={11} className={s.td}>
+                      <td colSpan={visibleColSpan} className={s.td}>
                         <div className={s.emptyBox}>
                           <div className={s.emptyIcon}><ClipboardList size={32} /></div>
                           <p className={s.emptyTitle}>Không có yêu cầu tài liệu</p>
@@ -1579,7 +1742,12 @@ export default function AdminClientRequests() {
                     const isOverdue    = item.status === 'overdue'
 
                     return (
-                      <tr key={item.id} className={`${s.tr} ${selectedIds.has(item.id) ? s.trSelected : ''} ${isOverdue ? s.trOverdue : ''}`}>
+                      <tr
+                        key={item.id}
+                        className={`${s.tr} ${s.trClickable} ${selectedIds.has(item.id) ? s.trSelected : ''} ${isOverdue ? s.trOverdue : ''}`}
+                        onClick={(e) => { if (e.target.closest('button, select, input, a, label, [data-colfilter-btn]')) return; setQuickViewId(item.id) }}
+                        title="Nhấp để xem nhanh"
+                      >
                         <SelectionRowCell checked={selectedIds.has(item.id)} onToggle={() => toggleSelect(item.id)} />
                         <IndexRowCell index={(safePage - 1) * pageSize + i + 1} />
                         <td className={s.td}>
@@ -1594,9 +1762,9 @@ export default function AdminClientRequests() {
                               </span>
                             )}
                           </div>
-                          {item.description && <div className={s.docDesc}>{item.description}</div>}
                         </td>
 
+                        {vis('companyName') && (
                         <td className={s.td}>
                           {item.companyName ? (
                             <span
@@ -1609,27 +1777,101 @@ export default function AdminClientRequests() {
                             </span>
                           ) : <span className={s.mutedDash}>—</span>}
                         </td>
+                        )}
 
-                        <td className={s.td}><StatusBadge status={item.status} /></td>
-
-                        <td className={`${s.td} ${s.tdCenter}`}>
-                          {hasSubmitted ? (
-                            <button className={s.viewSubmittedBtn} onClick={() => setViewSubmitted(item)} title="Xem dữ liệu KH đã gửi">
-                              <Eye size={11} /> Xem
-                            </button>
-                          ) : <span className={s.mutedDash}>—</span>}
-                        </td>
-
+                        {vis('periodLabel') && (
                         <td className={s.td}><span className={s.periodText}>{item.periodLabel || '—'}</span></td>
+                        )}
 
+                        {vis('startDate') && (
+                        <td className={s.td}><span className={s.createdText}>{item.startDate ? fmtDate(item.startDate) : '—'}</span></td>
+                        )}
+
+                        {vis('deadlineDate') && (
                         <td className={s.td}>
                           <span className={isOverdue ? s.deadlineOverdue : s.deadlineText}>
                             {fmtDate(item.deadlineDate)}
                           </span>
                         </td>
+                        )}
 
+                        {vis('contactEmail') && (
                         <td className={s.td}><span className={s.emailText}>{item.contactEmail || '—'}</span></td>
+                        )}
 
+                        {vis('createdAt') && (
+                        <td className={s.td}><span className={s.createdText}>{fmtDate(item.createdAt)}</span></td>
+                        )}
+
+                        {vis('priority') && (
+                        <td className={s.td}>
+                          <span className={s.statusSelectWrap}>
+                            <select className={`${s.statusSelect} ${PRIORITY_CLASS[item.priority || 'medium']}`} value={item.priority || 'medium'} onChange={(e) => changePriority(item, e.target.value)} disabled={busy === 'priority'} title="Đổi mức độ">
+                              <option value="high">Cao</option>
+                              <option value="medium">Trung bình</option>
+                              <option value="low">Thấp</option>
+                            </select>
+                            <ChevronDown size={11} className={s.statusSelectCaret} />
+                          </span>
+                        </td>
+                        )}
+
+                        {vis('status') && (
+                        <td className={s.td}>
+                          <span className={s.statusSelectWrap}>
+                            <select className={`${s.statusSelect} ${STATUS_CLASS[item.status] ?? s.statusPending}`} value={item.status} onChange={(e) => changeStatus(item, e.target.value)} disabled={busy === 'status'} title="Đổi trạng thái">
+                              {item.status === 'overdue' && <option value="overdue" disabled>Quá hạn</option>}
+                              <option value="pending">Chờ KH</option>
+                              <option value="received">Đã nhận</option>
+                              <option value="not_required">Không cần</option>
+                            </select>
+                            <ChevronDown size={11} className={s.statusSelectCaret} />
+                          </span>
+                        </td>
+                        )}
+
+                        {vis('progress') && (
+                        <td className={s.td}>
+                          {item.checklistTotal > 0 ? (() => {
+                            const pct = Math.round((item.checklistDone / item.checklistTotal) * 100)
+                            return (
+                              <div className={s.progressCell} title={`${item.checklistDone}/${item.checklistTotal} mục đã xong`}>
+                                <div className={s.progressBarMini}>
+                                  <div
+                                    className={`${s.progressFillMini} ${pct >= 100 ? s.progressFillMiniDone : ''}`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className={s.progressText}>{pct}%</span>
+                              </div>
+                            )
+                          })() : <span className={s.mutedDash}>—</span>}
+                        </td>
+                        )}
+
+                        {vis('ownerName') && (
+                        <td className={s.td}>
+                          {item.requestedByName
+                            ? <span className={s.ownerText} title={`${item.requestedByName}${item.collaborators?.length ? ` · Hỗ trợ: ${item.collaborators.map((c) => c.name).join(', ')}` : ''}`}>{shortName(item.requestedByName)}</span>
+                            : <span className={s.mutedDash}>—</span>}
+                        </td>
+                        )}
+
+                        {vis('data') && (
+                        <td className={`${s.td} ${s.tdCenter}`}>
+                          {hasSubmitted ? (
+                            <button className={s.viewSubmittedBtn} onClick={() => setViewSubmitted(item)} title="Xem / cập nhật dữ liệu KH">
+                              <Eye size={11} /> Xem
+                            </button>
+                          ) : item.status !== 'not_required' ? (
+                            <button className={s.dataEntryBtn} onClick={() => setManualSubmitTarget(item)} title="Nhập dữ liệu KH">
+                              <PenLine size={11} /> Nhập
+                            </button>
+                          ) : <span className={s.mutedDash}>—</span>}
+                        </td>
+                        )}
+
+                        {vis('link') && (
                         <td className={`${s.td} ${s.tdCenter}`}>
                           <RowBtn
                             title={hasToken ? 'Xem / sao chép link' : 'Tạo link chia sẻ'}
@@ -1640,24 +1882,21 @@ export default function AdminClientRequests() {
                             <Link2 size={13} />
                           </RowBtn>
                         </td>
+                        )}
+
+                        {vis('latestComment') && (
+                        <td className={s.td}>
+                          {item.latestComment ? (
+                            <span className={s.commentPreview} title={item.latestComment}>
+                              {item.commentCount > 1 && <span className={s.commentCountBadge}>{item.commentCount}</span>}
+                              {item.latestComment}
+                            </span>
+                          ) : <span className={s.mutedDash}>—</span>}
+                        </td>
+                        )}
 
                         <td className={s.td}>
                           <div className={s.actionBtns}>
-                            <RowBtn title="Chỉnh sửa" onClick={() => setEditTarget(item)} disabled={!!busy}>
-                              <Eye size={13} />
-                            </RowBtn>
-
-                            {item.status !== 'not_required' && (
-                              <RowBtn
-                                title={item.tokenSubmittedAt ? 'Cập nhật dữ liệu KH' : 'Nhập dữ liệu KH thủ công'}
-                                onClick={() => setManualSubmitTarget(item)}
-                                disabled={!!busy}
-                                className={s.rowBtnPurple}
-                              >
-                                <PenLine size={13} />
-                              </RowBtn>
-                            )}
-
                             {(item.status === 'pending' || item.status === 'overdue') && (
                               <RowBtn title="Đánh dấu đã nhận" onClick={() => handleReceive(item)} disabled={!!busy} className={s.rowBtnSuccess}>
                                 {busy === 'receive' ? <Loader2 size={13} className={s.spinIcon} /> : <CheckCircle2 size={13} />}
@@ -1726,23 +1965,18 @@ export default function AdminClientRequests() {
       </div>
 
       {/* ── Modals ── */}
-      {(showCreate || editTarget) && (
+      {showCreate && (
         <CdrFormModal
           companies={companies}
           staffList={staffList}
           ownerId={currentUser?.id}
-          initial={editTarget}
-          onClose={() => { setShowCreate(false); setEditTarget(null) }}
+          initial={null}
+          onClose={() => setShowCreate(false)}
           onSaved={(saved) => {
-            setShowCreate(false); setEditTarget(null)
-            if (editTarget) {
-              setItems((prev) => prev.map((r) => r.id === saved.id ? saved : r))
-              addToast('Đã cập nhật yêu cầu', 'success')
-            } else {
-              queryClient.invalidateQueries({ queryKey: ['cdr', 'list'] })
-              setStatsKey((k) => k + 1)
-              addToast(`Đã tạo yêu cầu "${saved.documentName}"`, 'success')
-            }
+            setShowCreate(false)
+            queryClient.invalidateQueries({ queryKey: ['cdr', 'list'] })
+            setStatsKey((k) => k + 1)
+            addToast(`Đã tạo yêu cầu "${saved.documentName}"`, 'success')
           }}
         />
       )}
@@ -1775,6 +2009,16 @@ export default function AdminClientRequests() {
       )}
 
       {viewSubmitted && <SubmittedDataModal item={viewSubmitted} onClose={() => setViewSubmitted(null)} />}
+
+      {quickViewId && (
+        <CdrQuickView
+          requestId={quickViewId}
+          onClose={() => setQuickViewId(null)}
+          onUpdated={(updated) => setItems((prev) => prev.map((r) => r.id === updated.id ? { ...r, ...updated } : r))}
+          onManualSubmit={(it) => setManualSubmitTarget(it)}
+          onViewSubmitted={(it) => setViewSubmitted(it)}
+        />
+      )}
 
       {reminderTarget && (
         <ReminderModal item={reminderTarget} onClose={() => setReminderTarget(null)}

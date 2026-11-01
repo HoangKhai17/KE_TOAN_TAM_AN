@@ -26,8 +26,10 @@ function toDto(row) {
     documentName:       row.document_name,
     description:        row.description ?? null,
     periodLabel:        row.period_label ?? null,
+    startDate:          row.start_date ?? null,
     deadlineDate:       row.deadline_date ?? null,
     status:             row.status,
+    priority:           row.priority ?? 'medium',
     receivedAt:         row.received_at ?? null,
     receivedBy:         row.received_by ?? null,
     receivedByName:     row.received_by_name ?? null,
@@ -42,6 +44,10 @@ function toDto(row) {
     tokenSubmittedData: row.token_submitted_data ?? null,
     notes:              row.notes ?? null,
     collaborators:      Array.isArray(row.collaborators) ? row.collaborators : [],
+    commentCount:       row.comment_count != null ? Number(row.comment_count) : 0,
+    latestComment:      row.latest_comment ?? null,
+    checklistTotal:     row.checklist_total != null ? Number(row.checklist_total) : 0,
+    checklistDone:      row.checklist_done != null ? Number(row.checklist_done) : 0,
     createdAt:          row.created_at,
     updatedAt:          row.updated_at,
   }
@@ -94,14 +100,19 @@ async function notifyCdrCollaboratorChanges({ toAdd, toRemove }, item, actorId) 
 const CDR_COLS = `
   cdr.*,
   t.title  AS task_title,
-  c.name   AS company_name,
+  COALESCE(NULLIF(c.short_name, ''), c.name) AS company_name,
   rb.name  AS requested_by_name,
   rcv.name AS received_by_name,
   COALESCE((
     SELECT json_agg(json_build_object('id', ucc.id, 'name', ucc.name) ORDER BY ucc.name)
     FROM client_request_collaborators crc JOIN users ucc ON ucc.id = crc.user_id
     WHERE crc.request_id = cdr.id
-  ), '[]'::json) AS collaborators`
+  ), '[]'::json) AS collaborators,
+  (SELECT COUNT(*) FROM client_request_comments crcm WHERE crcm.request_id = cdr.id) AS comment_count,
+  (SELECT crcm.content FROM client_request_comments crcm WHERE crcm.request_id = cdr.id
+     ORDER BY crcm.created_at DESC LIMIT 1) AS latest_comment,
+  (SELECT COUNT(*) FROM client_request_checklist_items cci WHERE cci.request_id = cdr.id) AS checklist_total,
+  (SELECT COUNT(*) FROM client_request_checklist_items cci WHERE cci.request_id = cdr.id AND cci.is_completed) AS checklist_done`
 
 const CDR_FROM = `
   FROM client_document_requests cdr
@@ -115,18 +126,22 @@ const CDR_SELECT = `SELECT ${CDR_COLS} ${CDR_FROM}`
 // ── Header filter server-side (helper chung) ─────────────────────────────────────
 const CDR_COLUMNS_SQL = {
   documentName: { text: 'cdr.document_name',   filter: 'cdr.document_name', kind: 'text' },
-  companyName:  { text: 'c.name',              filter: 'c.name', kind: 'text' },
+  companyName:  { text: "COALESCE(NULLIF(c.short_name, ''), c.name)", filter: "COALESCE(NULLIF(c.short_name, ''), c.name)", kind: 'text' },
   status:       { text: 'cdr.status::text',    filter: 'cdr.status::text', kind: 'text' },
   periodLabel:  { text: 'cdr.period_label',    filter: 'cdr.period_label', kind: 'text' },
   contactEmail: { text: 'cdr.reminded_email',  filter: 'cdr.reminded_email', kind: 'text' },
+  startDate:    { text: `to_char(cdr.start_date, 'YYYY-MM-DD')`, filter: 'cdr.start_date', kind: 'date' },
   deadlineDate: { text: `to_char(cdr.deadline_date, 'YYYY-MM-DD')`, filter: 'cdr.deadline_date', kind: 'date' },
+  ownerName:    { text: 'rb.name',              filter: 'rb.name', kind: 'text' },
+  createdAt:    { text: `to_char(cdr.created_at, 'YYYY-MM-DD')`, filter: 'cdr.created_at', kind: 'date' },
+  priority:     { text: 'cdr.priority',          filter: 'cdr.priority', kind: 'text' },
 }
 const CDR_COLVALS_NS = 'cdrcolvals'
 const bumpCdrColVals = () => cf.bumpVersion(CDR_COLVALS_NS)
 
 // WHERE nền (bộ lọc chung) — tái dùng cho list + column-values.
 function buildCdrWhere(filters = {}) {
-  const { companyId, taskId, requestedBy, status, deadlineDateFrom, deadlineDateTo, search, staffScopeId, collaboratorIds } = filters
+  const { companyId, taskId, requestedBy, status, priority, deadlineDateFrom, deadlineDateTo, search, staffScopeId, collaboratorIds } = filters
   const conditions = ['1=1']
   const params = []
 
@@ -155,6 +170,10 @@ function buildCdrWhere(filters = {}) {
     const arr = Array.isArray(status) ? status : [status]
     params.push(arr)
     conditions.push(`cdr.status = ANY($${params.length}::text[])`)
+  }
+  if (priority) {
+    const arr = Array.isArray(priority) ? priority : String(priority).split(',').map((x) => x.trim()).filter(Boolean)
+    if (arr.length) { params.push(arr); conditions.push(`cdr.priority = ANY($${params.length}::text[])`) }
   }
   if (deadlineDateFrom && deadlineDateTo) {
     params.push(deadlineDateTo)
@@ -237,7 +256,7 @@ async function getById(id) {
 async function createClientRequest(data, requestedBy) {
   const {
     companyId, taskId = null, documentName, description = null,
-    periodLabel = null, deadlineDate = null, remindedEmail = null, notes = null,
+    periodLabel = null, startDate = null, deadlineDate = null, remindedEmail = null, notes = null,
     collaboratorIds,
   } = data
 
@@ -252,11 +271,11 @@ async function createClientRequest(data, requestedBy) {
   const { rows: [row] } = await query(
     `INSERT INTO client_document_requests
        (company_id, task_id, requested_by, document_name, description,
-        period_label, deadline_date, reminded_email, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        period_label, start_date, deadline_date, reminded_email, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
     [companyId, taskId, requestedBy, documentName, description ?? null,
-     periodLabel ?? null, deadlineDate ?? null, remindedEmail ?? null, notes ?? null]
+     periodLabel ?? null, startDate ?? null, deadlineDate ?? null, remindedEmail ?? null, notes ?? null]
   )
 
   // Người hỗ trợ ban đầu (nếu có) — owner = requestedBy, tự loại khỏi danh sách.
@@ -278,7 +297,9 @@ async function updateClientRequest(id, data, actorId = null) {
     documentName:  'document_name',
     description:   'description',
     periodLabel:   'period_label',
+    startDate:     'start_date',
     deadlineDate:  'deadline_date',
+    requestedBy:   'requested_by',
     taskId:        'task_id',
     remindedEmail: 'reminded_email',
     contactEmail:  'reminded_email',
@@ -393,6 +414,17 @@ async function dismissClientRequest(id) {
     [STATUS.NOT_REQUIRED, id]
   )
 
+  const item = await getById(id)
+  emitData('data:cdr', { action: 'updated', id }); void bumpCdrColVals()
+  return item
+}
+
+async function setPriority(id, priority) {
+  const allowed = ['high', 'medium', 'low']
+  if (!allowed.includes(priority)) throw Object.assign(new Error('Mức độ ưu tiên không hợp lệ'), { status: 400 })
+  const { rows: [existing] } = await query('SELECT id FROM client_document_requests WHERE id = $1', [id])
+  if (!existing) throw Object.assign(new Error('Client request not found'), { status: 404 })
+  await query('UPDATE client_document_requests SET priority = $1, updated_at = NOW() WHERE id = $2', [priority, id])
   const item = await getById(id)
   emitData('data:cdr', { action: 'updated', id }); void bumpCdrColVals()
   return item
@@ -738,6 +770,7 @@ module.exports = {
   receiveClientRequest,
   unreceiveClientRequest,
   dismissClientRequest,
+  setPriority,
   sendReminder,
   generateLink,
   revokeLink,

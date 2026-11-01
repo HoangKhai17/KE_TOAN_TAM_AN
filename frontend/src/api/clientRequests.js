@@ -31,6 +31,38 @@ export const unreceiveClientRequest = (id) =>
 export const dismissClientRequest = (id) =>
   api.post(`/client-requests/${id}/dismiss`).then((r) => r.data.data.item)
 
+export const setPriorityClientRequest = (id, priority) =>
+  api.post(`/client-requests/${id}/priority`, { priority }).then((r) => r.data.data.item)
+
+// ─── Bình luận ───────────────────────────────────────────────────────────────
+export const getCdrComments = (id) =>
+  api.get(`/client-requests/${id}/comments`).then((r) => r.data.data.comments)
+
+export const addCdrComment = (id, data) =>
+  api.post(`/client-requests/${id}/comments`, data).then((r) => r.data.data.comment)
+
+export const updateCdrComment = (id, commentId, data) =>
+  api.patch(`/client-requests/${id}/comments/${commentId}`, data).then((r) => r.data.data.comment)
+
+export const deleteCdrComment = (id, commentId) =>
+  api.delete(`/client-requests/${id}/comments/${commentId}`)
+
+// ─── Checklist ───────────────────────────────────────────────────────────────
+export const getCdrChecklist = (id) =>
+  api.get(`/client-requests/${id}/checklist`).then((r) => r.data.data.items)
+
+export const addCdrChecklistItem = (id, data) =>
+  api.post(`/client-requests/${id}/checklist`, data).then((r) => r.data.data.item)
+
+export const updateCdrChecklistItem = (id, itemId, data) =>
+  api.patch(`/client-requests/${id}/checklist/${itemId}`, data).then((r) => r.data.data.item)
+
+export const deleteCdrChecklistItem = (id, itemId) =>
+  api.delete(`/client-requests/${id}/checklist/${itemId}`)
+
+export const reorderCdrChecklist = (id, items) =>
+  api.post(`/client-requests/${id}/checklist/reorder`, { items }).then((r) => r.data.data.items)
+
 export const sendReminder = (id, data) =>
   api.post(`/client-requests/${id}/remind`, data).then((r) => r.data.data.item)
 

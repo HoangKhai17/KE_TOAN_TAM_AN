@@ -1,5 +1,7 @@
 'use strict'
 const svc = require('./clientRequests.service')
+const commentsSvc = require('./cdrComments.service')
+const checklistSvc = require('./cdrChecklist.service')
 
 async function listClientRequests(req, res, next) {
   try {
@@ -82,6 +84,13 @@ async function dismissClientRequest(req, res, next) {
   } catch (err) { next(err) }
 }
 
+async function setPriority(req, res, next) {
+  try {
+    const item = await svc.setPriority(req.params.id, req.body?.priority)
+    res.json({ success: true, data: { item } })
+  } catch (err) { next(err) }
+}
+
 async function sendReminder(req, res, next) {
   try {
     const item = await svc.sendReminder(req.params.id, req.body)
@@ -131,6 +140,74 @@ async function manualSubmit(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// ── Bình luận ──────────────────────────────────────────────────────────────────
+async function listComments(req, res, next) {
+  try {
+    const comments = await commentsSvc.listComments(req.params.id, {
+      page:  Math.max(1, parseInt(req.query.page || '1', 10)),
+      limit: Math.min(100, Math.max(1, parseInt(req.query.limit || '50', 10))),
+    })
+    res.json({ success: true, data: { comments } })
+  } catch (err) { next(err) }
+}
+
+async function addComment(req, res, next) {
+  try {
+    const comment = await commentsSvc.addComment(req.params.id, req.body, req.user.id)
+    res.status(201).json({ success: true, data: { comment } })
+  } catch (err) { next(err) }
+}
+
+async function updateComment(req, res, next) {
+  try {
+    const comment = await commentsSvc.updateComment(req.params.id, req.params.commentId, req.body, req.user.id, req.user.role === 'admin')
+    res.json({ success: true, data: { comment } })
+  } catch (err) { next(err) }
+}
+
+async function deleteComment(req, res, next) {
+  try {
+    await commentsSvc.deleteComment(req.params.id, req.params.commentId, req.user.id, req.user.role === 'admin')
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+// ── Checklist ───────────────────────────────────────────────────────────────────
+async function listChecklist(req, res, next) {
+  try {
+    const items = await checklistSvc.listItems(req.params.id)
+    res.json({ success: true, data: { items } })
+  } catch (err) { next(err) }
+}
+
+async function addChecklistItem(req, res, next) {
+  try {
+    const item = await checklistSvc.addItem(req.params.id, req.body)
+    res.status(201).json({ success: true, data: { item } })
+  } catch (err) { next(err) }
+}
+
+async function updateChecklistItem(req, res, next) {
+  try {
+    const item = await checklistSvc.updateItem(req.params.id, req.params.itemId, req.body, req.user.id)
+    res.json({ success: true, data: { item } })
+  } catch (err) { next(err) }
+}
+
+async function deleteChecklistItem(req, res, next) {
+  try {
+    await checklistSvc.deleteItem(req.params.id, req.params.itemId)
+    res.status(204).end()
+  } catch (err) { next(err) }
+}
+
+async function reorderChecklist(req, res, next) {
+  try {
+    const items = await checklistSvc.reorder(req.params.id, req.body.items)
+    res.json({ success: true, data: { items } })
+  } catch (err) { next(err) }
+}
+
 async function getAvailableYears(req, res, next) {
   try {
     const years = await svc.getAvailableYears()
@@ -148,10 +225,20 @@ module.exports = {
   receiveClientRequest,
   unreceiveClientRequest,
   dismissClientRequest,
+  setPriority,
   sendReminder,
   generateLink,
   revokeLink,
   manualSubmit,
+  listComments,
+  addComment,
+  updateComment,
+  deleteComment,
+  listChecklist,
+  addChecklistItem,
+  updateChecklistItem,
+  deleteChecklistItem,
+  reorderChecklist,
   getAdminOverview,
   getStats,
   getPublicForm,

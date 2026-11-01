@@ -237,43 +237,47 @@
 .filterBar {
   position: relative;
   background: var(--color-surface);
-  border: 1px solid var(--color-border-muted);
+  border: 1.5px solid #dbeafe;
   border-radius: var(--radius-lg);
-  margin-bottom: 0;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 8px;
+  transition: box-shadow 0.18s;
 }
+.filterBar:focus-within { border-color: #93c5fd; box-shadow: 0 4px 16px rgba(37, 99, 235, 0.10); }
 
 .filterBarHead {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--color-border-soft);
-  background: var(--gradient-filter-head);
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  padding: 6px 12px;
+  border-bottom: 1.5px solid #dbeafe;
+  background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .filterBarTitle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 6px;
   font-size: var(--fs-2xs);
-  font-weight: var(--fw-semibold);
-  color: var(--color-text-strong);
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1.5px solid var(--color-primary-soft, var(--color-border-muted));
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  font-weight: var(--fw-bold);
+  color: var(--color-primary-deep);
+  min-height: 30px;
+  padding: 4px 12px 4px 9px;
+  border: 1px solid var(--color-primary-bg-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-bg);
   font-family: inherit;
   cursor: pointer;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
+  transition: background var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
 
 .filterBarTitle:hover,
 .filterBarTitleOpen {
-  background: var(--color-primary-bg);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  background: var(--color-primary-bg-strong);
+  border-color: var(--color-primary-soft);
+  color: var(--color-primary-deep);
 }
 
 /* ── Lọc nhanh + khối nâng cao (gập) — đồng bộ InternalAssignments ── */
@@ -281,7 +285,7 @@
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 7px 14px;
+  padding: 7px 12px;
   flex-wrap: wrap;
 }
 
@@ -347,6 +351,13 @@
   gap: 16px;
   min-width: 0;
 }
+.filterBarHeadRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
 /* Thống kê khi ở trên header: bỏ box (padding/viền/nền/bo góc), nằm inline */
 .statsRowHead {
   padding: 0;
@@ -357,34 +368,33 @@
 }
 
 .filterReset {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-danger-bg);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
   font-size: var(--fs-2xs);
-  color: var(--color-text-soft);
-  background: var(--color-surface);
-  border: 1.5px solid var(--color-border);
-  cursor: pointer;
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-md);
   font-weight: var(--fw-semibold);
+  cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: color var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast);
+  transition: all 0.13s;
 }
-.filterReset:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary-soft);
-  background: var(--color-primary-bg-soft, var(--color-surface));
-}
-.filterReset:hover { color: var(--color-text); background: var(--color-surface-muted); }
+.filterReset:hover { border-color: var(--color-danger); color: var(--color-white); background: var(--color-danger); }
 
 .filterGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 14px;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px 12px;
+  padding: 12px 14px 14px;
+}
+@media (max-width: 640px) {
+  .filterGrid { grid-template-columns: 1fr; }
 }
 
 .filterGroup {
@@ -397,10 +407,9 @@
 
 .filterLabel {
   font-size: var(--fs-2xs);
-  font-weight: var(--fw-regular);
+  font-weight: var(--fw-semibold);
   color: var(--color-text-soft);
-  text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: 0.2px;
 }
 
 .filterSelect {
@@ -475,11 +484,22 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  padding: 2px 14px 2px 0;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
 }
+.statItem:hover { background: var(--color-surface-muted); }
+.statItemActive {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
+}
+.statItemActive .statLabel { color: var(--color-primary); font-weight: var(--fw-bold); }
 
 .statValue {
-  font-size: var(--fs-lg);
+  font-size: var(--fs-xs);
   font-weight: var(--fw-extrabold);
   color: var(--color-text-strong);
   line-height: 1;
@@ -488,6 +508,7 @@
 .statLabel {
   font-size: var(--fs-2xs);
   color: var(--color-text-soft);
+  font-weight: var(--fw-medium);
   white-space: nowrap;
 }
 
@@ -576,7 +597,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px var(--space-4);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   white-space: nowrap;
@@ -587,6 +608,25 @@
 .statusReceived    { background: var(--color-success-bg-soft);  color: var(--color-success-dark); border-color: var(--color-success-light); }
 .statusNotRequired { background: var(--color-surface-soft);     color: var(--color-muted);        border-color: var(--color-border); }
 .statusOverdue     { background: var(--color-danger-bg-soft);   color: var(--color-danger-dark);  border-color: var(--color-danger-light); }
+
+/* Dropdown trạng thái sửa inline (vuông, tô màu theo status) */
+.statusSelectWrap { position: relative; display: inline-flex; align-items: center; }
+.statusSelect {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  height: 26px; padding: 0 22px 0 9px; line-height: 1;
+  border-radius: var(--radius-sm); border: 1px solid transparent;
+  font-size: var(--fs-2xs); font-weight: var(--fw-semibold); font-family: inherit;
+  cursor: pointer; white-space: nowrap;
+}
+.statusSelect:focus { outline: none; box-shadow: var(--shadow-focus); }
+.statusSelect:disabled { opacity: 0.6; cursor: default; }
+.statusSelectCaret { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); pointer-events: none; opacity: 0.65; }
+
+/* Mức độ / Ưu tiên (đồng bộ Tasks: Cao=hổ phách, TB=xanh dương, Thấp=xám) */
+.colPriority { min-width: 112px; }
+.prioHigh   { background: var(--color-warning-bg);  color: var(--color-warning-text); border-color: var(--color-warning-bg-strong); }
+.prioMedium { background: var(--color-info-bg);     color: var(--color-info-dark);    border-color: var(--color-info-light); }
+.prioLow    { background: var(--color-surface-muted); color: var(--color-muted);      border-color: var(--color-border); }
 
 /* ── Table view ──────────────────────────────────────────────── */
 
@@ -662,6 +702,83 @@
 
 .trOverdue .docTitle { color: var(--color-danger); }
 
+.docTitleLink {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--fw-medium);
+  color: var(--color-text-strong);
+  text-align: left;
+  cursor: pointer;
+}
+.docTitleLink:hover { color: var(--color-primary); text-decoration: underline; }
+.trOverdue .docTitleLink { color: var(--color-danger); }
+
+.trClickable { cursor: pointer; }
+.trClickable:hover .docTitle { color: var(--color-primary); }
+
+/* ── Quick view: tab chuyển qua lại (nằm trên header) ─────────────── */
+.qvTabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 0 12px 0 auto;
+  align-self: center;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+.qvTab {
+  padding: 6px 18px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-muted);
+  opacity: 0.7;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--duration-fast), color var(--duration-fast), opacity var(--duration-fast);
+}
+.qvTab:hover:not(.qvTabActive) { color: var(--color-primary); background: var(--color-primary-bg); opacity: 1; }
+.qvTabActive {
+  background: var(--gradient-primary);
+  color: var(--color-white);
+  opacity: 1;
+  box-shadow: 0 2px 8px -2px rgba(37, 99, 235, 0.5);
+}
+.qvTabActive:hover { filter: brightness(1.06); }
+
+.qvDataView { display: flex; flex-direction: column; gap: 10px; }
+.qvDataEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 16px;
+  color: var(--color-muted);
+  text-align: center;
+}
+.qvDataEmpty p { margin: 0; font-size: var(--fs-sm); }
+.qvCopyBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.qvCopyBtn:hover { background: var(--color-primary-bg); color: var(--color-primary); border-color: var(--color-primary-soft); }
+
 .collaboratorBadge {
   display: inline-flex;
   margin-left: 6px;
@@ -696,6 +813,11 @@
 .deadlineText { font-size: var(--fs-2xs); color: var(--color-text-strong); }
 .deadlineOverdue { color: var(--color-danger); font-weight: var(--fw-semibold); font-size: var(--fs-2xs); }
 .emailText { font-size: var(--fs-2xs); color: var(--color-text-strong); max-width: 155px; overflow-wrap: anywhere; white-space: normal; display: block; }
+.colOwner { min-width: 130px; }
+.colCreated { min-width: 92px; white-space: nowrap; }
+.ownerText { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2xs); color: var(--color-text-strong); white-space: nowrap; }
+.ownerText svg { color: var(--color-muted); flex-shrink: 0; }
+.createdText { font-size: var(--fs-2xs); color: var(--color-text-soft); white-space: nowrap; }
 .mutedDash  { color: var(--color-muted-subtle); }
 
 /* ── Submitted data button ───────────────────────────────────── */
@@ -705,7 +827,7 @@
   align-items: center;
   gap: 4px;
   padding: 3px var(--space-4);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   border: none;
   background: var(--color-primary-bg);
   color: var(--color-primary);
@@ -716,6 +838,14 @@
   transition: background var(--duration-fast);
 }
 .viewSubmittedBtn:hover { background: var(--color-primary-bg-strong); }
+.dataEntryBtn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px var(--space-4); border-radius: var(--radius-sm); border: 1px dashed var(--color-border);
+  background: var(--color-surface-muted); color: var(--color-text-soft);
+  font-size: var(--fs-2xs); font-weight: var(--fw-semibold); cursor: pointer; white-space: nowrap;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+}
+.dataEntryBtn:hover { background: var(--color-primary-bg); color: var(--color-primary); border-color: var(--color-primary-soft); border-style: solid; }
 
 /* ── Row action buttons ──────────────────────────────────────── */
 
@@ -1557,3 +1687,126 @@
 .colEmail    { width: 155px; }
 .colLink     { width: 60px; }
 .colActions  { width: 150px; }
+.colProgress { width: 110px; }
+.colComment  { min-width: 160px; max-width: 240px; }
+
+/* ── Cột Tiến độ (checklist) ──────────────────────────────────────── */
+.progressCell {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 90px;
+}
+.progressBarMini {
+  flex: 1;
+  min-width: 48px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+.progressFillMini {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary);
+  transition: width var(--duration-fast);
+}
+.progressFillMiniDone { background: var(--color-success); }
+.progressText {
+  font-size: var(--fs-2xs);
+  color: var(--color-text-soft);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Cột Bình luận (xem nhanh câu mới nhất) ───────────────────────── */
+.commentPreview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-2xs);
+  color: var(--color-text-soft);
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.commentCountBadge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-size: var(--fs-3xs, 10px);
+  font-weight: var(--fw-bold);
+}
+
+/* ── Bộ chọn ẩn/hiện cột (đồng bộ Tasks) ─────────────────────────── */
+.colMenuWrap { position: relative; }
+.colMenuBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-white);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+}
+.colMenuBtn:hover { background: var(--color-primary-bg); color: var(--color-primary); border-color: var(--color-primary); }
+.colMenuBtnActive { background: var(--gradient-primary); color: var(--color-white); border-color: transparent; }
+.colMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 210px;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14);
+  padding: 6px;
+}
+.colMenuHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 8px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+}
+.colMenuReset {
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.colMenuReset:hover { text-decoration: underline; }
+.colMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.colMenuItem:hover { background: var(--color-surface-muted); }
+.colMenuItem input { cursor: pointer; }
+.colMenuItemFixed { opacity: 0.6; cursor: default; }
+.colMenuItemFixed:hover { background: none; }
