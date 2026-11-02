@@ -38,4 +38,20 @@ async function getCharts(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { getSummary, getCharts }
+async function getAccountingAlerts(req, res, next) {
+  try {
+    const raw = Number.parseInt(req.query.withinDays, 10)
+    const withinDays = Number.isFinite(raw) ? Math.min(365, Math.max(0, raw)) : 30
+    const data = await svc.getAccountingAlerts(req.user.id, req.user.role, withinDays)
+    res.json({ success: true, data })
+  } catch (err) { next(err) }
+}
+
+async function getTaxAlertSources(req, res, next) {
+  try {
+    const data = await svc.getTaxAlertSources(req.user.id, req.user.role)
+    res.json({ success: true, data })
+  } catch (err) { next(err) }
+}
+
+module.exports = { getSummary, getCharts, getAccountingAlerts, getTaxAlertSources }

@@ -877,3 +877,67 @@
 .kpiLeaderName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kpiLeaderMuted { color: var(--color-muted); }
 .kpiLeaderSub { color: var(--color-muted); font-size: var(--fs-3xs); font-weight: 400; }
+
+/* ── Cảnh báo kế toán ─────────────────────────────────────────────────────── */
+.alertHeadLeft { display: flex; flex-direction: column; gap: 2px; }
+.alertTitleIcon { vertical-align: -2px; color: var(--color-danger); margin-right: 2px; }
+.alertWithin { display: inline-flex; gap: 3px; padding: 3px; background: var(--color-surface-muted); border-radius: 8px; }
+.alertWithinBtn {
+  border: none;
+  background: transparent;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+.alertWithinActive { background: var(--color-white, #fff); color: var(--color-primary); box-shadow: var(--shadow-sm); }
+
+.alertList { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; max-height: 360px; overflow-y: auto; }
+.alertRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border-muted);
+  border-radius: 10px;
+  background: var(--color-surface, #fff);
+  cursor: pointer;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.alertRow:hover { border-color: var(--color-primary-bg-strong); box-shadow: var(--shadow-sm); }
+.alertDot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+.alertRed    { --a: var(--color-danger);  color: var(--color-danger); }
+.alertOrange { --a: var(--color-accent-dark, #ea580c); color: var(--color-accent-dark, #ea580c); }
+.alertAmber  { --a: var(--color-accent);  color: var(--color-accent-dark, #b45309); }
+.alertDot.alertRed    { background: var(--color-danger); }
+.alertDot.alertOrange { background: var(--color-accent-dark, #ea580c); }
+.alertDot.alertAmber  { background: var(--color-accent, #d97706); }
+
+.alertKind {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+.alertKindContract { background: rgba(37, 99, 235, 0.12); color: var(--color-info); }
+.alertKindLicense  { background: rgba(124, 58, 237, 0.12); color: var(--color-purple, #7c3aed); }
+.alertKindTax      { background: rgba(8, 145, 178, 0.12);  color: var(--color-cyan-dark, #0e7490); }
+
+.alertBody { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.alertCompany { font-size: var(--fs-2xs); font-weight: var(--fw-bold); color: var(--color-text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alertDesc { font-size: var(--fs-3xs); color: var(--color-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.alertDue { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; flex-shrink: 0; }
+.alertDueText { font-size: var(--fs-2xs); font-weight: var(--fw-extrabold); white-space: nowrap; }
+.alertDueDate { font-size: var(--fs-3xs); color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.alertArrow { color: var(--color-muted); flex-shrink: 0; }
+@media (max-width: 560px) { .alertKind { display: none; } }

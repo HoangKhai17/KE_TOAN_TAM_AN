@@ -505,4 +505,115 @@ async function getCharts(userId, role, from, to, taskType) {
   return getTraditionalCharts(userId, role, from, to)
 }
 
-module.exports = { getSummary, getCharts }
+// ─── Cảnh báo kế toán (Phase 1): hợp đồng dịch vụ & giấy phép/địa điểm sắp hết hạn ─
+// Gộp các dòng có end_date ≤ hôm nay + withinDays (gồm cả ĐÃ quá hạn). RBAC: staff
+// chỉ thấy KH mình phụ trách. daysLeft < 0 = đã hết hạn; 0..N = sắp hết hạn.
+async function getAccountingAlerts(userId, role, withinDays = 30) {
+  const isStaff = role === 'staff'
+  const scope = isStaff ? 'AND c.assigned_staff_id = $1' : ''
+  const dn = isStaff ? 2 : 1                        // vị trí tham số withinDays
+  const params = isStaff ? [userId, withinDays] : [withinDays]
+
+  const [contracts, licenses] = await Promise.all([
+    query(`
+      SELECT sc.id,
+             sc.company_id                                   AS "companyId",
+             c.name                                          AS "companyName",
+             c.short_name                                    AS "companyShortName",
+             COALESCE(NULLIF(btrim(sc.content), ''), sc.contract_type, 'Hợp đồng dịch vụ') AS title,
+             sc.contract_type                                AS "contractType",
+             sc.end_date                                     AS "dueDate",
+             (sc.end_date - CURRENT_DATE)                    AS "daysLeft"
+      FROM company_service_contracts sc
+      JOIN companies c ON c.id = sc.company_id
+      WHERE sc.end_date IS NOT NULL
+        AND sc.status_override IS NULL                       -- bỏ qua "Đã gia hạn" / "Ngưng dịch vụ"
+        AND sc.end_date <= CURRENT_DATE + ($${dn} * INTERVAL '1 day')
+        ${scope}
+      ORDER BY sc.end_date ASC`, params),
+    query(`
+      SELECT l.id,
+             l.company_id                                    AS "companyId",
+             c.name                                          AS "companyName",
+             c.short_name                                    AS "companyShortName",
+             COALESCE(NULLIF(btrim(l.name), ''), '')         AS "locationName",
+             l.location_type                                 AS "locationType",
+             l.end_date                                      AS "dueDate",
+             (l.end_date - CURRENT_DATE)                     AS "daysLeft"
+      FROM company_locations l
+      JOIN companies c ON c.id = l.company_id
+      WHERE l.end_date IS NOT NULL
+        AND l.status = 'active'                              -- CHỈ giấy phép còn hoạt động mới cảnh báo
+                                                             -- (enum trạng thái là động: mọi trạng thái "đã ngưng/chấm dứt" tùy chỉnh đều bị loại)
+        AND l.end_date <= CURRENT_DATE + ($${dn} * INTERVAL '1 day')
+        ${scope}
+      ORDER BY l.end_date ASC`, params),
+  ])
+
+  const toNum = (d) => (d == null ? null : Number(d))
+  const mapRow = (kind) => (r) => ({
+    kind,
+    id: r.id,
+    companyId: r.companyId,
+    companyName: r.companyName,
+    companyShortName: r.companyShortName,
+    title: kind === 'contract' ? r.title : (r.locationName || null),
+    locationType: r.locationType ?? null,
+    contractType: r.contractType ?? null,
+    dueDate: r.dueDate,
+    daysLeft: toNum(r.daysLeft),
+  })
+
+  const items = [
+    ...contracts.rows.map(mapRow('contract')),
+    ...licenses.rows.map(mapRow('license')),
+  ].sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0))
+
+  return {
+    withinDays,
+    total: items.length,
+    overdue: items.filter((x) => (x.daysLeft ?? 0) < 0).length,
+    dueSoon: items.filter((x) => (x.daysLeft ?? 0) >= 0).length,
+    contracts: contracts.rows.map(mapRow('contract')),
+    licenses: licenses.rows.map(mapRow('license')),
+    items,
+  }
+}
+
+// ─── Cảnh báo thuế (Phase 2): trả RAW rows + định nghĩa cột của bảng tùy chỉnh ───
+// Việc đánh giá công thức "Trạng thái" (Chưa nộp - Trễ hạn...) để frontend chạy bằng
+// chính engine formula.js có sẵn → không nhân đôi logic. RBAC: staff chỉ KH mình.
+// ALERT_TAX_KEYS: table_key của các bảng cần quét (hiện: bảng "Theo dõi phát sinh Thuế").
+const ALERT_TAX_KEYS = ['nsnn']
+
+async function getTaxAlertSources(userId, role) {
+  const isStaff = role === 'staff'
+  const { rows: defs } = await query(
+    `SELECT id, table_key AS "tableKey", name
+     FROM company_table_defs
+     WHERE table_key = ANY($1) AND parent_def_id IS NULL`, [ALERT_TAX_KEYS])
+  if (!defs.length) return { sources: [] }
+
+  const sources = []
+  for (const def of defs) {
+    const [colsRes, rowsRes] = await Promise.all([
+      query(
+        `SELECT col_key AS "colKey", label, data_type AS "dataType",
+                computed_type AS "computedType", computed_config AS "computedConfig"
+         FROM company_table_columns
+         WHERE def_id = $1 AND is_active = TRUE
+         ORDER BY sort_order`, [def.id]),
+      query(
+        `SELECT r.id, r.company_id AS "companyId", c.name AS "companyName",
+                c.short_name AS "companyShortName", r.data
+         FROM company_table_rows r
+         JOIN companies c ON c.id = r.company_id
+         WHERE r.def_id = $1 ${isStaff ? 'AND c.assigned_staff_id = $2' : ''}`,
+        isStaff ? [def.id, userId] : [def.id]),
+    ])
+    sources.push({ def: { ...def, columns: colsRes.rows }, rows: rowsRes.rows })
+  }
+  return { sources }
+}
+
+module.exports = { getSummary, getCharts, getAccountingAlerts, getTaxAlertSources }

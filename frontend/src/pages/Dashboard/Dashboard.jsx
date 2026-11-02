@@ -18,6 +18,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { getDashboardSummary, getDashboardCharts } from '../../api/dashboard'
 import { useDataSync } from '../../hooks/useDataSync'
 import DashboardKpi from './DashboardKpi'
+import DashboardAlerts from './DashboardAlerts'
 import s from './Dashboard.module.css'
 
 const DASHBOARD_COLORS = {
@@ -107,7 +108,7 @@ const RANGE_OPTIONS = [
 const RANGE_SUB = { today: 'Hôm nay', '7d': '7 ngày gần nhất', month: 'Tháng hiện tại' }
 
 const TASK_TYPE_TABS = [
-  { key: 'kpi',         label: 'KPI',          icon: Award         },
+  { key: 'kpi',         label: 'KPI & Cảnh báo', icon: Award       },
   { key: 'traditional', label: 'Truyền thống', icon: ClipboardList },
   { key: 'cdr',         label: 'Yêu cầu KH',  icon: FileText      },
   { key: 'ia',          label: 'Nội bộ',       icon: Users         },
@@ -406,7 +407,10 @@ export default function Dashboard() {
       </div>
 
       {isKpiTab ? (
-        <DashboardKpi user={user} />
+        <>
+          <DashboardKpi user={user} />
+          <DashboardAlerts />
+        </>
       ) : (
       <>
       {/* ── KPI Cards ── */}

@@ -7,5 +7,7 @@ const auth = [authenticate]
 
 router.get('/summary', ...auth, ctrl.getSummary)
 router.get('/charts',  ...auth, ctrl.getCharts)
+router.get('/accounting-alerts', ...auth, ctrl.getAccountingAlerts)
+router.get('/tax-alerts',        ...auth, ctrl.getTaxAlertSources)
 
 module.exports = router
