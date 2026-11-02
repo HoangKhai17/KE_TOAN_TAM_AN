@@ -9,7 +9,7 @@ import {
   Building2, ClipboardList, AlertTriangle, CheckCircle2,
   ArrowRight, Loader2,
   User, Calendar as CalendarIcon,
-  FileText, Users, SendHorizonal,
+  FileText, Users, SendHorizonal, Award,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { vi } from 'date-fns/locale'
@@ -17,6 +17,7 @@ import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
 import { getDashboardSummary, getDashboardCharts } from '../../api/dashboard'
 import { useDataSync } from '../../hooks/useDataSync'
+import DashboardKpi from './DashboardKpi'
 import s from './Dashboard.module.css'
 
 const DASHBOARD_COLORS = {
@@ -106,6 +107,7 @@ const RANGE_OPTIONS = [
 const RANGE_SUB = { today: 'Hôm nay', '7d': '7 ngày gần nhất', month: 'Tháng hiện tại' }
 
 const TASK_TYPE_TABS = [
+  { key: 'kpi',         label: 'KPI',          icon: Award         },
   { key: 'traditional', label: 'Truyền thống', icon: ClipboardList },
   { key: 'cdr',         label: 'Yêu cầu KH',  icon: FileText      },
   { key: 'ia',          label: 'Nội bộ',       icon: Users         },
@@ -315,7 +317,7 @@ export default function Dashboard() {
 
   const queryClient = useQueryClient()
   const [range,          setRange]          = useState('month')
-  const [activeTaskType, setActiveTaskType] = useState('traditional')
+  const [activeTaskType, setActiveTaskType] = useState('kpi')
   const syncTimer = useRef(null)
 
   // ── Dashboard — React Query (cache theo range/loại CV + giữ data cũ khi đổi) ──
@@ -349,8 +351,9 @@ export default function Dashboard() {
   const greetWord = greetHour < 12 ? 'Chào buổi sáng' : greetHour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối'
   const isStaff   = user?.role === 'staff'
 
+  const isKpiTab = activeTaskType === 'kpi'
   const kpiCards = buildKpiCards({ activeTaskType, summary, isStaff, loading, range, navigate })
-  const meta     = CHART_META[activeTaskType]
+  const meta     = CHART_META[activeTaskType] ?? CHART_META.traditional
   const trendColor = meta.trend.color
 
   return (
@@ -402,6 +405,10 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {isKpiTab ? (
+        <DashboardKpi user={user} />
+      ) : (
+      <>
       {/* ── KPI Cards ── */}
       <div className={s.kpiGrid}>
         {kpiCards.map((card) => (
@@ -594,6 +601,8 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+      )}
+      </>
       )}
 
     </AppLayout>

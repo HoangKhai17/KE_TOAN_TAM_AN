@@ -721,3 +721,159 @@
 
 /* ── Status badge: overdue ───────────────────────────────────────────────── */
 .statusOverdue { background: var(--color-danger-bg); color: var(--color-danger); }
+
+/* ── KPI panel (dashboard) ───────────────────────────────────────────────── */
+.kpiPanel { margin-bottom: 12px; }
+
+.kpiMiniGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+@media (max-width: 860px) { .kpiMiniGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .kpiMiniGrid { grid-template-columns: 1fr; } }
+
+.kpiGradeBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--grade-color);
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-extrabold);
+  line-height: 1.5;
+}
+
+/* Tiến độ lên hạng (staff) */
+.kpiTierBox { margin-top: 12px; }
+.kpiTierHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: var(--fs-2xs);
+  color: var(--color-text-soft);
+}
+.kpiTierRemain { color: var(--color-text); }
+.kpiTierRemain strong { color: var(--color-primary); }
+.kpiTierTrack {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+.kpiTierFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width var(--duration-base);
+}
+.kpiTierTop {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--gradient-kpi-green, var(--color-success-bg));
+  color: var(--color-success);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+}
+
+/* Phân bố xếp loại (admin) */
+.kpiDistrib { margin-top: 14px; }
+.kpiDistribBar {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+.kpiDistribBar > span { display: block; min-width: 2px; }
+.kpiDistribLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+  font-size: var(--fs-2xs);
+  color: var(--color-text-soft);
+}
+.kpiDistribLg { display: inline-flex; align-items: center; gap: 5px; }
+.kpiDistribLg strong { color: var(--color-text-strong); }
+.kpiDistribSw { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+/* Chia đôi: bảng · biểu đồ */
+.kpiSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+  align-items: start;
+}
+@media (max-width: 920px) { .kpiSplit { grid-template-columns: 1fr; } }
+.kpiSplitPane { min-width: 0; }
+
+.kpiChartBox {
+  border: 1px solid var(--color-border-muted);
+  border-radius: 10px;
+  padding: 10px 8px 6px;
+  background: var(--color-surface, #fff);
+}
+.kpiChartTitle {
+  margin: 0 0 2px 8px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-text-soft);
+}
+
+/* Bảng xếp hạng / thành phần */
+.kpiLeaderWrap {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-muted);
+  border-radius: 10px;
+}
+.kpiLeaderTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-2xs);
+  table-layout: fixed;
+}
+.kpiLeaderTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface-muted);
+  padding: 7px 9px;
+  text-align: left;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-extrabold);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-soft);
+  border-bottom: 1px solid var(--color-border-muted);
+  white-space: nowrap;
+}
+.kpiLeaderTable tbody td {
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--color-border-muted);
+  color: var(--color-text);
+}
+.kpiLeaderTable tbody tr:last-child td { border-bottom: none; }
+.kpiLeaderTable tbody tr:hover td { background: var(--color-primary-bg); }
+.kpiLeaderTable tfoot td {
+  padding: 7px 9px;
+  background: var(--color-surface-muted);
+  font-weight: var(--fw-bold);
+  border-top: 1.5px solid var(--color-border);
+}
+.kpiLeaderTable .kpiGradeBadge {
+  font-size: var(--fs-3xs);
+  padding: 1px 8px;
+  font-weight: var(--fw-bold);
+}
+.kpiLeaderNum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpiLeaderRank { text-align: center; color: var(--color-text-soft); font-variant-numeric: tabular-nums; }
+.kpiLeaderCenter { text-align: center; }
+.kpiLeaderName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpiLeaderMuted { color: var(--color-muted); }
+.kpiLeaderSub { color: var(--color-muted); font-size: var(--fs-3xs); font-weight: 400; }
