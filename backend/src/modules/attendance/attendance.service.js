@@ -5,6 +5,18 @@ const { sendMail }                       = require('../../utils/mailer')
 const { getTemplate, renderTemplate }    = require('../../utils/emailTemplates')
 const { DAILY_VIEW, summaryColumns, getStrictUnpaidFrom } = require('./aggregate.sql')
 
+// Hôm nay theo giờ ĐỊA PHƯƠNG (YYYY-MM-DD) — so sánh chuỗi an toàn với work_date.
+function todayYmd() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+// Nhãn hiển thị cho ca ĐÃ VÀO nhưng CHƯA chấm ra:
+//   ngày hôm nay/tương lai → đang trong ca ('checked_in')
+//   ngày đã qua            → quên chấm ra  ('missing_checkout')
+function openShiftStatus(workDate) {
+  return String(workDate).slice(0, 10) >= todayYmd() ? 'checked_in' : 'missing_checkout'
+}
+
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
 function toRecordDto(r) {
@@ -26,7 +38,10 @@ function toRecordDto(r) {
     paidLeaveUnits:   r.paid_leave_units   != null ? parseFloat(r.paid_leave_units)   : 0,
     unpaidLeaveUnits: r.unpaid_leave_units != null ? parseFloat(r.unpaid_leave_units) : 0,
     payableUnits:     r.payable_units      != null ? parseFloat(r.payable_units)      : 0,
-    status:          r.status,
+    // ĐÃ VÀO CA (có giờ vào) nhưng CHƯA chấm ra → KHÔNG phải vắng. Suy ở tầng DTO để sửa
+    // cả bản ghi cũ còn lưu 'absent'/'checked_in' và luôn tươi theo "hôm nay vs đã qua".
+    status:          (r.check_in_time && !r.check_out_time && ['absent', 'unscheduled', 'checked_in', 'missing_checkout'].includes(r.status))
+                       ? openShiftStatus(r.work_date) : r.status,
     // Loại nghỉ CỤ THỂ + buổi nghỉ — status chỉ là nhãn gộp ('on_leave' dùng chung
     // cho phép năm, nghỉ ốm, nghỉ bù lẫn nghỉ không lương) nên không đủ để hiển thị.
     leaveType:       r.leave_type   ?? null,
@@ -323,8 +338,8 @@ async function calculateAttendanceRecord(userId, date) {
   let status
   if (leave && leaveUnits >= 0.999)      status = policy.mapsToStatus
   else if (workUnits > 0)                status = timeStatus ?? 'present'
-  // ĐÃ VÀO CA nhưng CHƯA chấm ra (chưa đủ công) → KHÔNG phải vắng. Nhãn riêng "Đang làm việc".
-  else if (checkInTime && !checkOutTime) status = 'checked_in'
+  // ĐÃ VÀO CA nhưng CHƯA chấm ra → KHÔNG phải vắng. Hôm nay = "Đang làm việc", đã qua = "Thiếu giờ ra".
+  else if (checkInTime && !checkOutTime) status = openShiftStatus(date)
   else if (leaveUnits > 0)               status = policy.mapsToStatus
   else                                   status = 'absent'
 
@@ -571,13 +586,13 @@ async function getAttendanceSummary({ userId, month, year }) {
 
 const STATUS_LABEL = {
   present: 'Có mặt', late: 'Đi muộn', early_leave: 'Về sớm',
-  late_and_early: 'Muộn & Sớm', absent: 'Vắng mặt', checked_in: 'Đang làm việc', on_leave: 'Nghỉ phép',
+  late_and_early: 'Muộn & Sớm', absent: 'Vắng mặt', checked_in: 'Đang làm việc', missing_checkout: 'Thiếu giờ ra', on_leave: 'Nghỉ phép',
   business_trip: 'Công tác', wfh: 'WFH', holiday: 'Nghỉ lễ', unscheduled: '—',
 }
 
 const STATUS_COLOR = {
   present: '#047857', late: '#b45309', early_leave: '#c2410c',
-  late_and_early: '#7e22ce', absent: '#dc2626', checked_in: '#2563eb', on_leave: '#4f46e5',
+  late_and_early: '#7e22ce', absent: '#dc2626', checked_in: '#2563eb', missing_checkout: '#ea580c', on_leave: '#4f46e5',
   business_trip: '#0e7490', wfh: '#8b5cf6', holiday: '#be123c', unscheduled: '#64748b',
 }
 

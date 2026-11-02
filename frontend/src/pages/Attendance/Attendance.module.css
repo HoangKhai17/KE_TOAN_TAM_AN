@@ -639,11 +639,18 @@
   --status-border: var(--color-danger-border);
 }
 
-/* Đã vào ca nhưng chưa chấm ra — đang trong ca, KHÔNG phải vắng */
+/* Đã vào ca nhưng chưa chấm ra — đang trong ca (HÔM NAY), KHÔNG phải vắng */
 .status_checked_in {
   --status-bg: var(--color-info-surface, var(--color-primary-bg));
   --status-color: var(--color-info, var(--color-primary));
   --status-border: var(--color-status-progress-bg, var(--color-primary-bg));
+}
+
+/* Ngày ĐÃ QUA có vào ca nhưng quên chấm ra — cảnh báo cần xử lý */
+.status_missing_checkout {
+  --status-bg: var(--color-warning-bg);
+  --status-color: var(--color-warning-dark);
+  --status-border: var(--color-warning-bg-strong);
 }
 
 .status_on_leave {

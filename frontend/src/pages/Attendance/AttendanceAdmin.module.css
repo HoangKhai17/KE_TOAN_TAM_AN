@@ -838,7 +838,7 @@
   border-right: 0;
 }
 
-.allStaffNameHeader {
+.allStaffTable th.allStaffNameHeader {
   padding: 0 0 0 24px;
   position: sticky;
   top: 0;
@@ -1013,6 +1013,16 @@
 .allStaffStatus_absent {
   --staff-cell-bg: #fee2e2;
   --staff-cell-fg: #dc2626;
+}
+
+.allStaffStatus_checked_in {
+  --staff-cell-bg: #dbeafe;
+  --staff-cell-fg: #2563eb;
+}
+
+.allStaffStatus_missing_checkout {
+  --staff-cell-bg: #ffedd5;
+  --staff-cell-fg: #ea580c;
 }
 
 .allStaffStatus_on_leave {
