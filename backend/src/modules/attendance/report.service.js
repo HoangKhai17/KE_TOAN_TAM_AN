@@ -154,7 +154,7 @@ async function syncAttendanceToPayroll(payrollPeriodId) {
      FROM attendance_records ar
      JOIN users u ON ar.user_id = u.id
      WHERE ar.work_date BETWEEN $1 AND $2
-       AND (ar.status = 'unscheduled' OR (ar.check_out_time IS NULL AND ar.status IN ('present','late','early_leave','late_and_early')))
+       AND (ar.status = 'unscheduled' OR (ar.check_out_time IS NULL AND ar.status IN ('present','late','early_leave','late_and_early','checked_in')))
      ORDER BY ar.work_date, u.name`,
     [from, to]
   )

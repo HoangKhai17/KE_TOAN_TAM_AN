@@ -86,6 +86,7 @@ const STATUS_CFG = {
   early_leave:    { label: 'Về sớm',      bg: 'var(--color-warning-bg)', color: 'var(--color-warning-dark)', border: 'var(--color-warning-bg-strong)' },
   late_and_early: { label: 'Muộn & Sớm', bg: 'var(--color-purple-bg-soft)', color: 'var(--color-purple)', border: 'var(--color-status-review-bg)' },
   absent:         { label: 'Vắng mặt',   bg: 'var(--color-danger-bg)', color: 'var(--color-danger)', border: 'var(--color-danger-bg)' },
+  checked_in:     { label: 'Đang làm việc', bg: 'var(--color-info-surface)', color: 'var(--color-info)', border: 'var(--color-status-progress-bg)' },
   on_leave:       { label: 'Nghỉ phép',  bg: 'var(--color-primary-bg)', color: 'var(--color-primary)', border: 'var(--color-status-progress-bg)' },
   business_trip:  { label: 'Công tác',   bg: 'var(--color-info-surface)', color: 'var(--color-cyan)', border: 'var(--color-info-surface)' },
   wfh:            { label: 'WFH',        bg: 'var(--color-purple-bg-soft)', color: 'var(--color-purple-bright)', border: 'var(--color-purple-bg)' },
@@ -99,6 +100,7 @@ const STATUS_SHORT = {
   early_leave:    'Sớm',
   late_and_early: 'M+S',
   absent:         'Vắng',
+  checked_in:     'Đang làm',
   on_leave:       'NP',
   business_trip:  'CT',
   wfh:            'WFH',
@@ -148,6 +150,7 @@ const STATUS_CLASS = {
   early_leave:    'status_early_leave',
   late_and_early: 'status_late_and_early',
   absent:         'status_absent',
+  checked_in:     'status_checked_in',
   on_leave:       'status_on_leave',
   business_trip:  'status_business_trip',
   wfh:            'status_wfh',
@@ -501,7 +504,7 @@ const DETAIL_DEFAULT  = ['userName', 'workDate', 'dayOfWeek', 'statusLabel', 'ch
 const _DOW_VI     = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
 const _STATUS_VI  = {
   present: 'Có mặt', late: 'Đi muộn', early_leave: 'Về sớm',
-  late_and_early: 'Muộn & Sớm', absent: 'Vắng mặt', on_leave: 'Nghỉ phép',
+  late_and_early: 'Muộn & Sớm', absent: 'Vắng mặt', checked_in: 'Đang làm việc', on_leave: 'Nghỉ phép',
   business_trip: 'Công tác', wfh: 'WFH', holiday: 'Nghỉ lễ', unscheduled: 'Ngoài lịch',
 }
 

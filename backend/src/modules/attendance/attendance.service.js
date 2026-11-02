@@ -323,6 +323,8 @@ async function calculateAttendanceRecord(userId, date) {
   let status
   if (leave && leaveUnits >= 0.999)      status = policy.mapsToStatus
   else if (workUnits > 0)                status = timeStatus ?? 'present'
+  // ĐÃ VÀO CA nhưng CHƯA chấm ra (chưa đủ công) → KHÔNG phải vắng. Nhãn riêng "Đang làm việc".
+  else if (checkInTime && !checkOutTime) status = 'checked_in'
   else if (leaveUnits > 0)               status = policy.mapsToStatus
   else                                   status = 'absent'
 
@@ -569,13 +571,13 @@ async function getAttendanceSummary({ userId, month, year }) {
 
 const STATUS_LABEL = {
   present: 'Có mặt', late: 'Đi muộn', early_leave: 'Về sớm',
-  late_and_early: 'Muộn & Sớm', absent: 'Vắng mặt', on_leave: 'Nghỉ phép',
+  late_and_early: 'Muộn & Sớm', absent: 'Vắng mặt', checked_in: 'Đang làm việc', on_leave: 'Nghỉ phép',
   business_trip: 'Công tác', wfh: 'WFH', holiday: 'Nghỉ lễ', unscheduled: '—',
 }
 
 const STATUS_COLOR = {
   present: '#047857', late: '#b45309', early_leave: '#c2410c',
-  late_and_early: '#7e22ce', absent: '#dc2626', on_leave: '#4f46e5',
+  late_and_early: '#7e22ce', absent: '#dc2626', checked_in: '#2563eb', on_leave: '#4f46e5',
   business_trip: '#0e7490', wfh: '#8b5cf6', holiday: '#be123c', unscheduled: '#64748b',
 }
 
