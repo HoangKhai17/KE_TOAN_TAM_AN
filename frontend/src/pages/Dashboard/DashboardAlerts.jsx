@@ -53,7 +53,7 @@ function makeRowResolver(row, byKey) {
 }
 
 // Suy ra danh sách cảnh báo thuế từ RAW rows + định nghĩa cột, bằng chính công thức "Trạng thái".
-function buildTaxItems(sources, withinDays) {
+export function buildTaxItems(sources, withinDays) {
   const items = []
   for (const src of (sources || [])) {
     const cols = src.def?.columns || []

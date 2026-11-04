@@ -9,16 +9,18 @@ import {
   Building2, ClipboardList, AlertTriangle, CheckCircle2,
   ArrowRight, Loader2,
   User, Calendar as CalendarIcon,
-  FileText, Users, SendHorizonal, Award,
+  FileText, Users, SendHorizonal, Award, CalendarCheck,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { vi } from 'date-fns/locale'
 import AppLayout from '../../components/layout/AppLayout'
 import { useAuthStore } from '../../stores/authStore'
-import { getDashboardSummary, getDashboardCharts } from '../../api/dashboard'
+import { getDashboardSummary, getDashboardCharts, getAccountingAlerts, getTaxAlertSources } from '../../api/dashboard'
+import { listLeaveRequests, listOvertimeRequests } from '../../api/attendance'
 import { useDataSync } from '../../hooks/useDataSync'
 import DashboardKpi from './DashboardKpi'
-import DashboardAlerts from './DashboardAlerts'
+import DashboardAlerts, { buildTaxItems } from './DashboardAlerts'
+import DashboardAttendance from './DashboardAttendance'
 import s from './Dashboard.module.css'
 
 const DASHBOARD_COLORS = {
@@ -109,6 +111,7 @@ const RANGE_SUB = { today: 'Hôm nay', '7d': '7 ngày gần nhất', month: 'Th�
 
 const TASK_TYPE_TABS = [
   { key: 'kpi',         label: 'KPI & Cảnh báo', icon: Award       },
+  { key: 'attendance',  label: 'Chấm công',    icon: CalendarCheck, adminOnly: true },
   { key: 'traditional', label: 'Truyền thống', icon: ClipboardList },
   { key: 'cdr',         label: 'Yêu cầu KH',  icon: FileText      },
   { key: 'ia',          label: 'Nội bộ',       icon: Users         },
@@ -352,7 +355,19 @@ export default function Dashboard() {
   const greetWord = greetHour < 12 ? 'Chào buổi sáng' : greetHour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối'
   const isStaff   = user?.role === 'staff'
 
+  const isAdmin  = user?.role === 'admin'
   const isKpiTab = activeTaskType === 'kpi'
+  const isAttendanceTab = activeTaskType === 'attendance'
+  const visibleTabs = TASK_TYPE_TABS.filter((t) => !t.adminOnly || isAdmin)
+
+  // ── Badge cảnh báo trên tab (dùng CHUNG queryKey với các panel con → không tốn request thừa) ──
+  const acctAlertQ = useQuery({ queryKey: ['dashboard-accounting-alerts', 30], queryFn: () => getAccountingAlerts(30), staleTime: 60_000 })
+  const taxAlertQ  = useQuery({ queryKey: ['dashboard-tax-alert-sources'], queryFn: () => getTaxAlertSources(), staleTime: 60_000 })
+  const leavePendQ = useQuery({ queryKey: ['dashboard-attn-leave-pending'], queryFn: () => listLeaveRequests({ status: 'pending', limit: 200 }), staleTime: 60_000, enabled: isAdmin })
+  const otPendQ    = useQuery({ queryKey: ['dashboard-attn-ot-pending'], queryFn: () => listOvertimeRequests({ status: 'pending', limit: 200 }), staleTime: 60_000, enabled: isAdmin })
+  const alertCount = (acctAlertQ.data?.items?.length ?? 0) + buildTaxItems(taxAlertQ.data?.sources, 30).length
+  const attnPending = (leavePendQ.data?.requests?.length ?? 0) + (otPendQ.data?.requests?.length ?? 0)
+  const tabBadges = { kpi: alertCount, attendance: isAdmin ? attnPending : 0 }
   const kpiCards = buildKpiCards({ activeTaskType, summary, isStaff, loading, range, navigate })
   const meta     = CHART_META[activeTaskType] ?? CHART_META.traditional
   const trendColor = meta.trend.color
@@ -394,7 +409,7 @@ export default function Dashboard() {
 
       {/* ── Task type tab bar — điều khiển toàn bộ dashboard ── */}
       <div className={s.taskTypeBar}>
-        {TASK_TYPE_TABS.map(({ key, label, icon: Icon }) => (
+        {visibleTabs.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             className={`${s.taskTypeTab} ${activeTaskType === key ? s.taskTypeTabActive : ''}`}
@@ -402,11 +417,14 @@ export default function Dashboard() {
           >
             <Icon size={14} />
             {label}
+            {tabBadges[key] > 0 && <span className={s.tabBadge}>{tabBadges[key]}</span>}
           </button>
         ))}
       </div>
 
-      {isKpiTab ? (
+      {isAttendanceTab ? (
+        <DashboardAttendance />
+      ) : isKpiTab ? (
         <>
           <DashboardKpi user={user} />
           <DashboardAlerts />

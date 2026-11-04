@@ -725,6 +725,191 @@
 /* ── KPI panel (dashboard) ───────────────────────────────────────────────── */
 .kpiPanel { margin-bottom: 12px; }
 
+/* ── Tổng quan chấm công ─────────────────────────────────────────────────── */
+.attnCards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+@media (max-width: 1100px) { .attnCards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 680px)  { .attnCards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px)  { .attnCards { grid-template-columns: 1fr; } }
+
+.attnPending {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-bg-strong);
+  font-size: var(--fs-2xs);
+  color: var(--color-warning-dark);
+}
+.attnPendingIcon { color: var(--color-accent-dark, #ea580c); flex-shrink: 0; }
+.attnPendingText { flex: 1; }
+.attnPendingText strong { color: var(--color-text-strong); }
+.attnPendingBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--gradient-primary, var(--color-primary));
+  color: #fff;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+.attnPendingOk {
+  background: var(--color-success-bg-soft, var(--color-success-bg));
+  border-color: var(--color-success-bg);
+  color: var(--color-success-dark);
+}
+
+/* Sub-tab Nghỉ phép / Tăng ca (đơn chờ duyệt) */
+.attnSubBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 16px 0 10px;
+  border-bottom: 1.5px solid var(--color-border-muted);
+}
+.attnSubTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+.attnSubTabActive { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.attnSubCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-extrabold);
+}
+.attnSubApprove {
+  margin-left: auto;
+  margin-bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--gradient-primary, var(--color-primary));
+  color: #fff;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+.attnEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 26px 12px;
+  color: var(--color-success-dark);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+}
+.attnRowClick { cursor: pointer; }
+.attnCompany { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; vertical-align: middle; }
+.attnCompany svg { flex-shrink: 0; color: var(--color-muted); }
+.attnCompanyName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 2 section Nghỉ phép | Tăng ca */
+.attnSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+@media (max-width: 920px) { .attnSplit { grid-template-columns: 1fr; } }
+.attnSplitPane {
+  min-width: 0;
+  border: 1px solid var(--color-border-muted);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--color-surface, #fff);
+  box-shadow: var(--shadow-sm);
+}
+/* Bảng bên trong card → bỏ viền kép, chỉ giữ scroll */
+.attnSplitPane .kpiLeaderWrap { border: none; border-radius: 0; max-height: 280px; }
+.attnSecHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.attnSecTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-extrabold);
+  color: var(--color-text-strong);
+}
+.attnSecLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 7px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+}
+
+/* Badge cảnh báo trên tab Dashboard */
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  margin-left: 2px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-extrabold);
+  line-height: 1;
+}
+.attnPendBadge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--color-accent-bg-soft, var(--color-warning-bg));
+  color: var(--color-warning-dark);
+  font-size: var(--fs-3xs);
+  font-weight: var(--fw-bold);
+}
+
 .kpiMiniGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
