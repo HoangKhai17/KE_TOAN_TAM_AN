@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, CheckCircle2, ShieldAlert, FileText, BadgeCheck, Receipt, ArrowRight } from 'lucide-react'
+import { Loader2, CheckCircle2, ShieldAlert, FileText, BadgeCheck, Receipt, ArrowRight, Search, Info, X, ChevronDown } from 'lucide-react'
 import { getAccountingAlerts, getTaxAlertSources } from '../../api/dashboard'
 import { evaluateFormula } from '../../utils/formula'
 import { useEnumsStore } from '../../hooks/useEnums'
@@ -127,10 +127,27 @@ function AlertRow({ it, getLabel, onOpen }) {
   )
 }
 
+const KINDS = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'contract', label: 'Hợp đồng' },
+  { key: 'license', label: 'Giấy phép' },
+  { key: 'tax', label: 'Thuế' },
+]
+const STATUSES = [
+  { key: 'all', label: 'Mọi mức' },
+  { key: 'overdue', label: 'Quá hạn' },
+  { key: 'soon', label: 'Sắp đến' },
+]
+const VISIBLE = 6
+
 export default function DashboardAlerts() {
   const navigate = useNavigate()
   const getLabel = useEnumsStore((st) => st.getLabel)
   const [withinDays, setWithinDays] = useState(30)
+  const [kindF, setKindF]     = useState('all')
+  const [statusF, setStatusF] = useState('all')
+  const [search, setSearch]   = useState('')
+  const [expanded, setExpanded] = useState(false)
 
   const acctQuery = useQuery({
     queryKey: ['dashboard-accounting-alerts', withinDays],
@@ -142,27 +159,40 @@ export default function DashboardAlerts() {
     queryFn: () => getTaxAlertSources(),
     staleTime: 60_000,
   })
-
   const loading = acctQuery.isLoading || taxQuery.isLoading
 
-  const { items, overdue, dueSoon } = useMemo(() => {
+  const allItems = useMemo(() => {
     const acct = acctQuery.data?.items ?? []
     const tax = buildTaxItems(taxQuery.data?.sources, withinDays)
-    const all = [...acct, ...tax].sort((a, b) => (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999))
-    return {
-      items: all,
-      overdue: all.filter((x) => (x.daysLeft ?? 0) < 0).length,
-      dueSoon: all.filter((x) => (x.daysLeft ?? 0) >= 0).length,
-    }
+    return [...acct, ...tax].sort((a, b) => (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999))
   }, [acctQuery.data, taxQuery.data, withinDays])
+
+  const overdue = allItems.filter((x) => (x.daysLeft ?? 0) < 0).length
+  const dueSoon = allItems.length - overdue
+
+  // Lọc theo mức + tên công ty (chưa lọc theo loại → để đếm chip theo loại)
+  const q = search.trim().toLowerCase()
+  const baseFiltered = useMemo(() => allItems.filter((it) => {
+    if (statusF === 'overdue' && !((it.daysLeft ?? 0) < 0)) return false
+    if (statusF === 'soon' && !((it.daysLeft ?? 0) >= 0)) return false
+    if (q && !`${it.companyName || ''} ${it.companyShortName || ''}`.toLowerCase().includes(q)) return false
+    return true
+  }), [allItems, statusF, q])
+  const kindCount = (k) => (k === 'all' ? baseFiltered.length : baseFiltered.filter((it) => it.kind === k).length)
+  const filtered = kindF === 'all' ? baseFiltered : baseFiltered.filter((it) => it.kind === kindF)
+  const displayed = expanded ? filtered : filtered.slice(0, VISIBLE)
 
   return (
     <div className={`${s.chartPanel} ${s.kpiPanel} ${s.alertPanel}`}>
+      {/* Tiêu đề + số liệu trên CÙNG 1 hàng */}
       <div className={s.chartHeader}>
-        <div className={s.alertHeadLeft}>
-          <span className={s.chartTitle}><ShieldAlert size={15} className={s.alertTitleIcon} /> Cảnh báo kế toán</span>
-          <span className={s.chartSub}>Hợp đồng · giấy phép · thuế sắp hết hạn{items.length > 0 ? ` · ${overdue} quá hạn, ${dueSoon} sắp đến` : ''}</span>
-        </div>
+        <span className={`${s.chartTitle} ${s.alertTitle}`}>
+          <ShieldAlert size={15} className={s.alertTitleIcon} />
+          <span>Cảnh báo kế toán</span>
+          {allItems.length > 0 && (
+            <span className={s.alertHeadCount}>· <strong style={{ color: 'var(--color-danger)' }}>{overdue}</strong> quá hạn · {dueSoon} sắp đến</span>
+          )}
+        </span>
         <div className={s.alertWithin}>
           {WITHIN_OPTS.map((d) => (
             <button key={d} className={`${s.alertWithinBtn} ${withinDays === d ? s.alertWithinActive : ''}`} onClick={() => setWithinDays(d)}>
@@ -172,19 +202,60 @@ export default function DashboardAlerts() {
         </div>
       </div>
 
+      {/* Điều kiện cảnh báo (trả lời "điều kiện để đây là gì") */}
+      <div className={s.alertInfo}>
+        <Info size={13} />
+        <span><strong>Hợp đồng / giấy phép</strong> còn hạn ≤ {withinDays} ngày hoặc đã quá hạn (theo ngày kết thúc) · <strong>Thuế</strong>: tờ khai “Chưa nộp – Trễ hạn” hoặc sắp đến hạn nộp trong {withinDays} ngày.</span>
+      </div>
+
       {loading ? (
         <div className={s.chartLoading}><Loader2 size={20} className={s.spin} /></div>
-      ) : items.length === 0 ? (
+      ) : allItems.length === 0 ? (
         <div className={s.chartEmpty}>
           <CheckCircle2 size={26} className={s.emptySuccessIcon} />
           Không có hợp đồng / giấy phép / thuế nào cần cảnh báo trong {withinDays} ngày 🎉
         </div>
       ) : (
-        <div className={s.alertList}>
-          {items.map((it) => (
-            <AlertRow key={`${it.kind}-${it.id}`} it={it} getLabel={getLabel} onOpen={() => navigate(`/companies/${it.companyId}`)} />
-          ))}
-        </div>
+        <>
+          {/* Bộ lọc: loại · mức · tìm công ty */}
+          <div className={s.alertFilters}>
+            <div className={s.alertChips}>
+              {KINDS.map((k) => (
+                <button key={k.key} className={`${s.alertChip} ${kindF === k.key ? s.alertChipActive : ''}`} onClick={() => setKindF(k.key)}>
+                  {k.label}<span className={s.alertChipN}>{kindCount(k.key)}</span>
+                </button>
+              ))}
+            </div>
+            <div className={s.alertChips}>
+              {STATUSES.map((st2) => (
+                <button key={st2.key} className={`${s.alertChip} ${statusF === st2.key ? s.alertChipActive : ''}`} onClick={() => setStatusF(st2.key)}>{st2.label}</button>
+              ))}
+            </div>
+            <div className={s.alertSearch}>
+              <Search size={13} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm công ty..." />
+              {search && <button onClick={() => setSearch('')}><X size={12} /></button>}
+            </div>
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className={s.chartEmpty} style={{ padding: '22px 12px' }}>Không có mục nào khớp bộ lọc.</div>
+          ) : (
+            <>
+              <div className={s.alertList}>
+                {displayed.map((it) => (
+                  <AlertRow key={`${it.kind}-${it.id}`} it={it} getLabel={getLabel} onOpen={() => navigate(`/companies/${it.companyId}`)} />
+                ))}
+              </div>
+              {filtered.length > VISIBLE && (
+                <button className={s.alertMore} onClick={() => setExpanded((v) => !v)}>
+                  {expanded ? 'Thu gọn' : `Xem thêm ${filtered.length - VISIBLE} mục`}
+                  <ChevronDown size={13} style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />
+                </button>
+              )}
+            </>
+          )}
+        </>
       )}
     </div>
   )
