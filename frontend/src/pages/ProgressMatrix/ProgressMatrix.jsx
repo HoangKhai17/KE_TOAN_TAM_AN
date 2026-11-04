@@ -10,7 +10,7 @@ import { useCompanyOptions, useStaffOptions } from '../../hooks/useReferenceData
 import { useProgressTaskTypes, useProgressYears } from '../../hooks/useProgressMatrixData'
 import { useEnumsStore } from '../../hooks/useEnums'
 import {
-  getMatrix, getByCompany, getCompanyMatrices, getByStaff, getStaffCompanies, exportReport,
+  getMatrix, getByCompany, getCompanyMatrices, getByStaff, getStaffCompanies, exportReport, getPeriods,
 } from '../../api/progressMatrix'
 import s from './ProgressMatrix.module.css'
 
@@ -592,6 +592,8 @@ export default function ProgressMatrix() {
   const availableYears = yearsData.length ? yearsData : [CUR_YEAR]
 
   const [taskTypeId, setTaskTypeId] = useState('')
+  const [periodLabel, setPeriodLabel] = useState('')       // lọc theo KỲ (period_label); '' = theo tháng
+  const [periodOptions, setPeriodOptions] = useState([])   // danh sách kỳ của quy trình đang chọn
   const [companyId, setCompanyId] = useState('')
   const [staffId, setStaffId] = useState('')
   const [staffCompanyId, setStaffCompanyId] = useState('')   // lọc theo công ty ở tab Theo nhân viên ('' = tất cả)
@@ -627,7 +629,7 @@ export default function ProgressMatrix() {
     let cancelled = false
     setLoading(true)
     const fetcher = tab === 'matrix'
-      ? getMatrix({ taskTypeId, month, year, collapse: !showChildren, importantOnly, includeChildren })
+      ? getMatrix({ taskTypeId, month, year, periodLabel: periodLabel || undefined, collapse: !showChildren, importantOnly, includeChildren })
       : tab === 'company'
         ? getCompanyMatrices({ companyId, month, year, includeChildren })
         : getByStaff({ staffId: staffId || undefined, companyId: staffCompanyId || undefined, month, year, includeChildren })
@@ -636,7 +638,18 @@ export default function ProgressMatrix() {
       .catch(() => { if (!cancelled) { setData(null); addToast('Không tải được dữ liệu', 'error') } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [tab, taskTypeId, companyId, staffId, staffCompanyId, month, year, showChildren, importantOnly, includeChildren, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, taskTypeId, companyId, staffId, staffCompanyId, month, year, periodLabel, showChildren, importantOnly, includeChildren, canLoad]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Nạp danh sách KỲ (period_label) khi đổi quy trình ở tab Ma trận. Đổi quy trình → reset kỳ.
+  useEffect(() => {
+    setPeriodLabel('')
+    if (tab !== 'matrix' || !taskTypeId) { setPeriodOptions([]); return undefined }
+    let alive = true
+    getPeriods(taskTypeId)
+      .then((ps) => { if (alive) setPeriodOptions(ps || []) })
+      .catch(() => { if (alive) setPeriodOptions([]) })
+    return () => { alive = false }
+  }, [tab, taskTypeId])
 
   // Danh sách công ty của NV đang chọn (cho bộ lọc Công ty ở tab Theo nhân viên)
   useEffect(() => {
@@ -671,6 +684,13 @@ export default function ProgressMatrix() {
     : tab === 'company'
       ? `TIẾN ĐỘ CÔNG VIỆC — ${data.subject.name} — ${data.period.label}`
       : `TIẾN ĐỘ CÔNG VIỆC — NV ${data.subject.name} — ${data.period.label}`
+
+  // Gợi ý kỳ: token THÁNG ("mm/yy" rút từ mỗi period_label) + các kỳ chi tiết.
+  const periodMonthTokens = useMemo(() => {
+    const set = new Set()
+    for (const p of periodOptions) { const mm = /(\d{1,2}\/\d{2,4})\s*$/.exec(String(p)); if (mm) set.add(mm[1]) }
+    return [...set]
+  }, [periodOptions])
 
   const filters = { taskTypeId, companyId, staffId: staffId || undefined, month, year, collapse: !showChildren, importantOnly, includeChildren }
 
@@ -740,15 +760,33 @@ export default function ProgressMatrix() {
               </select>
             </div>
           )}
+          {tab === 'matrix' && periodOptions.length > 0 && (
+            <div className={s.filterGroup}>
+              <label className={s.filterLabel}>Kỳ</label>
+              <input
+                className={s.select}
+                list="pm-period-list"
+                value={periodLabel}
+                onChange={(e) => setPeriodLabel(e.target.value)}
+                placeholder="VD: 10/26 (cả tháng) hoặc T10/26"
+                title="Gõ/chọn kỳ. Khớp một phần: '10/26' ra hết tháng 10/2026; để trống = lọc theo Tháng/Năm."
+                style={{ minWidth: 170 }}
+              />
+              <datalist id="pm-period-list">
+                {periodMonthTokens.map((t) => <option key={`m-${t}`} value={t}>{t} · cả tháng</option>)}
+                {periodOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </datalist>
+            </div>
+          )}
           <div className={s.filterGroup}>
             <label className={s.filterLabel}>Tháng</label>
-            <select className={s.select} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+            <select className={s.select} value={month} disabled={tab === 'matrix' && !!periodLabel} onChange={(e) => setMonth(Number(e.target.value))}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>Tháng {m}</option>)}
             </select>
           </div>
           <div className={s.filterGroup}>
             <label className={s.filterLabel}>Năm</label>
-            <select className={s.select} value={year} onChange={(e) => setYear(Number(e.target.value))}>
+            <select className={s.select} value={year} disabled={tab === 'matrix' && !!periodLabel} onChange={(e) => setYear(Number(e.target.value))}>
               {availableYears.map((y) => <option key={y} value={y}>Năm {y}</option>)}
             </select>
           </div>

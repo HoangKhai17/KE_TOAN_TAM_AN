@@ -18,6 +18,12 @@ export async function getSources() {
   return data.data.sources
 }
 
+// Danh sách kỳ (period_label) của một quy trình — cho bộ lọc "Kỳ"
+export async function getPeriods(taskTypeId, source) {
+  const { data } = await api.get('/progress-matrix/periods', { params: { taskTypeId, source: source || undefined } })
+  return data.data.periods
+}
+
 // Ma trận tiến độ theo quy trình (taskTypeId, month, year)
 export async function getMatrix(params) {
   const { data } = await api.get('/progress-matrix', { params })

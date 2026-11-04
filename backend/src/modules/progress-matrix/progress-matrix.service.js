@@ -219,10 +219,14 @@ async function buildMatrixBody(tasks, templById, { collapse = false, importantOn
 }
 
 // ── Ma trận theo 1 LOẠI công việc (task_type) — Tab "Theo quy trình mẫu" ──
-async function getMatrix({ taskTypeId, companyId, month, year, source, forceAssignedTo, collapse = false, importantOnly = true, includeChildren = true, useManualCols = false }) {
+async function getMatrix({ taskTypeId, companyId, month, year, source, periodLabel, forceAssignedTo, collapse = false, importantOnly = true, includeChildren = true, useManualCols = false }) {
   const m = parseInt(month, 10)
   const y = parseInt(year, 10)
-  if (!taskTypeId || !m || !y) throw Object.assign(new Error('Thiếu tham số taskTypeId / month / year'), { status: 400 })
+  // Lọc theo KỲ: khớp MỘT PHẦN period_label (gõ "10/26" → ra mọi ngày 10/2026, cả "T10/26").
+  const rawPeriod = String(periodLabel ?? '').trim().replace(/[%_]/g, '')
+  const byPeriod = rawPeriod !== ''
+  if (!taskTypeId) throw Object.assign(new Error('Thiếu tham số taskTypeId'), { status: 400 })
+  if (!byPeriod && (!m || !y)) throw Object.assign(new Error('Thiếu tham số month / year'), { status: 400 })
   const periodStart = `${y}-${String(m).padStart(2, '0')}-01`
 
   const { rows: ttRows } = await query('SELECT id, name, group_name FROM task_types WHERE id = $1', [taskTypeId])
@@ -234,7 +238,17 @@ async function getMatrix({ taskTypeId, companyId, month, year, source, forceAssi
      WHERE task_type_id = $1 ORDER BY step_order, id`, [taskTypeId])
   const templById = new Map(templ.map((t) => [t.id, t]))
 
-  const params = [taskTypeId, periodStart]
+  const params = [taskTypeId]
+  // Điều kiện kỳ: theo period_label (chính xác theo nghiệp vụ) hoặc theo tháng calendar.
+  let periodCond
+  if (byPeriod) {
+    params.push(`%${rawPeriod}%`)
+    periodCond = `t.period_label ILIKE $${params.length}`
+  } else {
+    params.push(periodStart)
+    periodCond = `COALESCE(t.start_date, t.due_date) >= $${params.length}::date
+      AND COALESCE(t.start_date, t.due_date) <  ($${params.length}::date + INTERVAL '1 month')`
+  }
   let staffCond = ''
   if (forceAssignedTo) { params.push(forceAssignedTo); staffCond += ` AND t.assigned_to = $${params.length}` }
   if (companyId) { params.push(companyId); staffCond += ` AND t.company_id = $${params.length}` }
@@ -245,17 +259,36 @@ async function getMatrix({ taskTypeId, companyId, month, year, source, forceAssi
            c.name AS company_name, c.tax_code, u.name AS assignee_name
     FROM tasks t JOIN companies c ON c.id = t.company_id LEFT JOIN users u ON u.id = t.assigned_to
     WHERE t.task_type_id = $1 AND t.parent_task_id IS NULL AND t.source = 'auto'
-      AND COALESCE(t.start_date, t.due_date) >= $2::date
-      AND COALESCE(t.start_date, t.due_date) <  ($2::date + INTERVAL '1 month')
+      AND ${periodCond}
       ${staffCond}
     ORDER BY c.name, COALESCE(t.due_date, t.start_date), t.created_at`, params)
 
   const body = await buildMatrixBody(tasks, templById, { collapse, importantOnly, includeChildren, useManualCols })
   return {
     taskType: { id: taskType.id, name: taskType.name, groupName: taskType.group_name },
-    period:   { month: m, year: y, label: `Tháng ${m}/${y}` },
+    period:   byPeriod
+      ? { month: m || null, year: y || null, periodLabel: rawPeriod, label: `Kỳ ${rawPeriod}` }
+      : { month: m, year: y, periodLabel: null, label: `Tháng ${m}/${y}` },
     ...body,
   }
+}
+
+// Danh sách KỲ (period_label) thực tế của một quy trình (task_type), mới → cũ.
+async function listPeriods({ taskTypeId, source, forceAssignedTo }) {
+  if (!taskTypeId) throw Object.assign(new Error('Thiếu taskTypeId'), { status: 400 })
+  const params = [taskTypeId]
+  let cond = ''
+  if (forceAssignedTo) { params.push(forceAssignedTo); cond += ` AND t.assigned_to = $${params.length}` }
+  const srcArr = parseSources(source)
+  if (srcArr) { params.push(srcArr); cond += ` AND t.source = ANY($${params.length})` }
+  const { rows } = await query(`
+    SELECT t.period_label AS label, MAX(COALESCE(t.start_date, t.due_date)) AS anchor
+    FROM tasks t
+    WHERE t.task_type_id = $1 AND t.parent_task_id IS NULL AND t.source = 'auto'
+      AND t.period_label IS NOT NULL AND btrim(t.period_label) <> '' ${cond}
+    GROUP BY t.period_label
+    ORDER BY anchor DESC NULLS LAST, t.period_label DESC`, params)
+  return rows.map((r) => r.label)
 }
 
 // ── Tab "Theo công ty" / "Theo nhân viên" — bảng tiến độ tổng hợp ───────────────
@@ -878,4 +911,4 @@ async function exportReport({ view = 'matrix', taskTypeId, companyId, staffId, m
   return { buffer: await exportMatrix(mx, includeSet), nameBase: slug(mx.taskType.name), period: mx.period }
 }
 
-module.exports = { listTaskTypes, listYears, listSources, getMatrix, byCompany, byStaff, staffCompanies, companyMatrices, exportReport }
+module.exports = { listTaskTypes, listYears, listSources, listPeriods, getMatrix, byCompany, byStaff, staffCompanies, companyMatrices, exportReport }

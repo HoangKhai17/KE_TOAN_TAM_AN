@@ -25,6 +25,15 @@ async function getSources(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Danh sách kỳ (period_label) của một quy trình — cho bộ lọc "Kỳ".
+async function getPeriods(req, res, next) {
+  try {
+    const { taskTypeId, source } = req.query
+    const periods = await svc.listPeriods({ taskTypeId, source, forceAssignedTo: staffScope(req) })
+    res.json({ success: true, data: { periods } })
+  } catch (err) { next(err) }
+}
+
 // includeChildren mặc định TRUE; FE gửi includeChildren=false để tắt (chế độ phẳng như cũ).
 function wantChildren(req) {
   const v = req.query.includeChildren
@@ -33,10 +42,10 @@ function wantChildren(req) {
 
 async function getMatrix(req, res, next) {
   try {
-    const { taskTypeId, month, year, source, collapse, importantOnly } = req.query
+    const { taskTypeId, month, year, source, periodLabel, collapse, importantOnly } = req.query
     // Mặc định CHỈ hiện bước ★; FE gửi importantOnly=false để hiện tất cả.
     const impOnly = !(importantOnly === 'false' || importantOnly === '0')
-    const data = await svc.getMatrix({ taskTypeId, month, year, source, collapse: collapse === 'true' || collapse === '1', importantOnly: impOnly, includeChildren: wantChildren(req), forceAssignedTo: staffScope(req) })
+    const data = await svc.getMatrix({ taskTypeId, month, year, source, periodLabel, collapse: collapse === 'true' || collapse === '1', importantOnly: impOnly, includeChildren: wantChildren(req), forceAssignedTo: staffScope(req) })
     res.json({ success: true, data })
   } catch (err) { next(err) }
 }
@@ -90,4 +99,4 @@ async function exportReport(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { getTaskTypes, getYears, getSources, getMatrix, getByCompany, getCompanyMatrices, getByStaff, getStaffCompanies, exportReport }
+module.exports = { getTaskTypes, getYears, getSources, getPeriods, getMatrix, getByCompany, getCompanyMatrices, getByStaff, getStaffCompanies, exportReport }
