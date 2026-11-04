@@ -19,6 +19,18 @@ async function listConfigs() {
   return rows.map(toDto)
 }
 
+// Cờ cấu hình AN TOÀN cho mọi người dùng (không chỉ admin) đọc để bật/tắt UI.
+// Chỉ whitelist các key không nhạy cảm. Key thiếu → frontend tự coi là mặc định.
+const PUBLIC_CONFIG_KEYS = ['checklist_fetch_source_type_ids']
+async function getPublicConfigs() {
+  const { rows } = await query(
+    'SELECT key, value FROM system_configs WHERE key = ANY($1)', [PUBLIC_CONFIG_KEYS]
+  )
+  const map = {}
+  for (const r of rows) map[r.key] = r.value
+  return map
+}
+
 async function updateConfig(key, value, userId) {
   // UPSERT — creates the row if it doesn't exist (handles first-run before seed)
   const { rows } = await query(
@@ -43,4 +55,4 @@ async function updateConfig(key, value, userId) {
   return config
 }
 
-module.exports = { listConfigs, updateConfig }
+module.exports = { listConfigs, updateConfig, getPublicConfigs }

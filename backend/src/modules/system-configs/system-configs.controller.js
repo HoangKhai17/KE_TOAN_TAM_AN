@@ -11,6 +11,13 @@ async function listConfigs(req, res, next) {
   } catch (err) { next(err) }
 }
 
+// Cờ public (mọi user đọc được) để bật/tắt UI, vd công tắc "Cách lấy".
+async function getPublicConfigs(req, res, next) {
+  try {
+    res.json({ success: true, data: { configs: await svc.getPublicConfigs() } })
+  } catch (err) { next(err) }
+}
+
 async function updateConfig(req, res, next) {
   try {
     const config = await svc.updateConfig(req.params.key, req.body.value, req.user.id)
@@ -28,4 +35,4 @@ async function updateConfig(req, res, next) {
   } catch (err) { next(err) }
 }
 
-module.exports = { listConfigs, updateConfig }
+module.exports = { listConfigs, updateConfig, getPublicConfigs }

@@ -17,6 +17,7 @@ import {
   checklistLeafCounts, checklistIsParent, checklistParentDone,
 } from './taskUtils'
 import { useEnumsStore } from '../../hooks/useEnums'
+import { useFetchSourceEnabledFor } from '../../hooks/useFetchSourceEnabled'
 import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
 import TaskLinksSection from './TaskLinksSection'
@@ -359,8 +360,11 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
   const currentUserId = useAuthStore((st) => st.user?.id)
 
   const [task,        setTask]        = useState(null)
+  const typeFetchOn = useFetchSourceEnabledFor(task?.taskTypeId)   // "Cách lấy" theo loại CV
   const [loading,     setLoading]     = useState(true)
   const [checklist,   setChecklist]   = useState([])
+  // Hiện cột "Cách lấy" khi loại CV bật, HOẶC checklist đã có bước gán giá trị (task tạo tay).
+  const fetchSourceOn = typeFetchOn || checklist.some((i) => i.fetchSource)
   const [pushItem,    setPushItem]    = useState(null)   // bước đang "ghi sang bảng"
   const [togglingIds, setTogglingIds] = useState(new Set())
   const [saving,      setSaving]      = useState(false)
@@ -1072,15 +1076,17 @@ export default function TaskQuickView({ taskId, onClose, onUpdated, onOpenTask }
                               </span>
                               {item.isImportant && <span className={s.clItemStar} title="Bước quan trọng">★</span>}
                               {item.points > 0 && <span className={s.clItemPts} title="Điểm của bước">{item.points}đ</span>}
-                              <select
-                                value={item.fetchSource ?? ''}
-                                onChange={(e) => changeItemFetch(item, e.target.value)}
-                                title="Cách lấy"
-                                style={{ fontSize: 'var(--fs-2xs)', padding: '1px 3px', border: '1px solid var(--color-border)', borderRadius: 4, maxWidth: 120, color: 'var(--color-text-soft)' }}
-                              >
-                                <option value="">— Cách lấy —</option>
-                                {(getOptions('checklist_fetch_source') || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                              </select>
+                              {fetchSourceOn && (
+                                <select
+                                  value={item.fetchSource ?? ''}
+                                  onChange={(e) => changeItemFetch(item, e.target.value)}
+                                  title="Cách lấy"
+                                  style={{ fontSize: 'var(--fs-2xs)', padding: '1px 3px', border: '1px solid var(--color-border)', borderRadius: 4, maxWidth: 120, color: 'var(--color-text-soft)' }}
+                                >
+                                  <option value="">— Cách lấy —</option>
+                                  {(getOptions('checklist_fetch_source') || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                                </select>
+                              )}
                               <button
                                 className={`${s.qvChecklistDel} ${s.clEdit}`}
                                 onClick={() => { setEditItemId(item.id); setEditItemText(item.stepText) }}

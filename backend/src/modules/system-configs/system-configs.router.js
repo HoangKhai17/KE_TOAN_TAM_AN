@@ -6,7 +6,11 @@ const { validate } = require('../../middleware/validate')
 const ctrl = require('./system-configs.controller')
 
 const router = Router()
+const auth  = [authenticate]
 const admin = [authenticate, requireRole('admin')]
+
+// Cờ public — mọi user đăng nhập đọc được (bật/tắt UI "Cách lấy"…). Đặt TRƯỚC '/:key'.
+router.get('/public', ...auth, ctrl.getPublicConfigs)
 
 const updateConfigSchema = z.object({
   value: z.union([z.string(), z.number()]).transform(String),

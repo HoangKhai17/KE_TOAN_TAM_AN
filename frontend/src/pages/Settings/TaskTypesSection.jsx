@@ -16,6 +16,9 @@ import Modal from '../../components/ui/Modal'
 import { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
+import { useQueryClient } from '@tanstack/react-query'
+import { useFetchSourceTypeIds, FETCH_SOURCE_TYPES_KEY, PUBLIC_CONFIG_QK } from '../../hooks/useFetchSourceEnabled'
+import { updateConfig } from '../../api/systemConfigs'
 import {
   listTaskTypes, getTaskType, createTaskType, updateTaskType, toggleTaskType, deleteTaskType,
   addChecklistStep, updateChecklistStep, deleteChecklistStep, reorderChecklist,
@@ -142,6 +145,10 @@ export default function TaskTypesSection() {
           <Plus size={13} /> Thêm loại
         </button>
       </div>
+
+      <p style={{ fontSize: 'var(--fs-2xs)', color: 'var(--color-text-soft)', margin: '0 0 12px' }}>
+        💡 Mở rộng một loại → ở mục <strong>Checklist mẫu</strong> có công tắc <strong>“Cách lấy”</strong>: bật để checklist của loại đó hiện ô chọn nguồn lấy chứng từ (áp dụng cả khi tạo/xem công việc & lịch định kỳ của loại). Mặc định tắt.
+      </p>
 
       {loading ? (
         <div className={s.skeletonStack}>
@@ -273,6 +280,7 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
                 checklist={detail.checklist}
                 onRefresh={onDetailRefresh}
                 withPoints
+                showFetchToggle
               />
               <CustomFieldsPanel
                 taskTypeId={tt.id}
@@ -304,7 +312,7 @@ function TaskTypeRow({ tt, isExpanded, isDetailLoading, detail, onExpand, onEdit
 // ── Checklist Panel ───────────────────────────────────────────────────────────
 
 function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onSave, onCancel, onDelete, onToggleLevel,
-  withPoints, onChangePoints, onToggleImportant, fetchOptions, onChangeFetch }) {
+  withPoints, onChangePoints, onToggleImportant, fetchOptions, onChangeFetch, fetchSourceEnabled }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: step.id })
 
@@ -358,11 +366,13 @@ function SortableStep({ step, isEditing, editText, setEditText, onStartEdit, onS
           <span className={s.clStepText} onClick={onStartEdit} title="Nhấp để chỉnh sửa" style={{ whiteSpace: 'pre-wrap' }}>
             {step.stepText}
           </span>
-          {/* "Cách lấy" — áp cho MỌI bước (cha & con) */}
-          <select className={s.clDiffSelect} value={step.fetchSource ?? ''} onChange={(e) => onChangeFetch(step, e.target.value)} title="Cách lấy">
-            <option value="">— Cách lấy —</option>
-            {(fetchOptions || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-          </select>
+          {/* "Cách lấy" — áp cho MỌI bước (cha & con), ẩn khi loại này tắt */}
+          {fetchSourceEnabled && (
+            <select className={s.clDiffSelect} value={step.fetchSource ?? ''} onChange={(e) => onChangeFetch(step, e.target.value)} title="Cách lấy">
+              <option value="">— Cách lấy —</option>
+              {(fetchOptions || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+          )}
           {withPoints && (
             <span className={s.clPointsGroup}>
               <button
@@ -403,10 +413,28 @@ const DEFAULT_CL_API = {
   reorder: (tid, steps) => reorderChecklist(tid, steps),
 }
 
-function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, addPlaceholder, withPoints }) {
+function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, addPlaceholder, withPoints, showFetchToggle }) {
   const A = api ?? DEFAULT_CL_API
   const addToast = useToastStore((st) => st.toast)
   const fetchOptions = useEnumsStore((st) => st.getOptions)('checklist_fetch_source')
+  // "Cách lấy" bật/tắt THEO LOẠI công việc (lưu danh sách type-id trong system_configs)
+  const qcFs = useQueryClient()
+  const fetchTypeIds = useFetchSourceTypeIds()
+  const fetchSourceEnabled = !!taskTypeId && fetchTypeIds.has(String(taskTypeId))
+  const [fsBusy, setFsBusy] = useState(false)
+  async function toggleFetchSource() {
+    if (!taskTypeId) return
+    setFsBusy(true)
+    try {
+      const next = new Set(fetchTypeIds)
+      const willOn = !next.has(String(taskTypeId))
+      willOn ? next.add(String(taskTypeId)) : next.delete(String(taskTypeId))
+      await updateConfig(FETCH_SOURCE_TYPES_KEY, JSON.stringify([...next]))
+      await qcFs.invalidateQueries({ queryKey: PUBLIC_CONFIG_QK })
+      addToast(`Đã ${willOn ? 'bật' : 'tắt'} “Cách lấy” cho loại này`, 'success')
+    } catch { addToast('Không thể cập nhật cấu hình', 'error') }
+    finally { setFsBusy(false) }
+  }
   const [items, setItems]       = useState(checklist)
   const [saving, setSaving]     = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -509,6 +537,7 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, ad
               onToggleImportant={handleToggleImportant}
               fetchOptions={fetchOptions}
               onChangeFetch={handleChangeFetch}
+              fetchSourceEnabled={fetchSourceEnabled}
             />
           ))}
         </SortableContext>
@@ -540,6 +569,24 @@ function ChecklistPanel({ taskTypeId, checklist, onRefresh, api, title, bare, ad
         <AlignLeft size={13} />
         {title ?? 'Checklist mẫu'}
         {saving && <Loader2 size={12} className={`${s.spin} ${s.ttPanelSaving}`} />}
+        {showFetchToggle && taskTypeId && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={fetchSourceEnabled}
+            disabled={fsBusy}
+            onClick={toggleFetchSource}
+            title={fetchSourceEnabled ? 'Đang bật “Cách lấy” — bấm để tắt' : 'Bật “Cách lấy” cho loại này'}
+            style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', cursor: fsBusy ? 'default' : 'pointer', opacity: fsBusy ? 0.6 : 1, padding: 0 }}
+          >
+            <span style={{ fontSize: 'var(--fs-2xs)', fontWeight: 'var(--fw-bold)', color: fetchSourceEnabled ? 'var(--color-primary)' : 'var(--color-muted)' }}>
+              Cách lấy
+            </span>
+            <span style={{ position: 'relative', width: 34, height: 19, flexShrink: 0, borderRadius: 999, background: fetchSourceEnabled ? 'var(--color-primary)' : 'var(--color-border)', transition: 'background .15s' }}>
+              <span style={{ position: 'absolute', top: 2, left: fetchSourceEnabled ? 17 : 2, width: 15, height: 15, borderRadius: '50%', background: '#fff', transition: 'left .15s', boxShadow: '0 1px 2px rgba(0,0,0,.3)' }} />
+            </span>
+          </button>
+        )}
       </div>
       {inner}
     </div>

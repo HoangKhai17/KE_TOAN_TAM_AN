@@ -9,6 +9,7 @@ import { listUserOptions } from '../../api/users'
 import { listTaskTypes, getTaskType } from '../../api/taskTypes'
 import { useAuthStore } from '../../stores/authStore'
 import { useEnumsStore } from '../../hooks/useEnums'
+import { useFetchSourceEnabledFor } from '../../hooks/useFetchSourceEnabled'
 import { PRIORITY_LABELS } from './taskUtils'
 import CollaboratorPicker from './CollaboratorPicker'
 import s from './tasks.module.css'
@@ -151,6 +152,10 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
   const [linkErr,      setLinkErr]      = useState('')
 
   const getOptions = useEnumsStore((st) => st.getOptions)
+  const typeFetchOn = useFetchSourceEnabledFor(form.taskTypeId)   // loại CV đã bật "Cách lấy"?
+  const [fetchManual, setFetchManual] = useState(false)          // NV tự bật tay cho task này
+  // hiệu lực = loại bật HOẶC bật tay HOẶC đã có bước gán giá trị
+  const fetchSourceOn = typeFetchOn || fetchManual || checklistItems.some((i) => i.fetchSource)
   const loadEnums  = useEnumsStore((st) => st.load)
 
   useEffect(() => {
@@ -769,14 +774,30 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
 
         {/* Checklist */}
         <div className={`${s.formGroup} ${s.span2}`}>
-          <label className={`${s.formLabel} ${s.required}`}>
-            Checklist công việc
-            {checklistItems.length > 0 && (
-              <span style={{ fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>
-                ({checklistItems.length} bước)
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label className={`${s.formLabel} ${s.required}`} style={{ margin: 0 }}>
+              Checklist công việc
+              {checklistItems.length > 0 && (
+                <span style={{ fontWeight: 400, color: 'var(--color-muted)', marginLeft: 6 }}>
+                  ({checklistItems.length} bước)
+                </span>
+              )}
+            </label>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={fetchSourceOn}
+              disabled={typeFetchOn}
+              onClick={() => setFetchManual((v) => !v)}
+              title={typeFetchOn ? 'Loại công việc đã bật “Cách lấy”' : (fetchSourceOn ? 'Tắt cột “Cách lấy”' : 'Bật cột “Cách lấy” cho công việc này')}
+              style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7, border: 'none', background: 'transparent', cursor: typeFetchOn ? 'default' : 'pointer', opacity: typeFetchOn ? 0.7 : 1, padding: 0, fontWeight: 'var(--fw-bold)' }}
+            >
+              <span style={{ fontSize: 'var(--fs-2xs)', color: fetchSourceOn ? 'var(--color-primary)' : 'var(--color-muted)' }}>Cách lấy</span>
+              <span style={{ position: 'relative', width: 32, height: 18, flexShrink: 0, borderRadius: 999, background: fetchSourceOn ? 'var(--color-primary)' : 'var(--color-border)', transition: 'background .15s' }}>
+                <span style={{ position: 'absolute', top: 2, left: fetchSourceOn ? 16 : 2, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left .15s', boxShadow: '0 1px 2px rgba(0,0,0,.3)' }} />
               </span>
-            )}
-          </label>
+            </button>
+          </div>
           {fe.checklist && <p className={s.formError} style={{ marginTop: 0 }}>{fe.checklist}</p>}
 
           {checklistItems.length > 0 && (
@@ -827,16 +848,18 @@ export default function TaskFormModal({ onClose, onSaved, onSavedAndOpen, initia
                           {item.text}
                         </span>
                       )}
-                      {/* "Cách lấy" — áp cho mọi bước (cha & con) */}
-                      <select
-                        value={item.fetchSource ?? ''}
-                        onChange={(e) => setChecklistItems((prev) => prev.map((x) => x.id === item.id ? { ...x, fetchSource: e.target.value || null } : x))}
-                        title="Cách lấy"
-                        style={{ fontSize: 'var(--fs-2xs)', padding: '2px 4px', border: '1px solid var(--color-border)', borderRadius: 4, maxWidth: 130, color: 'var(--color-text-soft)' }}
-                      >
-                        <option value="">— Cách lấy —</option>
-                        {(getOptions('checklist_fetch_source') || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                      </select>
+                      {/* "Cách lấy" — áp cho mọi bước (cha & con), ẩn khi công tắc tắt */}
+                      {fetchSourceOn && (
+                        <select
+                          value={item.fetchSource ?? ''}
+                          onChange={(e) => setChecklistItems((prev) => prev.map((x) => x.id === item.id ? { ...x, fetchSource: e.target.value || null } : x))}
+                          title="Cách lấy"
+                          style={{ fontSize: 'var(--fs-2xs)', padding: '2px 4px', border: '1px solid var(--color-border)', borderRadius: 4, maxWidth: 130, color: 'var(--color-text-soft)' }}
+                        >
+                          <option value="">— Cách lấy —</option>
+                          {(getOptions('checklist_fetch_source') || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                        </select>
+                      )}
                       <button
                         type="button"
                         className={s.fmClDel}

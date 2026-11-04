@@ -11,6 +11,7 @@ import { listHolidays } from '../../api/attendance'
 import { getNextOccurrences, rollForwardToWorkday } from '../../utils/recurrencePreview'
 import { useToastStore } from '../../stores/toastStore'
 import { useEnumsStore } from '../../hooks/useEnums'
+import { useFetchSourceEnabledFor } from '../../hooks/useFetchSourceEnabled'
 import Modal from '../../components/ui/Modal'
 import DeleteConfirmDialog, { useDeleteConfirm } from '../../components/ui/DeleteConfirmDialog'
 import DateBox from './DateBox'
@@ -604,7 +605,7 @@ function SubtaskList({ subtasks, onAdd, onEdit, onRemove, onResetFromTemplate, s
 }
 
 // ── Popup THÊM/SỬA 1 việc con: tên + offset + checklist riêng (điểm/★) ──
-function SubtaskFormModal({ initial, isNew, subPreviewOcc, previewSubDate, canScore = true, onCancel, onSave }) {
+function SubtaskFormModal({ initial, isNew, subPreviewOcc, previewSubDate, canScore = true, fetchSourceEnabled = false, onCancel, onSave }) {
   const [draft, setDraft] = useState(() => cloneSubtaskDraft(initial))
   const [err, setErr] = useState('')
   const fetchOptions = useEnumsStore((st) => st.getOptions)('checklist_fetch_source')
@@ -710,10 +711,12 @@ function SubtaskFormModal({ initial, isNew, subPreviewOcc, previewSubDate, canSc
                 {it.level === 1 ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
               </button>
               <input className={s.scClText} value={it.stepText} onChange={(e) => setItemField(j, 'stepText', e.target.value)} placeholder="Nội dung bước…" />
-              <select className={s.scClDiff} value={it.fetchSource ?? ''} onChange={(e) => setItemField(j, 'fetchSource', e.target.value)} title="Cách lấy">
-                <option value="">— Cách lấy —</option>
-                {(fetchOptions || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-              </select>
+              {(fetchSourceEnabled || (draft.items || []).some((x) => x.fetchSource)) && (
+                <select className={s.scClDiff} value={it.fetchSource ?? ''} onChange={(e) => setItemField(j, 'fetchSource', e.target.value)} title="Cách lấy">
+                  <option value="">— Cách lấy —</option>
+                  {(fetchOptions || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                </select>
+              )}
               {canScore ? (
                 <>
                   <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setItemField(j, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>
@@ -847,6 +850,10 @@ export default function SchedulesTab({ company, isAdmin = false }) {
   // Modal
   const [modal,      setModal]      = useState(null)  // null | { mode, schedule? }
   const [form,       setForm]       = useState(emptyForm())
+  const typeFetchOn = useFetchSourceEnabledFor(form.taskTypeId)   // loại CV của lịch đã bật?
+  const [fetchManual, setFetchManual] = useState(false)          // tự bật tay cho lịch này
+  // hiệu lực = loại bật HOẶC bật tay HOẶC checklist đã có bước gán giá trị
+  const fetchSourceOn = typeFetchOn || fetchManual || (form.checklist || []).some((it) => it.fetchSource)
   const [formErrors, setFormErrors] = useState({})
   const [saving,     setSaving]     = useState(false)
 
@@ -1537,11 +1544,27 @@ export default function SchedulesTab({ company, isAdmin = false }) {
                         · Tổng điểm {form.checklist.reduce((a, it) => a + (Number(it.points) || 0), 0)}
                       </span>
                     </label>
-                    {form.mode !== 'manual' && (
-                      <button type="button" className={s.scClResetBtn} onClick={resetClFromTemplate} title="Nạp checklist từ mẫu của loại CV (ghi đè checklist hiện tại)">
-                        <RefreshCw size={12} /> Khôi phục về mẫu
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={fetchSourceOn}
+                        disabled={typeFetchOn}
+                        onClick={() => setFetchManual((v) => !v)}
+                        title={typeFetchOn ? 'Loại công việc đã bật “Cách lấy”' : (fetchSourceOn ? 'Tắt cột “Cách lấy”' : 'Bật cột “Cách lấy” cho lịch này')}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: typeFetchOn ? 'default' : 'pointer', opacity: typeFetchOn ? 0.7 : 1, padding: 0, fontWeight: 'var(--fw-bold)' }}
+                      >
+                        <span style={{ fontSize: 'var(--fs-2xs)', color: fetchSourceOn ? 'var(--color-primary)' : 'var(--color-muted)' }}>Cách lấy</span>
+                        <span style={{ position: 'relative', width: 32, height: 18, flexShrink: 0, borderRadius: 999, background: fetchSourceOn ? 'var(--color-primary)' : 'var(--color-border)', transition: 'background .15s' }}>
+                          <span style={{ position: 'absolute', top: 2, left: fetchSourceOn ? 16 : 2, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left .15s', boxShadow: '0 1px 2px rgba(0,0,0,.3)' }} />
+                        </span>
                       </button>
-                    )}
+                      {form.mode !== 'manual' && (
+                        <button type="button" className={s.scClResetBtn} onClick={resetClFromTemplate} title="Nạp checklist từ mẫu của loại CV (ghi đè checklist hiện tại)">
+                          <RefreshCw size={12} /> Khôi phục về mẫu
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className={s.scStepPickHint}>
                     Sửa checklist riêng cho công ty này — thêm/bớt bước{canScore ? ', đổi độ khó (tự gợi ý điểm) hoặc nhập điểm tay' : ''}. <b>★</b> = bước quan trọng (hiện mặc định ở báo cáo).
@@ -1564,10 +1587,12 @@ export default function SchedulesTab({ company, isAdmin = false }) {
                           onChange={(e) => setClField(idx, 'stepText', e.target.value)}
                           placeholder="Nội dung bước..."
                         />
-                        <select className={s.scClDiff} value={it.fetchSource ?? ''} onChange={(e) => setClField(idx, 'fetchSource', e.target.value)} title="Cách lấy">
-                          <option value="">— Cách lấy —</option>
-                          {(fetchOptions || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                        </select>
+                        {fetchSourceOn && (
+                          <select className={s.scClDiff} value={it.fetchSource ?? ''} onChange={(e) => setClField(idx, 'fetchSource', e.target.value)} title="Cách lấy">
+                            <option value="">— Cách lấy —</option>
+                            {(fetchOptions || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                          </select>
+                        )}
                         {canScore ? (
                           <>
                             <button type="button" className={`${s.scClStar} ${it.isImportant ? s.scClStarOn : ''}`} onClick={() => setClField(idx, 'isImportant', !it.isImportant)} title={it.isImportant ? 'Bỏ quan trọng' : 'Đánh dấu quan trọng'}>
@@ -1733,6 +1758,7 @@ export default function SchedulesTab({ company, isAdmin = false }) {
           subPreviewOcc={subPreviewOcc}
           previewSubDate={previewSubDate}
           canScore={canScore}
+          fetchSourceEnabled={fetchSourceOn}
           onCancel={() => setSubEdit(null)}
           onSave={saveSubtask}
         />
